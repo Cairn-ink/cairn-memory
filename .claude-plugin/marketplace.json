@@ -1,0 +1,25 @@
+{
+  "name": "cairn-memory",
+  "owner": {
+    "name": "Cairn.ink",
+    "url": "https://cairn.ink"
+  },
+  "description": "Private cross-session memory for AI agents, with inspectable Source Receipts.",
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "cairn-memory",
+      "source": "./plugins/cairn-memory",
+      "description": "Lightweight cross-session memory with a receipt for every memory.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Cairn.ink"
+      },
+      "homepage": "https://github.com/Cairn-ink/cairn-memory",
+      "repository": "https://github.com/Cairn-ink/cairn-memory",
+      "license": "Apache-2.0",
+      "category": "productivity",
+      "tags": ["memory", "mcp", "provenance"]
+    }
+  ]
+}

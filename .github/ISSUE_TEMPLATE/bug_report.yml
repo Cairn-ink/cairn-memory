@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible plugin or protocol problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials or private conversation content. Security issues belong in a private advisory.
+  - type: input
+    id: version
+    attributes:
+      label: Cairn Memory version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal safe reproduction
+      description: Use synthetic text and remove paths, repository names, and tokens.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

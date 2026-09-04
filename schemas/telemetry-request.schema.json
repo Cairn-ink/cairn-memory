@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/telemetry-request.schema.json",
+  "title": "Cairn Memory telemetry request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["install_id", "event", "client", "version", "platform"],
+  "properties": {
+    "install_id": { "type": "string", "format": "uuid" },
+    "event": { "enum": ["plugin_started", "capture_succeeded", "recall_succeeded"] },
+    "client": { "const": "claude-code" },
+    "version": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "platform": { "enum": ["darwin", "linux", "win32", "other"] }
+  }
+}
