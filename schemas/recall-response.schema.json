@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/recall-response.schema.json",
+  "title": "Cairn Memory recall response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["memories"],
+  "properties": {
+    "memories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/memory" }
+    }
+  },
+  "$defs": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["client", "sessionId", "eventId", "role", "excerpt", "createdAt"],
+      "properties": {
+        "client": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "eventId": { "type": "string" },
+        "role": { "enum": ["user", "assistant"] },
+        "excerpt": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "content", "kind", "scope", "projectId", "origin", "confidence", "createdAt", "updatedAt", "receipts"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "content": { "type": "string" },
+        "kind": { "enum": ["fact", "preference", "decision", "instruction", "context"] },
+        "scope": { "enum": ["personal", "project"] },
+        "projectId": { "type": ["string", "null"] },
+        "origin": { "enum": ["explicit", "agent-inferred"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "receipts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/receipt" }
+        }
+      }
+    }
+  }
+}

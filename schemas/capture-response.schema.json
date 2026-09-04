@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/capture-response.schema.json",
+  "title": "Cairn Memory capture response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["duplicate", "memoryCount"],
+  "properties": {
+    "duplicate": { "type": "boolean" },
+    "processing": { "type": "boolean" },
+    "memoryCount": { "type": "integer", "minimum": 0 }
+  }
+}

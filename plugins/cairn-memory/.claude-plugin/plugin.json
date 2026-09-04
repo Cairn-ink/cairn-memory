@@ -1,0 +1,36 @@
+{
+  "name": "cairn-memory",
+  "displayName": "Cairn.ink Memory",
+  "version": "0.1.0",
+  "description": "Lightweight cross-session memory with a source receipt for every inference.",
+  "author": {
+    "name": "Cairn.ink",
+    "url": "https://cairn.ink"
+  },
+  "homepage": "https://github.com/Cairn-ink/cairn-memory",
+  "repository": "https://github.com/Cairn-ink/cairn-memory",
+  "license": "Apache-2.0",
+  "keywords": ["memory", "mcp", "provenance", "claude-code"],
+  "userConfig": {
+    "api_endpoint": {
+      "type": "string",
+      "title": "Cairn endpoint",
+      "description": "Hosted Cairn.ink endpoint, or your compatible self-hosted endpoint.",
+      "required": true,
+      "default": "https://cairn.ink"
+    },
+    "api_token": {
+      "type": "string",
+      "title": "Cairn token",
+      "description": "Personal access token created at Cairn.ink settings.",
+      "sensitive": true,
+      "required": true
+    },
+    "telemetry": {
+      "type": "boolean",
+      "title": "Anonymous product telemetry",
+      "description": "Send content-free lifecycle events. Never sends text, paths, or repository names.",
+      "default": true
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "cairn-memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight cross-session memory for AI agents, with receipts.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test plugins/cairn-memory/test/*.test.mjs",
+    "validate": "node scripts/validate-json.mjs"
+  }
+}
