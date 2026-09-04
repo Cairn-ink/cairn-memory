@@ -1,0 +1,16 @@
+{
+  "name": "@cairn-memory/plugin-validation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned maintainer tooling for validating the Cairn Memory marketplace and plugin.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "validate": "claude plugin validate ../.. && claude plugin validate ../../plugins/cairn-memory --strict"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-code": "2.1.260"
+  }
+}

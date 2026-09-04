@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { normalizeEndpoint } from "../lib/config.mjs";
 
 async function schema(name) {
   const url = new URL(`../../../schemas/${name}.schema.json`, import.meta.url);
@@ -39,4 +40,18 @@ test("recall requires provenance on every memory", async () => {
   assert.ok(memory.required.includes("confidence"));
   assert.ok(memory.required.includes("receipts"));
   assert.equal(memory.properties.receipts.minItems, 1);
+});
+
+test("remote endpoints require HTTPS before credentials can be sent", () => {
+  assert.equal(normalizeEndpoint("https://memory.example.com/"), "https://memory.example.com");
+  assert.throws(() => normalizeEndpoint("http://memory.example.com"), /insecure_endpoint/);
+  assert.throws(() => normalizeEndpoint("https://user:pass@example.com"), /invalid_endpoint/);
+  assert.throws(() => normalizeEndpoint("https://example.com?token=secret"), /invalid_endpoint/);
+});
+
+test("plain HTTP is restricted to explicit loopback development hosts", () => {
+  assert.equal(normalizeEndpoint("http://localhost:8787/"), "http://localhost:8787");
+  assert.equal(normalizeEndpoint("http://127.0.0.1:8787"), "http://127.0.0.1:8787");
+  assert.equal(normalizeEndpoint("http://[::1]:8787"), "http://[::1]:8787");
+  assert.throws(() => normalizeEndpoint("http://0.0.0.0:8787"), /insecure_endpoint/);
 });

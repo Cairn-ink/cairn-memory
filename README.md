@@ -79,13 +79,13 @@ The Cairn.ink hosted extraction service, user database, auth, billing, abuse con
 
 ## Development
 
-Requires Node.js 20 or newer. The plugin itself has no npm dependencies.
+The dependency-free plugin runtime and test suite require Node.js 20 or newer. Maintainer-only Claude plugin validation requires Node.js 22 and is isolated under `tools/plugin-validation` so it is never installed with the plugin.
 
 ```bash
 npm test
-node scripts/validate-json.mjs
-claude plugin validate .
-claude plugin validate ./plugins/cairn-memory --strict
+npm run validate
+npm ci --prefix tools/plugin-validation
+npm run validate --prefix tools/plugin-validation
 ```
 
 Contributions are welcome after reading [CONTRIBUTING.md](CONTRIBUTING.md) and the privacy invariants in [docs/protocol.md](docs/protocol.md).

@@ -6,11 +6,13 @@ import { homedir, platform, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { captureEventId, transcriptMessages } from "../lib/transcript.mjs";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
+import { normalizeEndpoint } from "../lib/config.mjs";
+import { createJsonPoster } from "../lib/http.mjs";
+import { VERSION } from "../lib/version.mjs";
 
-const VERSION = "0.1.0";
 const action = process.argv[2] ?? "status";
-const endpoint = (process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink")
-  .replace(/\/+$/, "");
+const configuredEndpoint =
+  process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink";
 const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 const telemetryEnabled = !/^(?:0|false|no|off)$/i.test(
   process.env.CLAUDE_PLUGIN_OPTION_TELEMETRY ?? "true",
@@ -18,6 +20,17 @@ const telemetryEnabled = !/^(?:0|false|no|off)$/i.test(
 const dataDir =
   process.env.CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory");
 const pauseFile = join(dataDir, "paused");
+let endpoint;
+let post;
+try {
+  endpoint = normalizeEndpoint(configuredEndpoint);
+  post = createJsonPoster({ endpoint, token });
+} catch {
+  endpoint = "invalid (HTTPS required; HTTP is loopback-only)";
+  post = async () => {
+    throw new Error("invalid_endpoint");
+  };
+}
 
 async function input() {
   let text = "";
@@ -37,21 +50,6 @@ async function isPaused() {
   } catch {
     return false;
   }
-}
-
-async function post(path, body, timeoutMs, authenticated = true) {
-  if (authenticated && !token) throw new Error("missing_token");
-  const headers = { "content-type": "application/json" };
-  if (authenticated) headers.authorization = `Bearer ${token}`;
-  const response = await fetch(`${endpoint}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!response.ok) throw new Error(`http_${response.status}`);
-  if (response.status === 204) return null;
-  return response.json();
 }
 
 async function telemetry(event) {

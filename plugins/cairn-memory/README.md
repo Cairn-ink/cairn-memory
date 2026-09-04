@@ -20,6 +20,7 @@ The plugin has no npm dependencies. It needs the Node.js runtime already require
 - Project paths are hashed locally into an opaque scope id.
 - `/cairn-memory:pause` and `/cairn-memory:resume` control automatic capture and recall.
 - `/cairn-memory:status` reports state without printing the credential.
+- Remote endpoints require HTTPS; plain HTTP is accepted only on explicit loopback hosts for local development.
 - Content-free telemetry can be disabled in plugin configuration. Its schema accepts only event name, plugin version, platform, and a random installation id.
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work. See the repository security policy before reporting a possible privacy issue.

@@ -15,8 +15,8 @@ jobs:
       matrix:
         node-version: [20, 22]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm test
@@ -25,13 +25,12 @@ jobs:
   plugin-validation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - name: Install pinned Claude Code validator
-        run: npm install --global @anthropic-ai/claude-code@2.1.260
-      - name: Validate marketplace
-        run: claude plugin validate .
-      - name: Validate plugin
-        run: claude plugin validate ./plugins/cairn-memory --strict
+          cache: npm
+          cache-dependency-path: tools/plugin-validation/package-lock.json
+      - run: npm ci --prefix tools/plugin-validation
+      - name: Validate marketplace and plugin
+        run: npm run validate --prefix tools/plugin-validation

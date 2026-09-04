@@ -15,7 +15,7 @@
     "api_endpoint": {
       "type": "string",
       "title": "Cairn endpoint",
-      "description": "Hosted Cairn.ink endpoint, or your compatible self-hosted endpoint.",
+      "description": "HTTPS Cairn.ink or compatible endpoint. Plain HTTP is allowed only on localhost.",
       "required": true,
       "default": "https://cairn.ink"
     },
