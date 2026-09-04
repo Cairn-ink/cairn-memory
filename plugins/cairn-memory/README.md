@@ -1,6 +1,6 @@
 # Cairn.ink Memory for Claude Code
 
-Cross-session memory that keeps receipts. This plugin recalls relevant private context before a prompt and captures durable user/assistant conversation context after a turn. It does not read or upload file contents, tool results, terminal output, filesystem paths, or repository names.
+Cross-session memory that keeps receipts. This plugin recalls relevant private context before a prompt and captures durable user/assistant conversation context after a turn. It reads the Claude-provided transcript path and working directory only to process the transcript and derive an opaque project id. It does not read arbitrary project files or upload file contents, tool results, terminal output, filesystem paths, or repository names.
 
 ## Install
 
@@ -23,4 +23,4 @@ The plugin has no npm dependencies. It needs the Node.js runtime already require
 - Remote endpoints require HTTPS; plain HTTP is accepted only on explicit loopback hosts for local development.
 - Content-free telemetry can be disabled in plugin configuration. Its schema accepts only event name, plugin version, platform, and a random installation id.
 
-Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work. See the repository security policy before reporting a possible privacy issue.
+Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work. Capture is handed to a detached worker so it survives both interactive sessions and `claude -p` teardown without delaying Claude's response. The launcher pipes only session id, transcript path, and working directory directly to the worker; it does not use a queue file or enlarge the worker environment. See the repository security policy before reporting a possible privacy issue.

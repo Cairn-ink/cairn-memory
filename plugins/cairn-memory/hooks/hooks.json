@@ -30,8 +30,8 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "capture"],
-            "async": true
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/launch-capture.mjs"],
+            "timeout": 1
           }
         ]
       }
@@ -42,8 +42,8 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "capture"],
-            "async": true
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/launch-capture.mjs"],
+            "timeout": 1
           }
         ]
       }

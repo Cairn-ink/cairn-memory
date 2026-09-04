@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { access, mkdtemp, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
 import { redactSecrets } from "../lib/redact.mjs";
@@ -119,7 +120,7 @@ test("capture hook redacts locally before constructing the HTTP body", async (t)
 
   const child = spawn(
     process.execPath,
-    [new URL("../scripts/hook.mjs", import.meta.url).pathname, "capture"],
+    [fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url)), "capture"],
     {
       env: {
         ...process.env,
@@ -148,10 +149,72 @@ test("capture hook redacts locally before constructing the HTTP body", async (t)
   assert.match(received.project_id, /^[a-f0-9]{64}$/);
 });
 
+test("detached capture survives after its short-lived launcher exits", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "cairn-detached-test-"));
+  const transcript = join(dir, "transcript.jsonl");
+  await writeFile(
+    transcript,
+    `${JSON.stringify({
+      type: "user",
+      uuid: "u-detached",
+      message: { content: "Remember detached capture." },
+    })}\n`,
+  );
+
+  let received;
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", () => {
+      received = JSON.parse(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end('{"duplicate":false,"memoryCount":1}');
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const launcher = spawn(
+    process.execPath,
+    [fileURLToPath(new URL("../scripts/launch-capture.mjs", import.meta.url))],
+    {
+      env: {
+        ...process.env,
+        CLAUDE_PLUGIN_OPTION_API_ENDPOINT: `http://127.0.0.1:${address.port}`,
+        CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
+        CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
+        CLAUDE_PLUGIN_DATA: join(dir, "data"),
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
+  launcher.stdin.end(
+    JSON.stringify({
+      session_id: "session-detached",
+      transcript_path: transcript,
+      cwd: `/${"a".repeat(8_191)}`,
+      hook_event_name: "Stop",
+      last_assistant_message: "THIS RAW HOOK FIELD MUST BE DISCARDED",
+    }),
+  );
+  const exitCode = await new Promise((resolve) => launcher.on("exit", resolve));
+  assert.equal(exitCode, 0);
+
+  for (let attempt = 0; attempt < 50 && !received; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(received.messages[0].content, "Remember detached capture.");
+  assert.equal(JSON.stringify(received).includes("RAW HOOK FIELD"), false);
+  assert.match(received.project_id, /^[a-f0-9]{64}$/);
+  await assert.rejects(access(join(dir, "data", "queue")));
+});
+
 test("a recall outage fails open with a successful, silent hook exit", async () => {
   const child = spawn(
     process.execPath,
-    [new URL("../scripts/hook.mjs", import.meta.url).pathname, "recall"],
+    [fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url)), "recall"],
     {
       env: {
         ...process.env,

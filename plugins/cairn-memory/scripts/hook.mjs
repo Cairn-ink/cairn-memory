@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir, platform, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { captureEvent } from "../lib/capture-event.mjs";
 import { captureEventId, transcriptMessages } from "../lib/transcript.mjs";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
@@ -119,13 +120,11 @@ async function readCursor(path) {
 
 async function capture(hookInput) {
   if ((await isPaused()) || !token) return;
-  if (
-    typeof hookInput.session_id !== "string" ||
-    typeof hookInput.transcript_path !== "string"
-  ) return;
+  const event = captureEvent(hookInput);
+  if (!event) return;
 
-  const statePath = cursorPath(hookInput.session_id);
-  await withLock(`${statePath}.lock`, () => captureLocked(hookInput, statePath));
+  const statePath = cursorPath(event.session_id);
+  await withLock(`${statePath}.lock`, () => captureLocked(event, statePath));
 }
 
 async function withLock(path, fn) {
@@ -226,7 +225,7 @@ try {
     const hookInput = await input();
     if (action === "start") await telemetry("plugin_started");
     else if (action === "recall") await recall(hookInput);
-    else if (action === "capture") await capture(hookInput);
+    else if (["capture", "capture-detached"].includes(action)) await capture(hookInput);
     else await control();
   }
 } catch {

@@ -39,10 +39,11 @@ User prompt
        └─ inject a short, explicitly untrusted context block
 
 Assistant turn ends
-  └─ read only new user/assistant transcript text
-       └─ redact likely credentials locally
-            └─ send an idempotent capture batch
-                 └─ store durable memories with Source Receipts
+  └─ hand capture to a detached worker without delaying Claude
+       └─ read only new user/assistant transcript text
+            └─ redact likely credentials locally
+                 └─ send an idempotent capture batch
+                      └─ store durable memories with Source Receipts
 ```
 
 The bundled MCP connection also exposes explicit `remember_memory`, `recall_memory`, and `forget_memory` tools. Clients without lifecycle hooks can use those tools manually; passive capture is never claimed where the host does not expose a hook.
@@ -57,6 +58,7 @@ The bundled MCP connection also exposes explicit `remember_memory`, `recall_memo
 - Automatically inferred memories remain personal or project-private. They cannot publish into a team or community.
 - Product telemetry is content-free, defaults on, and can be disabled. Its schema accepts only lifecycle event, client version, platform, and a random installation id.
 - Hooks fail open: Cairn outages and timeouts do not block normal Claude Code work.
+- Capture workers are detached so headless `claude -p` sessions cannot cancel them during teardown; the allowlisted handoff is piped directly to the worker and is not written to a queue file.
 
 Use `/cairn-memory:pause`, `/cairn-memory:resume`, and `/cairn-memory:status` to control capture and recall.
 

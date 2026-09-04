@@ -18,6 +18,8 @@ By default the plugin stores control state under `~/.cairn-memory/`:
 - `sessions/*.json`: byte cursors keyed by a hash of the Claude session id;
 - short-lived lock files preventing overlapping capture for one session.
 
+Stop and PreCompact pipe only session id, transcript path, and working directory directly to the detached worker. The plugin does not write a capture queue to disk or add the handoff to the worker environment, and assistant text present elsewhere in the raw hook event is discarded before handoff.
+
 The API token is supplied by Claude Code plugin configuration and is not written by this plugin.
 
 ## Controls and residual risk
