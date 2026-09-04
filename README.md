@@ -8,11 +8,11 @@
   <a href="https://cairn.ink"><img alt="Hosted by Cairn.ink" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
 </p>
 
-Cairn Memory gives Claude Code private, inspectable memory across sessions. It recalls relevant context before a prompt and captures durable user/assistant conversation context after a turn. Every stored memory carries its origin, confidence, scope, timestamps, and a redacted Source Receipt showing why it exists.
+Cairn Memory gives AI coding agents private, inspectable memory across sessions. Claude Code gets automatic recall before a prompt and automatic capture after a turn. Codex and other MCP clients can use the same hosted memory explicitly through `remember_memory`, `recall_memory`, and `forget_memory`. Every stored memory carries its origin, confidence, scope, timestamps, and a redacted Source Receipt showing why it exists.
 
 It is deliberately small: one Claude Code plugin, one remote MCP connection, no plugin runtime dependencies, and no generic notes UI.
 
-## Install
+## Install for Claude Code (automatic memory)
 
 In Claude Code, run:
 
@@ -30,6 +30,23 @@ git clone https://github.com/Cairn-ink/cairn-memory.git
 cd cairn-memory
 claude --plugin-dir ./plugins/cairn-memory
 ```
+
+## Connect from Codex (explicit MCP memory)
+
+Codex v0.1 support uses the hosted MCP tools. Keep the token in your shell or
+secret manager, not in a repository or committed config file:
+
+```bash
+export CAIRN_MCP_TOKEN='your-token-from-cairn.ink'
+codex mcp add cairn \
+  --url https://cairn.ink/api/mcp \
+  --bearer-token-env-var CAIRN_MCP_TOKEN
+```
+
+Restart Codex, then use `/mcp` or `codex mcp list` to confirm the connection.
+Codex can now explicitly remember, recall, and forget private memory. The v0.1
+release does not install automatic Codex lifecycle hooks; that compatibility
+layer is next on the roadmap.
 
 ## The loop
 
@@ -77,7 +94,10 @@ The Cairn.ink hosted extraction service, user database, auth, billing, abuse con
 
 ## Status
 
-`v0.1.0` is an alpha contract. It is suitable for dogfooding, not yet a promise of protocol stability. The release gate is a real two-session recall test followed by a 10-developer private alpha. See [ROADMAP.md](ROADMAP.md).
+`v0.1.0` is a public alpha, not yet a promise of protocol stability. The hosted
+two-session sourced-recall gate has passed. We are now recruiting the first 10
+developers and measuring activation, useful second-session recalls, false
+memories, and redaction misses in public. See [ROADMAP.md](ROADMAP.md).
 
 ## Development
 
