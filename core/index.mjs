@@ -44,13 +44,16 @@ export function openMemoryStore(input) {
     }
 
     function suppress(fingerprint) {
-      db.prepare("INSERT OR IGNORE INTO suppressed VALUES (?, ?, ?, ?)")
+      db.prepare(`INSERT OR IGNORE INTO suppressed
+        (owner_id, scope, project_id, fingerprint) VALUES (?, ?, ?, ?)`)
         .run(...boundary, fingerprint);
     }
 
     function attach(id, receipt, now) {
       const key = createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
-      return db.prepare("INSERT OR IGNORE INTO receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      return db.prepare(`INSERT OR IGNORE INTO receipts
+        (memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(id, key, receipt.client, receipt.sessionId, receipt.eventId,
           receipt.role, receipt.excerpt, now).changes;
     }
@@ -79,7 +82,9 @@ export function openMemoryStore(input) {
             return dto(row(existing.id));
           }
           const id = randomUUID();
-          db.prepare(`INSERT INTO memories VALUES
+          db.prepare(`INSERT INTO memories
+            (id, owner_id, scope, project_id, fingerprint, content, kind, origin,
+             confidence, revision, deleted, created_at, updated_at) VALUES
             (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`)
             .run(id, ...boundary, value.fingerprint, value.content, value.kind,
               value.origin, value.confidence, now, now);
