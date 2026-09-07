@@ -34,6 +34,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:core
       - run: npm run demo:store
+      - run: npm run demo:moc
 
   plugin-validation:
     runs-on: ubuntu-latest

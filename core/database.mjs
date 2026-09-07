@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 3;
+const VERSION = 4;
 
 function createVersion3(db) {
   db.exec(`
@@ -116,6 +116,55 @@ function migrateVersion1(db) {
     VALUES (1, ?, ?)`).run(randomUUID(), randomBytes(32).toString("hex"));
 }
 
+function migrateVersion3(db) {
+  db.exec(`
+    ALTER TABLE memories ADD COLUMN filing_status TEXT NOT NULL DEFAULT 'unfiled'
+      CHECK (filing_status IN ('filed','unfiled'));
+    CREATE TABLE mocs (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),
+      project_id TEXT NOT NULL,
+      level INTEGER NOT NULL CHECK (level IN (1,2)),
+      title TEXT NOT NULL,
+      canonical_title TEXT NOT NULL,
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      CHECK ((scope = 'personal' AND project_id = '') OR
+             (scope = 'project' AND length(project_id) > 0))
+    ) STRICT;
+    CREATE UNIQUE INDEX namespace_moc_titles ON mocs(
+      owner_id, scope, project_id, level, canonical_title);
+    CREATE INDEX namespace_mocs ON mocs(
+      owner_id, scope, project_id, level, canonical_title, id);
+    CREATE TABLE moc_title_sources (
+      moc_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,
+      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      memory_revision INTEGER NOT NULL CHECK (memory_revision > 0),
+      PRIMARY KEY (moc_id, memory_id)
+    ) STRICT;
+    CREATE INDEX memory_title_sources ON moc_title_sources(memory_id, moc_id);
+    CREATE TABLE moc_memory_refs (
+      moc_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,
+      moc_revision INTEGER NOT NULL CHECK (moc_revision > 0),
+      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      memory_revision INTEGER NOT NULL CHECK (memory_revision > 0),
+      PRIMARY KEY (moc_id, memory_id)
+    ) STRICT;
+    CREATE INDEX memory_moc_refs ON moc_memory_refs(memory_id, moc_id);
+    CREATE TABLE moc_edges (
+      parent_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,
+      parent_revision INTEGER NOT NULL CHECK (parent_revision > 0),
+      child_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,
+      child_revision INTEGER NOT NULL CHECK (child_revision > 0),
+      PRIMARY KEY (parent_id, child_id),
+      CHECK (parent_id != child_id)
+    ) STRICT;
+    CREATE INDEX child_moc_edges ON moc_edges(child_id, parent_id);
+  `);
+}
+
 export function transaction(db, work) {
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -152,12 +201,19 @@ export function openDatabase(path) {
       if (appId === APPLICATION_ID && version === VERSION) return;
       if (appId === APPLICATION_ID && version === 1) {
         migrateVersion1(db);
+        migrateVersion3(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
+      if (appId === APPLICATION_ID && version === 3) {
+        migrateVersion3(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       const tables = db.prepare("SELECT count(*) AS n FROM sqlite_master").get().n;
       if (appId !== 0 || version !== 0 || tables !== 0) fail("unsupported_database");
       createVersion3(db);
+      migrateVersion3(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

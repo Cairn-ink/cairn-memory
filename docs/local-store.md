@@ -3,8 +3,9 @@
 The additive [S2a model-free core contract](storage-contract.md) provides explicit
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
-the new inspection cursors. Opening v1 data now upgrades it to v3. Draft-v2 and
-unknown formats are rejected, and old v1 binaries cannot open v3 files.
+the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
+v1/v3 data now upgrades it to v4. Draft-v2 and unknown formats are rejected,
+and old v1/v3 binaries cannot open v4 files.
 
 This is a real SQLite persistence library runnable from public source. It is
 **not yet a standalone memory service**: no model extraction, semantic recall,
@@ -154,9 +155,11 @@ implementation targets small local datasets, not high-throughput deployments.
 Use a local filesystem, trusted database path/parent directories, and one
 application-controlled database. Do not open untrusted SQLite files or share a
 file across machines/network filesystems. Unknown database/schema versions are
-rejected, never reset. This first schema has no migration/import tool yet.
+rejected, never reset. Supported schema upgrades are automatic; there is no
+general import/export or downgrade tool yet.
 
-Next: model/extraction and local MCP in 2B, then reproducible setup/data-flow and
-export/restore in 2C. Hosted migration remains a separate, behavior-tested change.
+The S2b preview adds guarded classification through an injected adapter, not a
+bundled model. Next: bounded fetch/recall and local MCP, then real-model evaluation
+and export/restore. Hosted migration remains a separate, behavior-tested change.
 The existing released plugin's default-on telemetry is unchanged; this store
 has no telemetry at all. See [acceptance and dependency provenance](plans/local-memory-store.md).

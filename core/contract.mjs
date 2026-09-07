@@ -1,5 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
+import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
+import { countTokens } from './model-budget.mjs';
+import { classify } from './classification.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision,
 } from "./validation.mjs";
@@ -92,7 +95,9 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  const runtime = createMemoryRuntime(input);
+  object(input, ['path', 'model']);
+  const model = input.model;
+  const runtime = createMemoryRuntime({ path: input.path });
   const { storeId, cursorSecret } = runtime.identity;
 
   function namespaceBinding(ns) {
@@ -198,7 +203,7 @@ export function openMemoryCore(input) {
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
-      return { memory: page.memory, receipts, placements: [], conflicts: [],
+      return { memory: page.memory, receipts, placements: page.placements, conflicts: [],
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
           a: { createdAt: last.createdAt, id: last.id } }), exhausted };
     });
@@ -229,8 +234,95 @@ export function openMemoryCore(input) {
     });
   }
 
+  function applyPlacement(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'proposal', 'expectedMemoryRevisions', 'expectedIndexRevision']);
+      const ns = contractNamespace(input.namespace);
+      const proposal = placementProposal(input.proposal);
+      const guards = memoryGuards(input.expectedMemoryRevisions, proposal.items.map((item) => item.memoryId));
+      return runtime.applyPlacement(ns, proposal, guards, contractRevision(input.expectedIndexRevision));
+    });
+  }
+
+  function linkMocs(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'parentId', 'expectedParentRevision', 'childId',
+        'expectedChildRevision', 'expectedIndexRevision']);
+      return runtime.linkMocs(contractNamespace(input.namespace), {
+        parentId: contractId(input.parentId), childId: contractId(input.childId),
+        expectedParentRevision: contractRevision(input.expectedParentRevision),
+        expectedChildRevision: contractRevision(input.expectedChildRevision),
+        expectedIndexRevision: contractRevision(input.expectedIndexRevision),
+      });
+    });
+  }
+
+  function map(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
+      const ns = contractNamespace(input.namespace);
+      const purpose = input.purpose ?? 'recall';
+      if (!['recall', 'classification'].includes(purpose)) throw new MemoryStoreError('invalid_input');
+      const count = contractLimit(input.limit ?? 100);
+      const budget = contractRevision(input.tokenBudget ?? 4000);
+      if (budget > 4000) throw new MemoryStoreError('invalid_input');
+      let parentRef;
+      if (input.parentRef !== undefined) {
+        object(input.parentRef, ['mocId', 'revision']);
+        parentRef = { mocId: contractId(input.parentRef.mocId), revision: contractRevision(input.parentRef.revision) };
+      }
+      // Require a counter before accessing content, even for an empty map.
+      countTokens(model, '');
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
+        p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
+          Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
+      const offset = cursor?.a.offset ?? 0;
+      const page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e });
+      const capacity = Math.min(count, page.rows.length);
+      for (let take = capacity; take >= 0; take--) {
+        if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
+        const selected = page.rows.slice(0, take);
+        const exhausted = take === page.rows.length;
+        const value = { items: selected.filter((row) => row.item).map((row) => row.item),
+          nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
+          exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
+          indexRevision: page.epoch,
+          invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
+        if (countTokens(model, JSON.stringify(success(value))) <= budget) {
+          runtime.assertEpoch(ns, page.epoch);
+          return value;
+        }
+      }
+      throw new MemoryStoreError('context_item_too_large');
+    });
+  }
+
+  async function classifyPlacement(input) {
+    try {
+      runtime.ready();
+      object(input, ['namespace', 'memoryIds', 'expectedMemoryRevisions', 'mapRevision']);
+      const ns = contractNamespace(input.namespace);
+      const ids = uniqueIds(input.memoryIds, 5, 1);
+      const guards = memoryGuards(input.expectedMemoryRevisions, ids);
+      const index = contractRevision(input.mapRevision);
+      if (typeof model?.classify !== 'function') throw new MemoryStoreError('model_not_configured');
+      const snapshot = runtime.classificationSnapshot(ns, ids, guards, index);
+      const mapped = map({ namespace: input.namespace, purpose: 'classification' });
+      if (!mapped.ok) return mapped;
+      if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
+      const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
+      const value = await classify({ model, snapshot, map: mapped.value, validateFresh });
+      return success(value);
+    } catch (error) { return failure(error); }
+  }
+
   return Object.freeze({
-    admit, list, get, correct, forget,
+    admit, list, get, correct, forget, applyPlacement, linkMocs, map, classifyPlacement,
     close() {
       runtime.close();
       return success(null);
