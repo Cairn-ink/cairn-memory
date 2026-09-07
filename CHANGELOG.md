@@ -4,6 +4,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add the model-free S2a core contract over the existing SQLite store: explicit
+  receipt batches, metadata/source pagination, stable source IDs, persistent
+  namespace epochs and signed cursors shared with legacy mutations. Upgrade v1
+  storage atomically to v3; unmerged draft-v2 databases remain unsupported.
+  This is not yet the MOC/classification/recall engine or a local MCP service.
+
 - Add a source-runnable local SQLite storage preview with atomic memory/receipt
   writes, exact owner/project isolation, deduplication, revision-checked correction,
   deletion suppression, lexical lookup, and real-file/concurrent-process tests.

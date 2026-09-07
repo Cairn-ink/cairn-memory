@@ -35,6 +35,11 @@ public redactor. The hosted implementation is unchanged in this milestone;
 extraction/model integration and a behavior-tested hosted migration are separate
 steps, not a permanent second engine per host.
 
+The [S2a contract facade](storage-contract.md) shares this store's transactions
+and mutation helpers; it adds model-free lifecycle/inspection contracts, not a
+second database engine. MOC organization and model/MCP adapters are subsequent
+slices. No private source, prompt or fixture contents are copied into this slice.
+
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
 ## Trust boundaries
