@@ -300,6 +300,29 @@ export function openMemoryCore(input) {
     });
   }
 
+  function rebuildIndex(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'expectedIndexRevision', 'limit', 'cursor']);
+      const ns = contractNamespace(input.namespace);
+      const expectedIndexRevision = contractRevision(input.expectedIndexRevision);
+      const count = input.limit === undefined ? 500 : input.limit;
+      if (!Number.isInteger(count) || count < 1 || count > 500) {
+        throw new MemoryStoreError('invalid_input');
+      }
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'rebuild',
+        l: count, r: expectedIndexRevision };
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      if (cursor && cursor.e !== expectedIndexRevision) throw new MemoryStoreError('invalid_cursor');
+      const result = runtime.rebuildIndex(ns, { expectedIndexRevision, limit: count,
+        ...(cursor ? { progress: cursor.a } : {}) });
+      return { state: result.state, indexRevision: result.indexRevision,
+        nextCursor: result.progress === null ? null : encodeCursor({ ...binding,
+          e: expectedIndexRevision, a: result.progress }),
+        exhausted: result.exhausted, invalidRefs: result.invalidRefs };
+    });
+  }
+
   function applyPlacement(input) {
     return invoke(() => {
       runtime.ready();
@@ -439,7 +462,7 @@ export function openMemoryCore(input) {
 
   return Object.freeze({
     admit, list, get, correct, forget, claimAdmission, finishAdmission, abandonAdmission,
-    applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement,
+    applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     close() {
       runtime.close();
       return success(null);

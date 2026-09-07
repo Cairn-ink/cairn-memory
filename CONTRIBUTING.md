@@ -31,6 +31,9 @@ Its injected scripted extractor verifies source binding and lifecycle, not model
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.
 
+For index generation changes also run `npm run demo:rebuild` on both core
+runtime versions. This validates existing organization without a model service.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

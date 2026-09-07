@@ -3,9 +3,10 @@ import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
+import { migrateVersion6 } from "./index-schema.mjs";
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 6;
+const VERSION = 7;
 
 function createVersion3(db) {
   db.exec(`
@@ -244,11 +245,17 @@ export function openDatabase(path) {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if (appId === APPLICATION_ID && version === VERSION) return;
+      if (appId === APPLICATION_ID && version === 6) {
+        migrateVersion6(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
       if (appId === APPLICATION_ID && version === 1) {
         migrateVersion1(db);
         migrateVersion3(db);
         migrateVersion4(db);
         migrateVersion5(db);
+        migrateVersion6(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -256,17 +263,20 @@ export function openDatabase(path) {
         migrateVersion3(db);
         migrateVersion4(db);
         migrateVersion5(db);
+        migrateVersion6(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 4) {
         migrateVersion4(db);
         migrateVersion5(db);
+        migrateVersion6(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 5) {
         migrateVersion5(db);
+        migrateVersion6(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -276,6 +286,7 @@ export function openDatabase(path) {
       migrateVersion3(db);
       migrateVersion4(db);
       migrateVersion5(db);
+      migrateVersion6(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

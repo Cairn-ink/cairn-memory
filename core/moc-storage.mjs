@@ -14,7 +14,14 @@ const titleKey = (title) => title.normalize("NFKC").toLocaleLowerCase("und");
 const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
-export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts }) {
+export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts, assertIndexAvailable }) {
+  // Read authority is generation-owned; writes below continue targeting declarations.
+  // Title validity deliberately consults every original source binding.
+  function projectPrepare(sql) {
+    return db.prepare(sql.replace(/\bmoc_memory_refs\b/g, 'index_read_memory_refs')
+      .replace(/\bmoc_edges\b/g, 'index_read_edges').replace(/\bmocs\b/g, 'index_read_mocs')
+      .replace(/\bmemories\b/g, 'index_read_memories'));
+  }
   const mocById = (ns, id) => db.prepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
     .get(...boundary(ns), id);
 
@@ -29,7 +36,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
   function titleSources(id) {
     return db.prepare(`SELECT memory_id AS memoryId, memory_revision AS revision
-      FROM moc_title_sources WHERE moc_id = ? ORDER BY memory_id`).all(id);
+      FROM index_read_title_sources WHERE moc_id = ? ORDER BY memory_id`).all(id);
   }
 
   function mocDto(moc) {
@@ -302,6 +309,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
   function classificationSnapshot(ns, ids, guards, expectedIndex) {
     return transaction(db, () => {
+      assertIndexAvailable(ns);
       assertEpochValue(ns, expectedIndex);
       const expected = guardsMap(guards);
       if (expected.size !== ids.length || ids.some((id) => !expected.has(id))) fail("invalid_input");
@@ -317,7 +325,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
   }
 
   function placementRefs(ns, memoryId) {
-    return db.prepare(`SELECT r.*, m.id, m.title, m.owner_id, m.scope, m.project_id FROM moc_memory_refs r
+    return projectPrepare(`SELECT r.*, m.id, m.title, m.owner_id, m.scope, m.project_id FROM moc_memory_refs r
       JOIN mocs m ON m.id = r.moc_id JOIN memories memory ON memory.id = r.memory_id
       WHERE ${qualifiedNamespace("m")} AND m.level = 1 AND ${qualifiedNamespace("memory")}
         AND memory.deleted = 0 AND r.memory_id = ?
@@ -338,6 +346,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch }) {
     return transaction(db, () => {
+      assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
@@ -418,17 +427,23 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           SELECT 'unfiled', 3, '', memory.id, '', NULL, NULL, NULL, memory.id,
             memory.revision, 'memory', NULL, memory.content
           FROM memories memory WHERE ${qualifiedNamespace("memory")} AND memory.deleted = 0
-            AND memory.filing_status = 'unfiled'
+            AND (memory.filing_status = 'unfiled' OR NOT EXISTS (
+              SELECT 1 FROM moc_memory_refs valid_ref JOIN mocs valid_parent ON valid_parent.id = valid_ref.moc_id
+              WHERE valid_ref.memory_id = memory.id AND valid_parent.level = 1
+                AND valid_parent.owner_id = memory.owner_id AND valid_parent.scope = memory.scope
+                AND valid_parent.project_id = memory.project_id AND valid_ref.moc_revision = valid_parent.revision
+                AND valid_ref.memory_revision = memory.revision))
         ) SELECT * FROM candidates ORDER BY sort_level, sort_title, sort_id, sort_ref
           LIMIT ? OFFSET ?`;
-        rows = db.prepare(sql).all(...boundary(ns), recall, ...boundary(ns), recall,
+        rows = projectPrepare(sql).all(...boundary(ns), recall, ...boundary(ns), recall,
           ...boundary(ns), ...boundary(ns), count, offset);
       } else {
-        const parent = mocById(ns, parentRef.mocId);
+        const parent = projectPrepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
+          .get(...boundary(ns), parentRef.mocId);
         if (!parent) fail("moc_not_found");
         if (parent.revision !== parentRef.revision) fail("revision_conflict");
         if (parent.level === 1) {
-          rows = db.prepare(`SELECT
+          rows = projectPrepare(`SELECT
             CASE WHEN memory.id IS NULL THEN 'invalid'
               WHEN memory.owner_id != moc.owner_id OR memory.scope != moc.scope
                 OR memory.project_id != moc.project_id THEN 'invalid'
@@ -448,7 +463,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             WHERE ref.moc_id = ? ORDER BY sort_id, sort_ref LIMIT ? OFFSET ?`)
             .all(parent.id, count, offset);
         } else {
-          rows = db.prepare(`WITH edges AS (
+          rows = projectPrepare(`WITH edges AS (
             SELECT edge.*, child.level child_level, child.owner_id child_owner,
               child.scope child_scope, child.project_id child_project, child.revision current_child_revision,
               ${titleExpression.replaceAll("moc.", "child.").replaceAll("moc ", "child ")} visible_title,

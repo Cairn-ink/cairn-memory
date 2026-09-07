@@ -68,9 +68,9 @@ can advance the epoch more than once within its one atomic transaction.
 
 ## Upgrade and verification
 
-Opening v1/v3/v4/v5 databases atomically upgrades to schema v6. Existing memory,
+Opening v1/v3/v4/v5/v6 databases atomically upgrades to schema v7. Existing memory,
 source IDs, suppression, MOC membership, epochs and cursor identity are retained.
-Old v1/v3/v4/v5 binaries cannot open v6; draft v2 and unknown databases remain
+Old v1/v3/v4/v5/v6 binaries cannot open v7; draft v2 and unknown databases remain
 unsupported. Back up meaningful files with writers closed before upgrading;
 there is no downgrade tool or production migration in this change.
 
