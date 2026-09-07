@@ -1,5 +1,11 @@
 # Local memory store — developer preview (2A)
 
+The additive [S2a model-free core contract](storage-contract.md) provides explicit
+admission and bounded metadata/source inspection over this same store. Existing
+methods and result shapes below are retained; their mutations also invalidate
+the new inspection cursors. Opening v1 data now upgrades it to v3. Draft-v2 and
+unknown formats are rejected, and old v1 binaries cannot open v3 files.
+
 This is a real SQLite persistence library runnable from public source. It is
 **not yet a standalone memory service**: no model extraction, semantic recall,
 local MCP/HTTP server, or host adapter is wired to it. The released Claude
