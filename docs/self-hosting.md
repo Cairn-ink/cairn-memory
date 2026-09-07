@@ -2,10 +2,11 @@
 
 Version 0.1 publishes the client, payload schemas, and service compatibility contract. It does **not** yet publish a turnkey extraction, database, authentication, or MCP server stack.
 
-The unreleased [local storage preview](local-store.md) adds real SQLite
-persistence, receipts, correction/deletion, and lexical lookup from public
-source. It is not yet an endpoint you can put in the plugin configuration.
-Model extraction and local MCP/HTTP wiring remain separate milestones.
+The unreleased [local engine preview](local-engine.md) adds real SQLite
+persistence, model extraction/recall, and a stdio MCP server from public source.
+It is usable with a stdio-capable client and explicitly configured model.
+It is not an HTTP endpoint you can put in the existing plugin configuration;
+the compatible HTTP-service requirements below are still separate work.
 
 You can point the plugin at a compatible endpoint through `api_endpoint`. That service must provide:
 
@@ -20,7 +21,7 @@ Remote endpoints must use HTTPS so the plugin credential and memory content are 
 
 Use the JSON Schemas in `schemas/` and the semantics in `docs/protocol.md`. Passing schema validation alone is not sufficient: ownership, idempotency, provenance, and fail-open behavior are semantic requirements.
 
-The next milestones build a runnable OSS engine on the local store, then publish
-reproducible product evidence and native host adapters. Until those gates pass,
+The next milestones harden setup/data flows, provide export/restore, broaden
+reproducible product evidence and add native host adapters. Until those gates pass,
 describing this repository as a complete self-hosted Mem0/Supermemory replacement
 would be misleading.

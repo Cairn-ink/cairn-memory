@@ -12,6 +12,11 @@ Thanks for helping make agent memory smaller, safer, and easier to inspect.
 For changes to `core/` or its example, also run `npm run test:core` and
 `npm run demo:store` on Node >=22.16. CI checks the minimum 22.16 runtime and
 Node 24. There is no TypeScript/typecheck gate in this JavaScript repository.
+For changes to the engine/model/MCP path, also run `npm ci --prefix runtime
+--ignore-scripts` and `npm run test:mcp`. Real-model probes are explicit opt-in
+commands with synthetic data and preinstalled weights; report their outcomes
+separately from deterministic mock tests. Do not download models or call paid
+providers implicitly as part of CI.
 Use only synthetic temporary databases; never point tests at user or production
 data. See `docs/local-store.md` for the preview's boundaries and retention limits.
 

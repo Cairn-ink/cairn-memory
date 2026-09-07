@@ -4,6 +4,14 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add the shared model-driven extraction/recall engine, injectable model contract,
+  explicit Ollama transport and optional local stdio MCP runtime. Include deterministic
+  mock fixtures, real-SQLite/MCP tests and synthetic real-model probes.
+- Add persistent capture admission/replay protection and atomic multi-memory receipt
+  writes. Schema v1 upgrades transactionally to v2; old v1 clients reject v2 files.
+- Keep the hosted service, HTTP plugin, Moss maintenance, telemetry defaults and
+  production deployment unchanged; local runtime has no telemetry or cloud fallback.
+
 - Add a source-runnable local SQLite storage preview with atomic memory/receipt
   writes, exact owner/project isolation, deduplication, revision-checked correction,
   deletion suppression, lexical lookup, and real-file/concurrent-process tests.

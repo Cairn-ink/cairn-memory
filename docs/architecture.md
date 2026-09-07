@@ -1,8 +1,8 @@
 # Architecture and repository boundary
 
-Cairn Memory is moving toward a shared open-source memory core. The public
-repository now includes the local storage foundation (`core/`); extraction and
-the deployed service remain private until separately staged migrations.
+Cairn Memory now has a shared public storage/extraction/recall engine (`core/`)
+and an optional stdio MCP adapter (`runtime/`). The deployed service still uses
+its previous private implementation until a separately staged migration.
 
 ```text
 Claude Code
@@ -19,21 +19,25 @@ This public repository                    Cairn.ink private application
   project identity                          billing and operations
   protocol schemas                          hosted UI
   conformance tests
-  local SQLite store (not yet connected to the plugin or hosted service)
+  local SQLite store + model engine
+  stdio MCP adapter (not connected to the hosted HTTP plugin)
 ```
 
 ## Source-of-truth rule
 
 This repository owns plugin behavior, marketplace packaging, public wire schemas, and compatibility documentation. The private Cairn.ink application owns its implementation of those contracts and runs its own conformance tests; it does not maintain a second plugin copy.
 
-`core/` is the target reusable persistence implementation for the upcoming OSS
-engine and host adapters. It contains no account system, model client, HTTP/MCP
-server, or telemetry. Its exact-namespace JavaScript API is documented in
-[Local store](local-store.md); it is not the hosted wire contract. Public source
-is authored independently of private application code and reuses the already
-public redactor. The hosted implementation is unchanged in this milestone;
-extraction/model integration and a behavior-tested hosted migration are separate
-steps, not a permanent second engine per host.
+`core/` owns the storage and model-independent extraction/recall logic; the
+bundled Ollama adapter implements an injectable structured-model interface.
+`runtime/` only validates local MCP input and calls that engine. It must not
+grow a second extractor or ranker. There is no account system, billing or
+telemetry in this path. [Local store](local-store.md) defines exact-namespace
+storage; [Local engine](local-engine.md) defines personal-plus-project recall,
+capture leases, inference destinations and local MCP behavior. Neither changes
+the hosted HTTP wire contract. Public source is independently authored and
+reuses the already-public redactor. Hosted migration must later pin a public
+engine version, compare behavior/data compatibility, and remove replaced private
+paths. That migration and deployment are not performed here.
 
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
