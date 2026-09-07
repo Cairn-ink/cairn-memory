@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { captureEvent } from "../lib/capture-event.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
+import { readControlState } from "../lib/control-state.mjs";
 
 const dataDir =
   process.env.CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory");
@@ -20,9 +20,8 @@ try {
 } catch {
   process.exit(0);
 }
-if (await stat(join(dataDir, "paused")).then(() => true).catch(() => false)) {
-  process.exit(0);
-}
+const control = await readControlState(dataDir);
+if (control.paused) process.exit(0);
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -33,7 +32,10 @@ try {
   process.exit(0);
 }
 if (!event) process.exit(0);
-const payload = JSON.stringify(event);
+const payload = JSON.stringify({
+  ...event,
+  capture_generation: control.generation,
+});
 
 try {
   const worker = spawn(

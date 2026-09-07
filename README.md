@@ -69,8 +69,9 @@ The bundled MCP connection also exposes explicit `remember_memory`, `recall_memo
 
 - Installation is explicit. Automatic capture begins only after installation and is on by default.
 - Only textual user and assistant message blocks are allowlisted.
-- File contents, tool results, terminal output, filesystem paths, and repository names are not uploaded.
-- Common credential shapes are replaced with `[REDACTED]` locally before a request body is constructed. The hosted service redacts again as defense in depth.
+- Tool-result and tool-use blocks are excluded; the plugin does not read arbitrary project files. Ordinary user/assistant text can still contain pasted file contents, terminal output, paths, or repository names and is eligible for processing.
+- Supported credential shapes are replaced with `[REDACTED]` locally in both capture text and automatic recall queries before transmission. Redaction is best-effort, not a guarantee that every secret is recognized. The hosted service redacts again as defense in depth.
+- Automatic recall sends a redacted, bounded version of the current prompt to the configured service. This occurs before capture and is a separate processing path.
 - Project scope is a keyed opaque identifier. Its derivation key never leaves the device and is separate from the anonymous telemetry id.
 - Automatically inferred memories remain personal or project-private. They cannot publish into a team or community.
 - Product telemetry is content-free, defaults on, and can be disabled. Its schema accepts only lifecycle event, client version, platform, and a random installation id.
@@ -78,6 +79,11 @@ The bundled MCP connection also exposes explicit `remember_memory`, `recall_memo
 - Capture workers are detached so headless `claude -p` sessions cannot cancel them during teardown; the allowlisted handoff is piped directly to the worker and is not written to a queue file.
 
 Use `/cairn-memory:pause`, `/cairn-memory:resume`, and `/cairn-memory:status` to control capture and recall.
+
+Paused text is not automatically backfilled. After resume, each session's first
+capture hook skips its current unprocessed history (including any early resumed
+text); later complete messages are captured. Requests already started before
+pause may finish. See the detailed pause boundaries in the privacy guide.
 
 Read the full [privacy and threat model](docs/privacy.md). Security reports belong in the private channel described in [SECURITY.md](SECURITY.md), not a public issue.
 
