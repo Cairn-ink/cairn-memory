@@ -4,6 +4,13 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add S2c revision-safe fetch with receipt continuation and bounded recall over
+  explicitly authorized namespaces. A final authoritative read prevents deleted
+  or changed candidates from escaping after model work. Injected selector/ranker
+  adapters share bounded-call enforcement with classification. Synthetic tests
+  and a runnable mock demo verify controls, not semantic quality. No local MCP
+  server or hosted migration is included; schema remains v4.
+
 - Add S2b persisted L2/L1 MOC organization, guarded multi-membership placement,
   bounded maps and read-only classification through an injected model port.
   Corrections/deletions invalidate memberships and source-derived titles in the

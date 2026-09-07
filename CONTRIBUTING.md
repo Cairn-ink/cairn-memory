@@ -19,6 +19,9 @@ For MOC/classification changes also run `npm run demo:moc`. It uses a scripted
 mock and a fresh SQLite file, not a model service or user database. Both core CI
 runtime versions run this example as well.
 
+For fetch/recall changes also run `npm run demo:recall`. Its scripted models test
+orchestration, not semantic relevance. Both core CI runtime versions run it.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

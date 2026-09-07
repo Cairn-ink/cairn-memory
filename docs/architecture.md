@@ -42,6 +42,10 @@ bounded maps and an injected classification port over that same runtime. No mode
 provider or MCP adapter is bundled. No private source, prompt or fixture contents
 are copied into these slices.
 
+[S2c](fetch-recall.md) adds bounded fetch/recall to that same runtime. Recall
+uses injected selection/ranking adapters and an authoritative final read;
+no model provider or network host is bundled. The released plugin is unchanged.
+
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
 ## Trust boundaries

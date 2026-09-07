@@ -107,5 +107,6 @@ claim that the entire S1 memory/placement suite passes.
 classification, explicit placement, hierarchy inspection and deletion. It prints
 the retained synthetic database path for inspection; no account or model needed.
 
-Next: bounded fetch/recall orchestration and MCP, followed by real-model
-organization/retrieval evaluation. Mock outcomes are not those quality results.
+[S2c](fetch-recall.md) now adds bounded fetch/recall orchestration. MCP and
+real-model organization/retrieval evaluation remain separate milestones.
+Mock outcomes are not those quality results.

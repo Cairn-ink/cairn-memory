@@ -3,8 +3,10 @@ import { createMemoryRuntime } from "./runtime.mjs";
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
 import { classify } from './classification.mjs';
+import { memoryRefs, fetchMemories } from './fetch.mjs';
+import { recallMemories } from './recall.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision,
+  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
@@ -302,6 +304,45 @@ export function openMemoryCore(input) {
     });
   }
 
+  function fetch(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'refs', 'cursor', 'tokenBudget']);
+      const ns = contractNamespace(input.namespace);
+      const refs = memoryRefs(input.refs);
+      const budget = contractRevision(input.tokenBudget ?? 4000);
+      if (budget > 4000) throw new MemoryStoreError('invalid_input');
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,
+        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url') };
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      return fetchMemories({ runtime, model, ns, refs, budget, cursor, binding, encodeCursor });
+    });
+  }
+
+  async function recall(input) {
+    try {
+      runtime.ready();
+      object(input, ['readSet', 'query', 'limit']);
+      let namespaces;
+      try {
+        denseArray(input.readSet, 1, 2);
+        namespaces = input.readSet.map(contractNamespace);
+        if (namespaces.length === 2 && (namespaces[0].ownerId !== namespaces[1].ownerId ||
+            namespaces[0].scope === namespaces[1].scope)) throw new Error();
+      } catch { throw new MemoryStoreError('invalid_read_set'); }
+      const query = boundedText(input.query, 4000);
+      const count = contractRevision(input.limit ?? 6);
+      if (count > 12) throw new MemoryStoreError('invalid_input');
+      return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
+        limit: count, map, fetch,
+        finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
+          namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
+          revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
+        })), selected),
+      }));
+    } catch (error) { return failure(error); }
+  }
+
   async function classifyPlacement(input) {
     try {
       runtime.ready();
@@ -322,7 +363,7 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, applyPlacement, linkMocs, map, classifyPlacement,
+    admit, list, get, correct, forget, applyPlacement, linkMocs, map, fetch, recall, classifyPlacement,
     close() {
       runtime.close();
       return success(null);

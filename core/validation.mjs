@@ -19,6 +19,15 @@ export function object(value, allowed) {
   return value;
 }
 
+export function denseArray(value, min, max) {
+  if (!Array.isArray(value) || value.length < min || value.length > max ||
+      Object.keys(value).length !== value.length) fail('invalid_input');
+  for (let index = 0; index < value.length; index++) {
+    if (!Object.hasOwn(value, index)) fail('invalid_input');
+  }
+  return value;
+}
+
 export function identifier(value) {
   if (typeof value !== "string" || !value || value.length > 200 ||
       value.trim() !== value || /[\x00-\x1f\x7f]/.test(value)) fail("invalid_identifier");
