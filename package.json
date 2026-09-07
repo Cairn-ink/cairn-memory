@@ -17,6 +17,7 @@
     "demo:capture": "node examples/capture.mjs",
     "demo:conflicts": "node examples/conflicts.mjs",
     "demo:rebuild": "node examples/index-rebuild.mjs",
+    "demo:continuation": "node examples/recall-continuation.mjs",
     "validate": "node scripts/validate-json.mjs"
   }
 }

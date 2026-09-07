@@ -26,32 +26,62 @@ function selection(output, allowed, maximum) {
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') fail('model_not_configured');
-  const maps = readSet.map((namespace) => unwrap(map({ namespace, purpose: 'recall' })));
-  const allowed = new Map();
-  maps.forEach((page, namespaceIndex) => {
-    for (const item of page.items) {
-      const ref = item.type === 'unfiled' ? item.ref :
-        item.type === 'ref' && item.ref.childType === 'memory' ?
-          { memoryId: item.ref.childId, revision: item.ref.childRevision } : null;
-      if (ref) { const candidate = { namespaceIndex, ...ref }; allowed.set(key(candidate), candidate); }
+  const maps = [];
+  const chosen = new Map();
+  for (let round = 0; round < 2; round++) {
+    const visible = [];
+    const allowed = new Map();
+    readSet.forEach((namespace, namespaceIndex) => {
+      const previous = maps[namespaceIndex];
+      if (previous?.exhausted) return;
+      const page = unwrap(map({ namespace, purpose: 'recall', tokenBudget: 4000,
+        ...(previous ? { cursor: previous.nextCursor } : {}) }));
+      maps[namespaceIndex] = page;
+      visible.push({ namespaceIndex, items: page.items, exhausted: page.exhausted });
+      for (const item of page.items) {
+        const ref = item.type === 'unfiled' ? item.ref :
+          item.type === 'ref' && item.ref.childType === 'memory' ?
+            { memoryId: item.ref.childId, revision: item.ref.childRevision } : null;
+        if (ref) { const candidate = { namespaceIndex, ...ref }; allowed.set(key(candidate), candidate); }
+      }
+    });
+    if (!visible.length) break;
+    const maxRefs = Math.min(24, 36 - chosen.size);
+    const output = await callModel(model, 'select', selectPrompt, { query, maps: visible, maxRefs });
+    const selected = selection(output, allowed, maxRefs);
+    for (let i = 0; i < readSet.length; i++) {
+      if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) fail('invalid_model_output');
     }
-  });
-  const output = await callModel(model, 'select', selectPrompt, {
-    query, maps: maps.map((page, namespaceIndex) => ({ namespaceIndex,
-      items: page.items, exhausted: page.exhausted })),
-  });
-  const chosen = selection(output, allowed, 24);
-  for (let i = 0; i < readSet.length; i++) {
-    if (chosen.filter((ref) => ref.namespaceIndex === i).length > 12) fail('invalid_model_output');
+    for (const ref of selected) {
+      if (!chosen.has(key(ref))) chosen.set(key(ref), ref);
+    }
   }
   const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: maps[i].exhausted,
     fetchExhausted: true }));
-  const candidates = chosen.map((ref) => {
-    const page = unwrap(fetch({ namespace: readSet[ref.namespaceIndex],
-      refs: [{ memoryId: ref.memoryId, revision: ref.revision }] }));
-    if (page.invalidRefs.length || page.items.length !== 1) fail('revision_conflict');
+  const candidates = [...chosen.values()].map((ref) => {
+    const request = { namespace: readSet[ref.namespaceIndex], tokenBudget: 4000,
+      refs: [{ memoryId: ref.memoryId, revision: ref.revision }] };
+    const receipts = [];
+    const receiptIds = new Set();
+    let page;
+    let item;
+    for (let round = 0; round < 2; round++) {
+      page = unwrap(fetch({ ...request, ...(page ? { cursor: page.nextCursor } : {}) }));
+      if (page.invalidRefs.length || page.items.length !== 1) fail('revision_conflict');
+      const current = page.items[0];
+      if (current.memory.id !== ref.memoryId || current.memory.revision !== ref.revision) {
+        fail('revision_conflict');
+      }
+      for (const receipt of current.receipts) {
+        if (receiptIds.has(receipt.id)) fail('revision_conflict');
+        receiptIds.add(receipt.id);
+        receipts.push(receipt);
+      }
+      item = current;
+      if (page.exhausted) break;
+    }
     if (!page.exhausted) namespaces[ref.namespaceIndex].fetchExhausted = false;
-    return { ...ref, item: page.items[0] };
+    return { ...ref, item: { ...item, receipts } };
   });
   let ranked = [];
   if (candidates.length) {
