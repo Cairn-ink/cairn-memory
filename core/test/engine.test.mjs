@@ -126,6 +126,17 @@ test("expired lease is reclaimed and stale completion/abandon cannot affect its 
     { duplicate: false, memoryCount: 0, suppressedCount: 0 });
 });
 
+test("capture ledger operations reject fields belonging to other operations", (t) => {
+  const { memory } = fixture(t, []);
+  const key = { client: "test", eventId: "event", digest: "a".repeat(64) };
+  assert.throws(() => memory.claimCapture({ ...key, leaseMs: 1000, token: "unexpected" }));
+  const { token } = memory.claimCapture({ ...key, leaseMs: 1000 });
+  assert.throws(() => memory.finishCapture({ ...key, token, leaseMs: 1000 }, []));
+  assert.throws(() => memory.abandonCapture({ ...key, token, leaseMs: 1000 }));
+  assert.deepEqual(memory.finishCapture({ ...key, token }, []),
+    { duplicate: false, memoryCount: 0, suppressedCount: 0 });
+});
+
 test("forgotten memory is neither recreated by replay nor by a new extraction event", async (t) => {
   const { engine, memory } = fixture(t, [extracted(), extracted()]);
   await engine.capture(captured());
@@ -198,4 +209,22 @@ test("v1 database migration preserves memory, receipts and suppression", (t) => 
   t.after(() => reopened.close());
   assert.deepEqual(reopened.scope(ns).get(saved.id), saved);
   assert.throws(() => reopened.scope(ns).remember(explicit("deleted")), /memory_suppressed/);
+});
+
+test("failed v1 migration rolls back and can recover without losing memories", (t) => {
+  const { path, store, engine, ns } = fixture(t, []);
+  const saved = engine.remember(explicit("preserved during migration failure"));
+  store.close();
+  const db = new DatabaseSync(path);
+  t.after(() => db.close());
+  db.exec(`DROP TABLE capture_events; PRAGMA user_version = 1;
+    CREATE VIEW capture_events AS SELECT id FROM memories;`);
+  assert.throws(() => openMemoryStore({ path }), /already exists/);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 1);
+  assert.equal(db.prepare("SELECT content FROM memories WHERE id = ?").get(saved.id).content, saved.content);
+  db.exec("DROP VIEW capture_events");
+  const recovered = openMemoryStore({ path });
+  t.after(() => recovered.close());
+  assert.deepEqual(recovered.scope(ns).get(saved.id), saved);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 2);
 });

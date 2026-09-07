@@ -5,6 +5,11 @@ over the SQLite store. The local stdio MCP server is a thin adapter to that same
 engine. Neither requires a Cairn account. Moss/maintenance and the hosted-service
 migration are not included; the deployed service still uses its previous code.
 
+**Not release-ready:** repeated real-model probes returned a formatting
+preference for an unrelated factual question. Stronger prompt wording did not
+resolve it. See the [complete smoke results](evals/local-engine-2b.md); passing
+mock tests establish control-flow invariants, not semantic recall quality.
+
 ## Install and configure
 
 Use Node >=22.16. From a source checkout:

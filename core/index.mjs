@@ -89,8 +89,8 @@ export function openMemoryStore(input) {
       return dto(row(id));
     }
 
-    function captureKey(input) {
-      object(input, ["client", "eventId", "digest", "token", "leaseMs"]);
+    function captureKey(input, operationField) {
+      object(input, ["client", "eventId", "digest", operationField]);
       identifier(input.client);
       identifier(input.eventId);
       if (typeof input.digest !== "string" || !/^[a-f0-9]{64}$/.test(input.digest)) fail("invalid_digest");
@@ -108,7 +108,7 @@ export function openMemoryStore(input) {
 
       claimCapture(input) {
         ready();
-        const key = captureKey(input);
+        const key = captureKey(input, "leaseMs");
         if (!Number.isInteger(input.leaseMs) || input.leaseMs < 1 || input.leaseMs > 125_000) {
           fail("invalid_lease");
         }
@@ -132,7 +132,7 @@ export function openMemoryStore(input) {
 
       finishCapture(input, items) {
         ready();
-        const key = captureKey(input);
+        const key = captureKey(input, "token");
         identifier(input.token);
         if (!Array.isArray(items) || items.length > 5) fail("invalid_capture");
         const values = items.map((item) => {
@@ -166,7 +166,7 @@ export function openMemoryStore(input) {
 
       abandonCapture(input) {
         ready();
-        const key = captureKey(input);
+        const key = captureKey(input, "token");
         identifier(input.token);
         return transaction(db, () => db.prepare(`UPDATE capture_events SET expires_at = 0 WHERE ${captureWhere}
           AND token = ? AND digest = ? AND completed = 0`)

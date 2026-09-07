@@ -16,6 +16,8 @@ It is deliberately small: one Claude Code plugin, one remote MCP connection, no 
 now support model extraction, sourced recall, correction and forgetting over
 SQLite, without a Cairn account. Node >=22.16 and an explicitly configured model
 are required for inference. Deterministic mocks are included for contributors.
+Real-model recall has an unresolved unrelated-query false positive; this is not
+release-ready. See the [passing and failing probe results](docs/evals/local-engine-2b.md).
 The plugin installation below still uses the existing hosted HTTP service;
 it is not automatically redirected to this local engine.
 

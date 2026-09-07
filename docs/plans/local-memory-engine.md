@@ -55,15 +55,24 @@ proof that a model's interpretation is true.
 
 ## Verification record
 
-Local Node 22.16: 33 core tests, 3 real-SDK MCP tests and 31 existing plugin
+Local Node 22.16: 35 core tests, 3 real-SDK MCP tests and 31 existing plugin
 tests pass. JSON/version validation, strict Claude plugin validation, the store
 demo and `git diff --check` pass. `npm ci --prefix runtime --ignore-scripts`
 reproduces the lockfile; `npm audit --prefix runtime --omit=dev` reports zero
 known vulnerabilities at verification time. No TypeScript gate applies.
 
-The real local DeepSeek probe passed both directly and through actual stdio MCP
-with process restart; timings and scope limits are in
-`docs/evals/local-engine-2b.md`. No private conversation or model key was used.
+The real local DeepSeek probe initially passed directly and through actual stdio
+MCP, but two follow-up MCP runs returned an unrelated formatting preference.
+Clarifying the prompt did not fix this. Acceptance 4's unrelated-query behavior
+is not reliably satisfied: delivery remains a draft, not release-ready.
+All four outcomes and limits are in `docs/evals/local-engine-2b.md`.
+No private conversation or model key was used.
+
+Migration recovery is covered by a synthetic conflicting-view failure followed
+by successful retry with memory preservation. A separate compatibility check
+archived the actual fixed base's v1 implementation, created a synthetic v1 DB,
+opened it with v2, confirmed v1 throws `unsupported_database`, and reopened it
+with v2 to confirm the original memory and receipt were unchanged.
 Final SHA, CI, independent Standards/Spec review and any review correction rounds
 are recorded in the delivery PR. Root owns implementation/integration; complex
 state/data review requests Sol with high reasoning under the agreed routing

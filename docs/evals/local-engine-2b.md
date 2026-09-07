@@ -22,7 +22,7 @@ Its confidence of 1 is self-reported, not a calibrated quality score.
 | Explicit correction to detailed paragraphs | only corrected content, 3,709 ms | only corrected content, 3,968 ms |
 | Forget then recall | no memories, no model call | no memories, 2 ms |
 
-Both probe runs passed. There were no failed assertions in these two runs. The
+These initial two probe runs passed, but follow-up runs below failed. The
 direct run's cold extraction exceeded the default 30-second model timeout; the
 probe explicitly uses 120 seconds. Use an appropriate timeout or prewarm your
 chosen model. No inference-provider billing was involved; electricity/hardware
@@ -36,3 +36,30 @@ Commands and synthetic fixtures are versioned in `examples/probe-local-model.mjs
 and `runtime/probe.mjs`; see [setup](../local-engine.md). CI runs deterministic
 mock/real-SQLite/real-MCP transport tests without downloading models. The final
 PR records candidate SHA, final checks and any follow-up probe results.
+
+## Follow-up failures — release gate remains blocked
+
+A clean-source archive of candidate `ee855e0`, installed only from the public
+runtime lockfile and run with a cleared environment, failed the same actual MCP
+probe. Extraction (11,319 ms), restart replay (4 ms), and relevant recall
+(2,926 ms) passed. The unrelated factual query incorrectly returned the stored
+formatting preference (2,653 ms). The probe exited 1 at that assertion; its later
+steps were not executed. Deterministic tests in that clean archive passed.
+
+The recall prompt was then clarified to require direct subject relevance and to
+exclude formatting preferences from unrelated factual questions. Another fresh
+MCP probe still failed: extraction 8,268 ms, replay 3 ms, relevant recall
+3,085 ms, and the same false positive at 2,740 ms. It also exited 1 and did not
+execute later steps. No query-specific filtering or fixture exceptions were
+added, and the probe assertion has not been weakened.
+
+Total observed end-to-end runs: **two passed, two failed**, across the original
+and clarified prompts. This tiny, repeated fixture is not an accuracy estimate;
+it establishes that the bundled model/configuration does not reliably satisfy
+the unrelated-query requirement. Schema-valid IDs and real receipts do not
+guarantee semantic relevance. The prompt change is not a demonstrated fix.
+
+**Keep the delivery PR draft.** Before marking it ready, address this failure
+and verify direct relevance across fresh positive/negative fixtures (including
+non-formatting memories), retaining all outcomes. Deterministic safety gates
+and a successful transport smoke test are not substitutes for that evidence.
