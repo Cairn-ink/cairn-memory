@@ -4,6 +4,13 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add S2b persisted L2/L1 MOC organization, guarded multi-membership placement,
+  bounded maps and read-only classification through an injected model port.
+  Corrections/deletions invalidate memberships and source-derived titles in the
+  shared runtime. Upgrade v1/v3 data atomically to v4. Synthetic SQLite/mock tests
+  and a runnable demo verify controls, not real-model classification quality.
+  Semantic recall, a local MCP server and hosted migration remain separate work.
+
 - Add the model-free S2a core contract over the existing SQLite store: explicit
   receipt batches, metadata/source pagination, stable source IDs, persistent
   namespace epochs and signed cursors shared with legacy mutations. Upgrade v1

@@ -15,6 +15,10 @@ Node 24. There is no TypeScript/typecheck gate in this JavaScript repository.
 Use only synthetic temporary databases; never point tests at user or production
 data. See `docs/local-store.md` for the preview's boundaries and retention limits.
 
+For MOC/classification changes also run `npm run demo:moc`. It uses a scripted
+mock and a fresh SQLite file, not a model service or user database. Both core CI
+runtime versions run this example as well.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

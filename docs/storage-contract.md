@@ -46,8 +46,8 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
 
 The exact inputs, result fields and acceptance gates are in the
 [S2a plan](plans/s2-storage-contract.md). Unknown fields are rejected, including
-not-yet-implemented conflict hints. All memories are unfiled in this slice;
-placements/conflicts are empty. This is not a simulated MOC index.
+not-yet-implemented conflict hints. The subsequent [S2b extension](moc-placement.md)
+adds real placements and filed/unfiled state; conflicts remain empty.
 
 Personal scope must be exactly `{ownerId,scope:'personal',projectId:null}`.
 Project scope must be exactly `{ownerId,scope:'project',projectId}` with a
@@ -75,10 +75,10 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1 format performs an atomic upgrade to v3, retaining
+Opening the committed v1 or v3 format performs an atomic upgrade to v4, retaining
 existing memory/source data, revisions and suppression. Back up the file while
-all writers are closed before upgrading meaningful data. Old v1 binaries cannot
-open v3; there is no downgrade tool. The unmerged engine draft reserved v2; this
+all writers are closed before upgrading meaningful data. Old v1/v3 binaries cannot
+open v4; there is no downgrade tool. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
 not reset. Reconciliation with that draft belongs to the later engine work.
@@ -103,7 +103,7 @@ the rest of the memory/placement suite, infer model quality or emulate model
 output. Synthetic setup pins timestamps only; generated runtime IDs and actual
 returned revisions/content are never rewritten to make assertions pass.
 
-Next slices add MOC placement/map/fetch, mock-model adapters and MCP integration,
-then real-model evaluation. This slice does not fix or certify the draft
+S2b adds MOC placement/map and a mock-model adapter. Next slices add bounded
+fetch/recall and MCP integration, then real-model evaluation. This does not certify the draft
 engine's unrelated-query recall behavior. Hosted migration and Moss remain out
 of scope; the end goal is one public core consumed by all host adapters.

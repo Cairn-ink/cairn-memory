@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { openDatabase, transaction } from "./database.mjs";
+import { createMocStorage } from "./moc-storage.mjs";
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -19,6 +20,7 @@ export function createMemoryRuntime(input) {
     throw error;
   }
   let closed = false;
+  let mocStorage;
   const ready = () => { if (closed) fail("store_closed"); };
 
   function activeRow(ns, id) {
@@ -84,7 +86,7 @@ export function createMemoryRuntime(input) {
       confidence: memory.confidence,
       revision: memory.revision,
       state: "active",
-      filing: { status: "unfiled" },
+      filing: { status: memory.filing_status },
       receiptCount: memory.receipt_count,
       createdAt: memory.created_at,
       updatedAt: memory.updated_at,
@@ -95,6 +97,11 @@ export function createMemoryRuntime(input) {
     const withCount = { ...memory, receipt_count: db.prepare(
       "SELECT count(*) AS n FROM receipts WHERE memory_id = ?").get(memory.id).n };
     return { ...metadataDto(withCount), content: memory.content };
+  }
+
+  function memoryDto(memory, includeContent = false) {
+    const result = detailDto(memory);
+    return includeContent ? result : metadataDto({ ...memory, receipt_count: result.receiptCount });
   }
 
   function admit(ns, value, projection = {}) {
@@ -115,6 +122,7 @@ export function createMemoryRuntime(input) {
           changed = true;
         }
         if (changed) {
+          mocStorage.invalidateMemory(ns, existing.id, now);
           db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?,
             revision = revision + 1, updated_at = ? WHERE id = ?`)
             .run(kind, origin, confidence, now, existing.id);
@@ -151,6 +159,7 @@ export function createMemoryRuntime(input) {
       if (other) fail("memory_conflict");
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
+      mocStorage.invalidateMemory(ns, id, now);
       db.prepare(`UPDATE memories SET content = ?, fingerprint = ?, kind = ?,
         origin = 'explicit', confidence = 1, revision = revision + 1, updated_at = ?
         WHERE id = ?`).run(value.content, value.fingerprint, value.kind, now, id);
@@ -171,9 +180,11 @@ export function createMemoryRuntime(input) {
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (current.revision !== expectedRevision) fail("revision_conflict");
       suppress(ns, current.fingerprint);
+      const now = new Date().toISOString();
+      mocStorage.invalidateMemory(ns, id, now);
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`)
-        .run(new Date().toISOString(), id);
+        .run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
       return { forgotten: true, indexRevision: advanceEpoch(ns) };
     });
@@ -208,11 +219,11 @@ export function createMemoryRuntime(input) {
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail("cursor_stale");
-      if (!statuses.includes("unfiled")) return { rows: [], epoch: currentEpoch };
       let sql = `SELECT memories.*, (SELECT count(*) FROM receipts
         WHERE receipts.memory_id = memories.id) AS receipt_count
-        FROM memories WHERE ${where} AND deleted = 0`;
-      const params = [...boundary(ns)];
+        FROM memories WHERE ${where} AND deleted = 0
+        AND filing_status IN (${statuses.map(() => "?").join(",")})`;
+      const params = [...boundary(ns), ...statuses];
       if (anchor) {
         sql += " AND (updated_at < ? OR (updated_at = ? AND id > ?))";
         params.push(anchor.updatedAt, anchor.updatedAt, anchor.id);
@@ -242,13 +253,26 @@ export function createMemoryRuntime(input) {
       sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
       params.push(count + 1);
       return { memory: { ...metadataDto(memory), content: memory.content },
-        receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })), epoch: currentEpoch };
+        receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
+        placements: mocStorage.placementRefs(ns, id), epoch: currentEpoch };
     });
   }
 
+  mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto });
+
   return Object.freeze({
     identity, ready, admit, correct, forget, legacyGet, legacyList, legacySearch,
-    listPage, getPage, epoch(ns) { ready(); return epoch(ns); },
+    listPage, getPage,
+    applyPlacement(ns, proposal, guards, index) {
+      ready(); return mocStorage.applyPlacement(ns, proposal, guards, index);
+    },
+    linkMocs(ns, input) { ready(); return mocStorage.linkMocs(ns, input); },
+    mapRows(ns, input) { ready(); return mocStorage.mapRows(ns, input); },
+    classificationSnapshot(ns, ids, guards, index) {
+      ready(); return mocStorage.classificationSnapshot(ns, ids, guards, index);
+    },
+    assertEpoch(ns, index) { ready(); return mocStorage.assertEpoch(ns, index); },
+    epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { db.close(); closed = true; } },
   });
 }
