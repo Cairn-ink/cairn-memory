@@ -313,3 +313,75 @@ test('R06 published projections track hierarchy links, receipt revisions and leg
   assert.ok(!map(core).items.some((i) => i.type === 'unfiled' && i.ref.memoryId === c.id));
   assert.ok(!ok(core.list({ namespace })).memories.some((m) => m.id === c.id));
 });
+
+test('R01 foreign and orphan reference gaps consume bounded pages without exposing their keys', (t) => {
+  for (const includeOwned of [false, true]) {
+    const { core, db } = fixture(t);
+    const count = 90;
+    const memory = db.prepare("INSERT INTO memories VALUES (?,?,'personal','',?,?,'fact','explicit',1,1,0,'2025','2025','unfiled')");
+    const moc = db.prepare("INSERT INTO mocs VALUES (?,?,'personal','',?,?,?,1,'2025','2025')");
+    const source = db.prepare('INSERT INTO moc_title_sources VALUES (?,?,1)');
+    const membership = db.prepare('INSERT INTO moc_memory_refs VALUES (?,1,?,1)');
+    const edge = db.prepare('INSERT INTO moc_edges VALUES (?,1,?,1)');
+    db.exec('PRAGMA foreign_keys=OFF; BEGIN');
+    for (let i = 0; i < count; i++) {
+      const suffix = String(i).padStart(4, '0');
+      const f = `foreign-secret-${suffix}`; const o = `orphan-secret-${suffix}`;
+      memory.run(f, 'other', f, 'Foreign synthetic text');
+      moc.run(`${f}-l1`, 'other', 1, f, f);
+      moc.run(`${f}-l2`, 'other', 2, f, f);
+      source.run(`${f}-l1`, f); membership.run(`${f}-l1`, f); edge.run(`${f}-l2`, `${f}-l1`);
+      source.run(`${o}-l1`, o); membership.run(`${o}-l1`, o); edge.run(`${o}-l2`, `${o}-l1`);
+    }
+    if (includeOwned) {
+      memory.run('zz-owned-memory', namespace.ownerId, 'owned', 'Owned synthetic text');
+      moc.run('zz-owned-l1', namespace.ownerId, 1, 'Owned topic', 'owned topic');
+      moc.run('zz-owned-l2', namespace.ownerId, 2, 'Owned root', 'owned root');
+      source.run('zz-owned-l1', 'zz-owned-memory');
+      membership.run('zz-owned-l1', 'zz-owned-memory');
+      edge.run('zz-owned-l2', 'zz-owned-l1');
+    }
+    db.exec('COMMIT');
+    // Rank persisted keysets against physical rows, including ignored references.
+    // This catches unbounded scans independently of projection insert counts.
+    const phases = [
+      ['memories', ['id']], ['mocs', ['id']], ['moc_title_sources', ['moc_id', 'memory_id']],
+      ['moc_memory_refs', ['moc_id', 'memory_id']], ['moc_edges', ['parent_id', 'child_id']],
+    ];
+    const keys = phases.map(([table, columns], phase) => db.prepare(
+      `SELECT ${columns.join(',')} FROM ${table}${phase < 2 ? " WHERE owner_id='rebuild'" : ''} ORDER BY ${columns.join(',')}`)
+      .all().map((row) => JSON.stringify(columns.map((column) => row[column]))));
+    for (const [table, columns] of phases.slice(2)) {
+      const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM ${table}
+        WHERE (${columns.join(',')}) > (?,?) ORDER BY ${columns.join(',')} LIMIT 1`).all('', '');
+      assert.ok(plan.some((row) => /SEARCH .* USING INDEX/.test(row.detail)), JSON.stringify(plan));
+      assert.ok(plan.every((row) => !/TEMP B-TREE/.test(row.detail)), JSON.stringify(plan));
+    }
+    const total = keys.reduce((sum, rows) => sum + rows.length, 0);
+    assert.equal(total, 6 * count + (includeOwned ? 6 : 0));
+    const revision = epoch(db); let cursor; let visited = 0;
+    do {
+      const result = page(core, revision, 1, cursor);
+      assert.deepEqual(result.invalidRefs, [], 'foreign and fully orphaned refs have no owned diagnostics');
+      cursor = result.nextCursor;
+      if (cursor) {
+        const decoded = JSON.parse(Buffer.from(cursor.split('.')[0], 'base64url').toString());
+        assert.deepEqual(Object.keys(decoded.a).sort(), ['generation', 'phase', 'sequence']);
+        assert.ok(!JSON.stringify(decoded).includes('foreign-secret'));
+        assert.ok(!JSON.stringify(decoded).includes('orphan-secret'));
+        const progress = db.prepare('SELECT phase,last_key FROM index_generations WHERE id=?').get(decoded.a.generation);
+        const position = progress.last_key === 'null' ? 0 : keys[progress.phase].indexOf(progress.last_key) + 1;
+        assert.ok(progress.last_key === 'null' || position > 0, 'persisted key identifies an actual physical row');
+        const traversed = keys.slice(0, progress.phase).reduce((sum, rows) => sum + rows.length, 0) + position;
+        assert.equal(traversed, visited + 1, 'limit one visits exactly one physical node or reference, including ignored rows');
+      } else assert.equal(visited + 1, total, 'publication must not skip an unbounded foreign/orphan tail');
+      visited++;
+      assert.ok(visited <= total);
+    } while (cursor);
+    assert.equal(visited, total);
+    if (includeOwned) {
+      assert.equal(detail(core, 'zz-owned-memory').placements[0].mocId, 'zz-owned-l1');
+      assert.ok(map(core).items.some((item) => item.type === 'ref' && item.ref.childId === 'zz-owned-l1'));
+    } else assert.deepEqual(map(core).items, []);
+  }
+});

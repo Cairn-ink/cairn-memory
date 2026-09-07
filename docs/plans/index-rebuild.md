@@ -59,7 +59,13 @@ filing status or revision merely to repair navigation.
 ## Bounded execution, cursor and failure
 
 Each call visits at most limit (maximum 500) nodes/references total, including
-invalid records. Page Memory nodes, MOC nodes, title-source refs, L1→Memory refs
+invalid records. Relationship phases scan raw reference keys in bounded pages;
+foreign and fully orphaned records also consume work rather than being filtered
+by an unbounded SQL scan before LIMIT. They emit no foreign IDs or content.
+Persist raw keysets only in storage; opaque cursor progress must not reveal keys
+of skipped foreign relationships. A store with many unrelated refs may require
+more pages; namespace-addressable reference indexing is a later optimization.
+Page Memory nodes, MOC nodes, title-source refs, L1→Memory refs
 and L2→L1 refs in deterministic indexed keyset phases. No OFFSET, full-store array,
 unbounded source fanout per node, final whole-generation validation/copy or bulk
 old-generation cleanup. A bounded lookahead may determine whether work remains.
@@ -97,6 +103,8 @@ unbounded projection backfill on open. Unsupported/future formats stay rejected.
 
 - R01: empty, exact-boundary, limit1 and >500-node/ref builds obey per-call work
   limits, require no model/counter, and publish once with exact response shapes.
+  Large foreign/orphan gaps are charged to those limits, not scanned in a single
+  lookahead; cursor payloads and invalidRefs disclose none of their identifiers.
 - R02: two-process/reopen continuation works; forged/wrong store/scope/limit,
   consumed and malformed progress cursors cannot write or publish.
 - R03: same-namespace mutation or competing publication stales a build; unrelated

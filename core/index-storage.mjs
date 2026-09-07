@@ -27,14 +27,13 @@ export function createIndexStorage({ db, epoch, advanceEpoch }) {
     if (phase < 2) return db.prepare(`SELECT r.id, r.revision, r.${phase === 0 ? 'deleted' : 'level'} FROM ${p.table} r
       WHERE ${namespace('r')}${after} ORDER BY ${p.keys.map(k => `r.${k}`).join(',')} LIMIT 1`)
       .get(...boundary(ns), ...(key ?? []));
-    const parentKey = phase === 4 ? 'parent_id' : 'moc_id';
-    const childKey = phase === 4 ? 'child_id' : 'memory_id';
+    // Namespace attribution happens only after a bounded indexed read. Filtering
+    // here through endpoint joins could scan arbitrarily many orphan/foreign rows.
+    // Such rows consume work too; their key remains private persisted progress.
     return db.prepare(`SELECT r.* FROM ${p.table} r
-      LEFT JOIN mocs p ON p.id = r.${parentKey}
-      LEFT JOIN ${phase === 4 ? 'mocs' : 'memories'} c ON c.id = r.${childKey}
-      WHERE ((${namespace('p')}) OR (${namespace('c')}))${after}
+      WHERE 1 = 1${after}
       ORDER BY ${p.keys.map(k => `r.${k}`).join(',')} LIMIT 1`)
-      .get(...boundary(ns), ...boundary(ns), ...(key ?? []));
+      .get(...(key ?? []));
   }
 
   function invalid(ns, phase, row) {
@@ -47,6 +46,7 @@ export function createIndexStorage({ db, epoch, advanceEpoch }) {
     const parent = db.prepare('SELECT id, owner_id, scope, project_id, level, revision FROM mocs WHERE id = ?').get(parentId);
     const child = db.prepare(`SELECT id, owner_id, scope, project_id, revision, ${edge ? 'level' : 'deleted'}
       FROM ${edge ? 'mocs' : 'memories'} WHERE id = ?`).get(childId);
+    if (!owned(parent, ns) && !owned(child, ns)) return 'skip';
     let reason = null;
     if (!owned(parent, ns) || !owned(child, ns)) reason = 'not_found';
     else if ((edge && (parent.level !== 2 || child.level !== 1)) ||
@@ -63,17 +63,14 @@ export function createIndexStorage({ db, epoch, advanceEpoch }) {
       let generation;
       if (progress !== undefined) {
         if (!progress || typeof progress !== 'object' || Array.isArray(progress) ||
-          Object.keys(progress).sort().join(',') !== 'generation,key,phase,sequence' ||
+          Object.keys(progress).sort().join(',') !== 'generation,phase,sequence' ||
           typeof progress.generation !== 'string' || !Number.isInteger(progress.phase) ||
           progress.phase < 0 || progress.phase > 4 || !Number.isSafeInteger(progress.sequence) ||
-          progress.sequence < 1 || !(progress.key === null || (Array.isArray(progress.key) &&
-            progress.key.length === phases[progress.phase].keys.length &&
-            Object.keys(progress.key).length === progress.key.length &&
-            progress.key.every(k => typeof k === 'string')))) fail('invalid_cursor');
+          progress.sequence < 1) fail('invalid_cursor');
         generation = db.prepare('SELECT * FROM index_generations WHERE id = ?').get(progress.generation);
         if (!generation || !owned(generation, ns) || generation.captured_epoch !== expectedIndexRevision ||
           generation.page_limit !== limit || generation.published || generation.phase !== progress.phase ||
-          generation.last_key !== JSON.stringify(progress.key) || generation.sequence !== progress.sequence) fail('invalid_cursor');
+          generation.sequence !== progress.sequence) fail('invalid_cursor');
         if (epoch(ns) !== expectedIndexRevision) fail('stale_rebuild');
       } else {
         if (epoch(ns) !== expectedIndexRevision) fail('index_revision_conflict');
@@ -110,7 +107,7 @@ export function createIndexStorage({ db, epoch, advanceEpoch }) {
       db.prepare('UPDATE index_generations SET phase = ?, last_key = ?, sequence = ? WHERE id = ?')
         .run(phase,JSON.stringify(key),sequence,generation.id);
       return { state: 'staged', indexRevision: expectedIndexRevision,
-        progress: { generation: generation.id, phase, key, sequence }, exhausted: false, invalidRefs };
+        progress: { generation: generation.id, phase, sequence }, exhausted: false, invalidRefs };
     });
   }
   return Object.freeze({ rebuildIndex, assertAvailable });

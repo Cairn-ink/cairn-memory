@@ -4,6 +4,9 @@
 validates existing organization without a model or token counter. Each call
 visits at most 1–500 nodes/references, including invalid ones. It does not infer
 new topics, regenerate source-derived titles or change memory content/revisions.
+Reference scans also charge skipped foreign/orphan rows to the page limit, so a
+store with many unrelated refs can require extra pages. Neither results nor
+opaque cursor progress expose those rows' identifiers or content.
 
 Success is `{state, indexRevision, nextCursor, exhausted, invalidRefs}`. Continue
 using the same namespace, expected revision and limit with `nextCursor` until
