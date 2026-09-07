@@ -1,6 +1,8 @@
 # Architecture and repository boundary
 
-Cairn Memory is one product split across a public client contract and a hosted implementation.
+Cairn Memory is moving toward a shared open-source memory core. The public
+repository now includes the local storage foundation (`core/`); extraction and
+the deployed service remain private until separately staged migrations.
 
 ```text
 Claude Code
@@ -17,11 +19,21 @@ This public repository                    Cairn.ink private application
   project identity                          billing and operations
   protocol schemas                          hosted UI
   conformance tests
+  local SQLite store (not yet connected to the plugin or hosted service)
 ```
 
 ## Source-of-truth rule
 
 This repository owns plugin behavior, marketplace packaging, public wire schemas, and compatibility documentation. The private Cairn.ink application owns its implementation of those contracts and runs its own conformance tests; it does not maintain a second plugin copy.
+
+`core/` is the target reusable persistence implementation for the upcoming OSS
+engine and host adapters. It contains no account system, model client, HTTP/MCP
+server, or telemetry. Its exact-namespace JavaScript API is documented in
+[Local store](local-store.md); it is not the hosted wire contract. Public source
+is authored independently of private application code and reuses the already
+public redactor. The hosted implementation is unchanged in this milestone;
+extraction/model integration and a behavior-tested hosted migration are separate
+steps, not a permanent second engine per host.
 
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 

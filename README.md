@@ -12,6 +12,11 @@ Cairn Memory gives AI coding agents private, inspectable memory across sessions.
 
 It is deliberately small: one Claude Code plugin, one remote MCP connection, no plugin runtime dependencies, and no generic notes UI.
 
+**Developer preview:** a [local SQLite storage core](docs/local-store.md) now
+runs from source without an account or service. Try `npm run demo:store` on
+Node >=22.16. This is the persistence milestone, not yet local model extraction
+or a self-hosted MCP server; the plugin installation below still uses a service.
+
 ## Install for Claude Code (automatic memory)
 
 In Claude Code, run:
@@ -94,6 +99,8 @@ This repository is the source of truth for:
 - the Claude Code plugin and marketplace manifest;
 - local transcript filtering, redaction, and project identity derivation;
 - the public HTTP/MCP wire contract and JSON Schemas;
+- a local SQLite persistence core with receipts, exact namespace isolation,
+  deduplication, correction, deletion suppression, and lexical lookup;
 - conformance tests and self-host implementation guidance.
 
 The Cairn.ink hosted extraction service, user database, auth, billing, abuse controls, and production operations live in a separate private repository. See [Architecture](docs/architecture.md) for the boundary and [Self-hosting](docs/self-hosting.md) for what is—and is not—available in v0.1.
@@ -114,6 +121,13 @@ npm test
 npm run validate
 npm ci --prefix tools/plugin-validation
 npm run validate --prefix tools/plugin-validation
+```
+
+For the local store on Node >=22.16 (no dependency installation required):
+
+```bash
+npm run test:core
+npm run demo:store
 ```
 
 Contributions are welcome after reading [CONTRIBUTING.md](CONTRIBUTING.md) and the privacy invariants in [docs/protocol.md](docs/protocol.md).
