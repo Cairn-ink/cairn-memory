@@ -4,7 +4,18 @@ import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 1;
+const VERSION = 2;
+
+function installCaptureLedger(db) {
+  db.exec(`CREATE TABLE capture_events (
+    owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+    client TEXT NOT NULL, event_id TEXT NOT NULL, digest TEXT NOT NULL,
+    token TEXT NOT NULL, expires_at INTEGER NOT NULL,
+    completed INTEGER NOT NULL CHECK (completed IN (0,1)),
+    memory_count INTEGER NOT NULL DEFAULT 0, suppressed_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (owner_id, scope, project_id, client, event_id)
+  ) STRICT; PRAGMA user_version = ${VERSION};`);
+}
 
 export function transaction(db, work) {
   db.exec("BEGIN IMMEDIATE");
@@ -40,6 +51,10 @@ export function openDatabase(path) {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if (appId === APPLICATION_ID && version === VERSION) return;
+      if (appId === APPLICATION_ID && version === 1) {
+        installCaptureLedger(db);
+        return;
+      }
       const tables = db.prepare("SELECT count(*) AS n FROM sqlite_master").get().n;
       if (appId !== 0 || version !== 0 || tables !== 0) fail("unsupported_database");
       db.exec(`
@@ -85,6 +100,7 @@ export function openDatabase(path) {
         PRAGMA application_id = ${APPLICATION_ID};
         PRAGMA user_version = ${VERSION};
       `);
+      installCaptureLedger(db);
     });
     return db;
   } catch (error) {

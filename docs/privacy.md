@@ -3,6 +3,10 @@
 This page describes the hosted plugin path. The separate, source-runnable local
 storage preview has no outbound processing or telemetry; its database contents,
 trust boundaries, and deletion limits are documented in [Local store](local-store.md).
+The optional [local engine/MCP runtime](local-engine.md) sends redacted inputs
+and bounded memory context to the explicitly configured model; it has no
+telemetry or implicit cloud fallback. This is separate from the plugin controls
+and telemetry defaults described below.
 
 The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 

@@ -34,6 +34,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:core
       - run: npm run demo:store
+      - run: npm ci --prefix runtime --ignore-scripts
+      - run: npm run test:mcp
 
   plugin-validation:
     runs-on: ubuntu-latest

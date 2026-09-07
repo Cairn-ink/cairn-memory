@@ -12,10 +12,12 @@ Cairn Memory gives AI coding agents private, inspectable memory across sessions.
 
 It is deliberately small: one Claude Code plugin, one remote MCP connection, no plugin runtime dependencies, and no generic notes UI.
 
-**Developer preview:** a [local SQLite storage core](docs/local-store.md) now
-runs from source without an account or service. Try `npm run demo:store` on
-Node >=22.16. This is the persistence milestone, not yet local model extraction
-or a self-hosted MCP server; the plugin installation below still uses a service.
+**Developer preview:** the [local memory engine and stdio MCP](docs/local-engine.md)
+now support model extraction, sourced recall, correction and forgetting over
+SQLite, without a Cairn account. Node >=22.16 and an explicitly configured model
+are required for inference. Deterministic mocks are included for contributors.
+The plugin installation below still uses the existing hosted HTTP service;
+it is not automatically redirected to this local engine.
 
 ## Install for Claude Code (automatic memory)
 
@@ -101,9 +103,14 @@ This repository is the source of truth for:
 - the public HTTP/MCP wire contract and JSON Schemas;
 - a local SQLite persistence core with receipts, exact namespace isolation,
   deduplication, correction, deletion suppression, and lexical lookup;
+- a shared extraction/recall engine, Ollama model adapter, deterministic mocks,
+  and an optional local stdio MCP runtime;
 - conformance tests and self-host implementation guidance.
 
-The Cairn.ink hosted extraction service, user database, auth, billing, abuse controls, and production operations live in a separate private repository. See [Architecture](docs/architecture.md) for the boundary and [Self-hosting](docs/self-hosting.md) for what is—and is not—available in v0.1.
+The deployed Cairn.ink service still uses its previous private implementation.
+Future hosted migration will consume the public engine; user data, auth, billing,
+abuse controls and production operations remain private. See [Architecture](docs/architecture.md)
+and [Self-hosting](docs/self-hosting.md) for the current boundary.
 
 ## Status
 
@@ -129,5 +136,14 @@ For the local store on Node >=22.16 (no dependency installation required):
 npm run test:core
 npm run demo:store
 ```
+
+For local MCP integration tests (fake model HTTP, real MCP protocol and SQLite):
+
+```bash
+npm ci --prefix runtime --ignore-scripts
+npm run test:mcp
+```
+
+Real-model results, setup and limitations are in [Local engine](docs/local-engine.md).
 
 Contributions are welcome after reading [CONTRIBUTING.md](CONTRIBUTING.md) and the privacy invariants in [docs/protocol.md](docs/protocol.md).

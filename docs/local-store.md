@@ -1,9 +1,9 @@
 # Local memory store — developer preview (2A)
 
 This is a real SQLite persistence library runnable from public source. It is
-**not yet a standalone memory service**: no model extraction, semantic recall,
-local MCP/HTTP server, or host adapter is wired to it. The released Claude
-plugin still uses its configured service. No Cairn account is needed for this
+the low-level storage API. The separate [2B engine and local MCP](local-engine.md)
+now add model extraction/recall on top of it; this page describes storage only.
+The released Claude plugin still uses its configured service. No Cairn account is needed for this
 library; no telemetry, network client, or cloud fallback exists in its runtime.
 
 ## Run the synthetic example
@@ -148,9 +148,12 @@ implementation targets small local datasets, not high-throughput deployments.
 Use a local filesystem, trusted database path/parent directories, and one
 application-controlled database. Do not open untrusted SQLite files or share a
 file across machines/network filesystems. Unknown database/schema versions are
-rejected, never reset. This first schema has no migration/import tool yet.
+rejected, never reset. The 2B engine transactionally migrates v1 storage to v2 by
+adding its capture ledger; old v1 binaries cannot open v2 files. Export/import
+and downgrade tools are not provided yet.
 
-Next: model/extraction and local MCP in 2B, then reproducible setup/data-flow and
-export/restore in 2C. Hosted migration remains a separate, behavior-tested change.
+The [2B engine](local-engine.md) adds model/extraction and local MCP; reproducible
+setup/data-flow hardening and export/restore remain in 2C. Hosted migration
+remains a separate, behavior-tested change.
 The existing released plugin's default-on telemetry is unchanged; this store
 has no telemetry at all. See [acceptance and dependency provenance](plans/local-memory-store.md).

@@ -11,6 +11,8 @@
     "test": "node --test plugins/cairn-memory/test/*.test.mjs",
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
+    "test:mcp": "npm test --prefix runtime",
+    "probe:model": "node examples/probe-local-model.mjs",
     "validate": "node scripts/validate-json.mjs"
   }
 }
