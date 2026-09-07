@@ -48,6 +48,10 @@ Status: implementation candidate. Base: `5ce6d58d2c008bf2f2271bc57925a571bc6db1e
   suppression, immutable retry batches after transcript growth, and concurrent
   capture. Lock fixtures verify that an hour-old live owner remains protected
   and a dead owner can be recovered. No production endpoint was called.
+- Independent Spec review found that malformed detached handoffs could adopt
+  the current generation. A regression reproduced one unexpected HTTP request;
+  detached capture now requires its launch generation and rejects missing or
+  non-string values, while direct capture remains available.
 - Intentional limits: the first hook after resume skips through current EOF;
   already initiated requests cannot be recalled. State requires a local
   hard-link-capable filesystem in one PID namespace; interrupted dead-lock

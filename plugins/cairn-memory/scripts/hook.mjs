@@ -300,7 +300,11 @@ try {
         typeof hookInput.capture_generation === "string"
           ? hookInput.capture_generation
           : undefined;
-      await capture(hookInput, requestedGeneration);
+      // Detached work must retain its launch generation. Missing or malformed
+      // handoffs cannot silently adopt the generation active at execution time.
+      if (action !== "capture-detached" || requestedGeneration !== undefined) {
+        await capture(hookInput, requestedGeneration);
+      }
     }
     else await control();
   }

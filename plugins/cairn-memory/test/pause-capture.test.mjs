@@ -187,6 +187,20 @@ test("a delayed pre-pause worker is rejected after resume", async (t) => {
     env,
   );
   assert.equal(captureCount, 0);
+
+  const event = {
+    session_id: "delayed-session",
+    transcript_path: transcript,
+    cwd: "/private/project",
+  };
+  await runHook("capture", event, env); // Establish the post-resume boundary.
+  await appendFile(transcript, record("later", "must require a worker generation"));
+  for (const capture_generation of [undefined, null, 42, {}, ""]) {
+    await runHook("capture-detached", { ...event, capture_generation }, env);
+  }
+  assert.equal(captureCount, 0, "malformed worker handoffs cannot adopt the current generation");
+  await runHook("capture", event, env);
+  assert.equal(captureCount, 1, "direct capture still handles current-generation input");
 });
 
 test("pause returns while an initiated request is in flight and stops later batches", async (t) => {
