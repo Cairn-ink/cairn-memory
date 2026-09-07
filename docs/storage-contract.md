@@ -75,10 +75,10 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1 or v3 format performs an atomic upgrade to v4, retaining
+Opening the committed v1, v3 or v4 format performs an atomic upgrade to v5, retaining
 existing memory/source data, revisions and suppression. Back up the file while
-all writers are closed before upgrading meaningful data. Old v1/v3 binaries cannot
-open v4; there is no downgrade tool. The unmerged engine draft reserved v2; this
+all writers are closed before upgrading meaningful data. Old v1/v3/v4 binaries cannot
+open v5; there is no downgrade tool. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
 not reset. Reconciliation with that draft belongs to the later engine work.

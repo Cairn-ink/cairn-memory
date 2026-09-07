@@ -4,6 +4,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add package 1a admission leases and atomic inferred-memory commits over the
+  shared runtime, with fenced takeover, digest-bound replay, suppression and
+  abandonment. Completed outcomes retain IDs/counts, never cached memory content.
+  Upgrade v1/v3/v4 databases atomically to v5. This does not yet add extraction,
+  automatic capture, conflict hints, a model provider or a local MCP server.
+
 - Add S2c revision-safe fetch with receipt continuation and bounded recall over
   explicitly authorized namespaces. A final authoritative read prevents deleted
   or changed candidates from escaping after model work. Injected selector/ranker

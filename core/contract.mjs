@@ -51,11 +51,11 @@ function contractReceipt(input) {
   }
 }
 
-function contractMemory(input) {
+function contractMemory(input, maxContent = 4000) {
   object(input, ["content", "kind"]);
   if (!kinds.includes(input.kind)) throw new MemoryStoreError("invalid_input");
   let content;
-  try { content = boundedText(input.content, 4_000); } catch {
+  try { content = boundedText(input.content, maxContent); } catch {
     throw new MemoryStoreError("invalid_input");
   }
   return { content, kind: input.kind, origin: "explicit", confidence: 1,
@@ -236,6 +236,54 @@ export function openMemoryCore(input) {
     });
   }
 
+  function admissionKey(input) {
+    if (typeof input.payloadDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.payloadDigest)) {
+      throw new MemoryStoreError('invalid_input');
+    }
+    return { client: contractId(input.client), eventId: contractId(input.eventId),
+      payloadDigest: input.payloadDigest };
+  }
+
+  function claimAdmission(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'leaseMs']);
+      const ns = contractNamespace(input.namespace);
+      const key = admissionKey(input);
+      const leaseMs = contractRevision(input.leaseMs);
+      if (leaseMs > 125000) throw new MemoryStoreError('invalid_input');
+      return runtime.claimAdmission(ns, { ...key, leaseMs });
+    });
+  }
+
+  function finishAdmission(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
+      const ns = contractNamespace(input.namespace);
+      const key = admissionKey(input);
+      const token = contractId(input.token);
+      const items = denseArray(input.items, 0, 5).map((item) => {
+        object(item, ['content', 'kind', 'confidence', 'receipts']);
+        if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
+            item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
+        const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
+        const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
+        return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts };
+      });
+      return runtime.finishAdmission(ns, { ...key, token, items });
+    });
+  }
+
+  function abandonAdmission(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token']);
+      const ns = contractNamespace(input.namespace);
+      return runtime.abandonAdmission(ns, { ...admissionKey(input), token: contractId(input.token) });
+    });
+  }
+
   function applyPlacement(input) {
     return invoke(() => {
       runtime.ready();
@@ -363,7 +411,8 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, applyPlacement, linkMocs, map, fetch, recall, classifyPlacement,
+    admit, list, get, correct, forget, claimAdmission, finishAdmission, abandonAdmission,
+    applyPlacement, linkMocs, map, fetch, recall, classifyPlacement,
     close() {
       runtime.close();
       return success(null);

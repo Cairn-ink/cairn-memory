@@ -36,6 +36,7 @@ jobs:
       - run: npm run demo:store
       - run: npm run demo:moc
       - run: npm run demo:recall
+      - run: npm run demo:admission
 
   plugin-validation:
     runs-on: ubuntu-latest
