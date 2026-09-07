@@ -73,6 +73,18 @@ test('one batch coalesces identical new topics and binds every contributing sour
   for (const memory of memories) assert.equal(detail(core, memory.id).placements.length, 1);
 });
 
+test('coalesced topics cannot bypass the existing L2 parent bound', (t) => {
+  const { core } = fixture(t);
+  const parents = Array.from({ length: 4 }, (_, i) =>
+    topic(core, admit(core, `Parent source ${i}`), `Child ${i}`, `Parent ${i}`).l2.id);
+  const memories = [admit(core, 'First contributor'), admit(core, 'Second contributor')];
+  const before = map(core, { purpose: 'classification' });
+  error(apply(core, memories.map((m, i) => ({ memoryId: m.id, parentIds: [],
+    newL1: { title: 'Combined topic', parentL2Ids: parents.slice(i * 2, i * 2 + 2) } }))), 'invalid_input');
+  assert.deepEqual(map(core, { purpose: 'classification' }), before);
+  for (const m of memories) assert.equal(detail(core, m.id).memory.revision, 1);
+});
+
 test('many-to-many replacement/no-op and hierarchy linking have exact revision effects', (t) => {
   const { core } = fixture(t);
   const a = admit(core, 'Keep protocol notes.');

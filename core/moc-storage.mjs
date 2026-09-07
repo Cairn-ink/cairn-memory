@@ -169,6 +169,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto }) {
         }
       }
 
+      // Per-item limits also apply to the union when a batch coalesces a topic.
+      for (const l1 of newL1.values()) if (l1.parentIds.size > 3) fail("invalid_input");
+
       const nextRevision = new Map();
       const desiredByMemory = new Map();
       const affected = new Set();
