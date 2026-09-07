@@ -9,6 +9,8 @@
   },
   "scripts": {
     "test": "node --test plugins/cairn-memory/test/*.test.mjs",
+    "test:core": "node --test core/test/*.test.mjs",
+    "demo:store": "node examples/local-store.mjs",
     "validate": "node scripts/validate-json.mjs"
   }
 }

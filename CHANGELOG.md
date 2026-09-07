@@ -4,6 +4,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add a source-runnable local SQLite storage preview with atomic memory/receipt
+  writes, exact owner/project isolation, deduplication, revision-checked correction,
+  deletion suppression, lexical lookup, and real-file/concurrent-process tests.
+  Core requires Node >=22.16; existing plugin Node 20 support remains unchanged.
+  Model extraction and a local MCP/HTTP service are not part of this milestone.
+
 - Apply local credential redaction to automatic recall queries before bounding
   their length to the protocol limit; skip empty queries.
 - Atomically initialize persistent project and telemetry identities so concurrent

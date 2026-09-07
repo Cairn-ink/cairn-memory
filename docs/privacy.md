@@ -1,5 +1,9 @@
 # Privacy and threat model
 
+This page describes the hosted plugin path. The separate, source-runnable local
+storage preview has no outbound processing or telemetry; its database contents,
+trust boundaries, and deletion limits are documented in [Local store](local-store.md).
+
 The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 
 ## Data flow
