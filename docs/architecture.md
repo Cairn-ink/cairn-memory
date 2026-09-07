@@ -1,5 +1,8 @@
 # Architecture and repository boundary
 
+See the [delivery roadmap](plans/delivery-roadmap.md) for remaining work,
+delegation, acceptance gates and the public-core/hosted migration sequence.
+
 Cairn Memory is moving toward a shared open-source memory core. The public
 repository now includes the local storage foundation (`core/`); extraction and
 the deployed service remain private until separately staged migrations.
