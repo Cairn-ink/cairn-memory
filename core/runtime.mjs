@@ -258,11 +258,48 @@ export function createMemoryRuntime(input) {
     });
   }
 
+  function receiptPrefix(id, offset, count) {
+    return db.prepare(`SELECT id, client, session_id AS sessionId, event_id AS eventId,
+      role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?
+      ORDER BY created_at, id LIMIT ? OFFSET ?`).all(id, count, offset)
+      .map((row) => ({ ...row }));
+  }
+
+  function fetchPage(ns, ref, offset, expectedEpoch) {
+    ready();
+    return transaction(db, () => {
+      const currentEpoch = epoch(ns);
+      if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail('cursor_stale');
+      const row = activeRow(ns, ref.memoryId);
+      const reason = !row ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
+      if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
+      const memory = detailDto(row);
+      return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch };
+    });
+  }
+
+  function recallSnapshot(candidates, selected) {
+    ready();
+    return transaction(db, () => {
+      // This transaction is the return linearization point across the read set.
+      const rows = candidates.map(({ namespace, memoryId, revision }) => {
+        const row = activeRow(namespace, memoryId);
+        if (!row || row.revision !== revision) fail('revision_conflict');
+        return row;
+      });
+      return selected.map((index) => {
+        const memory = detailDto(rows[index]);
+        return { memory, receipts: receiptPrefix(memory.id, 0, candidates[index].receiptLimit),
+          receiptCount: memory.receiptCount };
+      });
+    });
+  }
+
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto });
 
   return Object.freeze({
     identity, ready, admit, correct, forget, legacyGet, legacyList, legacySearch,
-    listPage, getPage,
+    listPage, getPage, fetchPage, recallSnapshot,
     applyPlacement(ns, proposal, guards, index) {
       ready(); return mocStorage.applyPlacement(ns, proposal, guards, index);
     },

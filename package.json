@@ -12,6 +12,7 @@
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
     "demo:moc": "node examples/moc-placement.mjs",
+    "demo:recall": "node examples/recall.mjs",
     "validate": "node scripts/validate-json.mjs"
   }
 }

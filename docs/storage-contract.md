@@ -103,7 +103,8 @@ the rest of the memory/placement suite, infer model quality or emulate model
 output. Synthetic setup pins timestamps only; generated runtime IDs and actual
 returned revisions/content are never rewritten to make assertions pass.
 
-S2b adds MOC placement/map and a mock-model adapter. Next slices add bounded
-fetch/recall and MCP integration, then real-model evaluation. This does not certify the draft
+S2b adds MOC placement/map and a mock-model adapter; [S2c](fetch-recall.md) adds
+bounded fetch/recall. MCP integration and real-model evaluation remain separate.
+This does not certify the draft
 engine's unrelated-query recall behavior. Hosted migration and Moss remain out
 of scope; the end goal is one public core consumed by all host adapters.

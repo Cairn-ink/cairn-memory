@@ -159,7 +159,8 @@ rejected, never reset. Supported schema upgrades are automatic; there is no
 general import/export or downgrade tool yet.
 
 The S2b preview adds guarded classification through an injected adapter, not a
-bundled model. Next: bounded fetch/recall and local MCP, then real-model evaluation
-and export/restore. Hosted migration remains a separate, behavior-tested change.
+bundled model. [S2c](fetch-recall.md) adds bounded fetch/recall orchestration.
+Local MCP, real-model evaluation and export/restore remain separate work.
+Hosted migration remains a separate, behavior-tested change.
 The existing released plugin's default-on telemetry is unchanged; this store
 has no telemetry at all. See [acceptance and dependency provenance](plans/local-memory-store.md).
