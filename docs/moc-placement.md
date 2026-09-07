@@ -90,9 +90,10 @@ This preview has no measured large-scale latency/resource claim.
 
 ## Migration and verification
 
-Opening v1 or v3 data upgrades atomically to schema v4. Existing memory/source
-IDs, suppression, revisions and cursor identity survive; existing memories start
-unfiled. Old v1/v3 binaries cannot open v4. Draft-v2 and unknown schemas remain
+Opening v1, v3 or v4 data upgrades atomically to schema v5. Existing memory/source
+IDs, suppression, revisions and cursor identity survive. Pre-MOC v1/v3 memories
+start unfiled; v4 organization is preserved. Old v1/v3/v4 binaries cannot open v5.
+Draft-v2 and unknown schemas remain
 unsupported. Back up meaningful data with writers closed before upgrading;
 there is no downgrade/export tool or secure-erasure guarantee.
 

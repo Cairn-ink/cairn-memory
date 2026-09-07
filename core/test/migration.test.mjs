@@ -51,7 +51,7 @@ test('v1 migration preserves records, revisions, sources and suppression without
     receipts: [{ ...source, excerpt: 'Retired note' }] }).error.code, 'memory_suppressed');
   const check = new DatabaseSync(path);
   t.after(() => check.close());
-  assert.equal(check.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.equal(check.prepare('PRAGMA user_version').get().user_version, 5);
   // Migration may add columns, but must preserve every original column value.
   for (const old of before) {
     const migrated = check.prepare('SELECT * FROM memories WHERE id = ?').get(old.id);

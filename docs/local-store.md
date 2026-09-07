@@ -4,8 +4,8 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3 data now upgrades it to v4. Draft-v2 and unknown formats are rejected,
-and old v1/v3 binaries cannot open v4 files.
+v1/v3/v4 data now upgrades it to v5 for [admission claims](admission-claims.md).
+Draft-v2 and unknown formats are rejected; old v1/v3/v4 binaries cannot open v5.
 
 This is a real SQLite persistence library runnable from public source. It is
 **not yet a standalone memory service**: no model extraction, semantic recall,

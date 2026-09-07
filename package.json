@@ -13,6 +13,7 @@
     "demo:store": "node examples/local-store.mjs",
     "demo:moc": "node examples/moc-placement.mjs",
     "demo:recall": "node examples/recall.mjs",
+    "demo:admission": "node examples/admission.mjs",
     "validate": "node scripts/validate-json.mjs"
   }
 }

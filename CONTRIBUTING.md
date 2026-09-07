@@ -22,6 +22,9 @@ runtime versions run this example as well.
 For fetch/recall changes also run `npm run demo:recall`. Its scripted models test
 orchestration, not semantic relevance. Both core CI runtime versions run it.
 
+For admission-claim changes also run `npm run demo:admission`, which uses a fresh
+synthetic SQLite database and handcrafted trusted inferred items, not extraction.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

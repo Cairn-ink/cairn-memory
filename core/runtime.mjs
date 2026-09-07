@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { openDatabase, transaction } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
+import { createAdmissionStorage } from "./admission-storage.mjs";
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -40,9 +41,13 @@ export function createMemoryRuntime(input) {
     return epoch(ns);
   }
 
+  function isSuppressed(ns, value) {
+    return Boolean(db.prepare(`SELECT 1 FROM suppressed WHERE ${where} AND fingerprint = ?`)
+      .get(...boundary(ns), value));
+  }
+
   function assertNotSuppressed(ns, value) {
-    if (db.prepare(`SELECT 1 FROM suppressed WHERE ${where} AND fingerprint = ?`)
-      .get(...boundary(ns), value)) fail("memory_suppressed");
+    if (isSuppressed(ns, value)) fail("memory_suppressed");
   }
 
   function suppress(ns, value) {
@@ -106,44 +111,49 @@ export function createMemoryRuntime(input) {
 
   function admit(ns, value, projection = {}) {
     ready();
-    return transaction(db, () => {
-      assertNotSuppressed(ns, value.fingerprint);
-      const existing = db.prepare(`SELECT * FROM memories WHERE ${where}
-        AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
-      const now = new Date().toISOString();
-      if (existing) {
-        let changed = false;
-        for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now)) || changed;
-        const explicit = value.origin === "explicit";
-        const kind = explicit ? value.kind : existing.kind;
-        const origin = explicit ? "explicit" : existing.origin;
-        const confidence = Math.max(existing.confidence, value.confidence);
-        if (kind !== existing.kind || origin !== existing.origin || confidence !== existing.confidence) {
-          changed = true;
-        }
-        if (changed) {
-          mocStorage.invalidateMemory(ns, existing.id, now);
-          db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?,
-            revision = revision + 1, updated_at = ? WHERE id = ?`)
-            .run(kind, origin, confidence, now, existing.id);
-        }
-        const memory = activeRow(ns, existing.id);
-        return {
-          memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: true,
-          indexRevision: changed ? advanceEpoch(ns) : epoch(ns), changed,
-        };
+    return transaction(db, () => admitMutation(ns, value, projection));
+  }
+
+  // Caller owns the transaction, including admission-claim completion when used
+  // in a batch. Explicit and inferred writes share all mutation/invalidation rules.
+  function admitMutation(ns, value, projection = {}) {
+    assertNotSuppressed(ns, value.fingerprint);
+    const existing = db.prepare(`SELECT * FROM memories WHERE ${where}
+      AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
+    const now = new Date().toISOString();
+    if (existing) {
+      let changed = false;
+      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now)) || changed;
+      const explicit = value.origin === "explicit";
+      const kind = explicit ? value.kind : existing.kind;
+      const origin = explicit ? "explicit" : existing.origin;
+      const confidence = !explicit && existing.origin === "explicit"
+        ? existing.confidence : Math.max(existing.confidence, value.confidence);
+      if (kind !== existing.kind || origin !== existing.origin || confidence !== existing.confidence) {
+        changed = true;
       }
-      const id = randomUUID();
-      db.prepare(`INSERT INTO memories
-        (id, owner_id, scope, project_id, fingerprint, content, kind, origin,
-         confidence, revision, deleted, created_at, updated_at) VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`).run(id, ...boundary(ns),
-        value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now);
-      for (const receipt of value.receipts) attach(id, receipt, now);
-      const memory = activeRow(ns, id);
-      return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
-        indexRevision: advanceEpoch(ns), changed: true };
-    });
+      if (changed) {
+        mocStorage.invalidateMemory(ns, existing.id, now);
+        db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?,
+          revision = revision + 1, updated_at = ? WHERE id = ?`)
+          .run(kind, origin, confidence, now, existing.id);
+      }
+      const memory = activeRow(ns, existing.id);
+      return {
+        memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: true,
+        indexRevision: changed ? advanceEpoch(ns) : epoch(ns), changed,
+      };
+    }
+    const id = randomUUID();
+    db.prepare(`INSERT INTO memories
+      (id, owner_id, scope, project_id, fingerprint, content, kind, origin,
+       confidence, revision, deleted, created_at, updated_at) VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`).run(id, ...boundary(ns),
+      value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now);
+    for (const receipt of value.receipts) attach(id, receipt, now);
+    const memory = activeRow(ns, id);
+    return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
+      indexRevision: advanceEpoch(ns), changed: true };
   }
 
   function correct(ns, id, value, expectedRevision, projection = {}) {
@@ -296,10 +306,16 @@ export function createMemoryRuntime(input) {
   }
 
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto });
+  const admissionStorage = createAdmissionStorage({
+    db, admitMutation, isSuppressed, activeRow, epoch,
+  });
 
   return Object.freeze({
     identity, ready, admit, correct, forget, legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
+    claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
+    finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
+    abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
     applyPlacement(ns, proposal, guards, index) {
       ready(); return mocStorage.applyPlacement(ns, proposal, guards, index);
     },

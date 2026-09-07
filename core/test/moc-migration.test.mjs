@@ -24,7 +24,7 @@ function v3() {
   return { db, path };
 }
 
-test('v3→v4 retains memory, receipt IDs and authenticated S2a cursor identity', () => {
+test('v3→v5 retains memory, receipt IDs and authenticated S2a cursor identity', () => {
   const { db, path } = v3();
   const identity = db.prepare('SELECT * FROM store_metadata').get();
   const sign = (text) => createHmac('sha256', identity.cursor_secret).update(text).digest('base64url');
@@ -41,7 +41,7 @@ test('v3→v4 retains memory, receipt IDs and authenticated S2a cursor identity'
     assert.equal(page.value.memories[0].filing.status, 'unfiled');
     const check = new DatabaseSync(path);
     try {
-      assert.equal(check.prepare('PRAGMA user_version').get().user_version, 4);
+      assert.equal(check.prepare('PRAGMA user_version').get().user_version, 5);
       assert.deepEqual(check.prepare('SELECT * FROM store_metadata').get(), identity);
       assert.deepEqual(check.prepare('SELECT * FROM receipts ORDER BY id').all(), receipts);
       assert.equal(check.prepare('SELECT epoch FROM namespace_epochs').get().epoch, 8);

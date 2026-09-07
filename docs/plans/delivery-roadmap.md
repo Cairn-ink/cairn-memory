@@ -46,7 +46,7 @@ semantic quality, lightweight resource performance, standalone installation or
 hosted migration. The released plugin still uses its configured hosted service.
 The older draft engine PR #5 is not the delivery base.
 
-Low-level storage already accepts inferred origin/confidence, but the public
+At that baseline, low-level storage accepts inferred origin/confidence, but the public
 contract admission is explicit-only; neither is automatic extraction with guarded
 inferred admission. Inspection currently returns empty conflict links. Exact-content
 collision errors are not contradiction tracking. These gaps are separate below.
@@ -101,7 +101,7 @@ unattended scheduler. A new merge/continuation message resumes the next package.
 
 ## Five stages, thirteen initial work packages
 
-All rows below are **not_started**. The grouping is a planning baseline, not a
+Package **1a is in progress**; other rows remain **not_started**. The grouping is a planning baseline, not a
 promise of exactly thirteen PRs; split packages further when scope/risk requires.
 
 ### 1. Complete the core lifecycle contract
@@ -189,8 +189,13 @@ Next implementation package: **1a**. Primary first freezes its acceptance and
 file ownership; then dispatches engine implementation and independent replay/
 concurrency tests. Model/network and production access are unnecessary for 1a.
 
-Only discovery/plan work is underway in this PR. None of packages 1a–5b has been
-implemented or assigned to a running delivery worker by publishing this plan.
+Package 1a is implemented in its isolated delivery branch against merged #9
+(`44ece1479f4048a8a95f895baa6e674ec9a1c0a1`), with separate engine and test workers.
+Its [acceptance spec](admission-claims.md) governs primary integration and final
+review. Exact candidate, test/review evidence and remote CI are recorded in that
+PR; it is not marked merged here. Package 1b implementation still depends on its
+merge. Read-only extraction-interface/case preparation has been performed, not
+capture implementation. No later package is complete.
 
 When a package advances, record: package/status, fixed base and candidate SHA,
 implementation owner, primary verification commands/results, Standards findings,

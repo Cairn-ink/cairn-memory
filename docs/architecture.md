@@ -49,6 +49,10 @@ are copied into these slices.
 uses injected selection/ranking adapters and an authoritative final read;
 no model provider or network host is bundled. The released plugin is unchanged.
 
+[Admission claims](admission-claims.md) add guarded inferred commits and replay
+coordination to the same transaction runtime. Extraction orchestration remains
+separate; no private source or hosted path is migrated by these storage methods.
+
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
 ## Trust boundaries

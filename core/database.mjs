@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 4;
+const VERSION = 5;
 
 function createVersion3(db) {
   db.exec(`
@@ -165,6 +165,35 @@ function migrateVersion3(db) {
   `);
 }
 
+function migrateVersion4(db) {
+  db.exec(`
+    CREATE TABLE admission_claims (
+      owner_id TEXT NOT NULL,
+      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),
+      project_id TEXT NOT NULL,
+      client TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      payload_digest TEXT NOT NULL CHECK (
+        length(payload_digest) = 64 AND payload_digest NOT GLOB '*[^0-9a-f]*'),
+      state TEXT NOT NULL CHECK (state IN ('pending','completed')),
+      token TEXT,
+      lease_expires_at INTEGER,
+      memory_ids TEXT,
+      suppressed_count INTEGER,
+      PRIMARY KEY (owner_id, scope, project_id, client, event_id),
+      CHECK ((scope = 'personal' AND project_id = '') OR
+             (scope = 'project' AND length(project_id) > 0)),
+      CHECK ((state = 'pending' AND token IS NOT NULL AND lease_expires_at IS NOT NULL
+        AND memory_ids IS NULL AND suppressed_count IS NULL) OR
+        (state = 'completed' AND token IS NULL AND lease_expires_at IS NULL
+        -- Five opaque IDs of up to 200 characters, doubled by JSON escaping,
+        -- plus quotes, commas and brackets (including IDs preserved by migration).
+        AND memory_ids IS NOT NULL AND length(memory_ids) <= 2016
+        AND suppressed_count IS NOT NULL AND suppressed_count BETWEEN 0 AND 5))
+    ) STRICT;
+  `);
+}
+
 export function transaction(db, work) {
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -202,11 +231,18 @@ export function openDatabase(path) {
       if (appId === APPLICATION_ID && version === 1) {
         migrateVersion1(db);
         migrateVersion3(db);
+        migrateVersion4(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 3) {
         migrateVersion3(db);
+        migrateVersion4(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
+      if (appId === APPLICATION_ID && version === 4) {
+        migrateVersion4(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -214,6 +250,7 @@ export function openDatabase(path) {
       if (appId !== 0 || version !== 0 || tables !== 0) fail("unsupported_database");
       createVersion3(db);
       migrateVersion3(db);
+      migrateVersion4(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;
