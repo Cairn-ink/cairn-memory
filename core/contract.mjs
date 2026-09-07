@@ -71,6 +71,19 @@ function contractRevision(value) {
   try { return revision(value); } catch { throw new MemoryStoreError("invalid_input"); }
 }
 
+function contractConflictHints(value = []) {
+  const hints = denseArray(value, 0, 5).map((hint) => {
+    object(hint, ['memoryId', 'expectedRevision', 'relation']);
+    if (hint.relation !== 'contradicts') throw new MemoryStoreError('invalid_input');
+    return { memoryId: contractId(hint.memoryId),
+      expectedRevision: contractRevision(hint.expectedRevision), relation: 'contradicts' };
+  });
+  if (new Set(hints.map((hint) => hint.memoryId)).size !== hints.length) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  return hints;
+}
+
 function contractLimit(value) {
   try { return limit(value); } catch { throw new MemoryStoreError("invalid_input"); }
 }
@@ -157,14 +170,15 @@ export function openMemoryCore(input) {
   function admit(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memory", "receipts"]);
+      object(input, ["namespace", "memory", "receipts", "conflictHints"]);
       const ns = contractNamespace(input.namespace);
       const memory = contractMemory(input.memory);
       if (!Array.isArray(input.receipts) || input.receipts.length < 1 || input.receipts.length > 4) {
         throw new MemoryStoreError("invalid_input");
       }
       const receipts = input.receipts.map(contractReceipt);
-      const result = runtime.admit(ns, { ...memory, receipts });
+      const conflictHints = contractConflictHints(input.conflictHints);
+      const result = runtime.admit(ns, { ...memory, receipts, conflictHints });
       return { memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated, indexRevision: result.indexRevision };
     });
@@ -206,7 +220,7 @@ export function openMemoryCore(input) {
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
-      return { memory: page.memory, receipts, placements: page.placements, conflicts: [],
+      return { memory: page.memory, receipts, placements: page.placements, conflicts: page.conflicts,
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
           a: { createdAt: last.createdAt, id: last.id } }), exhausted };
     });
@@ -265,12 +279,13 @@ export function openMemoryCore(input) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = denseArray(input.items, 0, 5).map((item) => {
-        object(item, ['content', 'kind', 'confidence', 'receipts']);
+        object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints']);
         if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
             item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
         const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
         const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
-        return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts };
+        const conflictHints = contractConflictHints(item.conflictHints);
+        return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints };
       });
       return runtime.finishAdmission(ns, { ...key, token, items });
     });

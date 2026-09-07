@@ -45,9 +45,9 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
   persistent suppression and atomic invalidation of inspection cursors.
 
 The exact inputs, result fields and acceptance gates are in the
-[S2a plan](plans/s2-storage-contract.md). Unknown fields are rejected, including
-not-yet-implemented conflict hints. The subsequent [S2b extension](moc-placement.md)
-adds real placements and filed/unfiled state; conflicts remain empty.
+[S2a plan](plans/s2-storage-contract.md). Unknown fields are rejected. The subsequent
+[S2b extension](moc-placement.md) adds real placements and filed/unfiled state;
+[1c](conflicts.md) adds optional admission hints and attributed conflict inspection.
 
 Personal scope must be exactly `{ownerId,scope:'personal',projectId:null}`.
 Project scope must be exactly `{ownerId,scope:'project',projectId}` with a
@@ -75,10 +75,10 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1, v3 or v4 format performs an atomic upgrade to v5, retaining
+Opening the committed v1, v3, v4 or v5 format performs an atomic upgrade to v6, retaining
 existing memory/source data, revisions and suppression. Back up the file while
-all writers are closed before upgrading meaningful data. Old v1/v3/v4 binaries cannot
-open v5; there is no downgrade tool. The unmerged engine draft reserved v2; this
+all writers are closed before upgrading meaningful data. Old v1/v3/v4/v5 binaries cannot
+open v6; there is no downgrade tool. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
 not reset. Reconciliation with that draft belongs to the later engine work.

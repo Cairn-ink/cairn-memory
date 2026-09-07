@@ -6,7 +6,8 @@ const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND 
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
 
 /** Content-free job state around the shared admission mutation transaction. */
-export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch }) {
+export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
+  conflictStorage }) {
   const read = (ns, input) => db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
     .get(...key(ns, input));
   const live = (row, input, now) => row?.state === "pending" &&
@@ -43,14 +44,22 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       if (!live(read(ns, input), input, Date.now())) fail("stale_admission");
       const ids = new Set();
       let suppressedCount = 0;
+      const activeItems = [];
       for (const item of input.items) {
         // Check before deduplication; one suppressed input contributes one count.
         if (isSuppressed(ns, item.fingerprint)) {
           suppressedCount++;
           continue;
         }
-        ids.add(admitMutation(ns, item).memory.id);
+        conflictStorage.validateTargets(ns, item.conflictHints);
+        activeItems.push(item);
       }
+      const entries = activeItems.map((item) => {
+        const memoryId = admitMutation(ns, item).memory.id;
+        ids.add(memoryId);
+        return { memoryId, hints: item.conflictHints };
+      });
+      conflictStorage.insertBatch(ns, entries, "inferred-hint");
       const memoryIds = [...ids];
       // Resolve revisions after the entire batch: later exact matches can attach
       // receipts to an earlier result while preserving its first occurrence order.

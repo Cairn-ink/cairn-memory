@@ -94,7 +94,7 @@ test('namespace identity and unknown inputs fail before mutation', (t) => {
     { ...ns, ownerId: ' reader ' }, { ...ns, extra: true }]) {
     assert.equal(core.admit({ ...admission(), namespace: value }).ok, false);
   }
-  for (const extra of [{ surprise: true }, { conflictHints: [] }, { origin: 'agent-inferred' }]) {
+  for (const extra of [{ surprise: true }, { conflictHints: [{ source: 'explicit-hint' }] }, { origin: 'agent-inferred' }]) {
     error(core.admit({ ...admission(), ...extra }), 'invalid_input');
   }
   error(core.admit({ ...admission(), memory: { ...admission().memory, origin: 'agent-inferred' } }), 'invalid_input');

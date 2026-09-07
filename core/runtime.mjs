@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { openDatabase, transaction } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
+import { createConflictStorage } from "./conflict-storage.mjs";
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -111,7 +112,14 @@ export function createMemoryRuntime(input) {
 
   function admit(ns, value, projection = {}) {
     ready();
-    return transaction(db, () => admitMutation(ns, value, projection));
+    return transaction(db, () => {
+      assertNotSuppressed(ns, value.fingerprint);
+      conflictStorage.validateTargets(ns, value.conflictHints);
+      const result = admitMutation(ns, value, projection);
+      const changed = conflictStorage.insertBatch(ns,
+        [{ memoryId: result.memory.id, hints: value.conflictHints }], "explicit-hint");
+      return { ...result, changed: result.changed || changed, indexRevision: epoch(ns) };
+    });
   }
 
   // Caller owns the transaction, including admission-claim completion when used
@@ -133,6 +141,7 @@ export function createMemoryRuntime(input) {
         changed = true;
       }
       if (changed) {
+        conflictStorage.invalidateMemory(existing.id);
         mocStorage.invalidateMemory(ns, existing.id, now);
         db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?,
           revision = revision + 1, updated_at = ? WHERE id = ?`)
@@ -169,6 +178,7 @@ export function createMemoryRuntime(input) {
       if (other) fail("memory_conflict");
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
+      conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
       db.prepare(`UPDATE memories SET content = ?, fingerprint = ?, kind = ?,
         origin = 'explicit', confidence = 1, revision = revision + 1, updated_at = ?
@@ -191,6 +201,7 @@ export function createMemoryRuntime(input) {
       if (current.revision !== expectedRevision) fail("revision_conflict");
       suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
+      conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`)
@@ -264,7 +275,8 @@ export function createMemoryRuntime(input) {
       params.push(count + 1);
       return { memory: { ...metadataDto(memory), content: memory.content },
         receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
-        placements: mocStorage.placementRefs(ns, id), epoch: currentEpoch };
+        placements: mocStorage.placementRefs(ns, id),
+        conflicts: conflictStorage.inspect(ns, id), epoch: currentEpoch };
     });
   }
 
@@ -305,9 +317,11 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto });
+  const conflictStorage = createConflictStorage({ db, activeRow, advanceEpoch });
+  mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
+    invalidateConflicts: conflictStorage.invalidateMemory });
   const admissionStorage = createAdmissionStorage({
-    db, admitMutation, isSuppressed, activeRow, epoch,
+    db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
   });
 
   return Object.freeze({

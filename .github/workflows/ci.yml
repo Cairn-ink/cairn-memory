@@ -38,6 +38,7 @@ jobs:
       - run: npm run demo:recall
       - run: npm run demo:admission
       - run: npm run demo:capture
+      - run: npm run demo:conflicts
 
   plugin-validation:
     runs-on: ubuntu-latest
