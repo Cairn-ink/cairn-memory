@@ -37,6 +37,8 @@ second public `replayAdmission` implementation that could bypass suppression.
 - Model ports are injected; byte/fixed counters in tests are not production
   tokenizers. One real provider/tokenizer and frozen semantic/resource evaluation
   remain stage 2 gates. Passing mocks does not establish relevance or cost.
+  The [optional OpenAI adapter](../openai-provider.md) now supplies pinned local
+  tokenization and offline-verified transport, but live acceptance is still pending.
 - Recall examines at most two root-map pages per namespace and two receipt pages
   per candidate. It can return budget_exhausted or a context error; it does not
   promise exhaustive search of arbitrary stores.

@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an optional pinned OpenAI adapter with a real local tokenizer, provider
+  count preflight, bounded transport and strict output schemas. Offline fixtures
+  only: live provider acceptance and quality evaluation remain pending. Preserve
+  narrow trusted adapter budget/output errors through the shared model port.
+
 - Extend recall to two bounded root-map rounds and two receipt pages per
   candidate, with explicit incomplete coverage and the same final authoritative
   snapshot. Cap three model calls and 36 unique fetched memories; large combined

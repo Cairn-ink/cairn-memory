@@ -37,6 +37,11 @@ runtime versions. This validates existing organization without a model service.
 For recall continuation changes also run `npm run demo:continuation` on both
 core runtime versions. Its fixed counter/scripted model verifies traversal only.
 
+For optional OpenAI adapter changes, run `npm ci --prefix adapters/openai`, then
+`npm run test:openai` and `npm run demo:openai-offline` on both core runtimes.
+These use fake HTTP and need no key. Real-provider tests require explicitly
+approved credential scope and budget.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

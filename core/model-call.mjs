@@ -22,6 +22,10 @@ export async function callModel(model, method, system, input,
   } catch (error) {
     if (controller.signal.aborted || error?.code === 'model_timeout') fail('model_timeout');
     if (error?.name === 'AbortError') fail('model_cancelled');
+    // Trusted adapters can reject exact provider framing or malformed output.
+    // Do not forward arbitrary provider errors, payloads or authority codes.
+    if (error instanceof MemoryStoreError && ['context_budget_exceeded',
+      'token_count_unavailable', 'invalid_model_output'].includes(error.code)) throw error;
     fail(failureCode);
   } finally { clearTimeout(timer); }
   validateFresh();
