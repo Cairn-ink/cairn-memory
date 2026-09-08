@@ -4,6 +4,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Constrain optional OpenAI classification/recall references to their immutable
+  request snapshot and clarify cold-start topic creation for clear subjects.
+  Preserve genuinely unfiled outcomes, existing core authority checks and all
+  token/framing limits. A two-fact real-provider filing probe passed; general
+  semantic quality still requires the separate frozen evaluation.
+
 - Add an explicitly opt-in, budget-guarded synthetic live-provider lifecycle
   runner with sanitized reports and offline safety tests. Ordinary tests/CI
   never make paid requests. General semantic quality and standalone MCP remain
