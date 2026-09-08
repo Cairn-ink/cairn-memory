@@ -1,0 +1,12 @@
+{
+  "name": "cairn-memory-mcp-host",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": { "@modelcontextprotocol/client": "2.0.0" }
+}

@@ -46,6 +46,10 @@ temporary data and paid requests; it is never a CI gate. Its budget and CLI
 safety tests run within the ordinary offline adapter suite. See
 `docs/plans/live-provider.md` for acceptance and `docs/openai-provider.md` for
 credential and cumulative-budget handling.
+For the isolated MCP host, `npm ci --prefix adapters/mcp` and `npm run test:mcp`
+exercise actual stdio client/server calls using synthetic stores and scripted
+models only. Run on both core Node versions; CI has a separate MCP matrix.
+No key or paid request is needed. See `docs/standalone-mcp.md`.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 

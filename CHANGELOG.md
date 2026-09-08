@@ -4,6 +4,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add a thin local stdio MCP source host over the same public core, with
+  startup-bound namespaces and explicit remember/recall/inspect/correct/forget.
+  Distribution, real-client matrix and remote connectors remain separate gates.
+
 - Add an explicitly opt-in, budget-guarded synthetic live-provider lifecycle
   runner with sanitized reports and offline safety tests. Ordinary tests/CI
   never make paid requests. General semantic quality and standalone MCP remain
