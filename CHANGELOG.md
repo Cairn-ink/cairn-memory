@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add bounded model-free index rebuild with persisted continuation, validated
+  generation authority and atomic publication. Ordinary mutations maintain the
+  active projection transactionally. Schema v7 retains existing data; no topic
+  discovery, automatic cleanup or production migration is included.
+
 - Add optional revision-bound contradiction hints to explicit/inferred admission,
   symmetric attributed inspection and atomic invalidation on memory revision
   changes. Schema v6 preserves existing state; bounded links do not claim

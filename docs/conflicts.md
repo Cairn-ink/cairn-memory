@@ -37,8 +37,9 @@ changes a hinted target's expected revision, the whole finish fails. Suppressed
 inferred items skip semantic hint resolution, but malformed hint shapes still
 reject the batch. Completed replay never restores forgotten content or links.
 
-Schema v6 adds only relation metadata and upgrades supported v1/v3/v4/v5 stores
-atomically. Back up local data before upgrading; no down-migration is supplied.
+Relation metadata was introduced in schema v6. The current
+[v7 index upgrade](index-rebuild.md) preserves these links atomically.
+Back up local data before upgrading; no down-migration is supplied.
 The synthetic `npm run demo:conflicts` demonstrates inspection and invalidation,
 not semantic quality. See [acceptance](plans/conflict-lifecycle.md) for exact
 failure ordering, bounds and migration requirements.

@@ -3,6 +3,7 @@ import { openDatabase, transaction } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createConflictStorage } from "./conflict-storage.mjs";
+import { createIndexStorage } from "./index-storage.mjs";
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -318,8 +319,9 @@ export function createMemoryRuntime(input) {
   }
 
   const conflictStorage = createConflictStorage({ db, activeRow, advanceEpoch });
+  const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
-    invalidateConflicts: conflictStorage.invalidateMemory });
+    invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
   });
@@ -327,6 +329,7 @@ export function createMemoryRuntime(input) {
   return Object.freeze({
     identity, ready, admit, correct, forget, legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
+    rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
