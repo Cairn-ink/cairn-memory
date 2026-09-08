@@ -11,6 +11,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Verify pinned Hermes native-provider and general MCP routes through the actual
+  AIAgent conversation loop with scripted completions and real installed tools.
+  Cross-session receipts, revisions and forgetting are tested; real-model tool
+  selection and semantic recall remain separate gates.
+
 - Add `install:preview` to build and install into a new private directory with
   separate app/data paths and an installation receipt. Existing targets are
   rejected and failed partial installs are retained. No client settings, global
