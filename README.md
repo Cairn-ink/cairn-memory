@@ -29,7 +29,9 @@ claim that real users save a measured amount of time.
 An explicitly selected [experimental extraction profile](docs/plans/extraction-model-profile.md)
 passed the frozen synthetic gate after independent agent review. The default
 model's failure remains; MCP does not automatically enable the experimental
-profile, which is a programmatic adapter option.
+profile, which is a programmatic adapter option. MCP `remember_memory` saves
+explicit content directly; it does not run that extractor. Those extraction
+scores therefore do not certify the MCP recall experience.
 
 ## Try the local memory layer
 
@@ -41,7 +43,6 @@ local model path is not yet verified.
 ```sh
 git clone https://github.com/Cairn-ink/cairn-memory.git
 cd cairn-memory
-git switch --detach 34ad9dfa12ed3278d365a9dc7a1878ac670ccc0e
 npm run build:artifact
 ```
 
@@ -50,9 +51,20 @@ The builder prints a temporary archive path and SHA-256. Follow the
 then configure a stdio client to run the installed executable with an explicit
 database path and owner. Keep the database outside `node_modules`.
 The archive is **not published to npm**; there is no registry `npx` shortcut yet.
-The command pins the inspected core plus runnable walkthrough candidate
-because the older released tag does not contain this preview; it is not a claim
-that this candidate has merged or been released.
+This builds the checked-out source, not the older released hosted-plugin tag.
+Record `git rev-parse HEAD` and keep the build report to identify your preview.
+
+Before configuring a client, check the installed command (substitute your paths):
+
+```sh
+/absolute/install/node_modules/.bin/cairn-memory --help
+/absolute/install/node_modules/.bin/cairn-memory --check-config --db /absolute/data/memory.sqlite --owner local-user
+```
+
+The check makes no model requests and never opens your database. A missing key
+is a valid model-free configuration. A present key means only “configured,” not
+that credentials, model access or database permissions have been verified.
+Starting without `--check-config` waits for an MCP client; a quiet terminal is normal.
 
 No chat-client setup is needed for a first synthetic check. From this source
 checkout, install the isolated SDK client and point the walkthrough at your

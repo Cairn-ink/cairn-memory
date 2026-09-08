@@ -13,6 +13,8 @@ then run there:
 ```sh
 npm init -y
 npm install --prefix . --ignore-scripts --no-audit --no-fund /absolute/path/cairn-memory-local-preview-0.0.0-preview.1.tgz
+./node_modules/.bin/cairn-memory --help
+./node_modules/.bin/cairn-memory --check-config --db /absolute/path/memory.sqlite --owner local-user
 ./node_modules/.bin/cairn-memory --db /absolute/path/memory.sqlite --owner local-user
 ```
 
@@ -26,12 +28,21 @@ scope. The process waits for MCP JSON-RPC on stdin; stdout is protocol-only.
 Configure an MCP client's local command to use that executable and those args.
 This does not certify a specific named client or remote connector.
 
+`--check-config` must be the first argument. It checks argument and key syntax,
+prints a JSON report and exits without opening a database or making network
+requests. It does not verify database readiness, credential validity or model
+availability. Paths, owner/project IDs and keys are not printed in its report.
+`--help` is standalone and needs no configuration. Neither mode starts MCP.
+
 Without a model key, remember/inspect/correct/forget work and recall explicitly
 returns `model_not_configured`. For model recall, supply `OPENAI_API_KEY` through
 the host process environment or a secret manager, never command arguments or
 committed configuration. Selected data is sent to OpenAI and may incur charges;
 this host does not impose an account-wide spending cap. Memory storage is local,
 but model recall is not offline. MCP does not capture conversations automatically.
+The recall adapter uses the pinned default model `gpt-4.1-mini-2025-04-14`.
+Explicit remember bypasses model extraction. The experimental extraction profile
+is only a programmatic adapter option, not a CLI switch or a recall quality promise.
 
 ## Inspect, correct and delete
 
@@ -70,6 +81,7 @@ decision; uninstall is not a secure-data-erasure operation.
 
 - `cairn_mcp_start_failed`: check Node version, required --db/--owner arguments,
   writable database parent, and installed dependencies; do not paste your key.
+  Use `--help` and `--check-config` first to separate syntax from runtime problems.
 - `model_not_configured`: the host process has no model key; explicit tools remain usable.
 - Empty list: verify the same database and exact owner/project startup identity.
 - `revision_conflict`: inspect the latest revision before correcting or forgetting.
