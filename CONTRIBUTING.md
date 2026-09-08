@@ -46,6 +46,11 @@ temporary data and paid requests; it is never a CI gate. Its budget and CLI
 safety tests run within the ordinary offline adapter suite. See
 `docs/plans/live-provider.md` for acceptance and `docs/openai-provider.md` for
 credential and cumulative-budget handling.
+Semantic evaluation scorer/runner tests also run in `npm run test:openai` with
+fake HTTP. The opt-in `npm run eval:semantic -- --live --budget-usd 4.80` incurs
+charges and is never run in CI. Freeze fixtures and rubric before scored calls;
+retain failures and label independent semantic judgments honestly. See
+`docs/semantic-evaluation.md`.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 

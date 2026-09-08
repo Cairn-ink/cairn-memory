@@ -83,4 +83,50 @@ expected sets corresponding to these cases (no scored run until committed):
 
 Previous #17 runs reserved US$0.160128 of the authorized US$5. This package may
 reserve at most US$4.80, leaving US$0.039872 margin. DRI alone runs paid requests.
-No paid evaluation attempts yet. This is a synthetic evaluation, not human usage.
+The first frozen run reserved US$0.747264 (168 HTTP requests). Together with
+three classification probes (US$0.026688) and the MCP protocol/provider probe
+(US$0.026688), cumulative reservations are US$0.960768; US$4.039232 remains.
+Subsequent suite budgets must fit the remaining aggregate authorization.
+This is a synthetic evaluation, not human usage.
+
+## Baseline v1 evidence — failed/incomplete
+
+Corpus/rubric were frozen at `16ef4a86c323d93f68f932f5ce31f71843d1bfcb`
+before calls. [Retained synthetic report](../../evaluations/results/baseline-v1.json)
+includes all 36 attempts; only temporary database paths were removed.
+25 completed and 11 failed: C01/C02/C04 all repetitions, C10 repetition 3,
+and C12 repetition 1. No retries or dropped cases.
+
+Deterministically scored recall was 20/33 admitted required facts, precision
+20/20 returned admitted memories, empty-query checks 6/6 and MOC placement 0/12.
+Independent agent review of all five completed capture repetitions found seven
+captured records source-supported and five returned records relevant. Combined
+provisional recall is 25/45 and precision 25/25, with only 8/24 expected capture
+facts independently reviewed. Failed/partial capture judgments remain pending;
+these numbers are not overall semantic acceptance or human validation. Labels
+are retained in `evaluations/results/baseline-v1-review.json`. Safety checks
+found zero violations in returned evidence, not proof
+that missing results succeeded. Observed generation usage was 40,027 input and
+4,341 output tokens (estimated US$0.0229564, not an invoice).
+
+Completed-query p95 was 5,698 ms; 14 failed/unrun queries prevent a resource pass.
+Largest SQLite/WAL/SHM set was 233,472 bytes. Recorded RSS 1,682,141,184 bytes is
+**inconclusive**: Linux getrusage preserved the launcher's pre-exec high-water
+mark, reproduced in an empty Node process before importing this library.
+The original report is retained, not retroactively corrected. Subsequent runs
+measure Linux `/proc/self/status` VmHWM for the current executable; unsupported
+platforms fail closed. The frozen 512 MiB limit is unchanged.
+
+A separate provider-reference-constraints change addresses fabricated group IDs
+observed in a minimized two-fact classification probe. A schema-only follow-up
+removed invalid identifiers but left both facts unfiled. A subsequent explicit
+cold-start prompt experiment filed both under a valid precise topic. This is
+only a minimized integration probe: the unchanged suite must be rerun and reviewed.
+
+## Maintainer verification
+
+Node 22.16 and 24: 59 offline adapter/evaluation tests, 177 core tests, and all
+nine core/adapter demos passed. All 31 plugin tests, JSON validation and isolated
+Claude marketplace/strict plugin validation passed. Independent baseline labels
+validate with no review errors. Paid baseline quality remains incomplete; these
+offline gates establish evaluation tooling, not product readiness.

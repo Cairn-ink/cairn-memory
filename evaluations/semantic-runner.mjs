@@ -6,6 +6,7 @@ import { createOpenAIModel } from '../adapters/openai/index.mjs';
 import { createBudgetedFetch, LIVE_MODEL } from '../adapters/openai/live-harness.mjs';
 import { cases, fixtureVersion } from './semantic-cases.mjs';
 import { summarizeEvaluation, validateEvidence } from './score.mjs';
+import { measurePeakRss } from './resources.mjs';
 
 export const namespaces = Object.freeze({
   personal: Object.freeze({ ownerId: 'synthetic-owner-a', scope: 'personal', projectId: null }),
@@ -145,8 +146,8 @@ export async function runEvaluation({ apiKey, budgetUsd, fetchImpl = globalThis.
         run.elapsedMs = Math.round(performance.now() - started);
         try {
           run.resources = { retainedBytes: run.databasePath ? size(run.databasePath) : 0,
-            peakRssBytes: process.resourceUsage().maxRSS * 1024,
-            measurementScope: 'process lifetime peak RSS; SQLite plus WAL plus SHM before close',
+            peakRssBytes: measurePeakRss(),
+            measurementScope: 'Linux /proc/self/status VmHWM current executable peak RSS; SQLite plus WAL plus SHM before close',
             seededMemoryCount: fixture.mode === 'admit' ? fixture.memories.length : 0,
             sourceMessageCount: fixture.messages?.length ?? fixture.memories.length,
             fixtureBytes: Buffer.byteLength(JSON.stringify(fixture)),

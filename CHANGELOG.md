@@ -4,6 +4,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add a frozen synthetic semantic/resource evaluation with three fresh-state
+  repetitions, explicit unknown semantic judgments, safety checks and a shared
+  paid-request reservation budget. This is not a human or competitor benchmark.
+
 - Add an explicitly opt-in, budget-guarded synthetic live-provider lifecycle
   runner with sanitized reports and offline safety tests. Ordinary tests/CI
   never make paid requests. General semantic quality and standalone MCP remain
