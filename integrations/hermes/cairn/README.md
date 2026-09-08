@@ -28,7 +28,8 @@ The host's generic `OPENAI_API_KEY` is **not** reused. Without the dedicated key
 recall reports `model_not_configured`; other tools work without a model.
 Recall with a key sends selected memory evidence to OpenAI and incurs charges.
 There is no account-wide spending cap here: configure provider limits and consent
-first. No paid host-chat verification is claimed.
+first. A separate bounded native-provider actual-model recall probe passed;
+interactive AIAgent tool selection and general semantic quality are unverified.
 
 ## Explicit tools and boundaries
 

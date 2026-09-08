@@ -77,4 +77,20 @@ The canary credential is removed before process launch; no paid call occurred.
 31 existing plugin tests, JSON/version and marketplace/strict plugin gates pass.
 Host-configured Ruff and local documentation link/diff checks also pass.
 Independent fixed-candidate Standards/Spec review remains required. Full chat,
-paid Hermes recall, publication and general semantic quality are not claimed.
+publication and general semantic quality are not claimed.
+
+## DRI actual-model probe and cumulative budget
+
+The DRI's separate native-provider probe passed real discovery/MemoryManager
+remember + receipt inspection, new-manager/session actual-model recall of the
+same ID/content/receipt, then forget + empty recall. See the
+[retained report and precise scope](../hermes-memory-provider.md#bounded-actual-model-native-provider-probe).
+This used the latest persisted UUID implementation, unchanged installed engine
+and provider bridge, with a test-only budget-preload runtime wrapper. It is not
+interactive AIAgent tool selection or general semantic acceptance.
+
+Six HTTP responses were all 200; reserved US$0.026688, observed usage estimate
+US$0.000608. Previous cumulative US$2.980160 + this probe = **US$3.006848** of
+US$5, leaving **US$1.993152**. No worker paid requests or credentials were used.
+The final install documentation candidate `326809a` was integrated locally
+before this evidence candidate; there was no GitHub merge or deployment.
