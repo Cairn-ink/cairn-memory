@@ -1,6 +1,8 @@
 # Shared memory layer — delivery plan
 
-Baseline: merged PR #8, `71e5ee9e5ddeb2e5c65c48a4a36f6758d5ddbced`.
+Current baseline: merged PR #16, `5f17b4399ffdd6d7f5b1ee04e1fb106a2af163a9`.
+The original #8 baseline and historical checkpoint ledger below are retained
+as history, not the current merge status.
 This is an execution plan, not a claim that the remaining features have shipped.
 The primary assistant is the engineering DRI; the repository owner retains
 merge, production, release and external-publication decisions.
@@ -19,6 +21,46 @@ merge, production, release and external-publication decisions.
   correction/forget safety and the single-public-engine rule in every stage.
 
 ## Goal and baseline
+
+### Current checkpoint and next eight PR packages (2026-09-08)
+
+The owner merged #10 and #12–#16. Core lifecycle, capture, conflict hints,
+index rebuild and bounded recall continuation are implemented; the optional
+OpenAI adapter has offline verification. This is not yet real-model quality
+evidence or an independently installable MCP product.
+
+| Order | Package | Exit gate |
+| --- | --- | --- |
+| 1 | [Live provider lifecycle](live-provider.md), in progress | Real capture/classify/recall/reopen/correct/forget, bounded spend and sanitized evidence |
+| 2 | Frozen semantic/resource evaluation | Freeze numeric rubric before scored runs; three fresh-state repetitions, retain all failures, zero safety violations |
+| 3 | Thin standalone MCP host | Real protocol calls to the same core, startup-bound authority, persistence and lifecycle safety |
+| 4 | Install artifact and client matrix | Fresh-environment install and new-session recall; distinguish tested local stdio from unverified remote connectors |
+| 5 | First ecosystem integration | Prefer Hermes after checking the current interface; real host test, disable/uninstall, distinguish manual install from official listing |
+| 6 | Professional launch kit and PLG experiment | Accurate docs/demo/evidence/privacy/security and independent context-free onboarding; activation before stars |
+| 7 | Private pinned-core adapter | Commercial behavior actually runs the same versioned public core, not a second engine |
+| 8 | Private migration/rollback rehearsal | Synthetic legacy-data parity and failure recovery, no production mutation |
+
+These are scoped planning packages, not promised GitHub PR numbers. Fixes may
+need additional PRs. Package six targets a demonstrable standalone developer
+product ready to propose for publication. Packages seven/eight establish shared
+engine integration and rehearsal; actual production cutover remains a separate
+approval and verification gate, not something completed by a plan or mock.
+
+Evaluation fixtures and MCP interface design may start alongside live work.
+After the basic live lifecycle passes, evaluation and MCP implementation may
+advance concurrently; scored evaluation is a release-readiness gate, not a reason
+to defer all transport work. Private adapter/rehearsal work can begin once the
+core contract is stable; it does not depend on stars or publication.
+
+Owner approved using the existing local OpenAI key with a US$5 first-test total
+ceiling. Only the DRI performs paid calls, loading that key alone; never copy an
+application environment or use a user database. Actual spend remains recorded
+in the live acceptance evidence. Human feedback remains separate from agent
+onboarding tests. No fixed ten-person alpha prerequisite, no guaranteed stars,
+no automatic capture claim from MCP alone, no full UI or Moss prerequisite.
+
+The detailed stages below supply invariants and historical package identifiers.
+This current checkpoint overrides their historical status and strict ordering.
 
 Deliver a lightweight, self-hostable open-source memory layer, not merely a
 client for a private hosted service. MCP is the first adoption surface. A first
@@ -104,10 +146,9 @@ unattended scheduler. A new merge/continuation message resumes the next package.
 
 ## Five stages, thirteen initial work packages
 
-Package **1a is merged** (#10); **1b is ready_for_merge** (#12);
-**1c is ready_for_merge** (#13); **1d is ready_for_merge** (#14);
-**1e is ready_for_merge** (#15); the offline portion of **2a is in progress**.
-Live 2a acceptance is pending credentials/budget; later packages remain
+Packages **1a–1e are merged** (#10, #12–#15); the offline portion of **2a is
+merged** (#16). Live 2a acceptance is now in progress with authorized credentials
+and a bounded test budget; later packages remain
 **not_started**. The grouping is a planning baseline, not a
 promise of exactly thirteen PRs; split packages further when scope/risk requires.
 
@@ -220,9 +261,10 @@ ran 30 recall/continuation/fetch tests. It is not marked merged here.
 
 The [2a offline subpackage](openai-provider.md) follows that verified parent.
 Its adapter/tokenizer/transport fixtures are separate from live acceptance.
-After offline verification, real 2a requires an explicitly authorized test key
-and paid-run ceiling; neither has been provided. No real API call, model quality
-result or downstream package completion is claimed.
+This historical offline checkpoint did not include an authorized key or paid-run
+ceiling. Those are now authorized as recorded above; live outcomes belong in the
+[live acceptance evidence](live-provider.md). No downstream completion or general
+model-quality claim follows from the offline checkpoint.
 
 When a package advances, record: package/status, fixed base and candidate SHA,
 implementation owner, primary verification commands/results, Standards findings,

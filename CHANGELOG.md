@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an explicitly opt-in, budget-guarded synthetic live-provider lifecycle
+  runner with sanitized reports and offline safety tests. Ordinary tests/CI
+  never make paid requests. General semantic quality and standalone MCP remain
+  separate acceptance gates.
+
 - Add an optional pinned OpenAI adapter with a real local tokenizer, provider
   count preflight, bounded transport and strict output schemas. Offline fixtures
   only: live provider acceptance and quality evaluation remain pending. Preserve

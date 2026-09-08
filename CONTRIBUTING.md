@@ -41,6 +41,11 @@ For optional OpenAI adapter changes, run `npm ci --prefix adapters/openai`, then
 `npm run test:openai` and `npm run demo:openai-offline` on both core runtimes.
 These use fake HTTP and need no key. Real-provider tests require explicitly
 approved credential scope and budget.
+The opt-in `npm run test:openai-live -- --live --budget-usd 0.25` uses synthetic
+temporary data and paid requests; it is never a CI gate. Its budget and CLI
+safety tests run within the ordinary offline adapter suite. See
+`docs/plans/live-provider.md` for acceptance and `docs/openai-provider.md` for
+credential and cumulative-budget handling.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 

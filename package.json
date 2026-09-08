@@ -19,6 +19,7 @@
     "demo:rebuild": "node examples/index-rebuild.mjs",
     "demo:continuation": "node examples/recall-continuation.mjs",
     "demo:openai-offline": "node examples/openai-offline.mjs",
+    "test:openai-live": "node examples/openai-live.mjs",
     "test:openai": "npm test --prefix adapters/openai",
     "validate": "node scripts/validate-json.mjs"
   }
