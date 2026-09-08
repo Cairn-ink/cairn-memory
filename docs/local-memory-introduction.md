@@ -40,15 +40,10 @@ still has unsupported source details; an explicitly selected [experimental
 profile](plans/extraction-model-profile.md) passed a fixed small synthetic corpus
 after review. Neither result is a quality score for MCP recall or the Hermes loop.
 
-The installed SDK lifecycle is protocol/persistence evidence, not a general
-quality guarantee. Pinned Hermes checks exercise the actual AIAgent loop and real
-tool dispatch with scripted completion decisions, not a real model. A separate
-historical paid native `MemoryManager` probe used a real model for a bounded
-provider lifecycle, but it is not combined with that scripted loop or proof of
-real-model full-chat. Autonomous real-model tool selection remains unverified;
-automatic transcript capture is not implemented in this local MCP preview.
-The released hosted Claude plugin is a separate mode with its own implemented
-automatic capture and service/privacy behavior.
+Installed persistence and scripted Hermes dispatch have been tested; real-model
+full-chat behavior remains unverified. See the demo's [evidence boundaries](local-memory-demo.md#evidence-boundaries)
+for the separate test modes and historical paid probe. The released hosted Claude
+plugin is a separate mode with its own automatic capture and privacy behavior.
 
 ## 中文簡介
 

@@ -1,6 +1,6 @@
 # Developer preview readiness and handoff
 
-Base: fbee787b4f37f6ccd1b7865c2d5ce1e210ec7d74 (PR31, depends on30).
+Base: fbee787b4f37f6ccd1b7865c2d5ce1e210ec7d74 (PR #31, depends on #30).
 Documentation-only; no publication, outreach, telemetry or runtime change.
 
 ## Acceptance
@@ -36,10 +36,10 @@ roadmap checkpoint and evidence audit. Independent reviews inspect final diff.
   source and linked files. Primary read the complete revised copy, simplified
   the Chinese introduction and confirmed local capture is absent, not merely
   unverified. No runtime or public contract changes.
-- Plugin suite31/31 and JSON/version validation passed. Primary also ran the
-  pinned2.1.260 marketplace and strict plugin validator against this worktree;
+- Plugin suite 31/31 and JSON/version validation passed. Primary also ran the
+  pinned 2.1.260 marketplace and strict plugin validator against this worktree;
   both passed. No TypeScript gate exists in this JavaScript repository.
-- Installer and Hermes evidence is reused from verified parent PR30/31 and
+- Installer and Hermes evidence is reused from verified parent PR #30/#31 and
   linked by exact task plans; no new paid or human outcome is claimed.
 - `git diff --check` passed. Drafts remain unpublished. Worker model Luna max;
   primary owns final copy integration. One editorial correction round reduced

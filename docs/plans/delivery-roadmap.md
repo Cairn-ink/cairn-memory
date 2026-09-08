@@ -32,13 +32,13 @@ automatic transcript capture or ten-person private-alpha prerequisite is added.
   at `02e1a8e302f9a857ba00c81442e814d984d5c7c6` with passing CI.
 - [#30](https://github.com/Cairn-ink/cairn-memory/pull/30), ready for owner merge:
   one-command source-to-local installer, private app/data separation, no overwrite
-  or account configuration.13 artifact tests and18 MCP tests passed on each core
+  or account configuration. 13 artifact tests and 18 MCP tests passed on each core
   runtime; independent reviews and all nine remote CI jobs passed. Actual default
   install and six-stage no-key walkthrough also passed.
 - [#31](https://github.com/Cairn-ink/cairn-memory/pull/31), ready after #30:
   actual pinned Hermes AIAgent loop for native and MCP routes, scripted completion
-  decisions with real discovery/dispatch/SQLite. DRI reran7 host tests each on
-  Node22.16/24.20; independent reviews and nine remote CI jobs passed. This is
+  decisions with real discovery/dispatch/SQLite. DRI reran 7 host tests each on
+  Node 22.16/24.20; independent reviews and nine remote CI jobs passed. This is
   not real-model autonomous tool selection or a full paid conversation test.
 - This documentation follow-up depends on #31. Merge order is #30 → #31 →
   this follow-up; retarget dependent PRs to main after their parent merges.
@@ -58,7 +58,7 @@ durable spending reservations and accounting; migration/cutover approval; and
 owner-approved distribution/outreach. The [introduction](../local-memory-introduction.md)
 is a draft, and [14-day adoption targets](local-memory-plg.md) are not outcomes.
 No paid calls were added by these onboarding/host-test packages; the cumulative
-reservation stays US$4.179912 ofUS$5. Earlier balances are historical, not refillable.
+reservation stays US$4.179912 of US$5. Earlier balances are historical, not refillable.
 
 ### Current candidate checkpoint (2026-09-09)
 
