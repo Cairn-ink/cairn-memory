@@ -85,3 +85,14 @@ Linux executable (about 163 MiB peak, 4.963-second recall p95). These are small
 synthetic fixtures, not a human study, scale benchmark, client certification or
 evidence that Cairn outperforms another product.
 The third run measured about 170 MiB peak and 4.557-second recall p95.
+
+The fourth run explicitly changed only extraction to the experimental profile.
+It completed 36/36 and passed the unchanged gate after independent agent review:
+44/45 recall, 44/44 relevance, 25/25 captured records source-supported and 24/24
+required capture facts recovered. One cooking retrieval omitted the soup fact;
+that miss remains in the denominator. MOC discoverability was 12/12, empty queries
+6/6, with zero reported safety violations. Peak RSS was 176254976 bytes, retained
+storage 233472 bytes and recall p95 4856 ms. See the [fourth-run evidence and
+limits](plans/extraction-model-profile.md#measured-evidence). The default model
+remains unchanged and its source-support failure is not superseded by an opt-in
+profile's result.

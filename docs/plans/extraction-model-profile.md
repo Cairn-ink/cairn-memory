@@ -16,8 +16,9 @@ Candidate: `gpt-5.4-mini-2026-03-17`, reasoning effort `none`. Official model do
 checked 2026-09-09 describe Responses/structured-output support, a 400000-token
 window, and standard text pricing US$0.75 input/US$4.50 output per million tokens:
 <https://developers.openai.com/api/docs/models/gpt-5.4-mini>.
-Account access and actual response compatibility remain unverified until a
-bounded probe. No claim that a newer model necessarily passes this task.
+Account access and actual response compatibility were initially unverified;
+the bounded evidence below records the subsequent result. No claim that a newer
+model necessarily passes other tasks.
 
 ## Acceptance X01–X07
 
@@ -72,6 +73,49 @@ All 81 adapter/evaluation tests pass on Node22.16.0 and24.20.0; both offline
 provider lifecycle demos pass. Frozen corpus, scorer and old report files are
 unchanged. Existing 31 plugin tests, JSON/version validation and marketplace/
 strict plugin validation pass; no new typecheck gate exists in this JS repository.
-This stage makes no paid calls and consumes none of the US$1.966464
+The offline implementation stage made no paid calls and consumed none of the US$1.966464
 remaining campaign reservation. X06 compatibility and X07 independent source
 support remain DRI gates before any default-promotion discussion.
+
+## Measured evidence
+
+Implementation was frozen at `4980e6408c21c939ffb1357a16f082ee7b1e07cd` before
+the following DRI-only calls. The corpus/scorer and all three earlier reports
+are unchanged. The explicit experimental profile is not promoted to a default.
+
+- [Compatibility probe](../../evaluations/results/extraction-profile-probe-v1.json):
+  actual extract/count/generate and classification succeeded in a fresh synthetic
+  store. Both original usage statements remained literal, correctly sourced
+  memories. Four HTTP requests reserved US$0.028648 against a US$0.05 cap.
+- [Complete frozen run](../../evaluations/results/extraction-profile-v1.json):
+  36/36 completed, 222 HTTP requests, US$1.117728 reserved under the US$1.40 cap.
+  Only the 36 temporary database paths were removed from the original report;
+  raw pending-review summary remains intact alongside separate labels.
+- [Independent agent labels](../../evaluations/results/extraction-profile-v1-review.json):
+  unchanged scorer returns **passed**: recall 44/45, relevance 44/44, all 25
+  captured records supported and all 24 required capture facts recovered.
+  MOC discoverability 12/12 and three coherent topic groupings, empty queries 6/6,
+  zero reported safety violations or review errors. This is agent, not human,
+  evidence review. C04 repetition 3 omitted `soup-cumin` for the cooking query;
+  it remains a miss, not a discarded trial. The scorer's pre-existing 90% recall
+  threshold allows this miss; no threshold was changed.
+- Current-executable peak RSS 176254976 bytes, max retained SQLite/WAL/SHM
+  233472 bytes, recall p95 4856 ms. Small Linux fixtures only, not scale evidence.
+
+The probe's generation-usage estimate is US$0.0011855 and the complete run's is
+US$0.0415658, neither an invoice. Campaign reservations now total US$4.179912
+(prior US$3.033536 + probe US$0.028648 + run US$1.117728), leaving US$0.820088
+of the approved US$5. Failed/count requests in previous runs stay reserved.
+No additional calls are needed merely to improve this score.
+
+Reproduce review without network or credentials from this checkout:
+
+```sh
+node --input-type=module -e 'import fs from "node:fs"; import {cases} from "./evaluations/semantic-cases.mjs"; import {summarizeEvaluation} from "./evaluations/score.mjs"; const read = name => JSON.parse(fs.readFileSync("./evaluations/results/" + name, "utf8")); console.log(summarizeEvaluation(cases, read("extraction-profile-v1.json").results, read("extraction-profile-v1-review.json")));'
+```
+
+Default GPT-4.1 mini source support is still failed. This run is not a competitor
+benchmark, human benefit study, public release, automatic capture certification,
+or proof that an installed MCP client uses the experimental profile. Packaging
+integration must add the new runtime `profiles.mjs` to the artifact allowlist
+and rerun installation gates before these source changes are combined with it.

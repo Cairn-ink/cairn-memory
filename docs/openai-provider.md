@@ -15,7 +15,10 @@ count and generation. Classification, selection and ranking keep the existing
 model and request shape. Unknown models/options fail before network I/O; there
 is no automatic fallback or default promotion.
 
-This is an unmeasured experimental profile, not a quality claim. The
+This remains an experimental profile. Its first frozen synthetic run passed the
+existing acceptance gate after independent agent review; this is not a human
+study or a general reliability claim. See the [retained evidence](plans/extraction-model-profile.md#measured-evidence).
+The
 [official model page](https://developers.openai.com/api/docs/models/gpt-5.4-mini)
 documents the 400,000-token window, snapshot, structured outputs and reasoning
 `none`. The [count API](https://developers.openai.com/api/reference/typescript/resources/responses/subresources/input_tokens)
@@ -60,7 +63,7 @@ server counts are not evidence of actual provider framing.
 
 ## Host and data boundary
 
-`adapters/openai/index.mjs` exports `createOpenAIModel({apiKey,fetchImpl?})`.
+`adapters/openai/index.mjs` exports `createOpenAIModel({apiKey,fetchImpl?,extractionModel?})`.
 A trusted host supplies an explicit key and injects the result into
 `openMemoryCore({path,model})`. Construction/local counting makes no HTTP calls.
 Calling a model method without fake transport sends selected input to OpenAI
