@@ -67,4 +67,8 @@ retain failures and label independent semantic judgments honestly. See
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
+For `integrations/hermes` changes, run the real pinned host's canonical test
+runner as documented in `docs/hermes-memory-provider.md`, against an installed
+local artifact. Use synthetic profiles only, no user keys or paid requests.
+
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

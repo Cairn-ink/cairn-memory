@@ -14,6 +14,10 @@ All notable changes follow semantic versioning.
 - Include the shared model-profile module in the local archive and verify an
   installed adapter import. MCP retains its existing default; experimental
   extraction remains an explicit programmatic option.
+- Add an opt-in third-party Hermes memory-provider preview over installed MCP,
+  with profile-local explicit tools, CLI/primary context boundaries and no
+  automatic capture. Pinned-host lifecycle tests do not establish semantic
+  quality, full chat compatibility or upstream listing.
 
 - Prepare pinned public package metadata explicitly before offline artifact
   installation; add a clean-cache CI regression. Dependency installation with

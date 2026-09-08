@@ -112,5 +112,8 @@ Its explicit file allowlist copies the checked-in runtime into temporary staging
 that generated artifact is not a second maintained engine. The preview manifest
 and root contributor package remain private, and nothing is published to npm.
 Installation retrieves pinned dependencies; no public `npx` command, remote
-connector or named-client chat integration is implied. Hermes MCP tool discovery
-has been observed, but native memory-provider integration remains separate.
+connector or named-client chat integration is implied. The third-party
+[Hermes native provider preview](hermes-memory-provider.md) now has actual
+MemoryManager lifecycle and model-backed sourced-recall evidence. Interactive
+agent tool selection, other host versions and general semantic quality remain
+separate gates; no upstream listing or endorsement is implied.

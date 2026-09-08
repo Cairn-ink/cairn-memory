@@ -80,7 +80,7 @@ The walkthrough does not impose a provider account spending limit.
 Try the [cross-session walkthrough](docs/local-memory-demo.md). See the
 [tested client matrix](docs/install-artifact.md#verification-and-compatibility)
 before assuming a named client works: SDK stdio and Hermes MCP discovery have
-evidence. The separate [Hermes native-provider candidate](https://github.com/Cairn-ink/cairn-memory/pull/25)
+evidence. The included [Hermes native-provider preview](docs/hermes-memory-provider.md)
 also passed actual MemoryManager two-session sourced recall on Linux CLI;
 interactive chat tool selection and remote HTTP connectors remain separate gates.
 
@@ -107,6 +107,10 @@ The released v0.1 Claude Code plugin below is a **different installation mode**:
 it connects to a compatible hosted service, automatically captures allowlisted
 conversation text, and has its own telemetry defaults. It has not been migrated
 to the local engine. Existing hosted users can keep using these instructions.
+
+The opt-in [Hermes memory-provider preview](docs/hermes-memory-provider.md)
+adds profile-local explicit tools through the installed MCP. Its pinned-host
+offline lifecycle tests are not a full chat or semantic-quality certification.
 
 ## Install for Claude Code (automatic memory)
 

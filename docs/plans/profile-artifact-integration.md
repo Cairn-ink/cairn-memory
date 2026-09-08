@@ -3,8 +3,9 @@
 Base: `583225ce839fe51876506042e838cde67905fefe` (#26).
 Integrate reviewed source profile `03e745d48ba2e149a8ee8e259e8ee777868c3c3b`
 (#27) on an isolated branch, never GitHub/main. Preserve both sides' validation
-commands and changelog entries. Hermes provider remains its separate PR #25;
-this branch does not pretend it is present.
+commands and changelog entries. The final integration also incorporates reviewed
+native Hermes provider `e63ad0af68888656118e02ec1aecc37114a197fc` (#25), so its
+actual pinned-host lifecycle can be verified against the new artifact together.
 
 ## Acceptance A01–A05
 
@@ -27,13 +28,19 @@ this branch does not pretend it is present.
 - A05: Freeze verified integration and obtain independent Standards/Spec reviews
   before push/PR. Preserve prior evidence and document exact parent commits,
   tests and artifact hash. Do not merge/publish/deploy or alter user work.
+- A06: Preserve reviewed Hermes provider behavior, and run its actual pinned-host
+  five-test lifecycle suite against the new installed artifact on both Node
+  versions. No paid calls, full chat or new automatic capture claim. Distinguish
+  historical real-model proof from this fresh no-key integration proof.
 
 ## Integration evidence (2026-09-09)
 
 The local merge preserves both parents' changelog entries, package commands and
 CONTRIBUTING gates. Parent one is `583225ce839fe51876506042e838cde67905fefe`;
-parent two is `03e745d48ba2e149a8ee8e259e8ee777868c3c3b`. No Hermes provider
-implementation is brought into this branch.
+parent two is `03e745d48ba2e149a8ee8e259e8ee777868c3c3b`. This first integration
+candidate was `a221a27e507972ac6e8b51682e237725554c3b7b`. The subsequent local
+merge adds the already reviewed native Hermes provider, preserving both
+changelog additions; its new-artifact verification is recorded below.
 
 The new installed-adapter import regression failed before adding `profiles.mjs`
 to the archive allowlist (`artifact_command_failed` from the isolated import
@@ -77,3 +84,22 @@ profile is explicit programmatic adapter configuration only. No semantic recall
 was run for this new archive; retained source-profile quality evidence is neither
 an installed-MCP extraction claim nor human adoption evidence. Independent final
 Standards/Spec review remains the gate before any push/PR.
+
+## Native provider integration verification
+
+The DRI also integrated reviewed Hermes provider commit
+`e63ad0af68888656118e02ec1aecc37114a197fc`. No provider implementation was
+rewritten. The pinned Hermes 0.21.1 host at upstream commit
+`c8aa5608c24e3636e77c267650c0f1f52e44adb0` ran its canonical
+`scripts/run_tests.sh` against `integrations/hermes/test/test_provider.py`,
+with the installed executable and Node runtime passed explicitly.
+All five tests passed on Node22.16 (22.9 seconds) and Node24.20 (20.0 seconds).
+They exercise actual provider discovery/MemoryManager, profile identity,
+reopen/correction/forgetting, key isolation, inert unsupported contexts and child
+cleanup against the new archive. These are no-key integration tests; historical
+model-backed provider evidence retains its original archive scope.
+
+After that merge the DRI independently reran all 23 artifact/MCP tests on both
+Node versions and JSON validation. Both rebuilt archives still have SHA-256
+`d24f9d7bc10fd49ccd8e9853f3534efa6db0fce6ea983fef7f3791aac9cc9b9d`:
+Hermes plugin files are installed separately and do not change the npm archive.
