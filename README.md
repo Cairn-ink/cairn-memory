@@ -75,8 +75,9 @@ The walkthrough does not impose a provider account spending limit.
 Try the [cross-session walkthrough](docs/local-memory-demo.md). See the
 [tested client matrix](docs/install-artifact.md#verification-and-compatibility)
 before assuming a named client works: SDK stdio and Hermes MCP discovery have
-evidence; full chat/native-provider integration and remote HTTP connectors are
-separate gates.
+evidence. The separate [Hermes native-provider candidate](https://github.com/Cairn-ink/cairn-memory/pull/25)
+also passed actual MemoryManager two-session sourced recall on Linux CLI;
+interactive chat tool selection and remote HTTP connectors remain separate gates.
 
 ## Local privacy and control
 

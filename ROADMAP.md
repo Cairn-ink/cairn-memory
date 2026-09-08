@@ -12,8 +12,9 @@ service must use the same public core, not separate engines.
   has passed installed subprocess persistence and actual-model sourced recall.
 - Frozen synthetic evaluation and failures are retained. **Source support still
   fails**, so broad-promotion readiness is not declared.
-- Hermes MCP discovery is verified. Native-provider lifecycle is a separate
-  integration package, not implied by discovery.
+- Hermes MCP discovery is verified. The separate [native-provider candidate](https://github.com/Cairn-ink/cairn-memory/pull/25)
+  passed MemoryManager lifecycle and actual-model recall on Linux CLI; interactive
+  chat tool selection is not implied.
 
 These are development candidates, not a claim that every PR has merged or a new
 package has been published. The released v0.1 hosted plugin remains available;
@@ -22,7 +23,8 @@ its past hosted tests do not establish local-preview quality.
 ## Next gates
 
 1. Resolve the source-support failure and rerun the unchanged frozen evaluation.
-2. Verify selectable Hermes native-provider behavior and two-session memory use.
+2. Review/merge the verified native-provider candidate; separately evaluate
+   interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
 4. Run the [14-day adoption experiment](docs/plans/local-memory-plg.md) only after
    approval: activation and useful sourced recall first; stars are secondary.

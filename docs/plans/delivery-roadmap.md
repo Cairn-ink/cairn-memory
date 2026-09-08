@@ -34,7 +34,7 @@ tables below are retained; this checkpoint overrides their old progress labels.
 | 2 — Evaluation | [#19](https://github.com/Cairn-ink/cairn-memory/pull/19), [#21](https://github.com/Cairn-ink/cairn-memory/pull/21), [#23](https://github.com/Cairn-ink/cairn-memory/pull/23) retain all runs; latest source-support gate still **failed**, despite 36/36 completions and 45/45 recall/relevance |
 | 3 — Thin MCP | [PR #18](https://github.com/Cairn-ink/cairn-memory/pull/18): actual stdio lifecycle/isolation/revisions, same core |
 | 4 — Installation | [PR #24](https://github.com/Cairn-ink/cairn-memory/pull/24): inspected archive, fresh installed subprocess and actual-model restart/recall passed; no npm publication |
-| 5 — Hermes | MCP discovery verified; native MemoryProvider lifecycle is a separate in-progress package, not a released compatibility claim |
+| 5 — Hermes | [PR #25](https://github.com/Cairn-ink/cairn-memory/pull/25): native MemoryManager lifecycle and actual-model two-session recall passed on Linux CLI; not interactive chat or a released compatibility claim |
 | 6 — Launch kit | Local-first documentation and independent no-key onboarding in progress; broad promotion remains blocked by source support |
 | 7 — Private adapter | Preflight only; actual pinned-core consumption and runtime compatibility not complete |
 | 8 — Migration/rollback | Not completed; only synthetic rehearsal may proceed without production approval |
