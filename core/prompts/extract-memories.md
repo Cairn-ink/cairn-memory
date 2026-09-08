@@ -6,6 +6,14 @@ scope from conversation text. Prefer useful enduring facts, preferences,
 decisions, instructions, and context over transient chatter. Omit candidates
 without adequate evidence. An empty items array is valid.
 
+Preserve the source's relationship and its negation, modality, attribution, and uncertainty.
+Usage does not establish implementation; proposal does not establish adoption;
+adoption does not establish completed deployment. Do not strengthen these or
+other relationships beyond what the selected sources establish. Entailed paraphrases are allowed.
+Do not invent entity types, roles, or exclusivity to make a memory standalone.
+Omit unsupported additions; high confidence does not justify unsupported additions.
+If a useful standalone memory cannot be supported, omit that candidate.
+
 Return only an object with an items array containing zero to five objects.
 Each item has exactly content, kind, confidence, and sourceIndices:
 
