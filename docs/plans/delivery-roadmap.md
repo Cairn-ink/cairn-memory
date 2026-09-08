@@ -105,7 +105,8 @@ unattended scheduler. A new merge/continuation message resumes the next package.
 ## Five stages, thirteen initial work packages
 
 Package **1a is merged** (#10); **1b is ready_for_merge** (#12);
-**1c is ready_for_merge** (#13); **1d is in progress** on its verified parent. Later packages remain
+**1c is ready_for_merge** (#13); **1d is ready_for_merge** (#14);
+**1e is in progress** on its verified parent. Later packages remain
 **not_started**. The grouping is a planning baseline, not a
 promise of exactly thirteen PRs; split packages further when scope/risk requires.
 
@@ -203,9 +204,14 @@ Conflict [PR #13](https://github.com/Cairn-ink/cairn-memory/pull/13) follows #12
 `c9295f4ad9533fdf91d299703a85f3a4b2af94e4`: 145 core tests and six demos pass on
 each runtime, 31 plugin tests and all five CI jobs pass; independent Standards
 and Spec each report zero findings. It is not marked merged here.
-Package **1d** follows that verified parent; its [acceptance](index-rebuild.md)
-freezes bounded generation publication and ordinary-write coherence. Next after
-verification/review is **1e**. No later package is complete.
+Index [PR #14](https://github.com/Cairn-ink/cairn-memory/pull/14) follows #13 at
+`d91c60651c3d224eee5e8154a4eb6ab6ca27ba42`: 162 core tests and seven demos pass on
+each runtime, 31 plugin tests and all five CI jobs pass. Independent review found
+an initial unbounded SQL reference scan; the final bounded-scan fix passed both
+axes with zero findings. It is not marked merged here.
+Package **1e** follows that verified parent; its [acceptance](recall-continuation.md)
+freezes continuation budgets and the [contract inventory](core-contract-inventory.md).
+Next after verification/review is **2a**. No later package is complete.
 
 When a package advances, record: package/status, fixed base and candidate SHA,
 implementation owner, primary verification commands/results, Standards findings,

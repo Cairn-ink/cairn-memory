@@ -62,7 +62,8 @@ fetched candidates. Empty arrays are valid. Forged IDs, revisions, extra fields
 and group IDs fail validation. All query/content/receipt/label text is untrusted
 data. Structural validation does not prove that a model judges relevance well.
 
-There are at most two model calls and 24 candidate fetches. Each call needs a
+There are at most three model calls, 36 unique candidates and 72 fetch operations
+(two receipt pages per candidate). Each call needs a
 context window of at least 8192, input at most 6000 counted tokens, output at most
 1024 tokens and 1024 reserved for adapter framing. The shared classification/
 recall call helper enforces a 30-second AbortSignal deadline. Counter absence,
@@ -80,12 +81,15 @@ snapshot.
 
 ## Honest coverage limits
 
-This version reads one bounded map page per namespace and one receipt page per
-candidate. `namespaces` reports `mapExhausted` and `fetchExhausted`; any truncated
+Recall reads at most two bounded map pages per namespace and two receipt pages
+per candidate. Each selection round can use only refs visible in that round;
+finished namespaces are skipped without renumbering them. `namespaces` reports
+`mapExhausted` and `fetchExhausted`; any truncated
 input yields `coverage:'budget_exhausted'`, including empty results. `complete`
 means these bounded inputs were fully examined, not proof of relevance or perfect
 recall. Large candidate bodies can exceed model input limits and fail explicitly.
-Adaptive traversal and further receipt paging during recall are not implemented.
+Adaptive hierarchy traversal and paging beyond these ceilings are not implemented.
+See [recall continuation](recall-continuation.md) for exact budgets and coverage.
 
 Run `npm run demo:recall` from a source checkout on Node >=22.16. The bundled
 scripted mock uses byte-based test counting, not a production tokenizer. Tests
@@ -93,6 +97,7 @@ use synthetic SQLite files, including a second connection changing data while
 ranking waits. This verifies control flow, isolation and revision safety, not
 real-model semantic quality. The repository is not an npm-published package.
 
-The [S2c acceptance plan](plans/s2-fetch-recall.md) defines exact scope. Next:
+The [S2c acceptance plan](plans/s2-fetch-recall.md) records the original scope;
+the [continuation plan](plans/recall-continuation.md) defines the current extension. Next:
 real provider/tokenizer integration with quality evaluation and a thin MCP host
 over this shared core. Existing [storage/retention limits](local-store.md) apply.

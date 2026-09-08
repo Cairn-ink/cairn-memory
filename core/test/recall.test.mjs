@@ -66,8 +66,8 @@ test('unrelated selection is explicitly empty and no ranking fallback runs', asy
 });
 
 test('incomplete maps cannot masquerade as complete empty recall', async (t) => {
-  const { core } = fixture(t, { select: [{ refs: [] }] });
-  for (let i = 0; i < 101; i++) admit(core, `Synthetic note ${i}`);
+  const { core } = fixture(t, { select: [{ refs: [] }, { refs: [] }], countTokens: () => 1 });
+  for (let i = 0; i < 201; i++) admit(core, `Synthetic note ${i}`);
   const result = ok(await recall(core));
   assert.deepEqual(result.memories, []);
   assert.equal(result.namespaces[0].mapExhausted, false);
@@ -75,11 +75,11 @@ test('incomplete maps cannot masquerade as complete empty recall', async (t) => 
 });
 
 test('receipt overflow remains explicit in recall coverage', async (t) => {
-  const { core } = fixture(t);
-  for (let i = 0; i < 30; i++) admit(core, 'Many provenance sources', personal, `source-${i}`, 'x'.repeat(750));
+  const { core } = fixture(t, { countTokens: () => 1 });
+  for (let i = 0; i < 201; i++) admit(core, 'Many provenance sources', personal, `source-${i}`, 'x'.repeat(750));
   const result = ok(await recall(core));
-  assert.equal(result.memories[0].receiptCount, 30);
-  assert.ok(result.memories[0].receipts.length < 30);
+  assert.equal(result.memories[0].receiptCount, 201);
+  assert.equal(result.memories[0].receipts.length, 200);
   assert.equal(result.namespaces[0].fetchExhausted, false);
   assert.equal(result.coverage, 'budget_exhausted');
 });

@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Extend recall to two bounded root-map rounds and two receipt pages per
+  candidate, with explicit incomplete coverage and the same final authoritative
+  snapshot. Cap three model calls and 36 unique fetched memories; large combined
+  evidence retains explicit context errors. Add a core operation/test inventory.
+
 - Add bounded model-free index rebuild with persisted continuation, validated
   generation authority and atomic publication. Ordinary mutations maintain the
   active projection transactionally. Schema v7 retains existing data; no topic

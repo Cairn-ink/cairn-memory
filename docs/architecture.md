@@ -65,6 +65,11 @@ projections and atomically switches their authority. Normal mutations maintain
 the active projection in the shared transaction; readers still validate current
 memory identity and revisions. Rebuilding is not a second classification engine.
 
+[Recall continuation](recall-continuation.md) adds bounded next-page traversal
+and receipt prefixes without changing the final authoritative snapshot. The
+[operation inventory](plans/core-contract-inventory.md) distinguishes tested
+source contracts from provider, standalone MCP and commercial migration gates.
+
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
 ## Trust boundaries
