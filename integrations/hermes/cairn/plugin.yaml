@@ -1,0 +1,4 @@
+name: cairn
+version: 0.1.0
+description: Explicit profile-local memory through the installed Cairn MCP.
+hooks: []

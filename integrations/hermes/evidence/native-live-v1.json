@@ -1,0 +1,146 @@
+{
+  "status": "passed",
+  "stages": [
+    "native_discovery_manager_remember_receipt",
+    "new_manager_session_actual_model_sourced_recall",
+    "forget_then_recall_empty"
+  ],
+  "hostVersion": "0.21.1",
+  "hostCommit": "c8aa5608c24e3636e77c267650c0f1f52e44adb0",
+  "artifactSha256": "708a72b597d2958bd5c37340c4b28559ba707829e6e7a65d69858e20bb976020",
+  "accounting": [
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 0,
+      "reservedUsd": 0,
+      "observedInputTokens": 0,
+      "observedOutputTokens": 0,
+      "observedUsageEstimateUsd": 0,
+      "rejection": null,
+      "requests": []
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 0,
+      "reservedUsd": 0,
+      "observedInputTokens": 0,
+      "observedOutputTokens": 0,
+      "observedUsageEstimateUsd": 0,
+      "rejection": null,
+      "requests": []
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 0,
+      "reservedUsd": 0,
+      "observedInputTokens": 0,
+      "observedOutputTokens": 0,
+      "observedUsageEstimateUsd": 0,
+      "rejection": null,
+      "requests": []
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 0,
+      "reservedUsd": 0,
+      "observedInputTokens": 0,
+      "observedOutputTokens": 0,
+      "observedUsageEstimateUsd": 0,
+      "rejection": null,
+      "requests": []
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 4,
+      "reservedUsd": 0.017792,
+      "observedInputTokens": 880,
+      "observedOutputTokens": 82,
+      "observedUsageEstimateUsd": 0.00048320000000000004,
+      "rejection": null,
+      "requests": [
+        {
+          "endpoint": "count",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 1519,
+          "inputTokens": 369
+        },
+        {
+          "endpoint": "generate",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 1642,
+          "inputTokens": 369,
+          "outputTokens": 41
+        },
+        {
+          "endpoint": "count",
+          "method": "rank",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 329,
+          "inputTokens": 511
+        },
+        {
+          "endpoint": "generate",
+          "method": "rank",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 2918,
+          "inputTokens": 511,
+          "outputTokens": 41
+        }
+      ]
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 0,
+      "reservedUsd": 0,
+      "observedInputTokens": 0,
+      "observedOutputTokens": 0,
+      "observedUsageEstimateUsd": 0,
+      "rejection": null,
+      "requests": []
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 2,
+      "reservedUsd": 0.008896,
+      "observedInputTokens": 292,
+      "observedOutputTokens": 5,
+      "observedUsageEstimateUsd": 0.00012480000000000002,
+      "rejection": null,
+      "requests": [
+        {
+          "endpoint": "count",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 527,
+          "inputTokens": 292
+        },
+        {
+          "endpoint": "generate",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 1498,
+          "inputTokens": 292,
+          "outputTokens": 5
+        }
+      ]
+    }
+  ],
+  "reservedUsd": 0.026688,
+  "observedUsageEstimateUsd": 0.000608,
+  "requestCount": 6
+}

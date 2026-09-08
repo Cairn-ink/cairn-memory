@@ -1,11 +1,18 @@
 # Self-hosting compatibility
 
-Version 0.1 publishes the client, payload schemas, and service compatibility contract. It does **not** yet publish a turnkey extraction, database, authentication, or MCP server stack.
+The released v0.1 hosted client and the local developer preview are different
+installation modes. The preview now includes the public SQLite memory core,
+injected capture/MOC/recall orchestration, an optional OpenAI model adapter and
+a thin stdio MCP host. [Build and install the local archive](install-artifact.md)
+without a Cairn account; model-backed operations require explicit provider
+configuration. The archive has not been published to npm, and source-support
+quality still fails the frozen evaluation.
 
-The unreleased [local storage preview](local-store.md) adds real SQLite
-persistence, receipts, correction/deletion, and lexical lookup from public
-source. It is not yet an endpoint you can put in the plugin configuration.
-Model extraction and local MCP/HTTP wiring remain separate milestones.
+This local stdio process is **not** the HTTP service expected by the existing
+Claude Code automatic-capture plugin. There is no remote HTTP/OAuth host in this
+preview. Fully local model processing and general named-client compatibility
+remain unverified; local storage does not mean that configured cloud-model
+processing stays on-device.
 
 You can point the plugin at a compatible endpoint through `api_endpoint`. That service must provide:
 
@@ -20,7 +27,7 @@ Remote endpoints must use HTTPS so the plugin credential and memory content are 
 
 Use the JSON Schemas in `schemas/` and the semantics in `docs/protocol.md`. Passing schema validation alone is not sufficient: ownership, idempotency, provenance, and fail-open behavior are semantic requirements.
 
-The next milestones build a runnable OSS engine on the local store, then publish
-reproducible product evidence and native host adapters. Until those gates pass,
+The next milestones complete source-support quality, independently reproducible
+onboarding and native host adapters. Until those gates pass,
 describing this repository as a complete self-hosted Mem0/Supermemory replacement
 would be misleading.

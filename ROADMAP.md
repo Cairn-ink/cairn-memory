@@ -1,25 +1,39 @@
 # Roadmap
 
-## M1 — internal dogfood (complete)
+Our target is a lightweight, independently runnable memory layer with Source
+Receipts. MCP is the first access surface; native providers and the commercial
+service must use the same public core, not separate engines.
 
-- Completed real two-session sourced recall against the hosted service.
-- Verified pause/resume, fail-open behavior, Source Receipts, and forgetting.
+## Current developer preview
 
-## M2 — public alpha
+- Public SQLite core: capture orchestration, MOC organization, bounded recall,
+  inspection, correction, deletion suppression and namespace isolation.
+- Optional OpenAI adapter and thin local MCP host; an inspected local npm archive
+  has passed installed subprocess persistence and actual-model sourced recall.
+- Frozen synthetic evaluation and failures are retained. **Source support still
+  fails**, so broad-promotion readiness is not declared.
+- Hermes MCP discovery is verified. The separate [native-provider candidate](https://github.com/Cairn-ink/cairn-memory/pull/25)
+  passed MemoryManager lifecycle and actual-model recall on Linux CLI; interactive
+  chat tool selection is not implied.
 
-- Recruit 10 developers; target 6 activations and 4 useful second-session recalls.
-- Measure false memories, redaction misses, and recall usefulness before adding vector infrastructure.
-- Record a short reproducible demo and publish the repository and `v0.1.0` release.
-- Day 7 target: 100 GitHub stars. Day 30 target: 300; stretch: 500.
+These are development candidates, not a claim that every PR has merged or a new
+package has been published. The released v0.1 hosted plugin remains available;
+its past hosted tests do not establish local-preview quality.
 
-## M3 — trust and client coverage
+## Next gates
 
-- Add automatic Codex lifecycle-hook support without weakening the privacy contract.
-- Add the smallest useful memory inspection/edit/delete UI to Cairn.ink.
-- Treat `sourced_cross_session_recall`, not stars, as the product north star.
+1. Resolve the source-support failure and rerun the unchanged frozen evaluation.
+2. Review/merge the verified native-provider candidate; separately evaluate
+   interactive Hermes chat and additional host/platform coverage.
+3. Complete independent onboarding and propose publication with honest limits.
+4. Run the [14-day adoption experiment](docs/plans/local-memory-plg.md) only after
+   approval: activation and useful sourced recall first; stars are secondary.
+5. Verify private consumption of a pinned public core and synthetic migration/
+   rollback before proposing any production cutover.
 
-## Later
-
-- Evaluate additional host hooks or extensions without claiming passive capture where none exists.
-- Add an npm CLI only if it materially shortens setup or operates a real local service.
-- Add explicit human-confirmed promotion from private Memory into governed shared knowledge.
+See the [detailed delivery plan](docs/plans/delivery-roadmap.md) for dependencies
+and the [launch-kit acceptance](docs/plans/local-memory-launch-kit.md).
+OpenClaw, additional clients, fully local model verification, automatic local
+capture and UI improvements follow their own evidence gates. Moss and shared
+team knowledge are separate work. No ten-person alpha prerequisite, guaranteed
+star count, hidden telemetry or automatic publication is implied.

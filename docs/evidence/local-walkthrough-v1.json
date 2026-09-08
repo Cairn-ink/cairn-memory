@@ -1,0 +1,114 @@
+{
+  "status": "passed",
+  "runtime": "22.16.0",
+  "withRecall": true,
+  "stages": [
+    {
+      "stage": "five_tools",
+      "status": "passed"
+    },
+    {
+      "stage": "remember_and_inspect",
+      "status": "passed"
+    },
+    {
+      "stage": "restart_and_inspect",
+      "status": "passed"
+    },
+    {
+      "stage": "correct_and_reject_stale",
+      "status": "passed"
+    },
+    {
+      "stage": "model_recall_current_receipt",
+      "status": "passed"
+    },
+    {
+      "stage": "forget_and_empty_inspect",
+      "status": "passed"
+    },
+    {
+      "stage": "model_recall_empty",
+      "status": "passed"
+    }
+  ],
+  "accounting": [
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 0,
+      "reservedUsd": 0,
+      "observedInputTokens": 0,
+      "observedOutputTokens": 0,
+      "observedUsageEstimateUsd": 0,
+      "rejection": null,
+      "requests": []
+    },
+    {
+      "budgetUsd": 0.03,
+      "maxRequests": 6,
+      "requestCount": 6,
+      "reservedUsd": 0.026688,
+      "observedInputTokens": 1174,
+      "observedOutputTokens": 95,
+      "observedUsageEstimateUsd": 0.0006216,
+      "rejection": null,
+      "requests": [
+        {
+          "endpoint": "count",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 774,
+          "inputTokens": 379
+        },
+        {
+          "endpoint": "generate",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 1067,
+          "inputTokens": 379,
+          "outputTokens": 45
+        },
+        {
+          "endpoint": "count",
+          "method": "rank",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 682,
+          "inputTokens": 503
+        },
+        {
+          "endpoint": "generate",
+          "method": "rank",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 2130,
+          "inputTokens": 503,
+          "outputTokens": 45
+        },
+        {
+          "endpoint": "count",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 1838,
+          "inputTokens": 292
+        },
+        {
+          "endpoint": "generate",
+          "method": "select",
+          "status": 200,
+          "outcome": "received",
+          "elapsedMs": 1661,
+          "inputTokens": 292,
+          "outputTokens": 5
+        }
+      ]
+    }
+  ],
+  "reservedUsd": 0.026688,
+  "observedUsageEstimateUsd": 0.0006216,
+  "requestCount": 6
+}

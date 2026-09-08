@@ -1,8 +1,66 @@
 # Changelog
 
+## Local-memory introduction candidate
+
+- Lead documentation with the local memory layer and pinned install walkthrough,
+  clearly separate from the released hosted plugin and its privacy defaults.
+- Retain source-support failure beside evidence claims and prepare a consent-based
+  adoption experiment without publication, telemetry or promised stars.
+
 All notable changes follow semantic versioning.
 
 ## Unreleased
+
+- Include the shared model-profile module in the local archive and verify an
+  installed adapter import. MCP retains its existing default; experimental
+  extraction remains an explicit programmatic option.
+- Add an opt-in third-party Hermes memory-provider preview over installed MCP,
+  with profile-local explicit tools, CLI/primary context boundaries and no
+  automatic capture. Pinned-host lifecycle tests do not establish semantic
+  quality, full chat compatibility or upstream listing.
+
+- Prepare pinned public package metadata explicitly before offline artifact
+  installation; add a clean-cache CI regression. Dependency installation with
+  `npm ci` alone does not warm the metadata required by nested shrinkwraps.
+  Ordinary artifact tests remain offline; runtime/archive contents are unchanged.
+
+- Add an inspected private local npm install artifact over the same source core
+  and stdio host, with pinned production closure, upstream notices and actual
+  installed lifecycle/restart/upgrade tests. No npm publication or named-client
+  compatibility claim is included.
+
+- Add a thin local stdio MCP source host over the same public core, with
+  startup-bound namespaces and explicit remember/recall/inspect/correct/forget.
+  Distribution, real-client matrix and remote connectors remain separate gates.
+- Add an explicit experimental extraction-only model profile; retain GPT-4.1 mini
+  as default and for classify/select/rank. Mixed-model guards reserve per-request
+  integer costs before I/O and evaluation reports per-method identity. Offline
+  tests establish routing/accounting, not improved extraction quality.
+
+- Retain the third frozen synthetic evaluation and independent labels: all
+  repetitions completed, but two unsupported captured claims still fail the
+  mandatory source-support gate despite 45/45 recall and relevance. Preserve
+  prior failures; the prompt-only fix is not a general entailment guarantee.
+
+- Add a frozen synthetic semantic/resource evaluation with three fresh-state
+  repetitions, explicit unknown semantic judgments, safety checks and a shared
+  paid-request reservation budget. This is not a human or competitor benchmark.
+
+- Clarify extraction source fidelity: preserve relationships and qualifications,
+  without invented entity types or stronger claims. Scripted regression tests
+  verify prompt delivery and receipt/content preservation, not model entailment.
+  Real-provider source-support acceptance remains a separate gate.
+
+- Constrain optional OpenAI classification/recall references to their immutable
+  request snapshot and clarify cold-start topic creation for clear subjects.
+  Preserve genuinely unfiled outcomes, existing core authority checks and all
+  token/framing limits. A two-fact real-provider filing probe passed; general
+  semantic quality still requires the separate frozen evaluation.
+
+- Add an explicitly opt-in, budget-guarded synthetic live-provider lifecycle
+  runner with sanitized reports and offline safety tests. Ordinary tests/CI
+  never make paid requests. General semantic quality and standalone MCP remain
+  separate acceptance gates.
 
 - Add an optional pinned OpenAI adapter with a real local tokenizer, provider
   count preflight, bounded transport and strict output schemas. Offline fixtures

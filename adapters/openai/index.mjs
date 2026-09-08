@@ -1,9 +1,8 @@
 import { get_encoding } from 'tiktoken';
 import { MemoryStoreError } from '../../core/validation.mjs';
-import { schemas } from './schemas.mjs';
+import { schemasFor } from './schemas.mjs';
+import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 
-const model = 'gpt-4.1-mini-2025-04-14';
-const contextWindow = 1047576;
 const encoder = get_encoding('o200k_base');
 const fail = (code) => { throw new MemoryStoreError(code); };
 const providerFailure = () => { throw new Error('openai_request_failed'); };
@@ -50,7 +49,7 @@ async function readJSON(response, maximum, signal) {
   }
 }
 
-function parseOutput(response, inputTokens) {
+function parseOutput(response, inputTokens, model) {
   if (!record(response) || response.object !== 'response' || response.model !== model ||
       response.status !== 'completed' ||
       response.error !== null || response.incomplete_details !== null ||
@@ -80,9 +79,12 @@ function parseOutput(response, inputTokens) {
   return output;
 }
 
-export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch } = {}) {
+export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
+  extractionModel = DEFAULT_MODEL, ...unknown } = {}) {
+  const profile = modelProfile(extractionModel);
+  const contextWindow = Math.min(...Object.values(profile).map((entry) => entry.contextWindow));
   if (typeof apiKey !== 'string' || !apiKey.trim() || /[\r\n]/.test(apiKey) ||
-      typeof fetchImpl !== 'function') throw new Error('invalid_openai_configuration');
+      typeof fetchImpl !== 'function' || Object.keys(unknown).length) throw new Error('invalid_openai_configuration');
 
   async function post(path, body, maximum, signal) {
     checkAbort(signal);
@@ -111,19 +113,23 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch } = {})
     checkAbort(signal);
     let serializedInput;
     let localTokens;
+    let schema;
     try {
       serializedInput = JSON.stringify(input);
-      localTokens = countTokens(JSON.stringify({ system, input, maxOutputTokens }));
+      const snapshot = JSON.parse(serializedInput);
+      localTokens = countTokens(JSON.stringify({ system, input: snapshot, maxOutputTokens }));
+      schema = schemasFor(method, snapshot);
     } catch (error) {
       if (error instanceof MemoryStoreError) throw error;
       throw new Error('invalid_openai_request');
     }
     if (typeof serializedInput !== 'string') throw new Error('invalid_openai_request');
     if (localTokens > 6000) fail('context_budget_exceeded');
-    const payload = { model, instructions: system,
+    const selected = profile[method];
+    const payload = { model: selected.model, instructions: system,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
-        schema: schemas[method] } }, truncation: 'disabled' };
+        schema } }, truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
     // Serialize both requests before the first asynchronous host callback.
     const countBody = JSON.stringify(payload);
     const generateBody = JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
@@ -131,13 +137,13 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch } = {})
     if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
       fail('token_count_unavailable');
     }
-    if (counted.input_tokens > localTokens + 1024 || counted.input_tokens + 1024 > contextWindow) {
+    if (counted.input_tokens > localTokens + 1024 || counted.input_tokens + 1024 > selected.contextWindow) {
       fail('context_budget_exceeded');
     }
     checkAbort(signal);
     const response = await post('/responses', generateBody, 262144, signal);
     checkAbort(signal);
-    return parseOutput(response, counted.input_tokens);
+    return parseOutput(response, counted.input_tokens, selected.model);
   }
 
   return Object.freeze({ contextWindow, countTokens,

@@ -41,7 +41,34 @@ For optional OpenAI adapter changes, run `npm ci --prefix adapters/openai`, then
 `npm run test:openai` and `npm run demo:openai-offline` on both core runtimes.
 These use fake HTTP and need no key. Real-provider tests require explicitly
 approved credential scope and budget.
+The opt-in `npm run test:openai-live -- --live --budget-usd 0.25` uses synthetic
+temporary data and paid requests; it is never a CI gate. Its budget and CLI
+safety tests run within the ordinary offline adapter suite. See
+`docs/plans/live-provider.md` for acceptance and `docs/openai-provider.md` for
+credential and cumulative-budget handling.
+For the isolated MCP host, `npm ci --prefix adapters/mcp` and `npm run test:mcp`
+exercise actual stdio client/server calls using synthetic stores and scripted
+models only. Run on both core Node versions; CI has a separate MCP matrix.
+No key or paid request is needed. See `docs/standalone-mcp.md`.
+For local artifact changes, install both isolated adapter dependency sets above,
+then explicitly run `node packaging/prepare-cache.mjs` (public registry metadata
+requests), followed by `npm run test:artifact` on Node22.16 and24. `npm ci` alone
+does not populate the metadata needed by an offline nested-shrinkwrap install.
+CI also runs `node packaging/verify-clean-cache.mjs`, a network-enabled fresh-cache
+regression separate from ordinary offline tests. Tests build inspected private
+archives and install them offline into explicitly prefixed temporary projects;
+there are no model calls, global installs or registry publications. See
+`docs/install-artifact.md` for packaging and dependency-cache boundaries.
+Semantic evaluation scorer/runner tests also run in `npm run test:openai` with
+fake HTTP. The opt-in `npm run eval:semantic -- --live --budget-usd 4.80` incurs
+charges and is never run in CI. Freeze fixtures and rubric before scored calls;
+retain failures and label independent semantic judgments honestly. See
+`docs/semantic-evaluation.md`.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
+
+For `integrations/hermes` changes, run the real pinned host's canonical test
+runner as documented in `docs/hermes-memory-provider.md`, against an installed
+local artifact. Use synthetic profiles only, no user keys or paid requests.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
