@@ -87,21 +87,25 @@ Per package:
    Non-blocking suggestions stay explicit rather than disappearing from reports.
 6. Push/open a scoped PR and verify the remote SHA/CI. Mark `ready_for_merge`,
    not `merged`. Report worktree, branch, SHA, evidence and limitations.
-7. After the owner merges, verify merge SHA/CI and update this ledger in the next
-   delivery PR. Begin the next dependent package without redesigning the roadmap.
+7. The owner has authorized stacked branches: after verification and both reviews,
+   create the next dependent worktree from that fixed candidate without waiting
+   for merge. Record the parent SHA/PR and target its branch for a focused diff.
+   Only the owner merges; verify parent merges, retarget and rerun affected gates
+   when the stack advances. Never self-merge, publish or deploy.
 
 States: `not_started` → `in_progress` → `verified` → `ready_for_merge` → `merged`.
 Use `blocked` with the exact failing check or missing authority. Failed acceptance
 returns to implementation, not the next dependent package. Independent specs,
 fixtures and diagnostics may proceed in parallel; dependency-sensitive delivery
-uses merged main unless a stacked-PR workflow is explicitly agreed. No self-merge.
+uses merged main or the verified parent under the now-authorized stacked workflow.
 
 This plan is followed during active work sessions; it does not create an
 unattended scheduler. A new merge/continuation message resumes the next package.
 
 ## Five stages, thirteen initial work packages
 
-Package **1a is in progress**; other rows remain **not_started**. The grouping is a planning baseline, not a
+Package **1a is merged** (#10); **1b is in progress**. Later packages remain
+**not_started**. The grouping is a planning baseline, not a
 promise of exactly thirteen PRs; split packages further when scope/risk requires.
 
 ### 1. Complete the core lifecycle contract
@@ -185,17 +189,14 @@ dependency added to package.json while the private engine still runs.
 
 ## Next action and evidence ledger
 
-Next implementation package: **1a**. Primary first freezes its acceptance and
-file ownership; then dispatches engine implementation and independent replay/
-concurrency tests. Model/network and production access are unnecessary for 1a.
-
-Package 1a is implemented in its isolated delivery branch against merged #9
-(`44ece1479f4048a8a95f895baa6e674ec9a1c0a1`), with separate engine and test workers.
-Its [acceptance spec](admission-claims.md) governs primary integration and final
-review. Exact candidate, test/review evidence and remote CI are recorded in that
-PR; it is not marked merged here. Package 1b implementation still depends on its
-merge. Read-only extraction-interface/case preparation has been performed, not
-capture implementation. No later package is complete.
+Package 1a merged in [PR #10](https://github.com/Cairn-ink/cairn-memory/pull/10)
+at `b18db1590e15d2190e0cba8482fe2278e9580567`.
+Package 1b is implemented against that fixed base; its
+[checkpoint](capture-implementation.md) records the frozen C01–C13 acceptance.
+Primary integrates separate engine/test workers and verifies both runtime versions.
+The implementation PR records exact candidate, independent reviews and CI; this
+ledger does not claim that candidate merged. Next is **1c**, from verified 1b
+under the owner's stacked-branch authorization. No later package is complete.
 
 When a package advances, record: package/status, fixed base and candidate SHA,
 implementation owner, primary verification commands/results, Standards findings,

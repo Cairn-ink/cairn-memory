@@ -4,8 +4,8 @@ See the [delivery roadmap](plans/delivery-roadmap.md) for remaining work,
 delegation, acceptance gates and the public-core/hosted migration sequence.
 
 Cairn Memory is moving toward a shared open-source memory core. The public
-repository now includes the local storage foundation (`core/`); extraction and
-the deployed service remain private until separately staged migrations.
+repository now includes local storage and injected capture/recall orchestration
+(`core/`). The deployed service remains unchanged until a separately staged migration.
 
 ```text
 Claude Code
@@ -51,7 +51,9 @@ no model provider or network host is bundled. The released plugin is unchanged.
 
 [Admission claims](admission-claims.md) add guarded inferred commits and replay
 coordination to the same transaction runtime. Extraction orchestration remains
-separate; no private source or hosted path is migrated by these storage methods.
+separate from storage transactions. [Capture](capture.md) now composes these
+methods with an injected extractor and trusted receipt construction. No private
+source or hosted path is migrated by these methods.
 
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 

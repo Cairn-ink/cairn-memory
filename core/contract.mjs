@@ -5,6 +5,7 @@ import { countTokens } from './model-budget.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
+import { captureMessages } from './capture.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -391,6 +392,17 @@ export function openMemoryCore(input) {
     } catch (error) { return failure(error); }
   }
 
+  async function capture(input) {
+    try {
+      runtime.ready();
+      object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages']);
+      const namespace = publicNamespace(contractNamespace(input.namespace));
+      return success(await captureMessages({ model, input: { ...input, namespace },
+        operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
+          classifyPlacement, applyPlacement } }));
+    } catch (error) { return failure(error); }
+  }
+
   async function classifyPlacement(input) {
     try {
       runtime.ready();
@@ -412,7 +424,7 @@ export function openMemoryCore(input) {
 
   return Object.freeze({
     admit, list, get, correct, forget, claimAdmission, finishAdmission, abandonAdmission,
-    applyPlacement, linkMocs, map, fetch, recall, classifyPlacement,
+    applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement,
     close() {
       runtime.close();
       return success(null);

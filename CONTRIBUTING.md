@@ -25,6 +25,9 @@ orchestration, not semantic relevance. Both core CI runtime versions run it.
 For admission-claim changes also run `npm run demo:admission`, which uses a fresh
 synthetic SQLite database and handcrafted trusted inferred items, not extraction.
 
+For capture changes also run `npm run demo:capture` on both core runtime versions.
+Its injected scripted extractor verifies source binding and lifecycle, not model quality.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

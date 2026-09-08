@@ -4,6 +4,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add `core.capture` with bounded injected extraction, trusted source binding,
+  digest-bound replay and post-admission classification. No provider, passive
+  hook, local MCP server, hosted migration or schema change is included.
+
 - Add package 1a admission leases and atomic inferred-memory commits over the
   shared runtime, with fenced takeover, digest-bound replay, suppression and
   abandonment. Completed outcomes retain IDs/counts, never cached memory content.
