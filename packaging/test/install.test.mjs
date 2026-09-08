@@ -105,6 +105,22 @@ test('production shrinkwrap installs only the exact reviewed closure with upstre
   }
 });
 
+test('installed executable provides help and non-mutating configuration diagnostics', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cairn-installed-check-'));
+  const path = join(directory, 'memory.sqlite');
+  const help = command(process.execPath, [installation.executable, '--help'],
+    installation.directory, artifact.userconfig);
+  assert.match(help, /--check-config/);
+  const report = JSON.parse(command(process.execPath, [installation.executable,
+    '--check-config', '--db', path, '--owner', 'synthetic-owner'],
+  installation.directory, artifact.userconfig));
+  assert.equal(report.ok, true);
+  assert.equal(report.modelKeyPresent, false);
+  assert.equal(report.recall, 'model_not_configured');
+  assert.equal(report.databaseOpened, false);
+  assert.deepEqual(readdirSync(directory), []);
+});
+
 test('installed adapter resolves its relative runtime modules without source-checkout imports', () => {
   const probe = `import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
     const noNetwork = () => { throw new Error('unexpected_network'); };
