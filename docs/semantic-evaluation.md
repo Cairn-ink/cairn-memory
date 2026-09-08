@@ -52,7 +52,8 @@ under newly available budget. Real-human benefit remains a later product gate.
 ## Results
 
 The first frozen run completed 25/36 attempts and failed acceptance. Classification
-and MOC organization need fixes; capture semantics remain independently unreviewed.
+and MOC organization need fixes; independent capture review remains incomplete
+(the five completed capture repetitions have been reviewed).
 The original RSS measurement inherited launcher history and is inconclusive.
 See the [evidence ledger](plans/semantic-evaluation.md#baseline-v1-evidence--failedincomplete)
 and retained report. This result does not justify a launch-quality claim.
