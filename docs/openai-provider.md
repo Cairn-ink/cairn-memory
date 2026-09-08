@@ -6,6 +6,13 @@ passed; see the [run evidence](plans/live-provider.md). Neither that smoke test
 nor offline fixtures establish general semantic quality, client support or launch readiness.
 The hosted plugin is unchanged; core gains no provider dependency.
 
+Extraction instructions require source-faithful relationships, negation, modality,
+attribution and uncertainty, without invented entity types or stronger claims.
+This is a prompt policy, not an entailment validator: valid source indices and
+high confidence do not establish that a captured claim is supported. The failed
+frozen evaluation and subsequent verification are retained in
+[source-faithful extraction](plans/source-faithful-extraction.md).
+
 ## Offline checks
 
 With Node >=22.16, from a source checkout:

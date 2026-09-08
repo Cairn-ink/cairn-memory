@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Clarify extraction source fidelity: preserve relationships and qualifications,
+  without invented entity types or stronger claims. Scripted regression tests
+  verify prompt delivery and receipt/content preservation, not model entailment.
+  Real-provider source-support acceptance remains a separate gate.
+
 - Constrain optional OpenAI classification/recall references to their immutable
   request snapshot and clarify cold-start topic creation for clear subjects.
   Preserve genuinely unfiled outcomes, existing core authority checks and all
