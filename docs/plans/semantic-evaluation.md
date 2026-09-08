@@ -130,3 +130,49 @@ nine core/adapter demos passed. All 31 plugin tests, JSON validation and isolate
 Claude marketplace/strict plugin validation passed. Independent baseline labels
 validate with no review errors. Paid baseline quality remains incomplete; these
 offline gates establish evaluation tooling, not product readiness.
+
+## Reference-fix rerun — complete but failed source support
+
+Code `a6c093b59f07643dddf22c59c6f6e596551c9901` combines the independently
+reviewed evaluation tooling (`b12900b`) and reference/cold-start fix (`6727859`)
+in a local dependent test branch. No GitHub PR or main was merged. The only
+integration conflict was the changelog; both entries were retained. The frozen
+fixture is byte-identical to `16ef4a8`; no numeric gate changed.
+
+[Report](../../evaluations/results/reference-fix-v1.json) and
+[independent agent labels](../../evaluations/results/reference-fix-v1-review.json)
+retain all 36 fresh-state repetitions. The DRI inspected the synthetic source,
+captured text, queried evidence and topic placements; labels recompute without
+review errors. Agent review is not human validation.
+
+| Metric | Result |
+| --- | --- |
+| Completed repetitions | 36/36 |
+| Required query-fact recall | 45/45 |
+| Returned-memory relevance | 45/45 |
+| Supported expected capture facts | 22/24 |
+| Unsupported captured records | **2 — fails mandatory source support** |
+| MOC placement/coherence | 12/12 placed; 3/3 coherent |
+| Unrelated/forgotten empty queries | 6/6 |
+| Namespace/receipt/revision safety violations | 0 observed |
+| Linux current-executable peak RSS | 171,180,032 bytes (~163 MiB) |
+| Largest SQLite/WAL/SHM set | 233,472 bytes |
+| Recall p95 | 4,963 ms; no failed queries |
+
+The two unsupported records are C02 repetition 2: "uses Go/Python" was expanded
+to software "implemented using" those languages. The returned Harbor record is
+relevant to the query, but that does not make its entire wording source-supported.
+Thus overall status is **failed**, despite passing recall and resource thresholds.
+A separate source-faithful-extraction change must address the behavior; this
+report is retained, not replaced with a favorable subset.
+
+This run used 222 HTTP requests, reserving US$0.987456. Generation usage was
+66,039 input and 6,167 output tokens (estimated US$0.0362828, not an invoice).
+Current cumulative reservation is **US$1.948224**, leaving **US$3.051776** of
+the authorized US$5. A new run must subtract all earlier reservations.
+
+Combined offline checks: 73 adapter/evaluation tests on Node22.16/24, 2 changed
+classification-port tests, offline provider demo, 31 plugin tests and JSON
+validation passed. Core code is the already verified #20 candidate (179 core
+tests on both runtimes); combination changes no executable source beyond that
+reviewed fix. Independent final review remains required before delivery.

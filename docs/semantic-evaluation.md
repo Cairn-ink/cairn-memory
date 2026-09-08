@@ -51,9 +51,15 @@ under newly available budget. Real-human benefit remains a later product gate.
 
 ## Results
 
-The first frozen run completed 25/36 attempts and failed acceptance. Classification
-and MOC organization need fixes; independent capture review remains incomplete
-(the five completed capture repetitions have been reviewed).
-The original RSS measurement inherited launcher history and is inconclusive.
-See the [evidence ledger](plans/semantic-evaluation.md#baseline-v1-evidence--failedincomplete)
-and retained report. This result does not justify a launch-quality claim.
+The original baseline completed 25/36 attempts. After the separately reviewed
+reference/cold-start fix, the unchanged suite completed 36/36 with recall 45/45,
+relevance 45/45, MOC placement 12/12 and passing small-fixture resource limits.
+However, independent agent review found **two unsupported extraction claims**;
+overall quality acceptance remains **failed**. Relevant retrieval is not proof
+that every part of a memory is true to its source.
+
+Both runs and independent labels are retained in the [evidence ledger](plans/semantic-evaluation.md).
+The initial RSS measurement was inconclusive; the rerun measures the current
+Linux executable (about 163 MiB peak, 4.963-second recall p95). These are small
+synthetic fixtures, not a human study, scale benchmark, client certification or
+evidence that Cairn outperforms another product.
