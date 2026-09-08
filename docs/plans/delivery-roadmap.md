@@ -37,8 +37,8 @@ tables below are retained; this checkpoint overrides their old progress labels.
 | 5 — Hermes | [PR #25](https://github.com/Cairn-ink/cairn-memory/pull/25): native MemoryManager lifecycle and actual-model two-session recall passed on Linux CLI; not interactive chat or a released compatibility claim |
 | 6 — Launch kit | [#26](https://github.com/Cairn-ink/cairn-memory/pull/26): local-first documentation and independent no-key onboarding verified; source/profile artifact integration is a separate candidate, with no human-adoption or broad-promotion claim |
 | 7a — Private facade | Scoped candidate verified: actual pinned public engine, nine synthetic facade tests/61 assertions, typecheck and independent reviews passed. No routes switched and no production provider claim |
-| 7b — Production provider/quota/deadline | Not complete; no production integration claim |
-| 8 — Migration/rollback | Rehearsal not complete; only synthetic rehearsal may proceed without production approval |
+| 7b — Production provider/quota/deadline | Not complete: current exact synchronous counting contract needs a separately agreed compatibility design before the existing host provider can be connected; no provider/default switch or production integration claim |
+| 8 — Migration/rollback | Scoped synthetic rehearsal verified: 13 tests/134 assertions, typecheck and independent reviews. Covers retained rejected evidence, provenance/ID mappings, deletion suppression, checkpoint ambiguity and rollback rejection after divergent writes. Not a production importer, cold-process recovery or approved cutover |
 
 Provider reference constraints in [#20](https://github.com/Cairn-ink/cairn-memory/pull/20)
 corrected invalid placement references; the source-faithful prompt change in
