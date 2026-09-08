@@ -70,6 +70,11 @@ and receipt prefixes without changing the final authoritative snapshot. The
 [operation inventory](plans/core-contract-inventory.md) distinguishes tested
 source contracts from provider, standalone MCP and commercial migration gates.
 
+The [optional OpenAI adapter](openai-provider.md) lives outside core with isolated
+dependencies. It supplies the existing model ports, local tokenization and
+provider framing checks, not a second engine. Its HTTP fixtures are offline-only;
+real provider acceptance and quality gates remain pending.
+
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
 ## Trust boundaries

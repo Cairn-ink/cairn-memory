@@ -106,7 +106,8 @@ unattended scheduler. A new merge/continuation message resumes the next package.
 
 Package **1a is merged** (#10); **1b is ready_for_merge** (#12);
 **1c is ready_for_merge** (#13); **1d is ready_for_merge** (#14);
-**1e is in progress** on its verified parent. Later packages remain
+**1e is ready_for_merge** (#15); the offline portion of **2a is in progress**.
+Live 2a acceptance is pending credentials/budget; later packages remain
 **not_started**. The grouping is a planning baseline, not a
 promise of exactly thirteen PRs; split packages further when scope/risk requires.
 
@@ -211,7 +212,17 @@ an initial unbounded SQL reference scan; the final bounded-scan fix passed both
 axes with zero findings. It is not marked merged here.
 Package **1e** follows that verified parent; its [acceptance](recall-continuation.md)
 freezes continuation budgets and the [contract inventory](core-contract-inventory.md).
-Next after verification/review is **2a**. No later package is complete.
+Recall [PR #15](https://github.com/Cairn-ink/cairn-memory/pull/15) is ready for
+owner merge at `2a97af2b4fb1fe8e4277954143a840c6c7135e0b`: 174 core tests and
+eight demos pass on each runtime, 31 plugin tests and all five CI jobs pass.
+Independent Standards and Spec each report zero findings; Spec additionally
+ran 30 recall/continuation/fetch tests. It is not marked merged here.
+
+The [2a offline subpackage](openai-provider.md) follows that verified parent.
+Its adapter/tokenizer/transport fixtures are separate from live acceptance.
+After offline verification, real 2a requires an explicitly authorized test key
+and paid-run ceiling; neither has been provided. No real API call, model quality
+result or downstream package completion is claimed.
 
 When a package advances, record: package/status, fixed base and candidate SHA,
 implementation owner, primary verification commands/results, Standards findings,

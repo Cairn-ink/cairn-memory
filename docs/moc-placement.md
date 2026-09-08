@@ -58,6 +58,12 @@ input ≤6000 tokens, output ≤1024, with 1024 reserved for framing. Missing/in
 counting fails explicitly. The classifier has a 30-second deadline and passes an
 AbortSignal; late output cannot commit anything.
 
+The [optional OpenAI adapter](openai-provider.md) now implements this port outside
+core, with separate dependencies and offline transport verification. It is not
+selected by default and has not passed live-provider or semantic-quality gates.
+Trusted adapter budget/token/output errors retain their narrow core codes;
+arbitrary provider errors remain sanitized operation failures.
+
 `map` uses only the local counter, not a model request. Its entire serialized
 success envelope is bounded to at most 4000 counted tokens (or a smaller supplied
 budget), including cursors and invalid-reference reports. `list`, `get`, explicit
