@@ -11,6 +11,13 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add `install:preview` to build and install into a new private directory with
+  separate app/data paths and an installation receipt. Existing targets are
+  rejected and failed partial installs are retained. No client settings, global
+  tools, model calls or registry publication are involved.
+- Document local MCP `--help` and non-mutating `--check-config` diagnostics:
+  configured credentials are not a claim of verified model or database access.
+
 - Include the shared model-profile module in the local archive and verify an
   installed adapter import. MCP retains its existing default; experimental
   extraction remains an explicit programmatic option.

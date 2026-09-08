@@ -57,3 +57,8 @@ usage controls. Promotion/demo drafts can proceed without publishing.
 - `node scripts/validate-json.mjs` and `git diff --check` passed. No TypeScript
   gate is configured in this JavaScript repository. Existing CI artifact glob
   includes all new tests. Core and adapters are byte-unchanged from base.
+- Required contributor gates: plugin suite31/31; isolated maintainer marketplace
+  and strict plugin validations passed; public metadata cache preparation passed.
+  Maintainer tooling initially lacked its native wrapper because dependencies
+  were installed with ignore-scripts; after inspecting its local-only installer,
+  explicitly placing the pinned binary resolved this tooling setup issue.
