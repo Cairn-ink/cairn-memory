@@ -50,8 +50,18 @@ or publication is claimed yet.
 pinned modern 2026-07-28 discovery exercise the same tools. Evidence includes
 restart persistence, revision guards, owner/project/personal isolation, strict
 inputs, list/receipt pagination, query/storage redaction and forget behavior.
-Scripted models exercise recall protocol, not semantic quality. No paid request
-has yet been made through this MCP host.
+Scripted models exercise recall protocol, not semantic quality.
+
+A separate synthetic actual-provider-through-host probe passed on 2026-09-09
+(Asia/Taipei): official SDK Client called remember → recall → forget → recall
+through linked in-memory MCP transports and this exact host factory. The returned
+memory ID and source excerpt matched; after forgetting, recall returned none.
+This was not a stdio/provider combined test or a named-client compatibility test;
+stdio is independently covered above. Six HTTP requests, all200, reservation
+US$0.026688; generation1073 input/87 output tokens, estimate US$0.0005684.
+Shared authorization ledger at this point: #17 US$0.160128 + baseline evaluation
+US$0.747264 + classification diagnostic US$0.008896 + this probe US$0.026688 =
+US$0.942976 reserved of the authorized US$5. No unrecorded retries.
 
 An oversized-message test found a process-lifetime issue: SDK transport closure
 alone left an open stdin pipe keeping the process alive. The CLI now closes its
