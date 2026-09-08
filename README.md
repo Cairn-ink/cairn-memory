@@ -19,6 +19,10 @@ model recall requires a separately supplied provider key. Local named-client
 compatibility and general semantic quality remain separate gates. The hosted
 plugin installation below still uses a service and is unchanged.
 
+The opt-in [Hermes memory-provider preview](docs/hermes-memory-provider.md)
+adds profile-local explicit tools through the installed MCP. Its pinned-host
+offline lifecycle tests are not a full chat or semantic-quality certification.
+
 ## Install for Claude Code (automatic memory)
 
 In Claude Code, run:

@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an opt-in third-party Hermes memory-provider preview over installed MCP,
+  with profile-local explicit tools, CLI/primary context boundaries and no
+  automatic capture. Pinned-host lifecycle tests do not establish semantic
+  quality, full chat compatibility or upstream listing.
+
 - Add an inspected private local npm install artifact over the same source core
   and stdio host, with pinned production closure, upstream notices and actual
   installed lifecycle/restart/upgrade tests. No npm publication or named-client
