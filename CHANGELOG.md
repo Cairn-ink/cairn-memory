@@ -1,5 +1,12 @@
 # Changelog
 
+## Local-memory introduction candidate
+
+- Lead documentation with the local memory layer and pinned install walkthrough,
+  clearly separate from the released hosted plugin and its privacy defaults.
+- Retain source-support failure beside evidence claims and prepare a consent-based
+  adoption experiment without publication, telemetry or promised stars.
+
 All notable changes follow semantic versioning.
 
 ## Unreleased
