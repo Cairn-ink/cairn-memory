@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../../core/contract.mjs';
 import { createOpenAIModel } from './index.mjs';
-import { schemas } from './schemas.mjs';
+import { schemas, schemasFor } from './schemas.mjs';
 
 export const LIVE_MODEL = 'gpt-4.1-mini-2025-04-14';
 export const REQUEST_RESERVATION_USD = 0.004448;
@@ -60,13 +60,15 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
           typeof payload.instructions !== 'string' ||
           (!countEndpoint && (payload.max_output_tokens !== 1024 || payload.store !== false || payload.stream !== false))) throw 0;
       method = payload.text?.format?.name?.replace(/^cairn_/, '');
-      if (!Object.hasOwn(schemas, method) || !isDeepStrictEqual(payload.text,
-        { format: { type: 'json_schema', name: `cairn_${method}`, strict: true, schema: schemas[method] } })) throw 0;
+      if (!Object.hasOwn(schemas, method)) throw 0;
       const inputText = payload.input?.[0]?.content?.[0]?.text;
       if (typeof inputText !== 'string' || !isDeepStrictEqual(payload.input,
         [{ role: 'user', content: [{ type: 'input_text', text: inputText }] }])) throw 0;
+      const input = JSON.parse(inputText);
+      if (!isDeepStrictEqual(payload.text, { format: { type: 'json_schema', name: `cairn_${method}`,
+        strict: true, schema: schemasFor(method, input) } })) throw 0;
       if (counter.countTokens(JSON.stringify({ system: payload.instructions,
-        input: JSON.parse(inputText), maxOutputTokens: 1024 })) > 6000) throw 0;
+        input, maxOutputTokens: 1024 })) > 6000) throw 0;
     } catch { rejection = 'request_rejected'; fail(rejection); }
     if (options.signal.aborted) { rejection = 'request_aborted'; fail(rejection); }
     if (requests.length >= maxRequests) { rejection = 'request_limit_exceeded'; fail(rejection); }

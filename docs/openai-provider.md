@@ -4,7 +4,14 @@ This source adapter connects the same core's extract/classify/select/rank ports
 to pinned `gpt-4.1-mini-2025-04-14`. One synthetic real-provider lifecycle has
 passed; see the [run evidence](plans/live-provider.md). Neither that smoke test
 nor offline fixtures establish general semantic quality, client support or launch readiness.
-The hosted plugin and dependency-free core are unchanged.
+The hosted plugin is unchanged; core gains no provider dependency.
+
+Extraction instructions require source-faithful relationships, negation, modality,
+attribution and uncertainty, without invented entity types or stronger claims.
+This is a prompt policy, not an entailment validator: valid source indices and
+high confidence do not establish that a captured claim is supported. The failed
+frozen evaluation and subsequent verification are retained in
+[source-faithful extraction](plans/source-faithful-extraction.md).
 
 ## Offline checks
 
@@ -45,6 +52,27 @@ special-token-looking strings as ordinary text. Core retains 6000 input /1024
 output limits. Server preflight counts the same input-bearing fields as generation,
 including strict output schemas. It must fit local count +1024 framing reserve
 and leave room for output. Oversize fails before generation, without truncation.
+
+Classify/select/rank response schemas constrain references to the request's
+snapshot: classification uses visible L1/L2 group IDs and supplied memory IDs;
+recall uses the supplied namespace indices, memory IDs and revisions. An empty
+group or candidate set permits only an empty reference array, never fabricated
+IDs. Both count and generation use the same derived schema, and the live budget
+guard verifies that schema against the serialized input. The core still checks
+correlated namespace/memory/revision tuples and current authority; independent
+enums do not replace those checks. Larger candidate schemas consume the same
+1024-token framing reserve and can fail explicitly before generation; no budget
+is enlarged to accommodate them.
+
+Classification instructions distinguish an empty complete map from uncertainty:
+a clear subject without a suitable visible L1 group should propose a precise
+new topic. Existing-parent arrays remain empty when no such groups exist.
+Unclear memories can remain unfiled, and incomplete maps cannot propose new
+topics. A schema-only two-fact probe produced valid output but left both facts
+unfiled; the subsequent instruction experiment filed both into a shared precise
+topic. This is a narrow integration result, not general semantic-quality
+evidence. See [reference-constraint acceptance](plans/provider-reference-constraints.md)
+for retained failures and the separate frozen-evaluation gate.
 
 Completed response status, pinned model, assistant text, JSON object, consistent
 usage and output limits are checked. Core still validates source indices, refs,

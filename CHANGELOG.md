@@ -13,6 +13,17 @@ All notable changes follow semantic versioning.
   startup-bound namespaces and explicit remember/recall/inspect/correct/forget.
   Distribution, real-client matrix and remote connectors remain separate gates.
 
+- Clarify extraction source fidelity: preserve relationships and qualifications,
+  without invented entity types or stronger claims. Scripted regression tests
+  verify prompt delivery and receipt/content preservation, not model entailment.
+  Real-provider source-support acceptance remains a separate gate.
+
+- Constrain optional OpenAI classification/recall references to their immutable
+  request snapshot and clarify cold-start topic creation for clear subjects.
+  Preserve genuinely unfiled outcomes, existing core authority checks and all
+  token/framing limits. A two-fact real-provider filing probe passed; general
+  semantic quality still requires the separate frozen evaluation.
+
 - Add an explicitly opt-in, budget-guarded synthetic live-provider lifecycle
   runner with sanitized reports and offline safety tests. Ordinary tests/CI
   never make paid requests. General semantic quality and standalone MCP remain

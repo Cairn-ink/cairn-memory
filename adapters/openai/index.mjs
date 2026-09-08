@@ -1,6 +1,6 @@
 import { get_encoding } from 'tiktoken';
 import { MemoryStoreError } from '../../core/validation.mjs';
-import { schemas } from './schemas.mjs';
+import { schemasFor } from './schemas.mjs';
 
 const model = 'gpt-4.1-mini-2025-04-14';
 const contextWindow = 1047576;
@@ -111,9 +111,12 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch } = {})
     checkAbort(signal);
     let serializedInput;
     let localTokens;
+    let schema;
     try {
       serializedInput = JSON.stringify(input);
-      localTokens = countTokens(JSON.stringify({ system, input, maxOutputTokens }));
+      const snapshot = JSON.parse(serializedInput);
+      localTokens = countTokens(JSON.stringify({ system, input: snapshot, maxOutputTokens }));
+      schema = schemasFor(method, snapshot);
     } catch (error) {
       if (error instanceof MemoryStoreError) throw error;
       throw new Error('invalid_openai_request');
@@ -123,7 +126,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch } = {})
     const payload = { model, instructions: system,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
-        schema: schemas[method] } }, truncation: 'disabled' };
+        schema } }, truncation: 'disabled' };
     // Serialize both requests before the first asynchronous host callback.
     const countBody = JSON.stringify(payload);
     const generateBody = JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
