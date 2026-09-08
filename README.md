@@ -43,13 +43,22 @@ local model path is not yet verified.
 ```sh
 git clone https://github.com/Cairn-ink/cairn-memory.git
 cd cairn-memory
-npm run build:artifact
+npm run install:preview -- --directory /absolute/new/cairn-local --owner local-user
 ```
 
-The builder prints a temporary archive path and SHA-256. Follow the
-[isolated installation instructions](packaging/README.md) for that archive,
-then configure a stdio client to run the installed executable with an explicit
-database path and owner. Keep the database outside `node_modules`.
+Choose a **new absolute directory** with an existing parent you control. The
+installer builds and installs the inspected archive, downloads pinned public npm
+dependencies without install scripts, and prints a generic stdio command/args.
+Copy that command/args into your client's local MCP configuration; it does not
+modify client settings for you. Add `--project PROJECT_ID` for project scope.
+
+The directory contains `app/` (replaceable installation), `data/` (persistent
+memory location), and `installation-receipt.json` (artifact hash, local paths,
+owner/project and stdio settings). No key is stored. Unlike `--check-config`, the
+receipt intentionally contains local paths and identity: do not post it publicly.
+The installer never starts MCP, opens a database or makes model calls. Existing
+directories are rejected, including partial installs; see
+[manual installation, recovery and backup](packaging/README.md).
 The archive is **not published to npm**; there is no registry `npx` shortcut yet.
 This builds the checked-out source, not the older released hosted-plugin tag.
 Record `git rev-parse HEAD` and keep the build report to identify your preview.
@@ -57,8 +66,8 @@ Record `git rev-parse HEAD` and keep the build report to identify your preview.
 Before configuring a client, check the installed command (substitute your paths):
 
 ```sh
-/absolute/install/node_modules/.bin/cairn-memory --help
-/absolute/install/node_modules/.bin/cairn-memory --check-config --db /absolute/data/memory.sqlite --owner local-user
+/absolute/new/cairn-local/app/node_modules/.bin/cairn-memory --help
+/absolute/new/cairn-local/app/node_modules/.bin/cairn-memory --check-config --db /absolute/new/cairn-local/data/memory.sqlite --owner local-user
 ```
 
 The check makes no model requests and never opens your database. A missing key
@@ -72,7 +81,7 @@ installed executable (replace the absolute placeholder path):
 
 ```sh
 npm ci --prefix adapters/mcp
-node adapters/mcp/walkthrough.mjs --executable /absolute/install/node_modules/.bin/cairn-memory
+node adapters/mcp/walkthrough.mjs --executable /absolute/new/cairn-local/app/node_modules/.bin/cairn-memory
 ```
 
 This default path makes **no model calls**, even if the parent shell has a key.

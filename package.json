@@ -23,6 +23,7 @@
     "start:mcp": "node adapters/mcp/cli.mjs",
     "test:mcp": "npm test --prefix adapters/mcp",
     "build:artifact": "node packaging/build.mjs",
+    "install:preview": "node packaging/install-preview.mjs",
     "test:artifact": "node --test packaging/test/*.test.mjs",
     "eval:semantic": "node examples/semantic-evaluation.mjs",
     "test:openai": "npm test --prefix adapters/openai",
