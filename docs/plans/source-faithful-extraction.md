@@ -82,3 +82,13 @@ DRI alone controls paid calls. Failed runs are not refunded or dropped.
   also passed. Initial combined runs failed because this fresh worktree lacked
   `tiktoken`; installing locked isolated dependencies and rerunning produced
   exit 0 on both runtimes. No offline check made a paid request.
+
+## Frozen-suite outcome after the prompt fix
+
+The third unchanged suite at `b05773f` completed 36/36 but again failed source
+support: two C02 repetition 3 records strengthened "uses" to "implemented using".
+Recall/relevance 45/45 does not override this mandatory gate. The minimized
+probe remains narrow evidence, not evidence that the underlying behavior was
+resolved. See the retained [third-run ledger](semantic-evaluation.md#source-faithful-instruction-rerun--complete-source-support-still-failed)
+for all artifacts, metrics and the cumulative US$2.980160 reservation including
+the separate installed I05 check; US$2.019840 remains authorized.

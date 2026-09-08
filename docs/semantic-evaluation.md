@@ -58,8 +58,15 @@ However, independent agent review found **two unsupported extraction claims**;
 overall quality acceptance remains **failed**. Relevant retrieval is not proof
 that every part of a memory is true to its source.
 
-Both runs and independent labels are retained in the [evidence ledger](plans/semantic-evaluation.md).
+The subsequent source-faithful prompt change also completed 36/36, with recall
+and relevance 45/45, but again produced **two unsupported records** (21 of 23
+captured records supported; 22/24 required facts recovered with support).
+The mandatory source-support gate still fails: a prompt policy and a passing
+minimized probe did not establish reliable extraction.
+
+All three runs and independent labels are retained in the [evidence ledger](plans/semantic-evaluation.md).
 The initial RSS measurement was inconclusive; the rerun measures the current
 Linux executable (about 163 MiB peak, 4.963-second recall p95). These are small
 synthetic fixtures, not a human study, scale benchmark, client certification or
 evidence that Cairn outperforms another product.
+The third run measured about 170 MiB peak and 4.557-second recall p95.

@@ -176,3 +176,51 @@ classification-port tests, offline provider demo, 31 plugin tests and JSON
 validation passed. Core code is the already verified #20 candidate (179 core
 tests on both runtimes); combination changes no executable source beyond that
 reviewed fix. Independent final review remains required before delivery.
+
+## Source-faithful instruction rerun — complete, source support still failed
+
+Code `b05773f` integrates the reviewed source-fidelity prompt fix (#22) on
+`ef8863a` (#21). The unchanged 12-case corpus ran three fresh-state repetitions
+each. No model, schema, rubric or budget threshold was relaxed.
+[Third report](../../evaluations/results/source-faithful-v1.json) and
+[independent agent labels](../../evaluations/results/source-faithful-v1-review.json)
+retain all 36 repetitions. Only local `databasePath` fields were removed from
+the raw report; every other value, including the original pending-review
+summary, is unchanged. Recomputing with the separate labels yields **failed**
+with no review errors. Agent inspection is not human validation.
+
+| Metric | Result |
+| --- | --- |
+| Completed repetitions | 36/36 |
+| Required query-fact recall | 45/45 |
+| Returned-memory relevance | 45/45 |
+| Supported expected capture facts | 22/24 |
+| Captured records | 23: 21 supported, **2 unsupported** |
+| MOC discoverability | 12/12 |
+| Unrelated/forgotten empty queries | 6/6 |
+| Namespace/receipt/revision safety violations | 0 observed |
+| Linux current-executable peak RSS | 178,491,392 bytes (~170 MiB) |
+| Largest SQLite/WAL/SHM set | 233,472 bytes |
+| Recall p95 | 4,557 ms; no failed queries |
+
+Both unsupported records are C02 repetition 3: the source's "uses" relationship
+again became "implemented using". Relevant retrieval does not prove source
+entailment. The prompt-only policy and its earlier minimized probe therefore
+did **not** resolve the mandatory source-support failure on this frozen suite.
+All prior failed reports remain intact; this is not a successful quality gate
+or grounds for a stronger public reliability claim.
+
+This suite made 222 HTTP requests, reserving US$0.987456; observed generation
+usage estimate was US$0.0369444 (not an invoice). The prior US$1.948224 plus
+the minimized extraction probe US$0.017792, this suite US$0.987456, and the
+separate installed I05 check US$0.026688 give a cumulative reservation of
+**US$2.980160 / US$5**, leaving **US$2.019840**. Failed runs remain charged
+against the authorization. No paid request was made while retaining evidence.
+
+Retention verification: deep equality against the original report after removing
+only the 36 local database paths, and exact parsed equality for independent
+labels; the unchanged scorer confirms the metrics and failed status above.
+Node 24.20.0 passed the combined adapter/evaluation, extraction/classification
+prompt and plugin suites (108 tests). JSON/version, marketplace and strict
+plugin validation passed. Evidence/docs-only retention changes no executable
+code; fixed-candidate independent review remains a separate delivery gate.

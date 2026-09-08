@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Retain the third frozen synthetic evaluation and independent labels: all
+  repetitions completed, but two unsupported captured claims still fail the
+  mandatory source-support gate despite 45/45 recall and relevance. Preserve
+  prior failures; the prompt-only fix is not a general entailment guarantee.
+
 - Add a frozen synthetic semantic/resource evaluation with three fresh-state
   repetitions, explicit unknown semantic judgments, safety checks and a shared
   paid-request reservation budget. This is not a human or competitor benchmark.
