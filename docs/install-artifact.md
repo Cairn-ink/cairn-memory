@@ -58,11 +58,14 @@ synthetic databases for inspection; nothing is globally installed.
 | --- | --- |
 | Official SDK client2.0.0 → installed stdio executable, Linux x64, Node22.16.0 | Artifact tests cover contents/closure, lifecycle/restart, isolation/revisions, same-schema upgrade/uninstall and ancestor-project isolation |
 | Same installed SDK/stdio path, Node24.20.0 | Same offline installed-artifact verification; no semantic or named-client claim |
-| Installed host with actual OpenAI model and new session | Separate DRI-paid acceptance pending; no mock substitution |
-| Claude, Codex, ChatGPT, Hermes or other named clients | Not verified by this package; no compatibility badge |
+| Installed host with actual OpenAI model and new process | Passed: remember → restart → recall with exact source receipt → forget → empty recall; six actual HTTP requests |
+| Hermes0.21.1, commit c8aa5608c24e3636e77c267650c0f1f52e44adb0, Linux x64, Node22.16.0 | Actual `hermes mcp test cairn` connected and discovered all five tools; discovery only, no chat/native memory-provider acceptance |
+| Claude, Codex, ChatGPT or other named clients | Not verified by this package; no compatibility badge |
 | Remote HTTP/OAuth connectors | Not implemented in this package |
 
 Model-free installed tests cannot establish semantic recall. Without a key,
 recall returns `model_not_configured`; no lexical fallback is introduced. MCP
 does not imply automatic capture. General semantic quality remains a separate
-release gate. See [I01–I08 acceptance](plans/install-artifact.md).
+release gate: the frozen full suite still fails source support. The narrow
+installed lifecycle and Hermes discovery do not override that result. See
+[I01–I08 acceptance and exact artifact hash](plans/install-artifact.md).
