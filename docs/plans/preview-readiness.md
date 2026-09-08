@@ -15,9 +15,9 @@ Documentation-only; no publication, outreach, telemetry or runtime change.
   Default extractor retained failures and experimental source-support results
   must not be presented as scores for the explicit MCP or Hermes chat loop.
 - R4: Distinguish actual SDK/provider/agent-loop evidence, scripted decisions,
-  real-model MemoryManager probe, and still-unverified real-model fullchat.
+  real-model MemoryManager probe, and still-unverified real-model full-chat.
   No named-client compatibility beyond pinned Hermes evidence or upstream badge.
-- R5: Add a current roadmap checkpoint with merged29, reviewed unmerged30/31,
+- R5: Add a current roadmap checkpoint with merged #29, reviewed unmerged #30/#31,
   private staged consumer and remaining provider/count/budget/cutover choices.
   Retain older chronological evidence; clarify status labels rather than erase
   failed runs. State merge order and deferred gates, not fabricated completion.
