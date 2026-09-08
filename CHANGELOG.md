@@ -11,6 +11,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Prepare pinned public package metadata explicitly before offline artifact
+  installation; add a clean-cache CI regression. Dependency installation with
+  `npm ci` alone does not warm the metadata required by nested shrinkwraps.
+  Ordinary artifact tests remain offline; runtime/archive contents are unchanged.
+
 - Add an inspected private local npm install artifact over the same source core
   and stdio host, with pinned production closure, upstream notices and actual
   installed lifecycle/restart/upgrade tests. No npm publication or named-client
