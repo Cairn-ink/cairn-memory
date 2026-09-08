@@ -120,3 +120,26 @@ JSON/version checks and isolated pinned Claude marketplace/plugin validation
 passed. These are offline engineering gates, not semantic-quality approval.
 The candidate is ready to be committed for independent Standards and Spec
 review; those reviews and a scoped PR remain separate delivery steps.
+
+## PR24 clean-cache regression
+
+CI exposed a prerequisite hidden by the maintainer's warm npm cache: `npm ci`
+populates dependency tarballs but not package metadata used when npm installs
+the archive's nested shrinkwrap. A fresh isolated cache reproduced the exact
+installation failure (`ENOTCACHED`, metadata for `@modelcontextprotocol/server`).
+Preparing only the four pinned production packages' public metadata made the
+same archive/cache/runtime install successfully offline.
+
+Additional acceptance: the network-enabled `packaging/verify-clean-cache.mjs`
+must create its own cache/config and synthetic adapter installs, record whether
+the preparation-free install succeeds, then verify the same install succeeds after
+explicit metadata preparation. Both supported runtimes must pass this regression
+and ordinary offline artifact tests. Ambient application credentials and npm
+cache/registry/config overrides must not enter child commands. No runtime source,
+archive bytes, model calls or I05/semantic-quality acceptance changes are allowed.
+The recorded original failure is diagnostic evidence, not a requirement that
+future npm versions must continue failing before preparation.
+
+The CI prerequisite is `node packaging/prepare-cache.mjs`; its public registry
+requests are explicit and separate from ordinary offline artifact tests.
+The fix still requires independent review and a green remote CI rerun.

@@ -51,7 +51,11 @@ exercise actual stdio client/server calls using synthetic stores and scripted
 models only. Run on both core Node versions; CI has a separate MCP matrix.
 No key or paid request is needed. See `docs/standalone-mcp.md`.
 For local artifact changes, install both isolated adapter dependency sets above,
-then run `npm run test:artifact` on Node22.16 and24. Tests build inspected private
+then explicitly run `node packaging/prepare-cache.mjs` (public registry metadata
+requests), followed by `npm run test:artifact` on Node22.16 and24. `npm ci` alone
+does not populate the metadata needed by an offline nested-shrinkwrap install.
+CI also runs `node packaging/verify-clean-cache.mjs`, a network-enabled fresh-cache
+regression separate from ordinary offline tests. Tests build inspected private
 archives and install them offline into explicitly prefixed temporary projects;
 there are no model calls, global installs or registry publications. See
 `docs/install-artifact.md` for packaging and dependency-cache boundaries.
