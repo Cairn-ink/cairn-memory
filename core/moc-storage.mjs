@@ -14,7 +14,7 @@ const titleKey = (title) => title.normalize("NFKC").toLocaleLowerCase("und");
 const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
-export function createMocStorage({ db, epoch, advanceEpoch, memoryDto }) {
+export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts }) {
   const mocById = (ns, id) => db.prepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
     .get(...boundary(ns), id);
 
@@ -233,6 +233,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto }) {
         const memory = memories.get(item.memoryId);
         const revision = nextRevision.get(item.memoryId);
         const filed = desiredByMemory.get(item.memoryId).size ? "filed" : "unfiled";
+        if (revision !== memory.revision) invalidateConflicts(item.memoryId);
         updateMemory.run(filed, revision, revision, now, item.memoryId);
         deleteRefs.run(item.memoryId);
         for (const mocId of desiredByMemory.get(item.memoryId))

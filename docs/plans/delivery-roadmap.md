@@ -104,7 +104,8 @@ unattended scheduler. A new merge/continuation message resumes the next package.
 
 ## Five stages, thirteen initial work packages
 
-Package **1a is merged** (#10); **1b is in progress**. Later packages remain
+Package **1a is merged** (#10); **1b is ready_for_merge** (#12);
+**1c is in progress** on its verified parent. Later packages remain
 **not_started**. The grouping is a planning baseline, not a
 promise of exactly thirteen PRs; split packages further when scope/risk requires.
 
@@ -194,9 +195,13 @@ at `b18db1590e15d2190e0cba8482fe2278e9580567`.
 Package 1b is implemented against that fixed base; its
 [checkpoint](capture-implementation.md) records the frozen C01–C13 acceptance.
 Primary integrates separate engine/test workers and verifies both runtime versions.
-The implementation PR records exact candidate, independent reviews and CI; this
-ledger does not claim that candidate merged. Next is **1c**, from verified 1b
-under the owner's stacked-branch authorization. No later package is complete.
+Capture [PR #12](https://github.com/Cairn-ink/cairn-memory/pull/12) is ready for
+owner merge at `45bf62f801c340e82700780bc6c497b661452825`: 106 core tests and five
+demos pass on each runtime, 31 plugin tests and all five CI jobs pass; independent
+Standards and Spec each report zero findings. This ledger does not claim it merged.
+Package **1c** follows that parent under the owner's stacked-branch authorization;
+its [acceptance](conflict-lifecycle.md) freezes inline hint and migration behavior.
+After its verification and review, next is **1d**. No later package is complete.
 
 When a package advances, record: package/status, fixed base and candidate SHA,
 implementation owner, primary verification commands/results, Standards findings,

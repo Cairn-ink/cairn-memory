@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add optional revision-bound contradiction hints to explicit/inferred admission,
+  symmetric attributed inspection and atomic invalidation on memory revision
+  changes. Schema v6 preserves existing state; bounded links do not claim
+  semantic conflict detection or change the capture model output contract.
+
 - Add `core.capture` with bounded injected extraction, trusted source binding,
   digest-bound replay and post-admission classification. No provider, passive
   hook, local MCP server, hosted migration or schema change is included.

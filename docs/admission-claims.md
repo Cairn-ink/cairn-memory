@@ -25,10 +25,12 @@ from this mechanism: a slow old model call can overlap a takeover, but its stale
 result cannot write. Timeouts, abandonment and idempotent commits remain separate.
 
 `finishAdmission({namespace,client,eventId,payloadDigest,token,items})` admits
-zero to five trusted items. Each item has only content, kind, confidence and one
-to four source receipts. Content is normalized/redacted, at most 600 UTF-16 units;
+zero to five trusted items. Each item has content, kind, confidence, one
+to four source receipts and optional [conflictHints](conflicts.md).
+Content is normalized/redacted, at most 600 UTF-16 units;
 confidence is a finite number in 0..1. Core assigns inferred origin and identity.
-Namespace, IDs, arbitrary origin and conflict hints cannot come from items.
+Namespace, assigned memory IDs and arbitrary origin cannot come from items.
+Conflict hint targets are trusted orchestration references, not extractor output.
 
 The live lease, all memory/source changes and recorded completion are checked/
 committed atomically. A failed batch writes nothing and does not consume its
@@ -66,9 +68,9 @@ can advance the epoch more than once within its one atomic transaction.
 
 ## Upgrade and verification
 
-Opening v1/v3/v4 databases atomically upgrades to schema v5. Existing memory,
+Opening v1/v3/v4/v5 databases atomically upgrades to schema v6. Existing memory,
 source IDs, suppression, MOC membership, epochs and cursor identity are retained.
-Old v1/v3/v4 binaries cannot open v5; draft v2 and unknown databases remain
+Old v1/v3/v4/v5 binaries cannot open v6; draft v2 and unknown databases remain
 unsupported. Back up meaningful files with writers closed before upgrading;
 there is no downgrade tool or production migration in this change.
 

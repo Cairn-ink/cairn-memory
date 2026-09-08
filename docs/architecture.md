@@ -55,6 +55,11 @@ separate from storage transactions. [Capture](capture.md) now composes these
 methods with an injected extractor and trusted receipt construction. No private
 source or hosted path is migrated by these methods.
 
+[Conflict hints](conflicts.md) add revision-bound, attributed assertions to that
+same admission transaction. Every memory revision mutation invalidates incident
+links, including the legacy facade and filing transitions. No second engine or
+semantic contradiction detector is introduced.
+
 A public protocol change lands here first with a schema and test. Hosted support can ship before or with the corresponding public release, never after a client begins depending on it.
 
 ## Trust boundaries

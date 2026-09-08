@@ -15,6 +15,7 @@
     "demo:recall": "node examples/recall.mjs",
     "demo:admission": "node examples/admission.mjs",
     "demo:capture": "node examples/capture.mjs",
+    "demo:conflicts": "node examples/conflicts.mjs",
     "validate": "node scripts/validate-json.mjs"
   }
 }

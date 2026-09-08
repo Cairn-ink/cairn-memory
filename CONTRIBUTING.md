@@ -28,6 +28,9 @@ synthetic SQLite database and handcrafted trusted inferred items, not extraction
 For capture changes also run `npm run demo:capture` on both core runtime versions.
 Its injected scripted extractor verifies source binding and lifecycle, not model quality.
 
+For conflict lifecycle changes also run `npm run demo:conflicts` on both core
+runtime versions. It uses explicit synthetic hints, not semantic detection.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

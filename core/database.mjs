@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 5;
+const VERSION = 6;
 
 function createVersion3(db) {
   db.exec(`
@@ -194,6 +194,22 @@ function migrateVersion4(db) {
   `);
 }
 
+function migrateVersion5(db) {
+  db.exec(`
+    CREATE TABLE memory_conflicts (
+      left_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      left_revision INTEGER NOT NULL CHECK (left_revision > 0),
+      right_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      right_revision INTEGER NOT NULL CHECK (right_revision > 0),
+      relation TEXT NOT NULL CHECK (relation = 'contradicts'),
+      source TEXT NOT NULL CHECK (source IN ('explicit-hint','inferred-hint')),
+      PRIMARY KEY (left_memory_id, left_revision, right_memory_id, right_revision, relation, source),
+      CHECK (left_memory_id < right_memory_id)
+    ) STRICT;
+    CREATE INDEX right_memory_conflicts ON memory_conflicts(right_memory_id);
+  `);
+}
+
 export function transaction(db, work) {
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -232,17 +248,25 @@ export function openDatabase(path) {
         migrateVersion1(db);
         migrateVersion3(db);
         migrateVersion4(db);
+        migrateVersion5(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 3) {
         migrateVersion3(db);
         migrateVersion4(db);
+        migrateVersion5(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 4) {
         migrateVersion4(db);
+        migrateVersion5(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
+      if (appId === APPLICATION_ID && version === 5) {
+        migrateVersion5(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -251,6 +275,7 @@ export function openDatabase(path) {
       createVersion3(db);
       migrateVersion3(db);
       migrateVersion4(db);
+      migrateVersion5(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;
