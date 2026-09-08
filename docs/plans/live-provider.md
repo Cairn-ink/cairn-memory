@@ -55,7 +55,7 @@ these documented rates; stop if pricing/request shape changes.
 
 ## Evidence
 
-Run 1, 2026-09-08, Node 22.16.0: **passed**. No earlier paid attempts in this
+Run 1, 2026-09-08, Node 22.16.0: **provisional pass, superseded by review**. No earlier paid attempts in this
 work package. Fixture `review-preference-v1`, pinned model above, fresh SQLite
 retained locally (not committed). The DRI loaded only the key assignment into
 the runner process; no application environment/database was used.
@@ -81,13 +81,32 @@ reservation: US$4.919936. Run-local ceiling was US$0.25; no retries or parallel
 paid runs occurred. Further runs must be recorded here without resetting that
 shared allowance. Reports include no raw provider content or credentials.
 
-This establishes one synthetic integration lifecycle, not a semantic benchmark,
+Review found that checking the two extracted keywords admitted an opposite
+preference. The lifecycle was exercised but that run is not sufficient final
+L01 evidence. The corrected predicate accepts only anchored positive templates
+preserving the diagrams-over-long-prose preference for code reviews; unknown
+paraphrases fail closed. Contradictions, third-party preferences and unrelated
+keyword overlap are regression cases. The predicate was fixed before rerunning.
+
+Run 2, 2026-09-08, Node 22.16.0: **passed with corrected assertion**. Same frozen
+source, model and lifecycle; no provider prompt changes. Stage times were
+5249 / 3256 / 4335 / 4262 / 1254 ms in the table's order, total 18356 ms. All
+18 HTTP requests were 200. Per invocation input/output tokens: extract 340/33,
+classify 566/51, select 434/41, rank 447/41, select 434/41, rank 447/41,
+select 345/41, rank 456/41, select 291/5. Total 3760 input /335 output;
+generation usage estimate US$0.0020400, reservation US$0.080064.
+
+Across both runs: generation usage estimate US$0.0040684; conservative reserved
+total US$0.160128; remaining shared authorization US$4.839872. Both attempts are
+retained here; the second, not the provisional first, supplies final L01 evidence.
+
+This records synthetic integration lifecycles, not a semantic benchmark,
 resource guarantee, real-human onboarding, standalone MCP, or commercial parity.
 No provider/core changes were required by this run.
 
 Offline verification: `node --test core/test/*.test.mjs` passed 177 tests on
 Node 22.16.0 and 24.20.0. `node --test adapters/openai/test/*.test.mjs` passed
-28 tests on both runtimes, including 12 new runner/guard tests. `node
+30 tests on both runtimes, including 14 new runner/guard tests. `node
 examples/openai-offline.mjs` passed on both. `npm test` passed 31 plugin tests;
 `npm run validate` and `npm run validate --prefix tools/plugin-validation`
 passed. Optional packages were installed with `npm ci --prefix adapters/openai`

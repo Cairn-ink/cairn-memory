@@ -13,6 +13,18 @@ const fail = (code) => { throw new Error(code); };
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 const fixture = 'review-preference-v1';
 
+// Deliberately narrow smoke-test equivalences, not a general semantic grader.
+// Unknown paraphrases fail closed; a word overlap cannot establish preference.
+export function matchesSeededPreference(content) {
+  if (typeof content !== 'string') return false;
+  const text = content.toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
+  const subject = '(?:i prefer|(?:the )?user prefers)';
+  const contrast = '(?:rather than|over|instead of) long prose';
+  return new RegExp(`^${subject} diagrams ${contrast} (?:in|for) code reviews$`).test(text) ||
+    new RegExp(`^for code reviews ${subject} diagrams ${contrast}$`).test(text) ||
+    /^use diagrams (?:rather than|instead of) long prose (?:in|for) code reviews$/.test(text);
+}
+
 // This guard is a run-local conservative estimate, not a provider account limit.
 // Reservations are never refunded, including count calls and ambiguous failures.
 export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
@@ -165,7 +177,7 @@ export async function runLiveLifecycle({ apiKey, budgetUsd, maxRequests = 40,
       memoryId = captured.admission.memories[0].id;
       const stored = unwrap(core.get({ namespace, memoryId }));
       original = stored.memory.content;
-      check(/diagram/i.test(original) && /review/i.test(original));
+      check(matchesSeededPreference(original));
       check(stored.receipts.some((receipt) => receipt.eventId === 'source-v1' && receipt.excerpt === source));
     });
     await stage('recall', () => recallCurrent(original, 'source-v1'));

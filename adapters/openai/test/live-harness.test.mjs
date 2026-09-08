@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { createOpenAIModel } from '../index.mjs';
-import { createBudgetedFetch, runLiveLifecycle } from '../live-harness.mjs';
+import { createBudgetedFetch, runLiveLifecycle, matchesSeededPreference } from '../live-harness.mjs';
 
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status });
 const request = () => ({ system: 'Extract durable memories.', input: { messages: [] },
@@ -104,7 +104,7 @@ test('full lifecycle runs against fake HTTP and reports all five acceptance stag
       }
       const method = payload.text.format.name;
       let output;
-      if (method === 'cairn_extract') output = { items: [{ content: 'Use diagrams in code reviews.',
+      if (method === 'cairn_extract') output = { items: [{ content: 'Use diagrams rather than long prose in code reviews.',
         kind: 'preference', confidence: 0.9, sourceIndices: [0] }] };
       else if (method === 'cairn_classify') output = { items: input.memories.map((memory) => ({
         memoryId: memory.id, parentIds: [], newL1: { title: 'Code review preferences', parentL2Ids: [] } })) };
@@ -129,6 +129,40 @@ test('full lifecycle runs against fake HTTP and reports all five acceptance stag
   assert.ok(report.stages.every((stage) => stage.status === 'passed'));
   assert.ok(report.accounting.requestCount > 0);
   assert.doesNotMatch(JSON.stringify(report), /synthetic-only|Use diagrams/);
+});
+
+test('seed preference predicate rejects contradictions, unrelated overlap and unsupported paraphrases', () => {
+  for (const text of ['I dislike diagrams in code reviews.', 'I prefer long prose over diagrams for code reviews.',
+    'Do not use diagrams rather than long prose in code reviews.', 'Diagrams and code reviews are unrelated.',
+    'I prefer diagrams over long prose for code reviews, but this is false.',
+    'Someone else prefers diagrams over long prose for code reviews.', 'Use diagrams in code reviews.']) {
+    assert.equal(matchesSeededPreference(text), false, text);
+  }
+  for (const text of ['For code reviews, I prefer diagrams rather than long prose.',
+    'The user prefers diagrams over long prose for code reviews.',
+    'Use diagrams instead of long prose in code reviews.']) assert.equal(matchesSeededPreference(text), true, text);
+});
+
+test('contradictory extraction cannot pass the lifecycle despite valid source bindings', async () => {
+  for (const content of ['I dislike diagrams in code reviews.', 'Diagrams and code reviews are unrelated.']) {
+    const report = await runLiveLifecycle({ apiKey: 'synthetic', budgetUsd: 0.25,
+      fetchImpl: async (url, options) => {
+        const payload = JSON.parse(options.body);
+        if (url.endsWith('/input_tokens')) return json({ object: 'response.input_tokens', input_tokens: 100 });
+        const input = JSON.parse(payload.input[0].content[0].text);
+        const output = payload.text.format.name === 'cairn_extract'
+          ? { items: [{ content, kind: 'preference', confidence: 0.9, sourceIndices: [0] }] }
+          : { items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })) };
+        return json({ object: 'response', model: payload.model, status: 'completed', error: null,
+          incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+          usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });
+      } });
+    assert.equal(report.ok, false);
+    assert.equal(report.stages.length, 1);
+    assert.equal(report.stages[0].status, 'failed');
+    assert.equal(report.accounting.requestCount, 4);
+  }
 });
 
 test('lifecycle rejection records the failed stage without raw provider content', async () => {
