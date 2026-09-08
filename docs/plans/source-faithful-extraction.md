@@ -64,7 +64,7 @@ DRI alone controls paid calls. Failed runs are not refunded or dropped.
 - DRI minimized actual probe: four HTTP responses, all 200; both usage memories
   retained their separate source receipts and were filed. DRI's narrow predicate
   and manual source inspection passed; neither claim became implemented software.
-  Private local evidence: `/tmp/cairn-extraction-probe-EGaEiA/evidence.json`.
+  Synthetic probe evidence is retained privately by the DRI.
   An earlier import failure occurred before credential read/network (zero HTTP);
   after installing the isolated dependency, the DRI executed one paid probe.
   Probe reservation US$0.017792; reported usage 1,529 input / 161 output tokens,

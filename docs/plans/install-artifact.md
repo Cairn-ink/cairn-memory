@@ -2,6 +2,8 @@
 
 Base `f8bf5748edb92811cbcc1ccd831a9ed52b6c6dc8` (MCP PR #18).
 This is a dependent branch, not an approved publication or deployment.
+The install candidate also incorporates reviewed provider-reference and
+source-relationship fixes from PRs #20 and #22 in the same public engine.
 
 ## Acceptance I01–I08
 
@@ -42,8 +44,9 @@ This is a dependent branch, not an approved publication or deployment.
 
 A local npm archive is the verification artifact, not a claim that a published
 `npx` package exists. Package naming/version for a public release remains subject
-to that release decision. Hermes integration is the next scoped package; this
-one must not advertise it early. Full UI and Moss remain out of scope.
+to that release decision. Hermes native memory-provider integration is the next
+scoped package; the narrowly observed MCP discovery below is not that integration.
+Full UI and Moss remain out of scope.
 
 ## Implementation evidence and retained failures
 
@@ -52,11 +55,11 @@ private manifest, production shrinkwrap and notices. Six offline artifact tests
 pass on Node22.16.0 and24.20.0, including installed SDK stdio lifecycle/restart,
 same-schema preview.1→preview.2 upgrade and uninstall/database preservation.
 Actual archive contents and installed source hashes are inspected.
-Actual installed-provider acceptance and final independent
-reviews remain pending. No publication or deployment is performed.
+Actual installed-provider acceptance has now passed as described below. Final
+independent reviews remain pending. No publication or deployment is performed.
 
 The first test run failed installed-file checks because npm walked from an empty
-temporary directory up to an existing `/tmp/package.json`. Two attempts installed
+temporary directory up to an existing ancestor package.json. Two attempts installed
 the preview dependency there instead of in their intended temporary projects.
 The affected package was the synthetic local preview; its installed lifecycle
 checks had not succeeded. That failure is retained, not counted as installation
@@ -67,11 +70,53 @@ also initialize the dedicated directory and retain `--prefix .`. A dedicated
 synthetic-ancestor regression verifies its manifest and dependency directory
 remain untouched while the child install receives the artifact. The DRI removed
 only the introduced preview entries from the temporary root manifests/locks and
-moved its exact package/bin to recoverable quarantine, retaining manifest backups
-at `/tmp/cairn-install-quarantine-K0utwD`. Other dependencies were preserved;
+moved its exact package/bin to recoverable quarantine, retaining manifest backups.
+Other dependencies were preserved;
 the packaging worker performed no broad temporary-directory cleanup.
 
 The license check also found that tiktoken1.0.22's npm archive declares MIT but
 omits a standalone LICENSE. Rather than claiming one exists, this artifact now
 includes the upstream license from the registry-reported gitHead; its provenance
 is recorded in THIRD_PARTY_NOTICES and covered by the installed notice test.
+
+## Installed-provider and client evidence
+
+On 2026-09-09 (Asia/Taipei), the DRI exercised
+`cairn-memory-local-preview@0.0.0-preview.1` with archive SHA-256
+`708a72b597d2958bd5c37340c4b28559ba707829e6e7a65d69858e20bb976020`.
+The official SDK client used actual stdio against the installed executable:
+remember a synthetic fact, stop and restart the process, recall with the real
+model and verify its exact source receipt, forget, then verify model recall
+returns no memory. All stages passed. Unlike the earlier in-memory host probe,
+this exercises the installed executable and fresh-process persistence together.
+
+The installed-provider run made six HTTP requests, all status200, reserving
+US$0.026688. Generation reported 1150 input and 87 output tokens, estimated
+US$0.0005992. These are run-local usage estimates, not an invoice. The DRI's
+cumulative shared authorization ledger is US$2.980160 reserved of US$5, leaving
+US$2.019840; the total includes earlier retained failed/probe/evaluation runs.
+No worker used credentials or repeated this paid run.
+
+Hermes 0.21.1 at commit `c8aa5608c24e3636e77c267650c0f1f52e44adb0`
+also connected to this installed artifact using `hermes mcp test cairn` on
+Linux x64 with Node 22.16.0. The initial probe reported five tools in 852 ms;
+an independent discovery-only repeat reported `Connected` and the same five
+tools in 759 ms. The model key was explicitly blank. This is real Hermes MCP
+connection/discovery evidence only: no chat tool-use, automatic lifecycle hooks,
+native memory-provider selection or catalog inclusion has been verified.
+
+I05's narrow installed lifecycle is satisfied. It does not establish general
+memory quality: the frozen full semantic suite still fails its source-support
+gate. Named-client tool-use and native Hermes integration remain separate work;
+there is no universal-client or launch-readiness claim.
+
+## Final candidate verification
+
+The integrated runtime passed 181 core tests and all nine documented offline
+demos on each of Node22.16.0 and24.20.0. Six installed-artifact tests passed on
+both runtimes and reproduced the archive SHA-256 above. The DRI also verified
+the integrated MCP/adapter tests on both runtimes. The 31 plugin tests, repository
+JSON/version checks and isolated pinned Claude marketplace/plugin validation
+passed. These are offline engineering gates, not semantic-quality approval.
+The candidate is ready to be committed for independent Standards and Spec
+review; those reviews and a scoped PR remain separate delivery steps.

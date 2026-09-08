@@ -62,7 +62,7 @@ The schema-only two-fact probe returned two structurally valid items with empty
 parentIds and no newL1. Classification and application returned success, but
 both memories remained unfiled and createdMocs was empty. Two HTTP requests
 returned 200; this is format/authority evidence only. **That attempt did not meet R05.**
-The retained synthetic artifact is `/tmp/cairn-classify-probe-qpDjr6/evidence.json`.
+The synthetic schema-only probe evidence is retained privately by the DRI.
 At that point the DRI's shared ledger reserved US$0.951872 of the authorized US$5.
 
 Next prediction, recorded before changing instructions: explicitly distinguish
@@ -91,7 +91,7 @@ On 2026-09-09 (Asia/Taipei), the DRI's next two-fact actual-provider probe passe
 an explicit assertion that **both memories were filed**. It created one shared
 L1 topic, `Programming languages used by software projects`, and two current
 memory references. Classification and application succeeded. The retained
-synthetic artifact is `/tmp/cairn-classify-probe-BCzCHZ/evidence.json`.
+synthetic probe evidence is retained privately by the DRI.
 Two HTTP requests returned 200, reserving US$0.008896. Generation reported 1041
 input and 104 output tokens, estimated US$0.0005828. This satisfies the narrow
 R05 filing probe, not the still-pending frozen-evaluation rerun or general quality.
