@@ -45,10 +45,17 @@ Populate dependency caches once, then run offline artifact tests:
 ```sh
 npm ci --prefix adapters/mcp
 npm ci --prefix adapters/openai
+node packaging/prepare-cache.mjs
 npm run test:artifact
 ```
 
-The two `npm ci` commands may download dependencies. The artifact tests then
+The two `npm ci` commands download dependencies; the explicit preparation command
+fetches public registry metadata for the four pinned production dependencies.
+`npm ci` alone caches tarballs but is insufficient for the later offline install.
+`node packaging/verify-clean-cache.mjs` separately reproduces this boundary with
+a fresh isolated cache: it records the unprepared baseline and requires installation
+to pass after preparation. This CI regression uses network access; ordinary artifact tests do not.
+The artifact tests then
 use `npm install --offline --ignore-scripts` into initialized, explicitly prefixed
 synthetic temporary projects. Tests exercise real installed subprocess stdio,
 not a source-checkout executable. They retain artifacts, install directories and

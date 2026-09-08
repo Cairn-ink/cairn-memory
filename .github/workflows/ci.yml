@@ -73,6 +73,8 @@ jobs:
       - run: npm ci --prefix adapters/mcp
       - run: npm ci --prefix adapters/openai
       - run: npm run test:mcp
+      - run: node packaging/verify-clean-cache.mjs
+      - run: node packaging/prepare-cache.mjs
       - run: npm run test:artifact
 
   plugin-validation:
