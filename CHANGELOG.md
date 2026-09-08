@@ -11,6 +11,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Refresh developer-preview introduction, demo and roadmap with the isolated
+  installer and evidence boundaries. Keep scripted host integration, actual
+  model probes and unverified human/production outcomes distinct; no promotion
+  is published and no star/accuracy/savings claims are introduced.
+
 - Verify pinned Hermes native-provider and general MCP routes through the actual
   AIAgent conversation loop with scripted completions and real installed tools.
   Cross-session receipts, revisions and forgetting are tested; real-model tool
