@@ -36,7 +36,7 @@ local model path is not yet verified.
 ```sh
 git clone https://github.com/Cairn-ink/cairn-memory.git
 cd cairn-memory
-git switch --detach 0832b893038cf3af9cb6877c2fa5143c02156880
+git switch --detach a23b84d81851a9a864f6f48501a28a5da3cb2f5e
 npm run build:artifact
 ```
 
