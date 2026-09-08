@@ -71,7 +71,9 @@ jobs:
           cache: npm
           cache-dependency-path: adapters/mcp/package-lock.json
       - run: npm ci --prefix adapters/mcp
+      - run: npm ci --prefix adapters/openai
       - run: npm run test:mcp
+      - run: npm run test:artifact
 
   plugin-validation:
     runs-on: ubuntu-latest

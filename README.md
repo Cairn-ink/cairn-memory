@@ -12,10 +12,12 @@ Cairn Memory gives AI coding agents private, inspectable memory across sessions.
 
 It is deliberately small: one Claude Code plugin, one remote MCP connection, no plugin runtime dependencies, and no generic notes UI.
 
-**Developer preview:** a [local SQLite storage core](docs/local-store.md) now
-runs from source without an account or service. Try `npm run demo:store` on
-Node >=22.16. This is the persistence milestone, not yet local model extraction
-or a self-hosted MCP server; the plugin installation below still uses a service.
+**Local developer preview:** the [shared SQLite core](docs/local-store.md),
+[source-run MCP host](docs/standalone-mcp.md), and [local install artifact](docs/install-artifact.md)
+run without a Cairn account on Node >=22.16. The artifact is not published to npm;
+model recall requires a separately supplied provider key. Local named-client
+compatibility and general semantic quality remain separate gates. The hosted
+plugin installation below still uses a service and is unchanged.
 
 ## Install for Claude Code (automatic memory)
 

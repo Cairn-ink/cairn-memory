@@ -22,6 +22,8 @@
     "test:openai-live": "node examples/openai-live.mjs",
     "start:mcp": "node adapters/mcp/cli.mjs",
     "test:mcp": "npm test --prefix adapters/mcp",
+    "build:artifact": "node packaging/build.mjs",
+    "test:artifact": "node --test packaging/test/*.test.mjs",
     "test:openai": "npm test --prefix adapters/openai",
     "validate": "node scripts/validate-json.mjs"
   }

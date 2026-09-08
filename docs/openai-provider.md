@@ -55,8 +55,10 @@ namespaces and revisions; schemas do not prove relevance or entailment.
 ## Dependencies and remaining gate
 
 The isolated private package pins `tiktoken@1.0.22` (WASM) with registry integrity
-and no transitive dependencies. It is MIT licensed; the installed package retains
-its license notice. This package comes from third-party `dqbd/tiktoken`,
+and no transitive dependencies. Its package metadata declares MIT, but the
+1.0.22 npm archive omits a standalone license notice. The local install artifact
+includes the upstream notice under `licenses/tiktoken-LICENSE`; its source is
+recorded in `packaging/THIRD_PARTY_NOTICES.md`. This package comes from third-party `dqbd/tiktoken`,
 not an OpenAI-maintained JavaScript tokenizer. Ranks are bundled, not downloaded
 at runtime. No provenance attestation has been verified.
 [Dependency metadata](https://registry.npmjs.org/tiktoken/1.0.22).

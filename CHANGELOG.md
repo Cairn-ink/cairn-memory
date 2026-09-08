@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an inspected private local npm install artifact over the same source core
+  and stdio host, with pinned production closure, upstream notices and actual
+  installed lifecycle/restart/upgrade tests. No npm publication or named-client
+  compatibility claim is included.
+
 - Add a thin local stdio MCP source host over the same public core, with
   startup-bound namespaces and explicit remember/recall/inspect/correct/forget.
   Distribution, real-client matrix and remote connectors remain separate gates.

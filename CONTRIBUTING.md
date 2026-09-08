@@ -50,6 +50,11 @@ For the isolated MCP host, `npm ci --prefix adapters/mcp` and `npm run test:mcp`
 exercise actual stdio client/server calls using synthetic stores and scripted
 models only. Run on both core Node versions; CI has a separate MCP matrix.
 No key or paid request is needed. See `docs/standalone-mcp.md`.
+For local artifact changes, install both isolated adapter dependency sets above,
+then run `npm run test:artifact` on Node22.16 and24. Tests build inspected private
+archives and install them offline into explicitly prefixed temporary projects;
+there are no model calls, global installs or registry publications. See
+`docs/install-artifact.md` for packaging and dependency-cache boundaries.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
