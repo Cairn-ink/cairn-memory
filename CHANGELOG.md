@@ -11,6 +11,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Include the shared model-profile module in the local archive and verify an
+  installed adapter import. MCP retains its existing default; experimental
+  extraction remains an explicit programmatic option.
+
 - Prepare pinned public package metadata explicitly before offline artifact
   installation; add a clean-cache CI regression. Dependency installation with
   `npm ci` alone does not warm the metadata required by nested shrinkwraps.
@@ -24,6 +28,19 @@ All notable changes follow semantic versioning.
 - Add a thin local stdio MCP source host over the same public core, with
   startup-bound namespaces and explicit remember/recall/inspect/correct/forget.
   Distribution, real-client matrix and remote connectors remain separate gates.
+- Add an explicit experimental extraction-only model profile; retain GPT-4.1 mini
+  as default and for classify/select/rank. Mixed-model guards reserve per-request
+  integer costs before I/O and evaluation reports per-method identity. Offline
+  tests establish routing/accounting, not improved extraction quality.
+
+- Retain the third frozen synthetic evaluation and independent labels: all
+  repetitions completed, but two unsupported captured claims still fail the
+  mandatory source-support gate despite 45/45 recall and relevance. Preserve
+  prior failures; the prompt-only fix is not a general entailment guarantee.
+
+- Add a frozen synthetic semantic/resource evaluation with three fresh-state
+  repetitions, explicit unknown semantic judgments, safety checks and a shared
+  paid-request reservation budget. This is not a human or competitor benchmark.
 
 - Clarify extraction source fidelity: preserve relationships and qualifications,
   without invented entity types or stronger claims. Scripted regression tests

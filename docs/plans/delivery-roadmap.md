@@ -31,13 +31,14 @@ tables below are retained; this checkpoint overrides their old progress labels.
 | Package | Current evidence / remaining gate |
 | --- | --- |
 | 1 — Live provider | [PR #17](https://github.com/Cairn-ink/cairn-memory/pull/17): actual synthetic capture/classify/recall/reopen/correct/forget passed |
-| 2 — Evaluation | [#19](https://github.com/Cairn-ink/cairn-memory/pull/19), [#21](https://github.com/Cairn-ink/cairn-memory/pull/21), [#23](https://github.com/Cairn-ink/cairn-memory/pull/23) retain all runs; latest source-support gate still **failed**, despite 36/36 completions and 45/45 recall/relevance |
+| 2 — Evaluation | [#19](https://github.com/Cairn-ink/cairn-memory/pull/19), [#21](https://github.com/Cairn-ink/cairn-memory/pull/21), [#23](https://github.com/Cairn-ink/cairn-memory/pull/23) retain default-model failures. [#27](https://github.com/Cairn-ink/cairn-memory/pull/27) explicit experimental profile passed 36/36 frozen runs after independent agent labels: 25/25 source-supported claims, 24/24 facts, 44/45 recall, 44/44 relevance; default GPT-4.1 mini remains failed |
 | 3 — Thin MCP | [PR #18](https://github.com/Cairn-ink/cairn-memory/pull/18): actual stdio lifecycle/isolation/revisions, same core |
 | 4 — Installation | [PR #24](https://github.com/Cairn-ink/cairn-memory/pull/24): inspected archive, fresh installed subprocess and actual-model restart/recall passed; no npm publication |
 | 5 — Hermes | [PR #25](https://github.com/Cairn-ink/cairn-memory/pull/25): native MemoryManager lifecycle and actual-model two-session recall passed on Linux CLI; not interactive chat or a released compatibility claim |
-| 6 — Launch kit | Local-first documentation and independent no-key onboarding in progress; broad promotion remains blocked by source support |
-| 7 — Private adapter | Preflight only; actual pinned-core consumption and runtime compatibility not complete |
-| 8 — Migration/rollback | Not completed; only synthetic rehearsal may proceed without production approval |
+| 6 — Launch kit | [#26](https://github.com/Cairn-ink/cairn-memory/pull/26): local-first documentation and independent no-key onboarding verified; source/profile artifact integration is a separate candidate, with no human-adoption or broad-promotion claim |
+| 7a — Private facade | Under development; not complete |
+| 7b — Production provider/quota/deadline | Not complete; no production integration claim |
+| 8 — Migration/rollback | Rehearsal not complete; only synthetic rehearsal may proceed without production approval |
 
 Provider reference constraints in [#20](https://github.com/Cairn-ink/cairn-memory/pull/20)
 corrected invalid placement references; the source-faithful prompt change in
@@ -48,8 +49,10 @@ success. A sourced receipt and a relevant return do not establish entailment.
 The installed lifecycle is evidence of the narrow memory loop, not a human-user
 study. A subsequent real Hermes MemoryManager two-session sourced-recall probe
 also passed, without claiming interactive model tool selection. Current
-conservative paid-run reservation after the opt-in walkthrough is US$3.033536 of the approved
-US$5 ceiling, including failed runs; it is not an invoice. New paid experiments
+conservative paid-run reservation after the experimental profile probe and suite is
+US$4.179912 of the approved US$5 ceiling, including failed runs, with US$0.820088
+remaining; it is not an invoice. See the [exact profile ledger](extraction-model-profile.md#measured-evidence).
+New paid experiments
 must account for the remaining allowance and be recorded separately.
 
 ### Current checkpoint and next eight PR packages (2026-09-08)

@@ -26,6 +26,11 @@ semantic evaluation still fails source support: an extractor sometimes turns
 remain visible. This is synthetic evidence, not a competitor benchmark or a
 claim that real users save a measured amount of time.
 
+An explicitly selected [experimental extraction profile](docs/plans/extraction-model-profile.md)
+passed the frozen synthetic gate after independent agent review. The default
+model's failure remains; MCP does not automatically enable the experimental
+profile, which is a programmatic adapter option.
+
 ## Try the local memory layer
 
 Prerequisites: Node >=22.16, npm and `tar`. Model-free remember/inspect/correct/

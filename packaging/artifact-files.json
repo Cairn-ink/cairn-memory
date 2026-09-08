@@ -24,6 +24,7 @@
   "adapters/mcp/cli.mjs",
   "adapters/mcp/server.mjs",
   "adapters/openai/index.mjs",
+  "adapters/openai/profiles.mjs",
   "adapters/openai/schemas.mjs",
   "plugins/cairn-memory/lib/redact.mjs",
   "LICENSE"

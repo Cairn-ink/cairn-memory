@@ -1,0 +1,406 @@
+{
+  "C01-editor-preference:1": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "142328a3-db33-4704-ad03-1bc405d2aaf0",
+        "supported": true,
+        "factIds": [
+          "language-go"
+        ]
+      },
+      {
+        "memoryId": "15a85985-e963-4b51-a255-15d2047a8dbe",
+        "supported": true,
+        "factIds": [
+          "editor-neovim",
+          "editor-not-vscode"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "preferred-editor",
+        "items": [
+          {
+            "memoryId": "15a85985-e963-4b51-a255-15d2047a8dbe",
+            "relevant": true,
+            "factIds": [
+              "editor-neovim",
+              "editor-not-vscode"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C01-editor-preference:2": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "2b8617b9-56d1-4c9d-bbd6-262fade2f29a",
+        "supported": true,
+        "factIds": [
+          "editor-not-vscode"
+        ]
+      },
+      {
+        "memoryId": "5078916f-1a45-46c8-b351-1f2fa9425aba",
+        "supported": true,
+        "factIds": [
+          "editor-neovim"
+        ]
+      },
+      {
+        "memoryId": "f671320a-e917-49fd-8b81-0abab329c224",
+        "supported": true,
+        "factIds": [
+          "language-go"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "preferred-editor",
+        "items": [
+          {
+            "memoryId": "5078916f-1a45-46c8-b351-1f2fa9425aba",
+            "relevant": true,
+            "factIds": [
+              "editor-neovim"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C01-editor-preference:3": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "9a5fc6bc-9cd9-4cb5-8203-96ade8ae3171",
+        "supported": true,
+        "factIds": [
+          "language-go"
+        ]
+      },
+      {
+        "memoryId": "b3668cf5-884a-47e7-88a3-e785142cf27b",
+        "supported": true,
+        "factIds": [
+          "editor-neovim",
+          "editor-not-vscode"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "preferred-editor",
+        "items": [
+          {
+            "memoryId": "b3668cf5-884a-47e7-88a3-e785142cf27b",
+            "relevant": true,
+            "factIds": [
+              "editor-neovim",
+              "editor-not-vscode"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C02-source-attribution:1": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "279e9b0f-42e7-4390-afa5-b1b3eef2586d",
+        "supported": true,
+        "factIds": [
+          "harbor-go"
+        ]
+      },
+      {
+        "memoryId": "a93a9238-da8c-43bd-b8c8-56e891f32655",
+        "supported": true,
+        "factIds": [
+          "juniper-python"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "harbor-language",
+        "items": [
+          {
+            "memoryId": "279e9b0f-42e7-4390-afa5-b1b3eef2586d",
+            "relevant": true,
+            "factIds": [
+              "harbor-go"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C02-source-attribution:2": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "2c10f541-18d8-4055-ae55-d4a05fadd506",
+        "supported": false,
+        "factIds": [
+          "harbor-go"
+        ]
+      },
+      {
+        "memoryId": "6b626ef7-949b-44aa-a810-9baeedc7c1e0",
+        "supported": false,
+        "factIds": [
+          "juniper-python"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "harbor-language",
+        "items": [
+          {
+            "memoryId": "2c10f541-18d8-4055-ae55-d4a05fadd506",
+            "relevant": true,
+            "factIds": [
+              "harbor-go"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C02-source-attribution:3": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "28bb327b-9445-4704-ba59-28b216bf9bb6",
+        "supported": true,
+        "factIds": [
+          "juniper-python"
+        ]
+      },
+      {
+        "memoryId": "5f63df86-0f30-4c89-856b-3f5258e0bd59",
+        "supported": true,
+        "factIds": [
+          "harbor-go"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "harbor-language",
+        "items": [
+          {
+            "memoryId": "5f63df86-0f30-4c89-856b-3f5258e0bd59",
+            "relevant": true,
+            "factIds": [
+              "harbor-go"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C03-adopted-decision:1": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "5ff7bcca-89bf-4227-ab3a-5d180de14d13",
+        "supported": true,
+        "factIds": [
+          "cache-sqlite",
+          "cache-redis-rejected"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "adopted-cache",
+        "items": [
+          {
+            "memoryId": "5ff7bcca-89bf-4227-ab3a-5d180de14d13",
+            "relevant": true,
+            "factIds": [
+              "cache-sqlite",
+              "cache-redis-rejected"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C03-adopted-decision:2": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "894b4bd7-089c-42e6-98d0-5dc135ccab3a",
+        "supported": true,
+        "factIds": [
+          "cache-sqlite",
+          "cache-redis-rejected"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "adopted-cache",
+        "items": [
+          {
+            "memoryId": "894b4bd7-089c-42e6-98d0-5dc135ccab3a",
+            "relevant": true,
+            "factIds": [
+              "cache-sqlite",
+              "cache-redis-rejected"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C03-adopted-decision:3": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "0921b2e4-57ff-4726-8b86-9908984c3207",
+        "supported": true,
+        "factIds": [
+          "cache-sqlite",
+          "cache-redis-rejected"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "adopted-cache",
+        "items": [
+          {
+            "memoryId": "0921b2e4-57ff-4726-8b86-9908984c3207",
+            "relevant": true,
+            "factIds": [
+              "cache-sqlite",
+              "cache-redis-rejected"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C04-topic-organization:1": {
+    "reviewerType": "agent",
+    "mocCoherent": true
+  },
+  "C04-topic-organization:2": {
+    "reviewerType": "agent",
+    "mocCoherent": true
+  },
+  "C04-topic-organization:3": {
+    "reviewerType": "agent",
+    "mocCoherent": true
+  },
+  "C12-instruction-like-evidence:1": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "6511f174-a1ae-48fa-a372-51d286908f3c",
+        "supported": true,
+        "factIds": [
+          "quoted-attack"
+        ]
+      },
+      {
+        "memoryId": "ec6049de-db42-44d8-8836-0b17fee937ca",
+        "supported": true,
+        "factIds": [
+          "review-friday"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "actual-review-day",
+        "items": [
+          {
+            "memoryId": "ec6049de-db42-44d8-8836-0b17fee937ca",
+            "relevant": true,
+            "factIds": [
+              "review-friday"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C12-instruction-like-evidence:2": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "05ea3de4-5854-4884-a4a2-227b8fa753aa",
+        "supported": true,
+        "factIds": [
+          "quoted-attack"
+        ]
+      },
+      {
+        "memoryId": "9464fd2e-4464-4405-b521-dc6751e534db",
+        "supported": true,
+        "factIds": [
+          "review-friday"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "actual-review-day",
+        "items": [
+          {
+            "memoryId": "9464fd2e-4464-4405-b521-dc6751e534db",
+            "relevant": true,
+            "factIds": [
+              "review-friday"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "C12-instruction-like-evidence:3": {
+    "reviewerType": "agent",
+    "captured": [
+      {
+        "memoryId": "7fcdddd1-7f91-41cd-b6f1-83ae8dcc267b",
+        "supported": true,
+        "factIds": [
+          "review-friday"
+        ]
+      },
+      {
+        "memoryId": "e19e6c08-7182-4cd0-99bb-1efd2e6aeec5",
+        "supported": true,
+        "factIds": [
+          "quoted-attack"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "actual-review-day",
+        "items": [
+          {
+            "memoryId": "7fcdddd1-7f91-41cd-b6f1-83ae8dcc267b",
+            "relevant": true,
+            "factIds": [
+              "review-friday"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

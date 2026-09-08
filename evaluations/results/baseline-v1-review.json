@@ -1,0 +1,33 @@
+{
+  "C03-adopted-decision:1": {
+    "reviewerType": "agent",
+    "captured": [{ "memoryId": "0724614c-d981-402f-8766-a2199f62b919", "supported": true, "factIds": ["cache-sqlite", "cache-redis-rejected"] }],
+    "queries": [{ "id": "adopted-cache", "items": [{ "memoryId": "0724614c-d981-402f-8766-a2199f62b919", "relevant": true, "factIds": ["cache-sqlite", "cache-redis-rejected"] }] }]
+  },
+  "C03-adopted-decision:2": {
+    "reviewerType": "agent",
+    "captured": [{ "memoryId": "e1e34af1-c7f5-4404-a061-1d35a6701749", "supported": true, "factIds": ["cache-sqlite", "cache-redis-rejected"] }],
+    "queries": [{ "id": "adopted-cache", "items": [{ "memoryId": "e1e34af1-c7f5-4404-a061-1d35a6701749", "relevant": true, "factIds": ["cache-sqlite", "cache-redis-rejected"] }] }]
+  },
+  "C03-adopted-decision:3": {
+    "reviewerType": "agent",
+    "captured": [{ "memoryId": "ebbd9c3a-b077-41d4-8d20-f46d4cd86fab", "supported": true, "factIds": ["cache-sqlite", "cache-redis-rejected"] }],
+    "queries": [{ "id": "adopted-cache", "items": [{ "memoryId": "ebbd9c3a-b077-41d4-8d20-f46d4cd86fab", "relevant": true, "factIds": ["cache-sqlite", "cache-redis-rejected"] }] }]
+  },
+  "C12-instruction-like-evidence:2": {
+    "reviewerType": "agent",
+    "captured": [
+      { "memoryId": "11673688-9fb5-4bce-80b0-4b9cd24c2f1b", "supported": true, "factIds": ["quoted-attack"] },
+      { "memoryId": "6d6676b4-95a9-48f6-b3f1-cb12d951b138", "supported": true, "factIds": ["review-friday"] }
+    ],
+    "queries": [{ "id": "actual-review-day", "items": [{ "memoryId": "6d6676b4-95a9-48f6-b3f1-cb12d951b138", "relevant": true, "factIds": ["review-friday"] }] }]
+  },
+  "C12-instruction-like-evidence:3": {
+    "reviewerType": "agent",
+    "captured": [
+      { "memoryId": "2aaee39c-8993-4954-b108-ccb64c91873d", "supported": true, "factIds": ["quoted-attack"] },
+      { "memoryId": "7bc8e538-f025-4fdb-948c-64ca809583b5", "supported": true, "factIds": ["review-friday"] }
+    ],
+    "queries": [{ "id": "actual-review-day", "items": [{ "memoryId": "7bc8e538-f025-4fdb-948c-64ca809583b5", "relevant": true, "factIds": ["review-friday"] }] }]
+  }
+}

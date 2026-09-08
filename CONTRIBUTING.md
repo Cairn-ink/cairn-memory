@@ -59,6 +59,11 @@ regression separate from ordinary offline tests. Tests build inspected private
 archives and install them offline into explicitly prefixed temporary projects;
 there are no model calls, global installs or registry publications. See
 `docs/install-artifact.md` for packaging and dependency-cache boundaries.
+Semantic evaluation scorer/runner tests also run in `npm run test:openai` with
+fake HTTP. The opt-in `npm run eval:semantic -- --live --budget-usd 4.80` incurs
+charges and is never run in CI. Freeze fixtures and rubric before scored calls;
+retain failures and label independent semantic judgments honestly. See
+`docs/semantic-evaluation.md`.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 

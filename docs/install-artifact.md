@@ -76,3 +76,11 @@ does not imply automatic capture. General semantic quality remains a separate
 release gate: the frozen full suite still fails source support. The narrow
 installed lifecycle and Hermes discovery do not override that result. See
 [I01–I08 acceptance and exact artifact hash](plans/install-artifact.md).
+
+The [profile integration](plans/profile-artifact-integration.md) adds the shared
+`adapters/openai/profiles.mjs` runtime module and an installed-import regression.
+MCP keeps its existing default model and has no extraction-profile CLI option.
+The separately measured experimental profile requires explicit programmatic
+`createOpenAIModel({ apiKey, extractionModel: 'gpt-5.4-mini-2026-03-17' })`
+configuration; its source-level quality evidence does not certify MCP capture
+or the new archive's model-backed recall.

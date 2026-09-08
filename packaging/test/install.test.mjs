@@ -105,6 +105,18 @@ test('production shrinkwrap installs only the exact reviewed closure with upstre
   }
 });
 
+test('installed adapter resolves its relative runtime modules without source-checkout imports', () => {
+  const probe = `import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const noNetwork = () => { throw new Error('unexpected_network'); };
+    const baseline = createOpenAIModel({ apiKey: 'synthetic-import-only', fetchImpl: noNetwork });
+    const candidate = createOpenAIModel({ apiKey: 'synthetic-import-only', fetchImpl: noNetwork,
+      extractionModel: 'gpt-5.4-mini-2026-03-17' });
+    if (baseline.contextWindow !== 1047576 || candidate.contextWindow !== 400000) throw new Error('wrong_profile');
+    console.log('installed_adapter_import_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_adapter_import_passed');
+});
+
 test('installed executable completes actual SDK stdio lifecycle, restart and scoped revision rejection', { timeout: 30000 }, async (t) => {
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-installed-data-')), 'memory.sqlite');
   const first = await connect(t, installation, path, { project: 'harbor' });

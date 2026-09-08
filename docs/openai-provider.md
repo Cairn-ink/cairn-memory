@@ -6,6 +6,40 @@ passed; see the [run evidence](plans/live-provider.md). Neither that smoke test
 nor offline fixtures establish general semantic quality, client support or launch readiness.
 The hosted plugin is unchanged; core gains no provider dependency.
 
+## Experimental extraction-only profile
+
+The default remains `gpt-4.1-mini-2025-04-14` for every method. An explicit
+`extractionModel: 'gpt-5.4-mini-2026-03-17'` option on `createOpenAIModel` selects
+that snapshot for extraction only, with `reasoning: { effort: 'none' }` on both
+count and generation. Classification, selection and ranking keep the existing
+model and request shape. Unknown models/options fail before network I/O; there
+is no automatic fallback or default promotion.
+
+This remains an experimental profile. Its first frozen synthetic run passed the
+existing acceptance gate after independent agent review; this is not a human
+study or a general reliability claim. See the [retained evidence](plans/extraction-model-profile.md#measured-evidence).
+The
+[official model page](https://developers.openai.com/api/docs/models/gpt-5.4-mini)
+documents the 400,000-token window, snapshot, structured outputs and reasoning
+`none`. The [count API](https://developers.openai.com/api/reference/typescript/resources/responses/subresources/input_tokens)
+also accepts reasoning configuration (confirmed from its Markdown reference).
+Local 6,000 input /1,024 output limits and the 1,024 framing allowance remain
+unchanged. The smaller profile context window is reported conservatively;
+server counting still checks each method's selected window.
+
+`createBudgetedFetch` needs the same explicit `extractionModel` option to allow
+experimental requests. It verifies method/model/reasoning, then reserves integer
+millionths of a dollar before each HTTP call: 4,448 for the default model or
+9,876 for candidate extraction. At the documented US$0.75 input /US$4.50 output
+per million tokens, the candidate ceiling is 7,024 input +1,024 output tokens.
+Count calls and failed/ambiguous outcomes are reserved too, never refunded.
+Per-request model identity and reservation units are recorded; observed generation
+usage estimates use that model's rate and are not invoices/account-wide caps.
+Rates were checked 2026-09-09; recheck before later paid runs.
+
+See [measured-profile acceptance](plans/extraction-model-profile.md). No existing
+corpus, rubric or historical report is rewritten by this option.
+
 Extraction instructions require source-faithful relationships, negation, modality,
 attribution and uncertainty, without invented entity types or stronger claims.
 This is a prompt policy, not an entailment validator: valid source indices and
@@ -29,7 +63,7 @@ server counts are not evidence of actual provider framing.
 
 ## Host and data boundary
 
-`adapters/openai/index.mjs` exports `createOpenAIModel({apiKey,fetchImpl?})`.
+`adapters/openai/index.mjs` exports `createOpenAIModel({apiKey,fetchImpl?,extractionModel?})`.
 A trusted host supplies an explicit key and injects the result into
 `openMemoryCore({path,model})`. Construction/local counting makes no HTTP calls.
 Calling a model method without fake transport sends selected input to OpenAI

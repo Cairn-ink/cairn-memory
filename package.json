@@ -24,6 +24,7 @@
     "test:mcp": "npm test --prefix adapters/mcp",
     "build:artifact": "node packaging/build.mjs",
     "test:artifact": "node --test packaging/test/*.test.mjs",
+    "eval:semantic": "node examples/semantic-evaluation.mjs",
     "test:openai": "npm test --prefix adapters/openai",
     "validate": "node scripts/validate-json.mjs"
   }
