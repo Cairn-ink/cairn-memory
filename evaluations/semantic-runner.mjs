@@ -7,6 +7,7 @@ import { createBudgetedFetch, LIVE_MODEL } from '../adapters/openai/live-harness
 import { cases, fixtureVersion } from './semantic-cases.mjs';
 import { summarizeEvaluation, validateEvidence } from './score.mjs';
 import { measurePeakRss } from './resources.mjs';
+import { modelProfile } from '../adapters/openai/profiles.mjs';
 
 export const namespaces = Object.freeze({
   personal: Object.freeze({ ownerId: 'synthetic-owner-a', scope: 'personal', projectId: null }),
@@ -22,7 +23,8 @@ const size = (path) => ['', '-wal', '-shm'].reduce((total, suffix) => {
 }, 0);
 
 export async function runEvaluation({ apiKey, budgetUsd, fetchImpl = globalThis.fetch,
-  onProgress } = {}) {
+  onProgress, extractionModel = LIVE_MODEL } = {}) {
+  const profile = modelProfile(extractionModel);
   if (typeof apiKey !== 'string' || !apiKey.trim() || /[\r\n]/.test(apiKey) ||
     !Number.isFinite(budgetUsd) || budgetUsd <= 0 || budgetUsd > 4.80 || typeof fetchImpl !== 'function') {
     throw new Error('invalid_evaluation_configuration');
@@ -37,10 +39,11 @@ export async function runEvaluation({ apiKey, budgetUsd, fetchImpl = globalThis.
         semanticReview: fixture.mode === 'capture' || fixture.organize ? 'pending' : 'not_required',
         safetyViolations: [], databasePath: null };
       results.push(run);
-      if (exhausted || budgetUnits - reservedUnits < 4448) { exhausted = true; continue; }
+      const firstMethod = fixture.mode === 'capture' ? 'extract' : fixture.organize ? 'classify' : 'select';
+      if (exhausted || budgetUnits - reservedUnits < profile[firstMethod].reservationUnits) { exhausted = true; continue; }
       const guard = createBudgetedFetch({ budgetUsd: (budgetUnits - reservedUnits) / 1e6,
-        maxRequests: 40, fetchImpl });
-      const model = createOpenAIModel({ apiKey, fetchImpl: guard.fetchImpl });
+        maxRequests: 40, fetchImpl, extractionModel });
+      const model = createOpenAIModel({ apiKey, fetchImpl: guard.fetchImpl, extractionModel });
       const started = performance.now();
       let core;
       const ids = new Map();
@@ -141,7 +144,7 @@ export async function runEvaluation({ apiKey, budgetUsd, fetchImpl = globalThis.
       } catch { run.error = 'evaluation_case_failed'; }
       finally {
         run.accounting = guard.snapshot();
-        reservedUnits += run.accounting.requestCount * 4448;
+        reservedUnits += run.accounting.reservedUnits;
         if (run.accounting.rejection === 'budget_exceeded') exhausted = true;
         run.elapsedMs = Math.round(performance.now() - started);
         try {
@@ -161,7 +164,10 @@ export async function runEvaluation({ apiKey, budgetUsd, fetchImpl = globalThis.
       }
     }
   }
-  const report = { fixtureVersion, model: LIVE_MODEL, runtime: process.version, budgetUsd,
+  const report = { fixtureVersion, model: extractionModel === LIVE_MODEL ? LIVE_MODEL : 'mixed',
+    models: Object.fromEntries(Object.entries(profile).map(([method, entry]) => [method,
+      { model: entry.model, ...(entry.reasoning ? { reasoning: entry.reasoning } : {}) }])),
+    runtime: process.version, budgetUsd,
     reservedUsd: reservedUnits / 1e6, results, summary: summarizeEvaluation(cases, results) };
   // Synthetic model text is retained for review, but the process credential is never an artifact.
   const scrub = (value) => {

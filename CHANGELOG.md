@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an explicit experimental extraction-only model profile; retain GPT-4.1 mini
+  as default and for classify/select/rank. Mixed-model guards reserve per-request
+  integer costs before I/O and evaluation reports per-method identity. Offline
+  tests establish routing/accounting, not improved extraction quality.
+
 - Retain the third frozen synthetic evaluation and independent labels: all
   repetitions completed, but two unsupported captured claims still fail the
   mandatory source-support gate despite 45/45 recall and relevance. Preserve

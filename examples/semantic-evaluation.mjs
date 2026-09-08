@@ -2,12 +2,13 @@ import { pathToFileURL } from 'node:url';
 import { runEvaluation } from '../evaluations/semantic-runner.mjs';
 
 export async function main(args = process.argv.slice(2), env = process.env) {
-  if (args.length !== 3 || args[0] !== '--live' || args[1] !== '--budget-usd' ||
+  if ((args.length !== 3 && !(args.length === 5 && args[3] === '--extraction-model')) || args[0] !== '--live' || args[1] !== '--budget-usd' ||
     !/^\d+(?:\.\d+)?$/.test(args[2]) || Number(args[2]) <= 0 || Number(args[2]) > 4.80 ||
     typeof env.OPENAI_API_KEY !== 'string' || !env.OPENAI_API_KEY.trim()) {
     return { ok: false, error: 'Require --live --budget-usd VALUE (0 < VALUE <= 4.80) and OPENAI_API_KEY.' };
   }
-  try { return await runEvaluation({ apiKey: env.OPENAI_API_KEY, budgetUsd: Number(args[2]) }); }
+  try { return await runEvaluation({ apiKey: env.OPENAI_API_KEY, budgetUsd: Number(args[2]),
+    ...(args.length === 5 ? { extractionModel: args[4] } : {}) }); }
   catch { return { ok: false, error: 'evaluation_configuration_failed' }; }
 }
 

@@ -5,10 +5,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../../core/contract.mjs';
 import { createOpenAIModel } from './index.mjs';
 import { schemas, schemasFor } from './schemas.mjs';
+import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 
-export const LIVE_MODEL = 'gpt-4.1-mini-2025-04-14';
+export const LIVE_MODEL = DEFAULT_MODEL;
 export const REQUEST_RESERVATION_USD = 0.004448;
-const reservationUnits = 4448; // Millionths of a dollar, rounded up per request.
 const fail = (code) => { throw new Error(code); };
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 const fixture = 'review-preference-v1';
@@ -28,7 +28,8 @@ export function matchesSeededPreference(content) {
 // This guard is a run-local conservative estimate, not a provider account limit.
 // Reservations are never refunded, including count calls and ambiguous failures.
 export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
-  fetchImpl = globalThis.fetch } = {}) {
+  fetchImpl = globalThis.fetch, extractionModel = DEFAULT_MODEL } = {}) {
+  const profile = modelProfile(extractionModel);
   if (!Number.isFinite(budgetUsd) || budgetUsd <= 0 || budgetUsd > 5 ||
       !Number.isSafeInteger(maxRequests) || maxRequests < 1 || maxRequests > 40 ||
       typeof fetchImpl !== 'function') fail('invalid_live_configuration');
@@ -37,15 +38,18 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
   const requests = [];
   let observedInputTokens = 0;
   let observedOutputTokens = 0;
+  let reservedUnits = 0;
+  let observedUsageEstimateUsd = 0;
   let rejection = null;
   const snapshot = () => ({ budgetUsd, maxRequests, requestCount: requests.length,
-    reservedUsd: requests.length * reservationUnits / 1e6,
+    reservedUnits, reservedUsd: reservedUnits / 1e6,
     observedInputTokens, observedOutputTokens,
-    observedUsageEstimateUsd: (observedInputTokens * 0.4 + observedOutputTokens * 1.6) / 1e6,
+    observedUsageEstimateUsd,
     rejection, requests: requests.map((request) => ({ ...request })) });
   const guarded = async (url, options = {}) => {
     let payload;
     let method;
+    let selected;
     const countEndpoint = url === 'https://api.openai.com/v1/responses/input_tokens';
     try {
       if (!countEndpoint && url !== 'https://api.openai.com/v1/responses') throw 0;
@@ -53,14 +57,16 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
           !(options.signal instanceof AbortSignal) || typeof options.body !== 'string' ||
           options.body.length > 100000) throw 0;
       payload = JSON.parse(options.body);
-      const keys = ['model', 'instructions', 'input', 'text', 'truncation'];
-      if (!countEndpoint) keys.push('max_output_tokens', 'store', 'stream');
-      if (!isDeepStrictEqual(Object.keys(payload).sort(), keys.sort()) ||
-          payload.model !== LIVE_MODEL || payload.truncation !== 'disabled' ||
-          typeof payload.instructions !== 'string' ||
-          (!countEndpoint && (payload.max_output_tokens !== 1024 || payload.store !== false || payload.stream !== false))) throw 0;
       method = payload.text?.format?.name?.replace(/^cairn_/, '');
       if (!Object.hasOwn(schemas, method)) throw 0;
+      selected = profile[method];
+      const keys = ['model', 'instructions', 'input', 'text', 'truncation'];
+      if (selected.reasoning) keys.push('reasoning');
+      if (!countEndpoint) keys.push('max_output_tokens', 'store', 'stream');
+      if (!isDeepStrictEqual(Object.keys(payload).sort(), keys.sort()) ||
+          payload.model !== selected.model || !isDeepStrictEqual(payload.reasoning, selected.reasoning) || payload.truncation !== 'disabled' ||
+          typeof payload.instructions !== 'string' ||
+          (!countEndpoint && (payload.max_output_tokens !== 1024 || payload.store !== false || payload.stream !== false))) throw 0;
       const inputText = payload.input?.[0]?.content?.[0]?.text;
       if (typeof inputText !== 'string' || !isDeepStrictEqual(payload.input,
         [{ role: 'user', content: [{ type: 'input_text', text: inputText }] }])) throw 0;
@@ -72,12 +78,14 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
     } catch { rejection = 'request_rejected'; fail(rejection); }
     if (options.signal.aborted) { rejection = 'request_aborted'; fail(rejection); }
     if (requests.length >= maxRequests) { rejection = 'request_limit_exceeded'; fail(rejection); }
-    if ((requests.length + 1) * reservationUnits > budgetUnits) {
+    if (reservedUnits + selected.reservationUnits > budgetUnits) {
       rejection = 'budget_exceeded'; fail(rejection);
     }
-    const entry = { endpoint: countEndpoint ? 'count' : 'generate', method,
+    const entry = { endpoint: countEndpoint ? 'count' : 'generate', method, model: selected.model,
+      reservationUnits: selected.reservationUnits,
       status: null, outcome: 'pending', elapsedMs: 0 };
     requests.push(entry); // Reserve synchronously before any network I/O.
+    reservedUnits += selected.reservationUnits;
     const started = performance.now();
     let reader;
     const cancel = () => { reader?.cancel().catch(() => {}); };
@@ -116,13 +124,14 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
         entry.inputTokens = body.input_tokens;
       } else {
         const usage = body?.usage;
-        if (body?.model !== LIVE_MODEL || !integer(usage?.input_tokens) || usage.input_tokens > 7024 ||
+        if (body?.model !== selected.model || !integer(usage?.input_tokens) || usage.input_tokens > 7024 ||
           !integer(usage?.output_tokens) || usage.output_tokens > 1024 ||
           usage.total_tokens !== usage.input_tokens + usage.output_tokens) fail('invalid_provider_response');
         entry.inputTokens = usage.input_tokens;
         entry.outputTokens = usage.output_tokens;
         observedInputTokens += usage.input_tokens;
         observedOutputTokens += usage.output_tokens;
+        observedUsageEstimateUsd += (usage.input_tokens * selected.inputRate + usage.output_tokens * selected.outputRate) / 1e6;
       }
       entry.outcome = 'received';
       return new Response(bytes, { status: response.status, headers: { 'content-type': 'application/json' } });

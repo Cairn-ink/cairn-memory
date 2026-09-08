@@ -45,6 +45,21 @@ Resource acceptance currently requires Linux: peak RSS is the current executable
 `/proc/self/status` VmHWM. Other platforms report unsupported, never a false pass.
 
 Ordinary `npm run test:openai` runs only offline fixture/scorer/guard tests.
+
+An explicitly experimental extraction-only profile can be measured with:
+
+```sh
+npm run eval:semantic -- --live --budget-usd 1.40 --extraction-model gpt-5.4-mini-2026-03-17
+```
+
+This is a paid command, not an offline check. The current campaign requires a
+separate bounded compatibility probe first and one authorized frozen suite;
+see [X01–X07](plans/extraction-model-profile.md). No worker executes either.
+`runEvaluation` accepts the same `extractionModel` option. Reports include exact
+per-method `models`, mark the top-level model as `mixed` for this profile, and
+sum integer guard reservation units across all repetitions. Default execution
+still uses the old model; old report files and the frozen scorer remain unchanged.
+
 Do not tune the corpus after seeing live results. Record failures, fix the
 underlying behavior in a separately scoped change, and rerun the frozen suite
 under newly available budget. Real-human benefit remains a later product gate.
