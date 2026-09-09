@@ -4,6 +4,10 @@ This is an instruction script with expected outcomes, **not a recording or an
 evaluation result**. The no-key path below uses synthetic data and does not
 imply a human-user outcome.
 
+For the next step into Hermes, use the [first-value guide](hermes-first-use.md).
+It explains why a working local installation is not yet a configured chat
+client, and keeps the pending real-model experiment separate from this SDK check.
+
 ## Install from the source checkout
 
 Use Node >=22.16, npm and `tar` from the repository root. Choose a final target

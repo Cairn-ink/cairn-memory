@@ -82,7 +82,9 @@ export async function runWalkthrough({ executable, withRecall = false }, env = p
       stage = 'restart_and_inspect';
       await close();
       await connect();
-      assert.equal(ok(await call('inspect_memory', { memoryId: saved.id })).memory.content, initial);
+      const reopened = ok(await call('inspect_memory', { memoryId: saved.id }));
+      assert.equal(reopened.memory.content, initial);
+      assert.deepEqual(reopened.receipts, detail.receipts);
       pass();
       stage = 'correct_and_reject_stale';
       const corrected = ok(await call('correct_memory', {

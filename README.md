@@ -98,6 +98,9 @@ The walkthrough does not impose a provider account spending limit.
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
 
+Start with the [first-value guide](docs/hermes-first-use.md) to distinguish the
+no-key installation check from the pending real-model Hermes conversation task,
+including the two model credentials and profile/database boundaries.
 Try the [cross-session walkthrough](docs/local-memory-demo.md). See the
 [tested client matrix](docs/install-artifact.md#verification-and-compatibility)
 before assuming a named client works: SDK stdio and Hermes MCP discovery have
