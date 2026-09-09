@@ -162,14 +162,13 @@ test('count and generation share exactly one frozen schema despite asynchronous 
   assert.equal(accepts(schema, { items: [{ memoryId: 'harbor', parentIds: ['late-group'] }] }), false);
 });
 
-test('dynamic schemas do not enlarge the provider framing budget or issue generation after overflow', async () => {
+test('dynamic schemas retain the absolute provider input budget and issue no generation after overflow', async () => {
   let calls = 0;
   let model;
   const req = request(emptyMap());
   model = createOpenAIModel({ apiKey: 'synthetic-reference-key', fetchImpl: async () => {
     calls++;
-    return Response.json({ object: 'response.input_tokens',
-      input_tokens: model.countTokens(JSON.stringify({ system: req.system, input: req.input, maxOutputTokens: 1024 })) + 1025 });
+    return Response.json({ object: 'response.input_tokens', input_tokens: 7025 });
   } });
   await assert.rejects(model.classify(req), (error) => error.code === 'context_budget_exceeded');
   assert.equal(calls, 1);

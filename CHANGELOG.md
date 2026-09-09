@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Correct the OpenAI preflight check to use the existing absolute 7,024-token
+  provider-input ceiling, while retaining local 6,000 input /1,024 output limits.
+  Dynamic schema overhead no longer rejects otherwise in-budget requests solely
+  for exceeding local input +1,024; reservations and model defaults are unchanged.
+
 - Add an opt-in experiment HTTP guard joining host completion and Cairn count/generation reservations in one persistent budget, with bounded fake-HTTP verification; live Hermes routing and paid approval remain separate gates.
 
 - Add an offline persistent experiment reservation ledger shared across

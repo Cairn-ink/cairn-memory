@@ -158,7 +158,7 @@ test('A02: request input is snapshotted before asynchronous preflight', async ()
   assert.equal(calls[1].body.instructions, calls[0].body.instructions);
 });
 
-test('A03: local 6000-token request ceiling and 1024-token provider framing reserve have exact boundaries', async () => {
+test('A03: local 6000-token and absolute 7024-token provider input ceilings have exact boundaries', async () => {
   for (const target of [6000, 6001]) {
     const { model, calls } = harness();
     const req = request();
@@ -168,13 +168,20 @@ test('A03: local 6000-token request ceiling and 1024-token provider framing rese
     if (target === 6000) { await model.select(req); assert.equal(calls.length, 2); }
     else { await reject(model.select(req), 'context_budget_exceeded'); assert.equal(calls.length, 0); }
   }
-  for (const reserve of [1024, 1025]) {
-    let providerCount;
-    const { model, calls } = harness([() => json(countEnvelope(providerCount)), () => json(envelope({ refs: [] }, providerCount))]);
-    const req = request(); providerCount = localCount(model, req) + reserve;
-    if (reserve === 1024) { await model.select(req); assert.equal(calls.length, 2); }
-    else { await reject(model.select(req), 'context_budget_exceeded'); assert.equal(calls.length, 1); }
+  for (const providerCount of [7024, 7025]) {
+    const { model, calls } = harness([() => json(countEnvelope(providerCount)),
+      () => json(envelope({ refs: [] }, providerCount))]);
+    if (providerCount === 7024) { await model.select(request()); assert.equal(calls.length, 2); }
+    else { await reject(model.select(request()), 'context_budget_exceeded'); assert.equal(calls.length, 1); }
   }
+  let providerCount;
+  const dynamic = harness([() => json(countEnvelope(providerCount)),
+    () => json(envelope({ refs: [] }, providerCount))]);
+  const req = request();
+  providerCount = localCount(dynamic.model, req) + 1025;
+  assert.ok(providerCount <= 7024);
+  await dynamic.model.select(req);
+  assert.equal(dynamic.calls.length, 2);
 });
 
 test('A03: malformed preflight counts fail before generation', async () => {

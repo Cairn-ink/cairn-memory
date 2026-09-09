@@ -137,7 +137,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
       fail('token_count_unavailable');
     }
-    if (counted.input_tokens > localTokens + 1024 || counted.input_tokens + 1024 > selected.contextWindow) {
+    if (counted.input_tokens > 7024 || counted.input_tokens + 1024 > selected.contextWindow) {
       fail('context_budget_exceeded');
     }
     checkAbort(signal);
