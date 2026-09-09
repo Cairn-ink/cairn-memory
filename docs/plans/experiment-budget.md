@@ -78,6 +78,10 @@ interventions added opaque IDs, coherent read transactions, sidecar checks,
 fixed extended busy errors, safe construction cleanup, explicit busy testing
 and non-vacuous concurrency assertions. Sol high owns implementation; separate
 Sol high Standards and Spec reviewers inspect the frozen candidate. Exact
-review SHA/results are recorded on the PR. Agent cost/elapsed-time totals were
+review SHA/results are recorded on the PR. Initial Spec review identified two
+documentation gaps: missing contributor instructions for the new matrix and
+an incomplete API return/error contract. Both are now documented explicitly;
+the ledger implementation and verified runtime behavior are unchanged.
+Agent cost/elapsed-time totals were
 not measured. No private application, model profile, paid run or live host was
 changed; G06's transport/price-bound/end-to-end gates remain pending.

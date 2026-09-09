@@ -65,6 +65,13 @@ charges and is never run in CI. Freeze fixtures and rubric before scored calls;
 retain failures and label independent semantic judgments honestly. See
 `docs/semantic-evaluation.md`.
 
+For `evaluation/experiment-budget` changes, run `npm run test:experiment-budget`
+and `npm run demo:experiment-budget` on both Node 22.16 and 24, in addition to
+the generic contributor checks above. These use synthetic temporary ledgers,
+including real child processes; they do not call models or authorize paid runs.
+See `docs/experiment-budget.md` for the ledger-only boundary and remaining
+transport integration gates.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 For `integrations/hermes` changes, run the real pinned host's canonical test

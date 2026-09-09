@@ -97,6 +97,58 @@ omission means unknown usage. Duplicate attempt IDs reject instead of replaying
 a reservation. A `ledger_busy` failure means no authorization to send a
 request; there is no built-in retry or permission to bypass the ledger.
 
+## Exact API contract
+
+All methods are synchronous and throw on failure; they do not return the
+memory core's `{ok, value}` envelope. Exports are `createExperimentBudget`,
+`reopenExperimentBudget`, `ExperimentBudgetError`, `CHANNELS` and `OUTCOMES`.
+The last two are frozen arrays containing the channel/outcome strings above.
+All option objects have closed key sets; arbitrary metadata is rejected.
+
+Both constructors require exactly `{directory, runId, limitMicroUsd, requestCap}`
+and return a frozen handle. Limits/caps are positive safe integers. The directory
+is resolved against the current working directory; use an absolute path so
+independent processes resolve the same ledger. `createExperimentBudget` requires
+an absent leaf; `reopenExperimentBudget` requires the existing private ledger
+and matching identity/configuration. Neither constructor grants network access.
+
+| Handle method | Input | Return |
+| --- | --- | --- |
+| `reserve` | Exactly `{attemptId, channel, reservedMicroUsd}`; amount is a nonnegative safe integer | Frozen attempt record, with `outcome: null`, `actualMicroUsd: null` |
+| `recordOutcome` | `{attemptId, outcome}` and optionally `actualMicroUsd`, a nonnegative safe integer | Frozen terminal attempt record; omitted cost becomes `null` |
+| `getState` | No arguments | Frozen state snapshot described below |
+| `close` | No arguments | `undefined`; releases the connection, idempotent |
+
+Attempt records have exactly `{attemptId, channel, reservedMicroUsd, outcome,
+actualMicroUsd}`. `outcome: null` denotes an unresolved reservation; terminal
+values are the exported outcomes. `actualMicroUsd: null` is unknown usage, not
+zero; callers omit the input field rather than passing `null`.
+
+State snapshots have exactly `{runId, limitMicroUsd, requestCap, reservedMicroUsd,
+requestCount, state, attempts}`. `state` is `open` or `overrun`; the ordered
+attempt array and each record are frozen too. Snapshots are detached observations,
+not live views: call `getState` again for a later coherent transaction snapshot.
+Valid operations on a closed handle throw `ledger_closed`; closing again is safe.
+
+`ExperimentBudgetError` has `name: 'ExperimentBudgetError'`, a fixed `code`, and
+the same code as `message`. The fixed code set is:
+
+| Codes | Meaning |
+| --- | --- |
+| `invalid_options` | Invalid option shape, UUID, channel, outcome or integer |
+| `unsafe_path`, `unsafe_database_file` | Unsafe path/type/permissions, including checked sidecars |
+| `directory_exists`, `ledger_missing` | Create would reuse a directory, or reopen lacks its ledger |
+| `invalid_ledger` | Unrecognized schema or inconsistent persisted state |
+| `run_mismatch`, `configuration_mismatch` | Identity, ceiling or cap differs from the persisted run |
+| `attempt_exists`, `attempt_not_found`, `attempt_terminal` | Duplicate reservation, missing attempt or terminal rewrite |
+| `budget_exceeded`, `request_cap_exceeded`, `budget_blocked` | Reservation would exceed a bound, or an overrun has blocked the run |
+| `ledger_busy`, `ledger_closed`, `ledger_failed` | SQLite contention, closed handle or another mapped storage/connection failure |
+
+Failure supplies no permission to send a request. Reservations remain
+conservative after a terminal outcome; even `state: 'open'` does not mean there
+is enough remaining allowance for the next attempt. Re-read/inspect on an
+uncertain storage outcome instead of assuming it is safe to replay.
+
 ## Remaining gate
 
 The [acceptance plan](plans/experiment-budget.md) defines the offline tests.
