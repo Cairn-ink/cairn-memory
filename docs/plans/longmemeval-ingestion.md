@@ -115,6 +115,9 @@ before awaiting. The boundary-secret fixture explicitly crosses position 4,000.
 The demo originally cited a filler-only trailing chunk; it now cites the source
 containing the demonstrated preference and asserts that excerpt directly.
 Separate Sol high Standards/Spec reviewers inspect the final committed diff;
-review SHA/results are recorded in the PR. Agent costs and total elapsed time
+review SHA/results are recorded in the PR. Initial Spec review identified the
+missing LongMemEval contributor instructions; CONTRIBUTING now specifies the
+test/demo matrix and its no-key boundary. Runtime code is unchanged by that fix.
+Agent costs and total elapsed time
 were not measured. No private app, host profile, provider default, live traffic,
 model quality claim, scorer or benchmark score is part of this slice.
