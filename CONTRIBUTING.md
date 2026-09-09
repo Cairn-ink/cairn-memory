@@ -85,6 +85,12 @@ including real child processes; they do not call models or authorize paid runs.
 See `docs/experiment-budget.md` for the ledger-only boundary and remaining
 transport integration gates.
 
+For the experiment HTTP guard, also run `npm run test:experiment-request-guard`
+and `npm run demo:experiment-request-guard` on Node 22.16 and 24, after installing
+the isolated OpenAI adapter dependencies above. These exercise guarded fake HTTP
+and synthetic ledgers, not paid requests or a configured Hermes profile. See
+`docs/experiment-request-guard.md`; passing this gate does not authorize a live run.
+
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
 For `integrations/hermes` changes, run the real pinned host's canonical test

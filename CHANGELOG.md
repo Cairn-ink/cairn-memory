@@ -11,6 +11,8 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an opt-in experiment HTTP guard joining host completion and Cairn count/generation reservations in one persistent budget, with bounded fake-HTTP verification; live Hermes routing and paid approval remain separate gates.
+
 - Add an offline persistent experiment reservation ledger shared across
   processes and restarts, with conservative no-refund accounting and fail-closed
   overrun handling. This does not yet guard live host/provider traffic.
