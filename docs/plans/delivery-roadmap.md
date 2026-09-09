@@ -1,6 +1,6 @@
 # Shared memory layer — delivery plan
 
-Current baseline: merged PR #16, `5f17b4399ffdd6d7f5b1ee04e1fb106a2af163a9`.
+Historical implementation baseline: merged PR #16, `5f17b4399ffdd6d7f5b1ee04e1fb106a2af163a9`.
 The original #8 baseline and historical checkpoint ledger below are retained
 as history, not the current merge status.
 This is an execution plan, not a claim that the remaining features have shipped.
@@ -21,6 +21,44 @@ merge, production, release and external-publication decisions.
   correction/forget safety and the single-public-engine rule in every stage.
 
 ## Goal and baseline
+
+### Productization checkpoint (2026-09-09, overrides older status labels)
+
+The product remains an inspectable lightweight local memory layer, MCP-first,
+with one public engine and a staged commercial consumer. No full UI, Moss,
+automatic transcript capture or ten-person private-alpha prerequisite is added.
+
+- Public #17–#28 were integrated through merged #28. #29 diagnostics is merged
+  at `02e1a8e302f9a857ba00c81442e814d984d5c7c6` with passing CI.
+- [#30](https://github.com/Cairn-ink/cairn-memory/pull/30), ready for owner merge:
+  one-command source-to-local installer, private app/data separation, no overwrite
+  or account configuration. 13 artifact tests and 18 MCP tests passed on each core
+  runtime; independent reviews and all nine remote CI jobs passed. Actual default
+  install and six-stage no-key walkthrough also passed.
+- [#31](https://github.com/Cairn-ink/cairn-memory/pull/31), ready after #30:
+  actual pinned Hermes AIAgent loop for native and MCP routes, scripted completion
+  decisions with real discovery/dispatch/SQLite. DRI reran 7 host tests each on
+  Node 22.16/24.20; independent reviews and nine remote CI jobs passed. This is
+  not real-model autonomous tool selection or a full paid conversation test.
+- This documentation follow-up depends on #31. Merge order is #30 → #31 →
+  this follow-up; retarget dependent PRs to main after their parent merges.
+  The DRI does not merge, publish, deploy or send promotional drafts.
+- Commercial facade and synthetic migration remain reviewed private candidates,
+  not activated production paths. Optional operation deadlines are tracked
+  separately; they cannot complete provider/counting/spend-policy integration.
+
+Current installation is a developer preview built from source, not an npm
+registry release. Explicit MCP remember directly admits the supplied assertion;
+experimental extractor scores apply only to the separately selected programmatic
+capture profile. Receipt provenance does not guarantee truth or entailment.
+
+Remaining gates: consented real-client/model behavior and useful recall;
+compatible private provider/rung plus demonstrated counting/framing contracts;
+durable spending reservations and accounting; migration/cutover approval; and
+owner-approved distribution/outreach. The [introduction](../local-memory-introduction.md)
+is a draft, and [14-day adoption targets](local-memory-plg.md) are not outcomes.
+No paid calls were added by these onboarding/host-test packages; the cumulative
+reservation stays US$4.179912 of US$5. Earlier balances are historical, not refillable.
 
 ### Current candidate checkpoint (2026-09-09)
 
