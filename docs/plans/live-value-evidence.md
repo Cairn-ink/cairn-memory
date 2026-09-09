@@ -60,3 +60,21 @@ reviewers inspect final committed diff. No core/default/provider/schema changes
 unless a concrete defect requires a separately reviewed scope.
 
 Pricing source: https://developers.openai.com/api/docs/models/gpt-4.1-mini
+
+## Separately frozen Hermes authority follow-up
+
+The first trial is retained in commit e7b37f364aafa91fb9ee6b1a37f51b02ad631538.
+Its C stage performed a valid current-revision correction using an actual recall
+result, but the inspector required the literal inspect tool and halted D–F.
+This is a false-negative harness constraint, not permission to rewrite the trial.
+
+For one fresh-profile follow-up, keep prompts/model/tools/engine/limits unchanged
+and freeze acceptance `cairn-value-authority-v2` before any call. C/E must first
+observe the same ID, current revision and matching source receipt through actual
+inspect OR actual recall, in trace order before the mutation. The mutation must
+use that ID/expectedRevision; C must increment by one and leave one active memory
+with a new matching receipt; E must leave the target absent. Reject stale reads,
+unsupported receipts and reads only after mutation. Retain the original trial,
+new source hashes, all new failures and the same cumulative USD20 ledger.
+Primary semantic review of final answers remains required; the control's no-tool
+predicate is not a semantic task pass. No repeated reruns until green.

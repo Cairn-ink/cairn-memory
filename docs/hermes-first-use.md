@@ -2,8 +2,10 @@
 
 The goal is explicit, controllable cross-session memory: save a decision once,
 use its current version later, inspect its source and forget it when requested.
-This page separates a runnable **no-key installation check** from a **pending
-real-model chat experiment**. It is not a recorded successful chat or human study.
+This page separates a runnable **no-key installation check** from a **real-model
+chat experiment**. The [first retained trials](evidence/first-live-evidence.md)
+demonstrate cross-session save/read/correct/read but not the complete lifecycle;
+a recall failure blocked forgetting. No human study or general quality is claimed.
 
 ## First check: no account, no model key
 
@@ -52,10 +54,12 @@ model** to perform them can still cost money. Never paste keys into a prompt,
 
 ## Frozen live acceptance protocol — not yet executed
 
-This experiment must wait for a separately reviewed combined budget guard and
-explicit new paid-run approval. It must cover both connections above, count
+Every paid experiment requires a separately reviewed combined budget guard and
+explicit paid-run approval. It must cover both connections above, count
 preflights, generation, failures and unknown outcomes across process restarts.
 No command on this page launches the experiment or supplies that guard.
+The retained trials used the [explicit experiment harness](live-value-evidence.md)
+and one cumulative USD20 authorization; this is not standing approval for other runs.
 
 Use only this synthetic decision task. Pin the Cairn commit/artifact hash,
 Hermes revision, chat model, recall model, prompts, allowed tools, context limits

@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const HERMES_REVISION = 'c8aa5608c24e3636e77c267650c0f1f52e44adb0';
 export const MODEL = 'gpt-4.1-mini-2025-04-14';
+export const VALUE_ACCEPTANCE_VERSION = 'cairn-value-authority-v2';
 export const VALUE_PROMPTS = Object.freeze({
   A: 'Please remember this explicit decision: the fictional Lantern project runs its release review on Tuesday.',
   B: 'Use Cairn to check: when does the fictional Lantern project run its release review?',
@@ -119,6 +120,22 @@ const tool = (stage, name) => (stage.toolEvents || []).filter((event) => event.n
 const success = (event) => event?.result?.ok === true ? event.result.value : null;
 const answerHas = (stage, word) => new RegExp(`\\b${word}\\b`, 'iu').test(stage.finalResponse || '');
 
+function observedCurrentBefore(stage, mutation, state) {
+  const events = stage.toolEvents || [];
+  const index = events.indexOf(mutation);
+  for (const event of events.slice(0, Math.max(0, index))) {
+    const value = success(event);
+    const candidates = event.name === 'cairn_inspect_memory' ? [value]
+      : event.name === 'cairn_recall_memory' ? value?.memories || [] : [];
+    if (candidates.some(item => item?.memory?.id === state.memoryId
+      && item.memory.revision === state.revision && item.receipts?.some(receipt =>
+        receipt.id === state.receiptId && receipt.excerpt === item.memory.content))) {
+      return event.name;
+    }
+  }
+  return null;
+}
+
 export function inspectHermesStage(name, stage, store, state) {
   const base = { stage: name, childSucceeded: stage.ok === true, completed: stage.completed === true };
   if (!base.childSucceeded || !base.completed) return { ...base, passedAutomated: false };
@@ -130,7 +147,7 @@ export function inspectHermesStage(name, stage, store, state) {
     const pass = content?.includes('Tuesday') && store?.target?.ok === true
       && store.target.value.memory.id === saved?.id && store.target.value.memory.revision === saved?.revision
       && store.target.value.memory.content === content && receipt?.excerpt === content;
-    if (pass) { state.memoryId = saved.id; state.revision = saved.revision; }
+    if (pass) { state.memoryId = saved.id; state.revision = saved.revision; state.receiptId = receipt.id; }
     return { ...base, passedAutomated: Boolean(pass), memoryId: saved?.id ?? null,
       revision: saved?.revision ?? null, receiptId: receipt?.id ?? null };
   }
@@ -154,25 +171,30 @@ export function inspectHermesStage(name, stage, store, state) {
     const inspected = tool(stage, 'cairn_inspect_memory').some((event) => success(event)?.memory?.id === state.memoryId);
     const correctedEvent = tool(stage, 'cairn_correct_memory').find((event) => success(event)?.memory?.id === state.memoryId);
     const corrected = success(correctedEvent);
+    const observedVia = observedCurrentBefore(stage, correctedEvent, state);
     const current = store?.target?.value?.memory;
     const receipt = store?.target?.value?.receipts?.[0];
     const active = store?.list?.value?.memories;
     const guarded = correctedEvent?.arguments?.memoryId === state.memoryId
       && correctedEvent?.arguments?.expectedRevision === state.revision;
-    const pass = inspected && guarded && corrected?.memory?.content?.includes('Friday')
+    const pass = observedVia && guarded && corrected?.memory?.content?.includes('Friday')
       && current?.content === corrected.memory.content && current?.revision === corrected.memory.revision
+      && current.revision === state.revision + 1 && receipt?.id !== state.receiptId
       && active?.length === 1 && active[0].id === state.memoryId && receipt?.excerpt === current.content;
-    if (pass) state.revision = current.revision;
-    return { ...base, passedAutomated: Boolean(pass), inspected, guarded,
+    if (pass) { state.revision = current.revision; state.receiptId = receipt.id; }
+    return { ...base, passedAutomated: Boolean(pass), inspected, observedVia, guarded,
       revision: current?.revision ?? null, receiptId: receipt?.id ?? null };
   }
   if (name === 'E') {
     const inspected = tool(stage, 'cairn_inspect_memory').some((event) => success(event)?.memory?.id === state.memoryId);
-    const forgotten = tool(stage, 'cairn_forget_memory').some((event) => success(event) !== null
+    const forgottenEvent = tool(stage, 'cairn_forget_memory').find((event) => success(event) !== null
       && event.arguments?.memoryId === state.memoryId && event.arguments?.expectedRevision === state.revision);
+    const forgotten = Boolean(forgottenEvent);
+    const observedVia = observedCurrentBefore(stage, forgottenEvent, state);
     const empty = store?.list?.ok === true && store.list.value.memories?.length === 0;
     const missing = store?.target?.error?.code === 'memory_not_found';
-    return { ...base, passedAutomated: inspected && forgotten && empty && missing, inspected, forgotten, empty, missing };
+    return { ...base, passedAutomated: Boolean(observedVia) && forgotten && empty && missing,
+      inspected, observedVia, forgotten, empty, missing };
   }
   if (name === 'F') {
     const successfulRecall = tool(stage, 'cairn_recall_memory').find((event) => success(event) !== null);
@@ -239,7 +261,8 @@ export async function runHermesValueExperiment({
     'hermes_cli/__init__.py'].map((relative) => [relative, fileHash(path.join(host, relative))]));
   const cairnSourceSha256 = Object.fromEntries(['adapters/mcp/server.mjs', 'adapters/openai/index.mjs',
     'core/contract.mjs'].map((relative) => [relative, fileHash(path.join(packageRoot, relative))]));
-  const freeze = { version: 1, declaredHermesRevision: HERMES_REVISION, hostSourceSha256,
+  const freeze = { version: 2, acceptanceVersion: VALUE_ACCEPTANCE_VERSION,
+    declaredHermesRevision: HERMES_REVISION, hostSourceSha256,
     cairnArtifactSha256, cairnSourceSha256, model: MODEL, prompts: VALUE_PROMPTS,
     toolSchemas: discovery.tools, toolSchemaSha256: hash(JSON.stringify(discovery.tools)) };
   privateWrite(path.join(root, 'frozen-protocol.json'), freeze);
@@ -252,9 +275,9 @@ export async function runHermesValueExperiment({
   writeFileSync(transportFile, `${JSON.stringify({ version: 1, packageRoot, proxyUrl: proxy.url }, null, 2)}\n`,
     { encoding: 'utf8', mode: 0o600, flag: 'w' });
   const database = path.join(memoryDirectory, 'memory.sqlite');
-  const report = { version: 1, kind: 'real-hermes-native-memory', frozen: freeze,
+  const report = { version: 2, kind: 'real-hermes-native-memory', frozen: freeze,
     budgetBefore: session.getState(), stages: [], budgetAfter: null };
-  const state = { memoryId: null, revision: null };
+  const state = { memoryId: null, revision: null, receiptId: null };
   let halted = false;
   try {
     for (const name of Object.keys(VALUE_PROMPTS)) {

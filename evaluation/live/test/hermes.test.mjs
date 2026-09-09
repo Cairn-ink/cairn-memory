@@ -59,6 +59,49 @@ function response(message, finishReason = 'stop') {
     usage: { prompt_tokens: 20, completion_tokens: 4, total_tokens: 24 } };
 }
 
+test('authority-v2 requires a current sourced read before correction or forgetting, not one tool name', () => {
+  const initial = { memoryId: 'memory-1', revision: 1, receiptId: 'receipt-1' };
+  const before = { memory: { id: 'memory-1', revision: 1, content: 'Tuesday' },
+    receipts: [{ id: 'receipt-1', excerpt: 'Tuesday' }] };
+  const after = { memory: { id: 'memory-1', revision: 2, content: 'Friday' },
+    receipts: [{ id: 'receipt-2', excerpt: 'Friday' }] };
+  const corrected = nativeEvent('cairn_correct_memory', { memoryId: 'memory-1', expectedRevision: 1 },
+    { memory: after.memory });
+  const forgotten = nativeEvent('cairn_forget_memory', { memoryId: 'memory-1', expectedRevision: 1 },
+    { indexRevision: 2 });
+  const correctedStore = { list: { ok: true, value: { memories: [after.memory] } },
+    target: { ok: true, value: after } };
+  const forgottenStore = { list: { ok: true, value: { memories: [] } },
+    target: { ok: false, error: { code: 'memory_not_found' } } };
+  const stage = events => ({ ok: true, completed: true, toolEvents: events, finalResponse: 'Done.' });
+  for (const readName of ['cairn_inspect_memory', 'cairn_recall_memory']) {
+    const read = value => nativeEvent(readName, {}, readName === 'cairn_inspect_memory'
+      ? value : { memories: [value] });
+    const state = { ...initial };
+    const accepted = inspectHermesStage('C', stage([read(before), corrected]), correctedStore, state);
+    assert.equal(accepted.passedAutomated, true);
+    assert.equal(accepted.observedVia, readName);
+    assert.deepEqual(state, { memoryId: 'memory-1', revision: 2, receiptId: 'receipt-2' });
+    assert.equal(inspectHermesStage('E', stage([read(before), forgotten]), forgottenStore,
+      { ...initial }).passedAutomated, true);
+    for (const invalidRead of [
+      { ...before, memory: { ...before.memory, revision: 0 } },
+      { ...before, memory: { ...before.memory, id: 'other' } },
+      { ...before, receipts: [{ id: 'wrong', excerpt: 'Tuesday' }] },
+      { ...before, receipts: [{ id: 'receipt-1', excerpt: 'unsupported' }] },
+    ]) {
+      assert.equal(inspectHermesStage('C', stage([read(invalidRead), corrected]), correctedStore,
+        { ...initial }).passedAutomated, false);
+      assert.equal(inspectHermesStage('E', stage([read(invalidRead), forgotten]), forgottenStore,
+        { ...initial }).passedAutomated, false);
+    }
+    assert.equal(inspectHermesStage('C', stage([corrected, read(before)]), correctedStore,
+      { ...initial }).passedAutomated, false);
+    assert.equal(inspectHermesStage('E', stage([forgotten, read(before)]), forgottenStore,
+      { ...initial }).passedAutomated, false);
+  }
+});
+
 function call(name, arguments_) {
   return response({ content: null, tool_calls: [{ id: `call_${name}`, type: 'function',
     function: { name, arguments: JSON.stringify(arguments_) } }] }, 'tool_calls');

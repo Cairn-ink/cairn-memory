@@ -133,3 +133,57 @@ At this checkpoint the whole experiment had703 requests, USD5.450 conservatively
 reserved, USD0.668753 known usage estimates and332 unknown-cost requests. These
 are global totals including probe, pilot and diagnostic calls, not a provider
 invoice. The actual count-call cost is unknown, never assumed free.
+
+## Authority-v2 follow-up: A–D pass, forgetting blocked
+
+The next and only follow-up used a fresh profile and the separately frozen
+`cairn-value-authority-v2` acceptance. Prompts, model, tools, installed engine and
+limits were unchanged. It requires an actual read of matching current ID,
+revision and receipt before correction or forgetting, through inspect or recall.
+Negative tests reject stale/foreign/unsupported reads and reads after mutation.
+The [two-trial record](first-live-hermes.json) retains both outcomes, source and
+artifact hashes, original synthetic answers and bounded tool/error summaries.
+
+| Step | Real-model observation | Result |
+| --- | --- | --- |
+| A | Explicit save, one memory at revision1 with matching receipt | Pass |
+| B | New process recalls same ID/revision/receipt; answer Tuesday | Pass |
+| C | Recall current revision, guarded correction to2; one memory, new Friday receipt | Pass |
+| D | New process recalls revision2/new receipt; answer Friday, not Tuesday | Pass |
+| E | Recall returned `invalid_model_output`; model requested clarification, no forget call | Failed |
+| F | Not attempted after E failed | Not run |
+| Control | No tools/history; neither day guessed, but answer implied knowledge access | No sourced-value evidence |
+
+Primary reviewed the actual answers and store/receipt snapshots. E did not lie
+about deleting anything: the active memory remained and the model acknowledged
+failure to retrieve it. That preserves state but still fails the requested task.
+The nested model-output cause was not retained, so this report does not invent
+a select/rank root cause. There was no third retry to obtain a green lifecycle.
+
+Both trials used actual Hermes0.21.1, declared revision
+`c8aa5608c24e3636e77c267650c0f1f52e44adb0`, Python3.11.12 and Node22.16.0 on Linux,
+with installed archive SHA256
+`4db3754fcf44caba56de73fceee67de795c742c18b972008351ce7abef086f0d`.
+The checkout is an archive rather than an authenticated Git checkout; selected
+host source hashes are retained, not a provenance attestation. The experiment
+launcher replaces HTTP transport only, and is not a stock-client install claim.
+The same actual-host path with scripted model HTTP passed A–F plus control on
+Node22.16 and24.20; that offline success did not predict real-model completion.
+
+## Final cost checkpoint and conclusion
+
+After probe, original pilot/scoring, two framing diagnostics and both Hermes
+trials:729 guarded requests, USD6.120 conservatively reserved, USD0.686775 known
+usage-priced estimates,339 unknown-cost requests. The remaining reservation
+allowance is USD13.880 under the same USD20 ledger, not a new authorization.
+Unknown counting costs are not zero; this is not an audited provider bill.
+No paid process remains running, and no credentials or raw corpus are published.
+
+The defensible first value is narrow: an actual agent can reuse and replace an
+explicit local decision across fresh conversations, with inspectable receipts.
+It is **not yet a reliably completed remember-through-forget workflow**, and
+the LongMemEval pilot does not demonstrate a QA advantage. Next engineering
+work should retain per-model-port failure diagnostics, fix/retest the recall
+failure and low coverage, and calibrate judging before expanding or marketing
+scores. No release, deployment, upstream listing or private-engine migration
+is completed by this experiment.
