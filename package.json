@@ -11,6 +11,7 @@
     "test": "node --test plugins/cairn-memory/test/*.test.mjs",
     "test:longmemeval": "node --test evaluation/longmemeval/test/*.test.mjs",
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",
+    "demo:longmemeval-ingestion": "node evaluation/longmemeval/demo.mjs",
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
     "demo:moc": "node examples/moc-placement.mjs",

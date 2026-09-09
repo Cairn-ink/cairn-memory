@@ -42,7 +42,7 @@ jobs:
       - run: npm run demo:rebuild
       - run: npm run demo:continuation
 
-  longmemeval-preparation:
+  longmemeval:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,6 +53,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:longmemeval
+      - run: npm run demo:longmemeval-ingestion
 
   openai-offline:
     runs-on: ubuntu-latest
