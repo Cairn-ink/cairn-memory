@@ -28,6 +28,13 @@ synthetic SQLite database and handcrafted trusted inferred items, not extraction
 For capture changes also run `npm run demo:capture` on both core runtime versions.
 Its injected scripted extractor verifies source binding and lifecycle, not model quality.
 
+For `evaluation/longmemeval` changes, run `npm run test:longmemeval` and
+`npm run demo:longmemeval-ingestion` on Node 22.16 and 24, in addition to the
+generic checks above. Tests cover preparation and source-mapped ingestion;
+the demo uses scripted models and a fresh synthetic SQLite store. No downloaded
+corpus, provider key or paid run is required. See `docs/longmemeval-ingestion.md`
+for source reconstruction, normalization and remaining evaluation boundaries.
+
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.
 

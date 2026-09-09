@@ -69,6 +69,10 @@ All notable changes follow semantic versioning.
   separate model/evaluator artifacts, opaque case IDs and capture-size blocker
   reporting. This is not ingestion, a scored benchmark or a paid model run.
 
+- Add source-mapped capture planning and injected sequential ingestion for
+  prepared LongMemEval histories. Preserve raw turn reconstruction and expose
+  normalization, blocking and partial outcomes; no scored or paid run is added.
+
 - Retain the third frozen synthetic evaluation and independent labels: all
   repetitions completed, but two unsupported captured claims still fail the
   mandatory source-support gate despite 45/45 recall and relevance. Preserve
