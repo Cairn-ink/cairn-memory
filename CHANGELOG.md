@@ -61,6 +61,10 @@ All notable changes follow semantic versioning.
   integer costs before I/O and evaluation reports per-method identity. Offline
   tests establish routing/accounting, not improved extraction quality.
 
+- Add offline LongMemEval-S pilot preparation with pinned input integrity,
+  separate model/evaluator artifacts, opaque case IDs and capture-size blocker
+  reporting. This is not ingestion, a scored benchmark or a paid model run.
+
 - Retain the third frozen synthetic evaluation and independent labels: all
   repetitions completed, but two unsupported captured claims still fail the
   mandatory source-support gate despite 45/45 recall and relevance. Preserve
