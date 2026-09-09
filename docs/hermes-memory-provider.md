@@ -4,6 +4,11 @@ See [setup and boundaries](../integrations/hermes/cairn/README.md). This is a
 third-party `memory.provider: cairn` plugin, not a manual MCP config entry or a
 Hermes core change. The installed public core executes all five tools.
 
+Newer [agent-loop verification](hermes-agent-loop.md) also covers the actual
+AIAgent conversation loop for native-provider and general MCP-client routes,
+with scripted completions and real tool dispatch. This does not turn the older
+real-model MemoryManager probe below into a full real-model conversation test.
+
 Prepare Hermes 0.21.1 source revision
 `c8aa5608c24e3636e77c267650c0f1f52e44adb0` with its development dependencies and
 MCP SDK 2.0.0, and an inspected installed Cairn archive. From the Hermes checkout:
@@ -48,7 +53,9 @@ wrapper added budget preloading (US$0.03 / six HTTP requests per subprocess,
 at most two recall invocations). The dedicated key was supplied out-of-band,
 never persisted in provider JSON or report. Six HTTP responses were all 200;
 US$0.026688 was reserved, with US$0.000608 observed usage estimate (not an invoice).
-The cumulative campaign reservation is US$3.006848 of US$5, leaving US$1.993152.
+At that historical probe's completion, the cumulative campaign reservation was
+US$3.006848 of US$5, leaving US$1.993152. This is not the current spendable balance;
+later evaluation reservations are recorded in the delivery roadmap.
 Offline tests remain key-free; the worker made no paid requests.
 
 This proves bounded native host/tool lifecycle and actual-model recall, not
