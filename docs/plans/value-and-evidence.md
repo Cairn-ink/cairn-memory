@@ -104,3 +104,56 @@ and the unverified paid chat boundary. The new first-value guide addresses the
 credential and storage ambiguity and freezes the next experiment; it does not
 pretend to install Hermes or remove the paid-execution blocker. No production
 or private application change is part of this batch.
+
+### Commands and stage ledger
+
+Both installs ran from this repository root with `env -i`, Node 22.16.0/npm
+10.9.2 and only their runtime/system directories in PATH. Machine-specific Node
+installation prefixes are intentionally omitted; the following are the exact
+program arguments and synthetic target paths, not user profile locations.
+
+Fresh-context worker:
+
+```sh
+npm run install:preview -- --directory /tmp/cairn-first-use-jVWcNA/cairn-local --owner local-user
+npm ci --prefix adapters/mcp
+node adapters/mcp/walkthrough.mjs --executable /tmp/cairn-first-use-jVWcNA/cairn-local/app/node_modules/.bin/cairn-memory
+```
+
+Primary, separate install:
+
+```sh
+npm run install:preview -- --directory /tmp/cairn-value-primary-SVmjJX/cairn-local --owner local-user
+node adapters/mcp/walkthrough.mjs --executable /tmp/cairn-value-primary-SVmjJX/cairn-local/app/node_modules/.bin/cairn-memory
+```
+
+Each parent directory was created with `mktemp -d` before its respective install;
+use a newly generated parent to reproduce, not an existing recorded target.
+The primary reused the worker's locked source SDK installation but used a new
+installed app and synthetic database. No receipt/user database was shared.
+
+| Stage | Fresh-context worker | Primary |
+| --- | --- | --- |
+| five_tools | passed | passed |
+| remember_and_inspect | passed | passed |
+| restart_and_inspect | passed (memory content) | passed (memory content) |
+| correct_and_reject_stale | passed | passed |
+| model_disabled | passed: model_not_configured | passed: model_not_configured |
+| forget_and_empty_inspect | passed | passed |
+
+Spec review identified that the original restart stage compared only content,
+not the previously inspected Source Receipts. The diagnostic now compares the
+full receipt array after reopening. The earlier passes above remain historical
+content checks; final corrected-run verification is recorded separately below.
+
+Final corrected-run verification: the independent worker reran the same
+walkthrough command against its installed artifact under Node 22.16.0; all six
+stages passed (0.65 seconds), now including full receipt-array equality after
+restart. Primary reran the documented walkthrough command against its own
+installed artifact on Node 22.16.0 and 24.20.0: all six stages passed on both,
+including the new assertion. Core/artifact source files and hash were unchanged.
+Primary `npm run test:mcp` passed 18/18 on each runtime, and reran plugin tests
+31/31 and JSON/version validation successfully. An initial Node 24 command
+could not locate npm in its sanitized PATH; adding the known npm binary directory
+fixed the invocation before the successful gate. This was not a test failure.
+Pinned Claude 2.1.260 marketplace and strict plugin validation also passed.
