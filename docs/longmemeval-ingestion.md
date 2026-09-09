@@ -97,6 +97,8 @@ exercise these properties through the same SQLite-backed public core.
 The [acceptance plan](plans/longmemeval-ingestion.md) requires raw reconstruction,
 receipt mapping, replay, forgetting and isolation checks. A structural plan or
 scripted extraction success is not a LongMemEval score, source-faithfulness
-guarantee or evidence that real users save time. Retrieval/evidence scoring,
-fixed answerer/judge controls and separately authorized paid runs remain later
-steps. Preserve blocked/failed cases in future evaluation denominators.
+guarantee or evidence that real users save time. The separate
+[three-arm comparison runner](longmemeval-comparison.md) now connects retrieval,
+answering and evaluator-only scoring with offline tests. Actual-model scoring,
+a frozen live judge and separately authorized paid runs remain later steps.
+Preserve blocked/failed cases in evaluation denominators.

@@ -35,6 +35,12 @@ the demo uses scripted models and a fresh synthetic SQLite store. No downloaded
 corpus, provider key or paid run is required. See `docs/longmemeval-ingestion.md`
 for source reconstruction, normalization and remaining evaluation boundaries.
 
+For comparison/scoring changes, also run `npm run demo:longmemeval-comparison`
+on both runtimes. The same `test:longmemeval` suite includes these tests. This
+demo compares three synthetic arms using scripted models and the real local
+core; its diagnostic scores are not measured real-model accuracy. See
+`docs/longmemeval-comparison.md` for scorer and model-facing data separation.
+
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.
 
