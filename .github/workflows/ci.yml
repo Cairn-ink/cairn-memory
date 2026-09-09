@@ -89,6 +89,19 @@ jobs:
       - run: node packaging/prepare-cache.mjs
       - run: npm run test:artifact
 
+  experiment-budget:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22.16.0', 24]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm run test:experiment-budget
+      - run: npm run demo:experiment-budget
+
   plugin-validation:
     runs-on: ubuntu-latest
     steps:

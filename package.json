@@ -29,6 +29,8 @@
     "test:artifact": "node --test packaging/test/*.test.mjs",
     "eval:semantic": "node examples/semantic-evaluation.mjs",
     "test:openai": "npm test --prefix adapters/openai",
-    "validate": "node scripts/validate-json.mjs"
+    "validate": "node scripts/validate-json.mjs",
+    "test:experiment-budget": "node --test evaluation/experiment-budget/test/*.test.mjs",
+    "demo:experiment-budget": "node evaluation/experiment-budget/example.mjs"
   }
 }

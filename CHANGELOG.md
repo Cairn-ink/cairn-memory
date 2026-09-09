@@ -11,6 +11,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an offline persistent experiment reservation ledger shared across
+  processes and restarts, with conservative no-refund accounting and fail-closed
+  overrun handling. This does not yet guard live host/provider traffic.
+
 - Add a first-value guide separating the verified no-key installation path from
   a pending real-model Hermes task, including profile identity/storage, separate
   model credentials, fresh-session evidence and paid-run prerequisites.
