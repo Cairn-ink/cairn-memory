@@ -91,3 +91,9 @@ three-arm and no-memory validation, failed-coverage nulls and zero-call oversize
 question preflight. No paid model calls, real-dataset answer generation, private
 changes or production actions occurred. Independent fixed-base Standards and Spec
 reviews are required before push; their final results belong in the PR evidence.
+
+Initial independent Spec review found no gaps; Standards review found no
+documented violations and two cleanup heuristics. Primary extracted the repeated
+shape/freezing helpers while preserving each stage's error class, and renamed
+the validated token counter to `countTokensOrFail`. Both runtime gates and the
+independent probe are repeated, followed by both review axes on the new commit.

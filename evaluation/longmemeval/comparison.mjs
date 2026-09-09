@@ -3,6 +3,7 @@ import {
   ingestLongMemEvalCase,
   planLongMemEvalCase,
 } from './ingestion.mjs';
+import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const COMPARISON_SCHEMA_VERSION = 'cairn-longmemeval-comparison-v1';
 export const ANSWER_TEMPLATE_VERSION = 'cairn-longmemeval-answer-v1';
@@ -34,30 +35,7 @@ export class LongMemEvalComparisonError extends Error {
   }
 }
 
-const fail = (code) => { throw new LongMemEvalComparisonError(code); };
-const isPlainObject = (value) => value !== null && typeof value === 'object'
-  && !Array.isArray(value)
-  && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
-const exactObject = (value, keys, code) => {
-  if (!isPlainObject(value) || Object.keys(value).length !== keys.length
-    || keys.some((key) => !Object.hasOwn(value, key))
-    || Object.keys(value).some((key) => !keys.includes(key))) fail(code);
-  return value;
-};
-const denseArray = (value, minimum, code) => {
-  if (!Array.isArray(value) || value.length < minimum || Object.keys(value).length !== value.length) fail(code);
-  for (let index = 0; index < value.length; index += 1) if (!Object.hasOwn(value, index)) fail(code);
-  return value;
-};
-const deepFreeze = (value) => {
-  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const member of Object.values(value)) deepFreeze(member);
-  }
-  return value;
-};
-const validString = (value) => typeof value === 'string' && value.trim().length > 0
-  && !value.includes('\0');
+const { fail, exactObject, denseArray } = createShapeValidators(LongMemEvalComparisonError);
 const elapsedMs = (started) => Math.max(0, Date.now() - started);
 const safeCoreError = (error, fallback) => ({
   code: SAFE_CORE_CODES.has(error?.code) ? error.code : fallback,
@@ -116,7 +94,7 @@ const sourceCatalog = (history) => history.sessions.map((session) => ({
   turns: session.turns.map((turn) => ({ turnId: turn.turn_id, role: turn.role })),
 }));
 
-const count = (counter, text) => {
+const countTokensOrFail = (counter, text) => {
   let value;
   try { value = counter(text); } catch { fail('token_count_unavailable'); }
   if (!Number.isSafeInteger(value) || value < 0) fail('token_count_unavailable');
@@ -138,8 +116,8 @@ const packEvidence = ({ candidates, snapshot }) => {
   const selected = [];
   const omitted = [];
   const emptyRequest = requestFor(snapshot.question, selected);
-  const emptyEvidenceTokens = count(snapshot.callbacks.countTokens, JSON.stringify(selected));
-  const emptyRequestTokens = count(snapshot.callbacks.countTokens,
+  const emptyEvidenceTokens = countTokensOrFail(snapshot.callbacks.countTokens, JSON.stringify(selected));
+  const emptyRequestTokens = countTokensOrFail(snapshot.callbacks.countTokens,
     serializedEnvelope(snapshot.answerModel, emptyRequest, snapshot.limits.outputTokens));
   if (emptyEvidenceTokens > snapshot.limits.evidenceTokens
     || emptyRequestTokens > snapshot.limits.requestTokens) fail('question_or_framing_too_large');
@@ -147,9 +125,9 @@ const packEvidence = ({ candidates, snapshot }) => {
   let requestTokens = emptyRequestTokens;
   for (const candidate of candidates) {
     const attempted = [...selected, candidate.evidence];
-    const nextEvidenceTokens = count(snapshot.callbacks.countTokens, JSON.stringify(attempted));
+    const nextEvidenceTokens = countTokensOrFail(snapshot.callbacks.countTokens, JSON.stringify(attempted));
     const nextRequest = requestFor(snapshot.question, attempted);
-    const nextRequestTokens = count(snapshot.callbacks.countTokens,
+    const nextRequestTokens = countTokensOrFail(snapshot.callbacks.countTokens,
       serializedEnvelope(snapshot.answerModel, nextRequest, snapshot.limits.outputTokens));
     if (nextEvidenceTokens <= snapshot.limits.evidenceTokens
       && nextRequestTokens <= snapshot.limits.requestTokens) {
@@ -306,7 +284,7 @@ const classifyAnswer = (response, snapshot) => {
     if (!Object.values(response.usage).every(usageValue)) return null;
     usage = structuredClone(response.usage);
   }
-  const outputTokens = count(snapshot.callbacks.countTokens, response.text);
+  const outputTokens = countTokensOrFail(snapshot.callbacks.countTokens, response.text);
   if (outputTokens > snapshot.limits.outputTokens) return { error: 'answer_output_too_large' };
   return { text: response.text, outputTokens, usage };
 };
