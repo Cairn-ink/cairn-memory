@@ -23,8 +23,8 @@ The
 documents the 400,000-token window, snapshot, structured outputs and reasoning
 `none`. The [count API](https://developers.openai.com/api/reference/typescript/resources/responses/subresources/input_tokens)
 also accepts reasoning configuration (confirmed from its Markdown reference).
-Local 6,000 input /1,024 output limits and the 1,024 framing allowance remain
-unchanged. The smaller profile context window is reported conservatively;
+Local 6,000 input /1,024 output limits and the absolute 7,024-token provider-input
+ceiling remain unchanged. The smaller profile context window is reported conservatively;
 server counting still checks each method's selected window.
 
 `createBudgetedFetch` needs the same explicit `extractionModel` option to allow
@@ -84,8 +84,11 @@ Local redaction does not guarantee removal of all sensitive content.
 The synchronous `o200k_base` counter measures exact serialized text, treating
 special-token-looking strings as ordinary text. Core retains 6000 input /1024
 output limits. Server preflight counts the same input-bearing fields as generation,
-including strict output schemas. It must fit local count +1024 framing reserve
-and leave room for output. Oversize fails before generation, without truncation.
+including strict output schemas. The complete provider input must fit the fixed
+7,024-token ceiling (6,000 +1,024) and leave room for output in the selected
+model's context window. This is an absolute ceiling, not a requirement that
+schema/framing overhead be at most 1,024 above each request's local count.
+Oversize fails before generation, without truncation.
 
 Classify/select/rank response schemas constrain references to the request's
 snapshot: classification uses visible L1/L2 group IDs and supplied memory IDs;
@@ -95,8 +98,9 @@ IDs. Both count and generation use the same derived schema, and the live budget
 guard verifies that schema against the serialized input. The core still checks
 correlated namespace/memory/revision tuples and current authority; independent
 enums do not replace those checks. Larger candidate schemas consume the same
-1024-token framing reserve and can fail explicitly before generation; no budget
-is enlarged to accommodate them.
+fixed provider-input budget and can fail explicitly before generation. A shorter
+local input can leave room for more than 1,024 tokens of schema/framing overhead;
+the 7,024-token ceiling and existing cost reservations are not enlarged.
 
 Classification instructions distinguish an empty complete map from uncertainty:
 a clear subject without a suitable visible L1 group should propose a precise
