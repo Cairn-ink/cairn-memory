@@ -1,0 +1,358 @@
+{
+  "kind": "retained-first-pilot-not-validated-accuracy",
+  "startedAt": "2026-09-09T18:03:44.455Z",
+  "modelId": "gpt-4.1-mini-2025-04-14",
+  "baseRevision": "bbcaac46cf78f6e081bc9de6c989e600bf525168",
+  "sourceHashes": {
+    "evaluation/live/session.mjs": "0b6b92905ba26bc5206eec6044714a76b6e36b8f51b2a37b88ec8948ba8248cf",
+    "evaluation/live/pilot.mjs": "79c15c3b8a3856309e73c805819af80ed1a1070d30bebbf918dea4131b1f0b14"
+  },
+  "aggregate": {
+    "schemaVersion": "cairn-longmemeval-live-pilot-v1",
+    "pilot": {
+      "manifestSha256": "84bccc5726c910c8d99e81bdbcbc98d9fc6447df0bf011dd139fea1dfc00c6f8",
+      "historySha256": "02ef9286e77df82fa92919fc26da9cacc69a489dec66a650b03828a62db0e44f",
+      "questionsSha256": "c730ecccb02c933b116c37eb798aca28de3aa1bcf9c548b4cd13e28f964e746a",
+      "evaluatorSha256": "e91e20ed8d19c0114c20f06676b66711b5f0ad317dc52f4c5c39f349826960ac",
+      "questionIds": [
+        "lme-case-878689469dcd8d1049594092edb7b6fcd567fd5df426ab3a63afae92f4f47455",
+        "lme-case-c1053377466b2692161f3d0501955367573d998a3e1e984443034b86eaaaaaaf",
+        "lme-case-3485807b7bf53be627640adeea4d4b2bb1392c5dd34620e90547908bfc2172d4",
+        "lme-case-7f4ff16520358ee27ff17e1891fb0617e61a1422c0aa57944ded5dbbe533de38",
+        "lme-case-2b6611290a98a941b7b7c5cdc95ecdece2887fd18446af8863a7528a234d2042",
+        "lme-case-ece47f331598b1fc9fc3b680db5924a3156c84c945652927ecc6816c32ef8427",
+        "lme-case-4b9931a830fa1c7f0ad35fcde7d0fc821382bfed0a5293c7b8d28d98c733509a"
+      ],
+      "count": 7
+    },
+    "modelId": "gpt-4.1-mini-2025-04-14",
+    "generationConcurrency": 3,
+    "plannedCases": 7,
+    "limits": {
+      "evidenceTokens": 6000,
+      "requestTokens": 8000,
+      "outputTokens": 512,
+      "answerTimeoutMs": 60000,
+      "recallLimit": 6,
+      "lexicalLimit": 100
+    },
+    "cases": [
+      {
+        "questionId": "lme-case-878689469dcd8d1049594092edb7b6fcd567fd5df426ab3a63afae92f4f47455",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 1134592,
+        "latencyMs": {
+          "generation": 462920,
+          "judging": 2293
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          }
+        ]
+      },
+      {
+        "questionId": "lme-case-c1053377466b2692161f3d0501955367573d998a3e1e984443034b86eaaaaaaf",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 274432,
+        "latencyMs": {
+          "generation": 26498,
+          "judging": 1907
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "failed",
+            "judgeStatus": "unscored",
+            "judgeReason": "arm_failed"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          }
+        ]
+      },
+      {
+        "questionId": "lme-case-3485807b7bf53be627640adeea4d4b2bb1392c5dd34620e90547908bfc2172d4",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 1052672,
+        "latencyMs": {
+          "generation": 442759,
+          "judging": 1938
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "unscored",
+            "judgeReason": "judge_unknown"
+          }
+        ]
+      },
+      {
+        "questionId": "lme-case-7f4ff16520358ee27ff17e1891fb0617e61a1422c0aa57944ded5dbbe533de38",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 348160,
+        "latencyMs": {
+          "generation": 57211,
+          "judging": 1606
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "failed",
+            "judgeStatus": "unscored",
+            "judgeReason": "arm_failed"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          }
+        ]
+      },
+      {
+        "questionId": "lme-case-2b6611290a98a941b7b7c5cdc95ecdece2887fd18446af8863a7528a234d2042",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 315392,
+        "latencyMs": {
+          "generation": 58280,
+          "judging": 1457
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "failed",
+            "judgeStatus": "unscored",
+            "judgeReason": "arm_failed"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          }
+        ]
+      },
+      {
+        "questionId": "lme-case-ece47f331598b1fc9fc3b680db5924a3156c84c945652927ecc6816c32ef8427",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 946176,
+        "latencyMs": {
+          "generation": 403960,
+          "judging": 2435
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          }
+        ]
+      },
+      {
+        "questionId": "lme-case-4b9931a830fa1c7f0ad35fcde7d0fc821382bfed0a5293c7b8d28d98c733509a",
+        "generationStatus": "completed",
+        "scoringStatus": "completed",
+        "databaseBytes": 315392,
+        "latencyMs": {
+          "generation": 54360,
+          "judging": 1467
+        },
+        "blockingFlags": [],
+        "arms": [
+          {
+            "name": "cairn",
+            "generationStatus": "failed",
+            "judgeStatus": "unscored",
+            "judgeReason": "arm_failed"
+          },
+          {
+            "name": "lexical",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          },
+          {
+            "name": "no-memory",
+            "generationStatus": "completed",
+            "judgeStatus": "scored"
+          }
+        ]
+      }
+    ],
+    "arms": [
+      {
+        "name": "cairn",
+        "attemptedCases": 7,
+        "notAttemptedCases": 0,
+        "completedCases": 3,
+        "failedCases": 4,
+        "judgeAttemptedCases": 3,
+        "judgedCases": 3,
+        "correctCases": 1,
+        "incorrectCases": 2,
+        "unknownCases": 0,
+        "judgeFailedCases": 0,
+        "coverage": {
+          "retrieved": {
+            "availableCases": 3,
+            "numerator": 1,
+            "denominator": 6
+          },
+          "packed": {
+            "availableCases": 3,
+            "numerator": 1,
+            "denominator": 6
+          }
+        },
+        "blockingFlags": {},
+        "latencyMs": {
+          "generation": 1498334,
+          "judging": 2349
+        }
+      },
+      {
+        "name": "lexical",
+        "attemptedCases": 7,
+        "notAttemptedCases": 0,
+        "completedCases": 7,
+        "failedCases": 0,
+        "judgeAttemptedCases": 7,
+        "judgedCases": 7,
+        "correctCases": 5,
+        "incorrectCases": 2,
+        "unknownCases": 0,
+        "judgeFailedCases": 0,
+        "coverage": {
+          "retrieved": {
+            "availableCases": 7,
+            "numerator": 11,
+            "denominator": 11
+          },
+          "packed": {
+            "availableCases": 7,
+            "numerator": 10,
+            "denominator": 11
+          }
+        },
+        "blockingFlags": {},
+        "latencyMs": {
+          "generation": 30814,
+          "judging": 5213
+        }
+      },
+      {
+        "name": "no-memory",
+        "attemptedCases": 7,
+        "notAttemptedCases": 0,
+        "completedCases": 7,
+        "failedCases": 0,
+        "judgeAttemptedCases": 7,
+        "judgedCases": 6,
+        "correctCases": 1,
+        "incorrectCases": 5,
+        "unknownCases": 1,
+        "judgeFailedCases": 0,
+        "coverage": {
+          "retrieved": {
+            "availableCases": 7,
+            "numerator": 0,
+            "denominator": 11
+          },
+          "packed": {
+            "availableCases": 7,
+            "numerator": 0,
+            "denominator": 11
+          }
+        },
+        "blockingFlags": {},
+        "latencyMs": {
+          "generation": 17602,
+          "judging": 5526
+        }
+      }
+    ],
+    "blockingFlags": {},
+    "failures": {
+      "generationCases": 0,
+      "scoringCases": 0,
+      "progressCallbacks": 0
+    },
+    "storage": {
+      "databaseBytes": 4386816
+    },
+    "latencyMs": {
+      "generation": 1505988,
+      "judging": 13103,
+      "total": 936648
+    },
+    "interpretation": "seven-case-or-smaller-pilot-not-full-dataset-or-official-longmemeval-score"
+  },
+  "globalLedgerAtPilotCompletion": {
+    "requests": 685,
+    "reservedMicroUsd": 5000000,
+    "knownUsageMicroUsd": 654585,
+    "unknownCostRequests": 327,
+    "state": "open"
+  },
+  "localResultMtime": "2026-09-09T18:19:21.111Z"
+}

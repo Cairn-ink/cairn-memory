@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "test:live-evidence-offline": "node --test evaluation/live/test/*.test.mjs",
     "test": "node --test plugins/cairn-memory/test/*.test.mjs",
     "test:longmemeval": "node --test evaluation/longmemeval/test/*.test.mjs",
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",
