@@ -67,14 +67,14 @@ export class ExperimentRequestGuardError extends Error {
 
 const fail = (code) => { throw new ExperimentRequestGuardError(code); };
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-const record = (value) => value !== null
+const isPlainObject = (value) => value !== null
   && typeof value === 'object'
   && !Array.isArray(value)
   && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 const safeInteger = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
 
 function exactKeys(value, keys, code = 'invalid_options') {
-  if (!record(value)) fail(code);
+  if (!isPlainObject(value)) fail(code);
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
@@ -92,7 +92,7 @@ function deepFreeze(value) {
 
 function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (record(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  if (isPlainObject(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
   return JSON.stringify(value);
 }
 
@@ -103,13 +103,14 @@ function validatePrice(value) {
   }
 }
 
+function pricedTokens(tokens, price) {
+  const numerator = BigInt(tokens) * BigInt(price.microUsdNumerator);
+  return (numerator + BigInt(price.tokenDenominator) - 1n) / BigInt(price.tokenDenominator);
+}
+
 function pricedUpperBound(channel) {
-  const calculate = (tokens, price) => {
-    const numerator = BigInt(tokens) * BigInt(price.microUsdNumerator);
-    return (numerator + BigInt(price.tokenDenominator) - 1n) / BigInt(price.tokenDenominator);
-  };
-  return calculate(channel.maxInputTokens, channel.inputPrice)
-    + calculate(channel.maxOutputTokens, channel.outputPrice);
+  return pricedTokens(channel.maxInputTokens, channel.inputPrice)
+    + pricedTokens(channel.maxOutputTokens, channel.outputPrice);
 }
 
 function validateChannel(name, value) {
@@ -235,7 +236,7 @@ function requestSnapshot(url, options, channel) {
   if (bytes > channel.maxRequestBytes) fail('request_too_large');
   let body;
   try { body = JSON.parse(options.body); } catch { fail('invalid_request'); }
-  if (!record(body)) fail('invalid_request');
+  if (!isPlainObject(body)) fail('invalid_request');
   if (options.signal.aborted) fail('request_aborted');
   return { body, bodyText: options.body, headers, signal: options.signal };
 }
@@ -245,12 +246,12 @@ function jsonValue(value, depth = 0) {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return true;
   if (typeof value === 'number') return Number.isFinite(value);
   if (Array.isArray(value)) return value.length <= 256 && value.every((item) => jsonValue(item, depth + 1));
-  return record(value) && Object.keys(value).length <= 256
+  return isPlainObject(value) && Object.keys(value).length <= 256
     && Object.entries(value).every(([key, child]) => key.length <= 256 && jsonValue(child, depth + 1));
 }
 
 function validateHostMessage(message) {
-  if (!record(message) || !['developer', 'system', 'user', 'assistant', 'tool'].includes(message.role)) {
+  if (!isPlainObject(message) || !['developer', 'system', 'user', 'assistant', 'tool'].includes(message.role)) {
     fail('unsupported_request');
   }
   if (message.role === 'tool') {
@@ -280,14 +281,14 @@ function validateHostMessage(message) {
 
 function validateHostTool(tool) {
   exactKeys(tool, ['function', 'type'], 'unsupported_request');
-  if (tool.type !== 'function' || !record(tool.function)) fail('unsupported_request');
+  if (tool.type !== 'function' || !isPlainObject(tool.function)) fail('unsupported_request');
   const allowed = ['description', 'name', 'parameters', 'strict'];
   if (!Object.keys(tool.function).every((key) => allowed.includes(key))
     || !own(tool.function, 'name') || !own(tool.function, 'parameters')
     || typeof tool.function.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(tool.function.name)
     || (own(tool.function, 'description') && typeof tool.function.description !== 'string')
     || (own(tool.function, 'strict') && typeof tool.function.strict !== 'boolean')
-    || !record(tool.function.parameters) || !jsonValue(tool.function.parameters)) fail('unsupported_request');
+    || !isPlainObject(tool.function.parameters) || !jsonValue(tool.function.parameters)) fail('unsupported_request');
 }
 
 function validateHostBody(body, channel, byteLength) {
@@ -383,18 +384,14 @@ function parseUsage(json, kind, channel, requestedOutputTokens) {
     if (json?.object !== 'chat.completion' || json?.model !== channel.model) fail('invalid_response');
   } else if (json?.object !== 'response' || json?.model !== channel.model) fail('invalid_response');
   const usage = json?.usage;
-  if (!record(usage)) fail('invalid_response');
+  if (!isPlainObject(usage)) fail('invalid_response');
   const input = kind === 'hostCompletion' ? usage.prompt_tokens : usage.input_tokens;
   const output = kind === 'hostCompletion' ? usage.completion_tokens : usage.output_tokens;
   const total = usage.total_tokens;
   if (!integerUsage(input) || !integerUsage(output) || !integerUsage(total) || total !== input + output) {
     fail('invalid_response');
   }
-  const calculate = (tokens, price) => {
-    const numerator = BigInt(tokens) * BigInt(price.microUsdNumerator);
-    return (numerator + BigInt(price.tokenDenominator) - 1n) / BigInt(price.tokenDenominator);
-  };
-  const actual = calculate(input, channel.inputPrice) + calculate(output, channel.outputPrice);
+  const actual = pricedTokens(input, channel.inputPrice) + pricedTokens(output, channel.outputPrice);
   if (actual > BigInt(MAX_SAFE_INTEGER)) fail('invalid_response');
   return {
     actualMicroUsd: Number(actual),

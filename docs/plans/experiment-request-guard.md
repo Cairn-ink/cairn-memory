@@ -99,6 +99,13 @@ only printing counters. The final buffered-response cleanup change and improved
 demo were reverified before the candidate commit. Independent Standards and Spec
 review SHAs/results are recorded in the PR; any changed candidate is rereviewed.
 
+Initial independent Spec review found no gaps. Standards review found no
+documented violations and three heuristics. Primary clarified the plain-object
+predicate name and unified integer price rounding so reservation and usage
+cannot drift. The channel-switch suggestion is retained as nonblocking: three
+fixed channels have deliberately different request/usage contracts, and explicit
+branches keep those validations visible. Both axes rereview the corrected commit.
+
 These are synthetic transport and orchestration results. No current-price audit,
 paid request, actual Hermes chat, official benchmark score or invoice guarantee
 was established. Next: pinned-host routing and one-attempt transport/retry audit,
