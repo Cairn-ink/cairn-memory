@@ -151,6 +151,11 @@ uncertain storage outcome instead of assuming it is safe to replay.
 
 ## Remaining gate
 
+A separate [experiment HTTP guard](experiment-request-guard.md) now connects
+this ledger to explicitly injected, bounded host/Cairn transports and verifies
+them with fake HTTP. The ledger API itself remains accounting-only; the new
+guard does not yet route a real Hermes host or authorize paid execution.
+
 The [acceptance plan](plans/experiment-budget.md) defines the offline tests.
 Passing these tests does not mark the combined live guard in V05 complete.
 Transport integration, protected real Hermes sessions and a new explicit paid
