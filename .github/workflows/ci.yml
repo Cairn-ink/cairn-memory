@@ -54,6 +54,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:longmemeval
       - run: npm run demo:longmemeval-ingestion
+      - run: npm run demo:longmemeval-comparison
 
   openai-offline:
     runs-on: ubuntu-latest
