@@ -11,6 +11,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add a first-value guide separating the verified no-key installation path from
+  a pending real-model Hermes task, including profile identity/storage, separate
+  model credentials, fresh-session evidence and paid-run prerequisites.
+
 - Refresh developer-preview introduction, demo and roadmap with the isolated
   installer and evidence boundaries. Keep scripted host integration, actual
   model probes and unverified human/production outcomes distinct; no promotion
