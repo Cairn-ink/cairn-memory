@@ -4,7 +4,39 @@ A locally installable, private npm artifact of the same public memory core and
 stdio MCP host. No Cairn account is required. This archive is not published to
 the npm registry; no public `npx` command or named-client compatibility is claimed.
 
-## Install and start
+## Install directly from the source checkout
+
+With Node >=22.16, npm and `tar`, run from the repository root:
+
+```sh
+npm run install:preview -- --directory /absolute/new/cairn-local --owner local-user
+```
+
+The target must not exist; its parent must already exist and have no symlink
+components. Optional `--project PROJECT_ID` selects project scope. This creates
+private `app/` and `data/` directories, builds the existing inspected artifact,
+installs pinned dependencies from the public npm registry with lifecycle scripts
+disabled, and runs the installed syntax-only configuration check. No model call
+or database opening occurs. It does not modify any client configuration, shell
+profile, global installation or ancestor npm project.
+
+`installation-receipt.json` records the archive hash, installed executable,
+database path, owner/project and generic `stdio.command`/`stdio.args`. Use those
+settings in a local MCP client. Keys are never copied into this file. The receipt
+and printed settings **do contain local paths and identity**; keep them private.
+The runtime Node path is absolute; update your client settings if that Node
+installation moves. Credential configuration remains a separate explicit step.
+
+This is a fresh-install helper, not an upgrade or cleanup command. Re-running
+against any existing target fails closed. If installation fails, its partial
+directory is retained for inspection; choose another new path after inspecting
+the failure. It does not recursively remove files. Never delete the whole target
+to upgrade: preserve `data/` and backups, and operate on `app/` using the manual
+upgrade instructions below. The preview trusts local process/filesystem access;
+owner labels are not OS access control. POSIX permissions are not a Windows ACL
+guarantee. No cross-platform compatibility is claimed beyond recorded tests.
+
+## Manual archive install and start
 
 Use Node >=22.16 and npm, with the downloaded local archive's SHA-256 verified
 against its accompanying build report. Create a local installation directory,
