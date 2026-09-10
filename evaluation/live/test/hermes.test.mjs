@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdtempSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -132,7 +133,7 @@ function inputRef(input) {
     memoryId: candidate.memory.id, revision: candidate.memory.revision } : null;
 }
 
-async function fakeProvider() {
+async function fakeProvider({ invalidStage = null } = {}) {
   const token = 'synthetic-provider-key';
   const state = { calls: 0, memoryId: null, revision: null };
   const allowed = new Set(['max_completion_tokens', 'messages', 'model', 'n', 'store', 'stream', 'tool_choice', 'tools']);
@@ -149,7 +150,9 @@ async function fakeProvider() {
       } else if (request.url === '/v1/responses') {
         const input = JSON.parse(body.input[0].content[0].text);
         const ref = inputRef(input);
-        const value = body.text.format.name === 'cairn_select' || body.text.format.name === 'cairn_rank'
+        const value = body.text.format.name === `cairn_${invalidStage}`
+          ? { refs: 'PRIVATE_INVALID_MODEL_OUTPUT' }
+          : body.text.format.name === 'cairn_select' || body.text.format.name === 'cairn_rank'
           ? { refs: ref ? [ref] : [] } : { items: [] };
         output = { id: 'resp_offline', object: 'response', model: MODEL, status: 'completed', error: null,
           incomplete_details: null, output: [{ id: 'msg_offline', type: 'message', role: 'assistant',
@@ -178,7 +181,7 @@ async function fakeProvider() {
         } else if (forget) {
           output = response({ content: 'The decision was forgotten.' });
         } else if (recall) {
-          const content = recall.value.memories?.[0]?.memory?.content;
+          const content = recall.value?.memories?.[0]?.memory?.content;
           output = response({ content: content?.includes('Friday') ? 'The release review is Friday.'
             : content?.includes('Tuesday') ? 'The release review is Tuesday.' : 'The release-review day is unknown.' });
         } else if (prompt.includes('remember this explicit decision')) {
@@ -212,7 +215,7 @@ async function fakeProvider() {
     }) };
 }
 
-test('actual pinned Hermes loop traverses the real proxy and persistent request guard', { skip: missing.length
+for (const collectDiagnostics of [false, true]) test(`actual pinned Hermes lifecycle, diagnostics=${collectDiagnostics}`, { skip: missing.length
   ? `set ${missing.join(', ')} for the opt-in pinned-host gate` : false, timeout: 180_000 }, async () => {
   const provider = await fakeProvider();
   const ledger = { directory: path.join(mkdtempSync(path.join(tmpdir(), 'cairn-hermes-live-ledger-')), 'ledger'),
@@ -231,6 +234,7 @@ test('actual pinned Hermes loop traverses the real proxy and persistent request 
       cairnArtifactSha256: process.env.CAIRN_ARTIFACT_SHA256,
       privateDirectory: output,
       startProxy: startExperimentProxy,
+      collectDiagnostics,
     });
     assert.equal(report.kind, 'real-hermes-native-memory');
     assert.deepEqual(report.stages.map((stage) => stage.status), Array(7).fill('completed'));
@@ -238,8 +242,109 @@ test('actual pinned Hermes loop traverses the real proxy and persistent request 
     // forgotten-store recall still performs one selection over its navigation map.
     assert.equal(report.budgetAfter.requestCount, 25);
     assert.equal(provider.state.calls, 25);
+    assert.equal(Object.hasOwn(report.frozen, 'diagnostics'), collectDiagnostics);
+    for (const stage of report.stages) {
+      assert.equal(Object.hasOwn(stage, 'diagnostics'), collectDiagnostics);
+      if (collectDiagnostics) {
+        assert.deepEqual(stage.diagnostics.events, []);
+        assert.equal(stage.diagnostics.collection.corrupted, false);
+        assert.equal(stage.diagnostics.collection.deliveryGuaranteed, false);
+      }
+    }
+    if (collectDiagnostics) {
+      const expected = JSON.parse(readFileSync(new URL('../../../packaging/artifact-files.json', import.meta.url), 'utf8'));
+      assert.deepEqual(Object.keys(report.frozen.diagnostics.runtimeSourceSha256), expected);
+      assert.match(report.frozen.diagnostics.collectorSha256, /^[a-f0-9]{64}$/u);
+    }
   } finally {
     session.close();
     await provider.close();
+  }
+});
+
+test('diagnostic opt-in rejects non-booleans before any experiment setup', async () => {
+  for (const collectDiagnostics of [null, 1, 'true', {}]) {
+    await assert.rejects(runHermesValueExperiment({ collectDiagnostics }), /invalid_collect_diagnostics/u);
+  }
+});
+
+const hostOptions = () => ({ hermesCheckout: process.env.CAIRN_HERMES_CHECKOUT,
+  hermesPython: process.env.CAIRN_HERMES_PYTHON, nodePath: process.env.CAIRN_NODE,
+  cairnExecutable: process.env.CAIRN_EXECUTABLE, cairnArtifact: process.env.CAIRN_ARTIFACT,
+  cairnArtifactSha256: process.env.CAIRN_ARTIFACT_SHA256 });
+
+for (const invalidStage of ['select', 'rank']) test(`actual installed ${invalidStage} failure is diagnosed and halts lifecycle`, {
+  skip: missing.length ? `set ${missing.join(', ')} for the opt-in pinned-host gate` : false,
+  timeout: 180_000,
+}, async () => {
+  const provider = await fakeProvider({ invalidStage });
+  const ledger = { directory: path.join(mkdtempSync(path.join(tmpdir(), 'cairn-diagnostic-ledger-')), 'ledger'),
+    runId: randomUUID(), limitMicroUsd: 20_000_000, requestCap: 4000 };
+  createExperimentBudget(ledger).close();
+  const session = createLiveSession({ ledger, apiKey: provider.token,
+    fetchImpl: (url, options) => fetch(`${provider.url}${new URL(url).pathname}`, options) });
+  try {
+    const report = await runHermesValueExperiment({ ...hostOptions(), session,
+      privateDirectory: mkdtempSync(path.join(tmpdir(), 'cairn-hermes-diagnostic-failure-')),
+      collectDiagnostics: true, startProxy: startExperimentProxy });
+    assert.deepEqual(report.stages.map(stage => stage.status),
+      ['completed', 'failed', 'not_run', 'not_run', 'not_run', 'not_run', 'completed']);
+    const failed = report.stages[1];
+    assert.equal(failed.verdict.passedAutomated, false);
+    assert.ok(failed.diagnostics.events.some(event => event.stage === invalidStage
+      && event.layer === 'core_validation' && event.reason === 'malformed_refs'));
+    assert.equal(failed.diagnostics.collection.corrupted, false);
+    const diagnostics = JSON.stringify(report.stages.map(stage => stage.diagnostics));
+    assert.equal(diagnostics.includes('PRIVATE_INVALID_MODEL_OUTPUT'), false);
+    assert.equal(diagnostics.includes(provider.token), false);
+    assert.deepEqual(report.stages[0].diagnostics.events, []);
+    assert.deepEqual(report.stages.at(-1).diagnostics.events, []);
+    assert.ok(report.stages.slice(2, 6).every(stage => !Object.hasOwn(stage, 'diagnostics')));
+  } finally { session.close(); await provider.close(); }
+});
+
+for (const relative of ['core/model-diagnostics.mjs', 'evaluation/live/diagnostics.mjs']) test(`installed ${relative} mismatch fails before traffic`, {
+  skip: missing.length ? `set ${missing.join(', ')} for the opt-in pinned-host gate` : false,
+}, async () => {
+  const original = path.dirname(path.dirname(realpathSync(process.env.CAIRN_EXECUTABLE)));
+  const copy = path.join(mkdtempSync(path.join(tmpdir(), 'cairn-source-mismatch-')), 'package');
+  cpSync(original, copy, { recursive: true });
+  writeFileSync(path.join(copy, relative), '// mismatched synthetic installation\n');
+  let started = false;
+  await assert.rejects(runHermesValueExperiment({ ...hostOptions(),
+    cairnExecutable: path.join(copy, path.relative(original, realpathSync(process.env.CAIRN_EXECUTABLE))),
+    session: { getState() { throw Error('must not reach budget'); } }, collectDiagnostics: true,
+    privateDirectory: mkdtempSync(path.join(tmpdir(), 'cairn-source-mismatch-report-')),
+    startProxy() { started = true; throw Error('must not start traffic'); },
+  }), /cairn_install_source_mismatch/u);
+  assert.equal(started, false);
+});
+
+test('launcher rejects invalid diagnostic directory configs without protocol output', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cairn-launcher-invalid-'));
+  const packageRoot = path.join(root, 'package');
+  mkdirSync(path.join(packageRoot, 'evaluation/live'), { recursive: true });
+  writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'cairn-memory-local-preview' }));
+  writeFileSync(path.join(packageRoot, 'evaluation/live/diagnostics.mjs'),
+    'process.stderr.write("configuration_accepted\\n"); process.exit(0);\n');
+  const unsafe = mkdtempSync(path.join(tmpdir(), 'cairn-diagnostic-unsafe-'));
+  chmodSync(unsafe, 0o755);
+  const linked = path.join(root, 'linked');
+  symlinkSync(mkdtempSync(path.join(tmpdir(), 'cairn-diagnostic-target-')), linked);
+  const valid = mkdtempSync(path.join(tmpdir(), 'cairn-diagnostic-valid-'));
+  for (const [index, diagnosticDirectory] of [42, linked, unsafe, valid].entries()) {
+    const config = path.join(root, `config-${index}.json`);
+    writeFileSync(config, JSON.stringify({ version: 1,
+      packageRoot,
+      proxyUrl: 'http://127.0.0.1:1', diagnosticDirectory }), { mode: 0o600 });
+    const result = spawnSync(process.execPath,
+      [new URL('../cairn-launcher.mjs', import.meta.url).pathname,
+        '--db', path.join(root, 'unused.sqlite'), '--owner', 'synthetic'],
+      { encoding: 'utf8', timeout: 5000,
+        env: { PATH: process.env.PATH, CAIRN_LIVE_CONFIG: config } });
+    assert.equal(result.status, diagnosticDirectory === valid ? 0 : 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, diagnosticDirectory === valid
+      ? 'configuration_accepted\n' : 'cairn_live_launcher_failed\n');
   }
 });

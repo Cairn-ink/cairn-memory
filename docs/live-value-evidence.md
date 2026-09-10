@@ -88,6 +88,13 @@ denominators and the interpretation of partial ingestion do not change. See
 
 ## Offline contributor check
 
+Hermes runs can opt into the [bounded installed diagnostic collector](model-failure-diagnostics.md#installed-hermes-collection)
+with `collectDiagnostics: true`. It adds finite failure events and collection
+limits per executed stage, without changing prompts, retries, acceptance or model
+policy. Rebuild the artifact: all allowlisted installed runtime sources must now
+match the checkout before traffic. This does not recover the old missing cause
+or demonstrate improved recall quality. Ordinary runs leave collection disabled.
+
 ```sh
 npm ci --prefix adapters/openai
 npm ci --prefix adapters/mcp

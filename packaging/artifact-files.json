@@ -28,5 +28,6 @@
   "adapters/openai/profiles.mjs",
   "adapters/openai/schemas.mjs",
   "plugins/cairn-memory/lib/redact.mjs",
+  "evaluation/live/diagnostics.mjs",
   "LICENSE"
 ]

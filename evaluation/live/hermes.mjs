@@ -5,6 +5,7 @@ import {
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readDiagnostics } from './diagnostics.mjs';
 
 export const HERMES_REVISION = 'c8aa5608c24e3636e77c267650c0f1f52e44adb0';
 export const MODEL = 'gpt-4.1-mini-2025-04-14';
@@ -214,8 +215,9 @@ export function inspectHermesStage(name, stage, store, state) {
 export async function runHermesValueExperiment({
   session, hermesCheckout, hermesPython, nodePath, cairnExecutable, cairnArtifact,
   cairnArtifactSha256, privateDirectory,
-  startProxy = null,
+  startProxy = null, collectDiagnostics = false,
 }) {
+  if (typeof collectDiagnostics !== 'boolean') fail('invalid_collect_diagnostics');
   if (!session || typeof session.getState !== 'function') fail('invalid_live_session');
   const host = realpathSync(hermesCheckout);
   if (!path.basename(host).endsWith(HERMES_REVISION)) fail('unpinned_hermes_host');
@@ -227,12 +229,15 @@ export async function runHermesValueExperiment({
     fail('unpinned_cairn_artifact');
   }
   const packageRoot = installedPackageRoot(cairnExecutable);
-  for (const relative of ['adapters/mcp/server.mjs', 'adapters/openai/index.mjs',
-    'adapters/openai/schemas.mjs', 'core/contract.mjs']) {
-    if (fileHash(path.join(packageRoot, relative)) !== fileHash(path.resolve(HERE, '../..', relative))) {
-      fail('cairn_install_source_mismatch');
+  const runtimeFiles = JSON.parse(readFileSync(path.resolve(HERE, '../../packaging/artifact-files.json'), 'utf8'));
+  const runtimeSourceSha256 = {};
+  try {
+    for (const relative of runtimeFiles) {
+      const installedHash = fileHash(path.join(packageRoot, relative));
+      if (installedHash !== fileHash(path.resolve(HERE, '../..', relative))) fail('cairn_install_source_mismatch');
+      runtimeSourceSha256[relative] = installedHash;
     }
-  }
+  } catch { fail('cairn_install_source_mismatch'); }
   const root = prepareDirectory(privateDirectory, true);
   const profile = prepareDirectory(path.join(root, 'profile'));
   mkdirSync(path.join(profile, 'plugins'), { mode: 0o700 });
@@ -265,6 +270,11 @@ export async function runHermesValueExperiment({
     declaredHermesRevision: HERMES_REVISION, hostSourceSha256,
     cairnArtifactSha256, cairnSourceSha256, model: MODEL, prompts: VALUE_PROMPTS,
     toolSchemas: discovery.tools, toolSchemaSha256: hash(JSON.stringify(discovery.tools)) };
+  if (collectDiagnostics) freeze.diagnostics = {
+    version: 1, runtimeSourceSha256,
+    collectorSha256: fileHash(path.join(packageRoot, 'evaluation/live/diagnostics.mjs')),
+    launcherSha256: fileHash(CAIRN_LAUNCHER),
+  };
   privateWrite(path.join(root, 'frozen-protocol.json'), freeze);
 
   const proxyFactory = startProxy ?? (await import('./proxy.mjs')).startExperimentProxy;
@@ -286,6 +296,13 @@ export async function runHermesValueExperiment({
         continue;
       }
       const control = name === 'control';
+      const diagnosticDirectory = collectDiagnostics
+        ? prepareDirectory(path.join(root, `diagnostics-${name}`), true) : null;
+      if (collectDiagnostics) {
+        writeFileSync(transportFile, `${JSON.stringify({ version: 1, packageRoot,
+          proxyUrl: proxy.url, diagnosticDirectory }, null, 2)}\n`,
+        { encoding: 'utf8', mode: 0o600, flag: 'w' });
+      }
       const result = await runStage(python, host, { ...requestBase, operation: 'turn', stage: name,
         prompt: VALUE_PROMPTS[name], sessionId: `lantern-${name}-${randomUUID()}`,
         proxyUrl: proxy.url, proxyToken: proxy.token, control });
@@ -296,6 +313,7 @@ export async function runHermesValueExperiment({
       const store = await snapshotStore(packageRoot, database, ownerId, candidateId);
       const verdict = inspectHermesStage(name, result, store, state);
       const record = { stage: name, status: verdict.passedAutomated ? 'completed' : 'failed', result, store, verdict };
+      if (collectDiagnostics) record.diagnostics = readDiagnostics(diagnosticDirectory);
       privateWrite(path.join(root, `stage-${name}.json`), record);
       report.stages.push(record);
       if (!verdict.passedAutomated && !control) halted = true;

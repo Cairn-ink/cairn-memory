@@ -23,7 +23,8 @@ function loadConfiguration() {
     value = JSON.parse(readFileSync(filename, 'utf8'));
   } catch { fail(); }
   if (!value || typeof value !== 'object' || Array.isArray(value)
-    || Object.keys(value).sort().join(',') !== 'packageRoot,proxyUrl,version'
+    || !['packageRoot,proxyUrl,version', 'diagnosticDirectory,packageRoot,proxyUrl,version']
+      .includes(Object.keys(value).sort().join(','))
     || value.version !== 1 || typeof value.packageRoot !== 'string'
     || !path.isAbsolute(value.packageRoot) || typeof value.proxyUrl !== 'string') fail();
   let proxy;
@@ -34,7 +35,17 @@ function loadConfiguration() {
   const root = realpathSync(value.packageRoot);
   const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (manifest.name !== 'cairn-memory-local-preview') fail();
-  return { packageRoot: root, proxyUrl: proxy.href.replace(/\/$/u, '') };
+  if (own(value, 'diagnosticDirectory')) {
+    const directory = value.diagnosticDirectory;
+    if (typeof directory !== 'string' || !path.isAbsolute(directory)
+      || directory.includes('\0') || path.resolve(directory) !== directory) fail();
+    const directoryStat = lstatSync(directory);
+    if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()
+      || realpathSync(directory) !== directory || (directoryStat.mode & 0o777) !== 0o700
+      || (typeof process.getuid === 'function' && directoryStat.uid !== process.getuid())) fail();
+  }
+  return { packageRoot: root, proxyUrl: proxy.href.replace(/\/$/u, ''),
+    ...(own(value, 'diagnosticDirectory') ? { diagnosticDirectory: value.diagnosticDirectory } : {}) };
 }
 
 function parseArguments(args) {
@@ -60,6 +71,13 @@ function parseArguments(args) {
 async function start() {
   const config = loadConfiguration();
   const binding = parseArguments(process.argv.slice(2));
+  let onDiagnostic;
+  if (own(config, 'diagnosticDirectory')) {
+    const { createDiagnosticCollector } = await import(pathToFileURL(
+      path.join(config.packageRoot, 'evaluation/live/diagnostics.mjs'),
+    ).href);
+    onDiagnostic = createDiagnosticCollector(config.diagnosticDirectory);
+  }
   const requireFromPackage = createRequire(path.join(config.packageRoot, 'package.json'));
   const sdk = await import(pathToFileURL(requireFromPackage.resolve('@modelcontextprotocol/server/stdio')).href);
   const { createCairnServer } = await import(pathToFileURL(
@@ -82,7 +100,8 @@ async function start() {
       return nativeFetch(`${config.proxyUrl}${target.pathname}`, options);
     };
     globalThis.fetch = () => { throw new Error('cairn_live_network_route_blocked'); };
-    model = createOpenAIModel({ apiKey: token, fetchImpl: proxyFetch });
+    model = createOpenAIModel({ apiKey: token, fetchImpl: proxyFetch,
+      ...(onDiagnostic ? { onDiagnostic } : {}) });
   } else {
     globalThis.fetch = () => { throw new Error('cairn_live_network_route_blocked'); };
   }

@@ -17,6 +17,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add opt-in bounded failure collection to the installed Hermes experiment path,
+  with finite content-free events, explicit collection limits and full allowlisted
+  runtime source matching before traffic. No model policy or quality claim changes.
+
 - Preserve bounded capture/classification failure causes in comparison and pilot
   summaries. Partial ingestion still fails; historical evidence and scores are
   unchanged, and no raw model or source content is added to diagnostics.

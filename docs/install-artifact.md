@@ -26,6 +26,11 @@ the exact allowlist and records source-file SHA-256 values. Tests compare the
 installed bytes too. Tests, fixtures, databases, reports, local configuration,
 environment files and node_modules are not packaged.
 
+The allowlist also includes `evaluation/live/diagnostics.mjs`, a local collector
+with no additional npm dependencies, used only by the opt-in Hermes experiment launcher. No other
+experiment runners or credentials are included, and the consumer executable
+does not enable it. See [collection boundaries](model-failure-diagnostics.md#installed-hermes-collection).
+
 The production closure is pinned to SDK server/core2.0.0, Zod4.5.4 and
 tiktoken1.0.22 using the existing adapter lockfiles' exact versions, registry URLs
 and integrity values. Builds fail on unreviewed dependency changes. No dependency
