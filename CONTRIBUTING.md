@@ -4,6 +4,12 @@ Thanks for helping make agent memory smaller, safer, and easier to inspect.
 
 ## Before opening a pull request
 
+For `evaluation/live` changes, install the isolated OpenAI and MCP dependency
+sets and run `npm run test:live-evidence-offline` on Node 22.16 and 24. These
+tests never use a provider key or authorize paid calls. Actual pinned-host and
+paid evidence requires an explicitly scoped synthetic experiment and one shared
+durable budget; see `docs/plans/live-value-evidence.md`.
+
 1. Keep changes inside the public boundary described in `docs/architecture.md`.
 2. Preserve the privacy invariants in `docs/protocol.md`. New captured fields require an explicit threat-model update and tests.
 3. Run `npm test` and `npm run validate` with Node.js 20 or newer. With Node.js 22 or newer, install the isolated maintainer tooling and run the Claude validations as documented in the root README.

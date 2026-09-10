@@ -99,14 +99,17 @@ The walkthrough does not impose a provider account spending limit.
 | `forget_memory` | Logically delete at the revision you inspected |
 
 Start with the [first-value guide](docs/hermes-first-use.md) to distinguish the
-no-key installation check from the pending real-model Hermes conversation task,
+no-key installation check from the real-model Hermes conversation experiment,
 including the two model credentials and profile/database boundaries.
+The [first live evidence](docs/evidence/first-live-evidence.md) records successful
+cross-session save/read/correct/read, a later recall failure before forgetting,
+and weak long-history QA results. Full real-model reliability is not established.
 Try the [cross-session walkthrough](docs/local-memory-demo.md). See the
 [tested client matrix](docs/install-artifact.md#verification-and-compatibility)
 before assuming a named client works: SDK stdio and Hermes MCP discovery have
 evidence. The included [Hermes native-provider preview](docs/hermes-memory-provider.md)
 also passed actual MemoryManager two-session sourced recall on Linux CLI;
-interactive chat tool selection and remote HTTP connectors remain separate gates.
+the full real-model lifecycle and remote HTTP connectors remain separate gates.
 
 ## Local privacy and control
 

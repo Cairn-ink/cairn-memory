@@ -1,5 +1,11 @@
 # Changelog
 
+## Model-backed evidence candidate
+
+- Add an explicit shared-budget live experiment session, loopback host bridge,
+  and value/pilot evidence workflow. Offline harness tests are not quality scores;
+  live outcomes and limitations are reported separately.
+
 ## Local-memory introduction candidate
 
 - Lead documentation with the local memory layer and pinned install walkthrough,
