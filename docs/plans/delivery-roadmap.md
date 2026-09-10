@@ -48,7 +48,14 @@ The repaired installed artifact also passed one new actual Hermes six-stage loop
 with independent semantic review; its control abstained. Earlier failed gates
 remain failed and broader relevance remains unproved.
 
-The original USD20 ledger checkpoint is957 requests /USD10.680 reserved, not a new
+The subsequent [default-capture audit](capture-source-faithfulness.md) retained a
+nine-case local pass and a full 36-run semantic failure: recall/relevance45/45,
+but three unsupported statements and supported recovery20/24. The explicit
+installed loop is demonstrated; general automatic extraction is still not
+accepted. A stronger extraction-only comparison needs an authorized request-policy
+extension, not a reset ledger or silent default switch.
+
+The original USD20 ledger checkpoint is1,215 requests /USD11.970 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)
