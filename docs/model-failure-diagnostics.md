@@ -62,8 +62,42 @@ This is an in-process preview extension, not a hosted HTTP protocol change.
 Offline synthetic tests verify observation and unchanged failures, not recall
 quality. The original #40 failure omitted nested causes, so its particular
 `invalid_model_output` cannot be attributed retroactively. The experiment runner
-still needs a bounded collector and nested-ingestion summary preservation before
-a newly frozen, authorized live diagnostic run. Do not overwrite old results or
-repeat a paid run until it passes.
+now supports opt-in bounded collection and preserves nested ingestion summary
+causes. These enable a newly frozen, authorized live diagnostic run; they do not
+replace one. Do not overwrite old results or repeat a paid run until it passes.
+
+## Installed Hermes collection
+
+`runHermesValueExperiment({ ..., collectDiagnostics: true })` enables collection
+for this experiment only. The default is `false`, preserving the report shape;
+there is no consumer CLI flag or automatic logging. Rebuild and install the
+current artifact first. Before discovery or proxy traffic, the runner compares
+every installed source in `packaging/artifact-files.json` with this checkout.
+Enabled frozen evidence records those hashes plus collector and launcher hashes.
+
+Each executed stage gets a separate private directory (0700) with at most 64
+exclusive event files (0600), each bounded to 256 bytes. Two fixed empty markers
+record observed overflow or write failure. No append journal is used. The writer
+and reader both reproject exactly the finite schema above, rejecting extra fields
+and accessors. The reader checks only fixed filenames with bounded, no-follow
+reads; malformed, oversized, linked or nonregular files become corruption flags,
+not report contents. Nothing is printed on the MCP stdout channel.
+
+The stage's `diagnostics` field contains `{version, events, collection}`. Collection
+metadata is limited to fixed slot/byte limits and boolean `capacityReached`,
+`overflow`, `corrupted`, `writeFailed`, and `deliveryGuaranteed` (always false).
+No paths, raw file bytes or additional transcript content enter these fields.
+The enclosing synthetic experiment report still has its existing tool results,
+store snapshots and identifiers; this does not make that whole report content-free.
+
+Slot order is reservation order, not a global model-call trace. Duplicate boundary
+events are not unique failures. Full capacity is conservative: exactly 64 writes
+can fill capacity without overflow. Crashes, permission changes or other observer
+failures can prevent an event or marker from being persisted. Empty events never
+prove absence of failure, and collection errors never repair an operation result.
+This is bounded local retention, not an OS sandbox against a malicious same-user
+process. The operator owns retention and any export; no telemetry is sent.
+
+Acceptance: [installed collection plan](plans/hermes-diagnostic-collection.md).
 
 Acceptance: [diagnostic plan](plans/model-failure-diagnostics.md).
