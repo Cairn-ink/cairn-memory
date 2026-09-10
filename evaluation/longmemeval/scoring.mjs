@@ -3,6 +3,7 @@ import {
   COMPARISON_SCHEMA_VERSION,
 } from './comparison.mjs';
 import { opaqueQuestionId } from './prepare.mjs';
+import { projectIngestionFailure } from './ingestion.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const SCORING_SCHEMA_VERSION = 'cairn-longmemeval-scoring-v1';
@@ -154,9 +155,9 @@ const validateArm = (arm, catalog) => {
       if (!Number.isSafeInteger(ingestion.latencyMs) || ingestion.latencyMs < 0
         || typeof ingestion.executable !== 'boolean' || !Array.isArray(ingestion.outcomes)) fail('invalid_run');
       ingestion.outcomes.forEach((outcome) => {
-        if (!isPlainObject(outcome) || ![3, 4].includes(Object.keys(outcome).length)
+        if (!isPlainObject(outcome) || ![3, 4, 5].includes(Object.keys(outcome).length)
           || ['batchIndex', 'eventId', 'status'].some((key) => !Object.hasOwn(outcome, key))
-          || Object.keys(outcome).some((key) => !['batchIndex', 'eventId', 'status', 'error'].includes(key))) {
+          || Object.keys(outcome).some((key) => !['batchIndex', 'eventId', 'status', 'error', 'errorStage'].includes(key))) {
           fail('invalid_run');
         }
         if (!Number.isSafeInteger(outcome.batchIndex) || outcome.batchIndex < 0
@@ -164,6 +165,12 @@ const validateArm = (arm, catalog) => {
         if (Object.hasOwn(outcome, 'error')) {
           exactObject(outcome.error, ['code', 'retryable'], 'invalid_run');
           if (!validString(outcome.error.code) || typeof outcome.error.retryable !== 'boolean') fail('invalid_run');
+        }
+        if (Object.hasOwn(outcome, 'errorStage')) {
+          const projected = projectIngestionFailure(outcome);
+          if (!projected || outcome.errorStage !== projected.errorStage
+            || outcome.error.code !== projected.error.code
+            || outcome.error.retryable !== projected.error.retryable) fail('invalid_run');
         }
       });
     }

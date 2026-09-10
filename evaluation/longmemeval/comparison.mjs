@@ -2,6 +2,7 @@ import {
   INGESTION_CLIENT,
   ingestLongMemEvalCase,
   planLongMemEvalCase,
+  projectIngestionFailure,
 } from './ingestion.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
@@ -417,9 +418,9 @@ export async function runLongMemEvalComparison(options) {
       }
       const ingestionSummary = { latencyMs: elapsedMs(ingestionStarted),
         executable: ingestion.plan.executable,
-        outcomes: ingestion.outcomes.map(({ batchIndex, eventId, status, error }) => ({
-          batchIndex, eventId, status,
-          ...(error ? { error: { code: error.code, retryable: error.retryable } } : {}),
+        outcomes: ingestion.outcomes.map((outcome) => ({
+          batchIndex: outcome.batchIndex, eventId: outcome.eventId, status: outcome.status,
+          ...projectIngestionFailure(outcome),
         })) };
       if (!ingestion.plan.executable || ingestion.outcomes.some((outcome) =>
         !['completed', 'duplicate'].includes(outcome.status))) {

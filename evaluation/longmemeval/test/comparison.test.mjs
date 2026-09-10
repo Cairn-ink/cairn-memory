@@ -189,6 +189,52 @@ test('C02/C06/C07: Cairn ingestion and recall failures remain while baselines co
   assert.equal(recallFailure.arms[0].retrieval.status, 'failed');
 });
 
+test('ingestion summaries retain finite failure causes and stop later batches', async () => {
+  const partial = (code, retryable) => ({ ok: true, value: {
+    duplicate: false,
+    admission: { memories: [{ id: 'private-admission-reference', revision: 1 }],
+      suppressedCount: 0, indexRevision: 1 },
+    classification: { status: 'failed', error: { code, retryable } },
+  } });
+  const cases = [
+    [async () => partial('invalid_model_output', true), 'partial', 'classification', 'invalid_model_output', true],
+    [async () => partial('private_customer_123', true), 'partial', 'classification', 'classification_failed', false],
+    [async () => ({ ok: false, error: { code: 'extraction_failed', retryable: true } }),
+      'failed', 'capture', 'extraction_failed', true],
+    [async () => ({ ok: false, error: { code: 'private_customer_123', retryable: true } }),
+      'failed', 'capture', 'capture_failed', false],
+    [async () => ({ ok: true, value: { processing: true } }), 'unknown', 'capture', 'capture_processing', false],
+    [async () => ({ ok: true, value: {} }), 'unknown', 'capture', 'malformed_capture_response', false],
+    [async () => { throw Object.assign(new Error('private_exception_text'), { code: 'private_customer_123' }); },
+      'unknown', 'capture', 'capture_threw', false],
+  ];
+  for (const [capture, status, errorStage, code, retryable] of cases) {
+    let calls = 0;
+    const run = await runLongMemEvalComparison(options({ core: fakeCore({
+      capture: async () => { calls += 1; return capture(); },
+    }) }));
+    const arm = run.arms[0];
+    assert.equal(calls, 1);
+    assert.equal(arm.status, 'failed');
+    assert.equal(arm.failedStage, 'ingestion');
+    assert.equal(arm.error.code, 'ingestion_incomplete');
+    const [first, later] = arm.retrieval.ingestion.outcomes;
+    assert.deepEqual(first, { batchIndex: 0, eventId: first.eventId, status,
+      errorStage, error: { code, retryable } });
+    assert.match(first.eventId, /^lme-/u);
+    assert.deepEqual(later, { batchIndex: 1, eventId: later.eventId, status: 'not_run' });
+    assert.ok(run.arms.slice(1).every((baseline) => baseline.status === 'completed'));
+    assert.doesNotMatch(JSON.stringify(run), /private_customer_123|private_exception_text|private-admission-reference/u);
+  }
+  for (const capture of [async () => completedCapture,
+    async () => ({ ok: true, value: { duplicate: true, memoryIds: [], suppressedCount: 0 } })]) {
+    const run = await runLongMemEvalComparison(options({ core: fakeCore({ capture }) }));
+    assert.equal(run.arms[0].status, 'completed');
+    assert.ok(run.arms[0].retrieval.ingestion.outcomes.every((outcome) =>
+      !Object.hasOwn(outcome, 'errorStage') && !Object.hasOwn(outcome, 'error')));
+  }
+});
+
 test('C04/C06/C07: mismatched receipt and dirty namespace are blocking Cairn-only failures', async () => {
   let captured;
   const poisoned = fakeCore({

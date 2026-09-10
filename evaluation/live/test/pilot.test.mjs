@@ -62,7 +62,7 @@ const selectedRefs = (input) => input.maps.flatMap((page) => page.items.map((ite
       ? { memoryId: item.ref.childId, revision: item.ref.childRevision } : null)
   .filter(Boolean).map((ref) => ({ namespaceIndex: page.namespaceIndex, ...ref })));
 
-const scriptedSession = () => {
+const scriptedSession = ({ classificationFailure = false } = {}) => {
   const countTokens = (text) => Math.ceil(Buffer.byteLength(text, 'utf8') / 4);
   const calls = { extract: 0, answer: [], judge: [] };
   const memoryModel = {
@@ -71,14 +71,21 @@ const scriptedSession = () => {
     extract: async ({ input }) => {
       calls.extract += 1;
       const content = input.messages.map((message) => message.content).join(' ');
-      if (content.includes('CAPTURE_FAIL')) throw new Error('deliberate private capture failure');
+      if (content.includes('CAPTURE_FAIL') && !classificationFailure) {
+        throw Object.assign(new Error('private_exception_text'), { code: 'private_customer_123' });
+      }
       const match = content.match(/color is ([a-z]+)\./u);
       return { items: match ? [{ content: `The color is ${match[1]}.`, kind: 'fact', confidence: 0.9,
         sourceIndices: [input.messages.findIndex((message) => message.content.includes(match[0]))] }] : [] };
     },
-    classify: async ({ input }) => ({ items: input.memories.map((memory) => ({
-      memoryId: memory.id, parentIds: [], newL1: { title: 'Color', parentL2Ids: [] },
-    })) }),
+    classify: async ({ input }) => {
+      if (classificationFailure && input.memories.some((memory) => memory.content.includes('violet'))) {
+        throw Object.assign(new Error('private_exception_text'), { code: 'private_customer_123' });
+      }
+      return { items: input.memories.map((memory) => ({
+        memoryId: memory.id, parentIds: [], newL1: { title: 'Color', parentL2Ids: [] },
+      })) };
+    },
     select: async ({ input }) => ({ refs: selectedRefs(input) }),
     rank: async ({ input }) => ({ refs: input.candidates.slice(0, input.limit).map((candidate) => ({
       namespaceIndex: candidate.namespaceIndex,
@@ -141,6 +148,18 @@ test('two-case pilot uses actual core, retains capture failure, and judges only 
   assert.deepEqual(secondGeneration.run.arms.map((arm) => arm.status),
     ['failed', 'completed', 'completed']);
   assert.equal(secondGeneration.run.arms[0].failedStage, 'ingestion');
+  assert.deepEqual(secondGeneration.run.arms[0].retrieval.ingestion.outcomes.map((outcome) => ({
+    status: outcome.status, errorStage: outcome.errorStage, error: outcome.error,
+  })), [
+    { status: 'failed', errorStage: 'capture', error: { code: 'extraction_failed', retryable: false } },
+    { status: 'not_run', errorStage: undefined, error: undefined },
+  ]);
+  assert.deepEqual(result.cases[1].arms[0].ingestionFailure,
+    { stage: 'capture', reason: 'extraction_failed' });
+  assert.ok(result.cases[0].arms.every((arm) => !Object.hasOwn(arm, 'ingestionFailure')));
+  assert.ok(result.cases[1].arms.slice(1).every((arm) => !Object.hasOwn(arm, 'ingestionFailure')));
+  assert.deepEqual(JSON.parse(await readFile(path.join(output, 'aggregate.json'), 'utf8')), result);
+  assert.doesNotMatch(JSON.stringify(secondGeneration), /private_customer_123|private_exception_text/u);
   for (const generation of [firstGeneration, secondGeneration]) {
     assert.deepEqual(generation.run.limits, PILOT_LIMITS);
     assert.ok(generation.run.arms.every((arm) => arm.name === 'cairn'
@@ -167,6 +186,42 @@ test('two-case pilot uses actual core, retains capture failure, and judges only 
   const serialized = JSON.stringify(result);
   assert.doesNotMatch(serialized, /amber|violet|CAPTURE_FAIL|reference_answer|source\.json/u);
   assert.ok(result.storage.databaseBytes > 0);
+});
+
+test('actual-core pilot retains partial classification cause in generation and public aggregate', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'cairn-live-pilot-classification-'));
+  const prepared = await prepare(root);
+  const output = path.join(root, 'output');
+  await mkdir(output);
+  const pilot = await loadPreparedPilot({ directory: prepared });
+  const { session, calls } = scriptedSession({ classificationFailure: true });
+  const result = await runPilot({ pilot, directory: output, session });
+  const generation = await readCheckpoint(output, 2, 'generation');
+  const [cairn, ...baselines] = generation.run.arms;
+  assert.equal(cairn.status, 'failed');
+  assert.equal(cairn.failedStage, 'ingestion');
+  assert.equal(cairn.error.code, 'ingestion_incomplete');
+  const [first, later] = cairn.retrieval.ingestion.outcomes;
+  assert.deepEqual(first, { batchIndex: 0, eventId: first.eventId, status: 'partial',
+    errorStage: 'classification', error: { code: 'classification_failed', retryable: false } });
+  assert.deepEqual(later, { batchIndex: 1, eventId: later.eventId, status: 'not_run' });
+  assert.ok(baselines.every((arm) => arm.status === 'completed'));
+  assert.equal(calls.extract, 3);
+  assert.equal(calls.answer.length, 5);
+  assert.equal(calls.judge.length, 5);
+  assert.equal(result.arms[0].failedCases, 1);
+  assert.equal(result.arms[0].completedCases, 1);
+  assert.equal(result.arms[0].judgedCases, 0);
+  assert.deepEqual(result.cases[1].arms[0], { name: 'cairn', generationStatus: 'failed',
+    judgeStatus: 'unscored', judgeReason: 'arm_failed',
+    ingestionFailure: { stage: 'classification', reason: 'classification_failed' } });
+  const persisted = JSON.parse(await readFile(path.join(output, 'aggregate.json'), 'utf8'));
+  assert.deepEqual(persisted, result);
+  assert.doesNotMatch(JSON.stringify(generation), /private_customer_123|private_exception_text/u);
+  assert.doesNotMatch(JSON.stringify(persisted),
+    /private_customer_123|private_exception_text|amber|violet|CAPTURE_FAIL|eventId|batchIndex|admission/u);
+  assert.ok(result.cases[0].arms.every((arm) => !Object.hasOwn(arm, 'ingestionFailure')));
+  assert.ok(result.cases[1].arms.slice(1).every((arm) => !Object.hasOwn(arm, 'ingestionFailure')));
 });
 
 test('artifact digest mismatch fails before a model callback or output mutation', async () => {
