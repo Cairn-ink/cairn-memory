@@ -6,6 +6,7 @@ import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
 import { captureMessages } from './capture.mjs';
+import { emitDiagnostic } from './model-diagnostics.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -113,6 +114,7 @@ function failure(error) {
 export function openMemoryCore(input) {
   object(input, ['path', 'model']);
   const model = input.model;
+  if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   const runtime = createMemoryRuntime({ path: input.path });
   const { storeId, cursorSecret } = runtime.identity;
 
@@ -449,7 +451,10 @@ export function openMemoryCore(input) {
       const ids = uniqueIds(input.memoryIds, 5, 1);
       const guards = memoryGuards(input.expectedMemoryRevisions, ids);
       const index = contractRevision(input.mapRevision);
-      if (typeof model?.classify !== 'function') throw new MemoryStoreError('model_not_configured');
+      if (typeof model?.classify !== 'function') {
+        emitDiagnostic(model, 'classify', 'core_call', 'model_not_configured');
+        throw new MemoryStoreError('model_not_configured');
+      }
       const snapshot = runtime.classificationSnapshot(ns, ids, guards, index);
       const mapped = map({ namespace: input.namespace, purpose: 'classification' });
       if (!mapped.ok) return mapped;

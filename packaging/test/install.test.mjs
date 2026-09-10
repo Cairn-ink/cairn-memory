@@ -133,6 +133,23 @@ test('installed adapter resolves its relative runtime modules without source-che
     installation.directory, artifact.userconfig).trim(), 'installed_adapter_import_passed');
 });
 
+test('installed adapter resolves the diagnostic helper and emits only the finite event', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const events = [];
+    const model = createOpenAIModel({ apiKey: 'synthetic-import-only',
+      fetchImpl() { throw new Error('unexpected_network'); },
+      onDiagnostic(event) { events.push(event); } });
+    await assert.rejects(model.select({ system: 'synthetic', input: {},
+      maxOutputTokens: 1, signal: new AbortController().signal }),
+      { message: 'invalid_openai_request' });
+    assert.deepEqual(events, [{ version: 1, stage: 'select', layer: 'adapter', reason: 'request_invalid' }]);
+    assert.equal(Object.isFrozen(events[0]), true);
+    console.log('installed_diagnostic_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_diagnostic_passed');
+});
+
 test('installed executable completes actual SDK stdio lifecycle, restart and scoped revision rejection', { timeout: 30000 }, async (t) => {
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-installed-data-')), 'memory.sqlite');
   const first = await connect(t, installation, path, { project: 'harbor' });
