@@ -124,6 +124,49 @@ test('C05/C06/C07: missing evidence labels are null and failed generation is uns
   assert.equal(result.denominators.failedArms, 1);
 });
 
+test('old and stage-bearing ingestion failures preserve scoring and judge eligibility', async () => {
+  for (const partial of [false, true]) {
+    const run = await makeRun({ core: { ...core, capture: async () => partial
+      ? { ok: true, value: { duplicate: false,
+        admission: { memories: [], suppressedCount: 0, indexRevision: 1 },
+        classification: { status: 'failed', error: { code: 'invalid_model_output', retryable: false } } } }
+      : { ok: false, error: { code: 'extraction_failed', retryable: false } },
+    } });
+    const old = structuredClone(run);
+    const outcome = old.arms[0].retrieval.ingestion.outcomes[0];
+    delete outcome.errorStage;
+    if (partial) delete outcome.error;
+    const score = async (candidate) => {
+      let calls = 0;
+      const result = await scoreLongMemEvalComparison({ run: candidate, evaluator: evaluator(),
+        judgeModel: 'scripted-judge-v1', judgeTimeoutMs: 100,
+        judge: async () => { calls += 1; return { verdict: 'correct' }; } });
+      assert.equal(calls, 2);
+      assert.equal(result.denominators.completedArms, 2);
+      assert.equal(result.denominators.failedArms, 1);
+      assert.equal(result.denominators.semanticJudgeAttemptedArms, 2);
+      // Wall-clock judging latency is unrelated to retained ingestion diagnostics.
+      for (const arm of result.arms) assert.ok(arm.semanticJudge.latencyMs >= 0);
+      return JSON.parse(JSON.stringify(result, (key, value) => key === 'latencyMs' ? 0 : value));
+    };
+    assert.deepEqual(await score(run), await score(old));
+
+    for (const mutate of [
+      (item) => { item.errorStage = 'private_stage'; },
+      (item) => { delete item.error; },
+      (item) => { item.errorStage = partial ? 'capture' : 'classification'; },
+      (item) => { item.status = 'completed'; },
+      (item) => { item.error.code = 'private_customer_123'; item.error.retryable = true; },
+      (item) => { item.error.code = 'capture_threw'; item.error.retryable = true; },
+    ]) {
+      const invalid = structuredClone(run);
+      mutate(invalid.arms[0].retrieval.ingestion.outcomes[0]);
+      await assert.rejects(scoreLongMemEvalComparison({ run: invalid, evaluator: evaluator() }),
+        { code: 'invalid_run' });
+    }
+  }
+});
+
 test('C05/C07: judge correct/unknown/failure outcomes remain explicit and answer-blind', async () => {
   const run = await makeRun();
   const seen = [];

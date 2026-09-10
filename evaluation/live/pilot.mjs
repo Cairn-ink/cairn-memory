@@ -20,7 +20,7 @@ import {
   ANSWER_TEMPLATE_VERSION,
   runLongMemEvalComparison,
 } from '../longmemeval/comparison.mjs';
-import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
+import { planLongMemEvalCase, projectIngestionFailure } from '../longmemeval/ingestion.mjs';
 import { opaqueQuestionId, SCHEMA_VERSION as PREPARATION_SCHEMA_VERSION } from '../longmemeval/prepare.mjs';
 import { scoreLongMemEvalComparison } from '../longmemeval/scoring.mjs';
 import { deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
@@ -463,9 +463,14 @@ const publicCase = (record) => {
   for (const name of ARM_NAMES) {
     const arm = record.generation.run?.arms.find((candidate) => candidate.name === name);
     const scored = record.scoring.score?.arms.find((candidate) => candidate.name === name);
+    const failure = name === 'cairn'
+      ? arm?.retrieval?.ingestion?.outcomes.map(projectIngestionFailure).find(Boolean) : null;
     summary.arms.push({
       name,
       generationStatus: arm?.status ?? 'not-attempted',
+      ...(failure ? { ingestionFailure: {
+        stage: failure.errorStage, reason: failure.error.code,
+      } } : {}),
       judgeStatus: scored?.semanticJudge.status ?? 'not-attempted',
       ...(scored?.semanticJudge.reason ? { judgeReason: scored.semanticJudge.reason } : {}),
     });

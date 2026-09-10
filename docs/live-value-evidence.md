@@ -72,6 +72,20 @@ support, and safety failures are not averaged away by QA accuracy. Raw corpus
 and per-case transcripts remain private local artifacts; public results contain
 only aggregates, source identifiers and synthetic value evidence.
 
+New pilot aggregates can include a Cairn-arm `ingestionFailure` with exactly
+`{stage, reason}`: a finite capture/classification stage and allowlisted error
+code from the first recorded failed or partial batch. No memory, source or event
+IDs, batch indices, raw results, text or exception properties are added to that
+diagnostic. Existing case identifiers remain unchanged. Projection happens again
+at the aggregate boundary, so even a private string shaped like a legal error
+code cannot be reflected. These fields are local opt-in experiment reporting,
+not telemetry or hosted protocol changes; the operator still controls retention.
+
+Preserving a new diagnostic does not recover a missing historical cause. The
+original first-live evidence remains untouched. Generation/scoring eligibility,
+denominators and the interpretation of partial ingestion do not change. See
+[summary acceptance](plans/ingestion-failure-summary.md).
+
 ## Offline contributor check
 
 ```sh

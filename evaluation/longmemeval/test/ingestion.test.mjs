@@ -10,6 +10,7 @@ import {
   ingestLongMemEvalCase,
   LongMemEvalIngestionError,
   planLongMemEvalCase,
+  projectIngestionFailure,
 } from '../ingestion.mjs';
 import { opaqueQuestionId, stableTurnId } from '../prepare.mjs';
 
@@ -249,10 +250,16 @@ test('I04: every stop condition is sanitized, never retried and leaves later bat
       error: { code: 'model_timeout', retryable: false } }), 'model_timeout'],
     ['failed', async () => ({ ok: false,
       error: { code: 'PRIVATE PROVIDER BODY', retryable: true } }), 'capture_failed'],
+    ['failed', async () => ({ ok: false,
+      error: { code: 'private_customer_123', retryable: true } }), 'capture_failed'],
+    ['failed', async () => ({ ok: false,
+      error: { code: 'capture_threw', retryable: true } }), 'capture_failed'],
     ['partial', async () => completed({ status: 'failed',
       error: { code: 'classification_failed', retryable: false } }), 'classification_failed'],
     ['partial', async () => completed({ status: 'failed',
       error: { code: 'PRIVATE CLASSIFIER BODY', retryable: true } }), 'classification_failed'],
+    ['partial', async () => completed({ status: 'failed',
+      error: { code: 'private_customer_123', retryable: true } }), 'classification_failed'],
     ['unknown', async () => ({ ok: true, value: { duplicate: false } }), 'malformed_capture_response'],
     ['unknown', async () => { throw new Error('PRIVATE THROWN BODY'); }, 'capture_threw'],
   ];
@@ -265,8 +272,29 @@ test('I04: every stop condition is sanitized, never retried and leaves later bat
     assert.equal(result.outcomes[0].error?.code
       ?? result.outcomes[0].result.classification.error.code, code);
     assert.equal(result.outcomes[1].status, 'not_run');
-    assert.doesNotMatch(JSON.stringify(result), /PRIVATE/u);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE|private_customer_123/u);
   }
+});
+
+test('failure projection rechecks finite codes and stages without success diagnostics', () => {
+  for (const status of ['completed', 'duplicate', 'not_run', 'private_status', undefined]) {
+    assert.equal(projectIngestionFailure({ status, error: { code: 'model_timeout' } }), null);
+  }
+  for (const status of ['partial', 'failed', 'unknown']) {
+    assert.equal(projectIngestionFailure({ status }), null);
+    assert.deepEqual(projectIngestionFailure({ status, errorStage: 'private_stage',
+      error: { code: 'private_customer_123', retryable: true, message: 'private text' } }), {
+      errorStage: status === 'partial' ? 'classification' : 'capture',
+      error: { code: status === 'partial' ? 'classification_failed' : 'capture_failed', retryable: false },
+    });
+  }
+  for (const code of ['capture_failed', 'capture_processing', 'malformed_capture_response', 'capture_threw']) {
+    assert.deepEqual(projectIngestionFailure({ status: 'unknown', error: { code, retryable: true } }),
+      { errorStage: 'capture', error: { code, retryable: false } });
+  }
+  assert.deepEqual(projectIngestionFailure({ status: 'partial',
+    result: { classification: { error: { code: 'model_timeout', retryable: true } } } }),
+  { errorStage: 'classification', error: { code: 'model_timeout', retryable: true } });
 });
 
 test('I05: actual core receipts map to raw intervals; replay and forgetting cannot resurrect', async (t) => {

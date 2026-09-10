@@ -65,6 +65,17 @@ three `arms`, blocking flags and elapsed time. Arms are ordered `cairn`,
 execution order. Each arm records completion/failure, stage errors, retrieval,
 packing and answering evidence. Answer failures do not disappear from the report.
 
+Ingestion outcomes retain an optional `errorStage` (`capture` or `classification`)
+with a finite projected `{code, retryable}` error. A partial admission can have
+failed classification after memory was stored; it remains partial, stops later
+batches, and does not authorize an answer from the incomplete Cairn store.
+Top-level capture errors are not relabeled as extraction errors. Unknown codes
+map to fixed fallbacks, never arbitrary provider strings. Successful, duplicate
+and not-run outcomes do not acquire a failure diagnostic.
+The scorer accepts both older outcomes without `errorStage` and new bounded
+stage-bearing outcomes. The extra field does not change scores or eligibility;
+unknown stages and inconsistent stage/status/error combinations are rejected.
+
 Lexical ranking counts unique overlapping question/turn tokens after NFKC,
 lowercasing and Unicode letter/number tokenization. Zero-overlap turns are not
 candidates. Ties retain source order; `lexicalLimit` bounds the ranked candidates

@@ -17,6 +17,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Preserve bounded capture/classification failure causes in comparison and pilot
+  summaries. Partial ingestion still fails; historical evidence and scores are
+  unchanged, and no raw model or source content is added to diagnostics.
+
 - Add optional content-free model failure diagnostics for trusted local callers.
   Stage/layer/reason events do not change operation results, record model text,
   relax validation or establish the cause of historical live failures.

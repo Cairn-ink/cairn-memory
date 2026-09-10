@@ -390,6 +390,28 @@ const safeError = (error, fallback) => {
   return { code, retryable: code === error?.code && error?.retryable === true };
 };
 
+// Accept both ingestion outcomes and their comparison summaries. Status fixes
+// the stage; only finite codes cross either reporting boundary.
+export const projectIngestionFailure = (outcome) => {
+  if (outcome?.status === 'partial') {
+    const error = outcome.result?.classification?.error ?? outcome.error;
+    if (!error) return null;
+    return { errorStage: 'classification',
+      error: safeError(error, 'classification_failed') };
+  }
+  if (['failed', 'unknown'].includes(outcome?.status)) {
+    if (!outcome.error) return null;
+    const fallback = ['capture_failed', 'capture_processing', 'malformed_capture_response',
+      'capture_threw'].includes(outcome.error?.code) ? outcome.error.code : 'capture_failed';
+    return { errorStage: 'capture', error: {
+      code: safeError(outcome.error, fallback).code,
+      retryable: SAFE_CAPTURE_ERROR_CODES.has(outcome.error?.code)
+        && outcome.error.retryable === true,
+    } };
+  }
+  return null;
+};
+
 const validMemoryRef = (value) => exactResponseObject(value, ['id', 'revision'])
   && validCoreIdentifier(value.id)
   && Number.isSafeInteger(value.revision)
