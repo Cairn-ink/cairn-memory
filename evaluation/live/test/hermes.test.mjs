@@ -133,9 +133,11 @@ function inputRef(input) {
     memoryId: candidate.memory.id, revision: candidate.memory.revision } : null;
 }
 
-async function fakeProvider({ invalidStage = null } = {}) {
+async function fakeProvider({ invalidStage = null, invalidLookup = null } = {}) {
   const token = 'synthetic-provider-key';
-  const state = { calls: 0, memoryId: null, revision: null };
+  // Track only fault-injection location and emitted tool names, never a memory
+  // ID or revision carried across the fresh Hermes sessions.
+  const state = { calls: 0, lookup: null, toolCalls: [] };
   const allowed = new Set(['max_completion_tokens', 'messages', 'model', 'n', 'store', 'stream', 'tool_choice', 'tools']);
   const server = createServer(async (request, reply) => {
     const chunks = [];
@@ -151,6 +153,7 @@ async function fakeProvider({ invalidStage = null } = {}) {
         const input = JSON.parse(body.input[0].content[0].text);
         const ref = inputRef(input);
         const value = body.text.format.name === `cairn_${invalidStage}`
+          && (invalidLookup === null || invalidLookup === state.lookup)
           ? { refs: 'PRIVATE_INVALID_MODEL_OUTPUT' }
           : body.text.format.name === 'cairn_select' || body.text.format.name === 'cairn_rank'
           ? { refs: ref ? [ref] : [] } : { items: [] };
@@ -168,37 +171,42 @@ async function fakeProvider({ invalidStage = null } = {}) {
         assert.equal(body.n, 1);
         const prompt = body.messages.findLast((message) => message.role === 'user')?.content || '';
         const remember = toolResult(body.messages, 'cairn_remember_memory');
-        const inspect = toolResult(body.messages, 'cairn_inspect_memory');
         const correct = toolResult(body.messages, 'cairn_correct_memory');
         const forget = toolResult(body.messages, 'cairn_forget_memory');
         const recall = toolResult(body.messages, 'cairn_recall_memory');
+        const recalledMemory = recall?.ok === true ? recall.value?.memories?.[0]?.memory : null;
         if (remember) {
-          state.memoryId = remember.value.memory.id; state.revision = remember.value.memory.revision;
           output = response({ content: 'The decision was saved.' });
         } else if (correct) {
-          state.revision = correct.value.memory.revision;
           output = response({ content: 'The decision was corrected to Friday.' });
         } else if (forget) {
           output = response({ content: 'The decision was forgotten.' });
+        } else if (prompt.includes('correct the Lantern')) {
+          state.lookup = 'C';
+          output = recalledMemory ? call('cairn_correct_memory', { memoryId: recalledMemory.id,
+            expectedRevision: recalledMemory.revision,
+            content: 'The fictional Lantern project runs its release review on Friday.', kind: 'decision' })
+            : recall ? response({ content: 'The memory lookup failed; nothing was corrected.' })
+              : call('cairn_recall_memory', { query: prompt, limit: 6 });
+        } else if (prompt.includes('forget the Lantern')) {
+          state.lookup = 'E';
+          output = recalledMemory ? call('cairn_forget_memory', { memoryId: recalledMemory.id,
+            expectedRevision: recalledMemory.revision })
+            : recall ? response({ content: 'The memory lookup failed; nothing was forgotten.' })
+              : call('cairn_recall_memory', { query: prompt, limit: 6 });
         } else if (recall) {
           const content = recall.value?.memories?.[0]?.memory?.content;
           output = response({ content: content?.includes('Friday') ? 'The release review is Friday.'
             : content?.includes('Tuesday') ? 'The release review is Tuesday.' : 'The release-review day is unknown.' });
         } else if (prompt.includes('remember this explicit decision')) {
           output = call('cairn_remember_memory', { content: 'The fictional Lantern project runs its release review on Tuesday.', kind: 'decision' });
-        } else if (prompt.includes('correct the Lantern')) {
-          output = inspect ? call('cairn_correct_memory', { memoryId: state.memoryId,
-            expectedRevision: inspect.value.memory.revision,
-            content: 'The fictional Lantern project runs its release review on Friday.', kind: 'decision' })
-            : call('cairn_inspect_memory', { memoryId: state.memoryId });
-        } else if (prompt.includes('forget the Lantern')) {
-          output = inspect ? call('cairn_forget_memory', { memoryId: state.memoryId,
-            expectedRevision: inspect.value.memory.revision }) : call('cairn_inspect_memory', { memoryId: state.memoryId });
         } else if (body.tools?.length) {
+          state.lookup = 'read';
           output = call('cairn_recall_memory', { query: prompt, limit: 6 });
         } else {
           output = response({ content: 'Without memory access, the release-review day is unknown.' });
         }
+        state.toolCalls.push(...(output.choices[0].message.tool_calls || []).map(entry => entry.function.name));
       }
       reply.writeHead(200, { 'content-type': 'application/json' });
       reply.end(JSON.stringify(output));
@@ -215,7 +223,10 @@ async function fakeProvider({ invalidStage = null } = {}) {
     }) };
 }
 
-for (const collectDiagnostics of [false, true]) test(`actual pinned Hermes lifecycle, diagnostics=${collectDiagnostics}`, { skip: missing.length
+for (const { collectDiagnostics, acceptanceVersion } of [
+  { collectDiagnostics: false }, { collectDiagnostics: true },
+  { collectDiagnostics: true, acceptanceVersion: 'cairn-value-authority-v2' },
+]) test(`actual pinned Hermes lifecycle, diagnostics=${collectDiagnostics}, acceptance=${acceptanceVersion || 'default'}`, { skip: missing.length
   ? `set ${missing.join(', ')} for the opt-in pinned-host gate` : false, timeout: 180_000 }, async () => {
   const provider = await fakeProvider();
   const ledger = { directory: path.join(mkdtempSync(path.join(tmpdir(), 'cairn-hermes-live-ledger-')), 'ledger'),
@@ -235,13 +246,24 @@ for (const collectDiagnostics of [false, true]) test(`actual pinned Hermes lifec
       privateDirectory: output,
       startProxy: startExperimentProxy,
       collectDiagnostics,
+      ...(acceptanceVersion ? { acceptanceVersion } : {}),
     });
     assert.equal(report.kind, 'real-hermes-native-memory');
     assert.deepEqual(report.stages.map((stage) => stage.status), Array(7).fill('completed'));
-    // 15 host completions plus five Cairn count/generation pairs. The final
-    // forgotten-store recall still performs one selection over its navigation map.
-    assert.equal(report.budgetAfter.requestCount, 25);
-    assert.equal(provider.state.calls, 25);
+    // 15 host completions plus nine Cairn count/generation pairs. Each fresh
+    // correction/forget session must rediscover its target by select and rank.
+    // The final forgotten-store recall still performs one selection over its map.
+    assert.equal(report.budgetAfter.requestCount, 33);
+    assert.equal(provider.state.calls, 33);
+    assert.equal(report.frozen.acceptanceVersion, acceptanceVersion || 'cairn-value-authority-v3');
+    assert.equal(provider.state.toolCalls.includes('cairn_inspect_memory'), false);
+    for (const [index, mutation] of [[2, 'cairn_correct_memory'], [4, 'cairn_forget_memory']]) {
+      const events = report.stages[index].result.toolEvents;
+      assert.deepEqual(events.map(event => event.name), ['cairn_recall_memory', mutation]);
+      const current = events[0].result.value.memories[0].memory;
+      assert.equal(events[1].arguments.memoryId, current.id);
+      assert.equal(events[1].arguments.expectedRevision, current.revision);
+    }
     assert.equal(Object.hasOwn(report.frozen, 'diagnostics'), collectDiagnostics);
     for (const stage of report.stages) {
       assert.equal(Object.hasOwn(stage, 'diagnostics'), collectDiagnostics);
@@ -300,6 +322,44 @@ for (const invalidStage of ['select', 'rank']) test(`actual installed ${invalidS
     assert.deepEqual(report.stages[0].diagnostics.events, []);
     assert.deepEqual(report.stages.at(-1).diagnostics.events, []);
     assert.ok(report.stages.slice(2, 6).every(stage => !Object.hasOwn(stage, 'diagnostics')));
+  } finally { session.close(); await provider.close(); }
+});
+
+test('failed fresh-session lookup at E never forgets the active corrected memory', {
+  skip: missing.length ? `set ${missing.join(', ')} for the opt-in pinned-host gate` : false,
+  timeout: 180_000,
+}, async () => {
+  const provider = await fakeProvider({ invalidStage: 'select', invalidLookup: 'E' });
+  const ledger = { directory: path.join(mkdtempSync(path.join(tmpdir(), 'cairn-forget-lookup-ledger-')), 'ledger'),
+    runId: randomUUID(), limitMicroUsd: 20_000_000, requestCap: 4000 };
+  createExperimentBudget(ledger).close();
+  const session = createLiveSession({ ledger, apiKey: provider.token,
+    fetchImpl: (url, options) => fetch(`${provider.url}${new URL(url).pathname}`, options) });
+  try {
+    const report = await runHermesValueExperiment({ ...hostOptions(), session,
+      privateDirectory: mkdtempSync(path.join(tmpdir(), 'cairn-forget-lookup-failure-')),
+      collectDiagnostics: true, startProxy: startExperimentProxy });
+    assert.deepEqual(report.stages.map(stage => stage.status),
+      ['completed', 'completed', 'completed', 'completed', 'failed', 'not_run', 'completed']);
+    const failed = report.stages[4];
+    assert.equal(failed.verdict.passedAutomated, false);
+    assert.deepEqual(failed.result.toolEvents.map(event => event.name), ['cairn_recall_memory']);
+    assert.equal(provider.state.toolCalls.includes('cairn_forget_memory'), false);
+    assert.equal(failed.result.toolEvents[0].result.ok, false);
+    assert.equal(failed.store.list.ok, true);
+    assert.equal(failed.store.list.value.memories.length, 1);
+    assert.equal(failed.store.target.ok, true);
+    assert.deepEqual(failed.store.target.value, report.stages[3].store.target.value);
+    assert.match(failed.store.target.value.memory.content, /Friday/u);
+    assert.ok(failed.diagnostics.events.some(event => event.stage === 'select'
+      && event.layer === 'core_validation' && event.reason === 'malformed_refs'));
+    assert.equal(failed.diagnostics.collection.corrupted, false);
+    assert.ok(report.stages.slice(0, 4).every(stage => stage.diagnostics.events.length === 0));
+    assert.equal(Object.hasOwn(report.stages[5], 'diagnostics'), false);
+    assert.deepEqual(report.stages[6].diagnostics.events, []);
+    const diagnostics = JSON.stringify(report.stages.map(stage => stage.diagnostics));
+    assert.equal(diagnostics.includes('PRIVATE_INVALID_MODEL_OUTPUT'), false);
+    assert.equal(diagnostics.includes(provider.token), false);
   } finally { session.close(); await provider.close(); }
 });
 

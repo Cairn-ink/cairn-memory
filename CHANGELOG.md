@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Version Hermes evaluation acceptance as v3: reject duplicate initial memories
+  and no-op forgetting, preserve failed inspector state, and require semantic
+  review separately. Retain v2 and publish bounded real-model loop evidence:
+  18/18 product steps accepted, but the combined control gate did not pass.
+
 - Add opt-in bounded failure collection to the installed Hermes experiment path,
   with finite content-free events, explicit collection limits and full allowlisted
   runtime source matching before traffic. No model policy or quality claim changes.

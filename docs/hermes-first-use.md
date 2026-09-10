@@ -7,6 +7,11 @@ chat experiment**. The [first retained trials](evidence/first-live-evidence.md)
 demonstrate cross-session save/read/correct/read but not the complete lifecycle;
 a recall failure blocked forgetting. No human study or general quality is claimed.
 
+The [later fixed confirmation batch](evidence/reliable-memory-loop.md) completed
+the product A-F loop three times with real models and independent review. Its
+combined control gate still did not pass. Keep this narrow result separate from
+the retained failures and the unverified broader reliability/usefulness claims.
+
 ## First check: no account, no model key
 
 Follow the [source installer and six-stage walkthrough](local-memory-demo.md#install-from-the-source-checkout).

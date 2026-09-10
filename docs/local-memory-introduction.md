@@ -40,8 +40,10 @@ still has unsupported source details; an explicitly selected [experimental
 profile](plans/extraction-model-profile.md) passed a fixed small synthetic corpus
 after review. Neither result is a quality score for MCP recall or the Hermes loop.
 
-Installed persistence and scripted Hermes dispatch have been tested; real-model
-full-chat behavior remains unverified. See the demo's [evidence boundaries](local-memory-demo.md#evidence-boundaries)
+Installed persistence and scripted Hermes dispatch have been tested. A fixed
+three-trial [real-model explicit lifecycle](evidence/reliable-memory-loop.md)
+accepted all18 Cairn steps after review, but its combined no-memory control gate
+did not pass. This is not broad recall quality or a human study. See the demo's [evidence boundaries](local-memory-demo.md#evidence-boundaries)
 for the separate test modes and historical paid probe. The released hosted Claude
 plugin is a separate mode with its own automatic capture and privacy behavior.
 
@@ -57,8 +59,9 @@ MCP 的 `remember_memory` 直接存入呼叫者指定的內容，不會自動讀
 [實驗配置](plans/extraction-model-profile.md)則在固定的小型合成資料評測通過審查。
 這些抽取結果不能當作 MCP 檢索或 Hermes 對話的品質分數。
 
-目前是開發者預覽：安裝後的保存與修正流程已有實測，Hermes 也跑過真正的
-對話迴圈與工具派送，但工具選擇由模擬模型決定。另一次真實模型測試只驗證了
-有限的記憶召回，兩者不能合稱完整真實模型對話測試。本機 MCP 尚未實作自動
+目前是開發者預覽：安裝與 Hermes 工具派送已有測試；另一次事先固定的
+[三次真實模型閉環](evidence/reliable-memory-loop.md)，18 個 Cairn 步驟均通過複核，
+但包含無記憶對照組的整批門檻未通過。這不是一般檢索品質或真人使用研究。
+本機 MCP 尚未實作自動
 記錄對話；已發布的託管 Claude plugin 是另一種安裝模式，有自己的資料流與
 隱私設定。
