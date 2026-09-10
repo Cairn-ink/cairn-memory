@@ -17,6 +17,10 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add optional content-free model failure diagnostics for trusted local callers.
+  Stage/layer/reason events do not change operation results, record model text,
+  relax validation or establish the cause of historical live failures.
+
 - Correct the OpenAI preflight check to use the existing absolute 7,024-token
   provider-input ceiling, while retaining local 6,000 input /1,024 output limits.
   Dynamic schema overhead no longer rejects otherwise in-budget requests solely

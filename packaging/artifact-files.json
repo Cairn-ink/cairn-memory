@@ -13,6 +13,7 @@
   "core/moc-storage.mjs",
   "core/model-budget.mjs",
   "core/model-call.mjs",
+  "core/model-diagnostics.mjs",
   "core/placement-input.mjs",
   "core/recall.mjs",
   "core/runtime.mjs",

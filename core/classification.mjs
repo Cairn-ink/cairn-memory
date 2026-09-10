@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { callModel } from './model-call.mjs';
 import { placementProposal } from './placement-input.mjs';
 import { fail } from './validation.mjs';
+import { emitDiagnostic } from './model-diagnostics.mjs';
 
 const system = readFileSync(new URL('./prompts/classify-placement.md', import.meta.url), 'utf8');
 
@@ -22,6 +23,7 @@ export async function classify({ model, snapshot, map, validateFresh }) {
     }
   } catch (error) {
     if (error?.code === 'token_count_unavailable') throw error;
+    emitDiagnostic(model, 'classify', 'core_validation', 'invalid_classification');
     fail('invalid_model_output');
   }
   validateFresh();

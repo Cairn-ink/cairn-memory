@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { callModel } from './model-call.mjs';
+import { emitDiagnostic } from './model-diagnostics.mjs';
 import { fail, object, identifier, revision, denseArray } from './validation.mjs';
 
 const selectPrompt = readFileSync(new URL('./prompts/recall-select.md', import.meta.url), 'utf8');
@@ -7,7 +8,8 @@ const rankPrompt = readFileSync(new URL('./prompts/recall-rank.md', import.meta.
 const key = (ref) => JSON.stringify([ref.namespaceIndex, ref.memoryId, ref.revision]);
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
-function selection(output, allowed, maximum) {
+function selection(output, allowed, maximum, model, stage) {
+  let reason = 'malformed_refs';
   try {
     object(output, ['refs']);
     denseArray(output.refs, 0, maximum);
@@ -17,15 +19,19 @@ function selection(output, allowed, maximum) {
       if (!Number.isSafeInteger(ref.namespaceIndex) || ref.namespaceIndex < 0) fail('invalid_model_output');
       const clean = { namespaceIndex: ref.namespaceIndex, memoryId: identifier(ref.memoryId), revision: revision(ref.revision) };
       const identity = key(clean);
-      if (!allowed.has(identity) || seen.has(identity)) fail('invalid_model_output');
+      if (!allowed.has(identity)) { reason = 'non_visible_ref'; fail('invalid_model_output'); }
+      if (seen.has(identity)) { reason = 'duplicate_ref'; fail('invalid_model_output'); }
       seen.add(identity);
       return clean;
     });
-  } catch { fail('invalid_model_output'); }
+  } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize }) {
-  if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') fail('model_not_configured');
+  if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
+    emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
+    fail('model_not_configured');
+  }
   const maps = [];
   const chosen = new Map();
   for (let round = 0; round < 2; round++) {
@@ -48,9 +54,12 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     if (!visible.length) break;
     const maxRefs = Math.min(24, 36 - chosen.size);
     const output = await callModel(model, 'select', selectPrompt, { query, maps: visible, maxRefs });
-    const selected = selection(output, allowed, maxRefs);
+    const selected = selection(output, allowed, maxRefs, model, 'select');
     for (let i = 0; i < readSet.length; i++) {
-      if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) fail('invalid_model_output');
+      if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
+        emitDiagnostic(model, 'select', 'core_validation', 'namespace_selection_limit');
+        fail('invalid_model_output');
+      }
     }
     for (const ref of selected) {
       if (!chosen.has(key(ref))) chosen.set(key(ref), ref);
@@ -87,7 +96,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   if (candidates.length) {
     const rankOutput = await callModel(model, 'rank', rankPrompt, { query, limit,
       candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) });
-    ranked = selection(rankOutput, new Map(candidates.map((ref) => [key(ref), ref])), limit);
+    ranked = selection(rankOutput, new Map(candidates.map((ref) => [key(ref), ref])), limit, model, 'rank');
   }
   // No model/counter callback may follow the authoritative final read.
   const memories = finalize(candidates, ranked.map((ref) => candidates.findIndex((item) => key(item) === key(ref))));
