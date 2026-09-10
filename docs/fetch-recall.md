@@ -62,6 +62,23 @@ fetched candidates. Empty arrays are valid. Forged IDs, revisions, extra fields
 and group IDs fail validation. All query/content/receipt/label text is untrusted
 data. Structural validation does not prove that a model judges relevance well.
 
+Recall's internal navigation now uses query-aware excerpts, still at most 120
+Unicode code points per memory. It chooses a contiguous slice of current stored
+content containing the most distinct literal query words, with an earliest-window
+tie break. It does not add candidates, change their order, or make extra model
+calls. Public `core.map` and classification keep their original prefix labels.
+Internal continuation cursors bind a keyed query digest and excerpt-policy version;
+the raw query is not embedded in them. Excerpts are counted before page packing.
+
+This is navigation evidence, not a summary or semantic search fallback. Matching
+uses case-insensitive whole Unicode letter/number runs without additional
+normalization, stemming, stopword removal or language-specific segmentation.
+Existing input sanitation still applies. A longer CJK run cannot match a substring
+word; synonyms and facts spread over distant sentences may still be missed.
+The excerpt need not contain a complete sentence or answer: current content and
+receipts still come from revision-checked fetch and authoritative final reads.
+See the [fixed real-model diagnostic and follow-up](evidence/recall-label-visibility.md).
+
 There are at most three model calls, 36 unique candidates and 72 fetch operations
 (two receipt pages per candidate). Each call needs a
 context window of at least 8192, input at most 6000 counted tokens, output at most

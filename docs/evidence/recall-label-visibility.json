@@ -1,0 +1,724 @@
+{
+  "schemaVersion": 1,
+  "scope": "synthetic navigation diagnostic, not benchmark accuracy",
+  "fixtureRecipe": {
+    "filler": "General project background and meeting context. ",
+    "fillerRepetitions": 6,
+    "targetIndex": 0,
+    "distractorFact": "Person {i} owns the unrelated fictional Project {i} archive.",
+    "front": "fact + space + filler",
+    "back": "filler + fact",
+    "middle": "filler + fact + space + filler",
+    "mocTitle": "Project notes",
+    "freshStorePerCase": true,
+    "uuidOrdering": "uncontrolled",
+    "limit": 1
+  },
+  "runs": [
+    {
+      "name": "label-position-v1",
+      "intentSha256": "fc2f32e4e3455da627cd03bc93e4cad65c3d52de0d3c376efc589349e4af0ef7",
+      "operatorSha256": "9c34fdae6e0763c5d40bed1be02fc6160a26da74156df5cf38e861db9916a935",
+      "sourceBase": "c0cbc6027316750a73a8a9423e62aeae4104c2f3",
+      "sourceHashes": {
+        "core/admission-storage.mjs": "2b042b52e8a23e9900fa0794b70ac869b6da60eb5f770ab36de840e7454f202e",
+        "core/capture-input.mjs": "1b1d0b2365133ad349b73fb656afaf761e2af5b7897c72e0fd2d7e92995088bc",
+        "core/capture.mjs": "34d3ec503e383f29bf4dc52d36fdf0a48584633ac9b254ad33cb4c031f30b06f",
+        "core/classification.mjs": "980fa14c8e92bf5190763db6348deff8ed47ff886de832c5340478f9453ba177",
+        "core/conflict-storage.mjs": "0639606e811592a7b695f7342cd3c3751d2a15dc55c75879a28fa2944c5918ab",
+        "core/contract.mjs": "cecedd1ddf0b2f6b2e7830b1e3190ac09b52927239d20c8bf7f6cb0216828e3c",
+        "core/database.mjs": "5c0390583a22871787e9a4bda90f1f93e22f9a510157e9358a4763305ef987a6",
+        "core/fetch.mjs": "df363ddc24bb5aa63ef72fe77629aca5917ed6595f8f46e5e48d1e7ba2cfb336",
+        "core/index-schema.mjs": "665ff64d94da244dffd06541e2df0680f589faabec650650720dfa11ff7a8f00",
+        "core/index-storage.mjs": "f9e695bdbf2c5a6f82cb9ce3ac807fd3b4dd30331f3a083bb0d0b58926a8e0af",
+        "core/index.mjs": "7474c3076455d64af3c8c4d6cee3592b0058bb4542b1746232b2a607967c2f55",
+        "core/moc-storage.mjs": "4d3ae4581a3c5b0c9078ab7f4ef41b95a45dcb123eac9066a5ad7879ec742e5e",
+        "core/model-budget.mjs": "ab1eb8ca87bf6937e8ba9039518786668dc9337bb3b9062eed4477809dec1e8a",
+        "core/model-call.mjs": "c1508f8671ca1da1e418f34f32507ea3f447ea15ff737e003fb6744a05d1e34b",
+        "core/model-diagnostics.mjs": "2393442790a60cb869bc5978c5aff2cddb4f1d6b20d650292c061f3838f8d6e2",
+        "core/placement-input.mjs": "724348a355d5137448830369dd72fed680d5ef32b15614284c91a3fef9e5654d",
+        "core/recall.mjs": "d57d151738a2e4a12c8c3a2c5f5a49675267124da711cf062f4dcf6c31dabe93",
+        "core/runtime.mjs": "a9696596c69dd3fe4c39b1eddf65be3e050643fa00e126fdb279cb26e2956619",
+        "core/validation.mjs": "96d4a2cd01433c6af27f9263ffd5d32648367dec65995f223e3e1a3c18267b92",
+        "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",
+        "core/prompts/extract-memories.md": "8942bea305c2bf09a65b092f11da9dcb6068ceb16fe88e7e623149cd99850eae",
+        "core/prompts/recall-rank.md": "930e43038441d117dddf7bcaa2f93363bcb2e9150105d406750800da94b7fbcc",
+        "core/prompts/recall-select.md": "41cc02441ede2b53763bc0afad5eb26d9b35441defd9a5a2e2746216c9ba1880",
+        "adapters/mcp/cli.mjs": "6298d492caccb345bea85f29279bccb17ffc3e785c0d9168ed57a88760ce3466",
+        "adapters/mcp/server.mjs": "2d6d0d191085c487cf9d1144c35219ac2ab928ea6c72d25c6fbf9b850e0e9ae2",
+        "adapters/openai/index.mjs": "e6655b68ce831c63d10937e235d14bd035ef717bc9d59525bd4739e7e5062ec6",
+        "adapters/openai/profiles.mjs": "519d05fcb2aefc47f2d4d5c887533287114ceb6bb61245d06656726ca1d9da2b",
+        "adapters/openai/schemas.mjs": "7aaee1803c8cafa21a13e9e095a241aea60a25fac9aef0028e4367fb789215d6",
+        "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
+        "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
+        "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "evaluation/live/session.mjs": "0b6b92905ba26bc5206eec6044714a76b6e36b8f51b2a37b88ec8948ba8248cf",
+        "evaluation/experiment-budget/request-guard.mjs": "1bf75393d082e025e9155108f9a4dfc65b8af92703d3c30f02a9cb212ba7d696"
+      },
+      "model": "gpt-4.1-mini-2025-04-14",
+      "startedAt": "2026-09-10T17:27:59.352Z",
+      "completedAt": "2026-09-10T17:28:24.976Z",
+      "before": {
+        "requests": 862,
+        "reservedMicroUsd": 9530000,
+        "knownUsageMicroUsd": 780189,
+        "unknownCostRequests": 375,
+        "unsettled": 0,
+        "state": "open"
+      },
+      "after": {
+        "requests": 886,
+        "reservedMicroUsd": 9650000,
+        "knownUsageMicroUsd": 785152,
+        "unknownCostRequests": 387,
+        "unsettled": 0,
+        "state": "open"
+      },
+      "cases": [
+        {
+          "count": 1,
+          "position": "front",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "baseline",
+          "expectedRecall": true,
+          "observation": {
+            "case": 1,
+            "count": 1,
+            "position": "front",
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4203,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 1,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 1,
+          "position": "back",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "baseline",
+          "expectedRecall": true,
+          "observation": {
+            "case": 2,
+            "count": 1,
+            "position": "back",
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4074,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 1,
+                "targetRefVisible": true,
+                "queryTermVisible": false,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 4,
+          "position": "front",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "baseline",
+          "expectedRecall": true,
+          "observation": {
+            "case": 3,
+            "count": 4,
+            "position": "front",
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3534,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 4,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 4,
+          "position": "back",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "baseline",
+          "expectedRecall": true,
+          "observation": {
+            "case": 4,
+            "count": 4,
+            "position": "back",
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3284,
+            "coverage": "complete",
+            "recalled": 0,
+            "targetRecalled": false,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 4,
+                "targetRefVisible": true,
+                "queryTermVisible": false,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": false
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 16,
+          "position": "front",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "baseline",
+          "expectedRecall": true,
+          "observation": {
+            "case": 5,
+            "count": 16,
+            "position": "front",
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4308,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 16,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 16,
+          "position": "back",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "baseline",
+          "expectedRecall": true,
+          "observation": {
+            "case": 6,
+            "count": 16,
+            "position": "back",
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4459,
+            "coverage": "complete",
+            "recalled": 0,
+            "targetRecalled": false,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 16,
+                "targetRefVisible": true,
+                "queryTermVisible": false,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": false
+              }
+            ],
+            "diagnostics": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "label-excerpt-v1",
+      "intentSha256": "79a33af55b10d19c7c8be63cafecd1b000b8e90c7232e5d88c9ffcbe44031051",
+      "operatorSha256": "14cc4f70d0b48f579da706b305d7dc358f9681394324f5dd7db8940e3182249e",
+      "sourceBase": "c0cbc6027316750a73a8a9423e62aeae4104c2f3",
+      "sourceHashes": {
+        "core/admission-storage.mjs": "2b042b52e8a23e9900fa0794b70ac869b6da60eb5f770ab36de840e7454f202e",
+        "core/capture-input.mjs": "1b1d0b2365133ad349b73fb656afaf761e2af5b7897c72e0fd2d7e92995088bc",
+        "core/capture.mjs": "34d3ec503e383f29bf4dc52d36fdf0a48584633ac9b254ad33cb4c031f30b06f",
+        "core/classification.mjs": "980fa14c8e92bf5190763db6348deff8ed47ff886de832c5340478f9453ba177",
+        "core/conflict-storage.mjs": "0639606e811592a7b695f7342cd3c3751d2a15dc55c75879a28fa2944c5918ab",
+        "core/contract.mjs": "f65c2fad75bcf19b87bf5e117407922254e2c545b00cbc60dd176adba40a8582",
+        "core/database.mjs": "5c0390583a22871787e9a4bda90f1f93e22f9a510157e9358a4763305ef987a6",
+        "core/fetch.mjs": "df363ddc24bb5aa63ef72fe77629aca5917ed6595f8f46e5e48d1e7ba2cfb336",
+        "core/index-schema.mjs": "665ff64d94da244dffd06541e2df0680f589faabec650650720dfa11ff7a8f00",
+        "core/index-storage.mjs": "f9e695bdbf2c5a6f82cb9ce3ac807fd3b4dd30331f3a083bb0d0b58926a8e0af",
+        "core/index.mjs": "7474c3076455d64af3c8c4d6cee3592b0058bb4542b1746232b2a607967c2f55",
+        "core/moc-storage.mjs": "3dbd7b85fcb44aaad061cdee352badd4d949240069cefcaaa1edfc7871b8ab3d",
+        "core/model-budget.mjs": "ab1eb8ca87bf6937e8ba9039518786668dc9337bb3b9062eed4477809dec1e8a",
+        "core/model-call.mjs": "c1508f8671ca1da1e418f34f32507ea3f447ea15ff737e003fb6744a05d1e34b",
+        "core/model-diagnostics.mjs": "2393442790a60cb869bc5978c5aff2cddb4f1d6b20d650292c061f3838f8d6e2",
+        "core/placement-input.mjs": "724348a355d5137448830369dd72fed680d5ef32b15614284c91a3fef9e5654d",
+        "core/query-excerpt.mjs": "cda8347a0d249b72f6f74d0d4d3b0aacad493e8877bb0ab2d935adc6cbdac6ca",
+        "core/recall.mjs": "d57d151738a2e4a12c8c3a2c5f5a49675267124da711cf062f4dcf6c31dabe93",
+        "core/runtime.mjs": "a9696596c69dd3fe4c39b1eddf65be3e050643fa00e126fdb279cb26e2956619",
+        "core/validation.mjs": "96d4a2cd01433c6af27f9263ffd5d32648367dec65995f223e3e1a3c18267b92",
+        "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",
+        "core/prompts/extract-memories.md": "8942bea305c2bf09a65b092f11da9dcb6068ceb16fe88e7e623149cd99850eae",
+        "core/prompts/recall-rank.md": "930e43038441d117dddf7bcaa2f93363bcb2e9150105d406750800da94b7fbcc",
+        "core/prompts/recall-select.md": "41cc02441ede2b53763bc0afad5eb26d9b35441defd9a5a2e2746216c9ba1880",
+        "adapters/mcp/cli.mjs": "6298d492caccb345bea85f29279bccb17ffc3e785c0d9168ed57a88760ce3466",
+        "adapters/mcp/server.mjs": "2d6d0d191085c487cf9d1144c35219ac2ab928ea6c72d25c6fbf9b850e0e9ae2",
+        "adapters/openai/index.mjs": "e6655b68ce831c63d10937e235d14bd035ef717bc9d59525bd4739e7e5062ec6",
+        "adapters/openai/profiles.mjs": "519d05fcb2aefc47f2d4d5c887533287114ceb6bb61245d06656726ca1d9da2b",
+        "adapters/openai/schemas.mjs": "7aaee1803c8cafa21a13e9e095a241aea60a25fac9aef0028e4367fb789215d6",
+        "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
+        "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
+        "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "evaluation/live/session.mjs": "0b6b92905ba26bc5206eec6044714a76b6e36b8f51b2a37b88ec8948ba8248cf",
+        "evaluation/experiment-budget/request-guard.mjs": "1bf75393d082e025e9155108f9a4dfc65b8af92703d3c30f02a9cb212ba7d696"
+      },
+      "model": "gpt-4.1-mini-2025-04-14",
+      "startedAt": "2026-09-10T17:34:44.770Z",
+      "completedAt": "2026-09-10T17:35:29.874Z",
+      "before": {
+        "requests": 886,
+        "reservedMicroUsd": 9650000,
+        "knownUsageMicroUsd": 785152,
+        "unknownCostRequests": 387,
+        "unsettled": 0,
+        "state": "open"
+      },
+      "after": {
+        "requests": 924,
+        "reservedMicroUsd": 9840000,
+        "knownUsageMicroUsd": 793946,
+        "unknownCostRequests": 406,
+        "unsettled": 0,
+        "state": "open"
+      },
+      "cases": [
+        {
+          "count": 1,
+          "position": "front",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "development",
+          "expectedRecall": true,
+          "observation": {
+            "case": 1,
+            "count": 1,
+            "position": "front",
+            "group": "development",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4458,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 1,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 1,
+          "position": "back",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "development",
+          "expectedRecall": true,
+          "observation": {
+            "case": 2,
+            "count": 1,
+            "position": "back",
+            "group": "development",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4666,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 1,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 4,
+          "position": "front",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "development",
+          "expectedRecall": true,
+          "observation": {
+            "case": 3,
+            "count": 4,
+            "position": "front",
+            "group": "development",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3934,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 4,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 4,
+          "position": "back",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "development",
+          "expectedRecall": true,
+          "observation": {
+            "case": 4,
+            "count": 4,
+            "position": "back",
+            "group": "development",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3571,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 4,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 16,
+          "position": "front",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "development",
+          "expectedRecall": true,
+          "observation": {
+            "case": 5,
+            "count": 16,
+            "position": "front",
+            "group": "development",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4421,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 16,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 16,
+          "position": "back",
+          "query": "Who owns the fictional Juniper migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "development",
+          "expectedRecall": true,
+          "observation": {
+            "case": 6,
+            "count": 16,
+            "position": "back",
+            "group": "development",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3875,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 16,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 4,
+          "position": "middle",
+          "query": "Who owns the fictional Marigold migration?",
+          "targetFact": "Zara owns the Marigold migration.",
+          "group": "additional",
+          "expectedRecall": true,
+          "observation": {
+            "case": 7,
+            "count": 4,
+            "position": "middle",
+            "group": "additional",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 4773,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 4,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 16,
+          "position": "middle",
+          "query": "Who is responsible for the fictional Cedar rollout?",
+          "targetFact": "Noel is responsible for the Cedar rollout.",
+          "group": "additional",
+          "expectedRecall": true,
+          "observation": {
+            "case": 8,
+            "count": 16,
+            "position": "middle",
+            "group": "additional",
+            "expectedRecall": true,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3403,
+            "coverage": "complete",
+            "recalled": 1,
+            "targetRecalled": true,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 16,
+                "targetRefVisible": true,
+                "queryTermVisible": true,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 4,
+          "position": "back",
+          "query": "Who owns the fictional Aster migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "additional",
+          "expectedRecall": false,
+          "observation": {
+            "case": 9,
+            "count": 4,
+            "position": "back",
+            "group": "additional",
+            "expectedRecall": false,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 1500,
+            "coverage": "complete",
+            "recalled": 0,
+            "targetRecalled": false,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 4,
+                "targetRefVisible": true,
+                "queryTermVisible": false,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 0,
+                "targetChosen": false
+              }
+            ],
+            "diagnostics": []
+          }
+        },
+        {
+          "count": 16,
+          "position": "middle",
+          "query": "Who owns the fictional Quartz migration?",
+          "targetFact": "Rina owns the Juniper migration.",
+          "group": "additional",
+          "expectedRecall": false,
+          "observation": {
+            "case": 10,
+            "count": 16,
+            "position": "middle",
+            "group": "additional",
+            "expectedRecall": false,
+            "directTargetPresent": true,
+            "ok": true,
+            "elapsedMs": 3922,
+            "coverage": "complete",
+            "recalled": 0,
+            "targetRecalled": false,
+            "errorCode": null,
+            "navigation": [
+              {
+                "memoryRefs": 16,
+                "targetRefVisible": true,
+                "queryTermVisible": false,
+                "exhausted": true
+              }
+            ],
+            "chosen": [
+              {
+                "count": 1,
+                "targetChosen": true
+              }
+            ],
+            "diagnostics": []
+          }
+        }
+      ]
+    }
+  ]
+}

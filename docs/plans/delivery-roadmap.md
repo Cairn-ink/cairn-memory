@@ -38,7 +38,17 @@ distribution and real adoption). The narrow loop is now demonstrated repeatedly;
 long-history usefulness, broad reliability and PLG outcomes remain unproved.
 Private integration is separately owned and not certified by this checkpoint.
 No release, upstream listing, public promotion or production cutover is implied.
-The original USD20 ledger checkpoint is862 requests /USD9.530 reserved, not a new
+The [navigation-label repair](recall-query-excerpts.md) additionally reproduces a
+real-model miss when important words follow the prefix. Recall-only query-aware
+excerpts pass the original six-case follow-up plus two additional middle-position
+and two absent-answer checks. This is a narrow repair, not general semantic
+quality or long-history acceptance; public map/classification and ceilings stay
+unchanged. See [retained evidence](../evidence/recall-label-visibility.md).
+The repaired installed artifact also passed one new actual Hermes six-stage loop
+with independent semantic review; its control abstained. Earlier failed gates
+remain failed and broader relevance remains unproved.
+
+The original USD20 ledger checkpoint is957 requests /USD10.680 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)

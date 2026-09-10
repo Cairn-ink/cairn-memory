@@ -7,6 +7,7 @@ import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -351,6 +352,10 @@ export function openMemoryCore(input) {
   }
 
   function map(input) {
+    return mapPage(input);
+  }
+
+  function mapPage(input, navigation) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
@@ -369,11 +374,14 @@ export function openMemoryCore(input) {
       countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
+      if (navigation) Object.assign(binding, { o: 'recall_map',
+        q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
-      const page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e });
+      const page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
+        ...(navigation ? { memoryLabel: navigation.excerpt } : {}) });
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
         if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
@@ -422,8 +430,11 @@ export function openMemoryCore(input) {
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
+      const navigation = { excerpt: createQueryExcerpt(query),
+        queryDigest: createHmac('sha256', cursorSecret)
+          .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map, fetch,
+        limit: count, map: (request) => mapPage(request, navigation), fetch,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,

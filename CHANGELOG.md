@@ -17,6 +17,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Use bounded query-aware excerpts in recall's internal navigation to expose
+  relevant words beyond a memory's prefix. Public map/classification, model calls,
+  candidate membership and resource ceilings are unchanged. A frozen synthetic
+  real-model follow-up repaired the observed misses; broad semantic quality is
+  still not established.
+
 - Version Hermes evaluation acceptance as v3: reject duplicate initial memories
   and no-op forgetting, preserve failed inspector state, and require semantic
   review separately. Retain v2 and publish bounded real-model loop evidence:
