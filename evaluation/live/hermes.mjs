@@ -9,7 +9,8 @@ import { readDiagnostics } from './diagnostics.mjs';
 
 export const HERMES_REVISION = 'c8aa5608c24e3636e77c267650c0f1f52e44adb0';
 export const MODEL = 'gpt-4.1-mini-2025-04-14';
-export const VALUE_ACCEPTANCE_VERSION = 'cairn-value-authority-v2';
+export const LEGACY_VALUE_ACCEPTANCE_VERSION = 'cairn-value-authority-v2';
+export const VALUE_ACCEPTANCE_VERSION = 'cairn-value-authority-v3';
 export const VALUE_PROMPTS = Object.freeze({
   A: 'Please remember this explicit decision: the fictional Lantern project runs its release review on Tuesday.',
   B: 'Use Cairn to check: when does the fictional Lantern project run its release review?',
@@ -212,11 +213,41 @@ export function inspectHermesStage(name, stage, store, state) {
     guessedTuesday: answerHas(stage, 'Tuesday'), guessedFriday: answerHas(stage, 'Friday'), operatorReviewRequired: true };
 }
 
+// Keep the v2 inspector unchanged so historical evidence can retain its gate.
+// These mechanical checks still require independent review of answer meaning.
+export function inspectReliableHermesStage(name, stage, store, state) {
+  if (!Object.hasOwn(VALUE_PROMPTS, name)) fail('invalid_hermes_stage');
+  const candidateState = { ...state };
+  const verdict = { ...inspectHermesStage(name, stage, store, candidateState),
+    operatorReviewRequired: true };
+  if (name === 'A') {
+    const active = store?.list?.value?.memories;
+    const singleInitialMemory = store?.list?.ok === true && Array.isArray(active)
+      && active.length === 1 && active[0]?.id === candidateState.memoryId
+      && active[0]?.revision === 1 && candidateState.revision === 1;
+    verdict.passedAutomated = verdict.passedAutomated && singleInitialMemory;
+    verdict.singleInitialMemory = singleInitialMemory;
+  }
+  if (name === 'E') {
+    const forgottenEvent = tool(stage, 'cairn_forget_memory').find((event) =>
+      success(event)?.forgotten === true && event.arguments?.memoryId === state.memoryId
+      && event.arguments?.expectedRevision === state.revision);
+    const observedVia = observedCurrentBefore(stage, forgottenEvent, state);
+    verdict.forgotten = Boolean(forgottenEvent);
+    verdict.observedVia = observedVia;
+    verdict.passedAutomated = verdict.passedAutomated && verdict.forgotten && Boolean(observedVia);
+  }
+  if (verdict.passedAutomated) Object.assign(state, candidateState);
+  return verdict;
+}
+
 export async function runHermesValueExperiment({
   session, hermesCheckout, hermesPython, nodePath, cairnExecutable, cairnArtifact,
   cairnArtifactSha256, privateDirectory,
-  startProxy = null, collectDiagnostics = false,
+  startProxy = null, collectDiagnostics = false, acceptanceVersion = VALUE_ACCEPTANCE_VERSION,
 }) {
+  if (acceptanceVersion !== VALUE_ACCEPTANCE_VERSION
+    && acceptanceVersion !== LEGACY_VALUE_ACCEPTANCE_VERSION) fail('invalid_acceptance_version');
   if (typeof collectDiagnostics !== 'boolean') fail('invalid_collect_diagnostics');
   if (!session || typeof session.getState !== 'function') fail('invalid_live_session');
   const host = realpathSync(hermesCheckout);
@@ -266,7 +297,7 @@ export async function runHermesValueExperiment({
     'hermes_cli/__init__.py'].map((relative) => [relative, fileHash(path.join(host, relative))]));
   const cairnSourceSha256 = Object.fromEntries(['adapters/mcp/server.mjs', 'adapters/openai/index.mjs',
     'core/contract.mjs'].map((relative) => [relative, fileHash(path.join(packageRoot, relative))]));
-  const freeze = { version: 2, acceptanceVersion: VALUE_ACCEPTANCE_VERSION,
+  const freeze = { version: 2, acceptanceVersion,
     declaredHermesRevision: HERMES_REVISION, hostSourceSha256,
     cairnArtifactSha256, cairnSourceSha256, model: MODEL, prompts: VALUE_PROMPTS,
     toolSchemas: discovery.tools, toolSchemaSha256: hash(JSON.stringify(discovery.tools)) };
@@ -311,7 +342,9 @@ export async function runHermesValueExperiment({
       const candidateId = state.memoryId ?? (name === 'A'
         ? success(tool(result, 'cairn_remember_memory')[0])?.memory?.id ?? null : null);
       const store = await snapshotStore(packageRoot, database, ownerId, candidateId);
-      const verdict = inspectHermesStage(name, result, store, state);
+      const inspector = acceptanceVersion === LEGACY_VALUE_ACCEPTANCE_VERSION
+        ? inspectHermesStage : inspectReliableHermesStage;
+      const verdict = inspector(name, result, store, state);
       const record = { stage: name, status: verdict.passedAutomated ? 'completed' : 'failed', result, store, verdict };
       if (collectDiagnostics) record.diagnostics = readDiagnostics(diagnosticDirectory);
       privateWrite(path.join(root, `stage-${name}.json`), record);

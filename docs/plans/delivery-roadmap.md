@@ -22,6 +22,25 @@ merge, production, release and external-publication decisions.
 
 ## Goal and baseline
 
+### Reliability checkpoint (2026-09-11, overrides older status labels)
+
+Public #40-#43 are merged. Content-free model diagnostics, bounded ingestion
+failure summaries and the installed Hermes collector are available. The
+[reliable-loop follow-up](reliable-memory-loop.md) retains one successful live
+diagnostic and a fixed three-trial real-model batch: all18 Cairn steps reviewed
+accepted, but the combined gate did not pass (one hallucinated control, one
+ambiguous control, one accepted control). No engine change or historical-cause
+fix is claimed. Evaluator v3 closes reproduced duplicate-save/no-op-forget gaps.
+
+The active public work remains two tracks: quality (broader recall/ingestion and
+calibrated evidence) and productization (accurate onboarding, owner-approved
+distribution and real adoption). The narrow loop is now demonstrated repeatedly;
+long-history usefulness, broad reliability and PLG outcomes remain unproved.
+Private integration is separately owned and not certified by this checkpoint.
+No release, upstream listing, public promotion or production cutover is implied.
+The original USD20 ledger checkpoint is862 requests /USD9.530 reserved, not a new
+allowance; older USD5 balances below belong to a historical separate experiment.
+
 ### Productization checkpoint (2026-09-09, overrides older status labels)
 
 The product remains an inspectable lightweight local memory layer, MCP-first,

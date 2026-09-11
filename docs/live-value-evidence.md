@@ -8,6 +8,18 @@ The [first retained live report](evidence/first-live-evidence.md) is negative fo
 long-history QA and includes demonstrated judge false positives. Read it before
 using any machine aggregate as a product-quality claim.
 
+The [subsequent explicit-loop evidence](evidence/reliable-memory-loop.md) records
+18/18 reviewed Cairn steps across three fresh-profile real-model trials. Its
+combined gate did not pass because the no-memory controls included a hallucination
+and an ambiguous access claim. This does not repair the original long-history
+result or establish the cause of the earlier intermittent recall failure.
+
+New Hermes runs default to `cairn-value-authority-v3`: A requires one initial
+memory at revision1; E requires an actual `forgotten:true`; failed checks leave
+inspector state unchanged. Every verdict requires independent semantic review;
+`status: completed` remains mechanical evidence only. Pass
+`acceptanceVersion: 'cairn-value-authority-v2'` explicitly for legacy comparison.
+
 ## Run boundary
 
 The experiment uses one explicitly authorized cumulative USD20 allowance. The
