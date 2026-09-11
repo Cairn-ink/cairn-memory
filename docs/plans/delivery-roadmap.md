@@ -101,6 +101,11 @@ The following C work is deliberately staged after B2's offline mechanism gate:
 Neither C0a nor C0b is a new quality score or permission to provision the real
 campaign token. C1 remains unrun until its frozen scope and authority are settled.
 
+C0b is delivered in reviewable slices: [C0b1](ordered-history-evidence.md) adds
+the original-history ordering adapter and independently checked raw/history
+projection. C0b2 still freezes the new currentness corpus and installed-artifact
+ordered lifecycle. A passing synthetic harness is not a fresh real-model result.
+
 The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 

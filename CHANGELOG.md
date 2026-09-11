@@ -17,6 +17,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Prepare a separately versioned ordered-history diagnostic retaining complete
+  raw history alongside an explicit current-only projection for the unchanged
+  v1 scorer. Historical retirement requires separate independent review; frozen
+  original failures and denominators remain intact. Offline harness checks are
+  not real-model acceptance or a new semantic-quality score.
+
 - Prepare a separate immutable reconciliation experiment authorization and an
   explicit combined request guard. Existing guards still reject reconciliation;
   only an owner-authorized operator may provision real campaign state. Offline
