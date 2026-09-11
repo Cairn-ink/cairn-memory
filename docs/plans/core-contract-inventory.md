@@ -15,6 +15,7 @@ separate storage/classification engine for each host.
 | `list`: exact namespace, bounded metadata, signed continuation | runtime listPage + facade cursor | `contract.test.mjs`: restart cursors, isolation, metadata-only pages |
 | `get`: content, paged receipts, placements, attributed conflicts | runtime getPage + MOC/conflict inspection | `contract.test.mjs`, `conflict.test.mjs`: source paging, symmetric assertions, stale/foreign filtering |
 | `correct` / `forget`: CAS, suppression, invalidation | shared runtime mutations | `store.test.mjs`, `contract.test.mjs`, `conflict.test.mjs`: two-process CAS, rollback, both endpoints, legacy mutation paths |
+| `supersede`: explicit atomic replacement, durable history and current-only reads | shared admission mutation + supersession storage + v8 index readers | `supersession.test.mjs`, `supersession-migration.test.mjs`: receipt binding, historical inspection, stale races, suppression, forgetting, rollback, migration and rebuild |
 | `claimAdmission` / `finishAdmission` / `abandonAdmission` | admission-storage + shared admission mutation | `admission.test.mjs`: active leases, expiry/takeover, old-token fencing, atomic completion, replay after restart/forget |
 | `capture`: bounded extraction and trusted evidence | capture + capture-input + injected model-call | `capture.test.mjs` C01–C13: digest identity, forged sources, deadlines, model-free replay, durable classification failure |
 | Inline `conflictHints` and attributed inspection | conflict-storage + admission/MOC invalidation | `conflict.test.mjs` K01–K08: source variants, target revisions, incident caps, full-batch rollback |
@@ -43,7 +44,8 @@ second public `replayAdmission` implementation that could bypass suppression.
   per candidate. It can return budget_exhausted or a context error; it does not
   promise exhaustive search of arbitrary stores.
 - Contradiction hints are caller assertions, not general semantic contradiction
-  detection. No automatic conflict resolution, merge or truth replacement exists.
+  detection. Explicit `supersede` retains labeled historical evidence, but no
+  automatic capture reconciliation or semantic truth replacement is claimed.
 - All currently created topic titles require current source bindings. A separate
   explicitly authored title exemption and public retired-MOC management API are
   not exposed. Rebuild validates declarations; it does not recreate lost topics.

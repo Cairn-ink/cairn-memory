@@ -224,6 +224,7 @@ export function openMemoryCore(input) {
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
       return { memory: page.memory, receipts, placements: page.placements, conflicts: page.conflicts,
+        ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
           a: { createdAt: last.createdAt, id: last.id } }), exhausted };
     });
@@ -251,6 +252,19 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       return runtime.forget(ns, contractId(input.memoryId),
         contractRevision(input.expectedRevision));
+    });
+  }
+
+  function supersede(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'memoryId', 'expectedRevision', 'replacement', 'receipts']);
+      const ns = contractNamespace(input.namespace);
+      const id = contractId(input.memoryId);
+      const expectedRevision = contractRevision(input.expectedRevision);
+      const replacement = contractMemory(input.replacement);
+      const receipts = denseArray(input.receipts, 1, 4).map(contractReceipt);
+      return runtime.supersede(ns, id, { ...replacement, receipts }, expectedRevision);
     });
   }
 
@@ -477,7 +491,7 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, claimAdmission, finishAdmission, abandonAdmission,
+    admit, list, get, correct, forget, supersede, claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     close() {
       runtime.close();

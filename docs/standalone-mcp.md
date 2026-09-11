@@ -55,6 +55,16 @@ and receipts are explicitly untrusted data, not instructions for the client.
 Tool receipt text is the supplied assertion, not proof that the assertion is true
 or an authenticated transcript of what a human said.
 
+If a trusted local caller uses [core supersession](supersession.md), inspection
+also includes labeled historical memories. List pages remain metadata-only;
+ID inspection retains the old body/receipts and bounded replacement references.
+Historical does not mean current: recall excludes these records, correction is
+rejected, and forgetting remains available at the inspected revision. Supersession
+is not deletion or secure erasure; historical evidence remains until separately
+forgotten. No new supersede tool or automatic capture is added to MCP.
+Stop all old-runtime processes/connections, including idle readers, before the
+v8 database upgrade; mixed-version coexistence is unsupported.
+
 Supported secret shapes are redacted in storage and before recall sends a query
 to a model; redaction is best effort, not complete secret detection. The server
 does not capture transcripts or install hooks. Forgetting is not secure disk

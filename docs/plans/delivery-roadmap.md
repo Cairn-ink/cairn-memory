@@ -80,6 +80,10 @@ The [cross-window contract](cross-window-supersession.md) now separates three
 packages: rules plus executable gap characterization, shared-engine repair,
 and fresh real-provider/installed evidence. The baseline test deliberately
 reproduces two active claims; it is not a supersession implementation or pass.
+The [B implementation](supersession-engine.md) is split into B1 durable history,
+explicit atomic supersession and current-only retrieval, followed by B2 source-
+bound automatic capture judgment. B1 does not fix the capture audit by itself;
+do not substitute a manual supersession operation for automatic capture evidence.
 Next product work remains an explicit supported host-capture integration and
 onboarding that distinguishes module capture from MCP explicit remember.
 

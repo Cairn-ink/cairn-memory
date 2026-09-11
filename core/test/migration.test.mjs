@@ -51,10 +51,11 @@ test('v1 migration preserves records, revisions, sources and suppression without
     receipts: [{ ...source, excerpt: 'Retired note' }] }).error.code, 'memory_suppressed');
   const check = new DatabaseSync(path);
   t.after(() => check.close());
-  assert.equal(check.prepare('PRAGMA user_version').get().user_version, 7);
+  assert.equal(check.prepare('PRAGMA user_version').get().user_version, 8);
   // Migration may add columns, but must preserve every original column value.
   for (const old of before) {
     const migrated = check.prepare('SELECT * FROM memories WHERE id = ?').get(old.id);
+    assert.equal(migrated.currentness, 'current');
     for (const [key, value] of Object.entries(old)) assert.equal(migrated[key], value);
   }
   const legacy = openMemoryStore({ path });

@@ -43,6 +43,10 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
 - `get`: content with separately paginated receipts at a consistent revision.
 - `correct` and `forget`: revision checks, replacement/removal of active receipts,
   persistent suppression and atomic invalidation of inspection cursors.
+- Explicit [supersede](supersession.md): atomically admit a replacement and
+  preserve the predecessor as historical, with source-bound transition metadata.
+  Inspection `list/get` includes labeled history; current recall/navigation
+  excludes it. Automatic capture reconciliation remains a separate package.
 
 The exact inputs, result fields and acceptance gates are in the
 [S2a plan](plans/s2-storage-contract.md). Unknown fields are rejected. The subsequent
@@ -75,10 +79,12 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1, v3, v4, v5 or v6 format performs an atomic upgrade to v7, retaining
+Opening the committed v1, v3, v4, v5, v6 or v7 format performs an atomic upgrade to v8, retaining
 existing memory/source data, revisions and suppression. Back up the file while
-all writers are closed before upgrading meaningful data. Old v1/v3/v4/v5/v6 binaries cannot
-open v7; there is no downgrade tool. The unmerged engine draft reserved v2; this
+all older-runtime processes and connections (including idle readers) are closed
+before upgrading meaningful data. Mixed-version coexistence is unsupported;
+an already-open old process is not retroactively fenced. Older binaries cannot
+open v8; there is no downgrade tool. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
 not reset. Reconciliation with that draft belongs to the later engine work.

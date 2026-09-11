@@ -4,6 +4,7 @@ import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
+import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -29,6 +30,11 @@ export function createMemoryRuntime(input) {
   function activeRow(ns, id) {
     return db.prepare(`SELECT * FROM memories WHERE ${where} AND id = ? AND deleted = 0`)
       .get(...boundary(ns), id);
+  }
+
+  function currentRow(ns, id) {
+    const row = activeRow(ns, id);
+    return row?.currentness === 'current' ? row : undefined;
   }
 
   function epoch(ns) {
@@ -58,8 +64,10 @@ export function createMemoryRuntime(input) {
       .run(...boundary(ns), value);
   }
 
+  const receiptKey = receipt => createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
+
   function attach(id, receipt, now) {
-    const key = createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
+    const key = receiptKey(receipt);
     return db.prepare(`INSERT OR IGNORE INTO receipts
       (id, memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), id, key, receipt.client,
@@ -92,7 +100,7 @@ export function createMemoryRuntime(input) {
       origin: memory.origin,
       confidence: memory.confidence,
       revision: memory.revision,
-      state: "active",
+      state: memory.currentness === 'historical' ? 'historical' : 'active',
       filing: { status: memory.filing_status },
       receiptCount: memory.receipt_count,
       createdAt: memory.created_at,
@@ -172,6 +180,7 @@ export function createMemoryRuntime(input) {
       const current = activeRow(ns, id);
       if (!current) fail("memory_not_found");
       if (current.revision !== expectedRevision) fail("revision_conflict");
+      if (current.currentness === 'historical') fail('memory_historical');
       assertNotSuppressed(ns, value.fingerprint);
       const other = db.prepare(`SELECT id FROM memories WHERE ${where}
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
@@ -212,22 +221,40 @@ export function createMemoryRuntime(input) {
     });
   }
 
+  function supersede(ns, id, value, expectedRevision) {
+    ready();
+    return transaction(db, () => {
+      const previous = activeRow(ns, id);
+      if (!previous) fail('memory_not_found');
+      if (previous.revision !== expectedRevision) fail('revision_conflict');
+      if (previous.currentness === 'historical') fail('memory_historical');
+      if (previous.fingerprint === value.fingerprint) fail('invalid_ref');
+      const result = admitMutation(ns, value);
+      const receiptIds = [...new Set(value.receipts.map(receipt => db.prepare(
+        'SELECT id FROM receipts WHERE memory_id = ? AND receipt_key = ?')
+        .get(result.memory.id, receiptKey(receipt)).id))];
+      const retired = supersessionStorage.retire(ns, previous, result.memory, receiptIds);
+      return { ...retired, memory: { id: result.memory.id, revision: result.memory.revision },
+        deduplicated: result.deduplicated };
+    });
+  }
+
   function legacyGet(ns, id) {
     ready();
-    return transaction(db, () => legacyDto(activeRow(ns, id)));
+    return transaction(db, () => legacyDto(currentRow(ns, id)));
   }
 
   function legacyList(ns, count) {
     ready();
     return transaction(db, () => db.prepare(`SELECT * FROM memories WHERE ${where}
-      AND deleted = 0 ORDER BY updated_at DESC, id LIMIT ?`)
+      AND deleted = 0 AND currentness = 'current' ORDER BY updated_at DESC, id LIMIT ?`)
       .all(...boundary(ns), count).map(legacyDto));
   }
 
   function legacySearch(ns, terms, count) {
     ready();
     return transaction(db, () => db.prepare(`SELECT * FROM memories WHERE ${where}
-      AND deleted = 0`).all(...boundary(ns))
+      AND deleted = 0 AND currentness = 'current'`).all(...boundary(ns))
       .map((memory) => ({ memory, score: terms.reduce((n, term) =>
         n + Number(memory.content.toLowerCase().includes(term)), 0) }))
       .filter(({ score }) => score > 0)
@@ -277,7 +304,9 @@ export function createMemoryRuntime(input) {
       return { memory: { ...metadataDto(memory), content: memory.content },
         receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
         placements: mocStorage.placementRefs(ns, id),
-        conflicts: conflictStorage.inspect(ns, id), epoch: currentEpoch };
+        conflicts: conflictStorage.inspect(ns, id),
+        ...(memory.currentness === 'historical'
+          ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
     });
   }
 
@@ -293,7 +322,7 @@ export function createMemoryRuntime(input) {
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail('cursor_stale');
-      const row = activeRow(ns, ref.memoryId);
+      const row = currentRow(ns, ref.memoryId);
       const reason = !row ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
       const memory = detailDto(row);
@@ -306,7 +335,7 @@ export function createMemoryRuntime(input) {
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
-        const row = activeRow(namespace, memoryId);
+        const row = currentRow(namespace, memoryId);
         if (!row || row.revision !== revision) fail('revision_conflict');
         return row;
       });
@@ -318,16 +347,18 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  const conflictStorage = createConflictStorage({ db, activeRow, advanceEpoch });
+  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, advanceEpoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable });
+  const supersessionStorage = createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
+    invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
   });
 
   return Object.freeze({
-    identity, ready, admit, correct, forget, legacyGet, legacyList, legacySearch,
+    identity, ready, admit, correct, forget, supersede, legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },

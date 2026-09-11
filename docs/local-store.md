@@ -4,9 +4,13 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6 data now upgrades it to v7 for [index generations](index-rebuild.md),
-preserving [conflict hints](conflicts.md) and [admission claims](admission-claims.md).
-Draft-v2 and unknown formats are rejected; old v1/v3/v4/v5/v6 binaries cannot open v7.
+v1/v3/v4/v5/v6/v7 data now upgrades it to v8 for
+[historical currentness](supersession.md), preserving index generations,
+[conflict hints](conflicts.md) and [admission claims](admission-claims.md).
+Draft-v2 and unknown formats are rejected; older binaries cannot open v8.
+Stop all older-runtime processes/connections, including idle readers, before
+the upgrade. Previously opened old runtimes are not retroactively fenced;
+mixed-version coexistence is unsupported.
 
 This is a real SQLite persistence library runnable from public source. It is
 **not yet a standalone memory service**: no model extraction, semantic recall,
@@ -124,6 +128,13 @@ blindly retry a stale correction/deletion. Storage deduplication is not an
 extraction-job lease or a promise of exactly-once model calls.
 
 ## Correction, forgetting, and retention
+
+The shared core's explicit [supersession operation](supersession.md) can retain
+an earlier assertion as historical. Legacy `get`, `list` and `search` return
+current memories only; use `openMemoryCore().get/list` for labeled historical
+inspection. Historical records reject correction but permit revision-guarded
+forgetting. Retired fingerprints remain suppressed and are not reactivated by
+remembering the same text or by forgetting the replacement.
 
 Correction replaces active text and receipts; old text is no longer returned
 through any store API. Correction to another active memory's content fails
