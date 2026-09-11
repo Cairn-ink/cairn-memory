@@ -109,6 +109,10 @@ and state matching the raw successor, and nonempty selected receipt IDs bound to
 that successor with available evidence. At least one selected receipt is a user
 source from the window in which that predecessor first becomes historical.
 Preserve original predecessor receipts across retirement; don't fabricate them.
+For a newly retired record, the immutable replacement revision binds to that
+window's capture admission, not the successor's later post-classification
+revision. Filing may legitimately advance the current revision; the relation's
+reported current revision/state must still match the raw successor snapshot.
 The H2 final explicit-update window must actually report applied with positive
 retiredCount and retain a corresponding historical transition, not merely rank
 Monday above an unretired Friday. Count transitions against newly historical IDs.
@@ -166,12 +170,12 @@ new allowance, publication, release, deployment or private implementation here.
 
 Primary verification on Node22.16.0 and24.15.0:
 
-- `npm run test:openai`:130/130, including17 new ordered-history tests.
+- `npm run test:openai`:131/131, including18 new ordered-history tests.
 - `npm run demo:openai-offline`:passed with scripted HTTP only.
 - `npm run test:core`:266/266; no core files changed in this slice.
 - `npm test`:31/31; `npm run validate`:passed.
 - Pinned Claude2.1.260 `plugin validate .` and
-  `plugin validate plugins/cairn-memory --strict`:passed on Node22.16.
+  `plugin validate plugins/cairn-memory --strict`:passed on both runtimes.
 - All seven H1 hashes, local documentation links and `git diff --check`:passed.
 
 Primary review additionally required executable regressions for legitimate
@@ -179,5 +183,9 @@ active-memory revision growth when a duplicate capture adds receipts, bounded
 retirement counts, and malformed review options (including throwing getters).
 These tests verify mechanical rejection/acceptance only. No live provider,
 credential, real ledger, new semantic result or publication was used.
+Independent Spec review caught an overstrict equality between the immutable
+replacement revision and the post-classification revision. The repair binds to
+the actual admission revision and adds a real MOC-filing regression plus a forged
+bound-revision counterexample. The same fixed-base reviews repeat after repair.
 Independent Standards and Spec reviews apply to the candidate commit before push;
 their final outcomes and the exact candidate SHA belong in the PR handoff.

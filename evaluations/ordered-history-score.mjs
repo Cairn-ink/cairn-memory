@@ -161,13 +161,16 @@ export function scoreOrderedHistoryAudit(report, options = {}) {
           if (!current.has(memoryId)) reject('missing_prior_memory');
         }
 
+        const windowAdmissions = new Map();
         for (const item of window?.capture?.value?.admission?.memories ?? []) {
-          if (typeof item?.id !== 'string' || !item.id.length
+          if (!exact(item, ['id', 'revision']) || typeof item.id !== 'string' || !item.id.length
             || !Number.isSafeInteger(item.revision) || item.revision < 1
-            || !current.has(item.id) || current.get(item.id).memory.revision < item.revision) {
+            || !current.has(item.id) || current.get(item.id).memory.revision < item.revision
+            || windowAdmissions.has(item.id)) {
             reject('missing_admitted_memory');
             continue;
           }
+          windowAdmissions.set(item.id, item);
           admitted.set(item.id, current.get(item.id).memory.content);
         }
         for (const [memoryId, content] of admitted) {
@@ -184,6 +187,7 @@ export function scoreOrderedHistoryAudit(report, options = {}) {
           const isNew = newlyHistorical.some(newRecord => newRecord.memory.id === record.memory.id);
           const relation = record.supersession;
           const successor = current.get(relation?.replacement?.memoryId);
+          const admittedSuccessor = windowAdmissions.get(relation?.replacement?.memoryId);
           const selected = relation?.receiptIds;
           const retirementWindow = firstHistoricalWindow.get(record.memory.id);
           const firstWindowUserEvidence = Array.isArray(selected) && selected.some(receiptId =>
@@ -198,7 +202,8 @@ export function scoreOrderedHistoryAudit(report, options = {}) {
             || !Number.isSafeInteger(relation.replacement.revision)
             || relation.replacement.revision < 1
             || relation.replacement.revision > relation.replacement.currentRevision
-            || (isNew && relation.replacement.revision !== successor.memory.revision)
+            || (isNew && (!admittedSuccessor
+              || relation.replacement.revision !== admittedSuccessor.revision))
             || relation.replacement.currentRevision !== successor.memory.revision
             || relation.replacement.state !== successor.memory.state
             || !Array.isArray(selected) || selected.length < 1 || selected.length > 4

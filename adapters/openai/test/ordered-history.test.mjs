@@ -48,7 +48,8 @@ function model(options = {}) {
     async classify({ input }) {
       calls.push({ method: 'classify', input: structuredClone(input) });
       if (options.failClassification) throw new Error('Synthetic classification failure');
-      return { items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })) };
+      return { items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [],
+        ...(options.fileMemories ? { newL1: { title: `Topic: ${memory.content}`, parentL2Ids: [] } } : {}) })) };
     },
     async select({ input }) {
       calls.push({ method: 'select', input: structuredClone(input) });
@@ -235,6 +236,39 @@ test('H4 actual deduplication can grow active revisions and receipts before late
   assert.equal(retired.supersession.previousRevision, repeated.memory.revision);
   const result = scoreOrderedHistoryAudit(report, reviews(report));
   assert.equal(result.status, 'passed', JSON.stringify(result));
+});
+
+test('H4 classified successor preserves its committed supersession revision independently of current filing revision', async () => {
+  const report = await runOrderedHistoryAudit({ model: model({ fileMemories: true }), directory: directory() });
+  assert.equal(report.evidence.status, 'completed', JSON.stringify(report));
+  const final = temporal(report).windows[2];
+  const old = final.records.find((record) => record.memory.state === 'historical');
+  const successor = final.records.find((record) => record.memory.id === old.supersession.replacement.memoryId);
+  assert.equal(final.capture.value.admission.memories.find((memory) => memory.id === successor.memory.id).revision, 1);
+  assert.equal(old.supersession.replacement.revision, 1);
+  assert.equal(old.supersession.replacement.currentRevision, 2);
+  assert.equal(successor.memory.revision, 2); assert.equal(successor.memory.filing.status, 'filed');
+  const labels = reviews(report);
+  const score = scoreOrderedHistoryAudit(report, labels);
+  assert.equal(score.status, 'passed', JSON.stringify(score));
+  const forged = structuredClone(report);
+  const altered = temporal(forged).windows[2];
+  for (const records of [altered.records, altered.reopenedRecords])
+    records.find((record) => record.memory.state === 'historical').supersession.replacement.revision = 2;
+  forged.v1Projection = projectOrderedHistoryAudit(forged.evidence);
+  failed(scoreOrderedHistoryAudit(forged, labels));
+  for (const mutate of [
+    (memories) => memories.splice(0, memories.length),
+    (memories) => memories.push(structuredClone(memories[0])),
+    (memories) => { memories[0].revision = 2; },
+    (memories) => { memories[0].revision = '1'; },
+    (memories) => { memories[0].extra = true; },
+  ]) {
+    const candidate = structuredClone(report);
+    mutate(temporal(candidate).windows[2].capture.value.admission.memories);
+    candidate.v1Projection = projectOrderedHistoryAudit(candidate.evidence);
+    failed(scoreOrderedHistoryAudit(candidate, labels));
+  }
 });
 
 test('H4 reconciliation retirement counts above the core five-transition bound reject', async () => {
