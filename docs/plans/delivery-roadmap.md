@@ -68,11 +68,18 @@ Luna is not promoted; defaults remain unchanged. The subsequent
 one real-provider six-stage scenario with independent source review: installed
 capture, five fresh consumers, correction, forgetting and complete empty recall.
 This does not add automatic Hermes capture or certify large-history reliability.
-Next quality work is broader multi-turn/conflicting-history evaluation; next
-product work is an explicit supported host-capture integration and onboarding
-that honestly distinguishes module capture from MCP explicit remember.
+The subsequent [four-history diagnostic](../evidence/conversation-history-audit.md)
+completed six capture windows and seven queries. It exposes a cross-window gap:
+the old unqualified Friday assertion remains active after the Monday update,
+even though this final query returned Monday correctly. Source support and
+successful ranking do not establish reliable currentness. Transient calendar
+chatter was also retained. No engine fix or broad reliability is claimed.
+Next quality work is revision-safe cross-window update/supersession handling,
+followed by a fresh versioned diagnostic without discarding the original result.
+Next product work remains an explicit supported host-capture integration and
+onboarding that distinguishes module capture from MCP explicit remember.
 
-The original USD20 ledger checkpoint is1,673 requests /USD14.326872 reserved, not a new
+The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)
