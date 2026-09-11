@@ -1,0 +1,17 @@
+{
+  "version": "installed-capture-mcp-v1",
+  "reviewerType": "agent",
+  "independentReviewer": "luna_profile",
+  "primaryIndependentlyInspected": true,
+  "scope": "One synthetic installed programmatic capture and five fresh MCP consumer sessions; not human or autonomous-host evidence.",
+  "stages": [
+    { "stage": "A", "accepted": true, "reason": "The sole claim adds only an article to the original Friday statement, with no unsupported fact. Original user client/session/message and source excerpt are bound." },
+    { "stage": "B", "accepted": true, "reason": "Fresh consumer retrieves the supported Friday claim and original provenance. Foreign-owner and foreign-project read/mutation probes leave it intact." },
+    { "stage": "C", "accepted": true, "reason": "Consumer rediscovers revision 2 and corrects the same memory to authorized Monday at revision 3 with a Monday receipt; stale correction is rejected." },
+    { "stage": "D", "accepted": true, "reason": "Fresh consumer returns only current Monday revision 3 and its correction receipt; no active Friday assertion resurfaces." },
+    { "stage": "E", "accepted": true, "reason": "Consumer rediscovers Monday revision 3; stale forgetting fails, current forgetting returns true, inspection is missing and listing empty." },
+    { "stage": "F", "accepted": true, "reason": "Fresh recall succeeds with complete exhausted coverage and no memory. Inspection is missing and exhaustive listing empty; this is not failure interpreted as absence." }
+  ],
+  "accepted": true,
+  "limitations": ["Single synthetic fixture, no replacement run", "Programmatic capture producer, not public capture CLI", "Scripted consumer tool sequence, not autonomous host choice", "No Hermes automatic transcript capture", "No default promotion or general reliability claim"]
+}

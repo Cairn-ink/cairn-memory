@@ -13,14 +13,18 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
-import { DEFAULT_MODEL } from '../../../adapters/openai/profiles.mjs';
+import { DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL } from '../../../adapters/openai/profiles.mjs';
+import { schemasFor } from '../../../adapters/openai/schemas.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { createExperimentBudget } from '../index.mjs';
+import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
 import {
   ExperimentRequestGuardError,
   createExperimentRequestGuard,
+  createExtendedExperimentRequestGuard,
+  authorizeExtractionModelExtension,
 } from '../request-guard.mjs';
 
 const secret = 'synthetic-secret-never-expose';
@@ -155,6 +159,172 @@ function fakeOpenAI(calls, host = hostEnvelope()) {
 const guardError = (code) => (error) => error instanceof ExperimentRequestGuardError
   && error.code === code && error.message === code && !`${error} ${error.stack}`.includes(sensitive)
   && !`${error} ${error.stack}`.includes(secret);
+
+function extractionBody(model = LUNA_EXTRACTION_MODEL, generation = true) {
+  const input = { messages: [{ index: 0, role: 'user', content: 'Synthetic.' }] };
+  return { model, instructions: 'Synthetic system.',
+    input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(input) }] }],
+    truncation: 'disabled',
+    text: { format: { name: 'cairn_extract', type: 'json_schema', strict: true, schema: schemasFor('extract', input) } },
+    ...(model === DEFAULT_MODEL ? {} : { reasoning: { effort: 'none' } }),
+    ...(generation ? { max_output_tokens: 1024, store: false, stream: false } : {}) };
+}
+
+function extendedWorkspace(t, overrides = {}) {
+  const { ledger } = workspace(t, { limitMicroUsd: 30_000, ...overrides });
+  const configured = policy();
+  const baseline = createExperimentRequestGuard({ ledger, policy: configured, fetchImpl: async () => assert.fail('no I/O') });
+  baseline.close();
+  const provisioning = { ledger, policy: configured, authorizationId: 'synthetic-luna-comparison-v1' };
+  const extension = authorizeExtractionModelExtension(provisioning);
+  return { ledger, configured, provisioning, extension };
+}
+
+test('L4: explicit extension preserves original binding and historical settled ledger, and old guard never opts in', async (t) => {
+  const { ledger } = workspace(t, { limitMicroUsd: 30_000 });
+  const configured = policy();
+  const old = createExperimentRequestGuard({ ledger, policy: configured, fetchImpl: fakeOpenAI([]) });
+  await old.hostFetch(urls.host, options(hostBody()));
+  const before = old.getState();
+  const binding = readFileSync(path.join(ledger.directory, 'experiment-request-policy.json'));
+  const provisioning = { ledger, policy: configured, authorizationId: 'synthetic-approval' };
+  const extension = authorizeExtractionModelExtension(provisioning);
+  assert.deepEqual(old.getState(), before);
+  assert.deepEqual(readFileSync(path.join(ledger.directory, 'experiment-request-policy.json')), binding);
+  assert.deepEqual(authorizeExtractionModelExtension(provisioning), extension);
+  assert.equal(extension.models[LUNA_EXTRACTION_MODEL].cairnGeneration.reservedMicroUsd, 2985);
+  assert.equal(extension.models[EXPERIMENTAL_EXTRACTION_MODEL].cairnGeneration.reservedMicroUsd, 9876);
+  assert.equal(Object.isFrozen(extension.models[LUNA_EXTRACTION_MODEL].cairnCount), true);
+  await assert.rejects(old.cairnFetch(urls.generation, options(extractionBody())), guardError('unsupported_request'));
+  assert.deepEqual(old.getState(), before);
+  old.close();
+  assert.throws(() => authorizeExtractionModelExtension({ ...provisioning, authorizationId: 'other' }), guardError('policy_mismatch'));
+});
+
+test('L4/L5: mixed model requests reserve atomically in one ledger and reopen retains pricing and quotas', async (t) => {
+  const { ledger, configured, extension } = extendedWorkspace(t, { limitMicroUsd: 12_900 });
+  const calls = [];
+  const fetchImpl = async (url, request) => {
+    const body = JSON.parse(request.body); calls.push(body.model);
+    return Response.json(url === urls.count ? countEnvelope() : { ...generationEnvelope('extract'), model: body.model });
+  };
+  const construct = () => createExtendedExperimentRequestGuard({ ledger, policy: configured, extension, fetchImpl });
+  const first = construct(); const second = construct();
+  await Promise.all([
+    first.cairnFetch(urls.generation, options(extractionBody(LUNA_EXTRACTION_MODEL))),
+    second.cairnFetch(urls.generation, options(extractionBody(EXPERIMENTAL_EXTRACTION_MODEL))),
+  ]);
+  assert.equal(first.getState().reservedMicroUsd, 12861);
+  assert.deepEqual(first.getState().attempts.map((item) => item.actualMicroUsd), [31, 98]);
+  first.close(); second.close();
+  const reopened = construct();
+  await assert.rejects(reopened.cairnFetch(urls.generation, options(extractionBody())), { code: 'budget_exceeded' });
+  assert.equal(calls.length, 2);
+  assert.equal(reopened.getState().requestCount, 2);
+  reopened.close();
+});
+
+test('L4: extension refuses missing, malformed, changed, unsafe, symlink and mismatched authorization files before I/O', async (t) => {
+  for (const scenario of ['missing', 'malformed', 'changed', 'unsafe', 'symlink']) {
+    await t.test(scenario, async (t) => {
+      const { ledger, configured, extension } = extendedWorkspace(t);
+      let sends = 0;
+      const opts = { ledger, policy: configured, extension, fetchImpl: async () => { sends += 1; assert.fail('no I/O'); } };
+      const guard = createExtendedExperimentRequestGuard(opts);
+      const filename = path.join(ledger.directory, 'experiment-extraction-extension.json');
+      if (scenario === 'missing') unlinkSync(filename);
+      if (scenario === 'malformed') writeFileSync(filename, '{');
+      if (scenario === 'changed') writeFileSync(filename, JSON.stringify({ ...extension, authorizationId: 'changed' }));
+      if (scenario === 'unsafe') chmodSync(filename, 0o644);
+      if (scenario === 'symlink') { unlinkSync(filename); symlinkSync('experiment-request-policy.json', filename); }
+      assert.throws(() => createExtendedExperimentRequestGuard(opts), ExperimentRequestGuardError);
+      await assert.rejects(guard.cairnFetch(urls.generation, options(extractionBody())), ExperimentRequestGuardError);
+      assert.equal(guard.getState().requestCount, 0); assert.equal(sends, 0); guard.close();
+    });
+  }
+});
+
+test('L4: unsupported method/model/reasoning and widened extension rejected before reservation', async (t) => {
+  const { ledger, configured, extension } = extendedWorkspace(t);
+  const opts = { ledger, policy: configured, extension, fetchImpl: async () => assert.fail('no I/O') };
+  for (const invalid of [null, undefined, false, [], {}]) {
+    assert.throws(() => createExtendedExperimentRequestGuard({ ...opts, extension: invalid }), guardError('invalid_extension'));
+  }
+  const guard = createExtendedExperimentRequestGuard(opts);
+  for (const body of [extractionBody('unknown-model'),
+    { ...extractionBody(), reasoning: { effort: 'high' } },
+    { ...extractionBody(), text: { format: { ...extractionBody().text.format, name: 'cairn_classify' } } }]) {
+    await assert.rejects(guard.cairnFetch(urls.generation, options(body)), guardError('unsupported_request'));
+  }
+  await assert.rejects(guard.hostFetch(urls.host, options(hostBody({ model: LUNA_EXTRACTION_MODEL }))), guardError('unsupported_request'));
+  const changed = structuredClone(extension); changed.models[LUNA_EXTRACTION_MODEL].cairnCount.maxInputTokens += 1;
+  assert.throws(() => createExtendedExperimentRequestGuard({ ...opts, extension: changed }), guardError('invalid_extension'));
+  assert.throws(() => authorizeExtractionModelExtension({ ledger, policy: configured, authorizationId: '../bad' }), guardError('invalid_extension'));
+  assert.throws(() => authorizeExtractionModelExtension({ ledger, policy: configured, authorizationId: 123 }), guardError('invalid_extension'));
+  assert.equal(guard.getState().requestCount, 0); guard.close();
+});
+
+test('L4/L5: alternate count and baseline host retain shared request cap without model fallback', async (t) => {
+  const { ledger, configured, extension } = extendedWorkspace(t, { requestCap: 2 });
+  const calls = [];
+  const guard = createExtendedExperimentRequestGuard({ ledger, policy: configured, extension, fetchImpl: fakeOpenAI(calls) });
+  await guard.cairnFetch(urls.count, options(extractionBody(LUNA_EXTRACTION_MODEL, false)));
+  await guard.hostFetch(urls.host, options(hostBody()));
+  await assert.rejects(guard.cairnFetch(urls.count, options(extractionBody(EXPERIMENTAL_EXTRACTION_MODEL, false))), { code: 'request_cap_exceeded' });
+  assert.deepEqual(calls.map((call) => call.body.model), [LUNA_EXTRACTION_MODEL, DEFAULT_MODEL]);
+  assert.equal(guard.getState().reservedMicroUsd, 1756 + 12);
+  assert.equal(guard.getState().attempts[0].actualMicroUsd, null);
+  guard.close();
+});
+
+test('L4: original baseline restriction, unsafe path, and forged checkpoint fail closed', (t) => {
+  const { ledger, configured, extension, provisioning } = extendedWorkspace(t);
+  assert.throws(() => authorizeExtractionModelExtension({ ...provisioning,
+    policy: policy({ cairnCount: channel(urls.count, { model: EXPERIMENTAL_EXTRACTION_MODEL, maxOutputTokens: 0 }) }) }), guardError('invalid_extension'));
+  const alias = path.join(path.dirname(ledger.directory), 'alias');
+  symlinkSync(ledger.directory, alias);
+  assert.throws(() => createExtendedExperimentRequestGuard({ ledger: { ...ledger, directory: alias }, policy: configured, extension,
+    fetchImpl: async () => assert.fail('no I/O') }));
+  const forged = structuredClone(extension); forged.checkpoint.requestCount = 1; forged.checkpoint.reservedMicroUsd = 5;
+  writeFileSync(path.join(ledger.directory, 'experiment-extraction-extension.json'), JSON.stringify(forged));
+  assert.throws(() => createExtendedExperimentRequestGuard({ ledger, policy: configured, extension: forged,
+    fetchImpl: async () => assert.fail('no I/O') }), guardError('policy_mismatch'));
+});
+
+test('L4: an already-open extension rejects a rolled-back ledger checkpoint before network or reservation', async (t) => {
+  const { ledger } = workspace(t, { limitMicroUsd: 30_000 });
+  const configured = policy();
+  const baseline = createExperimentRequestGuard({ ledger, policy: configured, fetchImpl: fakeOpenAI([]) });
+  await baseline.hostFetch(urls.host, options(hostBody())); baseline.close();
+  const extension = authorizeExtractionModelExtension({ ledger, policy: configured, authorizationId: 'rollback-check' });
+  const guard = createExtendedExperimentRequestGuard({ ledger, policy: configured, extension,
+    fetchImpl: async () => assert.fail('no I/O') });
+  // Deliberately emulate a restored older, internally consistent synthetic ledger.
+  const db = new DatabaseSync(path.join(ledger.directory, 'experiment-budget.sqlite'));
+  db.exec('BEGIN IMMEDIATE; DELETE FROM attempts; UPDATE run_config SET reserved_micro_usd = 0, request_count = 0; COMMIT');
+  db.close();
+  await assert.rejects(guard.cairnFetch(urls.generation, options(extractionBody())), guardError('policy_mismatch'));
+  assert.equal(guard.getState().requestCount, 0); guard.close();
+});
+
+test('L4/L5: setup refuses unsettled attempts; interrupted and spoofed responses retain reservations', async (t) => {
+  const { ledger, configured, extension, provisioning } = extendedWorkspace(t);
+  const handle = reopenExperimentBudget(ledger);
+  const attemptId = randomUUID(); handle.reserve({ attemptId, channel: 'cairn-count', reservedMicroUsd: 5 });
+  assert.throws(() => authorizeExtractionModelExtension(provisioning), guardError('extension_busy'));
+  handle.recordOutcome({ attemptId, outcome: 'unknown' }); handle.close();
+  let calls = 0;
+  const guard = createExtendedExperimentRequestGuard({ ledger, policy: configured, extension, fetchImpl: async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('synthetic interrupt');
+    return Response.json(generationEnvelope('extract'));
+  } });
+  await assert.rejects(guard.cairnFetch(urls.generation, options(extractionBody())), guardError('transport_failed'));
+  await assert.rejects(guard.cairnFetch(urls.generation, options(extractionBody())), guardError('invalid_response'));
+  assert.equal(guard.getState().reservedMicroUsd, 5975);
+  assert.equal(guard.getState().attempts.filter((attempt) => attempt.outcome === 'unknown').length, 3);
+  guard.close();
+});
 
 test('G01: reopen-only constructor snapshots and durably binds one explicit immutable policy', (t) => {
   const { ledger } = workspace(t);

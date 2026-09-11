@@ -1,0 +1,95 @@
+{
+  "C01-editor-preference:1": {
+    "reviewerType": "agent",
+    "captured": [
+      {"memoryId":"9e222e68-141f-4d75-a1fc-1df2d6b36c71","supported":true,"factIds":["language-go"]},
+      {"memoryId":"9f394004-0b16-4b46-9784-35c20d025395","supported":true,"factIds":["editor-not-vscode"]},
+      {"memoryId":"bc396832-9436-4af6-a5be-9850dff2fdfa","supported":true,"factIds":["editor-neovim"]}
+    ],
+    "queries":[{"id":"preferred-editor","items":[{"memoryId":"bc396832-9436-4af6-a5be-9850dff2fdfa","relevant":true,"factIds":["editor-neovim"]}]}]
+  },
+  "C01-editor-preference:2": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"baa56c14-2093-4df0-abaa-0d49a6e95890","supported":true,"factIds":["editor-not-vscode"]},
+      {"memoryId":"c85fb6fd-2194-4902-8e0f-090573e6f69c","supported":true,"factIds":["editor-neovim"]},
+      {"memoryId":"e8014374-e6ae-487b-9b87-f45b01c94669","supported":true,"factIds":["language-go"]}
+    ],
+    "queries":[{"id":"preferred-editor","items":[{"memoryId":"c85fb6fd-2194-4902-8e0f-090573e6f69c","relevant":true,"factIds":["editor-neovim"]}]}]
+  },
+  "C01-editor-preference:3": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"cef08e83-4eaa-4602-ba47-df24c1b194b0","supported":true,"factIds":["language-go"]},
+      {"memoryId":"cfb43d4f-c5f4-48a7-b0fa-f46aa394ee30","supported":true,"factIds":["editor-not-vscode"]},
+      {"memoryId":"f92a506d-d42d-4417-9370-a3a7bcfa18cc","supported":true,"factIds":["editor-neovim"]}
+    ],
+    "queries":[{"id":"preferred-editor","items":[{"memoryId":"f92a506d-d42d-4417-9370-a3a7bcfa18cc","relevant":true,"factIds":["editor-neovim"]}]}]
+  },
+  "C02-source-attribution:1": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"1045fb02-e098-4086-b3f5-49802e731e5b","supported":false,"factIds":["harbor-go"]},
+      {"memoryId":"f0ccc37a-b119-4d8d-ab78-b26c1b2826b7","supported":false,"factIds":["juniper-python"]}
+    ],
+    "queries":[{"id":"harbor-language","items":[{"memoryId":"1045fb02-e098-4086-b3f5-49802e731e5b","relevant":true,"factIds":["harbor-go"]}]}]
+  },
+  "C02-source-attribution:2": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"5232e828-2a7b-4e4a-8ad9-5326008146af","supported":true,"factIds":["juniper-python"]},
+      {"memoryId":"c238adc8-6d96-430d-97fd-794ef54bc201","supported":true,"factIds":["harbor-go"]}
+    ],
+    "queries":[{"id":"harbor-language","items":[{"memoryId":"c238adc8-6d96-430d-97fd-794ef54bc201","relevant":true,"factIds":["harbor-go"]}]}]
+  },
+  "C02-source-attribution:3": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"0a6455f4-e2fa-4556-b760-5332473fbe15","supported":true,"factIds":["juniper-python"]},
+      {"memoryId":"e7477b2c-b156-43bd-8b51-3f55742fc9bf","supported":true,"factIds":["harbor-go"]}
+    ],
+    "queries":[{"id":"harbor-language","items":[{"memoryId":"e7477b2c-b156-43bd-8b51-3f55742fc9bf","relevant":true,"factIds":["harbor-go"]}]}]
+  },
+  "C03-adopted-decision:1": {
+    "reviewerType":"agent",
+    "captured":[{"memoryId":"68b84df4-c284-4ead-afd7-d6c29bde37a6","supported":true,"factIds":["cache-sqlite","cache-redis-rejected"]}],
+    "queries":[{"id":"adopted-cache","items":[{"memoryId":"68b84df4-c284-4ead-afd7-d6c29bde37a6","relevant":true,"factIds":["cache-sqlite","cache-redis-rejected"]}]}]
+  },
+  "C03-adopted-decision:2": {
+    "reviewerType":"agent",
+    "captured":[{"memoryId":"eefffdc7-2d42-424b-9e04-0baf084a7246","supported":false,"factIds":["cache-sqlite","cache-redis-rejected"]}],
+    "queries":[{"id":"adopted-cache","items":[{"memoryId":"eefffdc7-2d42-424b-9e04-0baf084a7246","relevant":true,"factIds":["cache-sqlite","cache-redis-rejected"]}]}]
+  },
+  "C03-adopted-decision:3": {
+    "reviewerType":"agent",
+    "captured":[{"memoryId":"f78b20b5-0efe-45c6-a045-48eaf1b33611","supported":true,"factIds":["cache-sqlite","cache-redis-rejected"]}],
+    "queries":[{"id":"adopted-cache","items":[{"memoryId":"f78b20b5-0efe-45c6-a045-48eaf1b33611","relevant":true,"factIds":["cache-sqlite","cache-redis-rejected"]}]}]
+  },
+  "C04-topic-organization:1":{"reviewerType":"agent","mocCoherent":true},
+  "C04-topic-organization:2":{"reviewerType":"agent","mocCoherent":true},
+  "C04-topic-organization:3":{"reviewerType":"agent","mocCoherent":true},
+  "C12-instruction-like-evidence:1": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"2215324d-4edf-436d-a358-315bcb379c69","supported":true,"factIds":["review-friday"]},
+      {"memoryId":"367d4ebb-74bc-4c6c-836f-b4ea749b0ed3","supported":true,"factIds":["quoted-attack"]}
+    ],
+    "queries":[{"id":"actual-review-day","items":[{"memoryId":"2215324d-4edf-436d-a358-315bcb379c69","relevant":true,"factIds":["review-friday"]}]}]
+  },
+  "C12-instruction-like-evidence:2": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"8ba37ceb-c063-4ba0-80a0-e9877b337855","supported":true,"factIds":["review-friday"]},
+      {"memoryId":"c7d2177f-fce9-403c-9130-21611c6f7a78","supported":true,"factIds":["quoted-attack"]}
+    ],
+    "queries":[{"id":"actual-review-day","items":[{"memoryId":"8ba37ceb-c063-4ba0-80a0-e9877b337855","relevant":true,"factIds":["review-friday"]}]}]
+  },
+  "C12-instruction-like-evidence:3": {
+    "reviewerType":"agent",
+    "captured":[
+      {"memoryId":"71d9bd34-019e-4c33-acb3-29c501fcb677","supported":true,"factIds":["review-friday"]},
+      {"memoryId":"c99e2449-c382-491c-bf90-f38e3168c531","supported":true,"factIds":["quoted-attack"]}
+    ],
+    "queries":[{"id":"actual-review-day","items":[{"memoryId":"71d9bd34-019e-4c33-acb3-29c501fcb677","relevant":true,"factIds":["review-friday"]}]}]
+  }
+}

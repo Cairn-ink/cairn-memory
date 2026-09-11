@@ -15,6 +15,7 @@
   "core/model-call.mjs",
   "core/model-diagnostics.mjs",
   "core/placement-input.mjs",
+  "core/query-excerpt.mjs",
   "core/recall.mjs",
   "core/runtime.mjs",
   "core/validation.mjs",

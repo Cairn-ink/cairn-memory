@@ -38,7 +38,52 @@ distribution and real adoption). The narrow loop is now demonstrated repeatedly;
 long-history usefulness, broad reliability and PLG outcomes remain unproved.
 Private integration is separately owned and not certified by this checkpoint.
 No release, upstream listing, public promotion or production cutover is implied.
-The original USD20 ledger checkpoint is862 requests /USD9.530 reserved, not a new
+The [navigation-label repair](recall-query-excerpts.md) additionally reproduces a
+real-model miss when important words follow the prefix. Recall-only query-aware
+excerpts pass the original six-case follow-up plus two additional middle-position
+and two absent-answer checks. This is a narrow repair, not general semantic
+quality or long-history acceptance; public map/classification and ceilings stay
+unchanged. See [retained evidence](../evidence/recall-label-visibility.md).
+The repaired installed artifact also passed one new actual Hermes six-stage loop
+with independent semantic review; its control abstained. Earlier failed gates
+remain failed and broader relevance remains unproved.
+
+The subsequent [default-capture audit](capture-source-faithfulness.md) retained a
+nine-case local pass and a full 36-run semantic failure: recall/relevance45/45,
+but three unsupported statements and supported recovery20/24. The explicit
+installed loop is demonstrated; general automatic extraction is still not
+accepted. The owner subsequently approved a Luna-first extraction-only comparison
+with GPT-5.4 mini under the same USD20 total. The
+[Luna experiment](luna-extraction.md) first adds a reviewed opt-in policy extension;
+it does not reset the ledger or silently switch defaults. Provider compatibility,
+same-source quality comparison and installed candidate verification remain gates,
+not completed outcomes at this implementation checkpoint.
+
+The [same-source extraction comparison](../evidence/luna-extraction-comparison.md)
+now retains Luna's34/36 completion and22/24 required-fact recovery: two empty
+captures lose a required fact. GPT-5.4 mini completed36/36 with24/24 required
+facts,24/24 supported claims and45/45 recall/relevance under the unchanged rubric.
+Luna is not promoted; defaults remain unchanged. The subsequent
+[installed capture-to-MCP gate](../evidence/installed-capture-loop.md) now passes
+one real-provider six-stage scenario with independent source review: installed
+capture, five fresh consumers, correction, forgetting and complete empty recall.
+This does not add automatic Hermes capture or certify large-history reliability.
+The subsequent [four-history diagnostic](../evidence/conversation-history-audit.md)
+completed six capture windows and seven queries. It exposes a cross-window gap:
+the old unqualified Friday assertion remains active after the Monday update,
+even though this final query returned Monday correctly. Source support and
+successful ranking do not establish reliable currentness. Transient calendar
+chatter was also retained. No engine fix or broad reliability is claimed.
+Next quality work is revision-safe cross-window update/supersession handling,
+followed by a fresh versioned diagnostic without discarding the original result.
+The [cross-window contract](cross-window-supersession.md) now separates three
+packages: rules plus executable gap characterization, shared-engine repair,
+and fresh real-provider/installed evidence. The baseline test deliberately
+reproduces two active claims; it is not a supersession implementation or pass.
+Next product work remains an explicit supported host-capture integration and
+onboarding that distinguishes module capture from MCP explicit remember.
+
+The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)

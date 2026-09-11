@@ -1,0 +1,62 @@
+{
+  "version": "conversation-history-review-v1",
+  "reviewerType": "agent",
+  "assertions": [
+    { "historyId": "H1-within-window-update", "memoryId": "9a32b22d-114b-4f87-b187-b9a9b232a0ad", "revision": 2, "supported": true },
+    { "historyId": "H1-within-window-update", "memoryId": "de3fe5e5-97e3-48f7-a9fe-45ded9b3f637", "revision": 2, "supported": true },
+    { "historyId": "H1-within-window-update", "memoryId": "0cb1bed9-13ec-445b-8278-2075da811243", "revision": 1, "supported": true },
+    { "historyId": "H2-across-window-update", "memoryId": "3f56ec3c-60d2-4a82-b881-f8ea18e5210e", "revision": 2, "supported": true },
+    { "historyId": "H2-across-window-update", "memoryId": "a30d0731-904d-4f9f-8f55-dcefffee5c4c", "revision": 2, "supported": true },
+    { "historyId": "H2-across-window-update", "memoryId": "07381e69-e9cc-4582-b116-499368db12ee", "revision": 2, "supported": true },
+    { "historyId": "H3-entities-and-negation", "memoryId": "1d6560af-bd4c-4671-b2cd-4ce08e5a7ac8", "revision": 2, "supported": true },
+    { "historyId": "H3-entities-and-negation", "memoryId": "332882cc-3ebb-4021-a739-1aa1bd319d50", "revision": 2, "supported": true },
+    { "historyId": "H3-entities-and-negation", "memoryId": "f47fb638-6803-4361-b361-18338dd276c4", "revision": 2, "supported": true },
+    { "historyId": "H4-positioned-24-messages", "memoryId": "e040fade-3f31-4cca-bc9b-eff48776de1f", "revision": 2, "supported": true },
+    { "historyId": "H4-positioned-24-messages", "memoryId": "e43d4501-b058-4fef-9fe0-1a06617edd0e", "revision": 2, "supported": true },
+    { "historyId": "H4-positioned-24-messages", "memoryId": "f4eb407e-7191-43b9-ac05-d4c51f25f7b1", "revision": 2, "supported": true }
+  ],
+  "currentness": [
+    { "historyId": "H1-within-window-update", "memoryId": "9a32b22d-114b-4f87-b187-b9a9b232a0ad", "revision": 2, "status": "current" },
+    { "historyId": "H1-within-window-update", "memoryId": "de3fe5e5-97e3-48f7-a9fe-45ded9b3f637", "revision": 2, "status": "historical" },
+    { "historyId": "H1-within-window-update", "memoryId": "0cb1bed9-13ec-445b-8278-2075da811243", "revision": 1, "status": "historical" },
+    { "historyId": "H2-across-window-update", "memoryId": "3f56ec3c-60d2-4a82-b881-f8ea18e5210e", "revision": 2, "status": "stale" },
+    { "historyId": "H2-across-window-update", "memoryId": "a30d0731-904d-4f9f-8f55-dcefffee5c4c", "revision": 2, "status": "historical" },
+    { "historyId": "H2-across-window-update", "memoryId": "07381e69-e9cc-4582-b116-499368db12ee", "revision": 2, "status": "current" },
+    { "historyId": "H3-entities-and-negation", "memoryId": "1d6560af-bd4c-4671-b2cd-4ce08e5a7ac8", "revision": 2, "status": "current" },
+    { "historyId": "H3-entities-and-negation", "memoryId": "332882cc-3ebb-4021-a739-1aa1bd319d50", "revision": 2, "status": "current" },
+    { "historyId": "H3-entities-and-negation", "memoryId": "f47fb638-6803-4361-b361-18338dd276c4", "revision": 2, "status": "current" },
+    { "historyId": "H4-positioned-24-messages", "memoryId": "e040fade-3f31-4cca-bc9b-eff48776de1f", "revision": 2, "status": "current" },
+    { "historyId": "H4-positioned-24-messages", "memoryId": "e43d4501-b058-4fef-9fe0-1a06617edd0e", "revision": 2, "status": "current" },
+    { "historyId": "H4-positioned-24-messages", "memoryId": "f4eb407e-7191-43b9-ac05-d4c51f25f7b1", "revision": 2, "status": "current" }
+  ],
+  "retention": [
+    { "historyId": "H1-within-window-update", "requiredIndex": 0, "retained": true, "evidence": [{ "memoryId": "9a32b22d-114b-4f87-b187-b9a9b232a0ad", "revision": 2 }] },
+    { "historyId": "H2-across-window-update", "requiredIndex": 0, "retained": true, "evidence": [{ "memoryId": "07381e69-e9cc-4582-b116-499368db12ee", "revision": 2 }] },
+    { "historyId": "H3-entities-and-negation", "requiredIndex": 0, "retained": true, "evidence": [{ "memoryId": "332882cc-3ebb-4021-a739-1aa1bd319d50", "revision": 2 }] },
+    { "historyId": "H3-entities-and-negation", "requiredIndex": 1, "retained": true, "evidence": [{ "memoryId": "332882cc-3ebb-4021-a739-1aa1bd319d50", "revision": 2 }] },
+    { "historyId": "H3-entities-and-negation", "requiredIndex": 2, "retained": true, "evidence": [{ "memoryId": "1d6560af-bd4c-4671-b2cd-4ce08e5a7ac8", "revision": 2 }] },
+    { "historyId": "H3-entities-and-negation", "requiredIndex": 3, "retained": true, "evidence": [{ "memoryId": "f47fb638-6803-4361-b361-18338dd276c4", "revision": 2 }] },
+    { "historyId": "H4-positioned-24-messages", "requiredIndex": 0, "retained": true, "evidence": [{ "memoryId": "f4eb407e-7191-43b9-ac05-d4c51f25f7b1", "revision": 2 }] },
+    { "historyId": "H4-positioned-24-messages", "requiredIndex": 1, "retained": true, "evidence": [{ "memoryId": "e43d4501-b058-4fef-9fe0-1a06617edd0e", "revision": 2 }] },
+    { "historyId": "H4-positioned-24-messages", "requiredIndex": 2, "retained": true, "evidence": [{ "memoryId": "e040fade-3f31-4cca-bc9b-eff48776de1f", "revision": 2 }] }
+  ],
+  "relevance": [
+    { "historyId": "H1-within-window-update", "queryId": "h1-current", "memoryId": "9a32b22d-114b-4f87-b187-b9a9b232a0ad", "revision": 2, "relevant": true },
+    { "historyId": "H2-across-window-update", "queryId": "h2-current", "memoryId": "07381e69-e9cc-4582-b116-499368db12ee", "revision": 2, "relevant": true },
+    { "historyId": "H3-entities-and-negation", "queryId": "h3-languages", "memoryId": "332882cc-3ebb-4021-a739-1aa1bd319d50", "revision": 2, "relevant": true },
+    { "historyId": "H3-entities-and-negation", "queryId": "h3-database", "memoryId": "1d6560af-bd4c-4671-b2cd-4ce08e5a7ac8", "revision": 2, "relevant": true },
+    { "historyId": "H3-entities-and-negation", "queryId": "h3-database", "memoryId": "f47fb638-6803-4361-b361-18338dd276c4", "revision": 2, "relevant": true },
+    { "historyId": "H4-positioned-24-messages", "queryId": "h4-editor", "memoryId": "f4eb407e-7191-43b9-ac05-d4c51f25f7b1", "revision": 2, "relevant": true },
+    { "historyId": "H4-positioned-24-messages", "queryId": "h4-language", "memoryId": "e43d4501-b058-4fef-9fe0-1a06617edd0e", "revision": 2, "relevant": true },
+    { "historyId": "H4-positioned-24-messages", "queryId": "h4-review", "memoryId": "e040fade-3f31-4cca-bc9b-eff48776de1f", "revision": 2, "relevant": true }
+  ],
+  "answers": [
+    { "historyId": "H1-within-window-update", "queryId": "h1-current", "answered": true },
+    { "historyId": "H2-across-window-update", "queryId": "h2-current", "answered": true },
+    { "historyId": "H3-entities-and-negation", "queryId": "h3-languages", "answered": true },
+    { "historyId": "H3-entities-and-negation", "queryId": "h3-database", "answered": true },
+    { "historyId": "H4-positioned-24-messages", "queryId": "h4-editor", "answered": true },
+    { "historyId": "H4-positioned-24-messages", "queryId": "h4-language", "answered": true },
+    { "historyId": "H4-positioned-24-messages", "queryId": "h4-review", "answered": true }
+  ]
+}

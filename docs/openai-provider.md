@@ -8,6 +8,22 @@ The hosted plugin is unchanged; core gains no provider dependency.
 
 ## Experimental extraction-only profile
 
+An additional explicit `extractionModel: 'gpt-5.6-luna'` candidate uses reasoning
+`none` for extraction only. It is not the default or a verified quality upgrade.
+The [official Luna documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+lists no dated snapshot; exact returned-model validation remains enforced, but a
+stable model string does not prove immutable provider weights. Account access
+must pass a bounded real compatibility probe before semantic testing.
+
+The Luna local guard reserves 2,985 integer micro-dollars per HTTP request,
+including count calls: 7,024 input at a conservative USD0.25/million plus 1,024
+output at USD1.20/million, rounded up. The documented base input rate is USD0.20;
+USD0.25 also covers its documented 1.25x cache-write premium. Usage estimates use
+that conservative rate, not a provider invoice. These input bounds stay below
+the 272K-token long-context surcharge threshold. Rates checked 2026-09-11.
+See [Luna acceptance](plans/luna-extraction.md) for frozen comparison gates and
+the original cumulative-budget boundary. No automatic fallback is introduced.
+
 The default remains `gpt-4.1-mini-2025-04-14` for every method. An explicit
 `extractionModel: 'gpt-5.4-mini-2026-03-17'` option on `createOpenAIModel` selects
 that snapshot for extraction only, with `reasoning: { effort: 'none' }` on both
@@ -69,7 +85,8 @@ A trusted host supplies an explicit key and injects the result into
 Calling a model method without fake transport sends selected input to OpenAI
 and can incur charges. The adapter never reads environment or logs credentials.
 
-The HTTPS endpoint and model snapshot are fixed. Redirects, retries, tools,
+The HTTPS endpoint and allowed model identifiers are fixed. The baseline and
+GPT-5.4 mini use dated snapshots; Luna has the limitation noted above. Redirects, retries, tools,
 conversation state and fallback models are disabled. Both HTTP phases share the
 core's single 30-second AbortSignal deadline. Errors omit raw provider bodies.
 Each model-port invocation makes at most two HTTP calls (count, then generation);

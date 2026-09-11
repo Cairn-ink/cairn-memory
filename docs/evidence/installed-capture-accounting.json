@@ -1,0 +1,181 @@
+{
+  "privateRawReportSha256": "06187b5661351c19602dc7d5579448684053fca1038ee773f09f4b94501aed24",
+  "redactions": [
+    "provenance.packageRoot"
+  ],
+  "intent": {
+    "startedAt": "2026-09-11T13:32:41.357Z",
+    "sourceCommit": "2e3546fdb5b6333d2c907a12df82ad09d9c6d4d0",
+    "sourceHashes": {
+      "evaluation/live/installed-capture-loop.mjs": "0e7f69c0cdf8698af57c68332c727917bd64e70fe8fd5a3e3be87e0f0ab15251",
+      "evaluation/live/cairn-launcher.mjs": "2e2d55c2098f20a6c4691260d9fd21ffba7cc3acf07862f229d3c7acb7187626",
+      "evaluation/live/proxy.mjs": "7000b7a050303c70e9b68da235e1bfb553479f18eca7492458ad61933e3c4584",
+      "evaluation/experiment-budget/index.mjs": "b3b8670607e9b433d3d11e09293541019f9d6b5b46752d30b621a3687df33f14",
+      "evaluation/experiment-budget/request-guard.mjs": "77c3731e2c4616a2f2f7d739e54ea615b626a6b2f13a22656703f3d54ca00e1b",
+      "docs/plans/installed-capture-loop.md": "2e91ca3ebb6599741607f13479f6eefa2aa30ea8629697faa596868399deb805"
+    },
+    "operatorSha256": "5ccbb559db9517fecbbbbda1dcdacc01193a8ff85a4796c11cf37b9d5155c9f7",
+    "cairnArtifactSha256": "8d4b0178381d88a34673b7435e15c3f10ea18aff97dec8040ff4b82e234b2ee9",
+    "originalBindingSha256": "ff1824f602e686d072274f7631249c515a5e833a0011f90f08049e0cfc2ae97b",
+    "extensionTokenSha256": "1ac62b04065e12a44d23807a86a7f223861fbdd5efbf5137c69d5694c051509c",
+    "model": "gpt-5.4-mini-2026-03-17",
+    "reasoning": "none",
+    "noReplacementRuns": true,
+    "before": {
+      "requests": 1651,
+      "reservedMicroUsd": 14211728,
+      "knownUsageMicroUsd": 936803,
+      "unknownCostRequests": 762,
+      "unsettled": 0,
+      "state": "open"
+    },
+    "maxAdditionalReservedMicroUsd": 500000,
+    "maxAdditionalRequests": 100
+  },
+  "result": {
+    "status": "mechanical_pass_pending_semantic_review",
+    "completedAt": "2026-09-11T13:33:15.049Z",
+    "observations": [
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-5.4-mini-2026-03-17",
+        "method": "cairn_extract",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-5.4-mini-2026-03-17",
+        "method": "cairn_extract",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_classify",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_classify",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_rank",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses/input_tokens",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      },
+      {
+        "endpoint": "/v1/responses",
+        "model": "gpt-4.1-mini-2025-04-14",
+        "method": "cairn_select",
+        "status": 200
+      }
+    ],
+    "totals": {
+      "requests": 1673,
+      "reservedMicroUsd": 14326872,
+      "knownUsageMicroUsd": 939961,
+      "unknownCostRequests": 773,
+      "unsettled": 0,
+      "state": "open"
+    }
+  }
+}

@@ -344,7 +344,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
-  function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch }) {
+  function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label }) {
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
@@ -504,7 +504,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           reason: row.reason,
         } };
         if (row.row_kind === "unfiled") return { item: { type: "unfiled",
-          ref: { memoryId: row.child_id, revision: row.child_revision }, label: label(row.content) } };
+          ref: { memoryId: row.child_id, revision: row.child_revision }, label: memoryLabel(row.content) } };
         if (row.row_kind === "moc") {
           const moc = db.prepare("SELECT * FROM mocs WHERE id = ?").get(row.moc_id);
           return { item: { type: "moc", moc: { id: moc.id, level: `L${moc.level}`,
@@ -516,7 +516,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           parent_revision: row.parent_revision, child_id: row.child_id,
           child_revision: row.child_revision });
         return { item: { type: "ref", ref,
-          label: row.child_type === "memory" ? label(row.content) : visibleTitle(
+          label: row.child_type === "memory" ? memoryLabel(row.content) : visibleTitle(
             db.prepare("SELECT * FROM mocs WHERE id = ?").get(row.child_id)) } };
       }), epoch: currentEpoch };
     });
