@@ -35,7 +35,7 @@
     "validate": "node scripts/validate-json.mjs",
     "test:experiment-budget": "node --test evaluation/experiment-budget/test/ledger.test.mjs",
     "demo:experiment-budget": "node evaluation/experiment-budget/example.mjs",
-    "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs",
+    "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs evaluation/experiment-budget/test/reconciliation-guard.test.mjs",
     "demo:experiment-request-guard": "node evaluation/experiment-budget/request-guard-example.mjs"
   }
 }

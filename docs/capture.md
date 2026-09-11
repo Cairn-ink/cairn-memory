@@ -4,7 +4,7 @@
 and MOC runtime. It is a JavaScript source API, not an MCP server or passive hook.
 Run `npm run demo:capture` on Node >=22.16 for an offline synthetic example.
 
-Input is exactly `{ namespace, client, eventId, sessionId, messages }`. The trusted
+Input is `{ namespace, client, eventId, sessionId, messages, causal? }`. The trusted
 host supplies the exact namespace; each message is `{ id, role, content }`, with
 role `user` or `assistant`. IDs are nonempty opaque identifiers up to 200 units.
 Supply 1–24 uniquely identified messages, each at most 4,000 normalized UTF-16
@@ -55,6 +55,67 @@ Pending replay returns `{processing:true}`. Completed replay returns
 may refer to subsequently forgotten records but expose no forgotten content.
 A changed digest on the same event returns `event_payload_conflict`.
 
-No real provider, tokenizer, automatic host integration or semantic-quality claim
-is bundled. Scripted tests prove boundary/lifecycle behavior only. Storage and
+An optional [OpenAI adapter](openai-provider.md) supplies a real provider and
+tokenizer. No automatic host integration or semantic-quality claim is bundled.
+Scripted tests prove boundary/lifecycle behavior only. Storage and
 receipt retention follow [the local store limits](local-store.md).
+
+## Opt-in source-ordered reconciliation
+
+The local JavaScript API accepts `causal: {streamId, sequence}`. This does not
+change the HTTP/plugin/MCP schemas. Without it, capture keeps the existing
+digest, output and model-call sequence; it does not retire changing facts.
+
+The trusted source application must durably allocate positive safe-integer
+sequence numbers in actual source order, serialize captures in that stream, and
+reuse the same event, sequence and payload on retries. `streamId` is an opaque
+identifier up to 200 units, scoped to the exact namespace and client. Different
+streams are incomparable. Start a new stream if allocation state is lost; do
+not manufacture chronology from delivery time or model judgment. This is a
+caller contract, not authenticated proof of ordering. Gaps are allowed, but an
+older unseen window cannot later be ingested as current.
+
+After bounded extraction, the core may call `model.reconcile` once to judge
+whether current user evidence explicitly replaces an earlier claim about the
+same subject/property/scope. Only agent-inferred candidates whose complete
+receipts belong to the same earlier stream are eligible. Explicit, unordered,
+mixed-stream or oversized sources remain unresolved. Discovery reads at most
+13 current namespace memories and five receipts each; accepted ceilings are
+12 memories and four receipts. Overflow does not silently claim completeness.
+
+The model sees indexed text, roles and candidate excerpts, not persisted IDs,
+namespace, event or stream identifiers. It returns bounded predecessor,
+replacement and evidence indices. The core verifies source bindings and commits
+admission, historical retirement, replay status and stream progress atomically,
+guarded by the claim lease, namespace revision and ordering snapshot. Model
+judgment is outside the transaction. Classification remains a later operation.
+No replacement is promoted to explicit authority. Existing receipts cannot be
+relabelled with a new causal position to make them eligible.
+
+Successful ordered capture and completed replay additionally return:
+
+```js
+reconciliation: {
+  status: 'applied' | 'complete_no_change' | 'unresolved',
+  reason: null | 'candidate_limit' | 'unordered_sources' | 'context_budget',
+  retiredCount: 0 // 0–5; positive only for applied
+}
+```
+
+`complete_no_change` describes this bounded pass, not global semantic truth.
+`unresolved` admits the extracted items without retiring predecessors and keeps
+its reason for replay. Context overflow is unresolved; a missing required port,
+malformed output, cancellation or provider failure commits no admission.
+An empty successful extraction still advances stream progress. A new event at
+a reused position or at/below completed progress returns `capture_order_conflict`
+before extraction. Identical completed events replay even after later progress;
+changing an event's payload or causal fields returns `event_payload_conflict`.
+
+Schema v9 stores opaque event/stream bindings, sequence numbers, receipt
+provenance and content-free reconciliation status locally. These metadata can
+reveal event linkage to database readers; never put secrets in identifiers.
+They do not duplicate transcript text or prove the model's semantics. See
+[historical retention](supersession.md) and the frozen
+[acceptance boundary](plans/ordered-capture.md). Real-model cross-window quality
+and installed-host acceptance remain separate gates; the original failed audit
+is retained unchanged.

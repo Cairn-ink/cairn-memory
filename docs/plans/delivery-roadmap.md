@@ -22,7 +22,27 @@ merge, production, release and external-publication decisions.
 
 ## Goal and baseline
 
-### Reliability checkpoint (2026-09-11, overrides older status labels)
+### Latest cross-window work — offline delivery, live quality still pending
+
+PRs [52](https://github.com/Cairn-ink/cairn-memory/pull/52),
+[53](https://github.com/Cairn-ink/cairn-memory/pull/53),
+[54](https://github.com/Cairn-ink/cairn-memory/pull/54) and
+[55](https://github.com/Cairn-ink/cairn-memory/pull/55) are delivered dependent
+branches, in that merge order, not an assertion that the owner has merged them.
+They provide durable superseded history, source-ordered automatic capture,
+an explicitly gated experiment capability, and a raw-history diagnostic with
+separate independent historical review. All17 CI checks passed for each PR.
+The public core is the only memory engine; MCP still does not automatically
+capture arbitrary conversations merely by being connected.
+
+Next is the [seven-case currentness harness](currentness-evidence.md), then the
+installed ordered capture/inspection/correction/forgetting loop. These are offline
+preparations for one newly authorized real-provider evidence attempt. The original
+failed four-history result remains failed and retained; scripted tests cannot
+establish that the semantic currentness problem is solved. Product onboarding,
+distribution and actual adoption remain separate from this quality work.
+
+### Earlier reliability checkpoint (2026-09-11)
 
 Public #40-#43 are merged. Content-free model diagnostics, bounded ingestion
 failure summaries and the installed Hermes collector are available. The
@@ -80,8 +100,37 @@ The [cross-window contract](cross-window-supersession.md) now separates three
 packages: rules plus executable gap characterization, shared-engine repair,
 and fresh real-provider/installed evidence. The baseline test deliberately
 reproduces two active claims; it is not a supersession implementation or pass.
+The [B implementation](supersession-engine.md) is split into B1 durable history,
+explicit atomic supersession and current-only retrieval, followed by B2 source-
+bound automatic capture judgment. [B2 acceptance](ordered-capture.md) now defines
+opt-in trusted stream ordering, atomic automatic transitions and explicit
+unresolved outcomes; its synthetic tests are not real-model quality evidence.
+B1 does not fix the capture audit by itself;
+do not substitute a manual supersession operation for automatic capture evidence.
 Next product work remains an explicit supported host-capture integration and
 onboarding that distinguishes module capture from MCP explicit remember.
+
+The following C work is deliberately staged after B2's offline mechanism gate:
+
+| Slice | Deliverable | Exit boundary |
+| --- | --- | --- |
+| [C0a](reconciliation-guard.md) | Separate immutable reconciliation authorization and combined guard, fake HTTP only | Old guards still reject the new method; same cumulative accounting, independent review |
+| C0b | Frozen currentness scenarios, disclosed ordered-v1 evaluator projection, installed-artifact harness | Original failed evidence/cases/rubric/scorer remain intact; offline failure-retention and oracle-separation checks |
+| C1 | One fresh real-provider and installed-artifact evidence attempt | Explicit method grant and local run cap under original USD20; independent semantic labels; retain all failures |
+
+Neither C0a nor C0b is a new quality score or permission to provision the real
+campaign token. C1 remains unrun until its frozen scope and authority are settled.
+
+C0b is delivered in reviewable slices: [C0b1](ordered-history-evidence.md) adds
+the original-history ordering adapter and independently checked raw/history
+projection. C0b2 still freezes the new currentness corpus and installed-artifact
+ordered lifecycle. A passing synthetic harness is not a fresh real-model result.
+
+C0b2 is split into [C0b2a](currentness-evidence.md), the frozen seven-case
+positive/negative corpus and independently scored actual-core harness, followed
+by C0b2b, the installed-artifact ordered lifecycle. This keeps semantic scoring
+and installation/MCP lifecycle checks separately reviewable. C1 remains unrun;
+none of these offline gates grants paid-method authority or changes defaults.
 
 The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
