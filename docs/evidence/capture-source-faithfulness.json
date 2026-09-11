@@ -1,0 +1,735 @@
+{
+  "schemaVersion": 1,
+  "scope": "nine-case synthetic capture diagnostic, not general accuracy",
+  "sourceBase": "40acbb4cd548d61530606d2137524be9408ed721",
+  "sourceHashes": {
+    "core/admission-storage.mjs": "2b042b52e8a23e9900fa0794b70ac869b6da60eb5f770ab36de840e7454f202e",
+    "core/capture-input.mjs": "1b1d0b2365133ad349b73fb656afaf761e2af5b7897c72e0fd2d7e92995088bc",
+    "core/capture.mjs": "34d3ec503e383f29bf4dc52d36fdf0a48584633ac9b254ad33cb4c031f30b06f",
+    "core/classification.mjs": "980fa14c8e92bf5190763db6348deff8ed47ff886de832c5340478f9453ba177",
+    "core/conflict-storage.mjs": "0639606e811592a7b695f7342cd3c3751d2a15dc55c75879a28fa2944c5918ab",
+    "core/contract.mjs": "f65c2fad75bcf19b87bf5e117407922254e2c545b00cbc60dd176adba40a8582",
+    "core/database.mjs": "5c0390583a22871787e9a4bda90f1f93e22f9a510157e9358a4763305ef987a6",
+    "core/fetch.mjs": "df363ddc24bb5aa63ef72fe77629aca5917ed6595f8f46e5e48d1e7ba2cfb336",
+    "core/index-schema.mjs": "665ff64d94da244dffd06541e2df0680f589faabec650650720dfa11ff7a8f00",
+    "core/index-storage.mjs": "f9e695bdbf2c5a6f82cb9ce3ac807fd3b4dd30331f3a083bb0d0b58926a8e0af",
+    "core/index.mjs": "7474c3076455d64af3c8c4d6cee3592b0058bb4542b1746232b2a607967c2f55",
+    "core/moc-storage.mjs": "3dbd7b85fcb44aaad061cdee352badd4d949240069cefcaaa1edfc7871b8ab3d",
+    "core/model-budget.mjs": "ab1eb8ca87bf6937e8ba9039518786668dc9337bb3b9062eed4477809dec1e8a",
+    "core/model-call.mjs": "c1508f8671ca1da1e418f34f32507ea3f447ea15ff737e003fb6744a05d1e34b",
+    "core/model-diagnostics.mjs": "2393442790a60cb869bc5978c5aff2cddb4f1d6b20d650292c061f3838f8d6e2",
+    "core/placement-input.mjs": "724348a355d5137448830369dd72fed680d5ef32b15614284c91a3fef9e5654d",
+    "core/query-excerpt.mjs": "cda8347a0d249b72f6f74d0d4d3b0aacad493e8877bb0ab2d935adc6cbdac6ca",
+    "core/recall.mjs": "d57d151738a2e4a12c8c3a2c5f5a49675267124da711cf062f4dcf6c31dabe93",
+    "core/runtime.mjs": "a9696596c69dd3fe4c39b1eddf65be3e050643fa00e126fdb279cb26e2956619",
+    "core/validation.mjs": "96d4a2cd01433c6af27f9263ffd5d32648367dec65995f223e3e1a3c18267b92",
+    "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",
+    "core/prompts/extract-memories.md": "8942bea305c2bf09a65b092f11da9dcb6068ceb16fe88e7e623149cd99850eae",
+    "core/prompts/recall-rank.md": "930e43038441d117dddf7bcaa2f93363bcb2e9150105d406750800da94b7fbcc",
+    "core/prompts/recall-select.md": "41cc02441ede2b53763bc0afad5eb26d9b35441defd9a5a2e2746216c9ba1880",
+    "adapters/mcp/cli.mjs": "6298d492caccb345bea85f29279bccb17ffc3e785c0d9168ed57a88760ce3466",
+    "adapters/mcp/server.mjs": "2d6d0d191085c487cf9d1144c35219ac2ab928ea6c72d25c6fbf9b850e0e9ae2",
+    "adapters/openai/index.mjs": "e6655b68ce831c63d10937e235d14bd035ef717bc9d59525bd4739e7e5062ec6",
+    "adapters/openai/profiles.mjs": "519d05fcb2aefc47f2d4d5c887533287114ceb6bb61245d06656726ca1d9da2b",
+    "adapters/openai/schemas.mjs": "7aaee1803c8cafa21a13e9e095a241aea60a25fac9aef0028e4367fb789215d6",
+    "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
+    "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "evaluation/live/session.mjs": "0b6b92905ba26bc5206eec6044714a76b6e36b8f51b2a37b88ec8948ba8248cf",
+    "evaluation/experiment-budget/request-guard.mjs": "1bf75393d082e025e9155108f9a4dfc65b8af92703d3c30f02a9cb212ba7d696"
+  },
+  "intentSha256": "6ae42935ba53455827780641cd3621d7082e5e3f9a707c8033f1513e19f2f66d",
+  "operatorSha256": "7eff57bf21ded503adbdbfc0c526b9984129de02cf470c75bc4e5eed204369d4",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "startedAt": "2026-09-10T17:51:15.809Z",
+  "completedAt": "2026-09-10T17:51:59.558Z",
+  "before": {
+    "requests": 957,
+    "reservedMicroUsd": 10680000,
+    "knownUsageMicroUsd": 816823,
+    "unknownCostRequests": 415,
+    "unsettled": 0,
+    "state": "open"
+  },
+  "after": {
+    "requests": 993,
+    "reservedMicroUsd": 10860000,
+    "knownUsageMicroUsd": 824561,
+    "unknownCostRequests": 433,
+    "unsettled": 0,
+    "state": "open"
+  },
+  "review": {
+    "reviewerTypes": [
+      "primary-agent",
+      "independent-agent"
+    ],
+    "supported": 18,
+    "unsupported": 0,
+    "unreviewed": 0,
+    "recovered": 18,
+    "expectedFacts": 18,
+    "filed": 17,
+    "unfiled": 1,
+    "limitation": "Earlier default-profile source-support failures are unchanged."
+  },
+  "cases": [
+    {
+      "family": 1,
+      "messages": [
+        {
+          "id": "harbor-source",
+          "role": "user",
+          "content": "Harbor uses Go."
+        },
+        {
+          "id": "juniper-source",
+          "role": "user",
+          "content": "Juniper uses Python."
+        }
+      ],
+      "repetition": 1,
+      "observation": {
+        "case": 1,
+        "family": 1,
+        "repetition": 1,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "ae6a2f67-d245-4801-963d-fd7aa6284834",
+              "revision": 2
+            },
+            {
+              "memoryId": "e26f304f-0a7a-4bfa-9238-1dcb6c2dae05",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "ae6a2f67-d245-4801-963d-fd7aa6284834",
+          "content": "Juniper uses the Python programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "juniper-source",
+              "role": "user",
+              "excerpt": "Juniper uses Python."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "e26f304f-0a7a-4bfa-9238-1dcb6c2dae05",
+          "content": "Harbor uses the Go programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "harbor-source",
+              "role": "user",
+              "excerpt": "Harbor uses Go."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 1,
+      "messages": [
+        {
+          "id": "harbor-source",
+          "role": "user",
+          "content": "Harbor uses Go."
+        },
+        {
+          "id": "juniper-source",
+          "role": "user",
+          "content": "Juniper uses Python."
+        }
+      ],
+      "repetition": 2,
+      "observation": {
+        "case": 2,
+        "family": 1,
+        "repetition": 2,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "1126127d-2fef-4e84-bc1f-e14af373d153",
+              "revision": 2
+            },
+            {
+              "memoryId": "9d4e8966-b45b-4b54-af19-f936d9efc617",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "1126127d-2fef-4e84-bc1f-e14af373d153",
+          "content": "Juniper uses the Python programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "juniper-source",
+              "role": "user",
+              "excerpt": "Juniper uses Python."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "9d4e8966-b45b-4b54-af19-f936d9efc617",
+          "content": "Harbor uses the Go programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "harbor-source",
+              "role": "user",
+              "excerpt": "Harbor uses Go."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 1,
+      "messages": [
+        {
+          "id": "harbor-source",
+          "role": "user",
+          "content": "Harbor uses Go."
+        },
+        {
+          "id": "juniper-source",
+          "role": "user",
+          "content": "Juniper uses Python."
+        }
+      ],
+      "repetition": 3,
+      "observation": {
+        "case": 3,
+        "family": 1,
+        "repetition": 3,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "0a6f12be-200a-4611-84c8-74ccdc543fe1",
+              "revision": 2
+            },
+            {
+              "memoryId": "a68a0f93-0cc1-426d-b77c-5cb4a12408d7",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "0a6f12be-200a-4611-84c8-74ccdc543fe1",
+          "content": "Harbor uses the Go programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "harbor-source",
+              "role": "user",
+              "excerpt": "Harbor uses Go."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "a68a0f93-0cc1-426d-b77c-5cb4a12408d7",
+          "content": "Juniper uses the Python programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "juniper-source",
+              "role": "user",
+              "excerpt": "Juniper uses Python."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 2,
+      "messages": [
+        {
+          "id": "aster-source",
+          "role": "user",
+          "content": "Aster uses Rust."
+        },
+        {
+          "id": "cedar-source",
+          "role": "user",
+          "content": "Cedar uses Ruby."
+        }
+      ],
+      "repetition": 1,
+      "observation": {
+        "case": 4,
+        "family": 2,
+        "repetition": 1,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "4a45c7e9-7f6b-4fc6-b1d9-7385373eece4",
+              "revision": 2
+            },
+            {
+              "memoryId": "7f9d818f-818d-4af2-bd0a-d045b29482e8",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "4a45c7e9-7f6b-4fc6-b1d9-7385373eece4",
+          "content": "Cedar uses the Ruby programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "cedar-source",
+              "role": "user",
+              "excerpt": "Cedar uses Ruby."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "7f9d818f-818d-4af2-bd0a-d045b29482e8",
+          "content": "Aster uses the Rust programming language.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "aster-source",
+              "role": "user",
+              "excerpt": "Aster uses Rust."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 2,
+      "messages": [
+        {
+          "id": "aster-source",
+          "role": "user",
+          "content": "Aster uses Rust."
+        },
+        {
+          "id": "cedar-source",
+          "role": "user",
+          "content": "Cedar uses Ruby."
+        }
+      ],
+      "repetition": 2,
+      "observation": {
+        "case": 5,
+        "family": 2,
+        "repetition": 2,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "7c7faccb-54c3-468c-88e8-c563542fec99",
+              "revision": 2
+            },
+            {
+              "memoryId": "a00ca84b-7489-4041-aade-de136e559ade",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "7c7faccb-54c3-468c-88e8-c563542fec99",
+          "content": "Aster uses Rust.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "aster-source",
+              "role": "user",
+              "excerpt": "Aster uses Rust."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "a00ca84b-7489-4041-aade-de136e559ade",
+          "content": "Cedar uses Ruby.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "cedar-source",
+              "role": "user",
+              "excerpt": "Cedar uses Ruby."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 2,
+      "messages": [
+        {
+          "id": "aster-source",
+          "role": "user",
+          "content": "Aster uses Rust."
+        },
+        {
+          "id": "cedar-source",
+          "role": "user",
+          "content": "Cedar uses Ruby."
+        }
+      ],
+      "repetition": 3,
+      "observation": {
+        "case": 6,
+        "family": 2,
+        "repetition": 3,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "359cc16e-2b0f-4561-8d4a-fcde3d89245e",
+              "revision": 2
+            },
+            {
+              "memoryId": "56770989-bd74-4579-9b6d-ffd070d33d96",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "359cc16e-2b0f-4561-8d4a-fcde3d89245e",
+          "content": "Cedar uses Ruby.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "cedar-source",
+              "role": "user",
+              "excerpt": "Cedar uses Ruby."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "56770989-bd74-4579-9b6d-ffd070d33d96",
+          "content": "Aster uses Rust.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "aster-source",
+              "role": "user",
+              "excerpt": "Aster uses Rust."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 3,
+      "messages": [
+        {
+          "id": "marigold-source",
+          "role": "user",
+          "content": "Marigold plans to use SQLite."
+        },
+        {
+          "id": "birch-source",
+          "role": "user",
+          "content": "Birch plans to use PostgreSQL."
+        }
+      ],
+      "repetition": 1,
+      "observation": {
+        "case": 7,
+        "family": 3,
+        "repetition": 1,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "18640ce0-2b97-4156-b998-787a785c5c9d",
+              "revision": 2
+            },
+            {
+              "memoryId": "f428eeeb-529f-442d-879d-984060521602",
+              "revision": 1
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "18640ce0-2b97-4156-b998-787a785c5c9d",
+          "content": "Marigold plans to use SQLite.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "marigold-source",
+              "role": "user",
+              "excerpt": "Marigold plans to use SQLite."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "f428eeeb-529f-442d-879d-984060521602",
+          "content": "Birch plans to use PostgreSQL.",
+          "revision": 1,
+          "filing": {
+            "status": "unfiled"
+          },
+          "receipts": [
+            {
+              "eventId": "birch-source",
+              "role": "user",
+              "excerpt": "Birch plans to use PostgreSQL."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 3,
+      "messages": [
+        {
+          "id": "marigold-source",
+          "role": "user",
+          "content": "Marigold plans to use SQLite."
+        },
+        {
+          "id": "birch-source",
+          "role": "user",
+          "content": "Birch plans to use PostgreSQL."
+        }
+      ],
+      "repetition": 2,
+      "observation": {
+        "case": 8,
+        "family": 3,
+        "repetition": 2,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "01753c7e-ca35-4ab2-8d52-8d84551bd26c",
+              "revision": 2
+            },
+            {
+              "memoryId": "6d68525e-2d58-4051-9819-0840e0d3e390",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "01753c7e-ca35-4ab2-8d52-8d84551bd26c",
+          "content": "Birch plans to use PostgreSQL.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "birch-source",
+              "role": "user",
+              "excerpt": "Birch plans to use PostgreSQL."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "6d68525e-2d58-4051-9819-0840e0d3e390",
+          "content": "Marigold plans to use SQLite.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "marigold-source",
+              "role": "user",
+              "excerpt": "Marigold plans to use SQLite."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    },
+    {
+      "family": 3,
+      "messages": [
+        {
+          "id": "marigold-source",
+          "role": "user",
+          "content": "Marigold plans to use SQLite."
+        },
+        {
+          "id": "birch-source",
+          "role": "user",
+          "content": "Birch plans to use PostgreSQL."
+        }
+      ],
+      "repetition": 3,
+      "observation": {
+        "case": 9,
+        "family": 3,
+        "repetition": 3,
+        "captureOk": true,
+        "classification": {
+          "status": "applied",
+          "memoryRevisions": [
+            {
+              "memoryId": "84f46c57-9a77-4d25-b6cd-c58196f65a16",
+              "revision": 2
+            },
+            {
+              "memoryId": "8a33824b-6c1f-4b7b-a110-8406a5a18dfa",
+              "revision": 2
+            }
+          ],
+          "indexRevision": 4
+        },
+        "errorCode": null,
+        "recordCount": 2,
+        "diagnostics": []
+      },
+      "records": [
+        {
+          "memoryId": "84f46c57-9a77-4d25-b6cd-c58196f65a16",
+          "content": "Birch plans to use PostgreSQL.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "birch-source",
+              "role": "user",
+              "excerpt": "Birch plans to use PostgreSQL."
+            }
+          ],
+          "sourceSupport": "supported"
+        },
+        {
+          "memoryId": "8a33824b-6c1f-4b7b-a110-8406a5a18dfa",
+          "content": "Marigold plans to use SQLite.",
+          "revision": 2,
+          "filing": {
+            "status": "filed"
+          },
+          "receipts": [
+            {
+              "eventId": "marigold-source",
+              "role": "user",
+              "excerpt": "Marigold plans to use SQLite."
+            }
+          ],
+          "sourceSupport": "supported"
+        }
+      ]
+    }
+  ]
+}
