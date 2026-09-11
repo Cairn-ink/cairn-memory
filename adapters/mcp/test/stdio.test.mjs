@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { openMemoryCore } from '../../../core/contract.mjs';
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 const scripted = fileURLToPath(new URL('./fixtures/scripted-server.mjs', import.meta.url));
@@ -237,6 +238,47 @@ function rawProcess(t, args) {
   const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal, stdout, stderr })));
   return { child, closed };
 }
+
+test('fresh stdio labels explicitly superseded history, recalls only current and forgets without reactivation', options, async (t) => {
+  // Seed via the trusted explicit core API, NOT automatic capture or an MCP
+  // supersede tool. Subsequent consumer operations use real stdio processes.
+  const path = database();
+  const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
+  const core = openMemoryCore({ path });
+  let changed;
+  let originalReceipts;
+  try {
+    const receipt = (eventId, excerpt) => ({ client: 'synthetic-seed', sessionId: 'review', eventId, role: 'user', excerpt });
+    const old = ok(core.admit({ namespace, memory: { content: 'Harbor review is Friday.', kind: 'fact' },
+      receipts: [receipt('old', 'Harbor review is Friday.')] })).memory;
+    originalReceipts = ok(core.get({ namespace, memoryId: old.id })).receipts;
+    changed = ok(core.supersede({ namespace, memoryId: old.id, expectedRevision: old.revision,
+      replacement: { content: 'Harbor review is Monday.', kind: 'fact' },
+      receipts: [receipt('new', 'Move Harbor review from Friday to Monday.')] }));
+  } finally { core.close(); }
+  const first = await host(t, path, { fixture: true });
+  const historical = ok(await call(first.client, 'inspect_memory', { memoryId: changed.previous.id }));
+  assert.equal(historical.memory.state, 'historical');
+  assert.deepEqual(historical.receipts, originalReceipts);
+  assert.equal(historical.supersession.replacement.memoryId, changed.memory.id);
+  assert.equal(historical.supersession.evidenceAvailable, true);
+  const recalled = ok(await call(first.client, 'recall_memory', { query: 'When is Harbor review?' }));
+  assert.deepEqual(recalled.memories.map(({ memory }) => memory.id), [changed.memory.id]);
+  assert.equal(JSON.stringify(recalled.memories.map(({ memory }) => memory.content)).includes('Friday'), false);
+  error(await call(first.client, 'correct_memory', { memoryId: changed.previous.id,
+    expectedRevision: historical.memory.revision, content: 'Rewrite history' }), 'memory_historical');
+  ok(await call(first.client, 'forget_memory', { memoryId: changed.memory.id, expectedRevision: changed.memory.revision }));
+  await first.client.close();
+  const second = await host(t, path, { fixture: true });
+  assert.deepEqual(ok(await call(second.client, 'recall_memory', { query: 'When is Harbor review?' })).memories, []);
+  const retained = ok(await call(second.client, 'inspect_memory', { memoryId: changed.previous.id }));
+  assert.equal(retained.memory.state, 'historical');
+  assert.equal(retained.supersession.replacement, null);
+  assert.deepEqual(retained.supersession.receiptIds, []);
+  assert.equal(retained.supersession.evidenceAvailable, false);
+  ok(await call(second.client, 'forget_memory', { memoryId: changed.previous.id, expectedRevision: retained.memory.revision }));
+  assert.deepEqual(ok(await call(second.client, 'inspect_memory')).memories, []);
+});
 
 test('malformed CLI exits without stdout or reflecting sensitive argument text', options, async (t) => {
   const marker = 'SYNTHETIC-SECRET-DO-NOT-REFLECT';

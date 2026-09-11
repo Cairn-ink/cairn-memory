@@ -34,7 +34,7 @@ function fixture(t, outputs) {
   return { core, path, calls: () => calls };
 }
 
-test('BASELINE GAP: Friday then an explicit Monday update in captured user text leaves both active', async (t) => {
+test('B2 PENDING BASELINE GAP: Friday then an explicit Monday update in captured user text leaves both active', async (t) => {
   const { core } = fixture(t, [{ items: [extracted(friday)] }, { items: [extracted(monday)] }]);
   const firstInput = capture('friday', friday);
   const nextInput = capture('monday', 'Update: the project deadline is now Monday, replacing Friday.');
@@ -55,7 +55,7 @@ test('BASELINE GAP: Friday then an explicit Monday update in captured user text 
   assert.equal(detail(core, newId).memory.origin, 'agent-inferred');
 });
 
-test('BASELINE GAP: cold reopen and replay retain the two active claims without duplicate memories or receipts', async (t) => {
+test('B2 PENDING BASELINE GAP: cold reopen and replay retain the two active claims without duplicate memories or receipts', async (t) => {
   const { core, path, calls } = fixture(t, [{ items: [extracted(friday)] }, { items: [extracted(monday)] }]);
   const inputs = [capture('friday', friday), capture('monday', 'The deadline changed from Friday to Monday.')];
   const ids = [];

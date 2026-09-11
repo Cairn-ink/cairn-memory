@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add explicit revision-safe `core.supersede` with atomic replacement admission,
+  preserved historical evidence and current-only recall/navigation. Schema v8
+  separates history from forgetting; no automatic capture reconciliation or
+  semantic-quality improvement is claimed by this storage foundation.
+
 - Add an explicit Luna extraction-only experiment and an opt-in durable model
   authorization extension over the original shared experiment budget. Defaults,
   prompts and historical failed quality results remain unchanged. Offline support

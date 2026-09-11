@@ -18,6 +18,7 @@
   "core/query-excerpt.mjs",
   "core/recall.mjs",
   "core/runtime.mjs",
+  "core/supersession-storage.mjs",
   "core/validation.mjs",
   "core/prompts/classify-placement.md",
   "core/prompts/extract-memories.md",
