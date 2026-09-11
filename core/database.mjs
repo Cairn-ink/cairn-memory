@@ -3,10 +3,11 @@ import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
-import { migrateVersion6 } from "./index-schema.mjs";
+import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
+import { migrateVersion8 } from './ordered-capture-schema.mjs';
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 7;
+const VERSION = 9;
 
 function createVersion3(db) {
   db.exec(`
@@ -211,6 +212,27 @@ function migrateVersion5(db) {
   `);
 }
 
+function migrateVersion7(db) {
+  db.exec(`ALTER TABLE memories ADD COLUMN currentness TEXT NOT NULL DEFAULT 'current'
+    CHECK (currentness IN ('current','historical'));
+    CREATE TABLE memory_supersessions (
+      owner_id TEXT NOT NULL,
+      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),
+      project_id TEXT NOT NULL,
+      previous_memory_id TEXT PRIMARY KEY REFERENCES memories(id),
+      previous_revision INTEGER NOT NULL CHECK (previous_revision > 0),
+      replacement_memory_id TEXT NOT NULL REFERENCES memories(id),
+      replacement_revision INTEGER NOT NULL CHECK (replacement_revision > 0),
+      -- Four opaque 200-unit IDs, including worst-case JSON escaping/delimiters.
+      receipt_ids TEXT NOT NULL CHECK (length(receipt_ids) <= 1613),
+      CHECK (previous_memory_id != replacement_memory_id),
+      CHECK ((scope = 'personal' AND project_id = '') OR
+             (scope = 'project' AND length(project_id) > 0))
+    ) STRICT;
+    CREATE INDEX replacement_supersessions ON memory_supersessions(replacement_memory_id);`);
+  installIndexReaders(db, true);
+}
+
 export function transaction(db, work) {
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -245,8 +267,21 @@ export function openDatabase(path) {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if (appId === APPLICATION_ID && version === VERSION) return;
+      if (appId === APPLICATION_ID && version === 8) {
+        migrateVersion8(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
+      if (appId === APPLICATION_ID && version === 7) {
+        migrateVersion7(db);
+        migrateVersion8(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
       if (appId === APPLICATION_ID && version === 6) {
         migrateVersion6(db);
+        migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -256,6 +291,8 @@ export function openDatabase(path) {
         migrateVersion4(db);
         migrateVersion5(db);
         migrateVersion6(db);
+        migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -264,6 +301,8 @@ export function openDatabase(path) {
         migrateVersion4(db);
         migrateVersion5(db);
         migrateVersion6(db);
+        migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -271,12 +310,16 @@ export function openDatabase(path) {
         migrateVersion4(db);
         migrateVersion5(db);
         migrateVersion6(db);
+        migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 5) {
         migrateVersion5(db);
         migrateVersion6(db);
+        migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -287,6 +330,8 @@ export function openDatabase(path) {
       migrateVersion4(db);
       migrateVersion5(db);
       migrateVersion6(db);
+      migrateVersion7(db);
+      migrateVersion8(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

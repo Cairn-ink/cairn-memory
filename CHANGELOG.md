@@ -17,6 +17,28 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Prepare a separately versioned ordered-history diagnostic retaining complete
+  raw history alongside an explicit current-only projection for the unchanged
+  v1 scorer. Historical retirement requires separate independent review; frozen
+  original failures and denominators remain intact. Offline harness checks are
+  not real-model acceptance or a new semantic-quality score.
+
+- Prepare a separate immutable reconciliation experiment authorization and an
+  explicit combined request guard. Existing guards still reject reconciliation;
+  only an owner-authorized operator may provision real campaign state. Offline
+  tests do not grant permission, replenish budgets or establish model quality.
+
+- Add opt-in local source-ordered capture reconciliation with inferred-authority
+  preservation, atomic history/progress fencing, bounded unresolved outcomes and
+  durable replay. Schema v9 retains content-free causal provenance; legacy
+  captures and MCP input schemas are unchanged. Offline tests do not establish
+  real-model quality, and existing paid guards do not authorize the new port.
+
+- Add explicit revision-safe `core.supersede` with atomic replacement admission,
+  preserved historical evidence and current-only recall/navigation. Schema v8
+  separates history from forgetting; no automatic capture reconciliation or
+  semantic-quality improvement is claimed by this storage foundation.
+
 - Add an explicit Luna extraction-only experiment and an opt-in durable model
   authorization extension over the original shared experiment budget. Defaults,
   prompts and historical failed quality results remain unchanged. Offline support

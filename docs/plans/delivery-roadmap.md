@@ -80,8 +80,31 @@ The [cross-window contract](cross-window-supersession.md) now separates three
 packages: rules plus executable gap characterization, shared-engine repair,
 and fresh real-provider/installed evidence. The baseline test deliberately
 reproduces two active claims; it is not a supersession implementation or pass.
+The [B implementation](supersession-engine.md) is split into B1 durable history,
+explicit atomic supersession and current-only retrieval, followed by B2 source-
+bound automatic capture judgment. [B2 acceptance](ordered-capture.md) now defines
+opt-in trusted stream ordering, atomic automatic transitions and explicit
+unresolved outcomes; its synthetic tests are not real-model quality evidence.
+B1 does not fix the capture audit by itself;
+do not substitute a manual supersession operation for automatic capture evidence.
 Next product work remains an explicit supported host-capture integration and
 onboarding that distinguishes module capture from MCP explicit remember.
+
+The following C work is deliberately staged after B2's offline mechanism gate:
+
+| Slice | Deliverable | Exit boundary |
+| --- | --- | --- |
+| [C0a](reconciliation-guard.md) | Separate immutable reconciliation authorization and combined guard, fake HTTP only | Old guards still reject the new method; same cumulative accounting, independent review |
+| C0b | Frozen currentness scenarios, disclosed ordered-v1 evaluator projection, installed-artifact harness | Original failed evidence/cases/rubric/scorer remain intact; offline failure-retention and oracle-separation checks |
+| C1 | One fresh real-provider and installed-artifact evidence attempt | Explicit method grant and local run cap under original USD20; independent semantic labels; retain all failures |
+
+Neither C0a nor C0b is a new quality score or permission to provision the real
+campaign token. C1 remains unrun until its frozen scope and authority are settled.
+
+C0b is delivered in reviewable slices: [C0b1](ordered-history-evidence.md) adds
+the original-history ordering adapter and independently checked raw/history
+projection. C0b2 still freezes the new currentness corpus and installed-artifact
+ordered lifecycle. A passing synthetic harness is not a fresh real-model result.
 
 The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
