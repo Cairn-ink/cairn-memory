@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Prepare an installed ordered-capture lifecycle gate with fresh MCP consumers,
+  source-bound history, scoped correction/forgetting, isolation and explicit
+  failure retention. Scripted installed tests are not real-model acceptance or
+  autonomous host capture; prior evidence remains unchanged.
+
 - Freeze a separate seven-case currentness diagnostic covering confirmed updates
   and non-update cases, with complete raw history and independent source,
   currentness, retention and recall labels. Scripted offline acceptance does not

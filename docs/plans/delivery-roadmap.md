@@ -26,18 +26,20 @@ merge, production, release and external-publication decisions.
 
 PRs [52](https://github.com/Cairn-ink/cairn-memory/pull/52),
 [53](https://github.com/Cairn-ink/cairn-memory/pull/53),
-[54](https://github.com/Cairn-ink/cairn-memory/pull/54) and
-[55](https://github.com/Cairn-ink/cairn-memory/pull/55) are delivered dependent
+[54](https://github.com/Cairn-ink/cairn-memory/pull/54),
+[55](https://github.com/Cairn-ink/cairn-memory/pull/55) and
+[56](https://github.com/Cairn-ink/cairn-memory/pull/56) are delivered dependent
 branches, in that merge order, not an assertion that the owner has merged them.
 They provide durable superseded history, source-ordered automatic capture,
-an explicitly gated experiment capability, and a raw-history diagnostic with
-separate independent historical review. All17 CI checks passed for each PR.
+an explicitly gated experiment capability, a raw-history diagnostic with
+separate independent historical review, and a frozen seven-case currentness
+harness. All17 CI checks passed for each PR.
 The public core is the only memory engine; MCP still does not automatically
 capture arbitrary conversations merely by being connected.
 
-Next is the [seven-case currentness harness](currentness-evidence.md), then the
-installed ordered capture/inspection/correction/forgetting loop. These are offline
-preparations for one newly authorized real-provider evidence attempt. The original
+Next is the [installed ordered capture/inspection/correction/forgetting loop](installed-ordered-loop.md).
+These are offline preparations for one newly authorized real-provider evidence
+attempt. The original
 failed four-history result remains failed and retained; scripted tests cannot
 establish that the semantic currentness problem is solved. Product onboarding,
 distribution and actual adoption remain separate from this quality work.
@@ -128,7 +130,7 @@ ordered lifecycle. A passing synthetic harness is not a fresh real-model result.
 
 C0b2 is split into [C0b2a](currentness-evidence.md), the frozen seven-case
 positive/negative corpus and independently scored actual-core harness, followed
-by C0b2b, the installed-artifact ordered lifecycle. This keeps semantic scoring
+by [C0b2b](installed-ordered-loop.md), the installed-artifact ordered lifecycle. This keeps semantic scoring
 and installation/MCP lifecycle checks separately reviewable. C1 remains unrun;
 none of these offline gates grants paid-method authority or changes defaults.
 
