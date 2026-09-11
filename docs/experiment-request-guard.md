@@ -103,6 +103,43 @@ Additional fixed errors are `invalid_extension` and `extension_busy`; existing
 binding/ledger errors also apply. Merely provisioning or passing offline tests
 does not establish provider access, source fidelity or a product default.
 
+### Separately authorized reconciliation capability
+
+The optional local capture judgment port is **not** enabled by either constructor
+above. After specific owner authorization, a trusted operator may call
+`authorizeReconciliationExtension({ledger, policy, extension, authorizationId})`.
+`extension` is the existing expected extraction-extension token, not a discovered
+file. Setup verifies it under the reservation writer lock, requires an open fully
+settled ledger, and exclusively writes a separate fsynced mode0600
+`experiment-reconciliation-extension.json`. The new record binds the exact
+original ledger, policy, extraction token and creation checkpoint; it never
+rewrites their files, allowance or historical reservations. Identical setup is
+idempotent; mismatched or partial state is not overwritten or repaired.
+
+Explicitly inject the returned expected token into
+`createReconciliationExperimentRequestGuard({ledger, policy, extension,
+reconciliationExtension, fetchImpl})`. Both tokens, their files, original binding
+and settled historical prefixes are checked at construction and before each
+request. No file alone enables a method. Existing baseline/extraction-only
+guards remain unchanged even when the new file exists.
+
+The combined guard adds only `cairn_reconcile` on the original baseline model and
+fixed Responses count/generation endpoints, with strict request-scoped schema,
+7024 input/1024 generation-output ceilings and unchanged baseline reservations,
+prices and timeouts. Alternate model selection remains extraction-only. All
+methods share the original cumulative ledger; there is no second allowance,
+automatic retry, fallback or default transport.
+
+These local records contain identifiers/configuration/counters, not keys or
+conversations. They protect against mismatched operator state, not a malicious
+same-user process that can replace both files and expected tokens. Provisioning
+is a real local mutation requiring operator authority; constructing a reviewed
+primitive, passing tests or merging its PR does not supply human consent.
+Before any paid run, freeze fixtures/code, state the attempt/request/reservation
+cap, inspect actual remaining settled budget, and obtain the missing method grant.
+Never create a ledger or new allowance to replenish an existing campaign.
+See [the offline acceptance](plans/reconciliation-guard.md).
+
 Fetch options are exactly `{method, redirect, signal, headers, body}`. Headers
 allow only JSON content type and Bearer authorization. Host messages allow text
 and function-tool history; media, streaming, multiple completions and unknown

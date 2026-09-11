@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Prepare a separate immutable reconciliation experiment authorization and an
+  explicit combined request guard. Existing guards still reject reconciliation;
+  only an owner-authorized operator may provision real campaign state. Offline
+  tests do not grant permission, replenish budgets or establish model quality.
+
 - Add opt-in local source-ordered capture reconciliation with inferred-authority
   preservation, atomic history/progress fencing, bounded unresolved outcomes and
   durable replay. Schema v9 retains content-free causal provenance; legacy
