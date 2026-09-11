@@ -2,6 +2,7 @@ import {
   closeSync,
   constants,
   fsyncSync,
+  fstatSync,
   lstatSync,
   openSync,
   readFileSync,
@@ -10,6 +11,7 @@ import {
 } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import {
   ExperimentBudgetError,
@@ -18,11 +20,13 @@ import {
 import {
   DEFAULT_MODEL,
   EXPERIMENTAL_EXTRACTION_MODEL,
+  LUNA_EXTRACTION_MODEL,
 } from '../../adapters/openai/profiles.mjs';
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { schemasFor } from '../../adapters/openai/schemas.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
+const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -169,16 +173,23 @@ function readBinding(filename, expected) {
     || (process.platform !== 'win32' && (entry.mode & 0o777) !== 0o600)) {
     fail('unsafe_policy_binding');
   }
+  let descriptor;
   try {
     if (realpathSync(filename) !== filename) fail('unsafe_policy_binding');
-    const bytes = readFileSync(filename);
+    descriptor = openSync(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const opened = fstatSync(descriptor);
+    if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino
+      || opened.size > 1_000_000 || opened.nlink !== 1
+      || (process.platform !== 'win32' && (opened.mode & 0o777) !== 0o600)) fail('unsafe_policy_binding');
+    const bytes = readFileSync(descriptor);
     if (bytes.byteLength > 1_000_000) fail('unsafe_policy_binding');
     const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-    if (canonical(parsed) !== canonical(expected)) fail('policy_mismatch');
+    if (expected !== undefined && canonical(parsed) !== canonical(expected)) fail('policy_mismatch');
+    return parsed;
   } catch (error) {
     if (error instanceof ExperimentRequestGuardError) throw error;
     fail('unsafe_policy_binding');
-  }
+  } finally { if (descriptor !== undefined) closeSync(descriptor); }
 }
 
 function bindPolicy(directory, runId, policy, ledgerState) {
@@ -328,7 +339,7 @@ function validateCairnBody(body, channel, generation) {
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
     : baseKeys;
-  if (body.model === EXPERIMENTAL_EXTRACTION_MODEL) expectedKeys.push('reasoning');
+  if ([EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL].includes(body.model)) expectedKeys.push('reasoning');
   exactKeys(body, expectedKeys, 'unsupported_request');
   if (body.model !== channel.model || typeof body.instructions !== 'string'
     || body.truncation !== 'disabled' || !Array.isArray(body.input) || body.input.length !== 1) {
@@ -340,7 +351,7 @@ function validateCairnBody(body, channel, generation) {
   exactKeys(body.input[0].content[0], ['text', 'type'], 'unsupported_request');
   if (body.input[0].content[0].type !== 'input_text'
     || typeof body.input[0].content[0].text !== 'string') fail('unsupported_request');
-  if (body.model === EXPERIMENTAL_EXTRACTION_MODEL) {
+  if ([EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL].includes(body.model)) {
     if (!deepEqual(body.reasoning, { effort: 'none' })) fail('unsupported_request');
   }
   exactKeys(body.text, ['format'], 'unsupported_request');
@@ -454,15 +465,121 @@ function parseResponseJson(bytes) {
   catch { fail('invalid_response'); }
 }
 
-export function createExperimentRequestGuard(options) {
+function extensionConfiguration(options) {
+  const policy = validateConstructor({ ledger: options.ledger, policy: options.policy, fetchImpl: () => {} });
+  if (typeof options.authorizationId !== 'string'
+    || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/u.test(options.authorizationId)) fail('invalid_extension');
+  if (Object.keys(CHANNELS).some((name) => policy[name].model !== DEFAULT_MODEL)
+    || policy.cairnCount.maxInputTokens !== 7024 || policy.cairnGeneration.maxInputTokens !== 7024
+    || policy.cairnGeneration.maxOutputTokens !== 1024) fail('invalid_extension');
+  const ledger = structuredClone(options.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const models = {};
+  for (const [model, input, output] of [[LUNA_EXTRACTION_MODEL, 25, 120], [EXPERIMENTAL_EXTRACTION_MODEL, 75, 450]]) {
+    models[model] = {};
+    for (const kind of ['cairnCount', 'cairnGeneration']) {
+      const channel = { ...policy[kind], model,
+        inputPrice: { microUsdNumerator: input, tokenDenominator: 100 },
+        outputPrice: { microUsdNumerator: output, tokenDenominator: 100 } };
+      channel.reservedMicroUsd = Math.max(channel.reservedMicroUsd, Number(pricedUpperBound(channel)));
+      models[model][kind] = channel;
+    }
+  }
+  return { version: 1, authorizationId: options.authorizationId, ledger, policy, method: 'cairn_extract', models };
+}
+
+function verifyExtension(extension, ledger, policy) {
+  exactKeys(extension, ['version', 'authorizationId', 'ledger', 'policy', 'method', 'models', 'checkpoint'], 'invalid_extension');
+  const expected = extensionConfiguration({ ledger, policy, authorizationId: extension.authorizationId });
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount) || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > ledger.requestCap || extension.checkpoint.reservedMicroUsd > ledger.limitMicroUsd
+    || canonical(extension) !== canonical({ ...expected, checkpoint: extension.checkpoint })) fail('invalid_extension');
+  readBinding(path.join(expected.ledger.directory, BINDING_FILENAME), { version: 1, runId: ledger.runId, policy });
+  readBinding(path.join(expected.ledger.directory, EXTENSION_FILENAME), extension);
+}
+
+function verifyExtensionCheckpoint(extension, state) {
+  const prefix = state.attempts.slice(0, extension.checkpoint.requestCount);
+  if (prefix.length !== extension.checkpoint.requestCount || prefix.some((attempt) => attempt.outcome === null)
+    || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0) !== extension.checkpoint.reservedMicroUsd) {
+    fail('policy_mismatch');
+  }
+}
+
+// Provisioning is separate from transport construction: existing guards never opt in implicitly.
+export function authorizeExtractionModelExtension(options) {
+  exactKeys(options, ['ledger', 'policy', 'authorizationId']);
+  const configuration = extensionConfiguration(options);
+  const ledger = reopenExperimentBudget(configuration.ledger);
+  let lock;
+  try {
+    readBinding(path.join(configuration.ledger.directory, BINDING_FILENAME),
+      { version: 1, runId: configuration.ledger.runId, policy: configuration.policy });
+    // The same SQLite writer lock used by reservations excludes setup/checkpoint races.
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    const state = ledger.getState();
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) fail('extension_busy');
+    const filename = path.join(configuration.ledger.directory, EXTENSION_FILENAME);
+    let existing;
+    try { existing = lstatSync(filename); } catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) {
+      // Read once only to recover the immutable creation checkpoint; verify every other byte below.
+      const extension = readBinding(filename);
+      verifyExtension(extension, configuration.ledger, configuration.policy);
+      verifyExtensionCheckpoint(extension, state);
+      if (extension.authorizationId !== configuration.authorizationId
+        || extension.checkpoint.requestCount > state.requestCount
+        || extension.checkpoint.reservedMicroUsd > state.reservedMicroUsd) fail('policy_mismatch');
+      return deepFreeze(extension);
+    }
+    const extension = { ...configuration, checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
+    let descriptor;
+    try {
+      descriptor = openSync(filename, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      writeFileSync(descriptor, `${canonical(extension)}\n`, { encoding: 'utf8' });
+      fsyncSync(descriptor);
+    } finally { if (descriptor !== undefined) closeSync(descriptor); }
+    const directoryDescriptor = openSync(configuration.ledger.directory, constants.O_RDONLY);
+    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+    verifyExtension(extension, configuration.ledger, configuration.policy);
+    return deepFreeze(extension);
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) throw error;
+    fail('unsafe_policy_binding');
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* No ledger writes were made. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
+export function createExtendedExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'fetchImpl', 'extension']);
+  let extension;
+  try { extension = deepFreeze(structuredClone(options.extension)); } catch { fail('invalid_extension'); }
+  if (!isPlainObject(extension)) fail('invalid_extension');
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl }, extension);
+}
+
+export function createExperimentRequestGuard(options) { return constructGuard(options); }
+
+function constructGuard(options, extension = null) {
   const policy = validateConstructor(options);
+  const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
-  try { ledger = reopenExperimentBudget(options.ledger); }
+  try { ledger = reopenExperimentBudget(ledgerConfiguration); }
   catch (error) {
     if (error instanceof ExperimentBudgetError) throw error;
     fail('ledger_failed');
   }
-  try { bindPolicy(options.ledger.directory, options.ledger.runId, policy, ledger.getState()); }
+  try {
+    if (extension) {
+      verifyExtension(extension, ledgerConfiguration, policy);
+      verifyExtensionCheckpoint(extension, ledger.getState());
+    }
+    else bindPolicy(ledgerConfiguration.directory, ledgerConfiguration.runId, policy, ledger.getState());
+  }
   catch (error) { ledger.close(); throw error; }
 
   const fetchImpl = options.fetchImpl;
@@ -471,8 +588,17 @@ export function createExperimentRequestGuard(options) {
 
   const guardedFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
-    const channel = policy[kind];
+    if (extension) {
+      verifyExtension(extension, ledgerConfiguration, policy);
+      verifyExtensionCheckpoint(extension, ledger.getState());
+    }
+    let channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);
+    if (extension && kind !== 'hostCompletion' && snapshot.body.model !== channel.model) {
+      if (snapshot.body.text?.format?.name !== 'cairn_extract'
+        || !own(extension.models, snapshot.body.model)) fail('unsupported_request');
+      channel = extension.models[snapshot.body.model][kind];
+    }
     const requestBytes = encoder.encode(snapshot.bodyText).byteLength;
     if (kind === 'hostCompletion') validateHostBody(snapshot.body, channel, requestBytes);
     else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');

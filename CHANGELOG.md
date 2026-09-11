@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add an explicit Luna extraction-only experiment and an opt-in durable model
+  authorization extension over the original shared experiment budget. Defaults,
+  prompts and historical failed quality results remain unchanged. Offline support
+  does not establish provider access or memory quality.
+
 - Use bounded query-aware excerpts in recall's internal navigation to expose
   relevant words beyond a memory's prefix. Public map/classification, model calls,
   candidate membership and resource ceilings are unchanged. A frozen synthetic
