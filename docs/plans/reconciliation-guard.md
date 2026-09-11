@@ -110,6 +110,7 @@ The actual-core/actual-adapter synthetic automatic update used10 fake HTTP calls
 and125 synthetic microUSD of reservations. Additional tests verify both nonzero
 authorization checkpoints, mixed Luna extraction/baseline judgment/host accounting,
 and an accessor deleting authorization after the initial check but before
-reservation. All must retain original counters and reject without unauthorized I/O.
+reservation. Accepted calls advance the same cumulative counters; rejected
+authorization never resets history or permits unauthorized I/O.
 These observations establish offline guard mechanics only, not paid permission,
 current vendor pricing, semantic quality or an account-wide invoice cap.

@@ -518,6 +518,20 @@ function verifyExtensionCheckpoint(extension, state) {
   }
 }
 
+// Callers retain their validation, writer lock and fixed error mapping. Never
+// replace or remove a partial authorization file if writing or syncing fails.
+function writeAuthorizationBinding(directory, filename, authorization) {
+  let descriptor;
+  try {
+    descriptor = openSync(filename,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    writeFileSync(descriptor, `${canonical(authorization)}\n`, { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } finally { if (descriptor !== undefined) closeSync(descriptor); }
+  const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+  try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+}
+
 // Provisioning is separate from transport construction: existing guards never opt in implicitly.
 export function authorizeExtractionModelExtension(options) {
   exactKeys(options, ['ledger', 'policy', 'authorizationId']);
@@ -546,14 +560,7 @@ export function authorizeExtractionModelExtension(options) {
       return deepFreeze(extension);
     }
     const extension = { ...configuration, checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
-    let descriptor;
-    try {
-      descriptor = openSync(filename, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-      writeFileSync(descriptor, `${canonical(extension)}\n`, { encoding: 'utf8' });
-      fsyncSync(descriptor);
-    } finally { if (descriptor !== undefined) closeSync(descriptor); }
-    const directoryDescriptor = openSync(configuration.ledger.directory, constants.O_RDONLY);
-    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+    writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
     verifyExtension(extension, configuration.ledger, configuration.policy);
     return deepFreeze(extension);
   } catch (error) {
@@ -637,15 +644,7 @@ export function authorizeReconciliationExtension(options) {
     }
     const reconciliation = { ...configuration,
       checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
-    let descriptor;
-    try {
-      descriptor = openSync(filename,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-      writeFileSync(descriptor, `${canonical(reconciliation)}\n`, { encoding: 'utf8' });
-      fsyncSync(descriptor);
-    } finally { if (descriptor !== undefined) closeSync(descriptor); }
-    const directoryDescriptor = openSync(configuration.ledger.directory, constants.O_RDONLY);
-    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+    writeAuthorizationBinding(configuration.ledger.directory, filename, reconciliation);
     verifyReconciliationExtension(reconciliation, configuration.extension,
       configuration.ledger, configuration.policy);
     verifyExtensionCheckpoint(reconciliation, state);
