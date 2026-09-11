@@ -47,13 +47,13 @@ const snapshot = (db) => tables.map((table) => db.prepare(`SELECT * FROM ${table
   return { ...row };
 }));
 
-test('v4→v8 preserves complete store state and authenticated cursors', (t) => {
+test('v4→v9 preserves complete store state and authenticated cursors', (t) => {
   const { path, db } = fixture(t);
   const before = snapshot(db);
   const savedCursor = cursor(db);
   const core = openMemoryCore({ path });
   t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
   assert.deepEqual(snapshot(db), before);
   const page = core.list({ namespace, limit: 1, cursor: savedCursor });
   assert.equal(page.ok, true, JSON.stringify(page));
@@ -88,6 +88,6 @@ test('v4 upgrade blocked by another writer remains intact and retries', (t) => {
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path });
   t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
   assert.deepEqual(snapshot(db), before);
 });

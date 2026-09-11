@@ -51,12 +51,12 @@ function cursor(db) {
   return `${body}.${sign(body)}`;
 }
 
-test('R08 v6→v8 preserves all values, claims, placements, suppression and signed cursors', (t) => {
+test('R08 v6→v9 preserves all values, claims, placements, suppression and signed cursors', (t) => {
   const { path, db } = fixture(t);
   const before = snapshot(db);
   const saved = cursor(db);
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
   assert.deepEqual(snapshot(db), before);
   const list = core.list({ namespace, limit: 1, cursor: saved });
   assert.equal(list.ok, true, JSON.stringify(list));
@@ -85,7 +85,7 @@ test('R08 v6 DDL collision preserves schema and state then retries', (t) => {
   assert.equal(db.prepare('SELECT preserve_me FROM index_generations').get().preserve_me, 'survivor');
   db.exec('DROP TABLE index_generations');
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
   assert.deepEqual(snapshot(db), before);
 });
 
@@ -101,6 +101,6 @@ test('R08 v6 writer contention leaves old schema intact and retryable', (t) => {
     assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema);
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
   assert.deepEqual(snapshot(db), before);
 });

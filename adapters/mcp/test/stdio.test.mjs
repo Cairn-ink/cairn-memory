@@ -280,6 +280,80 @@ test('fresh stdio labels explicitly superseded history, recalls only current and
   assert.deepEqual(ok(await call(second.client, 'inspect_memory')).memories, []);
 });
 
+test('fresh stdio observes ordered capture reconciliation and never resurrects corrected or forgotten history', options, async (t) => {
+  // Seed through actual automatic capture with source ordering and scripted
+  // semantic ports. No explicit supersede call is used; MCP has no supersede tool.
+  const path = database();
+  const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
+  const friday = 'Harbor review is Friday.';
+  const monday = 'Harbor review is Monday.';
+  const calls = [];
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    extract: ({ input }) => {
+      calls.push('extract');
+      return { items: [{ content: input.messages[0].content.includes('Monday') ? monday : friday,
+        kind: 'fact', confidence: 0.9, sourceIndices: [0] }] };
+    },
+    reconcile: ({ input }) => {
+      calls.push('reconcile');
+      assert.deepEqual(input.items.map((item) => item.content), [monday]);
+      assert.deepEqual(input.candidates.map((candidate) => candidate.content), [friday]);
+      return { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0] }] };
+    },
+    classify: ({ input }) => {
+      calls.push('classify');
+      return { items: input.memories.map(({ id }) => ({ memoryId: id, parentIds: [] })) };
+    },
+  };
+  const core = openMemoryCore({ path, model });
+  let previous;
+  let replacement;
+  try {
+    const capture = (sequence, content) => core.capture({ namespace, client: 'synthetic-ordered-source',
+      sessionId: 'harbor-review', eventId: `capture-${sequence}`,
+      causal: { streamId: 'harbor-review-stream', sequence },
+      messages: [{ id: `message-${sequence}`, role: 'user', content }] });
+    const original = ok(await capture(1, friday));
+    assert.deepEqual(original.reconciliation,
+      { status: 'complete_no_change', reason: null, retiredCount: 0 });
+    previous = original.admission.memories[0];
+    const changed = ok(await capture(2, 'Confirmed update: Harbor review moves from Friday to Monday.'));
+    assert.deepEqual(changed.reconciliation, { status: 'applied', reason: null, retiredCount: 1 });
+    replacement = changed.admission.memories[0];
+    assert.deepEqual(calls, ['extract', 'classify', 'extract', 'reconcile', 'classify']);
+  } finally { core.close(); }
+
+  const first = await host(t, path, { fixture: true });
+  const historical = ok(await call(first.client, 'inspect_memory', { memoryId: previous.id }));
+  assert.equal(historical.memory.state, 'historical');
+  assert.equal(historical.memory.content, friday);
+  assert.equal(historical.supersession.replacement.memoryId, replacement.id);
+  assert.deepEqual(historical.receipts.map(({ excerpt }) => excerpt), [friday]);
+  const current = ok(await call(first.client, 'inspect_memory', { memoryId: replacement.id }));
+  assert.equal(current.memory.state, 'active');
+  assert.equal(current.memory.origin, 'agent-inferred');
+  assert.equal(current.memory.content, monday);
+  const recalled = ok(await call(first.client, 'recall_memory', { query: 'When is Harbor review?' }));
+  assert.deepEqual(recalled.memories.map(({ memory }) => memory.id), [replacement.id]);
+  assert.deepEqual(recalled.memories.map(({ memory }) => memory.content), [monday]);
+
+  const corrected = ok(await call(first.client, 'correct_memory', { memoryId: replacement.id,
+    expectedRevision: current.memory.revision, content: 'Harbor review is Tuesday.' })).memory;
+  const afterCorrection = ok(await call(first.client, 'recall_memory', { query: 'When is Harbor review now?' }));
+  assert.deepEqual(afterCorrection.memories.map(({ memory }) => memory.id), [replacement.id]);
+  assert.deepEqual(afterCorrection.memories.map(({ memory }) => memory.content), ['Harbor review is Tuesday.']);
+  assert.equal(ok(await call(first.client, 'inspect_memory', { memoryId: previous.id })).memory.state, 'historical');
+  ok(await call(first.client, 'forget_memory', { memoryId: replacement.id, expectedRevision: corrected.revision }));
+  await first.client.close();
+
+  const second = await host(t, path, { fixture: true });
+  assert.deepEqual(ok(await call(second.client, 'recall_memory', { query: 'When is Harbor review?' })).memories, []);
+  const retained = ok(await call(second.client, 'inspect_memory', { memoryId: previous.id }));
+  assert.equal(retained.memory.state, 'historical');
+  assert.equal(retained.supersession.replacement, null);
+  assert.equal(retained.supersession.evidenceAvailable, false);
+});
+
 test('malformed CLI exits without stdout or reflecting sensitive argument text', options, async (t) => {
   const marker = 'SYNTHETIC-SECRET-DO-NOT-REFLECT';
   for (const args of [[], ['--unknown', marker], ['--db', marker],

@@ -5,6 +5,7 @@ import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
+import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -66,12 +67,15 @@ export function createMemoryRuntime(input) {
 
   const receiptKey = receipt => createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
 
-  function attach(id, receipt, now) {
+  function attach(id, receipt, now, inserted = []) {
     const key = receiptKey(receipt);
-    return db.prepare(`INSERT OR IGNORE INTO receipts
+    const receiptId = randomUUID();
+    const changes = db.prepare(`INSERT OR IGNORE INTO receipts
       (id, memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), id, key, receipt.client,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
       receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now).changes;
+    if (changes) inserted.push(receiptId);
+    return changes;
   }
 
   function legacyDto(memory) {
@@ -135,12 +139,13 @@ export function createMemoryRuntime(input) {
   // in a batch. Explicit and inferred writes share all mutation/invalidation rules.
   function admitMutation(ns, value, projection = {}) {
     assertNotSuppressed(ns, value.fingerprint);
+    const insertedReceiptIds = [];
     const existing = db.prepare(`SELECT * FROM memories WHERE ${where}
       AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
     const now = new Date().toISOString();
     if (existing) {
       let changed = false;
-      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now)) || changed;
+      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds)) || changed;
       const explicit = value.origin === "explicit";
       const kind = explicit ? value.kind : existing.kind;
       const origin = explicit ? "explicit" : existing.origin;
@@ -159,7 +164,7 @@ export function createMemoryRuntime(input) {
       const memory = activeRow(ns, existing.id);
       return {
         memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: true,
-        indexRevision: changed ? advanceEpoch(ns) : epoch(ns), changed,
+        indexRevision: changed ? advanceEpoch(ns) : epoch(ns), changed, insertedReceiptIds,
       };
     }
     const id = randomUUID();
@@ -168,10 +173,10 @@ export function createMemoryRuntime(input) {
        confidence, revision, deleted, created_at, updated_at) VALUES
       (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`).run(id, ...boundary(ns),
       value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now);
-    for (const receipt of value.receipts) attach(id, receipt, now);
+    for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds);
     const memory = activeRow(ns, id);
     return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
-      indexRevision: advanceEpoch(ns), changed: true };
+      indexRevision: advanceEpoch(ns), changed: true, insertedReceiptIds };
   }
 
   function correct(ns, id, value, expectedRevision, projection = {}) {
@@ -356,10 +361,20 @@ export function createMemoryRuntime(input) {
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
   });
+  const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
+    supersessionStorage, receiptKey, isSuppressed });
 
   return Object.freeze({
     identity, ready, admit, correct, forget, supersede, legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
+    claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },
+    discoverOrdered(ns, snapshot, order, items) {
+      ready(); return orderedStorage.discover(ns, snapshot, order, items);
+    },
+    finishOrdered(ns, snapshot, token, order, prepared, judged) {
+      ready(); return orderedStorage.finish(ns, snapshot, token, order, prepared.discovery,
+        prepared.items, judged.decisions, judged.reason);
+    },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },

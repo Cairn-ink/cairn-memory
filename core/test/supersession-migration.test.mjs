@@ -42,9 +42,9 @@ function assertPreserved(db) {
   }
 }
 
-test('B05 v7→v8 preserves all old values, published/staged generations and signed cursor continuation', (t) => {
+test('B05 v7→v9 preserves all old values, published/staged generations and signed cursor continuation', (t) => {
   const { path, db } = fixture(t); const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8); assertPreserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9); assertPreserved(db);
   assert.deepEqual(ok(core.list({ namespace: saved.namespace, limit: 1, cursor: saved.cursor })), saved.next);
   const next = ok(core.rebuildIndex(saved.rebuild));
   let cursor = next.nextCursor;
@@ -63,7 +63,7 @@ test('B05 late v7 migration DDL collision preserves original schema/data and per
   for (const { name, rows } of saved.tables) assert.deepEqual(db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all().map((r) => ({ ...r })), rows);
   assert.equal(db.prepare('SELECT preserve_me FROM memory_supersessions').get().preserve_me, 'synthetic survivor');
   db.exec('DROP TABLE memory_supersessions'); const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8); assertPreserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9); assertPreserved(db);
 });
 
 test('B05 competing writer prevents upgrade without changing v7 schema, then retry succeeds', (t) => {

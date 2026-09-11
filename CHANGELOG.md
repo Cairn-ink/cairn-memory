@@ -17,6 +17,12 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Add opt-in local source-ordered capture reconciliation with inferred-authority
+  preservation, atomic history/progress fencing, bounded unresolved outcomes and
+  durable replay. Schema v9 retains content-free causal provenance; legacy
+  captures and MCP input schemas are unchanged. Offline tests do not establish
+  real-model quality, and existing paid guards do not authorize the new port.
+
 - Add explicit revision-safe `core.supersede` with atomic replacement admission,
   preserved historical evidence and current-only recall/navigation. Schema v8
   separates history from forgetting; no automatic capture reconciliation or

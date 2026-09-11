@@ -88,6 +88,11 @@ newly open v8 and there is no downgrade tool or zero-downtime upgrade claim.
 The [implementation acceptance](plans/supersession-engine.md) covers rollback,
 isolation, mutation races, source preservation and migration on synthetic data.
 
-Automatic cross-window capture judgment and fresh real-provider/installed MCP
-acceptance remain next steps. The original Friday/Monday capture audit remains
-failed; a caller using this explicit API is not automatic capture fixing itself.
+Schema v9 additionally supports opt-in [ordered capture](capture.md#opt-in-source-ordered-reconciliation),
+which can use this history mechanism automatically with source-bound model
+judgment. The same stop-all-old-connections requirement applies to that upgrade;
+existing unordered receipts are not assigned invented chronology.
+
+Fresh real-provider cross-window and installed MCP acceptance remain separate
+gates. The original Friday/Monday capture audit remains failed; neither explicit
+supersession nor scripted ordered-capture tests establish real-model quality.

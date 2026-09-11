@@ -4,9 +4,10 @@ import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fail } from "./validation.mjs";
 import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
+import { migrateVersion8 } from './ordered-capture-schema.mjs';
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 8;
+const VERSION = 9;
 
 function createVersion3(db) {
   db.exec(`
@@ -266,14 +267,21 @@ export function openDatabase(path) {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if (appId === APPLICATION_ID && version === VERSION) return;
+      if (appId === APPLICATION_ID && version === 8) {
+        migrateVersion8(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
       if (appId === APPLICATION_ID && version === 7) {
         migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 6) {
         migrateVersion6(db);
         migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -284,6 +292,7 @@ export function openDatabase(path) {
         migrateVersion5(db);
         migrateVersion6(db);
         migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -293,6 +302,7 @@ export function openDatabase(path) {
         migrateVersion5(db);
         migrateVersion6(db);
         migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -301,6 +311,7 @@ export function openDatabase(path) {
         migrateVersion5(db);
         migrateVersion6(db);
         migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -308,6 +319,7 @@ export function openDatabase(path) {
         migrateVersion5(db);
         migrateVersion6(db);
         migrateVersion7(db);
+        migrateVersion8(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -319,6 +331,7 @@ export function openDatabase(path) {
       migrateVersion5(db);
       migrateVersion6(db);
       migrateVersion7(db);
+      migrateVersion8(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

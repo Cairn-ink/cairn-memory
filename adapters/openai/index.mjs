@@ -165,5 +165,6 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     classify: (request) => invoke('classify', request),
     select: (request) => invoke('select', request),
     rank: (request) => invoke('rank', request),
+    reconcile: (request) => invoke('reconcile', request),
   });
 }

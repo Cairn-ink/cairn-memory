@@ -1,6 +1,6 @@
 # Optional OpenAI adapter — source preview
 
-This source adapter connects the same core's extract/classify/select/rank ports
+This source adapter connects the same core's extract/reconcile/classify/select/rank ports
 to pinned `gpt-4.1-mini-2025-04-14`. One synthetic real-provider lifecycle has
 passed; see the [run evidence](plans/live-provider.md). Neither that smoke test
 nor offline fixtures establish general semantic quality, client support or launch readiness.
@@ -64,6 +64,23 @@ frozen evaluation and subsequent verification are retained in
 [source-faithful extraction](plans/source-faithful-extraction.md).
 
 ## Offline checks
+
+### Ordered-capture judgment boundary
+
+Opt-in local [ordered capture](capture.md#opt-in-source-ordered-reconciliation)
+adds a `reconcile` port on the baseline model; extraction-only profiles do not
+switch the judgment model. Its strict schema limits transition indices to the
+request snapshot. The core additionally checks correlated indices, user evidence,
+receipt provenance, revision and causal ordering. Structured output is not proof
+that a change was semantically justified.
+
+Judgment transmits bounded candidate text and receipt excerpts in addition to
+the current message window, but not database identities or causal identifiers.
+A capture requiring extraction, reconciliation and classification can make six
+HTTP requests. Existing experiment guards deliberately reject `cairn_reconcile`;
+adding this method does not extend paid authorization. No real-model acceptance
+is claimed for it by fake-HTTP tests. Missing required judgment or invalid output
+fails closed without committing admission; context overflow is explicitly unresolved.
 
 With Node >=22.16, from a source checkout:
 

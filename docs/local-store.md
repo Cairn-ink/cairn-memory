@@ -4,17 +4,19 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7 data now upgrades it to v8 for
+v1/v3/v4/v5/v6/v7/v8 data now upgrades it to v9 for
+[ordered capture](capture.md#opt-in-source-ordered-reconciliation) and
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md) and [admission claims](admission-claims.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v8.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v9.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
 
 This is a real SQLite persistence library runnable from public source. It is
-**not yet a standalone memory service**: no model extraction, semantic recall,
-local MCP/HTTP server, or host adapter is wired to it. The released Claude
+**not itself a standalone memory service**. The shared core now supplies capture
+and recall, and the optional [local MCP adapter](standalone-mcp.md) exposes
+explicit operations; none of these alone adds passive host capture. The released Claude
 plugin still uses its configured service. No Cairn account is needed for this
 library; no telemetry, network client, or cloud fallback exists in its runtime.
 
