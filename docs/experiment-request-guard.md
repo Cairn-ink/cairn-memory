@@ -66,6 +66,43 @@ snapshot IDs. A mixed extraction profile that changes models between methods
 must not be assumed compatible with a single channel policy: an unlisted model
 is rejected. The synthetic integrated demonstration uses the baseline profile.
 
+### Explicit extraction-model extension
+
+After separate owner authorization, `authorizeExtractionModelExtension({ledger,
+policy, authorizationId})` provisions `experiment-extraction-extension.json`
+(0600) alongside the existing binding. It never edits that binding, the ledger
+schema, total allowance or historical reservations. Setup requires a baseline
+policy, the fixed Cairn 7,024-input/1,024-output bounds, an open settled ledger,
+and the same SQLite writer lock used to exclude concurrent reservation changes.
+The fsynced file records the exact original policy/configuration, a bounded
+authorization identifier, creation counters and deterministic candidate channels.
+It contains no key or conversation. Keep the returned frozen extension token
+separately as the trusted caller's expected authorization record.
+
+`createExtendedExperimentRequestGuard({ledger, policy, extension, fetchImpl})`
+requires that explicit token and verifies it against the private file and original
+binding on construction and every request. The original constructor does not
+implicitly opt in. Changed, missing, unsafe or mismatched authorization fails
+closed; retained files are not a defense against a caller who can replace both
+the expected token and all local state. This is an operator-controlled spending
+guard, not a cryptographic user-authorization service.
+
+Only `cairn_extract` count/generation may select `gpt-5.6-luna` or the existing
+`gpt-5.4-mini-2026-03-17`, with reasoning `none`. Other methods and host completion
+retain the original model; endpoints, request/response limits and deadlines do
+not widen. Candidate reservations are the greater of the original reservation
+and the model-priced upper bound, with input/output rounded up separately.
+Thus the current campaign still reserves 5,000 microUSD for Luna count/generation,
+while its separate local adapter guard reserves 2,985; these are not two budgets
+or an invoice. GPT-5.4 mini count/generation reserve 5,268/9,876 respectively
+under that original policy. All share the original atomic cumulative ledger.
+Luna input accounting conservatively includes the documented cache-write premium;
+see [profile pricing and limitations](openai-provider.md).
+
+Additional fixed errors are `invalid_extension` and `extension_busy`; existing
+binding/ledger errors also apply. Merely provisioning or passing offline tests
+does not establish provider access, source fidelity or a product default.
+
 Fetch options are exactly `{method, redirect, signal, headers, body}`. Headers
 allow only JSON content type and Bearer authorization. Host messages allow text
 and function-tool history; media, streaming, multiple completions and unknown

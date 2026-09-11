@@ -52,8 +52,12 @@ The subsequent [default-capture audit](capture-source-faithfulness.md) retained 
 nine-case local pass and a full 36-run semantic failure: recall/relevance45/45,
 but three unsupported statements and supported recovery20/24. The explicit
 installed loop is demonstrated; general automatic extraction is still not
-accepted. A stronger extraction-only comparison needs an authorized request-policy
-extension, not a reset ledger or silent default switch.
+accepted. The owner subsequently approved a Luna-first extraction-only comparison
+with GPT-5.4 mini under the same USD20 total. The
+[Luna experiment](luna-extraction.md) first adds a reviewed opt-in policy extension;
+it does not reset the ledger or silently switch defaults. Provider compatibility,
+same-source quality comparison and installed candidate verification remain gates,
+not completed outcomes at this implementation checkpoint.
 
 The original USD20 ledger checkpoint is1,215 requests /USD11.970 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
