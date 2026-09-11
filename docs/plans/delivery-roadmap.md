@@ -76,6 +76,10 @@ successful ranking do not establish reliable currentness. Transient calendar
 chatter was also retained. No engine fix or broad reliability is claimed.
 Next quality work is revision-safe cross-window update/supersession handling,
 followed by a fresh versioned diagnostic without discarding the original result.
+The [cross-window contract](cross-window-supersession.md) now separates three
+packages: rules plus executable gap characterization, shared-engine repair,
+and fresh real-provider/installed evidence. The baseline test deliberately
+reproduces two active claims; it is not a supersession implementation or pass.
 Next product work remains an explicit supported host-capture integration and
 onboarding that distinguishes module capture from MCP explicit remember.
 
