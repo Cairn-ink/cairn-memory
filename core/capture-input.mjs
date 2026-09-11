@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { boundedText, denseArray, fail, identifier, object } from './validation.mjs';
+import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
@@ -11,6 +11,11 @@ export function captureSnapshot(input) {
     const client = identifier(input.client);
     const eventId = identifier(input.eventId);
     const sessionId = identifier(input.sessionId);
+    let causal;
+    if (input.causal !== undefined) {
+      object(input.causal, ['streamId', 'sequence']);
+      causal = { streamId: identifier(input.causal.streamId), sequence: revision(input.causal.sequence) };
+    }
     const messages = denseArray(input.messages, 1, 24).map((message) => {
       object(message, ['id', 'role', 'content']);
       const id = identifier(message.id);
@@ -23,10 +28,11 @@ export function captureSnapshot(input) {
       fail('invalid_input');
     }
     const payloadDigest = createHash('sha256').update(JSON.stringify([
-      'cairn.capture.v1', [namespace.ownerId, namespace.scope, namespace.projectId],
+      causal ? 'cairn.capture.v2' : 'cairn.capture.v1', [namespace.ownerId, namespace.scope, namespace.projectId],
       client, eventId, sessionId, messages.map(({ id, role, content }) => [id, role, content]),
+      ...(causal ? [[causal.streamId, causal.sequence]] : []),
     ]), 'utf8').digest('hex');
-    return { namespace, client, eventId, sessionId, messages, payloadDigest };
+    return { namespace, client, eventId, sessionId, messages, payloadDigest, ...(causal ? { causal } : {}) };
   } catch { fail('invalid_input'); }
 }
 
@@ -51,7 +57,8 @@ export function extractedItems(output, snapshot) {
         return { client: snapshot.client, sessionId: snapshot.sessionId,
           eventId: message.id, role: message.role, excerpt: boundedText(message.content, 800, true) };
       });
-      return { content, kind: item.kind, confidence: item.confidence, receipts };
+      return { content, kind: item.kind, confidence: item.confidence, receipts,
+        ...(snapshot.causal ? { sourceIndices: [...indices] } : {}) };
     });
   } catch { fail('invalid_model_output'); }
 }
