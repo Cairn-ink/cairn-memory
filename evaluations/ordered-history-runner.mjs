@@ -1,8 +1,8 @@
-import { lstatSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { openMemoryCore } from '../core/contract.mjs';
 import { historyCases, historyVersion } from './history-cases.mjs';
 import { historyReceiptBindingsValid } from './history-runner.mjs';
+import { captureAuditConfiguration, captureAuditSnapshot, captureAuditCompleted } from './capture-audit-support.mjs';
 
 export const ORDERED_HISTORY_VERSION = 'conversation-history-ordered-v1';
 export const ORDERED_HISTORY_MAPPING = Object.freeze({
@@ -14,65 +14,6 @@ const rawKind = 'synthetic-source-ordered-history';
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const fail = code => { throw new Error(code); };
 const unwrap = result => { if (!result?.ok) fail('history_operation_failed'); return result.value; };
-
-function configuration(options) {
-  let result;
-  try {
-    if (!options || typeof options !== 'object' || Array.isArray(options) ||
-        ![Object.prototype, null].includes(Object.getPrototypeOf(options)) ||
-        Reflect.ownKeys(options).some(key => !['model', 'directory', 'onProgress', 'readDiagnostics'].includes(key))) {
-      fail('invalid_history_options');
-    }
-    const { model, directory, onProgress = () => {}, readDiagnostics = () => [] } = options;
-    if (!model || !['object', 'function'].includes(typeof model) || Array.isArray(model) ||
-        typeof directory !== 'string' || !directory || directory.includes('\0') ||
-        typeof onProgress !== 'function' || typeof readDiagnostics !== 'function') fail('invalid_history_options');
-    result = { model, directory, onProgress, readDiagnostics };
-  } catch { fail('invalid_history_options'); }
-  try {
-    const { directory } = result;
-    const stat = lstatSync(directory);
-    if (path.resolve(directory) !== directory || !stat.isDirectory() || stat.isSymbolicLink() ||
-        realpathSync(directory) !== directory ||
-        (process.platform !== 'win32' && (stat.mode & 0o777) !== 0o700) || readdirSync(directory).length) {
-      fail('unsafe_history_directory');
-    }
-  } catch { fail('unsafe_history_directory'); }
-  return result;
-}
-
-function snapshot(core, namespace, records) {
-  let cursor;
-  do {
-    const listed = unwrap(core.list({ namespace, limit: 50, ...(cursor ? { cursor } : {}) }));
-    for (const memory of listed.memories) {
-      const detail = unwrap(core.get({ namespace, memoryId: memory.id, receiptLimit: 50 }));
-      const record = { memory: detail.memory, receipts: [...detail.receipts],
-        ...(detail.supersession ? { supersession: detail.supersession } : {}) };
-      // Retain the portion observed even if a later receipt page fails.
-      records.push(record);
-      let receiptCursor = detail.nextReceiptCursor;
-      while (receiptCursor) {
-        const next = unwrap(core.get({ namespace, memoryId: memory.id, receiptLimit: 50, receiptCursor }));
-        record.receipts.push(...next.receipts);
-        receiptCursor = next.nextReceiptCursor;
-      }
-    }
-    cursor = listed.nextCursor;
-  } while (cursor);
-}
-
-function captureCompleted(capture) {
-  if (!capture?.ok || capture.value?.duplicate !== false ||
-      !['applied', 'skipped'].includes(capture.value.classification?.status)) return false;
-  if (capture.value.classification.status === 'skipped' &&
-      !['empty', 'already_filed'].includes(capture.value.classification.reason)) return false;
-  const reconciliation = capture.value.reconciliation;
-  return reconciliation && Object.keys(reconciliation).sort().join(',') === 'reason,retiredCount,status' &&
-    reconciliation.reason === null && Number.isInteger(reconciliation.retiredCount) &&
-    ((reconciliation.status === 'applied' && reconciliation.retiredCount >= 1 && reconciliation.retiredCount <= 5) ||
-      (reconciliation.status === 'complete_no_change' && reconciliation.retiredCount === 0));
-}
 
 /** Mechanical, detached compatibility view; it makes no semantic acceptance decision. */
 export function projectOrderedHistoryAudit(evidence) {
@@ -102,7 +43,9 @@ export function projectOrderedHistoryAudit(evidence) {
 
 /** Fixed synthetic source order over the public core, with no evaluator/model defaults. */
 export async function runOrderedHistoryAudit(options) {
-  const { model, directory, onProgress, readDiagnostics } = configuration(options);
+  const { model, directory, onProgress, readDiagnostics } = captureAuditConfiguration(options, {
+    invalidOptions: 'invalid_history_options', unsafeDirectory: 'unsafe_history_directory',
+  });
   const cases = structuredClone(historyCases);
   const evidence = { version: rawVersion, kind: rawKind, cases: [], status: 'completed' };
   let infrastructureFailed = false;
@@ -149,16 +92,16 @@ export async function runOrderedHistoryAudit(options) {
         window.capture = await core.capture({ namespace, client: ORDERED_HISTORY_MAPPING.client,
           sessionId: `${history.id}-window-${index}`, eventId: `${history.id}-event-${index}`, messages, causal });
         window.records = [];
-        snapshot(core, namespace, window.records);
+        captureAuditSnapshot(core, namespace, window.records, unwrap);
         window.receiptBindingsValid = historyReceiptBindingsValid(window.records, history.windows.slice(0, index + 1), history.id);
         close(core, window);
         core = null;
         if (!infrastructureFailed) {
           core = openMemoryCore({ path: database });
           window.reopenedRecords = [];
-          snapshot(core, namespace, window.reopenedRecords);
+          captureAuditSnapshot(core, namespace, window.reopenedRecords, unwrap);
           window.reopenPersisted = same(window.records, window.reopenedRecords);
-          window.status = captureCompleted(window.capture) && window.receiptBindingsValid && window.reopenPersisted
+          window.status = captureAuditCompleted(window.capture) && window.receiptBindingsValid && window.reopenPersisted
             ? 'completed' : 'failed';
         }
       } catch {

@@ -17,6 +17,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Freeze a separate seven-case currentness diagnostic covering confirmed updates
+  and non-update cases, with complete raw history and independent source,
+  currentness, retention and recall labels. Scripted offline acceptance does not
+  establish real-model quality or replace the original failed history audit.
+
 - Prepare a separately versioned ordered-history diagnostic retaining complete
   raw history alongside an explicit current-only projection for the unchanged
   v1 scorer. Historical retirement requires separate independent review; frozen

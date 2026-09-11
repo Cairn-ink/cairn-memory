@@ -22,7 +22,27 @@ merge, production, release and external-publication decisions.
 
 ## Goal and baseline
 
-### Reliability checkpoint (2026-09-11, overrides older status labels)
+### Latest cross-window work — offline delivery, live quality still pending
+
+PRs [52](https://github.com/Cairn-ink/cairn-memory/pull/52),
+[53](https://github.com/Cairn-ink/cairn-memory/pull/53),
+[54](https://github.com/Cairn-ink/cairn-memory/pull/54) and
+[55](https://github.com/Cairn-ink/cairn-memory/pull/55) are delivered dependent
+branches, in that merge order, not an assertion that the owner has merged them.
+They provide durable superseded history, source-ordered automatic capture,
+an explicitly gated experiment capability, and a raw-history diagnostic with
+separate independent historical review. All17 CI checks passed for each PR.
+The public core is the only memory engine; MCP still does not automatically
+capture arbitrary conversations merely by being connected.
+
+Next is the [seven-case currentness harness](currentness-evidence.md), then the
+installed ordered capture/inspection/correction/forgetting loop. These are offline
+preparations for one newly authorized real-provider evidence attempt. The original
+failed four-history result remains failed and retained; scripted tests cannot
+establish that the semantic currentness problem is solved. Product onboarding,
+distribution and actual adoption remain separate from this quality work.
+
+### Earlier reliability checkpoint (2026-09-11)
 
 Public #40-#43 are merged. Content-free model diagnostics, bounded ingestion
 failure summaries and the installed Hermes collector are available. The
@@ -105,6 +125,12 @@ C0b is delivered in reviewable slices: [C0b1](ordered-history-evidence.md) adds
 the original-history ordering adapter and independently checked raw/history
 projection. C0b2 still freezes the new currentness corpus and installed-artifact
 ordered lifecycle. A passing synthetic harness is not a fresh real-model result.
+
+C0b2 is split into [C0b2a](currentness-evidence.md), the frozen seven-case
+positive/negative corpus and independently scored actual-core harness, followed
+by C0b2b, the installed-artifact ordered lifecycle. This keeps semantic scoring
+and installation/MCP lifecycle checks separately reviewable. C1 remains unrun;
+none of these offline gates grants paid-method authority or changes defaults.
 
 The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
