@@ -15,8 +15,10 @@ separate storage/classification engine for each host.
 | `list`: exact namespace, bounded metadata, signed continuation | runtime listPage + facade cursor | `contract.test.mjs`: restart cursors, isolation, metadata-only pages |
 | `get`: content, paged receipts, placements, attributed conflicts | runtime getPage + MOC/conflict inspection | `contract.test.mjs`, `conflict.test.mjs`: source paging, symmetric assertions, stale/foreign filtering |
 | `correct` / `forget`: CAS, suppression, invalidation | shared runtime mutations | `store.test.mjs`, `contract.test.mjs`, `conflict.test.mjs`: two-process CAS, rollback, both endpoints, legacy mutation paths |
+| `supersede`: explicit atomic replacement, durable history and current-only reads | shared admission mutation + supersession storage + v8 index readers | `supersession.test.mjs`, `supersession-migration.test.mjs`: receipt binding, historical inspection, stale races, suppression, forgetting, rollback, migration and rebuild |
 | `claimAdmission` / `finishAdmission` / `abandonAdmission` | admission-storage + shared admission mutation | `admission.test.mjs`: active leases, expiry/takeover, old-token fencing, atomic completion, replay after restart/forget |
 | `capture`: bounded extraction and trusted evidence | capture + capture-input + injected model-call | `capture.test.mjs` C01–C13: digest identity, forged sources, deadlines, model-free replay, durable classification failure |
+| Opt-in ordered `capture`: causal provenance, bounded automatic history and replay | ordered-capture orchestration/storage/schema + private admission hooks | `ordered-capture*.test.mjs`: actual-core synthetic transitions, source/claim/ordering fencing, unresolved limits, receipt laundering and migration; not semantic-quality evidence |
 | Inline `conflictHints` and attributed inspection | conflict-storage + admission/MOC invalidation | `conflict.test.mjs` K01–K08: source variants, target revisions, incident caps, full-batch rollback |
 | `classifyPlacement` / `applyPlacement` | injected classification + MOC storage | `classification.test.mjs`, `moc.test.mjs`: proposal allowlists, memory/index CAS, derived titles, incomplete catalogs |
 | `linkMocs` | MOC storage hierarchy mutation | `moc.test.mjs`, `index-rebuild.test.mjs`: exact-level hierarchy, revisions, duplicate no-op, active projection maintenance |
@@ -43,7 +45,9 @@ second public `replayAdmission` implementation that could bypass suppression.
   per candidate. It can return budget_exhausted or a context error; it does not
   promise exhaustive search of arbitrary stores.
 - Contradiction hints are caller assertions, not general semantic contradiction
-  detection. No automatic conflict resolution, merge or truth replacement exists.
+  detection. Explicit `supersede` retains labeled historical evidence. Opt-in
+  [ordered capture](ordered-capture.md) adds bounded automatic judgment, but
+  unordered capture remains unchanged and semantic quality is not established.
 - All currently created topic titles require current source bindings. A separate
   explicitly authored title exemption and public retired-MOC management API are
   not exposed. Rebuild validates declarations; it does not recreate lost topics.
