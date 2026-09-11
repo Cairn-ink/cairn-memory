@@ -63,10 +63,16 @@ The [same-source extraction comparison](../evidence/luna-extraction-comparison.m
 now retains Luna's34/36 completion and22/24 required-fact recovery: two empty
 captures lose a required fact. GPT-5.4 mini completed36/36 with24/24 required
 facts,24/24 supported claims and45/45 recall/relevance under the unchanged rubric.
-Luna is not promoted; defaults remain unchanged. Installed capture-to-MCP
-interoperability is the next gate; this does not add automatic Hermes capture.
+Luna is not promoted; defaults remain unchanged. The subsequent
+[installed capture-to-MCP gate](../evidence/installed-capture-loop.md) now passes
+one real-provider six-stage scenario with independent source review: installed
+capture, five fresh consumers, correction, forgetting and complete empty recall.
+This does not add automatic Hermes capture or certify large-history reliability.
+Next quality work is broader multi-turn/conflicting-history evaluation; next
+product work is an explicit supported host-capture integration and onboarding
+that honestly distinguishes module capture from MCP explicit remember.
 
-The original USD20 ledger checkpoint is1,651 requests /USD14.211728 reserved, not a new
+The original USD20 ledger checkpoint is1,673 requests /USD14.326872 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)
