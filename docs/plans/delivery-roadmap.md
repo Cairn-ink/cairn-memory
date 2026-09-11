@@ -59,7 +59,14 @@ it does not reset the ledger or silently switch defaults. Provider compatibility
 same-source quality comparison and installed candidate verification remain gates,
 not completed outcomes at this implementation checkpoint.
 
-The original USD20 ledger checkpoint is1,215 requests /USD11.970 reserved, not a new
+The [same-source extraction comparison](../evidence/luna-extraction-comparison.md)
+now retains Luna's34/36 completion and22/24 required-fact recovery: two empty
+captures lose a required fact. GPT-5.4 mini completed36/36 with24/24 required
+facts,24/24 supported claims and45/45 recall/relevance under the unchanged rubric.
+Luna is not promoted; defaults remain unchanged. Installed capture-to-MCP
+interoperability is the next gate; this does not add automatic Hermes capture.
+
+The original USD20 ledger checkpoint is1,651 requests /USD14.211728 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)
