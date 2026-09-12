@@ -14,6 +14,7 @@ import {
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
 const statusOrder = ["filed", "unfiled"];
+const stateOrder = ['active', 'historical'];
 
 function contractNamespace(input) {
   object(input, ["ownerId", "scope", "projectId"]);
@@ -96,6 +97,14 @@ function statuses(value = statusOrder) {
     throw new MemoryStoreError("invalid_input");
   }
   return statusOrder.filter((item) => value.includes(item));
+}
+
+function states(value = stateOrder) {
+  denseArray(value, 1, 2);
+  if (value.some(state => !stateOrder.includes(state)) || new Set(value).size !== value.length) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  return stateOrder.filter(state => value.includes(state));
 }
 
 function success(value) {
@@ -190,15 +199,17 @@ export function openMemoryCore(input) {
   function list(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "statuses", "limit", "cursor"]);
+      object(input, ["namespace", "statuses", "states", "limit", "cursor"]);
       const ns = contractNamespace(input.namespace);
       const selected = statuses(input.statuses);
+      const selectedStates = states(input.states);
       const count = contractLimit(input.limit);
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: "list",
-        f: selected.join(","), l: count };
+        f: selected.join(","), l: count,
+        ...(selectedStates.length === 1 ? { states: selectedStates[0] } : {}) };
       let cursor;
       if (input.cursor !== undefined) cursor = decodeCursor(input.cursor, binding);
-      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e);
+      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e, selectedStates);
       const memories = page.rows.slice(0, count);
       const exhausted = page.rows.length <= count;
       const last = memories.at(-1);
@@ -224,6 +235,7 @@ export function openMemoryCore(input) {
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
       return { memory: page.memory, receipts, placements: page.placements, conflicts: page.conflicts,
+        ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
           a: { createdAt: last.createdAt, id: last.id } }), exhausted };
     });
@@ -254,6 +266,19 @@ export function openMemoryCore(input) {
     });
   }
 
+  function supersede(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'memoryId', 'expectedRevision', 'replacement', 'receipts']);
+      const ns = contractNamespace(input.namespace);
+      const id = contractId(input.memoryId);
+      const expectedRevision = contractRevision(input.expectedRevision);
+      const replacement = contractMemory(input.replacement);
+      const receipts = denseArray(input.receipts, 1, 4).map(contractReceipt);
+      return runtime.supersede(ns, id, { ...replacement, receipts }, expectedRevision);
+    });
+  }
+
   function admissionKey(input) {
     if (typeof input.payloadDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.payloadDigest)) {
       throw new MemoryStoreError('invalid_input');
@@ -274,6 +299,18 @@ export function openMemoryCore(input) {
     });
   }
 
+  function admissionItems(input) {
+    return denseArray(input, 0, 5).map((item) => {
+      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints']);
+      if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
+          item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
+      const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
+      const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
+      const conflictHints = contractConflictHints(item.conflictHints);
+      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints };
+    });
+  }
+
   function finishAdmission(input) {
     return invoke(() => {
       runtime.ready();
@@ -281,15 +318,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = denseArray(input.items, 0, 5).map((item) => {
-        object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints']);
-        if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
-            item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
-        const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
-        const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
-        const conflictHints = contractConflictHints(item.conflictHints);
-        return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints };
-      });
+      const items = admissionItems(input.items);
       return runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -404,15 +433,18 @@ export function openMemoryCore(input) {
   function fetch(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ['namespace', 'refs', 'cursor', 'tokenBudget']);
+      object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget']);
       const ns = contractNamespace(input.namespace);
       const refs = memoryRefs(input.refs);
+      const view = input.view === undefined ? 'current' : input.view;
+      if (!['current', 'historical'].includes(view)) throw new MemoryStoreError('invalid_input');
       const budget = contractRevision(input.tokenBudget ?? 4000);
       if (budget > 4000) throw new MemoryStoreError('invalid_input');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,
-        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url') };
+        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url'),
+        ...(view === 'historical' ? { view } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, budget, cursor, binding, encodeCursor });
+      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor });
     });
   }
 
@@ -446,11 +478,23 @@ export function openMemoryCore(input) {
   async function capture(input) {
     try {
       runtime.ready();
-      object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages']);
-      const namespace = publicNamespace(contractNamespace(input.namespace));
+      object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
+      const ns = contractNamespace(input.namespace);
+      const namespace = publicNamespace(ns);
       return success(await captureMessages({ model, input: { ...input, namespace },
         operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
-          classifyPlacement, applyPlacement } }));
+          classifyPlacement, applyPlacement,
+          ordered: {
+            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot)),
+            prepare(snapshot, order, extracted) {
+              return invoke(() => {
+                const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
+                return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
+              });
+            },
+            finish: (snapshot, token, order, prepared, judged) =>
+              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged)),
+          } } }));
     } catch (error) { return failure(error); }
   }
 
@@ -477,7 +521,7 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, claimAdmission, finishAdmission, abandonAdmission,
+    admit, list, get, correct, forget, supersede, claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     close() {
       runtime.close();

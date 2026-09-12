@@ -1,0 +1,1423 @@
+{
+  "version": "ordered-c1-accounting-v1",
+  "publicExportFileSha256": {
+    "ordered-history": "febb44b2f0d72358af81fab39d8864f180753923e1d82d0687874f7c2e0a4e84",
+    "currentness": "0460a709ea2d4521fd58d73f8b5337781391e3b98a9d04acb7a5b4549aa1979f",
+    "installed": "950039fb450a617622ccb5d3f5206c2873149b2643eae9ea03689e10b9acb810"
+  },
+  "publicExportTransformation": "Ordered/currentness structurally unchanged; installed removes only provenance.packageRoot. Raw digests below bind private original reports, not the sanitized installed copy.",
+  "startedAt": "2026-09-12T06:31:35.637Z",
+  "completedAt": "2026-09-12T06:34:33.322Z",
+  "sourceCommit": "a01f35bddc74fa60a62b69f3f339b10e0cc42178",
+  "sourceHashes": {
+    ".claude-plugin/marketplace.json": "f78ddac7fb0209b91c5906cedc99ebd655149134727c548b2329e80b85983d05",
+    ".github/ISSUE_TEMPLATE/bug_report.yml": "0909300319be5013bd510f3bf284d1f19aff6781703f796595ca0e861e961394",
+    ".github/ISSUE_TEMPLATE/config.yml": "2d9b68ad8e7d1c800146d6302671aa481acee9a96cabb66b09b7f6b23b5d93a0",
+    ".github/ISSUE_TEMPLATE/feature_request.yml": "48f1cbbd0fb147d1c218c59cd00fc90ddc72601ea133e330c40e582b25a140d3",
+    ".github/pull_request_template.md": "5a1747b8a5d01a95317ea34f4e4587a15d764911c56893358c966b3422489f12",
+    ".github/workflows/ci.yml": "1bc4b8272c8617d5b252a22bacd9788e5a8a7fcbfeeaa7c5a807e6942b4cde21",
+    ".gitignore": "f0b8ae0578ae043cd800148c277e70938db444c3229b90f9b201e8c310031b2a",
+    "CHANGELOG.md": "81a3c9a0348970a26ec7930d2648ac199f9235acf95fed6e7fd3f522b133f9d8",
+    "CODE_OF_CONDUCT.md": "30e415e6ab5706398574896b4e2bb8ba327f824c63e8d07a5cc150249d23a53c",
+    "CONTEXT.md": "e265f1ff12cbabf1eb1cebaec78f7171878fa46dfa0985b7eb31ee895d88c13a",
+    "CONTRIBUTING.md": "6e4fc7f97c4addb06e02659869df7ef1f7d3623935173cca48e1c4ab4d1cd2e2",
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "README.md": "4125f97a57641c17d6e12f43d3528a816e4a529f3c438a44722bc04dba0644d3",
+    "ROADMAP.md": "dbfc764f9c707a6c00389fdd4f905d08788e49666078b70bfe2b8fef00021ed1",
+    "SECURITY.md": "c4accfe5e6c3a36a8b72d3ad1d74fac51e4a229dd4b2febc5134389237317c98",
+    "adapters/mcp/cli.mjs": "6298d492caccb345bea85f29279bccb17ffc3e785c0d9168ed57a88760ce3466",
+    "adapters/mcp/package-lock.json": "92163766358ffc4c8c746982dc73b6e36850f96024126922fa63a37a82cb899a",
+    "adapters/mcp/package.json": "99d9909daec5472997edfce265d18eea75e67024d88da673c59ab60c37773906",
+    "adapters/mcp/server.mjs": "9886f61b5d8f68f1d3266ecd2e6b1e1456d9904336f4797a1e3d206ea3bbdb45",
+    "adapters/mcp/test/configuration.test.mjs": "98d973be8532302f661c3e1527496fa3d2748647b091a7a5a57c6267c142352b",
+    "adapters/mcp/test/fixtures/scripted-server.mjs": "7fd9baa24b618130f44e12d64c63846def6a2f1b23ffe566a1813b32f22134fd",
+    "adapters/mcp/test/stdio.test.mjs": "1d4b180397dcbb28113cddb6ae98e5cf22381bd6286b6b703c0ced75415e0dad",
+    "adapters/mcp/test/walkthrough.test.mjs": "4e00f422b2ce3b68343890abaaaa28f1dae4abbf81e8f9428109c66b3e3466c3",
+    "adapters/mcp/walkthrough.mjs": "56854484290829dfa2e347275cdd9cc0da3b9b0bec5f45641118e66589cc10e5",
+    "adapters/openai/index.mjs": "dca6abed2d411dcf38592b083531fcfb881feb3e036ddf5c27d262470fa4bb24",
+    "adapters/openai/live-harness.mjs": "3f78440a16e9db12f017979080ce749f2d600d29e09a96ff9b64151cf5b29b5d",
+    "adapters/openai/package-lock.json": "48ce434b6e14e07f22412d7cec7b96054b10f69e3d14a5158af7ba5865ea2b69",
+    "adapters/openai/package.json": "ebc48d443e15987cd85e729e884d191378602cadf1f9e2577606f7e027cda85a",
+    "adapters/openai/profiles.mjs": "3ff8cf72cae5a751c3e4f7bb3613c1bd8199097aa138f826c04994149260576b",
+    "adapters/openai/schemas.mjs": "2c5ddc0e7dfd4bae345503389bb89d36270ef8cb73b0d4f57ae53ee7768bff0e",
+    "adapters/openai/test/currentness.test.mjs": "65e1186ab6ee6538b30bfc8330799be450fea5cfe7e13837332cc66fa835b09e",
+    "adapters/openai/test/diagnostics.test.mjs": "76304185f71246e67c4a3dfd0175cc6c7a55ea3254e4f4655e54be5ef5996506",
+    "adapters/openai/test/evaluation-resources.test.mjs": "da191ec36fa7de8ca1fe61aac767556203f9af21c4dd5dc56c88c12a2cc96e6a",
+    "adapters/openai/test/extraction-profile.test.mjs": "a1320c0cc8f0e14890bbbffdfd25f5ee116a7e05be1a49e0cd7090f907f8675c",
+    "adapters/openai/test/history-audit.test.mjs": "5b2fbff6a62ec996c270a93de17e0de08942e84557cf5c2229e4d4512b0f29b1",
+    "adapters/openai/test/lifecycle.test.mjs": "a11b1587eff182c16d796931b22cf8aa18f628920a6dd5a978fd263c97794526",
+    "adapters/openai/test/live-harness.test.mjs": "526d3ef11a01af49cf07ef10ad59cfca36aa0a0a4747ae58cdd2db48c8caae30",
+    "adapters/openai/test/luna-profile.test.mjs": "2808847930a6f8d72767dda381509e5410deaff45ce5161b8235d7672e7a3f98",
+    "adapters/openai/test/ordered-history.test.mjs": "20fbc310da2f471ae8798575c7e43c7687aea63dc6a033c11172043dbf6788da",
+    "adapters/openai/test/reconciliation.test.mjs": "24001a6837b423622a82f1155f6d310dde48e8cfb6ef5da82b83b5d7998ef855",
+    "adapters/openai/test/reference-constraints.test.mjs": "e996ff25a1c91e30c9b993a13433cb948855bb42f80beeba4ac03377973ab66c",
+    "adapters/openai/test/semantic-evaluation.test.mjs": "29815421d22da16233df174503a08383e050a3f9c80d49f4d8a7f87fa26c7ccc",
+    "adapters/openai/test/tokenizer-performance.test.mjs": "b2db520553e4850a9b06827500ce112d016e09817b4ce7e1164cf9e85bafdbbc",
+    "adapters/openai/test/tokenizer-vectors.mjs": "573b57795e293950b706bb94bcad59f36fa71ce9acf829dcb02a31284a0dfe9f",
+    "adapters/openai/test/transport.test.mjs": "fd55d78bb056a0d10c38820f0e9e5f5338e7cc9ebb7e8ddef721470e6adc216f",
+    "core/admission-storage.mjs": "a1bd7cb7af992a771b7c574a96543abf4da66f4f470093d111ba0e4628e3467e",
+    "core/capture-input.mjs": "8fee8c38e00e9465d644706d286c3433b7dd57fb796124347013ce3270da9e3a",
+    "core/capture.mjs": "f011f9e83372b46dea66242a0ccdff06e658f4e49c8deb492b960dff245f50c6",
+    "core/classification.mjs": "980fa14c8e92bf5190763db6348deff8ed47ff886de832c5340478f9453ba177",
+    "core/conflict-storage.mjs": "0639606e811592a7b695f7342cd3c3751d2a15dc55c75879a28fa2944c5918ab",
+    "core/contract.mjs": "0bdfd1b7b9ee6dddea66015cdb9711502c03476bac359f4f98f62d16c74da2ad",
+    "core/database.mjs": "bb674045e8348b3917ffda45b676b56476c7f92c6280bcddbf4f2927150a4004",
+    "core/fetch.mjs": "df363ddc24bb5aa63ef72fe77629aca5917ed6595f8f46e5e48d1e7ba2cfb336",
+    "core/index-schema.mjs": "929044da645c709e5c6c361cb8fdae961186451c6ed9d5829d1c7968a9c83c62",
+    "core/index-storage.mjs": "74e9c84d2d660e7996ce556d43096ee248edfeb056aa5a424acf94a781c892a2",
+    "core/index.mjs": "7474c3076455d64af3c8c4d6cee3592b0058bb4542b1746232b2a607967c2f55",
+    "core/moc-storage.mjs": "aeaabcaf626682fb95a4e4fc3474dcd93c43f63b5f4919a81a023b32f7703b9e",
+    "core/model-budget.mjs": "ab1eb8ca87bf6937e8ba9039518786668dc9337bb3b9062eed4477809dec1e8a",
+    "core/model-call.mjs": "c1508f8671ca1da1e418f34f32507ea3f447ea15ff737e003fb6744a05d1e34b",
+    "core/model-diagnostics.mjs": "deefc03a3ee9a15914a3512fac134ff71eef9e581fcc800818b0bf6ffdd96dfa",
+    "core/ordered-capture-schema.mjs": "9c1c93949b0a969e8a1f8008719699fb956c299753428c0dd0d4095175028469",
+    "core/ordered-capture-storage.mjs": "a743f83e3e3b4c2a54f1d09c0cdf326481c673022f1ac22a36a6163007f65f30",
+    "core/ordered-capture.mjs": "21125b7a96030ce53c012f620ffc93b37bbe3b29f1b1266a11257320204526b2",
+    "core/placement-input.mjs": "724348a355d5137448830369dd72fed680d5ef32b15614284c91a3fef9e5654d",
+    "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",
+    "core/prompts/extract-memories.md": "8942bea305c2bf09a65b092f11da9dcb6068ceb16fe88e7e623149cd99850eae",
+    "core/prompts/recall-rank.md": "930e43038441d117dddf7bcaa2f93363bcb2e9150105d406750800da94b7fbcc",
+    "core/prompts/recall-select.md": "41cc02441ede2b53763bc0afad5eb26d9b35441defd9a5a2e2746216c9ba1880",
+    "core/prompts/reconcile-memories.md": "72fe4deaf7c2c1a2391abc7cd5d9594560ab06a33ff9d96737f46aa90fbe3b09",
+    "core/query-excerpt.mjs": "cda8347a0d249b72f6f74d0d4d3b0aacad493e8877bb0ab2d935adc6cbdac6ca",
+    "core/recall.mjs": "d57d151738a2e4a12c8c3a2c5f5a49675267124da711cf062f4dcf6c31dabe93",
+    "core/runtime.mjs": "65111b2e9fe8787d8577594869547c32fd57693ecfd5e603822c9bf6d1bf8197",
+    "core/supersession-storage.mjs": "fb7fcab36befd74a4cdce92019c952136b2fb637089a6a021def5bed264638e6",
+    "core/test/admission-migration.test.mjs": "2fe94a2dc56a7ef2c8153c6cdcaf2e5ff5c5f929b85f77e0f36c5d1007ac1827",
+    "core/test/admission.test.mjs": "706f7128aeecd5914e8b302b8317a7c0617cd37ffb334d32258d2c9b731df33b",
+    "core/test/capture.test.mjs": "7565ca84c7dc9a5b64f2b3d2aa18df9ce40ddf834d80a1d9025c2dc2152d71f6",
+    "core/test/classification-prompt.test.mjs": "10375e4e035eab9b9f71771956933bca0c7d80ccd9fdfaa59084352e9ea1a1fe",
+    "core/test/classification.test.mjs": "a713399c75bea1cf88bd4e1b73e788b2708c6a4ca4dde5e04599988d0d78314f",
+    "core/test/conflict-migration.test.mjs": "885014c4b073739c0c7f355e6099410746bb5fa5b95a70aadbe79c5846d20914",
+    "core/test/conflict.test.mjs": "8f44cd74a1896b943eb14b74769ff6a9ac88e8e3c7631badcec717b8b493019d",
+    "core/test/contract.test.mjs": "b6b627c915363185d37812546cc81535bbcabf352b1d2f593dc461edb5dded66",
+    "core/test/extraction-prompt.test.mjs": "37d75e0beaefd5543a107a15a8bc22176fe16d803d9f91f8ca7c867962bdf5f6",
+    "core/test/fetch.test.mjs": "ccb5927bf12286d433836db13cfb1ebd9956ed1d51ffac3819a7180bff387d81",
+    "core/test/index-migration.test.mjs": "ba7deec3acf1145b5532306a69dc682e4bbd6fa9cb4c9689ee35c37b366ea7bd",
+    "core/test/index-rebuild.test.mjs": "beadce6fbaa62c25db5ef9d0137f4a77b7a3325f81e4bf875fb8954e135c8e1e",
+    "core/test/migration.test.mjs": "43d4bb65b5f386e599510061d1a5f41b2f0a464e827cae2986ac9ddfd1268c09",
+    "core/test/moc-migration.test.mjs": "7fc833146e55a3887562541459a0181b7c85e85134b85244e3fda722745c4559",
+    "core/test/moc.test.mjs": "dac1d19820746026b8a24254cee02f3e77e8dd34264d9a7400ce87398085d3fd",
+    "core/test/model-call.test.mjs": "a999a1609c2e3762a4ba5019f0b57f62f412644d93bc647f3fcc1ca4744de45a",
+    "core/test/model-diagnostics.test.mjs": "f6e4a7b9a0dcdbc9ee70c97a50f164c567585ab416ba16660096a9e29b355b05",
+    "core/test/ordered-capture-migration.test.mjs": "f493498700f9632c183c16cb4d322611b6ca3ca8bd374d0e5b4f0227537e3286",
+    "core/test/ordered-capture-v8-fixture.json": "beeaf7d26a1e9d6894827d683e46fba10c837d46138f7d7ac0ac74746c862e2c",
+    "core/test/ordered-capture.test.mjs": "c74f3a75b67deed759dd5d0f2c6ad5ef3393b3cf488ada3b745f33eb6af57c96",
+    "core/test/query-excerpt.test.mjs": "f289ad324a1892194beb6dc6ad336e3d1ecbfa64c61cbb9683fb784b9a8a405e",
+    "core/test/recall-continuation.test.mjs": "ec240adc002dd13ffd31b9befdfa176b0b051241bf8cc6ed0d5e28af373fce63",
+    "core/test/recall-excerpt-cursors.test.mjs": "fe1c564ec68666839f7fd5638313a4dc7822046d3ee112b1efdcf54f7e0158d8",
+    "core/test/recall-excerpts.test.mjs": "ca5bdbaa35b02ae2272f605aee8e5d397de984021d04dbb6bf29e82b5a2cbc48",
+    "core/test/recall.test.mjs": "55c213bf1fc48540f7073947aff75476d1c1359fd253f7f32ebcff698b8293b6",
+    "core/test/storage-scenarios.test.mjs": "18101ce74de454a480e56fb0dd663b32e78f0e3dd8676555512903bfa4e171e0",
+    "core/test/store.test.mjs": "bd2248a450558cc8ee0b7f0e0f9c3dfeaa79c89f54362a9be0d8d10210633dcb",
+    "core/test/supersession-baseline.test.mjs": "bca4227baa3c35bfd26a0f7a4ec4ea91d2c2917f57ac54c5ccb1c44e557ba6f9",
+    "core/test/supersession-migration.test.mjs": "bddd8c78dd6d7daf6f4f272fb6e2b25bf546893bd07da783cedb52fea43b7203",
+    "core/test/supersession-v7-fixture.json": "116cd32a0543f97291b853fd8e37ac358f82c67615a505d34f0d27ea8f68116e",
+    "core/test/supersession.test.mjs": "8ce64155bb3535b15d8ae41db5b1934083b2ba79321b0e74bb1e01a6002249b0",
+    "core/testing/admission-schema-v4.sql": "f4749fb4d874834b69d71876563bd2f79086c4fe534d5ad1b77fd5928eec92db",
+    "core/testing/conflict-schema-v5.sql": "f859b74e93d4542694462d34c6fa44df46dbe5096b31d084566e9b3b4b7bb66e",
+    "core/testing/index-schema-v6.sql": "2621044102852b61d38823495ad73b99dccf8d3bc73f4f77f1d82edea0b864c6",
+    "core/testing/mock-placement-model.mjs": "198a07f0cd30f61adefb7a17b470e8de8e374b1063c9f83868a1bb48adceccbd",
+    "core/testing/mock-recall-model.mjs": "0db97d69975d9ccb29400caf36776d1f41426fb9c7c215a81ae45357105400bc",
+    "core/testing/schema-v1.sql": "f36d4863226dabc0e21c1a1d5d4174597f6030229385f9363eb5c66a9ac90e75",
+    "core/testing/schema-v3.sql": "f480bd1a2ad06b0e6b16b977e2095c2c58bc68bb9a2829b337ce65dc1117012f",
+    "core/testing/storage-scenarios.mjs": "6162fda4c23f006202b76e022cdb2c7a9985cf5a53fc0c0519132bb715c4b67b",
+    "core/validation.mjs": "96d4a2cd01433c6af27f9263ffd5d32648367dec65995f223e3e1a3c18267b92",
+    "docs/admission-claims.md": "cb57b1b1dca669f1274e6e2927c48daa59aa0f7541477b9896dba911df5e220a",
+    "docs/adr/0001-historical-state-is-not-forgetting.md": "0006e4d3e399eb63361a0bfe92a722816222b5c1acf7a731a2a4ee01026beba0",
+    "docs/architecture.md": "b854a2b9a4817b751db2802d4bc1f97a3c3c14bc11d7390f31775d5cc31a8c99",
+    "docs/benchmark-preparation.md": "c0b57da08f36b8b93fcc6e29483c57aac016e7a7b7f7b9e1a2b8700f421d89c3",
+    "docs/capture.md": "0faeab72bd0310b0e76b9b3494f4569b79b11d6f7137977ed195303ab9934924",
+    "docs/conflicts.md": "7789d9c3226bb80c1e874ba9302d5886d7d4f23fd82ef64820d276664b94f37c",
+    "docs/conversation-history-audit.md": "f676e069a0fdf6681cb107e949bce5dce76cd9b12437e76ec4c438b14fafd26e",
+    "docs/currentness-audit.md": "f0fc6a0b0bd60cca17cb09355a778499633e2dbd7356631f4b9cca5e249777f7",
+    "docs/evidence/capture-source-faithfulness.json": "6a8222166e1c33a31842d23376afd26dc09ee49a81adb0048fdc3524284308f9",
+    "docs/evidence/capture-source-faithfulness.md": "5ad5fc9a1e30ab4ada9510a5439b51df4ab7facf121044cb411da52faf6a998f",
+    "docs/evidence/conversation-history-accounting.json": "8394f3c61f5855dbed585701fb67f206748b6e14e9dce5d73a4aae45f9a53299",
+    "docs/evidence/conversation-history-audit.md": "304d8c5d7ad696dc625ecfdb943c88696247ece9a4c97da22324618b8d64e3fb",
+    "docs/evidence/first-live-evidence.md": "ae1b764f5a161b82f4cfd5929acb3c81e0f51d2ce5ddfbfff77d2d550cca9f2f",
+    "docs/evidence/first-live-hermes.json": "94e0868f68d0466a6e182650edf9c16a05ce0d0d4b44aa7932d624aed92dbff5",
+    "docs/evidence/first-live-pilot.json": "cc37ca09acab9b5b8d3c28decf5baa5b3ef62df41bbba9a68d39274973d70e4c",
+    "docs/evidence/installed-capture-accounting.json": "b62408bca39e1b9ecf816fbcd530616d6f86c1b2e484fac1396ee2e4c346c339",
+    "docs/evidence/installed-capture-loop.md": "3d2c39613ca4287654c82f7b608d59af5c76d9672e177d6cb909bc2cd885465d",
+    "docs/evidence/local-walkthrough-v1.json": "20d647af12a64ff147ed8eb864daa83aff5d64fe599ea8e4f7dd4aa84d86a06e",
+    "docs/evidence/luna-extraction-accounting.json": "bf5856ca3d032a8cf77d06f0eb38f8bd5b7cc75022ccd3047037c57b602205de",
+    "docs/evidence/luna-extraction-comparison.md": "1f1dbd820dc345ae812bb44c671e3ee9b4bf96a6e4b461a4568071b439608e60",
+    "docs/evidence/recall-label-visibility.json": "74dda82aff71a69c7156d6cb2ff242666547489beb90002d62d66f909ee68eb6",
+    "docs/evidence/recall-label-visibility.md": "52a9df756b109d2edf2c2c73582762ecda6dddba3ff6b5c74c34ae51c050eeaa",
+    "docs/evidence/reliable-memory-loop.json": "f8630b1e195b86b568138ddd9c2768c49153e3162fbce6136ce9ae5e6a7b272f",
+    "docs/evidence/reliable-memory-loop.md": "ead384e9f8d26c936496dffa0c0974e2fa466ae1de57cf1f2202ecdd86e5c2d2",
+    "docs/experiment-budget.md": "2ff7f338a84b833f3591181dd44452bfe93da443b0c28eba27a6bc2e06ec1290",
+    "docs/experiment-request-guard.md": "a4c10cf316045410f8dd691a37b689e32f06a8223bfb49558aa22117d91a586d",
+    "docs/fetch-recall.md": "ae8b119d238a655558fd210243df96c8e3870a23941bce91616ae0a552c8eac9",
+    "docs/hermes-agent-loop.md": "9710cfb695208921368ab4bc8c72a00e1edf938ae355bd800f3fe2c2a4f7fb20",
+    "docs/hermes-first-use.md": "6e98e603f71fa424f6fe39c26327c39ee5e6eefb181fc15cfce746c3dec7296c",
+    "docs/hermes-memory-provider.md": "edcdb974b001cfd436ad5e32cc1b2f7c3971b198c0e89ff00920c3dcf7bf2e6d",
+    "docs/index-rebuild.md": "c5a1084a4ccd0afc9598deab2eacecc4e19dcf79f93df76a8be476d7ad419e57",
+    "docs/install-artifact.md": "34d050637836f009d557d5ff681bba88d48d186bc2d51bee409093e033b65332",
+    "docs/installed-capture-loop.md": "c1e6432a2cfe6b1d43dc05f351c485620dc4ed1ec496fe9be35a28abf79a9bc4",
+    "docs/installed-ordered-loop.md": "064e7550ea4e9373f5407828cdc5299393bc16de742c3f7bd6c04464008e0939",
+    "docs/live-value-evidence.md": "79c75df9b31fe9a252fe076758472b796cd87221bccbb6b434f8ee0c2524ee6a",
+    "docs/local-memory-demo.md": "af0737109f15b7e88c27b691edbd5e15f0341e95dce28105047150cb84723e54",
+    "docs/local-memory-introduction.md": "3c78e972d210de599f329a019fa1f7a916bdecad0628ce9e12a1fae33dbb8b87",
+    "docs/local-store.md": "c4f7ce1133e87ffd2d5ce2cb0599a8bd437a4f148bc9969da094c6fa8f4ecb17",
+    "docs/longmemeval-comparison.md": "9a4417a483dffe3a1e4201f13d7c72624d6e70cd52c25f89e3b54ac611debe09",
+    "docs/longmemeval-ingestion.md": "232e27000c361743e3be35f51c19a8076e2be4096ed9de300ce6c06d87ddf012",
+    "docs/moc-placement.md": "5fc69ae9b06fe5459037103634cc78bc2cade0f0f46cd884fb1d9838a40de4cd",
+    "docs/model-failure-diagnostics.md": "354ace75ef42e427b3e18bd1ef23257039c0920bef2a6abc0415de1572c7c3b6",
+    "docs/openai-provider.md": "9e6150672a0cd6301ce9d575a704fe8e9ea8a8f61e09ba15e55a292957b33449",
+    "docs/ordered-history-audit.md": "cae68767987884812b2850c3c3c59e5deff41097e3d5c1ea279e78a502e6a8bb",
+    "docs/plans/admission-claims.md": "ffdeea79500e5752cc90e4c53531cc61a5e1d48dc20d6198fc030ad0f2361c91",
+    "docs/plans/benchmark-preparation.md": "a358b6274242a43048634c6496ab9c22ad2435fd9235d6a4baf834a8b74d2563",
+    "docs/plans/capture-implementation.md": "c28c49a4443fec27e8155f5595985390bf75c1fe64808a2e26a33ac395e3fa78",
+    "docs/plans/capture-source-faithfulness.md": "782a6c61774e09fd9b7c2594b22289457693b4bf1ae0cd8947675b1ddef2aaf6",
+    "docs/plans/conflict-lifecycle.md": "ad45e5c27cf14304b7a73eb80ad3195a29739193077214127fbd341cc463f663",
+    "docs/plans/conversation-history-audit.md": "2fce21eb75eebad619d4cdef18df4fe6cf9bd94d2cb10cb2637175469938fc52",
+    "docs/plans/core-contract-inventory.md": "08e6da61176f753e95d22a0b42dc8851c9c60435427aa8272e9cbaf692a47d3f",
+    "docs/plans/cross-window-supersession.md": "a624d8d6d605e5a2152dcaf5ecd7d51185e137d1d9028050de173532e45767fa",
+    "docs/plans/currentness-evidence.md": "0a853afd4261393048b4faa27ef152b02f7065a076274a06e72603e2e59915bf",
+    "docs/plans/delivery-roadmap.md": "0892687b2b7a93460cdc7c8c36bae450977c74463a12a5fedfcc3e1405a40a87",
+    "docs/plans/experiment-budget.md": "a99a43555de135c7d68957d72ffb5434e7ea6394b56c43d3725643028a6a1db0",
+    "docs/plans/experiment-request-guard.md": "6953c7ec6e7d2e20010de79f0716f62216bd7289c2f17b770e900c27fdfeda25",
+    "docs/plans/extraction-model-profile.md": "5c871df866ae7c4750012d01e88bfa337275932399b4862da2aac92e7b84c255",
+    "docs/plans/hermes-agent-loop.md": "0c8162e8b773c2f8bb85268233ded23fe579ce791673f833b362f135a5af8d6e",
+    "docs/plans/hermes-diagnostic-collection.md": "c55ef560419a481fc90f148f83f4b9a16a06c6060237cb79342612a1daebfca4",
+    "docs/plans/hermes-memory-provider.md": "09ac354a59a5ded569dd0f0929f95963b5c1e8a706893e17bde58c2fd0f0c17f",
+    "docs/plans/index-rebuild.md": "d5024966a32884229dd838b94da30498bd46e583925f0b7f75df9683ec0bb1e4",
+    "docs/plans/ingestion-failure-summary.md": "39b7998dc92b44c841740a3c88ab8988c0f3e641da144c8c2feaf7cfe9281a1c",
+    "docs/plans/install-artifact.md": "fdf0821512f32a75234983985958b2f1f431520f362a2863b223cb9521d26899",
+    "docs/plans/installed-capture-loop.md": "2e91ca3ebb6599741607f13479f6eefa2aa30ea8629697faa596868399deb805",
+    "docs/plans/installed-ordered-loop.md": "24cc6912a7c066d9aa5cbfa67f2ffdebe0ae2cbc13364b385c3ef2e24ae741ed",
+    "docs/plans/live-provider.md": "0b72857e8a7d495a9cb33629a579d5b7c585f7a0399e6c86c24df5049bba3166",
+    "docs/plans/live-value-evidence.md": "9d110b2d09a4dcc327681e7671bf19760e6c4aedb63d7808105c33f7c6f587ba",
+    "docs/plans/local-memory-launch-kit.md": "ac4a9f4241e74ccbb6bc8b45c07dbadcf20f4524d5b5815581ddac4f6d3b5eb9",
+    "docs/plans/local-memory-plg.md": "c279760fa323c243e3ddb24a17eaafed8ba887d3da3599da552fdb05f345c488",
+    "docs/plans/local-memory-store.md": "bcdb77370b8ca4f30425013ed1d5ad2092ce79d7642936fad7d0062cfa1dd903",
+    "docs/plans/local-setup-profile.md": "4bf38f07710ada771c2d4126e22c7d47b11f3a3cd9f23538741cd772c45fdc8b",
+    "docs/plans/longmemeval-comparison.md": "967b48c76014184e48660fdac7e2c6df6cebaca9864e1691117f0d3fbb3f1a32",
+    "docs/plans/longmemeval-ingestion.md": "cfbf608ee8ab0338a6c1888d4122a95d7a684152631fd5f990b82ddcec6b4efb",
+    "docs/plans/luna-extraction.md": "3eed2031a06e6fc2d56ae41d8d8a698d2fa3934f225efc0d433933040a8f32cd",
+    "docs/plans/luna-quality-evidence.md": "b78443be96342bb913318cd92639856b7ec097eb3c7d2a96bd1275e4004e4b59",
+    "docs/plans/model-failure-diagnostics.md": "c5a5c0b8744707093bd0d86fa176012efce6a9c952d72c1033ff2b41af5c38e2",
+    "docs/plans/openai-framing-budget.md": "13a686b778b49da3439496d731ae1488a067de63efcbfe9db08f5809afdb7373",
+    "docs/plans/openai-provider.md": "3a51c20601de7a9c9e78c00a18c09e2415f535dca5a5055ee452ee28303d37ae",
+    "docs/plans/ordered-capture.md": "37f28775606a83e645d68299ffa90e305e967d59c246b68a7394e4ca3262fadf",
+    "docs/plans/ordered-history-evidence.md": "b040b668184a3dd9496b57cf177585f6547bd149eefd0fe3a9ebb63e56b17c9c",
+    "docs/plans/oss-v0.1.md": "d1bbcc8f2de8d1f6b59a39b3958cb66cbe98739cd99382c9cef12c755ee664dc",
+    "docs/plans/preview-installer.md": "3933d26adf528eaccc6922c7a56c1222ead59a219f90c6abc3139cf73cc7f519",
+    "docs/plans/preview-readiness.md": "b285e3e5874b88092a08c98fbade5750039ce6d2f4a621f36bfb6a719c782748",
+    "docs/plans/profile-artifact-integration.md": "7a499b971af85eb94b00c5b8de742e12373ff085c06f89300f4e16d73972ab2b",
+    "docs/plans/provider-reference-constraints.md": "956bd2dba90b0df9bf2ab939a0fe73c32dbf2e0df6e1a68b57c3c168f32b0823",
+    "docs/plans/recall-continuation.md": "5261a65556537480a71320798597e4617ddaf3d177eac44364f49729cab8b128",
+    "docs/plans/recall-label-evidence.md": "aef2af3ac300a223fb83679f3265c6e0ffff035499874929cf983c158d38128d",
+    "docs/plans/recall-query-excerpts.md": "ee03d59e8b9f50f92f4a146c27b0703a68deb773469eb93a9fed0ed8d847c6df",
+    "docs/plans/reconciliation-guard.md": "4e275af2804b750b45a571ed9fa0fed34aa671bb87d9d74fb8f5f8a8bc170ceb",
+    "docs/plans/reliable-memory-loop.md": "7b7a9720240dfb1e467ad30ef784273c1f487a1559dfd60d6eff2f06d0545bc3",
+    "docs/plans/s2-fetch-recall.md": "d1412cf2214e620b0643d895ba896dabbe811b5f275e069de0c7c0735e9c9413",
+    "docs/plans/s2-moc-placement.md": "76e7d2f73f7680a3c5c0003caa9b7098b8b619d62c267205acdc3c1b75cab8a3",
+    "docs/plans/s2-storage-contract.md": "2595c8795b60e9901a7fe2c09f09498222832bf65cc94dcbdca003b6707c4e7d",
+    "docs/plans/semantic-evaluation.md": "a379ab2b81b16e857e8af683d07348f1cf2a4736dea3e73340d08f34938eadc4",
+    "docs/plans/source-faithful-extraction.md": "ffa63ac4e998235134c4e835ce468c038446845aceb0ed7df8a438e8695f8cbf",
+    "docs/plans/standalone-mcp.md": "8fb47f486d23fcd3e955ca98d8d1431d65a15d61980525ea0f4e440d1e13b264",
+    "docs/plans/supersession-engine.md": "7ec33227dadb09225aae5146b738ab82d157bba9f5c06b129f46cdc1c4f9a008",
+    "docs/plans/trust-controls.md": "dc2cdee35d4cb44f9fd735950cc5e6427fd23bbbdd02ef204487fe314ee8721f",
+    "docs/plans/value-and-evidence.md": "613dab452234de5e6c2e2a6a3566dae0a497e0f02f8f6059d3b31127d45579c1",
+    "docs/privacy.md": "22257393ce1a7cfe8d98032f702d80f6214a9e1e20e1e30322ce0ff676be18a1",
+    "docs/protocol.md": "bb0326872c088879baf2e9f3aa14c7a9b5fcb76bcb648f882cb6bd5570941980",
+    "docs/recall-continuation.md": "83e7ad3944376dbe954d49a6dfd40cc27d8d407e3074b021be41e8eca7e32796",
+    "docs/self-hosting.md": "65d3246aea7ffb27c4996a76eaabf3d95a632a068c5f2b62bab8d981c459b17d",
+    "docs/semantic-evaluation.md": "9ee1fc77dacd7fc8561ad55c9b5a583711c1e2375034bd948ab0b5df1fae92b3",
+    "docs/standalone-mcp.md": "6df6adfc8266da2ac8430f24c724d06865d4b5968db7d367b14c7b472d914073",
+    "docs/storage-contract.md": "a62991c14561c1366f229144c9e3e25e4345d1c8c035555724d526343298a088",
+    "docs/supersession.md": "3c77a2de61adab9b9b814accd467e26ed6cd92228447a65d27147a498f548bb8",
+    "evaluation/experiment-budget/example.mjs": "5b50e32f949dc417e8e1fb0cbcfd307a3ce6025621a9885b3a4aba39d76ad595",
+    "evaluation/experiment-budget/index.mjs": "b3b8670607e9b433d3d11e09293541019f9d6b5b46752d30b621a3687df33f14",
+    "evaluation/experiment-budget/request-guard-example.mjs": "fb3d7f143a1910fb2949a4c3c4f25fa764d52ed17ea9fe567f9bb9a706182651",
+    "evaluation/experiment-budget/request-guard.mjs": "fc41d542d5d0d47d8bfdad8790efe68ebcd9901579d705dca290345637e51bc7",
+    "evaluation/experiment-budget/test/ledger.test.mjs": "ce9894ec75dd5b1902b7c14d24a1c3cad798a3bb2bc928cdbea283862bf64d08",
+    "evaluation/experiment-budget/test/reconciliation-guard.test.mjs": "6258d318a9fa7d1619ea1a5acd21c9863a1cc6560056feab0e63100c1631f587",
+    "evaluation/experiment-budget/test/request-guard.test.mjs": "df44a12d357e1dfcc8ba469c2157e4c6af2e444ffe2445393474f01da947ba2a",
+    "evaluation/live/cairn-launcher.mjs": "2e2d55c2098f20a6c4691260d9fd21ffba7cc3acf07862f229d3c7acb7187626",
+    "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
+    "evaluation/live/hermes-stage.py": "d0980da235df4e73fe4a827a43579ee79909b35870e104ea37d93173bed42eee",
+    "evaluation/live/hermes.mjs": "7f0a6caeea8fa2335c03f375b67dda8056e59041321242086d16327bdfba657e",
+    "evaluation/live/installed-capture-loop.mjs": "d8aec1ba4cf788143420a144d57c0b13b44ea139cb127877858025eec28868cc",
+    "evaluation/live/installed-capture-support.mjs": "5c3ecb193ef04712c02693dc1406dd1c0be74b56ef54db22cee64ceac15590ad",
+    "evaluation/live/installed-ordered-capture-loop.mjs": "7a2f1e7cdbe84c548c43ab333233945957744971c2cc7f73e4c1128e9642e7c8",
+    "evaluation/live/installed-ordered-fixture.mjs": "45a0e45bc8913712d4e59ab29515859057c1bc648439fd47ffa618dd764a3b01",
+    "evaluation/live/installed-ordered-stages.mjs": "971271387cca89233ad09a296e7ce9e2cde11c284f58385eb179051243e13366",
+    "evaluation/live/pilot.mjs": "4ce00c8c760e8f8e007f8604e46a8141e91ff01d5593ed286028a5fe88ea4272",
+    "evaluation/live/proxy.mjs": "7000b7a050303c70e9b68da235e1bfb553479f18eca7492458ad61933e3c4584",
+    "evaluation/live/session.mjs": "0b6b92905ba26bc5206eec6044714a76b6e36b8f51b2a37b88ec8948ba8248cf",
+    "evaluation/live/test/diagnostics.test.mjs": "1c67f58d13f2942e2a3b06cf3e7deb62949cbce4cf81affbafe4a851c439951a",
+    "evaluation/live/test/hermes.test.mjs": "b6e736119b3242b3ef1d0fd273730894edb6bf2329b0ffd07f2d920f8e52c7f1",
+    "evaluation/live/test/installed-capture-loop.test.mjs": "efa2d189e86412de9447dad479f79cc40890f97dd0685fe08d2ff233b09b3677",
+    "evaluation/live/test/installed-ordered-capture-loop.test.mjs": "29f0538e65763a0f9ccd346ffd0633cba9bb36a9e61143a607dfbd4be1ea1d05",
+    "evaluation/live/test/lifecycle-acceptance.test.mjs": "780e67e2930738731481e21e5e9bd535c0701ef480abb81aa41c54fa22236fab",
+    "evaluation/live/test/pilot.test.mjs": "14a7fcb3259d9e9ae15167e81bda1ccfe6669806d7076cb544153e1cfb92112b",
+    "evaluation/live/test/proxy.test.mjs": "2a6379d78d2e98eec0ac2cb15255f0a04d13b97f3060e4100d7c90e5d4cc7dbb",
+    "evaluation/live/test/session.test.mjs": "f334e675ac5986316483b2d8507f4771ede0c1fa4eff3fbf2bfaafed9a095fbf",
+    "evaluation/longmemeval/cli.mjs": "119bc1708d937f1ab9798bd17405c10eb4916eed1d82bbaad0f950227697084d",
+    "evaluation/longmemeval/comparison-demo.mjs": "085cba7c71f11d519a8fac4217f59cef393a0c63806e5faa325b8fc5718d1f5b",
+    "evaluation/longmemeval/comparison.mjs": "bfc32048f65b1e8c187ced59b67f857a904c99bb258552201cf8b7b6c68ba833",
+    "evaluation/longmemeval/demo.mjs": "345332f42167b0f1297842b7e9dd6b44e1ec2d6b33fcfde1883d975d86499832",
+    "evaluation/longmemeval/ingestion.mjs": "986cf98e4836b7dd18b6dd3182cbcc1eb969b92f4e9dae6b1acbcb47c226b2d8",
+    "evaluation/longmemeval/prepare.mjs": "40f70344f5f636cc44c9b8b92f5141b5b864d00e6ec8996da6995dccb38aead4",
+    "evaluation/longmemeval/scoring.mjs": "73066639ae1f53eff1291359aafacd3a5839ab87d78d47d6c4a660f1a2e69659",
+    "evaluation/longmemeval/test/comparison.test.mjs": "9b8ece33db7e83e1d7de2fc919659d55c9bcf4516491a79693e721be16cd4244",
+    "evaluation/longmemeval/test/ingestion.test.mjs": "f46563633b61d635a0a8bc51907c6b12ffe5e1196406f62cd74458aeee053240",
+    "evaluation/longmemeval/test/prepare.test.mjs": "814e2a57b13d689c6c9bce47e1bd04e0789c3b7ee7c450fd6d883ac3e71f386d",
+    "evaluation/longmemeval/test/scoring.test.mjs": "e3168232974eb9cbd35cafe54170e96e80a4a26f18996da743aa3c4158684f62",
+    "evaluation/longmemeval/validation.mjs": "9a3b77b8302bc233e349069a7f767ad44fc812e324c97c9e8bca07bba0cc3675",
+    "evaluations/capture-audit-support.mjs": "867e5f84d837e539fe9dee1d2e19a024bc6b93de5982a37c109aa98af8eaa069",
+    "evaluations/currentness-cases.mjs": "c03e3cbe8911d6afb73282ad748b4caf36922018b8fde7b94d02707f30853da2",
+    "evaluations/currentness-rubric.mjs": "19eb813ba3a070f75ed03e2b144cc4ec6786e6014403c815de365180e2166805",
+    "evaluations/currentness-runner.mjs": "85cc46b45fb967d5f43e3b764dc6e4b3b3be5ea3e416f6b366e3a62dbc863871",
+    "evaluations/currentness-score.mjs": "17f0c953c2f7f9c0a597652d9d61ae50e2140185ce8d3a21939a29a1637fb17f",
+    "evaluations/diagnostics/luna-empty-replay.mjs": "6388ae604eed130150659b358c50626c500b7c3f2efc61f23207f5beb4baf119",
+    "evaluations/history-cases.mjs": "13c2bc8b0492054869c9aab94de14a3438b08cbc81d2e9140f89f38fe6f4383f",
+    "evaluations/history-rubric.mjs": "c84b060d8b37f10ca9d0511bad254fff922814e796c88835ba878bf0452e9e75",
+    "evaluations/history-runner.mjs": "614b67d252611836c3bf9b2f4e6a17d5053cfa60ac70a053af063df90b004429",
+    "evaluations/history-score.mjs": "62c5c2ed3b6ef4a713824d6c6fb39fb714071f5dab46846eee46d727739832f7",
+    "evaluations/ordered-history-runner.mjs": "4252b973eba73c8581a9c03adf9ff3975874beaf29039a8ac9e99e983859a3a5",
+    "evaluations/ordered-history-score.mjs": "22cb13a5250200c780ad563b310285247732754977a4019cb011122ec2a878c8",
+    "evaluations/resources.mjs": "08f91708578058d25df190bfc2c3155c3e35f075e49cffd707de521661d6ae61",
+    "evaluations/results/baseline-v1-review.json": "6bb24deb6c1e188f13824cf5f63bf4120f332bcfd349cf6d41c44d50bb4d913f",
+    "evaluations/results/baseline-v1.json": "77fe85d75797c4c18f0957a29c981387a6c5853c9510fcaea19adba6ee7e1fa4",
+    "evaluations/results/conversation-history-v1-review.json": "323e2d94ddeb9117c95a825fc73af022408ff0b214691f98d44649bf2a1eb9cd",
+    "evaluations/results/conversation-history-v1.json": "b3244a104c483f029fc9751c68cf9766798c5cfc54e2cce5e95d6f19e93c14a8",
+    "evaluations/results/extraction-profile-probe-v1.json": "0996ae5b296edad2d002f46a249daa8e3438d9a51744e950c71c8a2e6109fabd",
+    "evaluations/results/extraction-profile-v1-review.json": "4dee7b02f8e68dfbba76c66ecaaf4b9d57a80e6cb4a4f853ee7fe1ec1fd246ac",
+    "evaluations/results/extraction-profile-v1.json": "f7e1a2083804202f8dc9c424d949c885a44629c16c5485bfc7cdde0da9daa6b7",
+    "evaluations/results/installed-capture-v1-review.json": "176e1339164b805a8cb869767b400a41a77aa32dad2d254dd743666bbface390",
+    "evaluations/results/installed-capture-v1.json": "9afa21ddc82bad887225806a6442e1afcff709a29aacf3fd5c98dae283807ff3",
+    "evaluations/results/luna-probe-v1.json": "0ff691eada138b650314b62fdca39d027c78466a7165522c0b935e71a6dba215",
+    "evaluations/results/luna-suite-v1-review.json": "d05d369ab1a8fd6f2ed57cf31f5f30291f27fdd9bdc2d135534eaf4252626d0d",
+    "evaluations/results/luna-suite-v1.json": "0417e33486985ad4b1142331ad06c696b4185e63046ea434545dc7f72e762f3d",
+    "evaluations/results/mini54-suite-v1-review.json": "f9fbbb86ea2b0f75d609ef593207f19ecfa087701176123ccfe86c6f00644b1e",
+    "evaluations/results/mini54-suite-v1.json": "dab8cababd2ffc94ea86b5af4d2e33ea3544f2c510f1cb03c79316ff996043b1",
+    "evaluations/results/reference-fix-v1-review.json": "c7a0a60eb78b20e5b9d769cb74d671f92b91e76add4f5bba1fefd6dfb27cbca9",
+    "evaluations/results/reference-fix-v1.json": "1bf3667e815a88aca5c882122a3128cedf99f23ca790ab97d4fa56153e46c83a",
+    "evaluations/results/semantic-excerpt-v1-review.json": "78e56e42dcbf98838b1574ed9f1da62f923cdfbf64a88a8a61ec7c1c395c09f3",
+    "evaluations/results/semantic-excerpt-v1.json": "8b2d6325cb5d3b63f87c29cd98ca2e92f5d4a4b8c4dfc0810278aceda3bdb137",
+    "evaluations/results/source-faithful-v1-review.json": "0cc826c0d7290806110929a919f6851a39d50fa7e820ab48283148c011540bc5",
+    "evaluations/results/source-faithful-v1.json": "cc3a9971783e7995fb1da2c158abe4b5a849679d2c4cf0c9226fee0a2be4cfab",
+    "evaluations/score.mjs": "d9a42817a15c732df893c2a3de21b008c2f955e616729ebd5a0855a1e83fa16b",
+    "evaluations/semantic-cases.mjs": "6df2ac78340c9a0bb420f5f719827155c9df0e606ead6b724cfed9457aa8fd70",
+    "evaluations/semantic-runner.mjs": "d1c02c39c1436e24d917c87ce75712e434efe99ebfa2afb9a946dbf6710496a9",
+    "examples/admission.mjs": "ca2c12989c6ad106b8309e2cfe3248424e90f7bc216aad41c72cb09ef52dc5a0",
+    "examples/capture.mjs": "d3b76e6e1030bd1c9ce242239ea709f8c9936ef702c9fbbff1e489f65b801fef",
+    "examples/check-storage-oracle.mjs": "16d65273ea0587981647274e4505e429ea2790871e2bad737eb98c38bdd169d0",
+    "examples/conflicts.mjs": "c3be802a50ff00236671603600285a98e31dad3c79599f9d72dc7a475161fcc3",
+    "examples/index-rebuild.mjs": "a6548e89cb80f20c5085da1cb8aeba9d6f7bf66aff05b763bb1d00f11bcd0475",
+    "examples/local-store.mjs": "87162eb2eb45b19772fa14b57a68fe4002a76a3331bba8e281c4118275eacef5",
+    "examples/moc-placement.mjs": "3b85618f79cdb5c281c8256a4006fcd31b4f3b2052243e8d1ec57a7f45277531",
+    "examples/openai-live.mjs": "5e9d77705215b51e7131be01d2705171b5087bbaa738504fd9f5ef8e73e87062",
+    "examples/openai-offline.mjs": "23fad8eb045cc88ffec30572c82fd2df2c0e15e9a306e6d24ba1abbcbc01968b",
+    "examples/recall-continuation.mjs": "71956b3c9350b72b0670e4dee770dcfdf2e65e34d845faeb68ddc26d4cfcd1c8",
+    "examples/recall.mjs": "882823326aa9607d54d00714fbfe9f0cc11e6de07ef3fc054abb639b00dccd88",
+    "examples/semantic-evaluation.mjs": "c3fe5469c4211076ef09f58d9136a2b019e31e9237ac1ceb788522feaf5258bc",
+    "integrations/hermes/cairn/README.md": "8c3dea94570c9d69e3ad4db848ac87be3a78695c9af85db1a95ec531b3b8e57b",
+    "integrations/hermes/cairn/__init__.py": "b88e3d384b69f6ecb8ac99bfc98d5dc7b4d621bee040a123b9489873e2f8e8af",
+    "integrations/hermes/cairn/bridge.py": "f77b95fa040fa8f981166a347ac914176f07e19c56bb3dfeea52209cf062d822",
+    "integrations/hermes/cairn/plugin.yaml": "2b6e332404e24eff2ab810dda5a1702fe489df583c7e734c9af8f9deeea7a750",
+    "integrations/hermes/evidence/native-live-v1.json": "91473576a5ed37344208f70cff52f8774928a6c2cf1be88c3eb072e4063e4238",
+    "integrations/hermes/test/conftest.py": "cf4413aacc71a4168024cd9a21e5fe86e78c1c4ce2c7bba15a814e14f023de33",
+    "integrations/hermes/test/test_agent_conversation.py": "607a1557858490f4f9ee7b29510a603a636d900e16b2f80cfbc9816c56b2c6f8",
+    "integrations/hermes/test/test_provider.py": "c72a5172882af045b40c0e2f36f9ada0f1ef9c77ef82fc52ca19aefd7d41550d",
+    "package.json": "cd4275505a80c2ba48842727dd630d38afa347cf88e7c3fc5ba943f56986463b",
+    "packaging/README.md": "931f2d897225f764deffa97b40c83a8929f746c89996640743d9186a62bbaaa4",
+    "packaging/THIRD_PARTY_NOTICES.md": "50aa8b0e7133671617cc71255245bfa92af354bc9cdeba6425ce0970639719c0",
+    "packaging/artifact-files.json": "731990c1175c2ff46b1f815238a779f9f452176499297cb7d5dfafd06bf7ec93",
+    "packaging/bin/cairn-memory.mjs": "56d8fe270b3945fb60287fca25c42a762595afab0cbf28c94b43b8c3ae59df86",
+    "packaging/build.mjs": "b1499bd6b71ac5dfe3712f0f636d1ff468c8acca1e37aac993b2bc17c02cf98b",
+    "packaging/install-preview.mjs": "ce19f7eb348f5d0ee20e896b57eb5fe1f533a00ef52a21b2ed40c7b6165eeb80",
+    "packaging/licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b",
+    "packaging/prepare-cache.mjs": "7126737e1e7a91c9e48c695f9524b8c75b5c48f32ccd2afd521f40a7c89a1389",
+    "packaging/test/cache.test.mjs": "ca4392c434dc9b3195967f20d273ae950331219b7031fa1ae95f285cbf59e8b6",
+    "packaging/test/install.test.mjs": "800a5535aee1c4a644730c0d4dc0e1d7e04656506a6197faa5a11a063bab032e",
+    "packaging/test/preview-installer.test.mjs": "119d5e5b53251b2978d3a552df5cbb7d4f71c3243a926052dcf7ae9abaee6c0b",
+    "packaging/verify-clean-cache.mjs": "59b54a938a4e2971e8786040ff754262fff2ebbfb81a58292daffe4f42680a30",
+    "plugins/cairn-memory/.claude-plugin/plugin.json": "6de147fc0e2f98256a0de47f69ce9c982ea47c361e2bb09366419a3548f9e218",
+    "plugins/cairn-memory/.mcp.json": "0d24d90bd54d560181adf85307559a7c1488f30c4f77b4744d7fd151afc2d5eb",
+    "plugins/cairn-memory/README.md": "03b95e07a4c38c78315135d6cdc922dad682fc532199c1e182071d82a78411db",
+    "plugins/cairn-memory/hooks/hooks.json": "45d6594830c3834f6cf98d731f63523b43aa68f5aa3ee635276bc0bc62d2c97c",
+    "plugins/cairn-memory/lib/capture-cursor.mjs": "8c5ff5ba87e85604c3119b86137057710736fa351362220a343e8c075e1cd467",
+    "plugins/cairn-memory/lib/capture-event.mjs": "e8523cef22f6a5d153b0652e1d5abff178ba52dfab0dda2e1754a74934af2d30",
+    "plugins/cairn-memory/lib/config.mjs": "e0cd0b8c69a9b56265d2db4ae477c5aa3719a0f7eb7851155ff3d9ac43dca0d3",
+    "plugins/cairn-memory/lib/control-state.mjs": "2921078bae31ac35e5273dcf5ab11857bf753c50e7e384c52f1758b01ec79916",
+    "plugins/cairn-memory/lib/file-lock.mjs": "a9026e7cbf285bb3aa1bfe60628ba41bf885c53e9ba922a7958e444f18dfb521",
+    "plugins/cairn-memory/lib/http.mjs": "da22fd81f46671f60bac4c0af0d52bfd33518ed41cf2896a1d241425dcd1c5ba",
+    "plugins/cairn-memory/lib/identity.mjs": "d86697c1366233021cf1e7699476078338bf2c61694718a7e80cb3b0762d5c4d",
+    "plugins/cairn-memory/lib/recall-query.mjs": "87d606696185da8c0455889c9cf359116f82f70b3a92a1153629026b5406f765",
+    "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
+    "plugins/cairn-memory/lib/transcript.mjs": "50fbb331029031b105cf93013168ac7e1561e22cbc1384a81e4c5b71753633ce",
+    "plugins/cairn-memory/lib/version.mjs": "655f09054c579267c5836e266dea5fc64b6d6c237c77421767d6f47f931059b1",
+    "plugins/cairn-memory/scripts/hook.mjs": "85c6c1af3c07b68d451447a952e80583aa2c7a4c7f86301699aa20c0579b14e7",
+    "plugins/cairn-memory/scripts/launch-capture.mjs": "a628fc0642ca625b5be9b3eb6fa0770e19a19e9386021ddf8f3f1f5508e10f30",
+    "plugins/cairn-memory/skills/pause/SKILL.md": "c44a2cc9f034f430f70baf04c33f7816d2c58f876d9c48b8f29218d4ca8b9986",
+    "plugins/cairn-memory/skills/resume/SKILL.md": "88da4465ba052739fa9ae4fd611f43e21583401a6aee01bd612fd66331c4d1e0",
+    "plugins/cairn-memory/skills/status/SKILL.md": "ee6dc2285495fe1072651957b34c7b05671f88fb1b839c817c5c6b482d0735f5",
+    "plugins/cairn-memory/test/capture-lock.test.mjs": "fa217bcb95989ef2f8a100e89bbc550ac8c78882f7046ac1072aae5b489fceaa",
+    "plugins/cairn-memory/test/identity.test.mjs": "111f98d3b0395af24fe22ec4ba852ec44cf96ad028a1f9c6caf4bf82300650d5",
+    "plugins/cairn-memory/test/pause-capture.test.mjs": "481024f95ac54a58d4fc65e4feab0367cf2e87aec5a0c1551fab5ba34e653ad7",
+    "plugins/cairn-memory/test/protocol.test.mjs": "aefc009ddd9497684be0151d8a9254775c18a2163e98a1b2db5f25622233e507",
+    "plugins/cairn-memory/test/recall.test.mjs": "fae5617b58b660cb5c55d9e7458914a52861b95e63ad75ba053a6c14e928a6cd",
+    "plugins/cairn-memory/test/transcript.test.mjs": "e43c84d5479be5e45b87d25815c5b9d27ef162f9653c5a822632f0671c4913c6",
+    "schemas/capture-request.schema.json": "14096024642c73d39b9bc6c5c519c8cb0cdc327f2159f6e5ce658c4c84025c31",
+    "schemas/capture-response.schema.json": "fd8a83e8aa459b05bb7cc2e4791452d49dcc3e0d476386562c2fecf056914079",
+    "schemas/recall-request.schema.json": "3899e548b43bb408216d518e104f37886b49bdd9269a3a3a1f3d2f399356b43d",
+    "schemas/recall-response.schema.json": "7ae5dacf2f80a606bf14be813e82e054ca194266e410c64bbce8d9745695ea69",
+    "schemas/telemetry-request.schema.json": "1e9b78ba8c47c1e905f6db4773f0b9b91bab2e8a87e75b800aa4ae0dbd20a26f",
+    "scripts/validate-json.mjs": "c6d674a870ebd1a11ce35eb86cb6e2a0234e04aee692615784a6d9458aef6f29",
+    "tools/plugin-validation/package-lock.json": "4f8437487e60c8c3f297ee4baae6f3a1ba950d68fa8dea800b7a72f10eaf7ec1",
+    "tools/plugin-validation/package.json": "7640500b6e3efe5b42e2e61d5c977bdce4648226e9b9bfdc16fed161bbdd06ba"
+  },
+  "operatorSha256": "947b67dd4a24fb0c49c2a6ca9c2626f381f1cbd1702fbe955b6b5378594ef5a5",
+  "acceptanceSha256": "41bf5090f83f837610e3571d39ebab1232d87d8ed6d586281e25127b1ada93e7",
+  "intentSha256": "c74e1f9989d3ccc66478dee92efec51e5afb3ab9caaf03026e8ae46382eefd37",
+  "bindingHashes": {
+    "authorization.json": "a776aee2e0cb6e2d4bb63f29e2a34fd3844c050e1a129aff27b89a1143076572",
+    "luna-extension-token.json": "1ac62b04065e12a44d23807a86a7f223861fbdd5efbf5137c69d5694c051509c",
+    "reconciliation-extension-token.json": "29f04a17cd7c70ec89109e502834035949d97e7cc409942a8d1ed450dcbe2cc7",
+    "experiment-request-policy.json": "ff1824f602e686d072274f7631249c515a5e833a0011f90f08049e0cfc2ae97b",
+    "experiment-extraction-extension.json": "e152371bb64d8bf3ff17a684ac9461a0b5083b0572ef1b9d9b421f7bfedfa795",
+    "experiment-reconciliation-extension.json": "a3fe1c0e2c1d7186d3fda96b6cf423fa1c7122b915c9fdc595144efc316601a5"
+  },
+  "artifactSha256": "49cb04896119c92b78043747517fa87e6db7df30c1a2247b6aacd9c2390d619a",
+  "nodeVersion": "v22.16.0",
+  "nodeSha256": "8142d37c6f2f372ef040419e7a111a6baf17df89f8078d02447d6c639ae20c1d",
+  "ownerCumulativeAuthorizedUsd": 30,
+  "implementedLedgerLimitUsd": 20,
+  "maxAdditionalReservedMicroUsd": 3000000,
+  "maxAdditionalRequests": 300,
+  "extractionModel": "gpt-5.4-mini-2026-03-17",
+  "otherModel": "gpt-4.1-mini-2025-04-14",
+  "noRetries": true,
+  "noReplacementRuns": true,
+  "rawReports": {
+    "ordered-history": {
+      "fileSha256": "febb44b2f0d72358af81fab39d8864f180753923e1d82d0687874f7c2e0a4e84",
+      "structuralDigest": "ee24a294bbdd71a26594b35ca3888faaf046b14afc7511500b543f384c276e51"
+    },
+    "currentness": {
+      "fileSha256": "0460a709ea2d4521fd58d73f8b5337781391e3b98a9d04acb7a5b4549aa1979f",
+      "structuralDigest": "79ec51eb0718999dc019adc4ed64540f19b55f87b9045962fe0a25f9e0a74238"
+    },
+    "installed": {
+      "fileSha256": "77b1a44aeb28d29d52887915fc8583f1093d76859e9fae56fe8069d849b38997",
+      "structuralDigest": "dfad7d132c2301bbc8e64b9f15ee2d6af669a86bc3e53490bb015a187a2e34ad"
+    }
+  },
+  "operatorStatus": "evidence_retained_pending_semantic_review",
+  "haltCode": null,
+  "outcomes": [
+    {
+      "stage": "ordered-history",
+      "status": "completed"
+    },
+    {
+      "stage": "currentness",
+      "status": "completed"
+    },
+    {
+      "stage": "installed",
+      "status": "mechanical_pass_pending_semantic_review"
+    }
+  ],
+  "observations": [
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "ordered-history",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "currentness",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses/input_tokens",
+      "status": 200
+    },
+    {
+      "stage": "installed",
+      "endpoint": "/v1/responses",
+      "status": 200
+    }
+  ],
+  "before": {
+    "requests": 1725,
+    "reservedMicroUsd": 14617736,
+    "knownUsageMicroUsd": 953198,
+    "unknownCostRequests": 799,
+    "unsettled": 0,
+    "state": "open"
+  },
+  "after": {
+    "requests": 1919,
+    "reservedMicroUsd": 15706048,
+    "knownUsageMicroUsd": 995016,
+    "unknownCostRequests": 896,
+    "unsettled": 0,
+    "state": "open"
+  },
+  "delta": {
+    "requests": 194,
+    "reservedMicroUsd": 1088312,
+    "knownUsageMicroUsd": 41818,
+    "unknownCostRequests": 97
+  },
+  "remainingImplementedReservedMicroUsd": 4293952
+}
