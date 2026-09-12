@@ -22,7 +22,16 @@ its past hosted tests do not establish local-preview quality.
 
 ## Next gates
 
-1. Resolve the source-support failure and rerun the unchanged frozen evaluation.
+The next reliability design slice is the
+[memory reliability contract](docs/plans/memory-reliability-contract.md): qualified
+updates, current/history/change evidence, and explicit acceptance gates. It
+distinguishes main from pending PRs and proposed behavior; it is not a release
+claim or authorization for a paid experiment. Its staged order guides the
+reliability work below without declaring older failure gates resolved.
+
+1. Resolve source-support and unjustified-update failures; evaluate under the
+   reliability contract's frozen-case and independent holdout rules. Any paid
+   rerun needs scoped authorization; earlier one-shot approvals do not roll over.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.

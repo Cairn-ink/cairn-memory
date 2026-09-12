@@ -1,0 +1,134 @@
+{
+  "version": "qualified-paired-semantic-review-v1",
+  "reviewer": "independent-spec-agent",
+  "language": "zh",
+  "cases": [
+    {
+      "caseId": "Q05", "arm": "baseline", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "46b15315-b8c4-4f6e-bcd6-709f85716e5b", "content": "User's current seat preference for daytime intercity train trips is an aisle seat.", "supported": true, "reason": "q05-a supports the original preference with both daytime and intercity-train scope; it is evaluated at first persistence, before the later update."},
+        {"memoryId": "0892ae95-01db-4981-b606-c4640a5b6153", "content": "使用者決定之後搭城際列車時改選靠窗座位,不再優先選靠走道。", "supported": false, "reason": "q05-b changes only daytime intercity-train preference. This persisted replacement omits daytime and states an unrestricted future intercity-train choice, violating the frozen scope-preservation obligation."},
+        {"memoryId": "b157b31f-b01d-45a5-9cc7-d928a2cf8b92", "content": "使用者偏好搭城際列車時坐靠窗,因為想沿途看風景。", "supported": false, "reason": "The stated scenery reason is supported, but the preference drops the required daytime restriction. A source receipt retaining the restriction does not repair the independently persisted overbroad claim."}
+      ],
+      "retirements": [{"predecessorId": "46b15315-b8c4-4f6e-bcd6-709f85716e5b", "successorId": "0892ae95-01db-4981-b606-c4640a5b6153", "justified": false, "reason": "q05-b does explicitly authorize aisle-to-window within daytime intercity trips, but the selected successor omits daytime. The complete scoped predecessor-to-successor pair therefore fails the frozen allowed-retirement and qualification requirements; the direction of change alone is supported."}],
+      "currentState": {"status": "fail", "reason": "The old aisle assertion is retired and the desired window value is present, but both active preference/decision claims broaden the source's daytime scope."},
+      "requiredRetrieval": {"status": "pass", "reason": "Both recalled items include q05-b receipts containing the daytime intercity scope, adopted window preference and scenery reason. Thus all required propositions are available in retrieved evidence, despite the overbroad extracted prose."},
+      "answer": {"status": "pass", "reason": "The answer restores the daytime intercity scope and gives the explicitly stated scenery reason; it is supported by retrieved receipts. Its source-date label matches ingestion metadata and is not presented as a separate event-time inference."},
+      "positiveUpdate": {"status": "fail", "reason": "An explicit positive update was attempted, but the scoped successor requirement is not met. This is not an abstention or a missing operation."},
+      "overall": "fail",
+      "notes": ["Scope failure is in extraction, not the existence of an adopted value change. Retirement grading here requires the full allowed semantic pair, not merely a source authorizing retirement in principle."]
+    },
+    {
+      "caseId": "Q05", "arm": "qualified", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "f431ccf0-9a8f-4fbe-b081-0e5f15b22bec", "content": "使用者搭白天的城際列車時,偏好坐靠走道的位置。", "supported": true, "reason": "q05-a supports the original scoped preference at first persistence."},
+        {"memoryId": "8e0724af-db33-40ea-b85e-4a6f97182b25", "content": "使用者表示這次已經想清楚了,對此決定具有明確性。", "supported": true, "reason": "q05-b explicitly says this decision has been thought through; this is attributed to the user and remains tied to this decision."},
+        {"memoryId": "92f72448-9b39-4746-a45b-e182b421950c", "content": "使用者決定改掉白天搭城際列車的選位偏好:以後優先選靠窗,不再優先選靠走道。", "supported": true, "reason": "q05-b explicitly adopts this change and the claim preserves daytime and intercity-train scope."},
+        {"memoryId": "967a2069-cac0-4d6f-87ae-3e4fd2f8a5a4", "content": "使用者這樣改變選位偏好,是因為想沿途看風景。", "supported": true, "reason": "q05-b supplies the scenery motive for this seat-preference change; no motive is invented."}
+      ],
+      "retirements": [{"predecessorId": "f431ccf0-9a8f-4fbe-b081-0e5f15b22bec", "successorId": "92f72448-9b39-4746-a45b-e182b421950c", "justified": true, "reason": "The predecessor and replacement retain the same daytime intercity scope, q05-b explicitly adopts the new value, and the bound successor receipt points to q05-b."}],
+      "currentState": {"status": "pass", "reason": "Current claims preserve the adopted window choice and its stated reason; the incompatible old scoped aisle preference is historical."},
+      "requiredRetrieval": {"status": "pass", "reason": "Recall supplies the scoped window decision and scenery reason with q05-b receipts."},
+      "answer": {"status": "pass", "reason": "The answer preserves scope and states only the supported choice and motive."},
+      "positiveUpdate": {"status": "pass", "reason": "A supported scoped replacement retires the actually extracted incompatible predecessor and remains available after reopening."},
+      "overall": "pass", "notes": []
+    },
+    {
+      "caseId": "Q06", "arm": "baseline", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "8a4473f9-9438-49ff-8399-7beb1907dea2", "content": "使用者在自己的食譜卡標示材料份量時,一律使用公克,不使用量杯;這是正式在用的標示規則。", "supported": true, "reason": "q06-a states this current rule, and q06-c later reaffirms it."},
+        {"memoryId": "2a713c3b-1e34-429a-8ecc-80547bba4936", "content": "正式使用的食譜卡仍以公克標示,舊範本不會拿回來使用。", "supported": true, "reason": "q06-c explicitly maintains grams and rejects reuse of the old template."},
+        {"memoryId": "59e2be9f-b3ca-439a-ace2-e67e3883e412", "content": "找到的一份早期食譜卡範本已作廢,保留它是為了展示食譜卡設計的演變。", "supported": true, "reason": "q06-b explicitly describes the obsolete template and why it was retained."}
+      ],
+      "retirements": [{"predecessorId": "8a4473f9-9438-49ff-8399-7beb1907dea2", "successorId": "2a713c3b-1e34-429a-8ecc-80547bba4936", "justified": false, "reason": "q06-c reaffirms the same grams rule; neither q06-b nor q06-c adopts a changed current value. Frozen allowedRetirements is empty."}],
+      "currentState": {"status": "pass", "reason": "Final active claims correctly use grams and label the old template obsolete. This metric assesses active propositions only; the erroneous retirement fails the separate lifecycle metric."},
+      "requiredRetrieval": {"status": "pass", "reason": "The recalled current rule and receipts establish the required grams proposition."},
+      "answer": {"status": "pass", "reason": "The answer correctly says grams without inventing a reason."},
+      "positiveUpdate": {"status": "not_applicable", "reason": "The frozen case requires reaffirmation, not an adopted update."},
+      "overall": "fail", "notes": ["Correct active wording and answer do not excuse converting an unchanged current rule to history."]
+    },
+    {
+      "caseId": "Q06", "arm": "qualified", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "6f0632eb-5d98-43fc-88ff-b423f65aa313", "content": "使用者在為自己的食譜卡標示材料份量時,一律使用公克,不使用量杯;這套公克標示規則是正式在用的版本。", "supported": true, "reason": "q06-a supports the current grams rule, unchanged by q06-c."},
+        {"memoryId": "d843a9f3-0614-48f2-99a1-92a0a595c6fc", "content": "找到的早期食譜卡範本已作廢,保留它是為了展示食譜卡設計的演變。", "supported": true, "reason": "q06-b explicitly identifies the obsolete template and retention purpose."},
+        {"memoryId": "fa58583c-4f2f-4b7e-9c78-f47d6b1d8a0e", "content": "正式使用的食譜卡仍以公克標示,舊範本不會拿回來使用。", "supported": true, "reason": "q06-c reaffirms grams and nonuse of the obsolete template."}
+      ],
+      "retirements": [{"predecessorId": "6f0632eb-5d98-43fc-88ff-b423f65aa313", "successorId": "fa58583c-4f2f-4b7e-9c78-f47d6b1d8a0e", "justified": false, "reason": "The selected q06-c receipt says the current rule remains grams, not that its value changes. Retiring the equivalent existing grams rule violates the empty allowedRetirements set."}],
+      "currentState": {"status": "pass", "reason": "Active claims preserve grams and the obsolete-template distinction; the separate transition audit fails."},
+      "requiredRetrieval": {"status": "pass", "reason": "The returned current rule and q06-c receipt cover the required grams proposition."},
+      "answer": {"status": "pass", "reason": "The answer says grams and invents no motive."},
+      "positiveUpdate": {"status": "not_applicable", "reason": "This is a no-update reaffirmation case."},
+      "overall": "fail", "notes": ["The qualified judgment contract did not prevent this unchanged-value retirement."]
+    },
+    {
+      "caseId": "Q07", "arm": "baseline", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "dc39c0cb-fcf9-44ce-bacc-3856fe664a42", "content": "使用者目前採用紙本筆記本來記錄讀書筆記。", "supported": true, "reason": "q07-a explicitly states the current paper-notebook choice."},
+        {"memoryId": "8c74dc2a-6c8b-43d2-91bb-cecb5e45f012", "content": "使用者想先評估電子筆記的操作是否太麻煩。", "supported": true, "reason": "q07-c explicitly states this contemplated evaluation, without asserting adoption."},
+        {"memoryId": "92994ca6-8608-4cce-8077-8704739e693b", "content": "目前使用者仍然照原先決定使用紙本。", "supported": true, "reason": "q07-c reaffirms continued paper use for now."},
+        {"memoryId": "b380ad18-d364-41ad-af6c-9627a1488414", "content": "使用者仍在考慮是否改用電子筆記,尚未決定更換。", "supported": true, "reason": "q07-c preserves the tentative, unadopted status of electronic notes."}
+      ],
+      "retirements": [],
+      "currentState": {"status": "pass", "reason": "Paper remains current, electronic notes remain undecided, and the old paper assertion stays active."},
+      "requiredRetrieval": {"status": "pass", "reason": "Recall covers both current paper use and the unadopted electronic alternative, with user receipts."},
+      "answer": {"status": "pass", "reason": "The answer preserves the current decision, uncertainty and stated desire to evaluate usability."},
+      "positiveUpdate": {"status": "not_applicable", "reason": "No adopted update is expected."},
+      "overall": "pass", "notes": []
+    },
+    {
+      "caseId": "Q07", "arm": "qualified", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "97670548-2e11-4425-bcd4-5087520a199f", "content": "目前讀書筆記先繼續使用紙本筆記本記錄。", "supported": true, "reason": "q07-a directly states the current paper method with provisional scope."},
+        {"memoryId": "4d19e51d-04b0-49fc-9dd7-5950e4b1bdc0", "content": "使用者還在考慮是否改用電子筆記,想先確認操作會不會太麻煩。", "supported": true, "reason": "q07-c supports both considering electronic notes and evaluating usability."},
+        {"memoryId": "6f4ac3fd-ea34-422b-bf79-887f5e4f1520", "content": "使用者目前仍然照原先決定使用紙本筆記,尚未決定改用電子筆記。", "supported": true, "reason": "q07-c explicitly reaffirms paper and preserves nonadoption of electronic notes."}
+      ],
+      "retirements": [{"predecessorId": "97670548-2e11-4425-bcd4-5087520a199f", "successorId": "6f4ac3fd-ea34-422b-bf79-887f5e4f1520", "justified": false, "reason": "The successor adds qualification about an undecided option but preserves the same current paper method. q07-c does not authorize retiring the original paper assertion; allowedRetirements is empty."}],
+      "currentState": {"status": "pass", "reason": "Active claims preserve paper and uncertainty, although the unchanged predecessor was wrongly made historical."},
+      "requiredRetrieval": {"status": "pass", "reason": "Retrieved claims and q07-c receipts cover current paper use and undecided electronic notes."},
+      "answer": {"status": "pass", "reason": "The answer faithfully distinguishes the current method from a considered alternative."},
+      "positiveUpdate": {"status": "not_applicable", "reason": "No adopted update is expected."},
+      "overall": "fail", "notes": ["The extra uncertainty qualification is compatible context, not a changed paper-to-electronic decision."]
+    },
+    {
+      "caseId": "Q08", "arm": "baseline", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "a0e3b93e-6090-4bf1-ad31-2dc8414e13f9", "content": "在家裡的書桌工作時,偏好完全安靜,不播放背景音樂。", "supported": true, "reason": "q08-a supports the home-desk silence preference with its scope."},
+        {"memoryId": "9a6a4bf4-4c5a-4906-bc10-69e97c560639", "content": "使用者在陶藝工作室捏陶時,喜歡把爵士樂當背景音樂。", "supported": true, "reason": "q08-b supports the distinct pottery-studio jazz preference."}
+      ],
+      "retirements": [],
+      "currentState": {"status": "pass", "reason": "Both compatible location/activity-specific preferences remain active."},
+      "requiredRetrieval": {"status": "fail", "reason": "Recall returns only the home-desk silence proposition and its q08-a receipt. The second frozen requiredCurrent proposition, pottery-studio jazz, is absent from retrieved evidence."},
+      "answer": {"status": "pass", "reason": "The question asks about the home desk, and the supported answer correctly says silence without importing the studio preference."},
+      "positiveUpdate": {"status": "not_applicable", "reason": "Different scopes coexist; no adopted update is required."},
+      "overall": "fail", "notes": ["This retrieval failure reflects the frozen all-requiredCurrent criterion, which is broader than the home-only question. The answer and state separation are correct; this must not be described as inability to answer the user's question."]
+    },
+    {
+      "caseId": "Q08", "arm": "qualified", "operationStatus": "completed",
+      "claims": [
+        {"memoryId": "60400fc4-4c4d-4706-ac9e-e76787a6c697", "content": "在家裡的書桌工作時,使用者喜歡完全安靜,不播放背景音樂。", "supported": true, "reason": "q08-a supports silence at the home desk with the location/activity scope preserved."},
+        {"memoryId": "1e8b1e1d-8aaa-411b-a666-a1e4c87010b1", "content": "在工作室做陶藝時播放爵士樂,是使用者的一項習慣。", "supported": true, "reason": "q08-b explicitly calls this a pottery-workshop habit."},
+        {"memoryId": "4857a963-ae8c-4fab-8cd5-cff668dce151", "content": "使用者在陶藝工作室捏陶時,喜歡播放爵士樂作為背景音樂。", "supported": true, "reason": "q08-b explicitly states this scoped preference."}
+      ],
+      "retirements": [],
+      "currentState": {"status": "pass", "reason": "Home silence and pottery-studio jazz coexist as correctly scoped active claims."},
+      "requiredRetrieval": {"status": "fail", "reason": "Only the home-silence item and q08-a receipt are retrieved. Neither studio-jazz item nor q08-b evidence appears, so the full frozen requiredCurrent set is not retrieved."},
+      "answer": {"status": "pass", "reason": "The answer faithfully answers the home-desk question from the supplied evidence."},
+      "positiveUpdate": {"status": "not_applicable", "reason": "No current preference changes across these distinct scopes."},
+      "overall": "fail", "notes": ["The frozen retrieval criterion exceeds query-specific needs here. Preserve the failure under that criterion without claiming a wrong home-desk answer."]
+    }
+  ],
+  "summary": {
+    "sourceReport": "qualified-paired-v1.json",
+    "caseArms": 8,
+    "mechanicallyCompleted": 8,
+    "missing": 0,
+    "claims": {"total": 25, "supported": 23, "unsupported": 2},
+    "retirements": {"total": 5, "justified": 1, "unjustified": 4},
+    "byArm": {
+      "baseline": {"caseArms": 4, "overallPass": 1, "overallFail": 3, "missing": 0, "claimsSupported": 10, "claimsTotal": 12, "retirementsJustified": 0, "retirementsTotal": 2, "currentStatePass": 3, "currentStateTotal": 4, "requiredRetrievalPass": 3, "requiredRetrievalTotal": 4, "answerPass": 4, "answerTotal": 4, "positiveUpdatePass": 0, "positiveUpdateTotal": 1},
+      "qualified": {"caseArms": 4, "overallPass": 1, "overallFail": 3, "missing": 0, "claimsSupported": 13, "claimsTotal": 13, "retirementsJustified": 1, "retirementsTotal": 3, "currentStatePass": 4, "currentStateTotal": 4, "requiredRetrievalPass": 3, "requiredRetrievalTotal": 4, "answerPass": 4, "answerTotal": 4, "positiveUpdatePass": 1, "positiveUpdateTotal": 1}
+    },
+    "limitations": ["Eight Mandarin case-arms are four cases run once per arm, not eight independent scenarios or a reliability estimate.", "All claims are judged at first persistence with subsequent state transitions evaluated separately; duplicate id-plus-content observations are not counted twice.", "Retirement correctness requires the entire scoped replacement pair. Q05 baseline has a supported update direction but fails this stricter pair-level test because its successor drops daytime scope.", "Q08 retrieval fails both arms only under the frozen all-requiredCurrent rule; both state separation and query-specific answers pass.", "Correct answers do not repair wrong historical retirement or overbroad stored claims."]
+  }
+}

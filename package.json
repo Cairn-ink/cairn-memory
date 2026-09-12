@@ -16,6 +16,7 @@
     "demo:longmemeval-comparison": "node evaluation/longmemeval/comparison-demo.mjs",
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
+    "demo:history": "node examples/historical-evidence.mjs",
     "demo:moc": "node examples/moc-placement.mjs",
     "demo:recall": "node examples/recall.mjs",
     "demo:admission": "node examples/admission.mjs",
@@ -35,7 +36,7 @@
     "validate": "node scripts/validate-json.mjs",
     "test:experiment-budget": "node --test evaluation/experiment-budget/test/ledger.test.mjs",
     "demo:experiment-budget": "node evaluation/experiment-budget/example.mjs",
-    "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs",
+    "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs evaluation/experiment-budget/test/reconciliation-guard.test.mjs",
     "demo:experiment-request-guard": "node evaluation/experiment-budget/request-guard-example.mjs"
   }
 }
