@@ -119,7 +119,7 @@
     }
   ],
   "summary": {
-    "sourceReport": "/tmp/cairn-live-evidence-2r4IsQ/qualified-paired-v1-result.json",
+    "sourceReport": "qualified-paired-v1.json",
     "caseArms": 8,
     "mechanicallyCompleted": 8,
     "missing": 0,

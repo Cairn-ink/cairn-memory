@@ -136,16 +136,18 @@ export async function runQualifiedComparison(options) {
         window.records = [];
         captureAuditSnapshot(core, entry.namespace, window.records, unwrap);
         window.sourceBindingsValid = bindingsValid(window.records, entry.namespace, entry.windows.slice(0, window.index + 1), sessionId);
+        if (!window.sourceBindingsValid) failure(window, 'comparison_source_bindings_failed', true);
         await close(core, window); core = null;
         if (!halted) {
           core = await open(entry, database, false);
           window.reopenedRecords = [];
           captureAuditSnapshot(core, entry.namespace, window.reopenedRecords, unwrap);
           window.reopenPersisted = same(window.records, window.reopenedRecords);
+          if (!window.reopenPersisted) failure(window, 'comparison_snapshot_mismatch', true);
           if (captureAuditCompleted(window.capture) && window.sourceBindingsValid && window.reopenPersisted) window.status = 'completed';
           else failure(window, 'comparison_capture_incomplete');
         }
-      } catch { failure(window, 'comparison_window_failed'); }
+      } catch { failure(window, 'comparison_window_failed', true); }
       finally { await close(core, window); window.durationMs = performance.now() - started; }
       await allowed();
       await checkpoint(`${stage}/after`);

@@ -8,6 +8,12 @@ const reviews = ['-english-review', '-chinese-review'].flatMap(suffix => JSON.pa
 const key = entry => `${entry.caseId}/${entry.arm}`;
 const claimKey = entry => JSON.stringify([entry.memoryId, entry.content]);
 
+test('every public paired JSON export omits private locators and credential-shaped strings', () => {
+  for (const suffix of ['', '-sources', '-rubric', '-english-review', '-chinese-review']) {
+    assert.doesNotMatch(read(suffix), /\/home\/|\/tmp\/|sk-[a-zA-Z0-9_-]{16,}|Bearer\s+[a-zA-Z0-9_-]+/u, suffix);
+  }
+});
+
 test('frozen paired evidence keeps all sixteen slots, source hashes and conservative accounting', () => {
   assert.equal(evidence.report.arms.length, 16);
   assert.equal(new Set(evidence.report.arms.map(key)).size, 16);

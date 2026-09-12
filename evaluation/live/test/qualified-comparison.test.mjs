@@ -215,3 +215,37 @@ test('detached persistence and halted callback after intent cannot alter evidenc
   assert.equal(report.arms[0].namespace.ownerId, 'synthetic-qualified-comparison');
   assert.ok(report.arms[0].windows.every(window => window.status === 'not_run'));
 });
+
+test('cold snapshot mismatch or read failure halts all later arms, not only the current case', async () => {
+  for (const fault of ['mismatch', 'read-failure', 'source-binding']) {
+    const run = setup();
+    const factory = options => {
+      run.opens.push({ ...options });
+      const core = openMemoryCore({ path: options.path, ...(options.withModel ? { model: scripted(run.calls) } : {}) });
+      if (fault === 'source-binding' && options.withModel) {
+        return { ...core, get: input => {
+          const result = core.get(input);
+          if (result.ok) for (const receipt of result.value.receipts) receipt.eventId = 'not-a-source-event';
+          return result;
+        } };
+      }
+      if (options.withModel) return core;
+      return { ...core, list: input => {
+        if (fault === 'read-failure') throw Error('PRIVATE_FAILURE');
+        const result = core.list(input);
+        if (result.ok) result.value.memories = [];
+        return result;
+      } };
+    };
+    run.options.candidates = { baseline: factory, qualified: factory };
+    const report = await runQualifiedComparison(run.options);
+    assert.equal(report.status, 'halted', fault);
+    assert.equal(run.calls.filter(call => call.method === 'extract').length, 1, fault);
+    assert.equal(run.answers.length, 0);
+    assert.ok(report.arms.slice(1).every(arm => arm.status === 'not_run'));
+    const window = report.arms[0].windows[0];
+    assert.ok(window.records.length);
+    if (fault === 'mismatch') assert.equal(window.reopenPersisted, false);
+    assert.ok(!JSON.stringify(report).includes('PRIVATE_FAILURE'));
+  }
+});

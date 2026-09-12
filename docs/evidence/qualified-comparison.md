@@ -129,9 +129,16 @@ Independent Standards and Spec reviews found zero blockers on the frozen harness
 and operator. No new installed-client or autonomous-host certification is claimed.
 Additional evidence consistency tests check exported hashes, every claim/retirement
 label's coverage, missing outcomes and accounting; they do not rejudge semantics
-or call a model. The final delivery reran both Node versions: 59 offline passes
+or call a model. The final delivery reran both Node versions: 61 offline passes
 with the same 27 opt-in skips, 31 generic passes, JSON and plugin validation;
-the 22 new harness/cap/evidence tests passed without skips.
+the 24 new harness/cap/evidence tests passed without skips.
+
+Final delivery review found and fixed two post-run harness/export gaps: a cold
+snapshot integrity/read failure now stops all later arms (not merely the current
+arm), and review exports replace private operational locators with public evidence
+filenames. Regression tests cover both. No such snapshot failure occurred in the
+retained run; its reviewed pre-call harness remains `fb80667`, and no paid evidence
+was rerun or rewritten to use the subsequent harness fix.
 
 ## DRI decision and next development gate
 
