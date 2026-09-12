@@ -30,3 +30,27 @@ A receipt proves provenance, not the truth or continuing applicability of a clai
 **Historical assertion**:
 A claim retained as evidence of an earlier state, not presented as current.
 _Avoid_: Forgotten memory
+
+**Reaffirmation**:
+New evidence confirming an existing assertion without changing its applicable
+value or scope.
+_Avoid_: Supersession
+
+**Recorded rationale**:
+A source-attributed reason explicitly associated with a decision or conclusion.
+_Avoid_: Reconstructed motive, proof of causation
+
+**Needs reconfirmation**:
+A decision whose recorded supporting premise no longer holds, without evidence
+that its source has adopted a different decision.
+_Avoid_: Cancelled decision, replacement decision
+
+**Unresolved conflict**:
+Incompatible assertions within the same subject, property, time and scope for
+which the available evidence does not justify a resolution.
+_Avoid_: Newest statement wins
+
+**Claim qualification**:
+The attribution, time, scope and degree of commitment attached to an assertion,
+such as a personal feeling, a proposal or an adopted decision.
+_Avoid_: Objective truth, model confidence
