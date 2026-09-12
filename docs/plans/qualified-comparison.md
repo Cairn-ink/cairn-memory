@@ -70,3 +70,12 @@ The runner accepts injected candidate factories and a guarded answer function;
 it never selects credentials, initializes a ledger or silently calls native fetch.
 An operator outside the distributable runtime owns approved local credential
 loading, immutable pin checks, existing-token validation and the one-shot intent.
+
+## Retained outcome (after the frozen attempt)
+
+Executed once at reviewed harness `fb80667dc0725cd1550bb0f07e73d59019cd707e`:
+233 requests /2,004,608 microUSD additional reservation, 15 mechanically completed
+arms and one incomplete arm. No retries, limit increases or tested-runtime edits.
+Independent source/transition/answer review leaves the reliability gate failed;
+see [the complete evidence and next development gate](../evidence/qualified-comparison.md).
+This outcome does not change the acceptance criteria above or authorize a rerun.

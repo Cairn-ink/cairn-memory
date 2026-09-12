@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — paired reconciliation evidence
+
+- Retain one frozen old/new comparison on eight new bilingual synthetic cases,
+  with per-claim, retirement, retrieval and answer review. Neither version meets
+  the full frozen gate; retain invalid-output and wrong-retirement failures.
+- Add a one-shot paired harness, private append-only evidence writer and a
+  conservative additional request/spending cap over an existing campaign guard.
+  No runtime tuning, paid retries, release, default-model change or new reliability
+  claim accompanies this evidence.
+
 ## Unreleased — explicit MCP history inspection
 
 - Add optional active/historical filters to the existing local `inspect_memory`
