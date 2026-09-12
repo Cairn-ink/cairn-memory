@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — explicit MCP history inspection
+
+- Add optional active/historical filters to the existing local `inspect_memory`
+  listing mode. Keep the same five tools and no-key inspection path; document
+  how to follow retained change evidence without inventing reasons or dates.
+
 ## Unreleased — explicit historical evidence view
 
 - Add local `list({states})` filtering and opt-in `fetch({view: 'historical'})`

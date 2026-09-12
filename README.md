@@ -94,7 +94,7 @@ The walkthrough does not impose a provider account spending limit.
 | --- | --- |
 | `remember_memory` | Explicitly save one memory and its receipt |
 | `recall_memory` | Model-guided retrieval of current memories and receipts |
-| `inspect_memory` | List memories or inspect an ID and current revision |
+| `inspect_memory` | List memories (optionally active/historical), or inspect an ID, revision and receipts |
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
 

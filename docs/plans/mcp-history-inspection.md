@@ -28,3 +28,12 @@ No self-merge, release, deploy or paid experiment.
 
 This deliberately reuses inspect_memory instead of adding another tool that
 would require a provider key just to count tokens for evidence access.
+
+## Offline checkpoint
+
+Node22.16.0 and24.15.0: `test:mcp`25/25, `test:artifact`14/14 and `npm test`31/31
+passed, zero skips. MCP includes the existing walkthrough and five new keyless
+SDK cases. Artifact checks exercise installed runtime identity and lifecycle.
+JSON/version validation and diff checks passed; pinned marketplace/strict plugin
+validations passed on Node22.16. Source receipts and supersession were seeded by
+explicit synthetic core operations, not real-model inference or human activity.

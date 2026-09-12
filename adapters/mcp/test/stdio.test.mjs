@@ -48,6 +48,113 @@ async function invalid(client, name, args) {
   }
 }
 
+function seedInspectionHistory(path) {
+  const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
+  const core = openMemoryCore({ path });
+  const receipt = (eventId, excerpt) => ({ client: 'synthetic-history', sessionId: 'inspection', eventId, role: 'user', excerpt });
+  try {
+    const old = ok(core.admit({ namespace, memory: { content: 'Synthetic review is Friday.', kind: 'fact' },
+      receipts: [receipt('original', 'I choose Friday.'), receipt('confirmation', 'Friday remains my choice.')] })).memory;
+    const first = ok(core.supersede({ namespace, memoryId: old.id, expectedRevision: old.revision,
+      replacement: { content: 'Synthetic review is Monday.', kind: 'fact' },
+      receipts: [receipt('first-change', 'Move the review to Monday because Friday is unavailable.')] })).memory;
+    const current = ok(core.supersede({ namespace, memoryId: first.id, expectedRevision: first.revision,
+      replacement: { content: 'Synthetic review is Tuesday.', kind: 'fact' },
+      receipts: [receipt('second-change', 'Move the review to Tuesday.')] })).memory;
+    return { old: ok(core.get({ namespace, memoryId: old.id })),
+      first: ok(core.get({ namespace, memoryId: first.id })), current };
+  } finally { core.close(); }
+}
+
+test('M1/M2 keyless SDK inspection filters before pagination and preserves default all-state cursor bindings', options, async (t) => {
+  const path = database(); const seeded = seedInspectionHistory(path); const { client } = await host(t, path);
+  const tools = (await client.listTools()).tools;
+  assert.deepEqual(tools.map(({ name }) => name).sort(),
+    ['correct_memory', 'forget_memory', 'inspect_memory', 'recall_memory', 'remember_memory']);
+  const schema = tools.find(({ name }) => name === 'inspect_memory').inputSchema;
+  assert.ok(schema.properties.states);
+  assert.equal(schema.additionalProperties, false);
+  const base = ok(await call(client, 'inspect_memory', { limit: 1 }));
+  for (const states of [['active', 'historical'], ['historical', 'active']]) {
+    assert.deepEqual(ok(await call(client, 'inspect_memory', { limit: 1, states })), base);
+    assert.deepEqual(ok(await call(client, 'inspect_memory', { limit: 1, states, cursor: base.nextCursor })),
+      ok(await call(client, 'inspect_memory', { limit: 1, cursor: base.nextCursor })));
+  }
+  const seen = []; let cursor;
+  do {
+    const page = ok(await call(client, 'inspect_memory', { states: ['historical'], limit: 1, ...(cursor ? { cursor } : {}) }));
+    assert.equal(page.memories.length, 1); assert.equal(page.memories[0].state, 'historical');
+    assert.equal(Object.hasOwn(page.memories[0], 'content'), false);
+    seen.push(page.memories[0].id); cursor = page.nextCursor; assert.ok(seen.length <= 2);
+  } while (cursor);
+  assert.deepEqual(seen.sort(), [seeded.old.memory.id, seeded.first.memory.id].sort());
+  assert.deepEqual(ok(await call(client, 'inspect_memory', { states: ['active'] })).memories.map(({ id }) => id), [seeded.current.id]);
+  error(await call(client, 'recall_memory', { query: 'What is the review day?' }), 'model_not_configured');
+});
+
+test('M1 invalid states and mixed ID/filter inspection reject without changing retained evidence', options, async (t) => {
+  const path = database(); const seeded = seedInspectionHistory(path); const { client } = await host(t, path);
+  const before = ok(await call(client, 'inspect_memory'));
+  for (const states of [null, [], 'historical', ['deleted'], ['active', 'active'], ['historical', 'historical'],
+    ['active', 'historical', 'active'], [null], [1], ['ACTIVE']]) await invalid(client, 'inspect_memory', { states });
+  for (const states of [['active'], ['historical'], ['active', 'historical']]) {
+    error(await call(client, 'inspect_memory', { memoryId: seeded.old.memory.id, states }), 'invalid_input');
+  }
+  await invalid(client, 'inspect_memory', { states: ['historical'], namespace: { ownerId: 'foreign' } });
+  error(await call(client, 'inspect_memory', { states: ['historical'], receiptLimit: 1 }), 'invalid_input');
+  assert.deepEqual(ok(await call(client, 'inspect_memory')), before);
+  assert.deepEqual(ok(await call(client, 'inspect_memory', { memoryId: seeded.old.memory.id })), seeded.old);
+});
+
+test('M2 filtered SDK cursors reject cross-filter, default and foreign namespace reuse', options, async (t) => {
+  const path = database(); const seeded = seedInspectionHistory(path); const { client } = await host(t, path);
+  const cursor = ok(await call(client, 'inspect_memory', { states: ['historical'], limit: 1 })).nextCursor;
+  assert.ok(cursor);
+  for (const patch of [{}, { states: ['active'] }, { states: ['active', 'historical'] }]) {
+    error(await call(client, 'inspect_memory', { limit: 1, cursor, ...patch }), 'invalid_cursor');
+  }
+  for (const binding of [{ owner: 'foreign-owner' }, { project: 'foreign-project' }]) {
+    const foreign = await host(t, path, binding);
+    assert.deepEqual(ok(await call(foreign.client, 'inspect_memory', { states: ['historical'] })).memories, []);
+    error(await call(foreign.client, 'inspect_memory', { states: ['historical'], limit: 1, cursor }), 'invalid_cursor');
+    error(await call(foreign.client, 'inspect_memory', { memoryId: seeded.old.memory.id }), 'memory_not_found');
+    await foreign.client.close();
+  }
+});
+
+for (const action of ['correct', 'forget']) {
+  test(`M4 cold keyless inspection preserves historical receipts after ${action} of the successor`, options, async (t) => {
+    const path = database(); const seeded = seedInspectionHistory(path); const first = await host(t, path);
+    const inspected = ok(await call(first.client, 'inspect_memory', { memoryId: seeded.first.memory.id }));
+    assert.deepEqual(inspected, seeded.first);
+    const originalSources = []; let receiptCursor;
+    do {
+      const page = ok(await call(first.client, 'inspect_memory', { memoryId: seeded.old.memory.id, receiptLimit: 1,
+        ...(receiptCursor ? { receiptCursor } : {}) }));
+      originalSources.push(...page.receipts); receiptCursor = page.nextReceiptCursor;
+    } while (receiptCursor);
+    assert.deepEqual(originalSources, seeded.old.receipts);
+    if (action === 'correct') ok(await call(first.client, 'correct_memory', { memoryId: seeded.current.id,
+      expectedRevision: seeded.current.revision, content: 'Corrected successor, not the original change reason.' }));
+    else ok(await call(first.client, 'forget_memory', { memoryId: seeded.current.id, expectedRevision: seeded.current.revision }));
+    await first.client.close();
+    const cold = await host(t, path);
+    const retained = ok(await call(cold.client, 'inspect_memory', { memoryId: seeded.first.memory.id }));
+    assert.equal(retained.memory.state, 'historical'); assert.deepEqual(retained.receipts, seeded.first.receipts);
+    assert.equal(retained.supersession.evidenceAvailable, false); assert.deepEqual(retained.supersession.receiptIds, []);
+    if (action === 'forget') assert.equal(retained.supersession.replacement, null);
+    else {
+      assert.equal(retained.supersession.replacement.memoryId, seeded.current.id);
+      assert.equal(retained.supersession.replacement.revision, seeded.current.revision);
+      assert.ok(retained.supersession.replacement.currentRevision > seeded.current.revision);
+    }
+    assert.ok(!JSON.stringify(retained).includes('Corrected successor'));
+    const listed = ok(await call(cold.client, 'inspect_memory', { states: ['historical'] }));
+    assert.deepEqual(listed.memories.map(({ id }) => id).sort(), [seeded.old.memory.id, seeded.first.memory.id].sort());
+    assert.deepEqual(ok(await call(cold.client, 'inspect_memory', { memoryId: seeded.old.memory.id })).receipts, seeded.old.receipts);
+  });
+}
+
 test('real stdio lists strict tools and persists revisions, receipts and forgetting across restart', options, async (t) => {
   const path = database();
   const first = await host(t, path);

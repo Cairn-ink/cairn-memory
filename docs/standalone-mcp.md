@@ -41,7 +41,7 @@ someone who can edit your process configuration or read your database file.
 | --- | --- | --- |
 | remember_memory | content, optional kind | Explicit memory plus receipt derived from supplied content |
 | recall_memory | query, optional limit (1–12) | Same bounded model-driven core recall with current source evidence |
-| inspect_memory | memoryId with optional receiptLimit/receiptCursor, OR limit/cursor | Page through receipts for one memory, or list this namespace |
+| inspect_memory | memoryId with optional receiptLimit/receiptCursor, OR limit/cursor/states | Page through receipts for one memory, or list this namespace with optional active/historical filtering |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
@@ -64,6 +64,38 @@ is not deletion or secure erasure; historical evidence remains until separately
 forgotten. No new supersede tool or automatic capture is added to MCP.
 Stop all old-runtime processes/connections, including idle readers, before the
 v8 database upgrade; mixed-version coexistence is unsupported.
+
+### Inspect an explicitly requested change history
+
+This workflow needs neither a model key nor a provider call:
+
+1. Call `inspect_memory` with `{"states":["historical"],"limit":20}`. Use
+   `nextCursor` as `cursor` with the same filters for more metadata pages.
+2. Inspect a returned ID with `{"memoryId":"the-returned-id"}` and page its
+   receipts with `receiptCursor`. The response identifies retained historical
+   content and, when available, a `supersession.replacement` reference.
+3. Inspect that recorded successor ID. Match its receipt IDs against the old
+   record's `supersession.receiptIds` before describing a change. Follow further
+   recorded links only as needed; no automatic chain traversal is implied.
+
+Absent `states`, listing still includes active and historical records.
+`["active"]` filters to active records, and either ordering of both states is
+equivalent to the default. Empty, duplicate or unknown states reject; states
+cannot be combined with `memoryId`. Each call is scoped to the configured owner
+and project. Mutations invalidate list/receipt pagination rather than returning
+cached evidence. Explicit forgetting removes the record from inspection.
+
+These calls are separate reads, not an atomic multi-tool snapshot. If a link or
+its bound receipts are no longer available, re-inspect rather than silently use
+a new successor revision as the original evidence. A source may document a change
+without documenting a reason: say "no reason recorded" in that case. A citation
+must support the explanation, not merely mention the same subject.
+
+Historical records are retained supersessions, not a guarantee of what was true
+on a date or a full log of overwritten corrections. Timestamps are not inferred
+real-world validity periods. Tool guidance does not prove an agent will select
+these calls or interpret the evidence correctly; interactive-host and model
+quality remain separate gates. Recalled consent never grants execution authority.
 
 Supported secret shapes are redacted in storage and before recall sends a query
 to a model; redaction is best effort, not complete secret detection. The server
