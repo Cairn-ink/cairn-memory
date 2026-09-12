@@ -3,6 +3,7 @@ import { captureSnapshot, extractedItems } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { reconcileCapture } from './ordered-capture.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
@@ -41,7 +42,8 @@ export async function captureMessages({ model, input, operations }) {
   const snapshot = captureSnapshot(input);
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
-  const claim = unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
+  const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
+    : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
   if (claim.processing || claim.duplicate) return claim;
   const owned = { ...key, token: claim.token };
   let finished;
@@ -52,7 +54,11 @@ export async function captureMessages({ model, input, operations }) {
     let items;
     try { items = extractedItems(output, snapshot); }
     catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
-    finished = unwrap(operations.finishAdmission({ ...owned, items }));
+    if (snapshot.causal) {
+      const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
+      const judged = await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery });
+      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
+    } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned); } catch { /* The bounded lease can expire. */ }
@@ -62,5 +68,6 @@ export async function captureMessages({ model, input, operations }) {
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };
   const classification = await classifyAdmission(model, snapshot.namespace, admission, operations);
-  return { duplicate: false, admission, classification };
+  return { duplicate: false, admission, classification,
+    ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}) };
 }

@@ -1,0 +1,59 @@
+{
+  "version": "conversation-history-review-v1",
+  "reviewerType": "agent",
+  "assertions": [
+    {"historyId":"H1-within-window-update","memoryId":"7505e5b7-8073-4764-a862-e9631a08260e","revision":2,"supported":true},
+    {"historyId":"H1-within-window-update","memoryId":"f62d5a0c-3ce1-49c3-a20f-a808f1300aca","revision":2,"supported":true},
+    {"historyId":"H2-across-window-update","memoryId":"e7639bbb-5eb0-44ee-b9fe-1e1e89cee579","revision":2,"supported":true},
+    {"historyId":"H2-across-window-update","memoryId":"83c82cee-80a5-4d4b-ba70-e5d8f1282a7d","revision":2,"supported":true},
+    {"historyId":"H2-across-window-update","memoryId":"d852ff6a-b6bc-46a4-94f5-43698d0598c6","revision":2,"supported":true},
+    {"historyId":"H3-entities-and-negation","memoryId":"764b188f-37c0-4978-bd8e-43f2891236e7","revision":2,"supported":true},
+    {"historyId":"H3-entities-and-negation","memoryId":"85e69c67-33b5-42de-87a6-9439b5c688ca","revision":2,"supported":true},
+    {"historyId":"H3-entities-and-negation","memoryId":"ddbf0fce-f36d-4df3-a503-ce248fda49a6","revision":2,"supported":true},
+    {"historyId":"H4-positioned-24-messages","memoryId":"7c7f1d2a-cfe9-45b1-ad01-875335df8fc6","revision":2,"supported":true},
+    {"historyId":"H4-positioned-24-messages","memoryId":"fc1065a3-b355-484f-bcc0-38b01faa43c1","revision":2,"supported":true},
+    {"historyId":"H4-positioned-24-messages","memoryId":"fdb866ac-0c9e-45f8-b838-a0d52d3909b7","revision":2,"supported":true}
+  ],
+  "currentness": [
+    {"historyId":"H1-within-window-update","memoryId":"7505e5b7-8073-4764-a862-e9631a08260e","revision":2,"status":"current"},
+    {"historyId":"H1-within-window-update","memoryId":"f62d5a0c-3ce1-49c3-a20f-a808f1300aca","revision":2,"status":"current"},
+    {"historyId":"H2-across-window-update","memoryId":"83c82cee-80a5-4d4b-ba70-e5d8f1282a7d","revision":2,"status":"current"},
+    {"historyId":"H2-across-window-update","memoryId":"d852ff6a-b6bc-46a4-94f5-43698d0598c6","revision":2,"status":"current"},
+    {"historyId":"H3-entities-and-negation","memoryId":"764b188f-37c0-4978-bd8e-43f2891236e7","revision":2,"status":"current"},
+    {"historyId":"H3-entities-and-negation","memoryId":"85e69c67-33b5-42de-87a6-9439b5c688ca","revision":2,"status":"current"},
+    {"historyId":"H3-entities-and-negation","memoryId":"ddbf0fce-f36d-4df3-a503-ce248fda49a6","revision":2,"status":"current"},
+    {"historyId":"H4-positioned-24-messages","memoryId":"7c7f1d2a-cfe9-45b1-ad01-875335df8fc6","revision":2,"status":"current"},
+    {"historyId":"H4-positioned-24-messages","memoryId":"fc1065a3-b355-484f-bcc0-38b01faa43c1","revision":2,"status":"current"},
+    {"historyId":"H4-positioned-24-messages","memoryId":"fdb866ac-0c9e-45f8-b838-a0d52d3909b7","revision":2,"status":"current"}
+  ],
+  "retention": [
+    {"historyId":"H1-within-window-update","requiredIndex":0,"retained":true,"evidence":[{"memoryId":"f62d5a0c-3ce1-49c3-a20f-a808f1300aca","revision":2}]},
+    {"historyId":"H2-across-window-update","requiredIndex":0,"retained":true,"evidence":[{"memoryId":"d852ff6a-b6bc-46a4-94f5-43698d0598c6","revision":2}]},
+    {"historyId":"H3-entities-and-negation","requiredIndex":0,"retained":true,"evidence":[{"memoryId":"ddbf0fce-f36d-4df3-a503-ce248fda49a6","revision":2}]},
+    {"historyId":"H3-entities-and-negation","requiredIndex":1,"retained":true,"evidence":[{"memoryId":"ddbf0fce-f36d-4df3-a503-ce248fda49a6","revision":2}]},
+    {"historyId":"H3-entities-and-negation","requiredIndex":2,"retained":true,"evidence":[{"memoryId":"85e69c67-33b5-42de-87a6-9439b5c688ca","revision":2}]},
+    {"historyId":"H3-entities-and-negation","requiredIndex":3,"retained":true,"evidence":[{"memoryId":"764b188f-37c0-4978-bd8e-43f2891236e7","revision":2}]},
+    {"historyId":"H4-positioned-24-messages","requiredIndex":0,"retained":true,"evidence":[{"memoryId":"fc1065a3-b355-484f-bcc0-38b01faa43c1","revision":2}]},
+    {"historyId":"H4-positioned-24-messages","requiredIndex":1,"retained":true,"evidence":[{"memoryId":"fdb866ac-0c9e-45f8-b838-a0d52d3909b7","revision":2}]},
+    {"historyId":"H4-positioned-24-messages","requiredIndex":2,"retained":true,"evidence":[{"memoryId":"7c7f1d2a-cfe9-45b1-ad01-875335df8fc6","revision":2}]}
+  ],
+  "relevance": [
+    {"historyId":"H1-within-window-update","queryId":"h1-current","memoryId":"f62d5a0c-3ce1-49c3-a20f-a808f1300aca","revision":2,"relevant":true},
+    {"historyId":"H2-across-window-update","queryId":"h2-current","memoryId":"d852ff6a-b6bc-46a4-94f5-43698d0598c6","revision":2,"relevant":true},
+    {"historyId":"H3-entities-and-negation","queryId":"h3-languages","memoryId":"ddbf0fce-f36d-4df3-a503-ce248fda49a6","revision":2,"relevant":true},
+    {"historyId":"H3-entities-and-negation","queryId":"h3-database","memoryId":"85e69c67-33b5-42de-87a6-9439b5c688ca","revision":2,"relevant":true},
+    {"historyId":"H3-entities-and-negation","queryId":"h3-database","memoryId":"764b188f-37c0-4978-bd8e-43f2891236e7","revision":2,"relevant":true},
+    {"historyId":"H4-positioned-24-messages","queryId":"h4-editor","memoryId":"fc1065a3-b355-484f-bcc0-38b01faa43c1","revision":2,"relevant":true},
+    {"historyId":"H4-positioned-24-messages","queryId":"h4-language","memoryId":"fdb866ac-0c9e-45f8-b838-a0d52d3909b7","revision":2,"relevant":true},
+    {"historyId":"H4-positioned-24-messages","queryId":"h4-review","memoryId":"7c7f1d2a-cfe9-45b1-ad01-875335df8fc6","revision":2,"relevant":true}
+  ],
+  "answers": [
+    {"historyId":"H1-within-window-update","queryId":"h1-current","answered":true},
+    {"historyId":"H2-across-window-update","queryId":"h2-current","answered":true},
+    {"historyId":"H3-entities-and-negation","queryId":"h3-languages","answered":true},
+    {"historyId":"H3-entities-and-negation","queryId":"h3-database","answered":true},
+    {"historyId":"H4-positioned-24-messages","queryId":"h4-editor","answered":true},
+    {"historyId":"H4-positioned-24-messages","queryId":"h4-language","answered":true},
+    {"historyId":"H4-positioned-24-messages","queryId":"h4-review","answered":true}
+  ]
+}

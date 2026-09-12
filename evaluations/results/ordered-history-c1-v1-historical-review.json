@@ -1,0 +1,13 @@
+{
+  "version": "conversation-history-ordered-review-v1",
+  "reviewerType": "agent",
+  "assertions": [
+    {
+      "historyId": "H2-across-window-update",
+      "memoryId": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+      "revision": 3,
+      "supported": true,
+      "retirementJustified": true
+    }
+  ]
+}

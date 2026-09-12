@@ -44,4 +44,18 @@ These tools provide honest manual memory in clients without lifecycle hooks. The
 
 ## Versioning
 
+### Separate local ordered-capture boundary
+
+The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)
+are not HTTP/plugin/MCP payload fields and do not widen these schemas. A trusted
+local host supplies stream order; it is not accepted as authenticated chronology.
+Opaque stream/event IDs, positions and receipt linkage persist in the local
+database and can reveal relationships to someone with file access. Do not embed
+secrets or personal text in them. Only bounded message/candidate text and source
+excerpts reach an injected judgment provider; the causal identifiers do not.
+No new telemetry is added. Historical retirement retains old text until explicit
+forgetting, and content-free event/progress metadata remains for replay safety.
+SQLite backup/journal and local access limitations remain as documented in
+[the store](local-store.md).
+
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
