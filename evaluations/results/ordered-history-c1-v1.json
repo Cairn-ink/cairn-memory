@@ -1,0 +1,4108 @@
+{
+  "version": "conversation-history-ordered-v1",
+  "sourceVersion": "conversation-history-v1",
+  "ordering": {
+    "kind": "trusted-fixture-window-order",
+    "client": "conversation-history-audit",
+    "streamId": "conversation-history-v1-<history.id>",
+    "sequence": "windowIndex+1"
+  },
+  "evidence": {
+    "version": "conversation-history-ordered-raw-v1",
+    "kind": "synthetic-source-ordered-history",
+    "cases": [
+      {
+        "id": "H1-within-window-update",
+        "namespace": {
+          "ownerId": "synthetic-H1-within-window-update",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h1-1",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              },
+              {
+                "id": "h1-2",
+                "role": "user",
+                "content": "I am checking the calendar now."
+              },
+              {
+                "id": "h1-3",
+                "role": "assistant",
+                "content": "Should we try Tuesday instead?"
+              },
+              {
+                "id": "h1-4",
+                "role": "user",
+                "content": "No, Tuesday was only a suggestion and was not adopted."
+              },
+              {
+                "id": "h1-5",
+                "role": "user",
+                "content": "Thanks, one moment while I check."
+              },
+              {
+                "id": "h1-6",
+                "role": "user",
+                "content": "Confirmed update: Harbor team review now happens on Monday, replacing Friday."
+              },
+              {
+                "id": "h1-7",
+                "role": "assistant",
+                "content": "Got it."
+              },
+              {
+                "id": "h1-8",
+                "role": "user",
+                "content": "That is all for now."
+              }
+            ],
+            "causal": {
+              "streamId": "conversation-history-v1-H1-within-window-update",
+              "sequence": 1
+            },
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                      "revision": 1
+                    },
+                    {
+                      "id": "7505e5b7-8073-4764-a862-e9631a08260e",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 3
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "7505e5b7-8073-4764-a862-e9631a08260e",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 4
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "7505e5b7-8073-4764-a862-e9631a08260e",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Tuesday was only a suggestion and was not adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "05c862ab-12cc-48dc-9b05-6105cf018c2c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday was only a suggestion and was not adopted.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "3a12c9da-ec4d-4c65-8eb9-3b5ba2ade21f",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-3",
+                    "role": "assistant",
+                    "excerpt": "Should we try Tuesday instead?",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Harbor team review now happens on Monday, replacing Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "a5cf28d6-89ac-47f9-b9c1-0cf46f95863c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "e61362a7-4b38-47bf-9cc7-8bee6a61efc9",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-6",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "7505e5b7-8073-4764-a862-e9631a08260e",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Tuesday was only a suggestion and was not adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "05c862ab-12cc-48dc-9b05-6105cf018c2c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday was only a suggestion and was not adopted.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "3a12c9da-ec4d-4c65-8eb9-3b5ba2ade21f",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-3",
+                    "role": "assistant",
+                    "excerpt": "Should we try Tuesday instead?",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Harbor team review now happens on Monday, replacing Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "a5cf28d6-89ac-47f9-b9c1-0cf46f95863c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "e61362a7-4b38-47bf-9cc7-8bee6a61efc9",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-6",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h1-current",
+            "query": "When does the Harbor team review happen now?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                      "namespace": {
+                        "ownerId": "synthetic-H1-within-window-update",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "decision",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 2,
+                      "createdAt": "2026-09-12T06:31:39.144Z",
+                      "updatedAt": "2026-09-12T06:31:42.339Z",
+                      "content": "Harbor team review now happens on Monday, replacing Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "a5cf28d6-89ac-47f9-b9c1-0cf46f95863c",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H1-within-window-update-window-0",
+                        "eventId": "h1-1",
+                        "role": "user",
+                        "excerpt": "Harbor team review happens on Friday.",
+                        "createdAt": "2026-09-12T06:31:39.144Z"
+                      },
+                      {
+                        "id": "e61362a7-4b38-47bf-9cc7-8bee6a61efc9",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H1-within-window-update-window-0",
+                        "eventId": "h1-6",
+                        "role": "user",
+                        "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                        "createdAt": "2026-09-12T06:31:39.144Z"
+                      }
+                    ],
+                    "receiptCount": 2
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H1-within-window-update",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "H2-across-window-update",
+        "namespace": {
+          "ownerId": "synthetic-H2-across-window-update",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h2-1",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              },
+              {
+                "id": "h2-2",
+                "role": "assistant",
+                "content": "Thanks."
+              }
+            ],
+            "causal": {
+              "streamId": "conversation-history-v1-H2-across-window-update",
+              "sequence": 1
+            },
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 2
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 3
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          },
+          {
+            "index": 1,
+            "messages": [
+              {
+                "id": "h2-3",
+                "role": "assistant",
+                "content": "Could Harbor team review move to Tuesday?"
+              },
+              {
+                "id": "h2-4",
+                "role": "user",
+                "content": "No, Tuesday is only a proposal. We have not adopted it."
+              }
+            ],
+            "causal": {
+              "streamId": "conversation-history-v1-H2-across-window-update",
+              "sequence": 2
+            },
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 4
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 5
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          },
+          {
+            "index": 2,
+            "messages": [
+              {
+                "id": "h2-5",
+                "role": "user",
+                "content": "Confirmed update: Harbor team review now happens on Monday, replacing Friday."
+              },
+              {
+                "id": "h2-6",
+                "role": "assistant",
+                "content": "Understood."
+              }
+            ],
+            "causal": {
+              "streamId": "conversation-history-v1-H2-across-window-update",
+              "sequence": 3
+            },
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 7
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 8
+                },
+                "reconciliation": {
+                  "status": "applied",
+                  "reason": null,
+                  "retiredCount": 1
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:58.727Z",
+                  "updatedAt": "2026-09-12T06:32:01.150Z",
+                  "content": "Harbor team review now happens on Monday instead of Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "1c77092d-4353-4331-9be4-187ec84024cb",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-2",
+                    "eventId": "h2-5",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:58.727Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:58.728Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ],
+                "supersession": {
+                  "previousRevision": 2,
+                  "replacement": {
+                    "memoryId": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                    "revision": 1,
+                    "currentRevision": 2,
+                    "state": "active"
+                  },
+                  "receiptIds": [
+                    "1c77092d-4353-4331-9be4-187ec84024cb"
+                  ],
+                  "evidenceAvailable": true
+                }
+              },
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:58.727Z",
+                  "updatedAt": "2026-09-12T06:32:01.150Z",
+                  "content": "Harbor team review now happens on Monday instead of Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "1c77092d-4353-4331-9be4-187ec84024cb",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-2",
+                    "eventId": "h2-5",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:58.727Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:58.728Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ],
+                "supersession": {
+                  "previousRevision": 2,
+                  "replacement": {
+                    "memoryId": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                    "revision": 1,
+                    "currentRevision": 2,
+                    "state": "active"
+                  },
+                  "receiptIds": [
+                    "1c77092d-4353-4331-9be4-187ec84024cb"
+                  ],
+                  "evidenceAvailable": true
+                }
+              },
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h2-current",
+            "query": "When does the Harbor team review happen now?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                      "namespace": {
+                        "ownerId": "synthetic-H2-across-window-update",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "decision",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:31:58.727Z",
+                      "updatedAt": "2026-09-12T06:32:01.150Z",
+                      "content": "Harbor team review now happens on Monday instead of Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "1c77092d-4353-4331-9be4-187ec84024cb",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H2-across-window-update-window-2",
+                        "eventId": "h2-5",
+                        "role": "user",
+                        "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                        "createdAt": "2026-09-12T06:31:58.727Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H2-across-window-update",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "H3-entities-and-negation",
+        "namespace": {
+          "ownerId": "synthetic-H3-entities-and-negation",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h3-1",
+                "role": "user",
+                "content": "Harbor uses Go. Juniper uses Python."
+              },
+              {
+                "id": "h3-2",
+                "role": "assistant",
+                "content": "Perhaps Harbor could use Rust and Juniper could use Go."
+              },
+              {
+                "id": "h3-3",
+                "role": "user",
+                "content": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python."
+              },
+              {
+                "id": "h3-4",
+                "role": "user",
+                "content": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished."
+              },
+              {
+                "id": "h3-5",
+                "role": "user",
+                "content": "I do not know whether the SQLite deployment is complete."
+              }
+            ],
+            "causal": {
+              "streamId": "conversation-history-v1-H3-entities-and-negation",
+              "sequence": 1
+            },
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                      "revision": 1
+                    },
+                    {
+                      "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                      "revision": 1
+                    },
+                    {
+                      "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 4
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 5
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.9,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "The SQLite deployment may or may not be complete; the speaker does not know whether it is complete."
+                },
+                "receipts": [
+                  {
+                    "id": "608fcfc0-ed06-44d0-8cc5-4c65b6a57dd1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-5",
+                    "role": "user",
+                    "excerpt": "I do not know whether the SQLite deployment is complete.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor adopted SQLite and rejected Redis; adoption does not imply deployment is finished."
+                },
+                "receipts": [
+                  {
+                    "id": "ffd12782-c618-4bc6-834f-a1935c828a7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-4",
+                    "role": "user",
+                    "excerpt": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:32:07.304Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor uses Go, and Juniper uses Python."
+                },
+                "receipts": [
+                  {
+                    "id": "2898004d-29b2-4f33-8844-3674ed4b7f94",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-3",
+                    "role": "user",
+                    "excerpt": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  },
+                  {
+                    "id": "e4e40d2b-4088-48f6-881f-d5f55866cf7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-1",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go. Juniper uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.9,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "The SQLite deployment may or may not be complete; the speaker does not know whether it is complete."
+                },
+                "receipts": [
+                  {
+                    "id": "608fcfc0-ed06-44d0-8cc5-4c65b6a57dd1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-5",
+                    "role": "user",
+                    "excerpt": "I do not know whether the SQLite deployment is complete.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor adopted SQLite and rejected Redis; adoption does not imply deployment is finished."
+                },
+                "receipts": [
+                  {
+                    "id": "ffd12782-c618-4bc6-834f-a1935c828a7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-4",
+                    "role": "user",
+                    "excerpt": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:32:07.304Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor uses Go, and Juniper uses Python."
+                },
+                "receipts": [
+                  {
+                    "id": "2898004d-29b2-4f33-8844-3674ed4b7f94",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-3",
+                    "role": "user",
+                    "excerpt": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  },
+                  {
+                    "id": "e4e40d2b-4088-48f6-881f-d5f55866cf7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-1",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go. Juniper uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h3-languages",
+            "query": "Which languages do Harbor and Juniper use?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                      "namespace": {
+                        "ownerId": "synthetic-H3-entities-and-negation",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 2,
+                      "createdAt": "2026-09-12T06:32:07.304Z",
+                      "updatedAt": "2026-09-12T06:32:09.523Z",
+                      "content": "Harbor uses Go, and Juniper uses Python."
+                    },
+                    "receipts": [
+                      {
+                        "id": "2898004d-29b2-4f33-8844-3674ed4b7f94",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-3",
+                        "role": "user",
+                        "excerpt": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python.",
+                        "createdAt": "2026-09-12T06:32:07.304Z"
+                      },
+                      {
+                        "id": "e4e40d2b-4088-48f6-881f-d5f55866cf7e",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-1",
+                        "role": "user",
+                        "excerpt": "Harbor uses Go. Juniper uses Python.",
+                        "createdAt": "2026-09-12T06:32:07.304Z"
+                      }
+                    ],
+                    "receiptCount": 2
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H3-entities-and-negation",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          },
+          {
+            "id": "h3-database",
+            "query": "What database did Harbor adopt, and is deployment complete?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                      "namespace": {
+                        "ownerId": "synthetic-H3-entities-and-negation",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.95,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:07.305Z",
+                      "updatedAt": "2026-09-12T06:32:09.523Z",
+                      "content": "Harbor adopted SQLite and rejected Redis; adoption does not imply deployment is finished."
+                    },
+                    "receipts": [
+                      {
+                        "id": "ffd12782-c618-4bc6-834f-a1935c828a7e",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-4",
+                        "role": "user",
+                        "excerpt": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished.",
+                        "createdAt": "2026-09-12T06:32:07.305Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  },
+                  {
+                    "memory": {
+                      "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                      "namespace": {
+                        "ownerId": "synthetic-H3-entities-and-negation",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "context",
+                      "origin": "agent-inferred",
+                      "confidence": 0.9,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:07.305Z",
+                      "updatedAt": "2026-09-12T06:32:09.523Z",
+                      "content": "The SQLite deployment may or may not be complete; the speaker does not know whether it is complete."
+                    },
+                    "receipts": [
+                      {
+                        "id": "608fcfc0-ed06-44d0-8cc5-4c65b6a57dd1",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-5",
+                        "role": "user",
+                        "excerpt": "I do not know whether the SQLite deployment is complete.",
+                        "createdAt": "2026-09-12T06:32:07.305Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H3-entities-and-negation",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "H4-positioned-24-messages",
+        "namespace": {
+          "ownerId": "synthetic-H4-positioned-24-messages",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h4-1",
+                "role": "user",
+                "content": "For Harbor work, my preferred editor is VS Code."
+              },
+              {
+                "id": "h4-2",
+                "role": "user",
+                "content": "Temporary chat turn 2: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-3",
+                "role": "user",
+                "content": "Temporary chat turn 3: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-4",
+                "role": "user",
+                "content": "Temporary chat turn 4: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-5",
+                "role": "user",
+                "content": "Temporary chat turn 5: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-6",
+                "role": "user",
+                "content": "Temporary chat turn 6: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-7",
+                "role": "user",
+                "content": "Temporary chat turn 7: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-8",
+                "role": "user",
+                "content": "Temporary chat turn 8: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-9",
+                "role": "user",
+                "content": "Temporary chat turn 9: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-10",
+                "role": "user",
+                "content": "Temporary chat turn 10: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-11",
+                "role": "user",
+                "content": "Temporary chat turn 11: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-12",
+                "role": "user",
+                "content": "Harbor uses Go."
+              },
+              {
+                "id": "h4-13",
+                "role": "user",
+                "content": "Temporary chat turn 13: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-14",
+                "role": "user",
+                "content": "Temporary chat turn 14: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-15",
+                "role": "user",
+                "content": "Temporary chat turn 15: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-16",
+                "role": "user",
+                "content": "Temporary chat turn 16: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-17",
+                "role": "user",
+                "content": "Temporary chat turn 17: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-18",
+                "role": "user",
+                "content": "Temporary chat turn 18: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-19",
+                "role": "user",
+                "content": "Temporary chat turn 19: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-20",
+                "role": "user",
+                "content": "Temporary chat turn 20: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-21",
+                "role": "user",
+                "content": "Temporary chat turn 21: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-22",
+                "role": "user",
+                "content": "Temporary chat turn 22: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-23",
+                "role": "user",
+                "content": "Temporary chat turn 23: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-24",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              }
+            ],
+            "causal": {
+              "streamId": "conversation-history-v1-H4-positioned-24-messages",
+              "sequence": 1
+            },
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                      "revision": 1
+                    },
+                    {
+                      "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                      "revision": 1
+                    },
+                    {
+                      "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 4
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 5
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "02cc9307-6dc9-4a40-bbbe-fa228c006d0c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-24",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "preference",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.689Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "For Harbor work, the preferred editor is VS Code."
+                },
+                "receipts": [
+                  {
+                    "id": "351bd333-de6e-49a6-98e5-058d87c962f1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-1",
+                    "role": "user",
+                    "excerpt": "For Harbor work, my preferred editor is VS Code.",
+                    "createdAt": "2026-09-12T06:32:18.689Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.97,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor uses Go."
+                },
+                "receipts": [
+                  {
+                    "id": "32d78d14-3b26-486a-94d6-d297b30ef45a",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-12",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "02cc9307-6dc9-4a40-bbbe-fa228c006d0c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-24",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "preference",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.689Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "For Harbor work, the preferred editor is VS Code."
+                },
+                "receipts": [
+                  {
+                    "id": "351bd333-de6e-49a6-98e5-058d87c962f1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-1",
+                    "role": "user",
+                    "excerpt": "For Harbor work, my preferred editor is VS Code.",
+                    "createdAt": "2026-09-12T06:32:18.689Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.97,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor uses Go."
+                },
+                "receipts": [
+                  {
+                    "id": "32d78d14-3b26-486a-94d6-d297b30ef45a",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-12",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h4-editor",
+            "query": "What editor do I prefer for Harbor work?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                      "namespace": {
+                        "ownerId": "synthetic-H4-positioned-24-messages",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "preference",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:18.689Z",
+                      "updatedAt": "2026-09-12T06:32:21.044Z",
+                      "content": "For Harbor work, the preferred editor is VS Code."
+                    },
+                    "receipts": [
+                      {
+                        "id": "351bd333-de6e-49a6-98e5-058d87c962f1",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H4-positioned-24-messages-window-0",
+                        "eventId": "h4-1",
+                        "role": "user",
+                        "excerpt": "For Harbor work, my preferred editor is VS Code.",
+                        "createdAt": "2026-09-12T06:32:18.689Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H4-positioned-24-messages",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          },
+          {
+            "id": "h4-language",
+            "query": "What language does Harbor use?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                      "namespace": {
+                        "ownerId": "synthetic-H4-positioned-24-messages",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.97,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:18.690Z",
+                      "updatedAt": "2026-09-12T06:32:21.044Z",
+                      "content": "Harbor uses Go."
+                    },
+                    "receipts": [
+                      {
+                        "id": "32d78d14-3b26-486a-94d6-d297b30ef45a",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H4-positioned-24-messages-window-0",
+                        "eventId": "h4-12",
+                        "role": "user",
+                        "excerpt": "Harbor uses Go.",
+                        "createdAt": "2026-09-12T06:32:18.690Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H4-positioned-24-messages",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          },
+          {
+            "id": "h4-review",
+            "query": "When does the Harbor team review happen?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                      "namespace": {
+                        "ownerId": "synthetic-H4-positioned-24-messages",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.95,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:18.690Z",
+                      "updatedAt": "2026-09-12T06:32:21.044Z",
+                      "content": "Harbor team review happens on Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "02cc9307-6dc9-4a40-bbbe-fa228c006d0c",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H4-positioned-24-messages-window-0",
+                        "eventId": "h4-24",
+                        "role": "user",
+                        "excerpt": "Harbor team review happens on Friday.",
+                        "createdAt": "2026-09-12T06:32:18.690Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H4-positioned-24-messages",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      }
+    ],
+    "status": "completed"
+  },
+  "v1Projection": {
+    "version": "conversation-history-v1",
+    "kind": "synthetic-multi-turn-history",
+    "cases": [
+      {
+        "id": "H1-within-window-update",
+        "namespace": {
+          "ownerId": "synthetic-H1-within-window-update",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h1-1",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              },
+              {
+                "id": "h1-2",
+                "role": "user",
+                "content": "I am checking the calendar now."
+              },
+              {
+                "id": "h1-3",
+                "role": "assistant",
+                "content": "Should we try Tuesday instead?"
+              },
+              {
+                "id": "h1-4",
+                "role": "user",
+                "content": "No, Tuesday was only a suggestion and was not adopted."
+              },
+              {
+                "id": "h1-5",
+                "role": "user",
+                "content": "Thanks, one moment while I check."
+              },
+              {
+                "id": "h1-6",
+                "role": "user",
+                "content": "Confirmed update: Harbor team review now happens on Monday, replacing Friday."
+              },
+              {
+                "id": "h1-7",
+                "role": "assistant",
+                "content": "Got it."
+              },
+              {
+                "id": "h1-8",
+                "role": "user",
+                "content": "That is all for now."
+              }
+            ],
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                      "revision": 1
+                    },
+                    {
+                      "id": "7505e5b7-8073-4764-a862-e9631a08260e",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 3
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "7505e5b7-8073-4764-a862-e9631a08260e",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 4
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "7505e5b7-8073-4764-a862-e9631a08260e",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Tuesday was only a suggestion and was not adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "05c862ab-12cc-48dc-9b05-6105cf018c2c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday was only a suggestion and was not adopted.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "3a12c9da-ec4d-4c65-8eb9-3b5ba2ade21f",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-3",
+                    "role": "assistant",
+                    "excerpt": "Should we try Tuesday instead?",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Harbor team review now happens on Monday, replacing Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "a5cf28d6-89ac-47f9-b9c1-0cf46f95863c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "e61362a7-4b38-47bf-9cc7-8bee6a61efc9",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-6",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "7505e5b7-8073-4764-a862-e9631a08260e",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Tuesday was only a suggestion and was not adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "05c862ab-12cc-48dc-9b05-6105cf018c2c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday was only a suggestion and was not adopted.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "3a12c9da-ec4d-4c65-8eb9-3b5ba2ade21f",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-3",
+                    "role": "assistant",
+                    "excerpt": "Should we try Tuesday instead?",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                  "namespace": {
+                    "ownerId": "synthetic-H1-within-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:39.144Z",
+                  "updatedAt": "2026-09-12T06:31:42.339Z",
+                  "content": "Harbor team review now happens on Monday, replacing Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "a5cf28d6-89ac-47f9-b9c1-0cf46f95863c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  },
+                  {
+                    "id": "e61362a7-4b38-47bf-9cc7-8bee6a61efc9",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H1-within-window-update-window-0",
+                    "eventId": "h1-6",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:39.144Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h1-current",
+            "query": "When does the Harbor team review happen now?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "f62d5a0c-3ce1-49c3-a20f-a808f1300aca",
+                      "namespace": {
+                        "ownerId": "synthetic-H1-within-window-update",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "decision",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 2,
+                      "createdAt": "2026-09-12T06:31:39.144Z",
+                      "updatedAt": "2026-09-12T06:31:42.339Z",
+                      "content": "Harbor team review now happens on Monday, replacing Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "a5cf28d6-89ac-47f9-b9c1-0cf46f95863c",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H1-within-window-update-window-0",
+                        "eventId": "h1-1",
+                        "role": "user",
+                        "excerpt": "Harbor team review happens on Friday.",
+                        "createdAt": "2026-09-12T06:31:39.144Z"
+                      },
+                      {
+                        "id": "e61362a7-4b38-47bf-9cc7-8bee6a61efc9",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H1-within-window-update-window-0",
+                        "eventId": "h1-6",
+                        "role": "user",
+                        "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                        "createdAt": "2026-09-12T06:31:39.144Z"
+                      }
+                    ],
+                    "receiptCount": 2
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H1-within-window-update",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "H2-across-window-update",
+        "namespace": {
+          "ownerId": "synthetic-H2-across-window-update",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h2-1",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              },
+              {
+                "id": "h2-2",
+                "role": "assistant",
+                "content": "Thanks."
+              }
+            ],
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 2
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 3
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          },
+          {
+            "index": 1,
+            "messages": [
+              {
+                "id": "h2-3",
+                "role": "assistant",
+                "content": "Could Harbor team review move to Tuesday?"
+              },
+              {
+                "id": "h2-4",
+                "role": "user",
+                "content": "No, Tuesday is only a proposal. We have not adopted it."
+              }
+            ],
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 4
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 5
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "e7639bbb-5eb0-44ee-b9fe-1e1e89cee579",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:48.555Z",
+                  "updatedAt": "2026-09-12T06:31:50.716Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "845c68e5-7608-4a33-8604-28ed620ef445",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-0",
+                    "eventId": "h2-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:31:48.555Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          },
+          {
+            "index": 2,
+            "messages": [
+              {
+                "id": "h2-5",
+                "role": "user",
+                "content": "Confirmed update: Harbor team review now happens on Monday, replacing Friday."
+              },
+              {
+                "id": "h2-6",
+                "role": "assistant",
+                "content": "Understood."
+              }
+            ],
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 7
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 8
+                },
+                "reconciliation": {
+                  "status": "applied",
+                  "reason": null,
+                  "retiredCount": 1
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:58.727Z",
+                  "updatedAt": "2026-09-12T06:32:01.150Z",
+                  "content": "Harbor team review now happens on Monday instead of Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "1c77092d-4353-4331-9be4-187ec84024cb",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-2",
+                    "eventId": "h2-5",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:58.727Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "decision",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:31:58.727Z",
+                  "updatedAt": "2026-09-12T06:32:01.150Z",
+                  "content": "Harbor team review now happens on Monday instead of Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "1c77092d-4353-4331-9be4-187ec84024cb",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-2",
+                    "eventId": "h2-5",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:31:58.727Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "83c82cee-80a5-4d4b-ba70-e5d8f1282a7d",
+                  "namespace": {
+                    "ownerId": "synthetic-H2-across-window-update",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.96,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:31:53.824Z",
+                  "updatedAt": "2026-09-12T06:31:55.768Z",
+                  "content": "Tuesday is only a proposal; it has not been adopted."
+                },
+                "receipts": [
+                  {
+                    "id": "2f686142-9b1d-4cc1-b5e3-596ffb65f6bc",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-4",
+                    "role": "user",
+                    "excerpt": "No, Tuesday is only a proposal. We have not adopted it.",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  },
+                  {
+                    "id": "e24b97ec-42c0-43ba-9f8b-77ef32f1e5a5",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H2-across-window-update-window-1",
+                    "eventId": "h2-3",
+                    "role": "assistant",
+                    "excerpt": "Could Harbor team review move to Tuesday?",
+                    "createdAt": "2026-09-12T06:31:53.824Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h2-current",
+            "query": "When does the Harbor team review happen now?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "d852ff6a-b6bc-46a4-94f5-43698d0598c6",
+                      "namespace": {
+                        "ownerId": "synthetic-H2-across-window-update",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "decision",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:31:58.727Z",
+                      "updatedAt": "2026-09-12T06:32:01.150Z",
+                      "content": "Harbor team review now happens on Monday instead of Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "1c77092d-4353-4331-9be4-187ec84024cb",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H2-across-window-update-window-2",
+                        "eventId": "h2-5",
+                        "role": "user",
+                        "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                        "createdAt": "2026-09-12T06:31:58.727Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H2-across-window-update",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "H3-entities-and-negation",
+        "namespace": {
+          "ownerId": "synthetic-H3-entities-and-negation",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h3-1",
+                "role": "user",
+                "content": "Harbor uses Go. Juniper uses Python."
+              },
+              {
+                "id": "h3-2",
+                "role": "assistant",
+                "content": "Perhaps Harbor could use Rust and Juniper could use Go."
+              },
+              {
+                "id": "h3-3",
+                "role": "user",
+                "content": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python."
+              },
+              {
+                "id": "h3-4",
+                "role": "user",
+                "content": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished."
+              },
+              {
+                "id": "h3-5",
+                "role": "user",
+                "content": "I do not know whether the SQLite deployment is complete."
+              }
+            ],
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                      "revision": 1
+                    },
+                    {
+                      "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                      "revision": 1
+                    },
+                    {
+                      "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 4
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 5
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.9,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "The SQLite deployment may or may not be complete; the speaker does not know whether it is complete."
+                },
+                "receipts": [
+                  {
+                    "id": "608fcfc0-ed06-44d0-8cc5-4c65b6a57dd1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-5",
+                    "role": "user",
+                    "excerpt": "I do not know whether the SQLite deployment is complete.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor adopted SQLite and rejected Redis; adoption does not imply deployment is finished."
+                },
+                "receipts": [
+                  {
+                    "id": "ffd12782-c618-4bc6-834f-a1935c828a7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-4",
+                    "role": "user",
+                    "excerpt": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:32:07.304Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor uses Go, and Juniper uses Python."
+                },
+                "receipts": [
+                  {
+                    "id": "2898004d-29b2-4f33-8844-3674ed4b7f94",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-3",
+                    "role": "user",
+                    "excerpt": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  },
+                  {
+                    "id": "e4e40d2b-4088-48f6-881f-d5f55866cf7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-1",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go. Juniper uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "context",
+                  "origin": "agent-inferred",
+                  "confidence": 0.9,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "The SQLite deployment may or may not be complete; the speaker does not know whether it is complete."
+                },
+                "receipts": [
+                  {
+                    "id": "608fcfc0-ed06-44d0-8cc5-4c65b6a57dd1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-5",
+                    "role": "user",
+                    "excerpt": "I do not know whether the SQLite deployment is complete.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:07.305Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor adopted SQLite and rejected Redis; adoption does not imply deployment is finished."
+                },
+                "receipts": [
+                  {
+                    "id": "ffd12782-c618-4bc6-834f-a1935c828a7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-4",
+                    "role": "user",
+                    "excerpt": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished.",
+                    "createdAt": "2026-09-12T06:32:07.305Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                  "namespace": {
+                    "ownerId": "synthetic-H3-entities-and-negation",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 2,
+                  "createdAt": "2026-09-12T06:32:07.304Z",
+                  "updatedAt": "2026-09-12T06:32:09.523Z",
+                  "content": "Harbor uses Go, and Juniper uses Python."
+                },
+                "receipts": [
+                  {
+                    "id": "2898004d-29b2-4f33-8844-3674ed4b7f94",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-3",
+                    "role": "user",
+                    "excerpt": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  },
+                  {
+                    "id": "e4e40d2b-4088-48f6-881f-d5f55866cf7e",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H3-entities-and-negation-window-0",
+                    "eventId": "h3-1",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go. Juniper uses Python.",
+                    "createdAt": "2026-09-12T06:32:07.304Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h3-languages",
+            "query": "Which languages do Harbor and Juniper use?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "ddbf0fce-f36d-4df3-a503-ce248fda49a6",
+                      "namespace": {
+                        "ownerId": "synthetic-H3-entities-and-negation",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 2,
+                      "createdAt": "2026-09-12T06:32:07.304Z",
+                      "updatedAt": "2026-09-12T06:32:09.523Z",
+                      "content": "Harbor uses Go, and Juniper uses Python."
+                    },
+                    "receipts": [
+                      {
+                        "id": "2898004d-29b2-4f33-8844-3674ed4b7f94",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-3",
+                        "role": "user",
+                        "excerpt": "Neither suggestion was adopted. Harbor still uses Go and Juniper still uses Python.",
+                        "createdAt": "2026-09-12T06:32:07.304Z"
+                      },
+                      {
+                        "id": "e4e40d2b-4088-48f6-881f-d5f55866cf7e",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-1",
+                        "role": "user",
+                        "excerpt": "Harbor uses Go. Juniper uses Python.",
+                        "createdAt": "2026-09-12T06:32:07.304Z"
+                      }
+                    ],
+                    "receiptCount": 2
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H3-entities-and-negation",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          },
+          {
+            "id": "h3-database",
+            "query": "What database did Harbor adopt, and is deployment complete?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "85e69c67-33b5-42de-87a6-9439b5c688ca",
+                      "namespace": {
+                        "ownerId": "synthetic-H3-entities-and-negation",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.95,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:07.305Z",
+                      "updatedAt": "2026-09-12T06:32:09.523Z",
+                      "content": "Harbor adopted SQLite and rejected Redis; adoption does not imply deployment is finished."
+                    },
+                    "receipts": [
+                      {
+                        "id": "ffd12782-c618-4bc6-834f-a1935c828a7e",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-4",
+                        "role": "user",
+                        "excerpt": "Harbor adopted SQLite; it rejected Redis. Adoption does not mean deployment has finished.",
+                        "createdAt": "2026-09-12T06:32:07.305Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  },
+                  {
+                    "memory": {
+                      "id": "764b188f-37c0-4978-bd8e-43f2891236e7",
+                      "namespace": {
+                        "ownerId": "synthetic-H3-entities-and-negation",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "context",
+                      "origin": "agent-inferred",
+                      "confidence": 0.9,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:07.305Z",
+                      "updatedAt": "2026-09-12T06:32:09.523Z",
+                      "content": "The SQLite deployment may or may not be complete; the speaker does not know whether it is complete."
+                    },
+                    "receipts": [
+                      {
+                        "id": "608fcfc0-ed06-44d0-8cc5-4c65b6a57dd1",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H3-entities-and-negation-window-0",
+                        "eventId": "h3-5",
+                        "role": "user",
+                        "excerpt": "I do not know whether the SQLite deployment is complete.",
+                        "createdAt": "2026-09-12T06:32:07.305Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H3-entities-and-negation",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "H4-positioned-24-messages",
+        "namespace": {
+          "ownerId": "synthetic-H4-positioned-24-messages",
+          "scope": "project",
+          "projectId": "synthetic-history"
+        },
+        "windows": [
+          {
+            "index": 0,
+            "messages": [
+              {
+                "id": "h4-1",
+                "role": "user",
+                "content": "For Harbor work, my preferred editor is VS Code."
+              },
+              {
+                "id": "h4-2",
+                "role": "user",
+                "content": "Temporary chat turn 2: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-3",
+                "role": "user",
+                "content": "Temporary chat turn 3: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-4",
+                "role": "user",
+                "content": "Temporary chat turn 4: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-5",
+                "role": "user",
+                "content": "Temporary chat turn 5: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-6",
+                "role": "user",
+                "content": "Temporary chat turn 6: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-7",
+                "role": "user",
+                "content": "Temporary chat turn 7: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-8",
+                "role": "user",
+                "content": "Temporary chat turn 8: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-9",
+                "role": "user",
+                "content": "Temporary chat turn 9: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-10",
+                "role": "user",
+                "content": "Temporary chat turn 10: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-11",
+                "role": "user",
+                "content": "Temporary chat turn 11: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-12",
+                "role": "user",
+                "content": "Harbor uses Go."
+              },
+              {
+                "id": "h4-13",
+                "role": "user",
+                "content": "Temporary chat turn 13: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-14",
+                "role": "user",
+                "content": "Temporary chat turn 14: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-15",
+                "role": "user",
+                "content": "Temporary chat turn 15: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-16",
+                "role": "user",
+                "content": "Temporary chat turn 16: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-17",
+                "role": "user",
+                "content": "Temporary chat turn 17: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-18",
+                "role": "user",
+                "content": "Temporary chat turn 18: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-19",
+                "role": "user",
+                "content": "Temporary chat turn 19: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-20",
+                "role": "user",
+                "content": "Temporary chat turn 20: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-21",
+                "role": "user",
+                "content": "Temporary chat turn 21: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-22",
+                "role": "user",
+                "content": "Temporary chat turn 22: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-23",
+                "role": "user",
+                "content": "Temporary chat turn 23: I am still checking; no new decision or preference."
+              },
+              {
+                "id": "h4-24",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              }
+            ],
+            "status": "completed",
+            "capture": {
+              "ok": true,
+              "value": {
+                "duplicate": false,
+                "admission": {
+                  "memories": [
+                    {
+                      "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                      "revision": 1
+                    },
+                    {
+                      "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                      "revision": 1
+                    },
+                    {
+                      "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                      "revision": 1
+                    }
+                  ],
+                  "suppressedCount": 0,
+                  "indexRevision": 4
+                },
+                "classification": {
+                  "status": "applied",
+                  "memoryRevisions": [
+                    {
+                      "memoryId": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                      "revision": 2
+                    },
+                    {
+                      "memoryId": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                      "revision": 2
+                    }
+                  ],
+                  "indexRevision": 5
+                },
+                "reconciliation": {
+                  "status": "complete_no_change",
+                  "reason": null,
+                  "retiredCount": 0
+                }
+              }
+            },
+            "records": [
+              {
+                "memory": {
+                  "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "02cc9307-6dc9-4a40-bbbe-fa228c006d0c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-24",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "preference",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.689Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "For Harbor work, the preferred editor is VS Code."
+                },
+                "receipts": [
+                  {
+                    "id": "351bd333-de6e-49a6-98e5-058d87c962f1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-1",
+                    "role": "user",
+                    "excerpt": "For Harbor work, my preferred editor is VS Code.",
+                    "createdAt": "2026-09-12T06:32:18.689Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.97,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor uses Go."
+                },
+                "receipts": [
+                  {
+                    "id": "32d78d14-3b26-486a-94d6-d297b30ef45a",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-12",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              }
+            ],
+            "receiptBindingsValid": true,
+            "reopenedRecords": [
+              {
+                "memory": {
+                  "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.95,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "02cc9307-6dc9-4a40-bbbe-fa228c006d0c",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-24",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "preference",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.689Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "For Harbor work, the preferred editor is VS Code."
+                },
+                "receipts": [
+                  {
+                    "id": "351bd333-de6e-49a6-98e5-058d87c962f1",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-1",
+                    "role": "user",
+                    "excerpt": "For Harbor work, my preferred editor is VS Code.",
+                    "createdAt": "2026-09-12T06:32:18.689Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                  "namespace": {
+                    "ownerId": "synthetic-H4-positioned-24-messages",
+                    "scope": "project",
+                    "projectId": "synthetic-history"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.97,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:32:18.690Z",
+                  "updatedAt": "2026-09-12T06:32:21.044Z",
+                  "content": "Harbor uses Go."
+                },
+                "receipts": [
+                  {
+                    "id": "32d78d14-3b26-486a-94d6-d297b30ef45a",
+                    "client": "conversation-history-audit",
+                    "sessionId": "H4-positioned-24-messages-window-0",
+                    "eventId": "h4-12",
+                    "role": "user",
+                    "excerpt": "Harbor uses Go.",
+                    "createdAt": "2026-09-12T06:32:18.690Z"
+                  }
+                ]
+              }
+            ],
+            "reopenPersisted": true,
+            "diagnostics": []
+          }
+        ],
+        "recalls": [
+          {
+            "id": "h4-editor",
+            "query": "What editor do I prefer for Harbor work?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "fc1065a3-b355-484f-bcc0-38b01faa43c1",
+                      "namespace": {
+                        "ownerId": "synthetic-H4-positioned-24-messages",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "preference",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:18.689Z",
+                      "updatedAt": "2026-09-12T06:32:21.044Z",
+                      "content": "For Harbor work, the preferred editor is VS Code."
+                    },
+                    "receipts": [
+                      {
+                        "id": "351bd333-de6e-49a6-98e5-058d87c962f1",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H4-positioned-24-messages-window-0",
+                        "eventId": "h4-1",
+                        "role": "user",
+                        "excerpt": "For Harbor work, my preferred editor is VS Code.",
+                        "createdAt": "2026-09-12T06:32:18.689Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H4-positioned-24-messages",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          },
+          {
+            "id": "h4-language",
+            "query": "What language does Harbor use?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "fdb866ac-0c9e-45f8-b838-a0d52d3909b7",
+                      "namespace": {
+                        "ownerId": "synthetic-H4-positioned-24-messages",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.97,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:18.690Z",
+                      "updatedAt": "2026-09-12T06:32:21.044Z",
+                      "content": "Harbor uses Go."
+                    },
+                    "receipts": [
+                      {
+                        "id": "32d78d14-3b26-486a-94d6-d297b30ef45a",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H4-positioned-24-messages-window-0",
+                        "eventId": "h4-12",
+                        "role": "user",
+                        "excerpt": "Harbor uses Go.",
+                        "createdAt": "2026-09-12T06:32:18.690Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H4-positioned-24-messages",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          },
+          {
+            "id": "h4-review",
+            "query": "When does the Harbor team review happen?",
+            "status": "completed",
+            "result": {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "memory": {
+                      "id": "7c7f1d2a-cfe9-45b1-ad01-875335df8fc6",
+                      "namespace": {
+                        "ownerId": "synthetic-H4-positioned-24-messages",
+                        "scope": "project",
+                        "projectId": "synthetic-history"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.95,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:32:18.690Z",
+                      "updatedAt": "2026-09-12T06:32:21.044Z",
+                      "content": "Harbor team review happens on Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "02cc9307-6dc9-4a40-bbbe-fa228c006d0c",
+                        "client": "conversation-history-audit",
+                        "sessionId": "H4-positioned-24-messages-window-0",
+                        "eventId": "h4-24",
+                        "role": "user",
+                        "excerpt": "Harbor team review happens on Friday.",
+                        "createdAt": "2026-09-12T06:32:18.690Z"
+                      }
+                    ],
+                    "receiptCount": 1
+                  }
+                ],
+                "namespaces": [
+                  {
+                    "namespace": {
+                      "ownerId": "synthetic-H4-positioned-24-messages",
+                      "scope": "project",
+                      "projectId": "synthetic-history"
+                    },
+                    "mapExhausted": true,
+                    "fetchExhausted": true
+                  }
+                ],
+                "coverage": "complete"
+              }
+            },
+            "diagnostics": []
+          }
+        ],
+        "status": "completed"
+      }
+    ],
+    "status": "completed"
+  }
+}

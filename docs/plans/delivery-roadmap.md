@@ -22,7 +22,37 @@ merge, production, release and external-publication decisions.
 
 ## Goal and baseline
 
-### Reliability checkpoint (2026-09-11, overrides older status labels)
+### Latest cross-window work — live currentness gate still fails
+
+PRs [52](https://github.com/Cairn-ink/cairn-memory/pull/52),
+[53](https://github.com/Cairn-ink/cairn-memory/pull/53),
+[54](https://github.com/Cairn-ink/cairn-memory/pull/54),
+[55](https://github.com/Cairn-ink/cairn-memory/pull/55),
+[56](https://github.com/Cairn-ink/cairn-memory/pull/56) and
+[57](https://github.com/Cairn-ink/cairn-memory/pull/57) are delivered dependent
+branches, in that merge order, not an assertion that the owner has merged them.
+They provide durable superseded history, source-ordered automatic capture,
+an explicitly gated experiment capability, a raw-history diagnostic with
+separate independent historical review, a frozen seven-case currentness harness
+and the installed ordered lifecycle. All17 CI checks passed for each PR.
+The public core is the only memory engine; MCP still does not automatically
+capture arbitrary conversations merely by being connected.
+
+The owner authorized execution within a cumulative USD30 ceiling. One frozen
+[C1 real-provider attempt](../evidence/ordered-live-evidence.md) now passes the
+ordered four-history audit and bounded installed A–F lifecycle, but FAILS C6:
+historical context reaffirming Monday wrongly retires the still-current Monday
+fact. All answers can be correct while memory state is wrong. The original
+unordered failure and this new failure remain retained, not overwritten.
+
+Next quality work is distinguishing genuine change from reaffirmation/paraphrase
+and added context, with offline regression and independent review before a new
+frozen paid follow-up. Product onboarding, supported host capture, distribution
+and actual adoption remain separate. The first C1 attempt used194 requests and
+USD1.088312 additional conservative reservations; cumulative reserved total is
+USD15.706048 in the unchanged stricter USD20 ledger, with0 unsettled requests.
+
+### Earlier reliability checkpoint (2026-09-11)
 
 Public #40-#43 are merged. Content-free model diagnostics, bounded ingestion
 failure summaries and the installed Hermes collector are available. The
@@ -80,10 +110,41 @@ The [cross-window contract](cross-window-supersession.md) now separates three
 packages: rules plus executable gap characterization, shared-engine repair,
 and fresh real-provider/installed evidence. The baseline test deliberately
 reproduces two active claims; it is not a supersession implementation or pass.
+The [B implementation](supersession-engine.md) is split into B1 durable history,
+explicit atomic supersession and current-only retrieval, followed by B2 source-
+bound automatic capture judgment. [B2 acceptance](ordered-capture.md) now defines
+opt-in trusted stream ordering, atomic automatic transitions and explicit
+unresolved outcomes; its synthetic tests are not real-model quality evidence.
+B1 does not fix the capture audit by itself;
+do not substitute a manual supersession operation for automatic capture evidence.
 Next product work remains an explicit supported host-capture integration and
 onboarding that distinguishes module capture from MCP explicit remember.
 
-The original USD20 ledger checkpoint is1,725 requests /USD14.617736 reserved, not a new
+The following original C staging was frozen after B2's offline mechanism gate;
+the latest execution outcome above supersedes its historical pending status:
+
+| Slice | Deliverable | Exit boundary |
+| --- | --- | --- |
+| [C0a](reconciliation-guard.md) | Separate immutable reconciliation authorization and combined guard, fake HTTP only | Old guards still reject the new method; same cumulative accounting, independent review |
+| C0b | Frozen currentness scenarios, disclosed ordered-v1 evaluator projection, installed-artifact harness | Original failed evidence/cases/rubric/scorer remain intact; offline failure-retention and oracle-separation checks |
+| C1 | One fresh real-provider and installed-artifact evidence attempt | Explicit method grant and local run cap under original USD20; independent semantic labels; retain all failures |
+
+Neither C0a nor C0b itself grants paid authority. C1 subsequently received its
+separate owner grant and ran under [frozen acceptance](ordered-live-evidence.md).
+
+C0b is delivered in reviewable slices: [C0b1](ordered-history-evidence.md) adds
+the original-history ordering adapter and independently checked raw/history
+projection. C0b2 still freezes the new currentness corpus and installed-artifact
+ordered lifecycle. A passing synthetic harness is not a fresh real-model result.
+
+C0b2 is split into [C0b2a](currentness-evidence.md), the frozen seven-case
+positive/negative corpus and independently scored actual-core harness, followed
+by [C0b2b](installed-ordered-loop.md), the installed-artifact ordered lifecycle. This keeps semantic scoring
+and installation/MCP lifecycle checks separately reviewable. None of these
+offline gates grants paid-method authority or changes defaults; subsequent C1
+evidence is linked in the latest checkpoint above.
+
+The pre-C1 USD20 ledger checkpoint was1,725 requests /USD14.617736 reserved, not a new
 allowance; older USD5 balances below belong to a historical separate experiment.
 
 ### Productization checkpoint (2026-09-09, overrides older status labels)

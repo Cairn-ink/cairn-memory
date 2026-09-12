@@ -24,7 +24,7 @@ export function createIndexStorage({ db, epoch, advanceEpoch }) {
     const p = phases[phase];
     const tuple = `(${p.keys.map(k => `r.${k}`).join(',')})`;
     const after = key === null ? '' : ` AND ${tuple} > (${p.keys.map(() => '?').join(',')})`;
-    if (phase < 2) return db.prepare(`SELECT r.id, r.revision, r.${phase === 0 ? 'deleted' : 'level'} FROM ${p.table} r
+    if (phase < 2) return db.prepare(`SELECT r.id, r.revision, ${phase === 0 ? 'r.deleted, r.currentness' : 'r.level'} FROM ${p.table} r
       WHERE ${namespace('r')}${after} ORDER BY ${p.keys.map(k => `r.${k}`).join(',')} LIMIT 1`)
       .get(...boundary(ns), ...(key ?? []));
     // Namespace attribution happens only after a bounded indexed read. Filtering
@@ -37,21 +37,22 @@ export function createIndexStorage({ db, epoch, advanceEpoch }) {
   }
 
   function invalid(ns, phase, row) {
-    if (phase === 0) return row.deleted ? 'skip' : null;
+    if (phase === 0) return row.deleted || row.currentness !== 'current' ? 'skip' : null;
     if (phase === 1) return [1,2].includes(row.level) ? null : {
       parentId: row.id, childType: 'moc', childId: row.id, reason: 'invalid_level' };
     const edge = phase === 4;
     const parentId = edge ? row.parent_id : row.moc_id;
     const childId = edge ? row.child_id : row.memory_id;
     const parent = db.prepare('SELECT id, owner_id, scope, project_id, level, revision FROM mocs WHERE id = ?').get(parentId);
-    const child = db.prepare(`SELECT id, owner_id, scope, project_id, revision, ${edge ? 'level' : 'deleted'}
+    const child = db.prepare(`SELECT id, owner_id, scope, project_id, revision, ${edge ? 'level' : 'deleted, currentness'}
       FROM ${edge ? 'mocs' : 'memories'} WHERE id = ?`).get(childId);
     if (!owned(parent, ns) && !owned(child, ns)) return 'skip';
     let reason = null;
     if (!owned(parent, ns) || !owned(child, ns)) reason = 'not_found';
     else if ((edge && (parent.level !== 2 || child.level !== 1)) ||
       (phase === 3 && parent.level !== 1) || (phase === 2 && ![1,2].includes(parent.level))) reason = 'invalid_level';
-    else if (child.deleted || child.revision !== (edge ? row.child_revision : row.memory_revision) ||
+    else if (child.deleted || (!edge && child.currentness !== 'current') ||
+      child.revision !== (edge ? row.child_revision : row.memory_revision) ||
       (phase !== 2 && parent.revision !== (edge ? row.parent_revision : row.moc_revision))) reason = 'stale';
     return reason ? { parentId, childType: edge ? 'moc' : 'memory', childId, reason } : null;
   }

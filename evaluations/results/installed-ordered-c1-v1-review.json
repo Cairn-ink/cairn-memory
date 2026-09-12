@@ -1,0 +1,44 @@
+{
+  "version": "installed-ordered-capture-mcp-v1",
+  "reviewerType": "agent",
+  "reviewedRawDigest": "dfad7d132c2301bbc8e64b9f15ee2d6af669a86bc3e53490bb015a187a2e34ad",
+  "stages": [
+    {
+      "stage": "A",
+      "accepted": true,
+      "reason": "The original Friday assertion is entailed by the first user source. The second source explicitly replaces Friday with Monday, justifying retirement of the original row at revision 3 and the active Monday successor at revision 2. Original body and receipts survive; selected replacement receipt is the actual second user source, bound to successor admission revision 1. Both complete snapshots equal their cold-reopened snapshots. Every row was inspected: one initial row and exactly the predecessor/successor pair after update, with no extras."
+    },
+    {
+      "stage": "B",
+      "accepted": true,
+      "reason": "Complete current recall returns only the source-supported Monday successor and fresh inspection agrees on identity, revision and receipts. Friday remains inspectable as historical with the original receipt and valid Monday relationship. Separate foreign-owner and foreign-project observations show empty listings, denied get/correct and forgotten false; rightful current and historical observations remain unchanged after each. No extra rows appear in either isolation snapshot."
+    },
+    {
+      "stage": "C",
+      "accepted": true,
+      "reason": "The fresh consumer recalls and inspects Monday at revision 2 before correcting that exact successor to the fixture's explicit Tuesday statement. The result advances once to revision 3, has explicit origin and a new user correction receipt, and retains no Monday source receipt. A stale revision-2 overwrite is rejected with revision_conflict and the post-control row remains Tuesday. Friday stays historical with unchanged body and original receipt; its selected replacement evidence correctly becomes unavailable with empty receiptIds instead of attributing Tuesday to the removed Monday source."
+    },
+    {
+      "stage": "D",
+      "accepted": true,
+      "reason": "A distinct consumer's complete recall returns only Tuesday at revision 3 with the explicit correction receipt. Fresh inspection and the full two-row snapshot agree. Friday is historical rather than current, and its unavailable replacement-evidence state persists without invented supporting receipts."
+    },
+    {
+      "stage": "E",
+      "accepted": true,
+      "reason": "Fresh recall and inspection identify Tuesday at revision 3. Forget using stale revision 2 returns revision_conflict and leaves the inspected row unchanged. Scoped forget at the fresh revision succeeds; subsequent get returns memory_not_found. The full remaining snapshot contains only the original Friday historical row and original receipt, with replacement null, empty receiptIds and evidenceAvailable false. No other rows were deleted or resurrected."
+    },
+    {
+      "stage": "F",
+      "accepted": true,
+      "reason": "The final distinct consumer returns complete empty current recall and memory_not_found for the forgotten successor. Full inspection retains exactly the original Friday historical row at revision 3 with its original source receipt. Its relationship is exactly previousRevision 2, replacement null, receiptIds empty and evidenceAvailable false, revealing no forgotten successor identity, body or receipt through the retained relation."
+    }
+  ],
+  "accepted": true,
+  "limitations": [
+    "Independent post-generation semantic review of this single retained synthetic lifecycle; not primary verification or a rerun of installed processes, artifact provenance or provider execution.",
+    "The pure mechanical inspector was replayed against the supplied raw report and passed A through F; semantic acceptance was separately judged from source text, actual row contents, mutation arguments and observed responses.",
+    "No extra admitted rows occurred in this run, so preservation of additional unrelated rows is not exercised by this evidence.",
+    "The result does not establish general conversation quality, host integration, production readiness or performance across repeated runs."
+  ]
+}
