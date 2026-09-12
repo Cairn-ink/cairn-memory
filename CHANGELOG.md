@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — ordered live evidence
+
+- Retain one real-provider ordered-history, seven-case currentness and installed
+  MCP lifecycle attempt with independent agent review. Explicit updates and the
+  narrow installed lifecycle pass; reaffirming the current fact wrongly retires
+  it in C6, so broader currentness acceptance remains failed. No runtime changes.
+
 ## Model-backed evidence candidate
 
 - Add an explicit shared-budget live experiment session, loopback host bridge,
