@@ -43,7 +43,8 @@ function model(options = {}) {
       calls.push({ method: 'reconcile', input: structuredClone(input) });
       if (options.failReconcile) throw new Error('Synthetic reconcile failure');
       if (options.noTransitions) return { transitions: [] };
-      return { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0] }] };
+      return { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+        relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] };
     },
     async classify({ input }) {
       calls.push({ method: 'classify', input: structuredClone(input) });

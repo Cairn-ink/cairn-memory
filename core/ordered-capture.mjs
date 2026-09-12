@@ -9,8 +9,15 @@ function decisions(output, items, candidates, messages) {
   object(output, ['transitions']);
   const seen = new Set();
   return denseArray(output.transitions, 0, 5).map(transition => {
-    object(transition, ['replacementIndex', 'predecessorIndex', 'evidenceIndices']);
-    const { replacementIndex, predecessorIndex } = transition;
+    object(transition, ['replacementIndex', 'predecessorIndex', 'evidenceIndices',
+      'relation', 'valueChange', 'adoption']);
+    const { replacementIndex, predecessorIndex, relation, valueChange, adoption } = transition;
+    if (!['supersedes', 'reaffirms', 'historical_context', 'compatible', 'unresolved'].includes(relation) ||
+        !['changed', 'unchanged', 'unknown'].includes(valueChange) ||
+        !['explicit', 'not_adopted', 'uncertain'].includes(adoption) ||
+        (relation === 'supersedes' && (valueChange !== 'changed' || adoption !== 'explicit'))) {
+      fail('invalid_model_output');
+    }
     if (!Number.isInteger(replacementIndex) || replacementIndex < 0 || replacementIndex >= items.length ||
         !Number.isInteger(predecessorIndex) || predecessorIndex < 0 || predecessorIndex >= candidates.length ||
         seen.has(predecessorIndex)) fail('invalid_model_output');
@@ -18,10 +25,13 @@ function decisions(output, items, candidates, messages) {
     const evidence = denseArray(transition.evidenceIndices, 1, 4);
     if (new Set(evidence).size !== evidence.length || evidence.some(index =>
       !Number.isInteger(index) || !items[replacementIndex].sourceIndices.includes(index)) ||
-      !evidence.some(index => messages[index]?.role === 'user')) fail('invalid_model_output');
+      (relation === 'supersedes' && !evidence.some(index => messages[index]?.role === 'user'))) {
+      fail('invalid_model_output');
+    }
+    if (relation !== 'supersedes') return null;
     return { replacementIndex, predecessorIndex,
       receiptIndices: evidence.map(index => items[replacementIndex].sourceIndices.indexOf(index)) };
-  });
+  }).filter(decision => decision !== null);
 }
 
 export async function reconcileCapture({ model, snapshot, items, discovery }) {

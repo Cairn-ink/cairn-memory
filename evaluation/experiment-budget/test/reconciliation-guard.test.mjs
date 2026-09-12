@@ -273,7 +273,8 @@ test('R4 actual core ordered capture through actual adapter and combined guard a
     if (url === urls.count) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
     const input = JSON.parse(b.input[0].content[0].text); const method = b.text.format.name;
     const output = method === 'cairn_extract' ? { items: [{ content: input.messages[0].content, kind: 'fact', confidence: 0.8, sourceIndices: [0] }] }
-      : method === 'cairn_reconcile' ? { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0] }] }
+      : method === 'cairn_reconcile' ? { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+        relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] }
         : { items: input.memories.map((m) => ({ memoryId: m.id, parentIds: [], newL1: { title: m.content, parentL2Ids: [] } })) };
     return Response.json(generated(output));
   }); t.after(() => guard.close());

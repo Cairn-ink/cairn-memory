@@ -92,6 +92,41 @@ judgment is outside the transaction. Classification remains a later operation.
 No replacement is promoted to explicit authority. Existing receipts cannot be
 relabelled with a new causal position to make them eligible.
 
+### Experimental model-port output migration
+
+Every nonempty `model.reconcile` entry now requires a qualified verdict:
+
+```js
+{ transitions: [{
+  replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+  relation: 'supersedes', // or reaffirms, historical_context, compatible, unresolved
+  valueChange: 'changed', // or unchanged, unknown
+  adoption: 'explicit' // or not_adopted, uncertain
+}] }
+```
+
+Only `supersedes` with `changed` and `explicit`, bound to a user source, can
+retire. Contradictory supersession labels reject the entire judgment. All
+entries, including nonretiring ones, must have valid unique item-bound evidence;
+assistant evidence is allowed only for nonretiring verdicts. At most five
+entries and one per predecessor are accepted; omitted predecessors are untouched,
+not proven compatible. Consider all supplied evidence before choosing a verdict.
+
+Custom injected models must migrate nonempty outputs; old bare index tuples fail
+with `invalid_model_output` and commit no admission. `{transitions: []}` remains
+valid. There is no fallback or additional model call. Input shape, database
+format, hosted wire schemas and completed-event replay results do not change.
+
+Nonretiring labels are currently ephemeral: they prevent retirement but are not
+stored conflict/rationale links or new recall qualifications. Paraphrased
+reaffirmations may still admit separate records; exact-content deduplication is
+unchanged. `complete_no_change` means no retirement in this bounded pass, even
+when a model reports an unresolved semantic conflict. The three labels are one
+model's judgments, not independent proof. Correlated errors can still cause an
+unjustified retirement. Temporary exceptions, report-correction narratives,
+qualified extraction and historical/rationale QA remain later work. See
+[qualified reconciliation acceptance](plans/qualified-reconciliation.md).
+
 Successful ordered capture and completed replay additionally return:
 
 ```js

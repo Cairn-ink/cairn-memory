@@ -47,6 +47,9 @@ export function schemasFor(method, input) {
     const transitionMaximum = replacementIndices.length && messageIndices.length
       ? Math.min(5, predecessorIndices.length) : 0;
     return object({ transitions: array(object({
+      relation: { type: 'string', enum: ['supersedes', 'reaffirms', 'historical_context', 'compatible', 'unresolved'] },
+      valueChange: { type: 'string', enum: ['changed', 'unchanged', 'unknown'] },
+      adoption: { type: 'string', enum: ['explicit', 'not_adopted', 'uncertain'] },
       replacementIndex: constrained(integer, replacementIndices),
       predecessorIndex: constrained(integer, predecessorIndices),
       evidenceIndices: { ...array(constrained(integer, messageIndices),

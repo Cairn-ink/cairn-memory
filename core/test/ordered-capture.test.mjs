@@ -16,7 +16,8 @@ const capture = (sequence, content = monday, patch = {}) => ({ namespace, client
   sessionId: 'session', eventId: `event-${sequence}`, causal: { streamId: 'source-stream', sequence },
   messages: [source(`message-${sequence}`, content)], ...patch });
 const item = (content, sourceIndices = [0]) => ({ content, kind: 'fact', confidence: 0.8, sourceIndices });
-const transition = (patch = {}) => ({ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0], ...patch });
+const transition = (patch = {}) => ({ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+  relation: 'supersedes', valueChange: 'changed', adoption: 'explicit', ...patch });
 const noChange = { status: 'complete_no_change', reason: null, retiredCount: 0 };
 const applied = { status: 'applied', reason: null, retiredCount: 1 };
 const unresolved = (reason) => ({ status: 'unresolved', reason, retiredCount: 0 });
@@ -45,6 +46,108 @@ function fixture(t, options = {}) {
 const material = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('admission_claims','capture_events') ORDER BY name").all()
   .map(({ name }) => [name, db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()]);
 const first = async (core) => ok(await core.capture(capture(1, friday))).admission.memories[0].id;
+
+// Q judgments below are scripted: they verify mutation gates, not model entailment.
+for (const relation of ['reaffirms', 'historical_context', 'compatible', 'unresolved']) {
+  for (const role of ['user', 'assistant']) {
+    test(`Q2 ${relation} with ${role} evidence never retires its predecessor`, async (t) => {
+      const { core } = fixture(t, { reconcile: () => ({ transitions: [transition({ relation,
+        valueChange: 'unknown', adoption: 'uncertain' })] }) });
+      const old = await first(core); const before = detail(core, old);
+      const result = ok(await core.capture(capture(2, monday, { messages: [source('qualified-source', monday, role)] })));
+      assert.deepEqual(result.reconciliation, noChange);
+      assert.deepEqual(detail(core, old), before);
+      assert.equal(detail(core, result.admission.memories[0].id).memory.state, 'active');
+      assert.deepEqual(ok(await core.capture(capture(2, monday, { messages: [source('qualified-source', monday, role)] }))),
+        { duplicate: true, memoryIds: result.admission.memories.map((m) => m.id), suppressedCount: 0, reconciliation: noChange });
+    });
+  }
+}
+
+test('Q4 historical restatement keeps current Monday and a later explicit change retires it across cold reads', async (t) => {
+  const tuesday = 'Project Alpha deadline is Tuesday.';
+  const quote = 'We used to say Friday; the current deadline remains Monday.';
+  const { core, path, model, calls } = fixture(t, {
+    extract: ({ input }) => ({ items: [item(input.messages[0].content === quote ? monday : input.messages[0].content)] }),
+    reconcile: () => ({ transitions: [transition({ relation: 'reaffirms', valueChange: 'unchanged', adoption: 'explicit' })] }),
+  });
+  const old = ok(await core.capture(capture(1, monday))).admission.memories[0].id;
+  const before = detail(core, old);
+  const restated = ok(await core.capture(capture(2, quote)));
+  assert.deepEqual(restated.reconciliation, noChange);
+  assert.equal(restated.admission.memories[0].id, old);
+  assert.equal(detail(core, old).memory.state, 'active');
+  assert.deepEqual(detail(core, old).supersession, before.supersession);
+  assert.equal(detail(core, old).receipts.length, before.receipts.length + 1);
+  assert.equal(detail(core, old).receipts.at(-1).excerpt, quote);
+  const cold = openMemoryCore({ path }); t.after(() => cold.close());
+  assert.equal(detail(cold, old).memory.state, 'active');
+  model.reconcile = () => ({ transitions: [transition()] });
+  const changed = ok(await core.capture(capture(3, tuesday)));
+  assert.deepEqual(changed.reconciliation, applied);
+  assert.equal(detail(cold, old).memory.state, 'historical');
+  assert.equal(detail(cold, changed.admission.memories[0].id).memory.content, tuesday);
+  assert.equal(detail(cold, changed.admission.memories[0].id).memory.state, 'active');
+  assert.deepEqual(detail(cold, old).supersession.receiptIds,
+    detail(cold, changed.admission.memories[0].id).receipts.map((r) => r.id));
+  assert.equal(calls.filter((c) => c.method === 'extract').length, 3);
+});
+
+test('Q2 missing, unknown and contradictory qualifications reject mixed batches before any admission', async (t) => {
+  const malformed = [];
+  for (const key of ['relation', 'valueChange', 'adoption']) {
+    const missing = transition(); delete missing[key]; malformed.push(missing);
+    for (const value of [null, 'unrecognized', 0, {}, []]) malformed.push(transition({ [key]: value }));
+  }
+  malformed.push({ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0] });
+  for (const valueChange of ['changed', 'unchanged', 'unknown']) {
+    for (const adoption of ['explicit', 'not_adopted', 'uncertain']) {
+      if (valueChange !== 'changed' || adoption !== 'explicit') malformed.push(transition({ valueChange, adoption }));
+    }
+  }
+  for (const bad of malformed) {
+    for (const mixed of [false, true]) {
+      let extracted = 0;
+      const { core, db } = fixture(t, {
+        extract: () => ({ items: extracted++ ? [item(monday)] : [item(friday), item('Project Beta deadline is Thursday.')] }),
+        reconcile: () => ({ transitions: mixed ? [transition({ predecessorIndex: 1 }), bad] : [bad] }),
+      });
+      await first(core); const before = material(db);
+      error(await core.capture(capture(2)), 'invalid_model_output');
+      assert.deepEqual(material(db), before);
+      assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE event_id='event-2' AND state='completed'").get().n, 0);
+    }
+  }
+});
+
+test('Q2 discarded nonretiring entries still enforce evidence binding and duplicate predecessor guards', async (t) => {
+  for (const mode of ['unbound', 'duplicate', 'mixed-duplicate']) {
+    const qualified = transition({ relation: 'compatible', valueChange: 'unknown', adoption: 'not_adopted' });
+    const { core, db, model } = fixture(t); await first(core);
+    model.extract = () => ({ items: [item(monday, [0])] });
+    model.reconcile = () => ({ transitions: mode === 'unbound' ? [{ ...qualified, evidenceIndices: [1] }]
+      : [qualified, mode === 'duplicate' ? qualified : transition()] });
+    const before = material(db);
+    error(await core.capture(capture(2, monday, { messages: [source('bound', monday), source('not-bound', 'Other context')] })), 'invalid_model_output');
+    assert.deepEqual(material(db), before);
+  }
+});
+
+test('Q3 reconcile prompt carries qualification policy, not a model-quality assertion', async (t) => {
+  const { core, calls } = fixture(t, { reconcile: () => ({ transitions: [] }) });
+  await first(core); ok(await core.capture(capture(2)));
+  const policy = calls.find((call) => call.method === 'reconcile').system;
+  for (const label of ['supersedes', 'reaffirms', 'historical_context', 'compatible', 'unresolved',
+    'valueChange', 'adoption', 'not_adopted']) assert.ok(policy.includes(label));
+  assert.match(policy, /historical quotation|historical\s+quotation/);
+  assert.match(policy, /same subject, property and scope/);
+  assert.match(policy, /assistant-only/);
+  assert.match(policy, /ordering.*does not itself prove/);
+  assert.match(policy, /Do not invent a motive/);
+  assert.match(policy, /untrusted evidence/);
+  // This only checks that policy reaches the port; scripted judgments do not
+  // establish that any provider follows it on unseen conversational evidence.
+});
 
 test('O1/O4 ordered captures automatically retire Friday, bind real Monday evidence and preserve inferred authority', async (t) => {
   const { core, calls } = fixture(t, { classify: ({ input }) => ({ items: input.memories.map((m) => ({ memoryId: m.id,

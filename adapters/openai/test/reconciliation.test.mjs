@@ -28,7 +28,8 @@ const input = () => ({
 });
 const request = (value = input()) => ({ system: 'Judge only explicit user-adopted changes.', input: value,
   maxOutputTokens: 1024, signal: new AbortController().signal });
-const result = { transitions: [{ replacementIndex: 9, predecessorIndex: 3, evidenceIndices: [11] }] };
+const verdict = { relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' };
+const result = { transitions: [{ ...verdict, replacementIndex: 9, predecessorIndex: 3, evidenceIndices: [11] }] };
 const json = (value) => new Response(JSON.stringify(value));
 function envelope(payload, value = result, changes = {}) {
   return { object: 'response', model: payload.model, status: 'completed', error: null,
@@ -108,7 +109,7 @@ test('reconciliation schema constrains every output index to the request snapsho
   const transition = schema.properties.transitions.items;
   assert.equal(schema.additionalProperties, false);
   assert.deepEqual(Object.keys(transition.properties).sort(),
-    ['evidenceIndices', 'predecessorIndex', 'replacementIndex']);
+    ['adoption', 'evidenceIndices', 'predecessorIndex', 'relation', 'replacementIndex', 'valueChange']);
   assert.deepEqual(transition.properties.replacementIndex.enum, [4, 9]);
   assert.deepEqual(transition.properties.predecessorIndex.enum, [3, 8, 12]);
   assert.deepEqual(transition.properties.evidenceIndices.items.enum, [2, 7, 11]);
@@ -118,16 +119,41 @@ test('reconciliation schema constrains every output index to the request snapsho
   assert.equal(accepts(schema, result), true);
   assert.equal(accepts(schema, { transitions: [] }), true);
   for (const forged of [
-    { transitions: [{ replacementIndex: 10, predecessorIndex: 3, evidenceIndices: [11] }] },
-    { transitions: [{ replacementIndex: 9, predecessorIndex: 4, evidenceIndices: [11] }] },
-    { transitions: [{ replacementIndex: 9, predecessorIndex: 3, evidenceIndices: [10] }] },
+    { transitions: [{ ...verdict, replacementIndex: 10, predecessorIndex: 3, evidenceIndices: [11] }] },
+    { transitions: [{ ...verdict, replacementIndex: 9, predecessorIndex: 4, evidenceIndices: [11] }] },
+    { transitions: [{ ...verdict, replacementIndex: 9, predecessorIndex: 3, evidenceIndices: [10] }] },
+    { transitions: [{ replacementIndex: 9, predecessorIndex: 3, evidenceIndices: [11] }] },
+    ...['relation', 'valueChange', 'adoption'].map((key) => ({ transitions: [{ ...result.transitions[0], [key]: 'invented' }] })),
     { transitions: [{ ...result.transitions[0], operation: 'supersede' }] },
     { transitions: Array.from({ length: 4 }, () => result.transitions[0]) },
   ]) assert.equal(accepts(schema, forged), false, JSON.stringify(forged));
   // Index 11 exists in the snapshot but is not a source for replacement 4.
   // The schema permits it; core must enforce that correlated source subset.
-  assert.equal(accepts(schema, { transitions: [{ replacementIndex: 4,
+  assert.equal(accepts(schema, { transitions: [{ ...verdict, replacementIndex: 4,
     predecessorIndex: 3, evidenceIndices: [11] }] }), true);
+  for (const relation of ['reaffirms', 'historical_context', 'compatible', 'unresolved']) {
+    assert.equal(accepts(schema, { transitions: [{ ...result.transitions[0], relation,
+      valueChange: 'unknown', adoption: 'uncertain' }] }), true);
+  }
+  // The schema constrains vocabularies, not cross-field semantics. Core rejects
+  // a supersession that is not an explicitly adopted changed value.
+  assert.equal(accepts(schema, { transitions: [{ ...result.transitions[0],
+    valueChange: 'unchanged' }] }), true);
+});
+
+test('five qualified judgments fit the existing output budget without extra HTTP calls', async () => {
+  const value = input();
+  value.candidates = Array.from({ length: 5 }, (_, index) => ({ ...value.candidates[0], index }));
+  const full = { transitions: value.candidates.map(({ index }) => ({ ...result.transitions[0],
+    predecessorIndex: index, evidenceIndices: [2, 7, 11] })) };
+  const calls = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic',
+    fetchImpl: transport(calls, (payload) => envelope(payload, full)) });
+  assert.ok(model.countTokens(JSON.stringify(full)) <= 1024);
+  assert.deepEqual(await model.reconcile(request(value)), full);
+  assert.equal(accepts(calls[0].payload.text.format.schema, full), true);
+  assert.equal(calls[1].payload.max_output_tokens, 1024);
+  assert.equal(calls.length, 2);
 });
 
 test('malformed reconciliation snapshots fail before fake HTTP', async () => {

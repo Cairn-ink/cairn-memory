@@ -70,15 +70,18 @@ frozen evaluation and subsequent verification are retained in
 Opt-in local [ordered capture](capture.md#opt-in-source-ordered-reconciliation)
 adds a `reconcile` port on the baseline model; extraction-only profiles do not
 switch the judgment model. Its strict schema limits transition indices to the
-request snapshot. The core additionally checks correlated indices, user evidence,
+request snapshot and requires `relation`, `valueChange` and `adoption` labels.
+See the [experimental port migration](capture.md#experimental-model-port-output-migration)
+before updating a custom model adapter. The core additionally checks correlated indices, user evidence for retirement,
 receipt provenance, revision and causal ordering. Structured output is not proof
 that a change was semantically justified.
 
 Judgment transmits bounded candidate text and receipt excerpts in addition to
 the current message window, but not database identities or causal identifiers.
 A capture requiring extraction, reconciliation and classification can make six
-HTTP requests. Existing experiment guards deliberately reject `cairn_reconcile`;
-adding this method does not extend paid authorization. No real-model acceptance
+HTTP requests. The original live guard rejects `cairn_reconcile`; the separate
+shared-budget guard requires an explicitly scoped reconcile allowlist. Updating
+this output contract does not extend paid authorization. No real-model acceptance
 is claimed for it by fake-HTTP tests. Missing required judgment or invalid output
 fails closed without committing admission; context overflow is explicitly unresolved.
 

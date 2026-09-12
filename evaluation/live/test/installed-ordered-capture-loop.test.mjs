@@ -45,7 +45,8 @@ function fakeSession(options = {}) {
       } else if (method === 'cairn_reconcile') {
         if (options.failReconcile) return Response.json({ error: { message: 'PRIVATE_SYNTHETIC_FAILURE' } }, { status: 503 });
         output = { transitions: options.noTransition ? [] : [{ replacementIndex: 0, predecessorIndex: options.forgedPredecessor ? 99 : 0,
-          evidenceIndices: options.forgedEvidence ? [99] : [0], ...(options.forgedField ? { memoryId: 'forged-memory' } : {}) }] };
+          evidenceIndices: options.forgedEvidence ? [99] : [0], relation: 'supersedes', valueChange: 'changed', adoption: 'explicit',
+          ...(options.forgedField ? { memoryId: 'forged-memory' } : {}) }] };
       } else if (method === 'cairn_classify') {
         output = options.badClassification ? { items: [{ memoryId: 'forged-memory', parentIds: [] }] }
           : { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [], ...(options.unfiled ? {} : {

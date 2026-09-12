@@ -18,6 +18,9 @@ No merge, publication, deployment or paid experiment is included.
   entries too, then discard them from retirement decisions. Empty output remains
   valid; legacy nonempty tuples lacking qualifications fail closed. No implicit
   fallback, new model call, expanded budget or silent migration of old evidence.
+  All verdicts require item-bound evidence; only retiring verdicts require a user
+  source, so an assistant-only proposal can be classified without granting it
+  authority. Omitted predecessors are untouched, not certified compatible.
 - Q3: prompts distinguish current-value change from restatement with historical
   context, proposals, assistant recommendations, changed subject/scope and
   uncertain evidence. Source role/order is necessary evidence binding, not proof
@@ -41,3 +44,19 @@ Correlated mistaken labels can still retire an assertion incorrectly. Fresh
 held-out semantic evaluation remains necessary; no reliability percentage is
 claimed. Qualified extraction, persisted conflicts, premise dependencies and
 query views remain later slices of the parent reliability contract.
+
+## Offline verification checkpoint
+
+Node 22.16.0 and 24.15.0 passed `test:core`, `test:openai` (152 cases), `test:mcp`,
+`test:experiment-request-guard`, `test:live-evidence-offline`, `test:artifact`
+(14 cases), `npm test` (31 cases), `validate`, `demo:store`, `demo:capture` and
+`demo:openai-offline`. The generic live suite has 27 explicit opt-in skips, not
+27 successes. Separately, the installed ordered and legacy capture suites passed
+26/26 with zero skips on each runtime using all four public artifact selectors.
+Pinned Claude marketplace and strict plugin validation passed on Node 22.16.
+
+Installed artifact SHA256:
+`7e863b87cc7a3369041e77fdc22f0df1f8be22aadf54907ae8ad384953e9c3a3`.
+The installed suites exercise actual core, tokenizer, fake HTTP, MCP processes,
+restart, correction, forgetting and injected failures, not a real provider.
+Original source/evidence pins remain unchanged. No paid calls were made.

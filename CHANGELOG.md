@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — qualified reconciliation candidate
+
+- Require explicit relation, value-change and adoption judgments in the
+  experimental injected reconcile port. Only a consistent adopted replacement
+  can retire prior memory; validated nonretiring judgments preserve it. Custom
+  models must update nonempty outputs; old bare tuples fail closed. No database
+  or hosted protocol change, and no new real-model reliability claim.
+
 ## Unreleased — ordered live evidence
 
 - Retain one real-provider ordered-history, seven-case currentness and installed

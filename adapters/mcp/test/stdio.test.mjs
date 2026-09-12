@@ -298,7 +298,8 @@ test('fresh stdio observes ordered capture reconciliation and never resurrects c
       calls.push('reconcile');
       assert.deepEqual(input.items.map((item) => item.content), [monday]);
       assert.deepEqual(input.candidates.map((candidate) => candidate.content), [friday]);
-      return { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0] }] };
+      return { transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+        relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] };
     },
     classify: ({ input }) => {
       calls.push('classify');

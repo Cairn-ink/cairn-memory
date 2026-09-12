@@ -46,7 +46,8 @@ function model(options = {}) {
           ? input.candidates.find(c => c.content === 'Harbor team review happens on Friday.')
           : item.content === 'Harbor deployment now happens on Monday, replacing Wednesday.'
             ? input.candidates.find(c => c.content === 'Harbor deployment happens on Wednesday.') : undefined;
-        if (predecessor) transitions.push({ replacementIndex: item.index, predecessorIndex: predecessor.index, evidenceIndices: item.sourceIndices });
+        if (predecessor) transitions.push({ replacementIndex: item.index, predecessorIndex: predecessor.index, evidenceIndices: item.sourceIndices,
+          relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' });
       }
       return { transitions };
     },
