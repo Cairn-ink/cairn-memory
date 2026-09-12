@@ -1,13 +1,5 @@
 # Changelog
 
-## Unreleased — bounded classification catalog
-
-- Classify placement against a MOC-only catalog, so unrelated unfiled memories
-  and placement references cannot crowd out topics or prevent first-topic
-  creation. Preserve namespace/revision checks and reject new topics when the
-  topic catalog itself is incomplete. Public maps and recall are unchanged;
-  this is an input-selection fix, not evidence of semantic classification quality.
-
 ## Unreleased — paired reconciliation evidence
 
 - Retain one frozen old/new comparison on eight new bilingual synthetic cases,
@@ -17,6 +9,14 @@
   conservative additional request/spending cap over an existing campaign guard.
   No runtime tuning, paid retries, release, default-model change or new reliability
   claim accompanies this evidence.
+
+## Unreleased — bounded classification catalog
+
+- Classify placement against a MOC-only catalog, so unrelated unfiled memories
+  and placement references cannot crowd out topics or prevent first-topic
+  creation. Preserve namespace/revision checks and reject new topics when the
+  topic catalog itself is incomplete. Public maps and recall are unchanged;
+  this is an input-selection fix, not evidence of semantic classification quality.
 
 ## Unreleased — explicit MCP history inspection
 
