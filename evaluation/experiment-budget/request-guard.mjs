@@ -5,7 +5,7 @@ import {
   fstatSync,
   lstatSync,
   openSync,
-  readFileSync,
+  readSync,
   realpathSync,
   writeFileSync,
 } from 'node:fs';
@@ -27,6 +27,7 @@ import { schemasFor } from '../../adapters/openai/schemas.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
+const RECONCILIATION_FILENAME = 'experiment-reconciliation-extension.json';
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -181,9 +182,16 @@ function readBinding(filename, expected) {
     if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino
       || opened.size > 1_000_000 || opened.nlink !== 1
       || (process.platform !== 'win32' && (opened.mode & 0o777) !== 0o600)) fail('unsafe_policy_binding');
-    const bytes = readFileSync(descriptor);
-    if (bytes.byteLength > 1_000_000) fail('unsafe_policy_binding');
-    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    // Keep the reader bounded even if the file grows after the stat check.
+    const bytes = Buffer.alloc(1_000_001);
+    let size = 0;
+    while (size < bytes.length) {
+      const read = readSync(descriptor, bytes, size, bytes.length - size, null);
+      if (read === 0) break;
+      size += read;
+    }
+    if (size > 1_000_000) fail('unsafe_policy_binding');
+    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size)));
     if (expected !== undefined && canonical(parsed) !== canonical(expected)) fail('policy_mismatch');
     return parsed;
   } catch (error) {
@@ -334,7 +342,7 @@ function validateHostBody(body, channel, byteLength) {
 
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
-function validateCairnBody(body, channel, generation) {
+function validateCairnBody(body, channel, generation, reconciliation = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -357,7 +365,10 @@ function validateCairnBody(body, channel, generation) {
   exactKeys(body.text, ['format'], 'unsupported_request');
   const format = body.text.format;
   exactKeys(format, ['name', 'schema', 'strict', 'type'], 'unsupported_request');
-  const match = /^cairn_(extract|classify|select|rank)$/u.exec(format.name);
+  if (typeof format.name !== 'string') fail('unsupported_request');
+  const match = (reconciliation ? /^cairn_(extract|classify|select|rank|reconcile)$/u
+    : /^cairn_(extract|classify|select|rank)$/u).exec(format.name);
+  if (match?.[1] === 'reconcile' && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   let expectedSchema;
@@ -507,6 +518,20 @@ function verifyExtensionCheckpoint(extension, state) {
   }
 }
 
+// Callers retain their validation, writer lock and fixed error mapping. Never
+// replace or remove a partial authorization file if writing or syncing fails.
+function writeAuthorizationBinding(directory, filename, authorization) {
+  let descriptor;
+  try {
+    descriptor = openSync(filename,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    writeFileSync(descriptor, `${canonical(authorization)}\n`, { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } finally { if (descriptor !== undefined) closeSync(descriptor); }
+  const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+  try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+}
+
 // Provisioning is separate from transport construction: existing guards never opt in implicitly.
 export function authorizeExtractionModelExtension(options) {
   exactKeys(options, ['ledger', 'policy', 'authorizationId']);
@@ -535,14 +560,7 @@ export function authorizeExtractionModelExtension(options) {
       return deepFreeze(extension);
     }
     const extension = { ...configuration, checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
-    let descriptor;
-    try {
-      descriptor = openSync(filename, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-      writeFileSync(descriptor, `${canonical(extension)}\n`, { encoding: 'utf8' });
-      fsyncSync(descriptor);
-    } finally { if (descriptor !== undefined) closeSync(descriptor); }
-    const directoryDescriptor = openSync(configuration.ledger.directory, constants.O_RDONLY);
-    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+    writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
     verifyExtension(extension, configuration.ledger, configuration.policy);
     return deepFreeze(extension);
   } catch (error) {
@@ -562,9 +580,95 @@ export function createExtendedExperimentRequestGuard(options) {
   return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl }, extension);
 }
 
+function snapshotExtension(value) {
+  let snapshot;
+  try {
+    snapshot = structuredClone(value);
+    canonical(snapshot); // Reject cyclic/non-serializable caller tokens with a fixed error.
+  } catch { fail('invalid_extension'); }
+  if (!isPlainObject(snapshot)) fail('invalid_extension');
+  return deepFreeze(snapshot);
+}
+
+function reconciliationConfiguration(options) {
+  // Reuse the baseline configuration gate; this capability introduces no prices
+  // or channels and does not relax the extraction extension's prerequisites.
+  const { version, authorizationId, ledger, policy } = extensionConfiguration(options);
+  return { version, authorizationId, ledger, policy, extension: snapshotExtension(options.extension),
+    method: 'cairn_reconcile', model: DEFAULT_MODEL };
+}
+
+function verifyReconciliationExtension(reconciliation, extension, ledger, policy) {
+  exactKeys(reconciliation, ['version', 'authorizationId', 'ledger', 'policy', 'extension',
+    'method', 'model', 'checkpoint'], 'invalid_extension');
+  verifyExtension(extension, ledger, policy);
+  const expected = reconciliationConfiguration({ ledger, policy, extension,
+    authorizationId: reconciliation.authorizationId });
+  exactKeys(reconciliation.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(reconciliation.checkpoint.requestCount)
+    || !safeInteger(reconciliation.checkpoint.reservedMicroUsd)
+    || reconciliation.checkpoint.requestCount > ledger.requestCap
+    || reconciliation.checkpoint.reservedMicroUsd > ledger.limitMicroUsd
+    || reconciliation.checkpoint.requestCount < extension.checkpoint.requestCount
+    || reconciliation.checkpoint.reservedMicroUsd < extension.checkpoint.reservedMicroUsd
+    || canonical(reconciliation) !== canonical({ ...expected, checkpoint: reconciliation.checkpoint })) {
+    fail('invalid_extension');
+  }
+  readBinding(path.join(expected.ledger.directory, RECONCILIATION_FILENAME), reconciliation);
+}
+
+// Provisioning this file is an operator action, never an implicit constructor side effect.
+export function authorizeReconciliationExtension(options) {
+  exactKeys(options, ['ledger', 'policy', 'extension', 'authorizationId']);
+  const configuration = reconciliationConfiguration(options);
+  const ledger = reopenExperimentBudget(configuration.ledger);
+  let lock;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    verifyExtension(configuration.extension, configuration.ledger, configuration.policy);
+    const state = ledger.getState();
+    verifyExtensionCheckpoint(configuration.extension, state);
+    if (state.state !== 'open' || state.attempts.some(attempt => attempt.outcome === null)) fail('extension_busy');
+    const filename = path.join(configuration.ledger.directory, RECONCILIATION_FILENAME);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) {
+      const reconciliation = readBinding(filename);
+      verifyReconciliationExtension(reconciliation, configuration.extension,
+        configuration.ledger, configuration.policy);
+      verifyExtensionCheckpoint(reconciliation, state);
+      if (reconciliation.authorizationId !== configuration.authorizationId) fail('policy_mismatch');
+      return deepFreeze(reconciliation);
+    }
+    const reconciliation = { ...configuration,
+      checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
+    writeAuthorizationBinding(configuration.ledger.directory, filename, reconciliation);
+    verifyReconciliationExtension(reconciliation, configuration.extension,
+      configuration.ledger, configuration.policy);
+    verifyExtensionCheckpoint(reconciliation, state);
+    return deepFreeze(reconciliation);
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) throw error;
+    fail('unsafe_policy_binding');
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* No ledger writes were made. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
+export function createReconciliationExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'extension', 'reconciliationExtension', 'fetchImpl']);
+  const extension = snapshotExtension(options.extension);
+  const reconciliation = snapshotExtension(options.reconciliationExtension);
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    extension, reconciliation);
+}
+
 export function createExperimentRequestGuard(options) { return constructGuard(options); }
 
-function constructGuard(options, extension = null) {
+function constructGuard(options, extension = null, reconciliation = null) {
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
@@ -573,11 +677,19 @@ function constructGuard(options, extension = null) {
     if (error instanceof ExperimentBudgetError) throw error;
     fail('ledger_failed');
   }
-  try {
-    if (extension) {
+  const verifyCapabilities = () => {
+    if (reconciliation) {
+      verifyReconciliationExtension(reconciliation, extension, ledgerConfiguration, policy);
+      const state = ledger.getState();
+      verifyExtensionCheckpoint(extension, state);
+      verifyExtensionCheckpoint(reconciliation, state);
+    } else if (extension) {
       verifyExtension(extension, ledgerConfiguration, policy);
       verifyExtensionCheckpoint(extension, ledger.getState());
     }
+  };
+  try {
+    if (extension) verifyCapabilities();
     else bindPolicy(ledgerConfiguration.directory, ledgerConfiguration.runId, policy, ledger.getState());
   }
   catch (error) { ledger.close(); throw error; }
@@ -588,10 +700,7 @@ function constructGuard(options, extension = null) {
 
   const guardedFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
-    if (extension) {
-      verifyExtension(extension, ledgerConfiguration, policy);
-      verifyExtensionCheckpoint(extension, ledger.getState());
-    }
+    if (extension) verifyCapabilities();
     let channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);
     if (extension && kind !== 'hostCompletion' && snapshot.body.model !== channel.model) {
@@ -601,8 +710,11 @@ function constructGuard(options, extension = null) {
     }
     const requestBytes = encoder.encode(snapshot.bodyText).byteLength;
     if (kind === 'hostCompletion') validateHostBody(snapshot.body, channel, requestBytes);
-    else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
+    else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', reconciliation !== null);
 
+    // Snapshotting caller-owned request/header objects can execute accessors.
+    // Recheck the new capability after those callbacks, before any reservation.
+    if (reconciliation) verifyCapabilities();
     const attemptId = randomUUID();
     ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd });
     inFlight += 1;

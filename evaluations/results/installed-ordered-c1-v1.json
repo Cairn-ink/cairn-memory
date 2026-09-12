@@ -1,0 +1,4397 @@
+{
+  "version": "installed-ordered-capture-mcp-v1",
+  "kind": "installed-programmatic-ordered-capture-to-mcp",
+  "fixture": {
+    "first": "Harbor team review happens on Friday.",
+    "update": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+    "correction": "Harbor team review happens on Tuesday.",
+    "query": "When does the Harbor team review happen now?",
+    "client": "installed-ordered-capture-loop",
+    "streamId": "synthetic-ordered-stream",
+    "extractionModel": "gpt-5.4-mini-2026-03-17",
+    "windows": [
+      {
+        "sessionId": "synthetic-source-1",
+        "eventId": "synthetic-event-1",
+        "sequence": 1,
+        "messages": [
+          {
+            "id": "synthetic-message-1",
+            "role": "user",
+            "content": "Harbor team review happens on Friday."
+          }
+        ]
+      },
+      {
+        "sessionId": "synthetic-source-2",
+        "eventId": "synthetic-event-2",
+        "sequence": 2,
+        "messages": [
+          {
+            "id": "synthetic-message-2",
+            "role": "user",
+            "content": "Confirmed update: Harbor team review now happens on Monday, replacing Friday."
+          }
+        ]
+      }
+    ]
+  },
+  "provenance": {
+    "artifactSha256": "49cb04896119c92b78043747517fa87e6db7df30c1a2247b6aacd9c2390d619a",
+    "sourceHashes": {
+      "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "README.md": "931f2d897225f764deffa97b40c83a8929f746c89996640743d9186a62bbaaa4",
+      "THIRD_PARTY_NOTICES.md": "50aa8b0e7133671617cc71255245bfa92af354bc9cdeba6425ce0970639719c0",
+      "adapters/mcp/cli.mjs": "6298d492caccb345bea85f29279bccb17ffc3e785c0d9168ed57a88760ce3466",
+      "adapters/mcp/server.mjs": "9886f61b5d8f68f1d3266ecd2e6b1e1456d9904336f4797a1e3d206ea3bbdb45",
+      "adapters/openai/index.mjs": "dca6abed2d411dcf38592b083531fcfb881feb3e036ddf5c27d262470fa4bb24",
+      "adapters/openai/profiles.mjs": "3ff8cf72cae5a751c3e4f7bb3613c1bd8199097aa138f826c04994149260576b",
+      "adapters/openai/schemas.mjs": "2c5ddc0e7dfd4bae345503389bb89d36270ef8cb73b0d4f57ae53ee7768bff0e",
+      "bin/cairn-memory.mjs": "56d8fe270b3945fb60287fca25c42a762595afab0cbf28c94b43b8c3ae59df86",
+      "core/admission-storage.mjs": "a1bd7cb7af992a771b7c574a96543abf4da66f4f470093d111ba0e4628e3467e",
+      "core/capture-input.mjs": "8fee8c38e00e9465d644706d286c3433b7dd57fb796124347013ce3270da9e3a",
+      "core/capture.mjs": "f011f9e83372b46dea66242a0ccdff06e658f4e49c8deb492b960dff245f50c6",
+      "core/classification.mjs": "980fa14c8e92bf5190763db6348deff8ed47ff886de832c5340478f9453ba177",
+      "core/conflict-storage.mjs": "0639606e811592a7b695f7342cd3c3751d2a15dc55c75879a28fa2944c5918ab",
+      "core/contract.mjs": "0bdfd1b7b9ee6dddea66015cdb9711502c03476bac359f4f98f62d16c74da2ad",
+      "core/database.mjs": "bb674045e8348b3917ffda45b676b56476c7f92c6280bcddbf4f2927150a4004",
+      "core/fetch.mjs": "df363ddc24bb5aa63ef72fe77629aca5917ed6595f8f46e5e48d1e7ba2cfb336",
+      "core/index-schema.mjs": "929044da645c709e5c6c361cb8fdae961186451c6ed9d5829d1c7968a9c83c62",
+      "core/index-storage.mjs": "74e9c84d2d660e7996ce556d43096ee248edfeb056aa5a424acf94a781c892a2",
+      "core/index.mjs": "7474c3076455d64af3c8c4d6cee3592b0058bb4542b1746232b2a607967c2f55",
+      "core/moc-storage.mjs": "aeaabcaf626682fb95a4e4fc3474dcd93c43f63b5f4919a81a023b32f7703b9e",
+      "core/model-budget.mjs": "ab1eb8ca87bf6937e8ba9039518786668dc9337bb3b9062eed4477809dec1e8a",
+      "core/model-call.mjs": "c1508f8671ca1da1e418f34f32507ea3f447ea15ff737e003fb6744a05d1e34b",
+      "core/model-diagnostics.mjs": "deefc03a3ee9a15914a3512fac134ff71eef9e581fcc800818b0bf6ffdd96dfa",
+      "core/ordered-capture-schema.mjs": "9c1c93949b0a969e8a1f8008719699fb956c299753428c0dd0d4095175028469",
+      "core/ordered-capture-storage.mjs": "a743f83e3e3b4c2a54f1d09c0cdf326481c673022f1ac22a36a6163007f65f30",
+      "core/ordered-capture.mjs": "21125b7a96030ce53c012f620ffc93b37bbe3b29f1b1266a11257320204526b2",
+      "core/placement-input.mjs": "724348a355d5137448830369dd72fed680d5ef32b15614284c91a3fef9e5654d",
+      "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",
+      "core/prompts/extract-memories.md": "8942bea305c2bf09a65b092f11da9dcb6068ceb16fe88e7e623149cd99850eae",
+      "core/prompts/recall-rank.md": "930e43038441d117dddf7bcaa2f93363bcb2e9150105d406750800da94b7fbcc",
+      "core/prompts/recall-select.md": "41cc02441ede2b53763bc0afad5eb26d9b35441defd9a5a2e2746216c9ba1880",
+      "core/prompts/reconcile-memories.md": "72fe4deaf7c2c1a2391abc7cd5d9594560ab06a33ff9d96737f46aa90fbe3b09",
+      "core/query-excerpt.mjs": "cda8347a0d249b72f6f74d0d4d3b0aacad493e8877bb0ab2d935adc6cbdac6ca",
+      "core/recall.mjs": "d57d151738a2e4a12c8c3a2c5f5a49675267124da711cf062f4dcf6c31dabe93",
+      "core/runtime.mjs": "65111b2e9fe8787d8577594869547c32fd57693ecfd5e603822c9bf6d1bf8197",
+      "core/supersession-storage.mjs": "fb7fcab36befd74a4cdce92019c952136b2fb637089a6a021def5bed264638e6",
+      "core/validation.mjs": "96d4a2cd01433c6af27f9263ffd5d32648367dec65995f223e3e1a3c18267b92",
+      "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
+      "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b",
+      "npm-shrinkwrap.json": "586d36cf333d878ee6dbbd27e7677c6d2271626b53485721b64f86aee599827b",
+      "package.json": "0bf54933a49d9a78749a5b96e384f14692ab3487842d3568f11b94cde56566f6",
+      "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88"
+    }
+  },
+  "namespace": {
+    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+    "scope": "project",
+    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+  },
+  "stages": [
+    {
+      "stage": "A",
+      "status": "completed",
+      "verdict": {
+        "stage": "A",
+        "passedAutomated": true,
+        "semanticReviewRequired": true
+      },
+      "windows": [
+        {
+          "source": {
+            "sessionId": "synthetic-source-1",
+            "eventId": "synthetic-event-1",
+            "sequence": 1,
+            "messages": [
+              {
+                "id": "synthetic-message-1",
+                "role": "user",
+                "content": "Harbor team review happens on Friday."
+              }
+            ]
+          },
+          "snapshot": {
+            "listPages": [
+              {
+                "ok": true,
+                "value": {
+                  "memories": [
+                    {
+                      "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:09.026Z",
+                      "updatedAt": "2026-09-12T06:34:10.635Z"
+                    }
+                  ],
+                  "nextCursor": null,
+                  "exhausted": true
+                }
+              }
+            ],
+            "getPages": [
+              {
+                "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "pages": [
+                  {
+                    "ok": true,
+                    "value": {
+                      "memory": {
+                        "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                        "namespace": {
+                          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                          "scope": "project",
+                          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                        },
+                        "kind": "fact",
+                        "origin": "agent-inferred",
+                        "confidence": 0.98,
+                        "revision": 2,
+                        "state": "active",
+                        "filing": {
+                          "status": "filed"
+                        },
+                        "receiptCount": 1,
+                        "createdAt": "2026-09-12T06:34:09.026Z",
+                        "updatedAt": "2026-09-12T06:34:10.635Z",
+                        "content": "The Harbor team review happens on Friday."
+                      },
+                      "receipts": [
+                        {
+                          "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                          "client": "installed-ordered-capture-loop",
+                          "sessionId": "synthetic-source-1",
+                          "eventId": "synthetic-message-1",
+                          "role": "user",
+                          "excerpt": "Harbor team review happens on Friday.",
+                          "createdAt": "2026-09-12T06:34:09.026Z"
+                        }
+                      ],
+                      "placements": [
+                        {
+                          "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                          "mocRevision": 1,
+                          "title": "Harbor team"
+                        }
+                      ],
+                      "conflicts": [],
+                      "nextReceiptCursor": null,
+                      "exhausted": true
+                    }
+                  }
+                ]
+              }
+            ],
+            "records": [
+              {
+                "memory": {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:10.635Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                    "client": "installed-ordered-capture-loop",
+                    "sessionId": "synthetic-source-1",
+                    "eventId": "synthetic-message-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:34:09.026Z"
+                  }
+                ]
+              }
+            ]
+          },
+          "reopenedSnapshot": {
+            "listPages": [
+              {
+                "ok": true,
+                "value": {
+                  "memories": [
+                    {
+                      "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:09.026Z",
+                      "updatedAt": "2026-09-12T06:34:10.635Z"
+                    }
+                  ],
+                  "nextCursor": null,
+                  "exhausted": true
+                }
+              }
+            ],
+            "getPages": [
+              {
+                "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "pages": [
+                  {
+                    "ok": true,
+                    "value": {
+                      "memory": {
+                        "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                        "namespace": {
+                          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                          "scope": "project",
+                          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                        },
+                        "kind": "fact",
+                        "origin": "agent-inferred",
+                        "confidence": 0.98,
+                        "revision": 2,
+                        "state": "active",
+                        "filing": {
+                          "status": "filed"
+                        },
+                        "receiptCount": 1,
+                        "createdAt": "2026-09-12T06:34:09.026Z",
+                        "updatedAt": "2026-09-12T06:34:10.635Z",
+                        "content": "The Harbor team review happens on Friday."
+                      },
+                      "receipts": [
+                        {
+                          "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                          "client": "installed-ordered-capture-loop",
+                          "sessionId": "synthetic-source-1",
+                          "eventId": "synthetic-message-1",
+                          "role": "user",
+                          "excerpt": "Harbor team review happens on Friday.",
+                          "createdAt": "2026-09-12T06:34:09.026Z"
+                        }
+                      ],
+                      "placements": [
+                        {
+                          "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                          "mocRevision": 1,
+                          "title": "Harbor team"
+                        }
+                      ],
+                      "conflicts": [],
+                      "nextReceiptCursor": null,
+                      "exhausted": true
+                    }
+                  }
+                ]
+              }
+            ],
+            "records": [
+              {
+                "memory": {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:10.635Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                    "client": "installed-ordered-capture-loop",
+                    "sessionId": "synthetic-source-1",
+                    "eventId": "synthetic-message-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:34:09.026Z"
+                  }
+                ]
+              }
+            ]
+          },
+          "capture": {
+            "ok": true,
+            "value": {
+              "duplicate": false,
+              "admission": {
+                "memories": [
+                  {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "revision": 1
+                  }
+                ],
+                "suppressedCount": 0,
+                "indexRevision": 2
+              },
+              "classification": {
+                "status": "applied",
+                "memoryRevisions": [
+                  {
+                    "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "revision": 2
+                  }
+                ],
+                "indexRevision": 3
+              },
+              "reconciliation": {
+                "status": "complete_no_change",
+                "reason": null,
+                "retiredCount": 0
+              }
+            }
+          }
+        },
+        {
+          "source": {
+            "sessionId": "synthetic-source-2",
+            "eventId": "synthetic-event-2",
+            "sequence": 2,
+            "messages": [
+              {
+                "id": "synthetic-message-2",
+                "role": "user",
+                "content": "Confirmed update: Harbor team review now happens on Monday, replacing Friday."
+              }
+            ]
+          },
+          "snapshot": {
+            "listPages": [
+              {
+                "ok": true,
+                "value": {
+                  "memories": [
+                    {
+                      "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:13.827Z",
+                      "updatedAt": "2026-09-12T06:34:15.657Z"
+                    },
+                    {
+                      "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 3,
+                      "state": "historical",
+                      "filing": {
+                        "status": "unfiled"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:09.026Z",
+                      "updatedAt": "2026-09-12T06:34:13.827Z"
+                    }
+                  ],
+                  "nextCursor": null,
+                  "exhausted": true
+                }
+              }
+            ],
+            "getPages": [
+              {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "pages": [
+                  {
+                    "ok": true,
+                    "value": {
+                      "memory": {
+                        "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                        "namespace": {
+                          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                          "scope": "project",
+                          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                        },
+                        "kind": "fact",
+                        "origin": "agent-inferred",
+                        "confidence": 0.98,
+                        "revision": 2,
+                        "state": "active",
+                        "filing": {
+                          "status": "filed"
+                        },
+                        "receiptCount": 1,
+                        "createdAt": "2026-09-12T06:34:13.827Z",
+                        "updatedAt": "2026-09-12T06:34:15.657Z",
+                        "content": "The Harbor team review now happens on Monday instead of Friday."
+                      },
+                      "receipts": [
+                        {
+                          "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                          "client": "installed-ordered-capture-loop",
+                          "sessionId": "synthetic-source-2",
+                          "eventId": "synthetic-message-2",
+                          "role": "user",
+                          "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                          "createdAt": "2026-09-12T06:34:13.827Z"
+                        }
+                      ],
+                      "placements": [
+                        {
+                          "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                          "mocRevision": 3,
+                          "title": null
+                        },
+                        {
+                          "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                          "mocRevision": 1,
+                          "title": "Team Meeting Schedule Changes"
+                        }
+                      ],
+                      "conflicts": [],
+                      "nextReceiptCursor": null,
+                      "exhausted": true
+                    }
+                  }
+                ]
+              },
+              {
+                "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "pages": [
+                  {
+                    "ok": true,
+                    "value": {
+                      "memory": {
+                        "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                        "namespace": {
+                          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                          "scope": "project",
+                          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                        },
+                        "kind": "fact",
+                        "origin": "agent-inferred",
+                        "confidence": 0.98,
+                        "revision": 3,
+                        "state": "historical",
+                        "filing": {
+                          "status": "unfiled"
+                        },
+                        "receiptCount": 1,
+                        "createdAt": "2026-09-12T06:34:09.026Z",
+                        "updatedAt": "2026-09-12T06:34:13.827Z",
+                        "content": "The Harbor team review happens on Friday."
+                      },
+                      "receipts": [
+                        {
+                          "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                          "client": "installed-ordered-capture-loop",
+                          "sessionId": "synthetic-source-1",
+                          "eventId": "synthetic-message-1",
+                          "role": "user",
+                          "excerpt": "Harbor team review happens on Friday.",
+                          "createdAt": "2026-09-12T06:34:09.026Z"
+                        }
+                      ],
+                      "placements": [],
+                      "conflicts": [],
+                      "supersession": {
+                        "previousRevision": 2,
+                        "replacement": {
+                          "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                          "revision": 1,
+                          "currentRevision": 2,
+                          "state": "active"
+                        },
+                        "receiptIds": [
+                          "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                        ],
+                        "evidenceAvailable": true
+                      },
+                      "nextReceiptCursor": null,
+                      "exhausted": true
+                    }
+                  }
+                ]
+              }
+            ],
+            "records": [
+              {
+                "memory": {
+                  "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:13.827Z",
+                  "updatedAt": "2026-09-12T06:34:15.657Z",
+                  "content": "The Harbor team review now happens on Monday instead of Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                    "client": "installed-ordered-capture-loop",
+                    "sessionId": "synthetic-source-2",
+                    "eventId": "synthetic-message-2",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:34:13.827Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                    "client": "installed-ordered-capture-loop",
+                    "sessionId": "synthetic-source-1",
+                    "eventId": "synthetic-message-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:34:09.026Z"
+                  }
+                ],
+                "supersession": {
+                  "previousRevision": 2,
+                  "replacement": {
+                    "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "revision": 1,
+                    "currentRevision": 2,
+                    "state": "active"
+                  },
+                  "receiptIds": [
+                    "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                  ],
+                  "evidenceAvailable": true
+                }
+              }
+            ]
+          },
+          "reopenedSnapshot": {
+            "listPages": [
+              {
+                "ok": true,
+                "value": {
+                  "memories": [
+                    {
+                      "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:13.827Z",
+                      "updatedAt": "2026-09-12T06:34:15.657Z"
+                    },
+                    {
+                      "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 3,
+                      "state": "historical",
+                      "filing": {
+                        "status": "unfiled"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:09.026Z",
+                      "updatedAt": "2026-09-12T06:34:13.827Z"
+                    }
+                  ],
+                  "nextCursor": null,
+                  "exhausted": true
+                }
+              }
+            ],
+            "getPages": [
+              {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "pages": [
+                  {
+                    "ok": true,
+                    "value": {
+                      "memory": {
+                        "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                        "namespace": {
+                          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                          "scope": "project",
+                          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                        },
+                        "kind": "fact",
+                        "origin": "agent-inferred",
+                        "confidence": 0.98,
+                        "revision": 2,
+                        "state": "active",
+                        "filing": {
+                          "status": "filed"
+                        },
+                        "receiptCount": 1,
+                        "createdAt": "2026-09-12T06:34:13.827Z",
+                        "updatedAt": "2026-09-12T06:34:15.657Z",
+                        "content": "The Harbor team review now happens on Monday instead of Friday."
+                      },
+                      "receipts": [
+                        {
+                          "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                          "client": "installed-ordered-capture-loop",
+                          "sessionId": "synthetic-source-2",
+                          "eventId": "synthetic-message-2",
+                          "role": "user",
+                          "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                          "createdAt": "2026-09-12T06:34:13.827Z"
+                        }
+                      ],
+                      "placements": [
+                        {
+                          "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                          "mocRevision": 3,
+                          "title": null
+                        },
+                        {
+                          "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                          "mocRevision": 1,
+                          "title": "Team Meeting Schedule Changes"
+                        }
+                      ],
+                      "conflicts": [],
+                      "nextReceiptCursor": null,
+                      "exhausted": true
+                    }
+                  }
+                ]
+              },
+              {
+                "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "pages": [
+                  {
+                    "ok": true,
+                    "value": {
+                      "memory": {
+                        "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                        "namespace": {
+                          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                          "scope": "project",
+                          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                        },
+                        "kind": "fact",
+                        "origin": "agent-inferred",
+                        "confidence": 0.98,
+                        "revision": 3,
+                        "state": "historical",
+                        "filing": {
+                          "status": "unfiled"
+                        },
+                        "receiptCount": 1,
+                        "createdAt": "2026-09-12T06:34:09.026Z",
+                        "updatedAt": "2026-09-12T06:34:13.827Z",
+                        "content": "The Harbor team review happens on Friday."
+                      },
+                      "receipts": [
+                        {
+                          "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                          "client": "installed-ordered-capture-loop",
+                          "sessionId": "synthetic-source-1",
+                          "eventId": "synthetic-message-1",
+                          "role": "user",
+                          "excerpt": "Harbor team review happens on Friday.",
+                          "createdAt": "2026-09-12T06:34:09.026Z"
+                        }
+                      ],
+                      "placements": [],
+                      "conflicts": [],
+                      "supersession": {
+                        "previousRevision": 2,
+                        "replacement": {
+                          "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                          "revision": 1,
+                          "currentRevision": 2,
+                          "state": "active"
+                        },
+                        "receiptIds": [
+                          "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                        ],
+                        "evidenceAvailable": true
+                      },
+                      "nextReceiptCursor": null,
+                      "exhausted": true
+                    }
+                  }
+                ]
+              }
+            ],
+            "records": [
+              {
+                "memory": {
+                  "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:13.827Z",
+                  "updatedAt": "2026-09-12T06:34:15.657Z",
+                  "content": "The Harbor team review now happens on Monday instead of Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                    "client": "installed-ordered-capture-loop",
+                    "sessionId": "synthetic-source-2",
+                    "eventId": "synthetic-message-2",
+                    "role": "user",
+                    "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                    "createdAt": "2026-09-12T06:34:13.827Z"
+                  }
+                ]
+              },
+              {
+                "memory": {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z",
+                  "content": "The Harbor team review happens on Friday."
+                },
+                "receipts": [
+                  {
+                    "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                    "client": "installed-ordered-capture-loop",
+                    "sessionId": "synthetic-source-1",
+                    "eventId": "synthetic-message-1",
+                    "role": "user",
+                    "excerpt": "Harbor team review happens on Friday.",
+                    "createdAt": "2026-09-12T06:34:09.026Z"
+                  }
+                ],
+                "supersession": {
+                  "previousRevision": 2,
+                  "replacement": {
+                    "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "revision": 1,
+                    "currentRevision": 2,
+                    "state": "active"
+                  },
+                  "receiptIds": [
+                    "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                  ],
+                  "evidenceAvailable": true
+                }
+              }
+            ]
+          },
+          "capture": {
+            "ok": true,
+            "value": {
+              "duplicate": false,
+              "admission": {
+                "memories": [
+                  {
+                    "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "revision": 1
+                  }
+                ],
+                "suppressedCount": 0,
+                "indexRevision": 5
+              },
+              "classification": {
+                "status": "applied",
+                "memoryRevisions": [
+                  {
+                    "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "revision": 2
+                  }
+                ],
+                "indexRevision": 6
+              },
+              "reconciliation": {
+                "status": "applied",
+                "reason": null,
+                "retiredCount": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stage": "B",
+      "status": "completed",
+      "verdict": {
+        "stage": "B",
+        "passedAutomated": true,
+        "semanticReviewRequired": true
+      },
+      "consumerSessionId": "685d8565-5325-41dd-b25e-05e3db391193",
+      "recall": {
+        "ok": true,
+        "value": {
+          "memories": [
+            {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 2,
+                "state": "active",
+                "filing": {
+                  "status": "filed"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:15.657Z",
+                "content": "The Harbor team review now happens on Monday instead of Friday."
+              },
+              "receipts": [
+                {
+                  "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-2",
+                  "eventId": "synthetic-message-2",
+                  "role": "user",
+                  "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                  "createdAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "receiptCount": 1
+            }
+          ],
+          "namespaces": [
+            {
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "mapExhausted": true,
+              "fetchExhausted": true
+            }
+          ],
+          "coverage": "complete"
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "currentPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:15.657Z",
+              "content": "The Harbor team review now happens on Monday instead of Friday."
+            },
+            "receipts": [
+              {
+                "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-2",
+                "eventId": "synthetic-message-2",
+                "role": "user",
+                "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                "createdAt": "2026-09-12T06:34:13.827Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                "mocRevision": 3,
+                "title": null
+              },
+              {
+                "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                "mocRevision": 1,
+                "title": "Team Meeting Schedule Changes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "current": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 2,
+            "state": "active",
+            "filing": {
+              "status": "filed"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:15.657Z",
+            "content": "The Harbor team review now happens on Monday instead of Friday."
+          },
+          "receipts": [
+            {
+              "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-2",
+              "eventId": "synthetic-message-2",
+              "role": "user",
+              "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+              "createdAt": "2026-09-12T06:34:13.827Z"
+            }
+          ],
+          "placements": [
+            {
+              "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+              "mocRevision": 3,
+              "title": null
+            },
+            {
+              "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+              "mocRevision": 1,
+              "title": "Team Meeting Schedule Changes"
+            }
+          ],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "isolation": {
+        "consumerSessionId": "a4c4203f-9970-43ff-9ad5-027137123336",
+        "namespace": {
+          "ownerId": "foreign-0bb94bce-4841-47de-8323-70ba90a333d9",
+          "scope": "project",
+          "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+        },
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "get": {
+          "ok": false,
+          "error": {
+            "code": "memory_not_found",
+            "retryable": false
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "correctArguments": {
+          "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+          "expectedRevision": 2,
+          "content": "Foreign overwrite."
+        },
+        "correct": {
+          "ok": false,
+          "error": {
+            "code": "memory_not_found",
+            "retryable": false
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "forgetArguments": {
+          "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+          "expectedRevision": 2
+        },
+        "forget": {
+          "ok": true,
+          "value": {
+            "forgotten": false,
+            "indexRevision": 1
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "afterPages": [
+          {
+            "ok": true,
+            "value": {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 2,
+                "state": "active",
+                "filing": {
+                  "status": "filed"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:15.657Z",
+                "content": "The Harbor team review now happens on Monday instead of Friday."
+              },
+              "receipts": [
+                {
+                  "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-2",
+                  "eventId": "synthetic-message-2",
+                  "role": "user",
+                  "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                  "createdAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "placements": [
+                {
+                  "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                  "mocRevision": 3,
+                  "title": null
+                },
+                {
+                  "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                  "mocRevision": 1,
+                  "title": "Team Meeting Schedule Changes"
+                }
+              ],
+              "conflicts": [],
+              "nextReceiptCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "after": {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:15.657Z",
+              "content": "The Harbor team review now happens on Monday instead of Friday."
+            },
+            "receipts": [
+              {
+                "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-2",
+                "eventId": "synthetic-message-2",
+                "role": "user",
+                "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                "createdAt": "2026-09-12T06:34:13.827Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                "mocRevision": 3,
+                "title": null
+              },
+              {
+                "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                "mocRevision": 1,
+                "title": "Team Meeting Schedule Changes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "historyAfterPages": [
+          {
+            "ok": true,
+            "value": {
+              "memory": {
+                "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 3,
+                "state": "historical",
+                "filing": {
+                  "status": "unfiled"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:09.026Z",
+                "updatedAt": "2026-09-12T06:34:13.827Z",
+                "content": "The Harbor team review happens on Friday."
+              },
+              "receipts": [
+                {
+                  "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-1",
+                  "eventId": "synthetic-message-1",
+                  "role": "user",
+                  "excerpt": "Harbor team review happens on Friday.",
+                  "createdAt": "2026-09-12T06:34:09.026Z"
+                }
+              ],
+              "placements": [],
+              "conflicts": [],
+              "supersession": {
+                "previousRevision": 2,
+                "replacement": {
+                  "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "revision": 1,
+                  "currentRevision": 2,
+                  "state": "active"
+                },
+                "receiptIds": [
+                  "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                ],
+                "evidenceAvailable": true
+              },
+              "nextReceiptCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "historyAfter": {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 2,
+                "state": "active"
+              },
+              "receiptIds": [
+                "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+              ],
+              "evidenceAvailable": true
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "snapshotAfter": {
+          "listPages": [
+            {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 2,
+                    "state": "active",
+                    "filing": {
+                      "status": "filed"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:13.827Z",
+                    "updatedAt": "2026-09-12T06:34:15.657Z"
+                  },
+                  {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z"
+                  }
+                ],
+                "nextCursor": null,
+                "exhausted": true
+              },
+              "evidenceTrust": "untrusted-data-not-instructions"
+            }
+          ],
+          "getPages": [
+            {
+              "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "pages": [
+                {
+                  "ok": true,
+                  "value": {
+                    "memory": {
+                      "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:13.827Z",
+                      "updatedAt": "2026-09-12T06:34:15.657Z",
+                      "content": "The Harbor team review now happens on Monday instead of Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                        "client": "installed-ordered-capture-loop",
+                        "sessionId": "synthetic-source-2",
+                        "eventId": "synthetic-message-2",
+                        "role": "user",
+                        "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                        "createdAt": "2026-09-12T06:34:13.827Z"
+                      }
+                    ],
+                    "placements": [
+                      {
+                        "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                        "mocRevision": 3,
+                        "title": null
+                      },
+                      {
+                        "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                        "mocRevision": 1,
+                        "title": "Team Meeting Schedule Changes"
+                      }
+                    ],
+                    "conflicts": [],
+                    "nextReceiptCursor": null,
+                    "exhausted": true
+                  },
+                  "evidenceTrust": "untrusted-data-not-instructions"
+                }
+              ]
+            },
+            {
+              "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "pages": [
+                {
+                  "ok": true,
+                  "value": {
+                    "memory": {
+                      "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 3,
+                      "state": "historical",
+                      "filing": {
+                        "status": "unfiled"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:09.026Z",
+                      "updatedAt": "2026-09-12T06:34:13.827Z",
+                      "content": "The Harbor team review happens on Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                        "client": "installed-ordered-capture-loop",
+                        "sessionId": "synthetic-source-1",
+                        "eventId": "synthetic-message-1",
+                        "role": "user",
+                        "excerpt": "Harbor team review happens on Friday.",
+                        "createdAt": "2026-09-12T06:34:09.026Z"
+                      }
+                    ],
+                    "placements": [],
+                    "conflicts": [],
+                    "supersession": {
+                      "previousRevision": 2,
+                      "replacement": {
+                        "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                        "revision": 1,
+                        "currentRevision": 2,
+                        "state": "active"
+                      },
+                      "receiptIds": [
+                        "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                      ],
+                      "evidenceAvailable": true
+                    },
+                    "nextReceiptCursor": null,
+                    "exhausted": true
+                  },
+                  "evidenceTrust": "untrusted-data-not-instructions"
+                }
+              ]
+            }
+          ],
+          "records": [
+            {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 2,
+                "state": "active",
+                "filing": {
+                  "status": "filed"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:15.657Z",
+                "content": "The Harbor team review now happens on Monday instead of Friday."
+              },
+              "receipts": [
+                {
+                  "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-2",
+                  "eventId": "synthetic-message-2",
+                  "role": "user",
+                  "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                  "createdAt": "2026-09-12T06:34:13.827Z"
+                }
+              ]
+            },
+            {
+              "memory": {
+                "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 3,
+                "state": "historical",
+                "filing": {
+                  "status": "unfiled"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:09.026Z",
+                "updatedAt": "2026-09-12T06:34:13.827Z",
+                "content": "The Harbor team review happens on Friday."
+              },
+              "receipts": [
+                {
+                  "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-1",
+                  "eventId": "synthetic-message-1",
+                  "role": "user",
+                  "excerpt": "Harbor team review happens on Friday.",
+                  "createdAt": "2026-09-12T06:34:09.026Z"
+                }
+              ],
+              "supersession": {
+                "previousRevision": 2,
+                "replacement": {
+                  "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "revision": 1,
+                  "currentRevision": 2,
+                  "state": "active"
+                },
+                "receiptIds": [
+                  "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                ],
+                "evidenceAvailable": true
+              }
+            }
+          ]
+        }
+      },
+      "projectIsolation": {
+        "consumerSessionId": "507204e5-4a25-4233-8454-ce178640fc40",
+        "namespace": {
+          "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+          "scope": "project",
+          "projectId": "foreign-5b66a4f0-ca25-42a4-8291-73fb680c2d37"
+        },
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "get": {
+          "ok": false,
+          "error": {
+            "code": "memory_not_found",
+            "retryable": false
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "correctArguments": {
+          "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+          "expectedRevision": 2,
+          "content": "Foreign overwrite."
+        },
+        "correct": {
+          "ok": false,
+          "error": {
+            "code": "memory_not_found",
+            "retryable": false
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "forgetArguments": {
+          "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+          "expectedRevision": 2
+        },
+        "forget": {
+          "ok": true,
+          "value": {
+            "forgotten": false,
+            "indexRevision": 1
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "afterPages": [
+          {
+            "ok": true,
+            "value": {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 2,
+                "state": "active",
+                "filing": {
+                  "status": "filed"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:15.657Z",
+                "content": "The Harbor team review now happens on Monday instead of Friday."
+              },
+              "receipts": [
+                {
+                  "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-2",
+                  "eventId": "synthetic-message-2",
+                  "role": "user",
+                  "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                  "createdAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "placements": [
+                {
+                  "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                  "mocRevision": 3,
+                  "title": null
+                },
+                {
+                  "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                  "mocRevision": 1,
+                  "title": "Team Meeting Schedule Changes"
+                }
+              ],
+              "conflicts": [],
+              "nextReceiptCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "after": {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:15.657Z",
+              "content": "The Harbor team review now happens on Monday instead of Friday."
+            },
+            "receipts": [
+              {
+                "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-2",
+                "eventId": "synthetic-message-2",
+                "role": "user",
+                "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                "createdAt": "2026-09-12T06:34:13.827Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                "mocRevision": 3,
+                "title": null
+              },
+              {
+                "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                "mocRevision": 1,
+                "title": "Team Meeting Schedule Changes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "historyAfterPages": [
+          {
+            "ok": true,
+            "value": {
+              "memory": {
+                "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 3,
+                "state": "historical",
+                "filing": {
+                  "status": "unfiled"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:09.026Z",
+                "updatedAt": "2026-09-12T06:34:13.827Z",
+                "content": "The Harbor team review happens on Friday."
+              },
+              "receipts": [
+                {
+                  "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-1",
+                  "eventId": "synthetic-message-1",
+                  "role": "user",
+                  "excerpt": "Harbor team review happens on Friday.",
+                  "createdAt": "2026-09-12T06:34:09.026Z"
+                }
+              ],
+              "placements": [],
+              "conflicts": [],
+              "supersession": {
+                "previousRevision": 2,
+                "replacement": {
+                  "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "revision": 1,
+                  "currentRevision": 2,
+                  "state": "active"
+                },
+                "receiptIds": [
+                  "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                ],
+                "evidenceAvailable": true
+              },
+              "nextReceiptCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "historyAfter": {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 2,
+                "state": "active"
+              },
+              "receiptIds": [
+                "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+              ],
+              "evidenceAvailable": true
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        },
+        "snapshotAfter": {
+          "listPages": [
+            {
+              "ok": true,
+              "value": {
+                "memories": [
+                  {
+                    "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 2,
+                    "state": "active",
+                    "filing": {
+                      "status": "filed"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:13.827Z",
+                    "updatedAt": "2026-09-12T06:34:15.657Z"
+                  },
+                  {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z"
+                  }
+                ],
+                "nextCursor": null,
+                "exhausted": true
+              },
+              "evidenceTrust": "untrusted-data-not-instructions"
+            }
+          ],
+          "getPages": [
+            {
+              "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "pages": [
+                {
+                  "ok": true,
+                  "value": {
+                    "memory": {
+                      "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 2,
+                      "state": "active",
+                      "filing": {
+                        "status": "filed"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:13.827Z",
+                      "updatedAt": "2026-09-12T06:34:15.657Z",
+                      "content": "The Harbor team review now happens on Monday instead of Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                        "client": "installed-ordered-capture-loop",
+                        "sessionId": "synthetic-source-2",
+                        "eventId": "synthetic-message-2",
+                        "role": "user",
+                        "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                        "createdAt": "2026-09-12T06:34:13.827Z"
+                      }
+                    ],
+                    "placements": [
+                      {
+                        "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                        "mocRevision": 3,
+                        "title": null
+                      },
+                      {
+                        "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                        "mocRevision": 1,
+                        "title": "Team Meeting Schedule Changes"
+                      }
+                    ],
+                    "conflicts": [],
+                    "nextReceiptCursor": null,
+                    "exhausted": true
+                  },
+                  "evidenceTrust": "untrusted-data-not-instructions"
+                }
+              ]
+            },
+            {
+              "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "pages": [
+                {
+                  "ok": true,
+                  "value": {
+                    "memory": {
+                      "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                      "namespace": {
+                        "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                        "scope": "project",
+                        "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                      },
+                      "kind": "fact",
+                      "origin": "agent-inferred",
+                      "confidence": 0.98,
+                      "revision": 3,
+                      "state": "historical",
+                      "filing": {
+                        "status": "unfiled"
+                      },
+                      "receiptCount": 1,
+                      "createdAt": "2026-09-12T06:34:09.026Z",
+                      "updatedAt": "2026-09-12T06:34:13.827Z",
+                      "content": "The Harbor team review happens on Friday."
+                    },
+                    "receipts": [
+                      {
+                        "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                        "client": "installed-ordered-capture-loop",
+                        "sessionId": "synthetic-source-1",
+                        "eventId": "synthetic-message-1",
+                        "role": "user",
+                        "excerpt": "Harbor team review happens on Friday.",
+                        "createdAt": "2026-09-12T06:34:09.026Z"
+                      }
+                    ],
+                    "placements": [],
+                    "conflicts": [],
+                    "supersession": {
+                      "previousRevision": 2,
+                      "replacement": {
+                        "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                        "revision": 1,
+                        "currentRevision": 2,
+                        "state": "active"
+                      },
+                      "receiptIds": [
+                        "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                      ],
+                      "evidenceAvailable": true
+                    },
+                    "nextReceiptCursor": null,
+                    "exhausted": true
+                  },
+                  "evidenceTrust": "untrusted-data-not-instructions"
+                }
+              ]
+            }
+          ],
+          "records": [
+            {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 2,
+                "state": "active",
+                "filing": {
+                  "status": "filed"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:15.657Z",
+                "content": "The Harbor team review now happens on Monday instead of Friday."
+              },
+              "receipts": [
+                {
+                  "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-2",
+                  "eventId": "synthetic-message-2",
+                  "role": "user",
+                  "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                  "createdAt": "2026-09-12T06:34:13.827Z"
+                }
+              ]
+            },
+            {
+              "memory": {
+                "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 3,
+                "state": "historical",
+                "filing": {
+                  "status": "unfiled"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:09.026Z",
+                "updatedAt": "2026-09-12T06:34:13.827Z",
+                "content": "The Harbor team review happens on Friday."
+              },
+              "receipts": [
+                {
+                  "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-1",
+                  "eventId": "synthetic-message-1",
+                  "role": "user",
+                  "excerpt": "Harbor team review happens on Friday.",
+                  "createdAt": "2026-09-12T06:34:09.026Z"
+                }
+              ],
+              "supersession": {
+                "previousRevision": 2,
+                "replacement": {
+                  "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "revision": 1,
+                  "currentRevision": 2,
+                  "state": "active"
+                },
+                "receiptIds": [
+                  "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                ],
+                "evidenceAvailable": true
+              }
+            }
+          ]
+        }
+      },
+      "historyPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 2,
+                "state": "active"
+              },
+              "receiptIds": [
+                "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+              ],
+              "evidenceAvailable": true
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "history": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 3,
+            "state": "historical",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:09.026Z",
+            "updatedAt": "2026-09-12T06:34:13.827Z",
+            "content": "The Harbor team review happens on Friday."
+          },
+          "receipts": [
+            {
+              "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-1",
+              "eventId": "synthetic-message-1",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Friday.",
+              "createdAt": "2026-09-12T06:34:09.026Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "supersession": {
+            "previousRevision": 2,
+            "replacement": {
+              "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "revision": 1,
+              "currentRevision": 2,
+              "state": "active"
+            },
+            "receiptIds": [
+              "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+            ],
+            "evidenceAvailable": true
+          },
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "snapshot": {
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [
+                {
+                  "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:13.827Z",
+                  "updatedAt": "2026-09-12T06:34:15.657Z"
+                },
+                {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "getPages": [
+          {
+            "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 2,
+                    "state": "active",
+                    "filing": {
+                      "status": "filed"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:13.827Z",
+                    "updatedAt": "2026-09-12T06:34:15.657Z",
+                    "content": "The Harbor team review now happens on Monday instead of Friday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                      "client": "installed-ordered-capture-loop",
+                      "sessionId": "synthetic-source-2",
+                      "eventId": "synthetic-message-2",
+                      "role": "user",
+                      "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                      "createdAt": "2026-09-12T06:34:13.827Z"
+                    }
+                  ],
+                  "placements": [
+                    {
+                      "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                      "mocRevision": 3,
+                      "title": null
+                    },
+                    {
+                      "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                      "mocRevision": 1,
+                      "title": "Team Meeting Schedule Changes"
+                    }
+                  ],
+                  "conflicts": [],
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          },
+          {
+            "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z",
+                    "content": "The Harbor team review happens on Friday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                      "client": "installed-ordered-capture-loop",
+                      "sessionId": "synthetic-source-1",
+                      "eventId": "synthetic-message-1",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Friday.",
+                      "createdAt": "2026-09-12T06:34:09.026Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "supersession": {
+                    "previousRevision": 2,
+                    "replacement": {
+                      "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "revision": 1,
+                      "currentRevision": 2,
+                      "state": "active"
+                    },
+                    "receiptIds": [
+                      "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+                    ],
+                    "evidenceAvailable": true
+                  },
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          }
+        ],
+        "records": [
+          {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:15.657Z",
+              "content": "The Harbor team review now happens on Monday instead of Friday."
+            },
+            "receipts": [
+              {
+                "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-2",
+                "eventId": "synthetic-message-2",
+                "role": "user",
+                "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                "createdAt": "2026-09-12T06:34:13.827Z"
+              }
+            ]
+          },
+          {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 2,
+                "state": "active"
+              },
+              "receiptIds": [
+                "d892ef70-120d-4af7-87ec-ee6d7d3c34f2"
+              ],
+              "evidenceAvailable": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "C",
+      "status": "completed",
+      "verdict": {
+        "stage": "C",
+        "passedAutomated": true,
+        "semanticReviewRequired": true
+      },
+      "consumerSessionId": "4bfa7a0a-5ed8-4f14-a559-297bdc69a9cb",
+      "recall": {
+        "ok": true,
+        "value": {
+          "memories": [
+            {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "agent-inferred",
+                "confidence": 0.98,
+                "revision": 2,
+                "state": "active",
+                "filing": {
+                  "status": "filed"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:15.657Z",
+                "content": "The Harbor team review now happens on Monday instead of Friday."
+              },
+              "receipts": [
+                {
+                  "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                  "client": "installed-ordered-capture-loop",
+                  "sessionId": "synthetic-source-2",
+                  "eventId": "synthetic-message-2",
+                  "role": "user",
+                  "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                  "createdAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "receiptCount": 1
+            }
+          ],
+          "namespaces": [
+            {
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "mapExhausted": true,
+              "fetchExhausted": true
+            }
+          ],
+          "coverage": "complete"
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "currentPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:15.657Z",
+              "content": "The Harbor team review now happens on Monday instead of Friday."
+            },
+            "receipts": [
+              {
+                "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-2",
+                "eventId": "synthetic-message-2",
+                "role": "user",
+                "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+                "createdAt": "2026-09-12T06:34:13.827Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+                "mocRevision": 3,
+                "title": null
+              },
+              {
+                "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+                "mocRevision": 1,
+                "title": "Team Meeting Schedule Changes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "current": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 2,
+            "state": "active",
+            "filing": {
+              "status": "filed"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:15.657Z",
+            "content": "The Harbor team review now happens on Monday instead of Friday."
+          },
+          "receipts": [
+            {
+              "id": "d892ef70-120d-4af7-87ec-ee6d7d3c34f2",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-2",
+              "eventId": "synthetic-message-2",
+              "role": "user",
+              "excerpt": "Confirmed update: Harbor team review now happens on Monday, replacing Friday.",
+              "createdAt": "2026-09-12T06:34:13.827Z"
+            }
+          ],
+          "placements": [
+            {
+              "mocId": "2c75e802-d216-40ee-b148-0045326e0172",
+              "mocRevision": 3,
+              "title": null
+            },
+            {
+              "mocId": "98ceab9b-3a58-470c-ab48-8d5df8e8452e",
+              "mocRevision": 1,
+              "title": "Team Meeting Schedule Changes"
+            }
+          ],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "mutationArguments": {
+        "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+        "expectedRevision": 2,
+        "content": "Harbor team review happens on Tuesday."
+      },
+      "mutation": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 3,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:23.393Z",
+            "content": "Harbor team review happens on Tuesday."
+          },
+          "indexRevision": 7
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "staleArguments": {
+        "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+        "expectedRevision": 2,
+        "content": "Stale overwrite."
+      },
+      "stale": {
+        "ok": false,
+        "error": {
+          "code": "revision_conflict",
+          "retryable": false
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "afterPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 3,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:23.393Z",
+              "content": "Harbor team review happens on Tuesday."
+            },
+            "receipts": [
+              {
+                "id": "81749826-087d-408b-aa8e-546dda61751d",
+                "client": "cairn-local-mcp",
+                "sessionId": "explicit-tool",
+                "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Tuesday.",
+                "createdAt": "2026-09-12T06:34:23.393Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "after": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 3,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:23.393Z",
+            "content": "Harbor team review happens on Tuesday."
+          },
+          "receipts": [
+            {
+              "id": "81749826-087d-408b-aa8e-546dda61751d",
+              "client": "cairn-local-mcp",
+              "sessionId": "explicit-tool",
+              "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Tuesday.",
+              "createdAt": "2026-09-12T06:34:23.393Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "historyPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 3,
+                "state": "active"
+              },
+              "receiptIds": [],
+              "evidenceAvailable": false
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "history": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 3,
+            "state": "historical",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:09.026Z",
+            "updatedAt": "2026-09-12T06:34:13.827Z",
+            "content": "The Harbor team review happens on Friday."
+          },
+          "receipts": [
+            {
+              "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-1",
+              "eventId": "synthetic-message-1",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Friday.",
+              "createdAt": "2026-09-12T06:34:09.026Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "supersession": {
+            "previousRevision": 2,
+            "replacement": {
+              "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "revision": 1,
+              "currentRevision": 3,
+              "state": "active"
+            },
+            "receiptIds": [],
+            "evidenceAvailable": false
+          },
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "snapshot": {
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [
+                {
+                  "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 3,
+                  "state": "active",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:13.827Z",
+                  "updatedAt": "2026-09-12T06:34:23.393Z"
+                },
+                {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "getPages": [
+          {
+            "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "explicit",
+                    "confidence": 1,
+                    "revision": 3,
+                    "state": "active",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:13.827Z",
+                    "updatedAt": "2026-09-12T06:34:23.393Z",
+                    "content": "Harbor team review happens on Tuesday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "81749826-087d-408b-aa8e-546dda61751d",
+                      "client": "cairn-local-mcp",
+                      "sessionId": "explicit-tool",
+                      "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Tuesday.",
+                      "createdAt": "2026-09-12T06:34:23.393Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          },
+          {
+            "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z",
+                    "content": "The Harbor team review happens on Friday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                      "client": "installed-ordered-capture-loop",
+                      "sessionId": "synthetic-source-1",
+                      "eventId": "synthetic-message-1",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Friday.",
+                      "createdAt": "2026-09-12T06:34:09.026Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "supersession": {
+                    "previousRevision": 2,
+                    "replacement": {
+                      "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "revision": 1,
+                      "currentRevision": 3,
+                      "state": "active"
+                    },
+                    "receiptIds": [],
+                    "evidenceAvailable": false
+                  },
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          }
+        ],
+        "records": [
+          {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 3,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:23.393Z",
+              "content": "Harbor team review happens on Tuesday."
+            },
+            "receipts": [
+              {
+                "id": "81749826-087d-408b-aa8e-546dda61751d",
+                "client": "cairn-local-mcp",
+                "sessionId": "explicit-tool",
+                "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Tuesday.",
+                "createdAt": "2026-09-12T06:34:23.393Z"
+              }
+            ]
+          },
+          {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 3,
+                "state": "active"
+              },
+              "receiptIds": [],
+              "evidenceAvailable": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "D",
+      "status": "completed",
+      "verdict": {
+        "stage": "D",
+        "passedAutomated": true,
+        "semanticReviewRequired": true
+      },
+      "consumerSessionId": "713c6a29-184a-4a43-8e19-11e81ad43707",
+      "recall": {
+        "ok": true,
+        "value": {
+          "memories": [
+            {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "explicit",
+                "confidence": 1,
+                "revision": 3,
+                "state": "active",
+                "filing": {
+                  "status": "unfiled"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:23.393Z",
+                "content": "Harbor team review happens on Tuesday."
+              },
+              "receipts": [
+                {
+                  "id": "81749826-087d-408b-aa8e-546dda61751d",
+                  "client": "cairn-local-mcp",
+                  "sessionId": "explicit-tool",
+                  "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                  "role": "user",
+                  "excerpt": "Harbor team review happens on Tuesday.",
+                  "createdAt": "2026-09-12T06:34:23.393Z"
+                }
+              ],
+              "receiptCount": 1
+            }
+          ],
+          "namespaces": [
+            {
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "mapExhausted": true,
+              "fetchExhausted": true
+            }
+          ],
+          "coverage": "complete"
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "currentPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 3,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:23.393Z",
+              "content": "Harbor team review happens on Tuesday."
+            },
+            "receipts": [
+              {
+                "id": "81749826-087d-408b-aa8e-546dda61751d",
+                "client": "cairn-local-mcp",
+                "sessionId": "explicit-tool",
+                "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Tuesday.",
+                "createdAt": "2026-09-12T06:34:23.393Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "current": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 3,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:23.393Z",
+            "content": "Harbor team review happens on Tuesday."
+          },
+          "receipts": [
+            {
+              "id": "81749826-087d-408b-aa8e-546dda61751d",
+              "client": "cairn-local-mcp",
+              "sessionId": "explicit-tool",
+              "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Tuesday.",
+              "createdAt": "2026-09-12T06:34:23.393Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "historyPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 3,
+                "state": "active"
+              },
+              "receiptIds": [],
+              "evidenceAvailable": false
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "history": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 3,
+            "state": "historical",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:09.026Z",
+            "updatedAt": "2026-09-12T06:34:13.827Z",
+            "content": "The Harbor team review happens on Friday."
+          },
+          "receipts": [
+            {
+              "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-1",
+              "eventId": "synthetic-message-1",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Friday.",
+              "createdAt": "2026-09-12T06:34:09.026Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "supersession": {
+            "previousRevision": 2,
+            "replacement": {
+              "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "revision": 1,
+              "currentRevision": 3,
+              "state": "active"
+            },
+            "receiptIds": [],
+            "evidenceAvailable": false
+          },
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "snapshot": {
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [
+                {
+                  "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 3,
+                  "state": "active",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:13.827Z",
+                  "updatedAt": "2026-09-12T06:34:23.393Z"
+                },
+                {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "getPages": [
+          {
+            "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "explicit",
+                    "confidence": 1,
+                    "revision": 3,
+                    "state": "active",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:13.827Z",
+                    "updatedAt": "2026-09-12T06:34:23.393Z",
+                    "content": "Harbor team review happens on Tuesday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "81749826-087d-408b-aa8e-546dda61751d",
+                      "client": "cairn-local-mcp",
+                      "sessionId": "explicit-tool",
+                      "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Tuesday.",
+                      "createdAt": "2026-09-12T06:34:23.393Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          },
+          {
+            "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z",
+                    "content": "The Harbor team review happens on Friday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                      "client": "installed-ordered-capture-loop",
+                      "sessionId": "synthetic-source-1",
+                      "eventId": "synthetic-message-1",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Friday.",
+                      "createdAt": "2026-09-12T06:34:09.026Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "supersession": {
+                    "previousRevision": 2,
+                    "replacement": {
+                      "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                      "revision": 1,
+                      "currentRevision": 3,
+                      "state": "active"
+                    },
+                    "receiptIds": [],
+                    "evidenceAvailable": false
+                  },
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          }
+        ],
+        "records": [
+          {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 3,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:23.393Z",
+              "content": "Harbor team review happens on Tuesday."
+            },
+            "receipts": [
+              {
+                "id": "81749826-087d-408b-aa8e-546dda61751d",
+                "client": "cairn-local-mcp",
+                "sessionId": "explicit-tool",
+                "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Tuesday.",
+                "createdAt": "2026-09-12T06:34:23.393Z"
+              }
+            ]
+          },
+          {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": {
+                "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "revision": 1,
+                "currentRevision": 3,
+                "state": "active"
+              },
+              "receiptIds": [],
+              "evidenceAvailable": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "E",
+      "status": "completed",
+      "verdict": {
+        "stage": "E",
+        "passedAutomated": true,
+        "semanticReviewRequired": true
+      },
+      "consumerSessionId": "af67e0dd-675d-43c4-ab32-0ffce0426cbd",
+      "recall": {
+        "ok": true,
+        "value": {
+          "memories": [
+            {
+              "memory": {
+                "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+                "namespace": {
+                  "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                  "scope": "project",
+                  "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                },
+                "kind": "fact",
+                "origin": "explicit",
+                "confidence": 1,
+                "revision": 3,
+                "state": "active",
+                "filing": {
+                  "status": "unfiled"
+                },
+                "receiptCount": 1,
+                "createdAt": "2026-09-12T06:34:13.827Z",
+                "updatedAt": "2026-09-12T06:34:23.393Z",
+                "content": "Harbor team review happens on Tuesday."
+              },
+              "receipts": [
+                {
+                  "id": "81749826-087d-408b-aa8e-546dda61751d",
+                  "client": "cairn-local-mcp",
+                  "sessionId": "explicit-tool",
+                  "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                  "role": "user",
+                  "excerpt": "Harbor team review happens on Tuesday.",
+                  "createdAt": "2026-09-12T06:34:23.393Z"
+                }
+              ],
+              "receiptCount": 1
+            }
+          ],
+          "namespaces": [
+            {
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "mapExhausted": true,
+              "fetchExhausted": true
+            }
+          ],
+          "coverage": "complete"
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "currentPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 3,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:23.393Z",
+              "content": "Harbor team review happens on Tuesday."
+            },
+            "receipts": [
+              {
+                "id": "81749826-087d-408b-aa8e-546dda61751d",
+                "client": "cairn-local-mcp",
+                "sessionId": "explicit-tool",
+                "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Tuesday.",
+                "createdAt": "2026-09-12T06:34:23.393Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "current": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 3,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:23.393Z",
+            "content": "Harbor team review happens on Tuesday."
+          },
+          "receipts": [
+            {
+              "id": "81749826-087d-408b-aa8e-546dda61751d",
+              "client": "cairn-local-mcp",
+              "sessionId": "explicit-tool",
+              "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Tuesday.",
+              "createdAt": "2026-09-12T06:34:23.393Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "staleArguments": {
+        "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+        "expectedRevision": 2
+      },
+      "stale": {
+        "ok": false,
+        "error": {
+          "code": "revision_conflict",
+          "retryable": false
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "afterStalePages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 3,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:13.827Z",
+              "updatedAt": "2026-09-12T06:34:23.393Z",
+              "content": "Harbor team review happens on Tuesday."
+            },
+            "receipts": [
+              {
+                "id": "81749826-087d-408b-aa8e-546dda61751d",
+                "client": "cairn-local-mcp",
+                "sessionId": "explicit-tool",
+                "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Tuesday.",
+                "createdAt": "2026-09-12T06:34:23.393Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "afterStale": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 3,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:13.827Z",
+            "updatedAt": "2026-09-12T06:34:23.393Z",
+            "content": "Harbor team review happens on Tuesday."
+          },
+          "receipts": [
+            {
+              "id": "81749826-087d-408b-aa8e-546dda61751d",
+              "client": "cairn-local-mcp",
+              "sessionId": "explicit-tool",
+              "eventId": "58fd33d0-8107-457a-bb28-cd461bed9364",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Tuesday.",
+              "createdAt": "2026-09-12T06:34:23.393Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "mutationArguments": {
+        "memoryId": "a467dea7-b8a2-4644-a9fa-44e09cb8093a",
+        "expectedRevision": 3
+      },
+      "mutation": {
+        "ok": true,
+        "value": {
+          "forgotten": true,
+          "indexRevision": 8
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "after": {
+        "ok": false,
+        "error": {
+          "code": "memory_not_found",
+          "retryable": false
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "historyPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": null,
+              "receiptIds": [],
+              "evidenceAvailable": false
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "history": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 3,
+            "state": "historical",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:09.026Z",
+            "updatedAt": "2026-09-12T06:34:13.827Z",
+            "content": "The Harbor team review happens on Friday."
+          },
+          "receipts": [
+            {
+              "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-1",
+              "eventId": "synthetic-message-1",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Friday.",
+              "createdAt": "2026-09-12T06:34:09.026Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "supersession": {
+            "previousRevision": 2,
+            "replacement": null,
+            "receiptIds": [],
+            "evidenceAvailable": false
+          },
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "snapshot": {
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [
+                {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "getPages": [
+          {
+            "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z",
+                    "content": "The Harbor team review happens on Friday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                      "client": "installed-ordered-capture-loop",
+                      "sessionId": "synthetic-source-1",
+                      "eventId": "synthetic-message-1",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Friday.",
+                      "createdAt": "2026-09-12T06:34:09.026Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "supersession": {
+                    "previousRevision": 2,
+                    "replacement": null,
+                    "receiptIds": [],
+                    "evidenceAvailable": false
+                  },
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          }
+        ],
+        "records": [
+          {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": null,
+              "receiptIds": [],
+              "evidenceAvailable": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "F",
+      "status": "completed",
+      "verdict": {
+        "stage": "F",
+        "passedAutomated": true,
+        "semanticReviewRequired": true
+      },
+      "consumerSessionId": "f9a3f420-7c75-424c-83ac-5932079d5bcb",
+      "recall": {
+        "ok": true,
+        "value": {
+          "memories": [],
+          "namespaces": [
+            {
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "mapExhausted": true,
+              "fetchExhausted": true
+            }
+          ],
+          "coverage": "complete"
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "after": {
+        "ok": false,
+        "error": {
+          "code": "memory_not_found",
+          "retryable": false
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "historyPages": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": null,
+              "receiptIds": [],
+              "evidenceAvailable": false
+            },
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "evidenceTrust": "untrusted-data-not-instructions"
+        }
+      ],
+      "history": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "namespace": {
+              "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+              "scope": "project",
+              "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+            },
+            "kind": "fact",
+            "origin": "agent-inferred",
+            "confidence": 0.98,
+            "revision": 3,
+            "state": "historical",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-09-12T06:34:09.026Z",
+            "updatedAt": "2026-09-12T06:34:13.827Z",
+            "content": "The Harbor team review happens on Friday."
+          },
+          "receipts": [
+            {
+              "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+              "client": "installed-ordered-capture-loop",
+              "sessionId": "synthetic-source-1",
+              "eventId": "synthetic-message-1",
+              "role": "user",
+              "excerpt": "Harbor team review happens on Friday.",
+              "createdAt": "2026-09-12T06:34:09.026Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "supersession": {
+            "previousRevision": 2,
+            "replacement": null,
+            "receiptIds": [],
+            "evidenceAvailable": false
+          },
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      },
+      "snapshot": {
+        "listPages": [
+          {
+            "ok": true,
+            "value": {
+              "memories": [
+                {
+                  "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                  "namespace": {
+                    "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                    "scope": "project",
+                    "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                  },
+                  "kind": "fact",
+                  "origin": "agent-inferred",
+                  "confidence": 0.98,
+                  "revision": 3,
+                  "state": "historical",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-12T06:34:09.026Z",
+                  "updatedAt": "2026-09-12T06:34:13.827Z"
+                }
+              ],
+              "nextCursor": null,
+              "exhausted": true
+            },
+            "evidenceTrust": "untrusted-data-not-instructions"
+          }
+        ],
+        "getPages": [
+          {
+            "memoryId": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+            "pages": [
+              {
+                "ok": true,
+                "value": {
+                  "memory": {
+                    "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+                    "namespace": {
+                      "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                      "scope": "project",
+                      "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+                    },
+                    "kind": "fact",
+                    "origin": "agent-inferred",
+                    "confidence": 0.98,
+                    "revision": 3,
+                    "state": "historical",
+                    "filing": {
+                      "status": "unfiled"
+                    },
+                    "receiptCount": 1,
+                    "createdAt": "2026-09-12T06:34:09.026Z",
+                    "updatedAt": "2026-09-12T06:34:13.827Z",
+                    "content": "The Harbor team review happens on Friday."
+                  },
+                  "receipts": [
+                    {
+                      "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                      "client": "installed-ordered-capture-loop",
+                      "sessionId": "synthetic-source-1",
+                      "eventId": "synthetic-message-1",
+                      "role": "user",
+                      "excerpt": "Harbor team review happens on Friday.",
+                      "createdAt": "2026-09-12T06:34:09.026Z"
+                    }
+                  ],
+                  "placements": [],
+                  "conflicts": [],
+                  "supersession": {
+                    "previousRevision": 2,
+                    "replacement": null,
+                    "receiptIds": [],
+                    "evidenceAvailable": false
+                  },
+                  "nextReceiptCursor": null,
+                  "exhausted": true
+                },
+                "evidenceTrust": "untrusted-data-not-instructions"
+              }
+            ]
+          }
+        ],
+        "records": [
+          {
+            "memory": {
+              "id": "4f6a7627-2bee-451c-88e1-f0ea0a3b9a48",
+              "namespace": {
+                "ownerId": "synthetic-94940508-dda4-4c60-ac03-1e136b181d86",
+                "scope": "project",
+                "projectId": "synthetic-8a8e2210-80ff-46c7-a7da-0e99d2755f89"
+              },
+              "kind": "fact",
+              "origin": "agent-inferred",
+              "confidence": 0.98,
+              "revision": 3,
+              "state": "historical",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-12T06:34:09.026Z",
+              "updatedAt": "2026-09-12T06:34:13.827Z",
+              "content": "The Harbor team review happens on Friday."
+            },
+            "receipts": [
+              {
+                "id": "7b71ac41-1aa8-42ca-8784-43880413c963",
+                "client": "installed-ordered-capture-loop",
+                "sessionId": "synthetic-source-1",
+                "eventId": "synthetic-message-1",
+                "role": "user",
+                "excerpt": "Harbor team review happens on Friday.",
+                "createdAt": "2026-09-12T06:34:09.026Z"
+              }
+            ],
+            "supersession": {
+              "previousRevision": 2,
+              "replacement": null,
+              "receiptIds": [],
+              "evidenceAvailable": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "budgetBefore": {
+    "runId": "a9f5f491-9335-4790-ad92-8ad090e21e80",
+    "limitMicroUsd": 20000000,
+    "requestCap": 4000,
+    "reservedMicroUsd": 15555760,
+    "requestCount": 1891,
+    "state": "open"
+  },
+  "budgetAfter": {
+    "runId": "a9f5f491-9335-4790-ad92-8ad090e21e80",
+    "limitMicroUsd": 20000000,
+    "requestCap": 4000,
+    "reservedMicroUsd": 15706048,
+    "requestCount": 1919,
+    "state": "open"
+  },
+  "status": "mechanical_pass_pending_semantic_review"
+}

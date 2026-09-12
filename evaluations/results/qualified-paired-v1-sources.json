@@ -1,0 +1,77 @@
+{
+  "version": "qualified-reconciliation-holdout-v1",
+  "cases": [
+    {
+      "id": "Q01",
+      "language": "en",
+      "windows": [
+        {"messages": [{"id": "q01-a", "role": "user", "content": "For my bird-camera project, my chosen retention period for uploaded clips is thirty days. The camera captures only birds in my garden."}]},
+        {"messages": [{"id": "q01-b", "role": "user", "content": "I have changed my choice for those uploaded bird-camera clips: keep them for seven days instead of thirty. I want the shorter retention period because storage is filling up. That is the setting I have decided on now."}]}
+      ],
+      "query": "What retention period have I chosen for my uploaded bird-camera clips, and why did I choose it?"
+    },
+    {
+      "id": "Q02",
+      "language": "en",
+      "windows": [
+        {"messages": [{"id": "q02-a", "role": "user", "content": "My current instructions for translating my short stories say to leave character names in their original spelling. I adopted that rule when I revised the translation guide."}]},
+        {"messages": [{"id": "q02-b", "role": "user", "content": "I found an annotated draft of my translation guide. Its margin says, 'Replace every character name with a local equivalent.' That draft was rejected; I am keeping it as an example of a translation approach I disliked."}, {"id": "q02-c", "role": "user", "content": "The approved guide is still the revised one: a character's original name spelling is preserved. Finding the rejected draft hasn't changed my instructions."}]}
+      ],
+      "query": "Under my approved translation guide, what should happen to character names in my short stories?"
+    },
+    {
+      "id": "Q03",
+      "language": "en",
+      "windows": [
+        {"messages": [{"id": "q03-a", "role": "user", "content": "I have decided to keep my folding bicycle. It is the bicycle I use for errands."}]},
+        {"messages": [{"id": "q03-b", "role": "assistant", "content": "Since you mentioned needing more space, you could sell the folding bicycle."}, {"id": "q03-c", "role": "user", "content": "Selling it is one possibility, but I haven't decided to do that. I want to try rearranging the storage area first, so the decision to keep the bicycle still stands for now."}]}
+      ],
+      "query": "Have I decided to keep or sell my folding bicycle?"
+    },
+    {
+      "id": "Q04",
+      "language": "en",
+      "windows": [
+        {"messages": [{"id": "q04-a", "role": "user", "content": "For my own bedtime audio, I prefer spoken stories, not white noise. This is my personal listening preference."}]},
+        {"messages": [{"id": "q04-b", "role": "user", "content": "My housemate told me, 'I prefer white noise to spoken stories at bedtime.' I am noting their preference here so I can recommend an app to them."}]}
+      ],
+      "query": "What kind of bedtime audio do I personally prefer?"
+    },
+    {
+      "id": "Q05",
+      "language": "zh",
+      "windows": [
+        {"messages": [{"id": "q05-a", "role": "user", "content": "我搭白天的城際列車時，選位原則是坐靠走道的位置，這是我目前定下來的偏好。"}]},
+        {"messages": [{"id": "q05-b", "role": "user", "content": "我決定改掉白天搭城際列車的選位偏好：以後選靠窗，不再優先選靠走道。因為我想沿途看風景，這次已經想清楚了。"}]}
+      ],
+      "query": "我現在白天搭城際列車會優先選哪種座位？改變的原因是什麼？"
+    },
+    {
+      "id": "Q06",
+      "language": "zh",
+      "windows": [
+        {"messages": [{"id": "q06-a", "role": "user", "content": "我現在替自己的食譜卡標示材料份量時，一律使用公克，不使用量杯。這套公克標示規則是正式在用的版本。"}]},
+        {"messages": [{"id": "q06-b", "role": "user", "content": "今天整理抽屜找到早期的食譜卡範本，上頭印著『所有材料請以量杯標示』。這份範本已經作廢，我留下它只是想展示食譜卡設計的演變。"}, {"id": "q06-c", "role": "user", "content": "正式使用的食譜卡仍照公克標示，舊範本不拿回來使用。"}]}
+      ],
+      "query": "我目前正式使用的食譜卡，用什麼單位標示材料份量？"
+    },
+    {
+      "id": "Q07",
+      "language": "zh",
+      "windows": [
+        {"messages": [{"id": "q07-a", "role": "user", "content": "我決定自己的讀書筆記先繼續用紙本筆記本記錄，這是目前採用的方式。"}]},
+        {"messages": [{"id": "q07-b", "role": "assistant", "content": "也許可以改成用電子筆記應用程式，搜尋書摘會比較方便。"}, {"id": "q07-c", "role": "user", "content": "這個建議我還在考慮，還沒決定換成電子筆記。我想先看看操作會不會太麻煩，目前仍然照原先決定用紙本。"}]}
+      ],
+      "query": "我目前已經決定採用的讀書筆記方式是什麼？有決定改用電子筆記了嗎？"
+    },
+    {
+      "id": "Q08",
+      "language": "zh",
+      "windows": [
+        {"messages": [{"id": "q08-a", "role": "user", "content": "在我家裡的書桌工作時，我喜歡完全安靜，不播放背景音樂。"}]},
+        {"messages": [{"id": "q08-b", "role": "user", "content": "在陶藝工作室捏陶的時候，我倒是喜歡放爵士樂當背景。這是在工作室做陶藝的習慣。"}]}
+      ],
+      "query": "我在家裡的書桌工作時，喜歡什麼樣的背景聲音？"
+    }
+  ]
+}

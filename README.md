@@ -33,6 +33,13 @@ profile, which is a programmatic adapter option. MCP `remember_memory` saves
 explicit content directly; it does not run that extractor. Those extraction
 scores therefore do not certify the MCP recall experience.
 
+The [paired update-reliability experiment](docs/evidence/qualified-comparison.md)
+also remains failed: the experimental source-ordered capture path can retire an
+unchanged fact or another person's still-valid preference. A source receipt and
+model-declared update labels are not a truth guarantee. This is separate from
+the MCP tools' explicit remember/correct operations; no automatic transcript
+capture or new quality certification is implied.
+
 ## Try the local memory layer
 
 Prerequisites: Node >=22.16, npm and `tar`. Model-free remember/inspect/correct/
@@ -94,7 +101,7 @@ The walkthrough does not impose a provider account spending limit.
 | --- | --- |
 | `remember_memory` | Explicitly save one memory and its receipt |
 | `recall_memory` | Model-guided retrieval of current memories and receipts |
-| `inspect_memory` | List memories or inspect an ID and current revision |
+| `inspect_memory` | List memories (optionally active/historical), or inspect an ID, revision and receipts |
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
 
