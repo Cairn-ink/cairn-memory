@@ -16,6 +16,7 @@
     "demo:longmemeval-comparison": "node evaluation/longmemeval/comparison-demo.mjs",
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
+    "demo:history": "node examples/historical-evidence.mjs",
     "demo:moc": "node examples/moc-placement.mjs",
     "demo:recall": "node examples/recall.mjs",
     "demo:admission": "node examples/admission.mjs",

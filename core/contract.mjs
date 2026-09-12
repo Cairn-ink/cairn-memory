@@ -14,6 +14,7 @@ import {
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
 const statusOrder = ["filed", "unfiled"];
+const stateOrder = ['active', 'historical'];
 
 function contractNamespace(input) {
   object(input, ["ownerId", "scope", "projectId"]);
@@ -96,6 +97,14 @@ function statuses(value = statusOrder) {
     throw new MemoryStoreError("invalid_input");
   }
   return statusOrder.filter((item) => value.includes(item));
+}
+
+function states(value = stateOrder) {
+  denseArray(value, 1, 2);
+  if (value.some(state => !stateOrder.includes(state)) || new Set(value).size !== value.length) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  return stateOrder.filter(state => value.includes(state));
 }
 
 function success(value) {
@@ -190,15 +199,17 @@ export function openMemoryCore(input) {
   function list(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "statuses", "limit", "cursor"]);
+      object(input, ["namespace", "statuses", "states", "limit", "cursor"]);
       const ns = contractNamespace(input.namespace);
       const selected = statuses(input.statuses);
+      const selectedStates = states(input.states);
       const count = contractLimit(input.limit);
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: "list",
-        f: selected.join(","), l: count };
+        f: selected.join(","), l: count,
+        ...(selectedStates.length === 1 ? { states: selectedStates[0] } : {}) };
       let cursor;
       if (input.cursor !== undefined) cursor = decodeCursor(input.cursor, binding);
-      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e);
+      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e, selectedStates);
       const memories = page.rows.slice(0, count);
       const exhausted = page.rows.length <= count;
       const last = memories.at(-1);
@@ -422,15 +433,18 @@ export function openMemoryCore(input) {
   function fetch(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ['namespace', 'refs', 'cursor', 'tokenBudget']);
+      object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget']);
       const ns = contractNamespace(input.namespace);
       const refs = memoryRefs(input.refs);
+      const view = input.view === undefined ? 'current' : input.view;
+      if (!['current', 'historical'].includes(view)) throw new MemoryStoreError('invalid_input');
       const budget = contractRevision(input.tokenBudget ?? 4000);
       if (budget > 4000) throw new MemoryStoreError('invalid_input');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,
-        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url') };
+        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url'),
+        ...(view === 'historical' ? { view } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, budget, cursor, binding, encodeCursor });
+      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor });
     });
   }
 

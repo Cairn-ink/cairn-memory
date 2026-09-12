@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — explicit historical evidence view
+
+- Add local `list({states})` filtering and opt-in `fetch({view: 'historical'})`
+  for retained superseded evidence with source receipts and supersession metadata.
+  Current recall/fetch defaults remain unchanged. This is not date-based temporal
+  QA, full revision history, automatic motive inference or a new MCP surface.
+
 ## Unreleased — qualified reconciliation candidate
 
 - Require explicit relation, value-change and adoption judgments in the

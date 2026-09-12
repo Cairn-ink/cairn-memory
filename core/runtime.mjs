@@ -268,7 +268,7 @@ export function createMemoryRuntime(input) {
       .slice(0, count).map(({ memory }) => legacyDto(memory)));
   }
 
-  function listPage(ns, statuses, count, anchor, expectedEpoch) {
+  function listPage(ns, statuses, count, anchor, expectedEpoch, states = ['active', 'historical']) {
     ready();
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
@@ -278,6 +278,10 @@ export function createMemoryRuntime(input) {
         FROM memories WHERE ${where} AND deleted = 0
         AND filing_status IN (${statuses.map(() => "?").join(",")})`;
       const params = [...boundary(ns), ...statuses];
+      if (states.length === 1) {
+        sql += ' AND currentness = ?';
+        params.push(states[0] === 'active' ? 'current' : 'historical');
+      }
       if (anchor) {
         sql += " AND (updated_at < ? OR (updated_at = ? AND id > ?))";
         params.push(anchor.updatedAt, anchor.updatedAt, anchor.id);
@@ -322,16 +326,18 @@ export function createMemoryRuntime(input) {
       .map((row) => ({ ...row }));
   }
 
-  function fetchPage(ns, ref, offset, expectedEpoch) {
+  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current') {
     ready();
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail('cursor_stale');
-      const row = currentRow(ns, ref.memoryId);
+      const candidate = view === 'historical' ? activeRow(ns, ref.memoryId) : currentRow(ns, ref.memoryId);
+      const row = candidate?.currentness === view ? candidate : undefined;
       const reason = !row ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
       const memory = detailDto(row);
-      return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch };
+      return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch,
+        ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
     });
   }
 

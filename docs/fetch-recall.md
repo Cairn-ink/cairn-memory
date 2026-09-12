@@ -32,6 +32,55 @@ truncation silently discards its evidence. The cursor is authenticated and binds
 store, operation, ordered refs, namespace, budget and epoch. Mutations stale it;
 reopen preserves it. Fetch requires the local counter but makes no model call.
 
+## Explicit historical evidence
+
+An application can deliberately inspect retained superseded records without
+changing the automatic current-memory recall path:
+
+```js
+const listed = core.list({ namespace, states: ['historical'], limit: 20 });
+if (!listed.ok) throw new Error(listed.error.code);
+const record = listed.value.memories[0];
+if (record) {
+  const historical = core.fetch({ namespace, view: 'historical',
+    refs: [{ memoryId: record.id, revision: record.revision }], tokenBudget: 4000 });
+  // Inspect historical.value only after checking historical.ok.
+}
+```
+
+`list.states` accepts a nonempty unique subset of `active` and `historical`.
+Absent or both states preserves the existing all-state inspection listing;
+`['active']` restricts it to current records. Filters apply before pagination.
+Use the same state/status filters and limit on subsequent list pages. Default
+`get` remains an explicit all-state inspection operation.
+
+`fetch.view` is `current` by default, or explicitly `historical`. Wrong-view,
+forgotten and foreign refs return `not_found` without content; a matching-view
+ref with an outdated revision returns `stale`. Historical items additionally
+carry the same `supersession` metadata as `get`, included in token accounting.
+Cursor view/filter bindings prevent using a current page cursor to fetch history
+or vice versa. Follow receipt pages with the same view, refs and token budget.
+Deletion or other namespace mutations invalidate pages, including changes made
+during the token counter callback. No generative model port is needed.
+
+This view means **records currently retained as superseded**, not "what was true
+at a requested date." Receipt timestamps record ingestion; memory timestamps
+include mutations. `correct` does not retain every overwritten body, so this is
+not full revision history. An active record may itself contain a qualified
+historical statement; these filters do not classify its temporal meaning.
+
+Supersession links identify recorded transitions, not their psychological or
+causal reasons. Inspect actual sources before explaining a change. If a successor
+was forgotten or its original receipts are unavailable, the existing metadata
+reports missing evidence; do not substitute its newer receipts as an old reason.
+Explicitly forgotten records remain inaccessible. Supersession's own fingerprint
+suppression prevents recapture, but does not erase the deliberately retained
+historical evidence. See [retention limits](supersession.md).
+
+MCP, current map/recall and legacy reads are unchanged by this local API addition.
+No `asOf` date, history-aware semantic search or historical answer generator is
+provided. Run `npm run demo:history` for a synthetic list-to-fetch walkthrough.
+
 ## Recall over authorized namespaces
 
 ```js

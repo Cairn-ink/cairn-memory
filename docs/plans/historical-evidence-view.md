@@ -40,3 +40,14 @@ This adds an explicit evidence access path. Rationale can only be reported from
 source text that actually states it; supersession edges alone are not motives.
 User-facing query interpretation and historical MCP access follow their own
 reviewed slices, rather than changing automatic current recall here.
+
+## Offline checkpoint
+
+Node22.16.0 and24.15.0: `test:core`289/289 (including11 new historical tests),
+`test:openai`152/152, `test:mcp`20/20, `test:artifact`14/14 and `npm test`31/31
+passed with zero skips. JSON/version validation, `demo:store`, `demo:recall`,
+`demo:history`, relative documentation links and `git diff --check` passed.
+Pinned marketplace and strict plugin validations passed on Node22.16.
+The history demo shows actual retained source evidence after explicit synthetic
+updates; it does not measure extraction, reconciliation or answer-model quality.
+No paid requests, credentials, production data or retained evidence were used.
