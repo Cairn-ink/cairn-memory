@@ -345,14 +345,22 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
-  function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label }) {
+  function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
+    catalogOnly = false }) {
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
       let rows;
-      if (!parentRef) {
+      if (catalogOnly) {
+        // Classification needs the complete topic catalog, not every placement or
+        // unfiled body. Filter before paging so memory growth cannot crowd it out.
+        rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
+          FROM mocs moc WHERE ${qualifiedNamespace("moc")}
+          ORDER BY moc.level, COALESCE(${titleExpression}, ''), moc.id
+          LIMIT ? OFFSET ?`).all(...boundary(ns), count, offset);
+      } else if (!parentRef) {
         const recall = purpose === "recall" ? 1 : 0;
         const sql = `WITH candidates AS (
           SELECT 'moc' row_kind, moc.level sort_level, COALESCE(${titleExpression}, '') sort_title,

@@ -384,7 +384,7 @@ export function openMemoryCore(input) {
     return mapPage(input);
   }
 
-  function mapPage(input, navigation) {
+  function mapPage(input, navigation, { catalogOnly = false } = {}) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
@@ -403,6 +403,7 @@ export function openMemoryCore(input) {
       countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
+      if (catalogOnly) binding.o = 'classification_catalog';
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
@@ -410,6 +411,7 @@ export function openMemoryCore(input) {
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
       const page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
+        catalogOnly,
         ...(navigation ? { memoryLabel: navigation.excerpt } : {}) });
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
@@ -511,7 +513,8 @@ export function openMemoryCore(input) {
         throw new MemoryStoreError('model_not_configured');
       }
       const snapshot = runtime.classificationSnapshot(ns, ids, guards, index);
-      const mapped = map({ namespace: input.namespace, purpose: 'classification' });
+      const mapped = mapPage({ namespace: input.namespace, purpose: 'classification' },
+        undefined, { catalogOnly: true });
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
       const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
