@@ -8,7 +8,7 @@ memory bodies fill its catalog page. No product runtime change or model-quality
 improvement is demonstrated here.
 
 The [retained raw report](../../evaluations/results/moc-architecture-v1.json)
-contains all nine cases, generated IDs, observed page positions, callback visibility,
+contains all ten cases, generated IDs, observed page positions, callback visibility,
 coverage states, lexical scores and local timings. Reproduce from this checkout
 with Node 22.16 or 24:
 
@@ -32,6 +32,7 @@ the actual core input. Lexical retrieval receives only active, namespace-filtere
 | Case | Corpus | Target map page | Visible / required | Oracle recalled | FTS5 recalled |
 | --- | ---: | --- | ---: | ---: | ---: |
 | English small | 16 | 1 | 1/1 | 1 | 1 |
+| Unfiled distractors | 16 | 1 | 1/1 | 1 | 1 |
 | English late | 224 | 3 | 0/1 | 0 | 1 |
 | English misfiled | 224 | 3 | 0/1 | 0 | 1 |
 | English early | 224 | 1 | 1/1 | 1 | 1 |
@@ -41,9 +42,10 @@ the actual core input. Lexical retrieval receives only active, namespace-filtere
 | Paraphrase control | 16 | 1 | 1/1 | 1 | 0 |
 | Multiple evidence, late | 224 | 3, 3 | 0/2 | 0 | 2 |
 
-All nine cases retain direct-read support, complete target inventory and namespace
-isolation. Each small case exposes 18 map items in one selection callback and
-then calls ranking once. Each large case exposes two batches of 100 map items;
+All ten cases retain direct-read support, complete target inventory and namespace
+isolation. Small cases expose 18 map items, except the unfiled-distractor case's
+17 items, in one selection callback and then call ranking once. Each large case
+exposes two batches of 100 map items;
 only the early-target case reaches ranking. Large cases report
 `budget_exhausted`, including the successful early retrieval. Small cases report
 `complete`. These core coverage states describe traversal, not semantic answer
@@ -59,7 +61,10 @@ This is an isolated catalog-completeness bottleneck, retained as a failure.
 The live diagnostic imports the checked-out core, so later catalog changes can
 change that observation. Its test enforces rejection when the catalog is
 incomplete, while permitting an empty, complete topic-only catalog to succeed;
-the retained JSON above remains the unmodified baseline observation.
+the retained JSON above preserves the baseline outcome. Independent review added
+the missing same-namespace unfiled-distractor fixture before delivery; the full
+offline report was regenerated with that tenth case, without choosing favorable
+UUIDs or changing the four late-target misses.
 
 ## Interpretation and limits
 

@@ -10,6 +10,8 @@ const ref = item => item.type === 'unfiled' ? item.ref : item.type === 'ref' && 
   ? { memoryId: item.ref.childId, revision: item.ref.childRevision } : null;
 const fixtures = [
   { id: 'english-small', size: 16, placement: 'late', query: 'Who owns the Juniper migration?', targets: ['Mira owns the Juniper migration.'] },
+  { id: 'unfiled-distractors', size: 16, placement: 'late', unfiledDistractors: true,
+    query: 'Who owns the Juniper migration?', targets: ['Mira owns the Juniper migration.'] },
   { id: 'english-late', size: 224, placement: 'late', query: 'Who owns the Juniper migration?', targets: ['Mira owns the Juniper migration.'] },
   { id: 'english-misfiled', size: 224, placement: 'misfiled', query: 'Who owns the Juniper migration?', targets: ['Mira owns the Juniper migration.'] },
   { id: 'english-early', size: 224, placement: 'early', query: 'Who owns the Juniper migration?', targets: ['Mira owns the Juniper migration.'] },
@@ -98,7 +100,8 @@ export async function runMocRetrievalDiagnostic({ directory } = {}) {
       core = openMemoryCore({ path: database, model });
       for (let index = 0; index < fixture.size - fixture.targets.length; index++) {
         const memory = admit(core, namespace, `Archive entry ${index} records calibration value ${index}.`, `d-${index}`);
-        place(core, memory, fixture.placement === 'early' ? 'ZZZ archived notes' : 'AAA archived notes', groups);
+        if (!fixture.unfiledDistractors) place(core, memory,
+          fixture.placement === 'early' ? 'ZZZ archived notes' : 'AAA archived notes', groups);
       }
       for (const [index, content] of fixture.targets.entries()) {
         const memory = admit(core, namespace, content, `target-${index}`);

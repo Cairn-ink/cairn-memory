@@ -12,7 +12,7 @@ test('real-core matrix separates stored evidence, page visibility and lexical re
   assert.equal(report.providerRequests, 0);
   assert.match(report.model, /oracle/u);
   assert.match(report.counter, /synthetic/u);
-  assert.equal(report.cases.length, 9);
+  assert.equal(report.cases.length, 10);
   for (const entry of report.cases) {
     assert.equal(entry.status, 'observed', JSON.stringify({ id: entry.id, error: entry.error, recall: entry.recall }));
     assert.equal(entry.coldDirectReadSupported, true);
@@ -34,7 +34,7 @@ test('real-core matrix separates stored evidence, page visibility and lexical re
     assert.equal(entry.targetLexicalCount, entry.targets.length, id);
     assert.equal(entry.recall.value.coverage, 'budget_exhausted', id);
   }
-  for (const id of ['english-small', 'english-early', 'chinese-spaced-control']) {
+  for (const id of ['english-small', 'english-early', 'chinese-spaced-control', 'unfiled-distractors']) {
     assert.equal(at(id).targetRecalledCount, 1, id);
     assert.equal(at(id).targetLexicalCount, 1, id);
   }
