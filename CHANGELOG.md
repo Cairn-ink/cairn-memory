@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — MOC architecture diagnostic
+
+- Add a synthetic cold-store visibility diagnostic and corpus-wide SQLite FTS5
+  baseline, retaining late-topic retrieval misses, Chinese/paraphrase lexical
+  failures and the 101-unfiled-memory classification failure. Separate oracle
+  visibility from semantic quality and provider cost; no runtime changes or paid
+  calls accompany this evidence. See [the report](docs/evidence/moc-architecture.md).
+
 ## Unreleased — paired reconciliation evidence
 
 - Retain one frozen old/new comparison on eight new bilingual synthetic cases,
