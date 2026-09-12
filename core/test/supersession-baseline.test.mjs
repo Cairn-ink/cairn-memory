@@ -6,9 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
 
-// Characterization of the pre-supersession contract, not target acceptance.
-// When supersession ships, deliberately replace BASELINE GAP assertions with
-// the adopted lifecycle assertions; keep replay, isolation and authority checks.
+// Compatibility contract for capture WITHOUT causal ordering. Automatic ordered
+// supersession has separate positive tests in ordered-capture.test.mjs; this
+// legacy path deliberately preserves existing behavior and response shape.
 // Scripted output proves orchestration behavior only, never semantic model quality.
 const namespace = { ownerId: 'supersession-baseline', scope: 'personal', projectId: null };
 const friday = 'The project deadline is Friday.';
@@ -34,7 +34,7 @@ function fixture(t, outputs) {
   return { core, path, calls: () => calls };
 }
 
-test('BASELINE GAP: Friday then an explicit Monday update in captured user text leaves both active', async (t) => {
+test('LEGACY NO CAUSAL: Friday then an explicit Monday update in captured user text leaves both active', async (t) => {
   const { core } = fixture(t, [{ items: [extracted(friday)] }, { items: [extracted(monday)] }]);
   const firstInput = capture('friday', friday);
   const nextInput = capture('monday', 'Update: the project deadline is now Monday, replacing Friday.');
@@ -42,6 +42,8 @@ test('BASELINE GAP: Friday then an explicit Monday update in captured user text 
   const oldId = first.admission.memories[0].id;
   const before = detail(core, oldId);
   const next = ok(await core.capture(nextInput));
+  assert.equal(Object.hasOwn(first, 'reconciliation'), false);
+  assert.equal(Object.hasOwn(next, 'reconciliation'), false);
   const newId = next.admission.memories[0].id;
   assert.notEqual(oldId, newId);
   assert.deepEqual(active(core).map((m) => detail(core, m.id).memory.content).sort(), [friday, monday].sort());
@@ -55,7 +57,7 @@ test('BASELINE GAP: Friday then an explicit Monday update in captured user text 
   assert.equal(detail(core, newId).memory.origin, 'agent-inferred');
 });
 
-test('BASELINE GAP: cold reopen and replay retain the two active claims without duplicate memories or receipts', async (t) => {
+test('LEGACY NO CAUSAL: cold reopen and replay retain the two active claims without duplicate memories or receipts', async (t) => {
   const { core, path, calls } = fixture(t, [{ items: [extracted(friday)] }, { items: [extracted(monday)] }]);
   const inputs = [capture('friday', friday), capture('monday', 'The deadline changed from Friday to Monday.')];
   const ids = [];

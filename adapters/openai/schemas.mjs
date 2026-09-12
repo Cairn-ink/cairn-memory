@@ -8,6 +8,8 @@ const placement = { memoryId: string, parentIds: array(string, 3) };
 const refs = object({ refs: array(object({ namespaceIndex: integer,
   memoryId: string, revision: { type: 'integer', minimum: 1 } }), 24) });
 
+// This export is also the existing live guard's method allowlist. Reconcile
+// remains dynamic-only until a separately authorized guard extension exists.
 export const schemas = {
   extract: object({ items: array(object({ content: { type: 'string', maxLength: 600 },
     kind: { type: 'string', enum: ['fact', 'preference', 'decision', 'instruction', 'context'] },
@@ -29,9 +31,31 @@ const list = (value) => { if (!Array.isArray(value)) invalid(); return value; };
 const sorted = (values) => [...new Set(values)].sort((a, b) => typeof a === 'number' ? a - b : a < b ? -1 : a > b ? 1 : 0);
 const constrained = (base, values) => values.length ? { ...base, enum: sorted(values) } : { ...base };
 const idArray = (values, maximum) => array(constrained(string, values), values.length ? Math.min(maximum, values.length) : 0);
+const snapshotIndices = (values, maximum) => {
+  const indices = list(values).map((value) => index(value?.index));
+  if (indices.length > maximum || sorted(indices).length !== indices.length) invalid();
+  return indices;
+};
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'reconcile') {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+    const messageIndices = snapshotIndices(input.messages, 24);
+    const replacementIndices = snapshotIndices(input.items, 5);
+    const predecessorIndices = snapshotIndices(input.candidates, 12);
+    const transitionMaximum = replacementIndices.length && messageIndices.length
+      ? Math.min(5, predecessorIndices.length) : 0;
+    return object({ transitions: array(object({
+      relation: { type: 'string', enum: ['supersedes', 'reaffirms', 'historical_context', 'compatible', 'unresolved'] },
+      valueChange: { type: 'string', enum: ['changed', 'unchanged', 'unknown'] },
+      adoption: { type: 'string', enum: ['explicit', 'not_adopted', 'uncertain'] },
+      replacementIndex: constrained(integer, replacementIndices),
+      predecessorIndex: constrained(integer, predecessorIndices),
+      evidenceIndices: { ...array(constrained(integer, messageIndices),
+        Math.max(1, Math.min(4, messageIndices.length))), minItems: 1 },
+    }), transitionMaximum) });
+  }
   if (!Object.hasOwn(schemas, method)) invalid();
   if (method === 'extract') return structuredClone(schemas.extract);
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();

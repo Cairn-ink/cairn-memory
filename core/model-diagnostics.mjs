@@ -1,9 +1,9 @@
-const stages = new Set(['extract', 'classify', 'select', 'rank']);
+const stages = new Set(['extract', 'classify', 'select', 'rank', 'reconcile']);
 const reasons = {
   core_call: new Set(['model_not_configured', 'context_budget_exceeded', 'token_count_unavailable',
     'model_timeout', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',
     'output_serialization', 'output_bounds']),
-  core_validation: new Set(['invalid_extraction', 'invalid_classification', 'malformed_refs',
+  core_validation: new Set(['invalid_extraction', 'invalid_classification', 'invalid_reconciliation', 'malformed_refs',
     'duplicate_ref', 'non_visible_ref', 'namespace_selection_limit']),
   adapter: new Set(['response_envelope', 'response_usage', 'response_message', 'response_content',
     'output_json', 'output_shape', 'output_bounds', 'request_invalid', 'request_bounds',
