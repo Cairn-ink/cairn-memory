@@ -1,5 +1,11 @@
 # Changelog
 
+The private-hold language in historical entries records each stage's status at
+the time. The minimum identifier fix was publicly delivered through PR #69 and
+[GHSA-42p4-q4pr-vpwf](https://github.com/Cairn-ink/cairn-memory/security/advisories/GHSA-42p4-q4pr-vpwf)
+on 2026-09-13. This integration does not publish a package or certify semantic
+reliability.
+
 ## Candidate — native Hermes submitted capture
 
 - Add explicit v2-only capture configuration to the native Hermes provider,
@@ -242,6 +248,13 @@
   MCP lifecycle attempt with independent agent review. Explicit updates and the
   narrow installed lifecycle pass; reaffirming the current fact wrongly retires
   it in C6, so broader currentness acceptance remains failed. No runtime changes.
+
+## Unreleased — well-formed local identifiers
+
+- Reject malformed Unicode identifiers at the shared core boundary. Valid
+  identifiers retain exact spelling; no normalization or migration of existing
+  identifiers is performed. This candidate is held for private security
+  coordination, not a published fix or a claim about hosted-service exposure.
 
 ## Model-backed evidence candidate
 
