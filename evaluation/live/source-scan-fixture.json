@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "id": "source-scan-ablation-v1",
+  "cases": [
+    {
+      "id": "printer-connection",
+      "query": "Which printer did I choose, why, and what about that reason needs checking now?",
+      "sources": [
+        {"label": "Printer choice and wireless convenience", "role": "user", "text": "I chose the Marigold printer because I was told it prints wirelessly."},
+        {"label": "Connection requirements", "role": "user", "text": "The Marigold manual says printing requires a USB cable. I have not changed my printer choice yet."},
+        {"label": "Paper supplies", "role": "user", "text": "I keep spare paper in the blue cupboard."}
+      ],
+      "evaluation": {"requiredSources": [0, 1], "irrelevantSources": [2], "reason": "Retain the decision, its original reason and the later challenge without inventing a replacement."}
+    },
+    {
+      "id": "voice-backup-zh",
+      "query": "我決定用哪個錄音工具，原本看中什麼，現在需要重新確認什麼？",
+      "sources": [
+        {"label": "錄音工具選擇", "role": "user", "text": "我決定用白鷺錄音，因為以為它能在沒有網路時自動備份。"},
+        {"label": "備份條件", "role": "user", "text": "實測白鷺錄音的自動備份必須連上網路。我還沒有決定換工具。"},
+        {"label": "麥克風位置", "role": "user", "text": "我的麥克風放在書桌右邊。"}
+      ],
+      "evaluation": {"requiredSources": [0, 1], "irrelevantSources": [2], "reason": "Both the original offline-backup assumption and corrected condition matter; no tool switch was adopted."}
+    },
+    {
+      "id": "two-people",
+      "query": "What changed about Nia's planner reason, and did my own planner choice change?",
+      "sources": [
+        {"label": "Nia's planner", "role": "user", "text": "Nia chose Tansy Planner because she thought it could share calendars without an account."},
+        {"label": "My planner", "role": "user", "text": "I chose Violet Planner for its large print."},
+        {"label": "Sharing rules and my decision", "role": "user", "text": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."}
+      ],
+      "evaluation": {"requiredSources": [0, 1, 2], "irrelevantSources": [], "reason": "Attribute the challenged reason to Nia, preserve the user's separate continuing choice."}
+    },
+    {
+      "id": "temporary-route",
+      "query": "What is my normal way to work, and how is Tuesday different?",
+      "sources": [
+        {"label": "Usual travel", "role": "user", "text": "I normally walk to work because it is close."},
+        {"label": "Tuesday exception", "role": "user", "text": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."},
+        {"label": "Weekend sport", "role": "user", "text": "I play badminton on Saturday."}
+      ],
+      "evaluation": {"requiredSources": [0, 1], "irrelevantSources": [2], "reason": "A dated exception coexists with the normal routine."}
+    },
+    {
+      "id": "uncertain-course",
+      "query": "Have I committed to the teaching course, and what were the actual stages of my thinking?",
+      "sources": [
+        {"label": "Possible course", "role": "assistant", "text": "You could consider the evening teaching course."},
+        {"label": "Initial reaction", "role": "user", "text": "I might try that course, but I have not enrolled or decided."},
+        {"label": "Later reflection", "role": "user", "text": "After a better day at work I feel more confident, but I still have not decided about the teaching course."}
+      ],
+      "evaluation": {"requiredSources": [0, 1, 2], "irrelevantSources": [], "reason": "Suggestion and changing feelings do not imply commitment; query explicitly asks for the stages."}
+    },
+    {
+      "id": "two-conditions",
+      "query": "Why did I select Larch Storage, which reason changed, and which still holds?",
+      "sources": [
+        {"label": "Storage selection", "role": "user", "text": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."},
+        {"label": "Subscription update", "role": "user", "text": "Larch now costs 19 credits monthly; local encryption still works. I have not selected a replacement."},
+        {"label": "Unrelated trip cost", "role": "user", "text": "My last train ride cost 19 credits."}
+      ],
+      "evaluation": {"requiredSources": [0, 1], "irrelevantSources": [2], "reason": "Only the price reason changes; local encryption continues. Shared price vocabulary is irrelevant."}
+    },
+    {
+      "id": "compatible-confirmation",
+      "query": "Why did I choose the Iris lamp and what did the later test show?",
+      "sources": [
+        {"label": "Lamp choice", "role": "user", "text": "I chose the Iris lamp because its brightness can be adjusted."},
+        {"label": "Lamp test", "role": "user", "text": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."},
+        {"label": "Desk dimensions", "role": "user", "text": "My desk is 110 centimetres wide."}
+      ],
+      "evaluation": {"requiredSources": [0, 1], "irrelevantSources": [2], "reason": "Compatible confirmation should not be treated as a contradiction."}
+    },
+    {
+      "id": "absent-choice",
+      "query": "Which telescope did I finally buy and why?",
+      "sources": [
+        {"label": "Snacks", "role": "user", "text": "I like sliced pears."},
+        {"label": "Music", "role": "user", "text": "I listen to piano music while cooking."}
+      ],
+      "evaluation": {"requiredSources": [], "irrelevantSources": [0, 1], "reason": "No telescope decision or reason is present; all returned sources would be irrelevant."}
+    }
+  ]
+}
