@@ -54,3 +54,26 @@ _Avoid_: Newest statement wins
 The attribution, time, scope and degree of commitment attached to an assertion,
 such as a personal feeling, a proposal or an adopted decision.
 _Avoid_: Objective truth, model confidence
+
+**Source author**:
+The attributed speaker of recorded evidence, who may be describing somebody else.
+_Avoid_: Claim subject
+
+**Claim subject**:
+The person or thing an assertion describes, distinct from who reported it.
+_Avoid_: Message author, namespace owner
+
+**Claim slot**:
+The subject, property and applicable scope that make two asserted values
+potential alternatives for the same matter, excluding the values themselves.
+_Avoid_: Topic similarity, shared keywords
+
+**Source anchor**:
+A specific passage of recorded evidence supporting an attributed assertion or
+qualification; its existence does not prove that its interpretation is correct.
+_Avoid_: Semantic proof, execution permission
+
+**Adoption evidence**:
+Recorded evidence that a source committed to a proposed value within a stated
+scope, rather than merely quoted, considered or received it as advice.
+_Avoid_: Recency, suggestion, past authorization
