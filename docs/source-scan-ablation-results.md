@@ -21,7 +21,7 @@ arm returned any source marked irrelevant. These are source-preservation counts,
 | Case | Baseline indices | Source scan | Interpretation |
 | --- | --- | --- | --- |
 | printer-connection | 0 | 0, 1 | Baseline selection omitted the USB requirement and unchanged choice. |
-| voice-backup-zh | 0 | 0, 1 | Baseline selection omitted the network requirement and no-switch decision. |
+| voice-backup-zh | 0 | 0, 1 | Baseline selection omitted the network requirement and no decision to switch. |
 | two-people | 2, 0, 1 | 2, 0, 1 | Both preserved distinct people and choices. |
 | temporary-route | 0, 1 | 0, 1 | Both preserved normal routine and temporary exception. |
 | uncertain-course | 2, 1 | 2, 1, 0 | Baseline ranking, not selection, omitted assistant-suggestion provenance. |
