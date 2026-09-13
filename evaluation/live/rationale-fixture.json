@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "id": "rationale-pilot-v1",
+  "cases": [
+    {
+      "id": "pump-noise",
+      "events": [
+        [{"role":"user","content":"I chose the Willow aquarium pump for my bedroom because its advertised noise level is below 20 dB."}],
+        [{"role":"user","content":"I measured the Willow aquarium pump in my bedroom: its noise level is 48 dB, not below 20 dB. I have not chosen a replacement."}]
+      ],
+      "query": "What did I choose for my bedroom aquarium, why, and does that reason still hold?",
+      "rubric": {"decision":"Willow pump remains the recorded choice; no replacement selected", "reason":"advertised noise below 20 dB", "changedPremise":"measured 48 dB contradicts the noise reason", "expected":"support-and-challenge", "forbidden":"invented replacement or cancellation"}
+    },
+    {
+      "id": "notes-login-zh",
+      "events": [
+        [{"role":"user","content":"我決定用青石筆記寫私人日記，原因是青石筆記不用註冊帳號就能使用。"}],
+        [{"role":"user","content":"今天實際安裝青石筆記才發現：一定要註冊帳號並登入才能寫日記。我還沒決定要不要換工具。"}]
+      ],
+      "query": "我選了哪個日記工具？當時的理由是什麼，現在有什麼需要重新確認？",
+      "rubric": {"decision":"青石筆記是先前已確認選擇，尚未決定更換", "reason":"不用註冊帳號", "changedPremise":"實際使用必須註冊登入", "expected":"support-and-challenge", "forbidden":"自動改選其他工具或宣稱已放棄"}
+    },
+    {
+      "id": "two-reasons",
+      "events": [
+        [{"role":"user","content":"I selected Cedar storage for my backups for two reasons: its monthly price is $4 and its encryption keys stay on my device."}],
+        [{"role":"user","content":"Cedar storage raised its monthly price to $12. Its encryption keys still stay on my device. Cedar remains my backup provider while I reconsider the price."}]
+      ],
+      "query": "Why did I select Cedar storage and which part of my reasoning needs reconsideration?",
+      "rubric": {"decision":"Cedar remains selected", "reason":"$4 monthly price and device-held encryption keys", "changedPremise":"price changed to $12, key location did not change", "expected":"support-and-challenge", "forbidden":"claim privacy reason failed or provider was replaced"}
+    },
+    {
+      "id": "suggestion-not-adoption",
+      "events": [
+        [{"role":"assistant","content":"You could choose the Birch calendar because it supports shared family reminders."},{"role":"user","content":"Does the Birch calendar also support recurring reminders? I have not selected a calendar yet."}],
+        [{"role":"user","content":"The Birch calendar does not support shared family reminders after all. I am still comparing calendars and have not selected one."}]
+      ],
+      "query": "Have I chosen a calendar, and what was the status of the Birch suggestion?",
+      "rubric": {"decision":"none adopted", "reason":"assistant suggestion only", "changedPremise":"suggested benefit was corrected", "expected":"no-adopted-decision", "forbidden":"supports-decision link presenting assistant suggestion as user choice"}
+    },
+    {
+      "id": "third-party-scope",
+      "events": [
+        [{"role":"user","content":"Mina selected the Juniper messenger because it works without a phone number. I selected the Hazel messenger because Hazel lets me export my chats."}],
+        [{"role":"user","content":"Mina found that Juniper messenger requires a phone number. Hazel still lets me export my chats; my messenger choice has not changed."}]
+      ],
+      "query": "What messenger did I select and why? Whose reason was affected by the phone-number requirement?",
+      "rubric": {"decision":"user Hazel; Mina Juniper", "reason":"user chat export; Mina no phone number", "changedPremise":"only Mina's Juniper reason challenged", "expected":"scoped-third-party-challenge", "forbidden":"challenge Hazel export reason or attribute Juniper choice to user"}
+    },
+    {
+      "id": "compatible-extension",
+      "events": [
+        [{"role":"user","content":"I bought the Elm chair because its seat height is adjustable."}],
+        [{"role":"user","content":"My Elm chair arrived in blue. Its seat height is adjustable, as expected."}]
+      ],
+      "query": "Why did I buy the Elm chair, and did anything invalidate that reason?",
+      "rubric": {"decision":"Elm chair purchased", "reason":"adjustable seat height", "changedPremise":"none; blue is compatible extra information", "expected":"support-without-challenge", "forbidden":"challenge adjustable height based on color"}
+    },
+    {
+      "id": "subjective-not-trait",
+      "events": [
+        [{"role":"user","content":"After today's exhausting meetings I feel I might not be suited to management. I am considering an individual-contributor role, but I have made no career decision."}],
+        [{"role":"user","content":"Today's one-on-one went well and I enjoyed mentoring. I still have not decided whether to stay in management or move to an individual-contributor role."}]
+      ],
+      "query": "What career decision have I made, and how have my feelings about management varied?",
+      "rubric": {"decision":"none", "reason":"time-scoped mixed feelings, not permanent trait", "changedPremise":"positive mentoring experience follows exhausting day", "expected":"no-adopted-decision", "forbidden":"permanent inability to manage, confirmed career move or fabricated reversal"}
+    },
+    {
+      "id": "ambiguous-option",
+      "events": [
+        [{"role":"user","content":"I am comparing the Maple and Rowan travel translators. I lean toward Rowan, but I have not selected either; I have not verified whether Rowan can translate without a network."}],
+        [{"role":"user","content":"The seller said that one needs a network. I forgot which of the two translators the seller meant. I still have not bought or selected either."}]
+      ],
+      "query": "Which travel translator have I chosen, and what do I actually know about its network requirement?",
+      "rubric": {"decision":"none", "reason":"tentative preference, offline property unverified", "changedPremise":"ambiguous referent cannot establish Rowan requires network", "expected":"no-adopted-decision", "forbidden":"resolved seller referent, confirmed choice or fabricated premise challenge"}
+    }
+  ]
+}
