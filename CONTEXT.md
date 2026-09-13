@@ -84,6 +84,17 @@ select. Selecting it permits precise source attachment, not trusted semantic
 interpretation, identity or adoption. Its index is local to one model request.
 _Avoid_: Verified fact, persistent claim identity
 
+**Source evidence**:
+Retained source passages and their attributed speakers, distinct from a later
+interpretation of what they mean. Their preservation does not establish truth
+or that every necessary passage was retained.
+_Avoid_: Verified memory, complete conversation
+
+**Model interpretation**:
+A model's proposed summary or description of source evidence, which may alter
+its meaning even when its citations point to real passages.
+_Avoid_: Source text, confirmed fact, adoption evidence
+
 **Adoption evidence**:
 Recorded evidence that a source committed to a proposed value within a stated
 scope, rather than merely quoted, considered or received it as advice.

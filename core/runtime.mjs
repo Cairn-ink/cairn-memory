@@ -7,6 +7,7 @@ import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
+import { sourceEvidence } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { fail, object } from "./validation.mjs";
 
@@ -368,7 +369,14 @@ export function createMemoryRuntime(input) {
       .map((row) => ({ ...row }));
   }
 
-  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false) {
+  function readSourceEvidence(row) {
+    const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
+    const count = detailDto(row).receiptCount;
+    qualificationStorage.inspect(row);
+    return sourceEvidence(row, receipts, count, receiptKey);
+  }
+
+  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false, contextMode) {
     ready();
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
@@ -377,6 +385,7 @@ export function createMemoryRuntime(input) {
       const row = candidate?.currentness === view ? candidate : undefined;
       const reason = !row ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
+      if (contextMode === 'source-evidence') return { source: readSourceEvidence(row), epoch: currentEpoch };
       const memory = detailDto(row);
       return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch,
         ...(includeQualification ? { qualification: qualificationStorage.inspect(row) } : {}),
@@ -384,7 +393,7 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false) {
+  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
@@ -396,6 +405,14 @@ export function createMemoryRuntime(input) {
       for (const { namespace, indexRevision } of namespaces) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision) fail('index_revision_conflict');
+      }
+      if (contextMode === 'source-evidence') {
+        const sources = rows.map((row, index) => {
+          const source = readSourceEvidence(row);
+          if (JSON.stringify(source) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
+          return source;
+        });
+        return selected.map(index => sources[index]);
       }
       const qualifications = includeQualification ? rows.map(row => qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {

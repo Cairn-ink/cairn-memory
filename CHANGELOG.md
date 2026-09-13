@@ -1,5 +1,14 @@
 # Changelog
 
+## Candidate — source evidence context
+
+- Add opt-in source-only fetch/recall context: complete retained passages and
+  submitted roles, without generated summaries or qualification labels in rank
+  and returned memory context. Keep existing modes and counted budgets unchanged.
+- Preserve the frozen eight-case real pilot: all ten records were recalled, but
+  semantic errors included false adoption and lost uncertainty. Source-first
+  usage does not repair selection gaps or prove truth or downstream answer quality.
+
 ## Candidate — fresh source-support experiment
 
 - Add a separate eight-case installed capture/qualified-recall experiment with

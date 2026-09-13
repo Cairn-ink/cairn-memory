@@ -1,5 +1,10 @@
 # Fetch and recall preview — S2c
 
+For source-only usage without model summaries/qualification labels in ranking
+and final context, see the optional [source evidence context](source-evidence-context.md).
+It requires complete retained receipt sets within the same budgets; existing
+calls without contextMode retain their prior behavior.
+
 The same public SQLite core now supports revision-checked content fetch and a
 bounded recall workflow through an injected model adapter. No local MCP server,
 bundled model provider, hosted migration or network fallback is added.

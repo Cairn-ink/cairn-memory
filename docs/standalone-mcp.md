@@ -1,5 +1,11 @@
 # Local MCP source preview
 
+`recall_memory` can opt into `contextMode: "source-evidence"` to rank and return
+complete retained sources instead of generated summaries and qualification
+labels. In this mode, omit includeQualification or set it false; explicit true
+conflicts. Existing defaults are unchanged without contextMode. See
+[source evidence context](source-evidence-context.md) for limits and examples.
+
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run
 stdio transport. Registry packaging, named-client compatibility and remote

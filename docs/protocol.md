@@ -160,3 +160,21 @@ hosted plugin/HTTP schema change, account authority or execution consent is
 introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-capture).
 
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
+
+### Opt-in local source evidence context
+
+Local fetch/recall and MCP recall may select `contextMode: 'source-evidence'`.
+This exposes complete retained receipt excerpts and claimed user/assistant roles
+without model summaries, kind/confidence or qualifications in rank/final memory
+context. It reduces that payload to source IDs, record ID/revision/lifecycle,
+source text/roles/count and core-owned omission/coverage markers. No new captured
+personal fields, provider method, telemetry or hosted wire schema is introduced.
+
+Source roles and passages remain untrusted; even explicit remember may contain
+an assertion supplied by a client, not an authenticated transcript. Source
+selection remains unassessed and MOC routing labels remain model interpretations.
+Complete retained sources must fit the existing budgets or fail; no context
+expansion, dropped conditions or inferred authority is allowed. Inspection can
+still expose the original model interpretation. File-access, journals, backups
+and logical forgetting retain their existing limitations. See
+[source evidence context](source-evidence-context.md).

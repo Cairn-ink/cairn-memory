@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import test from 'node:test';
+
+test('frozen source-support result preserves eight outcomes and semantic failures independently of storage', () => {
+  const read = name => readFileSync(new URL(name, import.meta.url));
+  const result = JSON.parse(read('../../../evaluations/results/source-support-v1.json'));
+  const fixture = read('../source-support-fixture.json');
+  assert.equal(createHash('sha256').update(fixture).digest('hex'), result.fixtureSha256);
+  assert.deepEqual(result.cases.map(item => item.id), JSON.parse(fixture).cases.map(item => item.id));
+  assert.equal(result.scheduledCases, 8);
+  assert.equal(result.structurallyCompletedCases, 8);
+  assert.equal(result.status, 'semantic_failures_observed');
+  assert.equal(result.generalAccuracyClaim, false);
+  assert.equal(result.cases.reduce((n, item) => n + item.storedRecords, 0), 10);
+  assert.equal(result.cases.reduce((n, item) => n + item.recalledRecords, 0), 10);
+  assert.equal(result.cases.reduce((n, item) => n + item.httpRequests, 0), 80);
+  assert.equal(result.accounting.reservedMicroUsd, 400000);
+  assert.equal(result.accounting.knownUsageMicroUsd, 20708);
+  assert.equal(result.accounting.additionalUnknownCostRequests, 40);
+  assert.equal(result.accounting.unsettled, 0);
+  assert.equal(result.accounting.phaseRequests, 204);
+  assert.equal(result.accounting.phaseReservedMicroUsd, 1020000);
+  assert.equal(result.cases.find(item => item.id === 'fresh_challenge_07').semanticFinding, 'false_adoption_and_missing_antecedent');
+  assert.equal(result.cases.find(item => item.id === 'fresh_proposal_04').semanticFinding, 'question_to_assertion');
+  assert.equal(result.cases.find(item => item.id === 'fresh_uncertain_05').semanticFinding, 'unsupported_strengthening');
+  assert.ok(result.cases.every(item => item.coldReplayVerified));
+  assert.ok(result.limitations.some(item => item.includes('not eight semantic passes')));
+  assert.doesNotMatch(JSON.stringify(result), /\/tmp\/|\/home\/|sk-[A-Za-z0-9]/u);
+});

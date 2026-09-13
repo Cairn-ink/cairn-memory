@@ -12,14 +12,28 @@ export function memoryRefs(input) {
 }
 
 export function fetchMemories({ runtime, model, ns, refs, view = 'current', budget, cursor, binding, encodeCursor,
-  includeQualification = false }) {
+  includeQualification = false, contextMode }) {
   countTokens(model, '');
   if (cursor && (Object.keys(cursor.a).length !== 2 ||
       !Number.isSafeInteger(cursor.a.index) || cursor.a.index < 0 || cursor.a.index >= refs.length ||
       !Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0)) fail('invalid_cursor');
   const index = cursor?.a.index ?? 0;
   const offset = cursor?.a.offset ?? 0;
-  const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view, includeQualification);
+  if (contextMode === 'source-evidence' && offset !== 0) fail('invalid_cursor');
+  const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view, includeQualification, contextMode);
+  if (contextMode === 'source-evidence') {
+    const exhausted = index === refs.length - 1;
+    const value = { items: page.source ? [page.source] : [],
+      nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch, a: { index: index + 1, offset: 0 } }),
+      exhausted, truncatedBy: exhausted ? null : 'page_limit', indexRevision: page.epoch,
+      invalidRefs: page.invalidRef ? [page.invalidRef] : [] };
+    if (countTokens(model, JSON.stringify({ ok: true, value })) > budget) fail('context_item_too_large');
+    // Token counting is caller code. Revalidate the complete source projection
+    // after its final callback, even if storage was changed without an epoch bump.
+    const authoritative = runtime.fetchPage(ns, refs[index], 0, page.epoch, view, false, contextMode);
+    if (JSON.stringify(authoritative) !== JSON.stringify(page)) fail('revision_conflict');
+    return value;
+  }
   const available = page.receipts?.length ?? 0;
   const capacity = Math.min(100, available);
   for (let take = capacity; take >= 0; take--) {

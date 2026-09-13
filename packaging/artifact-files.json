@@ -39,6 +39,8 @@
   "core/prompts/reconcile-memories.md",
   "core/prompts/recall-rank.md",
   "core/prompts/recall-rank-qualified.md",
+  "core/source-evidence.mjs",
+  "core/prompts/recall-rank-source-evidence.md",
   "core/prompts/recall-select.md",
   "adapters/mcp/cli.mjs",
   "adapters/mcp/server.mjs",

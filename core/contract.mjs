@@ -506,9 +506,12 @@ export function openMemoryCore(input) {
   function fetch(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget', 'includeQualification']);
+      object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget', 'includeQualification', 'contextMode']);
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
+      const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
+      if ((Object.hasOwn(input, 'contextMode') && contextMode !== 'source-evidence') ||
+          (contextMode === 'source-evidence' && includeQualification)) throw new MemoryStoreError('invalid_input');
       const ns = contractNamespace(input.namespace);
       const refs = memoryRefs(input.refs);
       const view = input.view === undefined ? 'current' : input.view;
@@ -518,18 +521,22 @@ export function openMemoryCore(input) {
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,
         r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url'),
         ...(view === 'historical' ? { view } : {}),
-        ...(includeQualification ? { includeQualification: true } : {}) };
+        ...(includeQualification ? { includeQualification: true } : {}),
+        ...(contextMode === 'source-evidence' ? { contextMode } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification });
+      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
     });
   }
 
   async function recall(input) {
     try {
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit', 'includeQualification']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode']);
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
+      const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
+      if ((Object.hasOwn(input, 'contextMode') && contextMode !== 'source-evidence') ||
+          (contextMode === 'source-evidence' && includeQualification)) throw new MemoryStoreError('invalid_input');
       let namespaces;
       try {
         denseArray(input.readSet, 1, 2);
@@ -551,13 +558,14 @@ export function openMemoryCore(input) {
         return page ? [{ namespace, indexRevision: page.epoch }] : [];
       }));
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification,
+        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode,
         validateFresh,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
+          ...(contextMode === 'source-evidence' ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
-          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification),
+          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
       }));
     } catch (error) { return failure(error); }
   }

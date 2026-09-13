@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "id": "source-support-v1",
+  "sourceCommit": "b6df5ff9274b526646c132ba242ce9cbbc9b8f94",
+  "artifactSha256": "d6c4d95abacd7e0fe8dbce9b5cfd2c98bd13ab567fbc23fe3cea303c75019cb1",
+  "fixtureSha256": "de75ff41fb0f4fac8c81f19dfad4d4a6456c42b63681ac47316e36e185576284",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "mode": "source-bound-v2",
+  "provenance": "Independently authored synthetic sources, subsequently root-seen; not blinded. Evaluator criteria excluded from provider inputs.",
+  "status": "semantic_failures_observed",
+  "scheduledCases": 8,
+  "structurallyCompletedCases": 8,
+  "storedRecords": 10,
+  "recalledRecords": 10,
+  "generalAccuracyClaim": false,
+  "cases": [
+    {
+      "id": "fresh_scope_01",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 1,
+      "recalledRecords": 1,
+      "coldReplayVerified": true,
+      "semanticFinding": "no_material_error_observed",
+      "finding": "No material error observed: Celsius and pottery-series restriction preserved; source-supported direct/adopted description."
+    },
+    {
+      "id": "fresh_exception_02",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 1,
+      "recalledRecords": 1,
+      "coldReplayVerified": true,
+      "semanticFinding": "temporal_generalization",
+      "finding": "Extraction retains today-only exception and next-time cycling, but qualification generalizes it to special circumstances involving clay."
+    },
+    {
+      "id": "fresh_report_03",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 1,
+      "recalledRecords": 1,
+      "coldReplayVerified": true,
+      "semanticFinding": "mixed_claim_representation",
+      "finding": "Reported Priya preference and user indecision remain in prose; single qualification describes only Priya. Adopted must not mean user adoption."
+    },
+    {
+      "id": "fresh_proposal_04",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 1,
+      "recalledRecords": 1,
+      "coldReplayVerified": true,
+      "semanticFinding": "question_to_assertion",
+      "finding": "Both receipts retained, but extraction converts a user question into a speculative fact about storage; qualifier propagates altered speech act."
+    },
+    {
+      "id": "fresh_uncertain_05",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 1,
+      "recalledRecords": 1,
+      "coldReplayVerified": true,
+      "semanticFinding": "unsupported_strengthening",
+      "finding": "Preference uncertainty is lost while uncertainty about its cause remains. Considered label does not restore the lost modality."
+    },
+    {
+      "id": "fresh_choice_06",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 1,
+      "recalledRecords": 1,
+      "coldReplayVerified": true,
+      "semanticFinding": "anchor_support_gap",
+      "finding": "Both receipts retained and choice/reason available; prose weakens this-backup scope, qualifier restores current decision but anchors omit the antecedent defining drive/backup."
+    },
+    {
+      "id": "fresh_challenge_07",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 2,
+      "recalledRecords": 2,
+      "coldReplayVerified": true,
+      "semanticFinding": "false_adoption_and_missing_antecedent",
+      "finding": "Assistant proposal falsely labeled direct/adopted. Expanded follow-up lacks its antecedent receipt and becomes an instruction; contextual qualifier cannot establish missing support."
+    },
+    {
+      "id": "fresh_distinct_08",
+      "structuralStatus": "completed",
+      "httpRequests": 10,
+      "storedRecords": 2,
+      "recalledRecords": 2,
+      "coldReplayVerified": true,
+      "semanticFinding": "fact_decision_enum_ambiguity",
+      "finding": "Two facts kept distinct without invented association. Cat-name descriptors are less precise; adopted on ordinary facts is not consent."
+    }
+  ],
+  "accounting": {
+    "requestLimit": 96,
+    "reservationLimitMicroUsd": 480000,
+    "httpRequests": 80,
+    "reservedMicroUsd": 400000,
+    "knownUsageMicroUsd": 20708,
+    "additionalUnknownCostRequests": 40,
+    "phaseRequests": 204,
+    "phaseReservedMicroUsd": 1020000,
+    "phaseKnownUsageMicroUsd": 69121,
+    "phaseUnknownCostRequests": 102,
+    "unsettled": 0,
+    "phaseLimitMicroUsd": 50000000
+  },
+  "limitations": [
+    "Eight structural completions are not eight semantic passes or general reliability.",
+    "Recall preserved all ten stored interpretations, including semantic errors; no answer-generation quality was tested.",
+    "Source linkage and submitted roles do not establish truth, adoption, identity or authorization.",
+    "Prior failed runs remain unchanged; no failed source was retried or rescored.",
+    "No automatic identity, currentness resolution or rationale-link evaluation was completed."
+  ]
+}
