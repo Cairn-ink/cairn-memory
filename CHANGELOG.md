@@ -1,5 +1,14 @@
 # Changelog
 
+## Candidate — native Hermes submitted capture
+
+- Add explicit v2-only capture configuration to the native Hermes provider,
+  using the installed MCP tool schema and shared engine. Preserve the five-tool
+  default, keyless discovery, profile binding and inert transcript hooks.
+- Limit dedicated-key forwarding to explicit capture/recall and give capture
+  bounded longer deadlines. Timeout is not evidence of rollback; inspect and
+  replay the same batch rather than automatically retrying a new one.
+
 ## Candidate — qualified installation settings
 
 - Accept an explicit source-bound capture mode during preview installation and

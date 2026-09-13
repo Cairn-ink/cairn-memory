@@ -18,6 +18,11 @@ from hermes_constants import get_hermes_home
 
 TOOLS = frozenset({"remember_memory", "recall_memory", "inspect_memory", "correct_memory", "forget_memory"})
 TIMEOUT_SECONDS = 45
+CAPTURE_TIMEOUT_SECONDS = 135
+
+
+def configured_tools(config):
+    return TOOLS | {"capture_memory"} if config and config.get("capture_qualification") == "source-bound-v2" else TOOLS
 
 
 def stop_process(process):
@@ -51,9 +56,13 @@ def configuration(home):
 
 
 def validate_config(value):
-    if not isinstance(value, dict) or set(value) != {"node_path", "executable_path"}:
+    if not isinstance(value, dict) or set(value) not in (
+            {"node_path", "executable_path"}, {"node_path", "executable_path", "capture_qualification"}):
         raise ValueError("cairn_invalid_configuration")
-    for key, raw in value.items():
+    if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
+        raise ValueError("cairn_invalid_configuration")
+    for key in ("node_path", "executable_path"):
+        raw = value[key]
         if not isinstance(raw, str) or not Path(raw).is_absolute() or "\0" in raw:
             raise ValueError("cairn_invalid_configuration")
         path = Path(raw)
@@ -121,7 +130,10 @@ class CairnMemoryProvider(MemoryProvider):
         paths = [{"key": key, "description": description, "required": True}
                 for key, description in [("node_path", "Absolute Node >=22.16 executable path"),
                                          ("executable_path", "Absolute installed cairn-memory JavaScript executable path")]]
-        return paths + [{"key": "api_key", "description": "Optional Cairn recall OpenAI key (paid; selected memory evidence leaves this device)",
+        return paths + [{"key": "capture_qualification",
+                         "description": "Optional source-bound-v2 for explicitly submitted capture (paid). Omit on fresh setup for five tools; existing setting is retained. No passive capture.",
+                         "required": False},
+                        {"key": "api_key", "description": "Optional Cairn capture/recall OpenAI key (paid; selected source evidence leaves this device)",
                          "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
 
     def save_config(self, values, hermes_home):
@@ -142,7 +154,8 @@ class CairnMemoryProvider(MemoryProvider):
             self._config = configuration(self._home)
             with tempfile.TemporaryDirectory(prefix="cairn-hermes-schema-") as directory:
                 result = self._request("list", Path(directory) / "memory.sqlite", "synthetic-schema-owner")
-            if not isinstance(result, list) or {item.get("name") for item in result} != TOOLS or len(result) != len(TOOLS):
+            tools = configured_tools(self._config)
+            if not isinstance(result, list) or {item.get("name") for item in result} != tools or len(result) != len(tools):
                 raise ValueError("cairn_invalid_tool_listing")
             self._schemas = [{"name": "cairn_" + item["name"],
                               "description": item.get("description", ""),
@@ -164,7 +177,7 @@ class CairnMemoryProvider(MemoryProvider):
         if kwargs.get("platform", "cli") != "cli" or kwargs.get("agent_context", "primary") != "primary":
             return error("cairn_unsupported_context")
         name = tool_name.removeprefix("cairn_")
-        if tool_name != "cairn_" + name or name not in TOOLS or not isinstance(args, dict):
+        if tool_name != "cairn_" + name or name not in configured_tools(self._config) or not isinstance(args, dict):
             return error("invalid_input")
         try:
             if len(json.dumps(args)) > 60000:
@@ -187,14 +200,16 @@ class CairnMemoryProvider(MemoryProvider):
             request = {"operation": operation, "database": str(database), "owner": owner,
                        **self._config, **fields}
             environment = {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
-            if operation == "call" and fields.get("name") == "recall_memory":
+            capture = operation == "call" and fields.get("name") == "capture_memory"
+            if operation == "call" and fields.get("name") in {"recall_memory", "capture_memory"}:
                 environment["OPENAI_API_KEY"] = os.environ.get("CAIRN_MEMORY_OPENAI_API_KEY", "")
             process = subprocess.Popen([sys.executable, "-I", str(Path(__file__).with_name("bridge.py"))],
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                        env=environment, start_new_session=True)
             self._process = process
         try:
-            output, _ = process.communicate(json.dumps(request).encode(), timeout=TIMEOUT_SECONDS)
+            output, _ = process.communicate(json.dumps(request).encode(),
+                                            timeout=CAPTURE_TIMEOUT_SECONDS if capture else TIMEOUT_SECONDS)
             if process.returncode or len(output) > 262144:
                 raise ValueError("cairn_transport_failed")
             return json.loads(output)

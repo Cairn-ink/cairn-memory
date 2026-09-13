@@ -2,7 +2,10 @@
 
 See [setup and boundaries](../integrations/hermes/cairn/README.md). This is a
 third-party `memory.provider: cairn` plugin, not a manual MCP config entry or a
-Hermes core change. The installed public core executes all five tools.
+Hermes core change. The installed public core executes the five default tools;
+explicit native `capture_qualification: source-bound-v2` adds submitted capture
+as a sixth tool. The historical evidence below predates this opt-in and does not
+certify its semantic quality.
 
 Newer [agent-loop verification](hermes-agent-loop.md) also covers the actual
 AIAgent conversation loop for native-provider and general MCP-client routes,
@@ -40,6 +43,25 @@ The host source archive lacks `.git`, so the optional
 bytecode-precompile step prints a git warning; actual tests run and return 0.
 
 ## Bounded actual-model native-provider probe
+
+The historical real-model probe in this section covers manual memory and recall,
+not the newly opt-in capture tool. For the new mode's offline integration check,
+run the same canonical command above with all four test paths:
+`test_provider.py`, `test_agent_conversation.py`, `test_qualified_provider.py`
+and `test_qualified_conversation.py` (each under `integrations/hermes/test/`).
+
+Root verification passed all 15 tests on Node 22.16.0 and 24.15.0 against an
+installed archive with SHA-256
+`aa46bb1f4792dc7de514dee397708d6406066685b0668d2808b5e13a1007b2f5`.
+The new lifecycle uses the real pinned MemoryManager, AIAgent routing and
+installed MCP/core; a test-only explicit Node wrapper replaces provider fetch
+with scripted responses. Sixteen fake provider requests occur before restart,
+zero during keyless cold inspection/replay. A deliberately wrong adopted
+interpretation remains inspectable but is absent from source-only rank/context.
+Separate tests verify native setup, key isolation, applied deadlines and active
+helper/SDK termination. No real credential or model service was used.
+This is mechanical integration evidence, not natural tool selection, semantic
+quality, or a claim of recovery from arbitrary operating-system process kills.
 
 The DRI's separate [sanitized report](../integrations/hermes/evidence/native-live-v1.json)
 records a passed native discovery/MemoryManager lifecycle: session A explicitly
