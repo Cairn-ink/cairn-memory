@@ -40,3 +40,39 @@ and assert its historical misses separately. Current-runtime tests must require
 exact target reachability, preserve public-map page observations as a distinct
 measurement, and require the now-complete classification catalog. No permissive
 zero-or-one assertion or overwritten historical result is acceptable.
+
+## Integrated root verification
+
+The resolved integration passed these commands on Node 22.16.0 and 24.15.0:
+
+| Gate | Outcome per runtime |
+| --- | --- |
+| `npm test` | 31 passed |
+| `npm run validate` | JSON and version consistency passed |
+| `npm run validate --prefix tools/plugin-validation` | Marketplace and strict plugin validation passed |
+| `npm run test:core` | 502 passed |
+| `npm run test:openai` | 163 passed |
+| `npm run test:mcp` | 53 passed |
+| `npm run test:artifact` | 54 passed |
+| `npm run test:live-evidence-offline` | 109 passed, 27 existing skips; no failures |
+| `npm run test:experiment-budget` | 15 passed |
+| `npm run test:experiment-request-guard` | 64 passed |
+| Pinned canonical Hermes runner, four integration files | 15 passed |
+
+Also passed on both runtimes: `demo:store`, `demo:moc`, `demo:recall`,
+`demo:capture`, `demo:history`, `demo:conflicts`, `demo:rebuild`,
+`demo:continuation`, `demo:openai-offline`, `demo:experiment-budget`, and
+`demo:experiment-request-guard`. No TypeScript gate exists in this repository.
+
+A fresh installed artifact built from the resolved integration retained SHA-256
+`aa46bb1f4792dc7de514dee397708d6406066685b0668d2808b5e13a1007b2f5`.
+The actual SDK receipt lifecycle and canonical pinned Hermes MemoryManager /
+scripted AIAgent tests exercised that installed shared core, not source imports.
+See [the native verification command](../hermes-memory-provider.md) and
+[S9's record](hermes-qualified-capture.md). All inputs, databases and provider
+responses were synthetic; no model credentials or paid requests were used.
+
+Original PR64 and PR66 result JSON remained byte-identical to their recorded
+heads. The identifier validator and Unicode regression file match public main.
+The main merge retained both historical security plans, and PR59's ancestry
+merge left the already-equivalent tree unchanged. No old PR was closed or merged.

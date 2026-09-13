@@ -13,10 +13,10 @@ Historical private-hold notes below retain their original context.
    retained-source extraction and source-only recall context.
 3. S8–S9: source-checkout installation and native Hermes explicit capture.
 
-## Public PR heads to preserve
+## Preserved public PR heads
 
-The table records fetched heads, not a claim that these PRs have been merged.
-The final delivery verification must confirm every head is an ancestor. Keep
+The table records fetched heads, not a claim that these PRs have been merged into
+public main. Ancestry merges preserve these exact heads in this integration. Keep
 old PRs and branches intact until the integration is accepted.
 
 | PR | Recorded head | Scope |
@@ -40,8 +40,8 @@ old PRs and branches intact until the integration is accepted.
 | [#68](https://github.com/Cairn-ink/cairn-memory/pull/68) | `3512719a3c43c14354f76c31064d8d62666e97bf` | docs(core): define source-backed qualification and update gates |
 
 PR59's contract was already cherry-picked into the feature chain; its original
-head still needs ancestry integration. PR64 diagnostic additions and PR66's last
-paired-evidence commit were not in the S9 chain and must be included explicitly.
+head is now preserved by an ancestry merge. PR64 diagnostic additions and PR66's
+last paired-evidence commit were not in the S9 chain and were included explicitly.
 
 ## Local reviewed stages
 
@@ -90,4 +90,3 @@ gates; the latter are defined in [the delivery plan](plans/source-reliability-in
 - Installed SDK and scripted Hermes agent tests establish wiring, not natural
   tool selection or benefits measured with real users. No passive capture, public
   npm release, remote ChatGPT connector, or production deployment is included.
-

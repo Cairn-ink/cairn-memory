@@ -40,6 +40,14 @@ model-declared update labels are not a truth guarantee. This is separate from
 the MCP tools' explicit remember/correct operations; no automatic transcript
 capture or new quality certification is implied.
 
+The latest [eight-case source-support pilot](evaluations/results/source-support-v1.json)
+stored and recalled all ten records but still showed false adoption and lost
+uncertainty. Optional [source-only context](docs/source-evidence-context.md)
+separates retained passages from generated interpretations; it does not certify
+source completeness or downstream answers. The
+[integration inventory](docs/source-reliability-integration.md) distinguishes
+shipped security work, developer-preview changes and unfinished reliability goals.
+
 ## Try the local memory layer
 
 Prerequisites: Node >=22.16, npm and `tar`. Model-free remember/inspect/correct/

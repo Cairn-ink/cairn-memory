@@ -43,14 +43,20 @@ To reproduce the candidate observation, use PR64's
 to the candidate `core/contract.mjs`. No fixture, scorer or oracle change is
 needed. The normal core regressions are directly runnable via `npm run test:core`.
 
-## Additional boundaries
+## Historical candidate boundaries and later scan policy
 
-New actual-SQLite regressions cover raw 1023/1024/1025-row boundaries, with deleted
+The original actual-SQLite regressions covered raw 1023/1024/1025-row boundaries, with deleted
 and historical rows consuming the scan allowance. A fixture scores exactly 1024
 bodies /15277 UTF-8 bytes and excludes the sentinel. The existing namespace/ID
 index supplies the raw scan without a temporary sort. Auxiliary projection and
 placement lookup costs are separate; no total-I/O or production-latency bound is
 claimed. The [runtime documentation](../fetch-recall.md) defines the ceilings.
+
+That describes the retained v1 candidate experiment, not the integrated current
+scan policy. PR67 subsequently excluded history and tombstones from the 1,024
+current-memory allowance and changed the private cursor policy. Its complete
+current-row scan still has a sentinel and bounded coverage. The fixed reports
+below are not rerun or relabeled as measurements of that later version.
 
 Literal matching still misses unsegmented Chinese substrings and synonyms, and
 can prioritize lexical decoys. Zero-score records remain eligible, but large
@@ -59,6 +65,63 @@ Private pages omit group headers, so this change loses that context rather than
 implementing adaptive MOC routing. Bounded topic routing, model quality, current
 state updates, decision premises and real-user benefit remain separate work.
 
-The [next frozen live protocol](../plans/query-candidates-live.md) tests six new
-independently authored cases with actual selection/ranking and retained failures.
-This offline evidence does not claim that live protocol has passed.
+## Retained live query probe
+
+The [frozen live protocol](../plans/query-candidates-live.md) subsequently ran once
+on six new synthetic cases, each with a baseline and candidate arm. Baseline was
+`b3429f1246c942b3b8adcb68e955d68abb7716c2`; candidate was
+`d1381aed856effd4448236a872cf3ecaced92fe9`. Both used their actual core, adapter and
+guard with unchanged `gpt-4.1-mini-2025-04-14` selection/ranking. Explicit admission
+and manual placement isolated retrieval from extraction and reconciliation.
+The case author saw the specification and audited implementation; fixture
+metadata was held out from implementation/test authors, but this was not blinded.
+
+The [frozen fixture](../../evaluations/results/query-candidates-live-fixture-v1.json)
+contains source text, corpus recipes and evaluator expectations. Those evaluator
+fields were not model input. The
+[compact evidence export](../../evaluations/results/query-candidates-live-v1.json)
+retains every arm, source-bound target, complete recall envelope, trace output,
+intermediate target visibility/selection summaries and per-request accounting.
+It records corpus/input hashes and original artifact hashes. Full distractor
+snapshots, model inputs, HTTP envelopes, incremental checkpoints and operational
+paths remain private; hashes bind these artifacts but do not make omitted content
+independently reconstructible from the public export.
+
+| Case | Baseline required targets returned | Candidate required targets returned | Both arms' coverage |
+| --- | ---: | ---: | --- |
+| English, correctly filed, 224 records | 0/1 | 1/1 | `budget_exhausted` |
+| English, unfiled, 224 records | 0/1 | 1/1 | `budget_exhausted` |
+| English, two records misfiled, 224 records | 0/2 | 2/2 | `budget_exhausted` |
+| Chinese control, 16 records | 1/1 | 1/1 | `complete` |
+| English paraphrase control, 16 records | 1/1 | 1/1 | `complete` |
+| Absent-answer control, 16 records | 0 returned; 0 required | 0 returned; 0 required | `complete` |
+
+All 12 arms mechanically completed, with no retry or replacement. Of five
+positive cases per arm, baseline retrieved all required targets in 2/5 and
+candidate in 5/5; target-record coverage was 2/6 and 6/6 respectively. By language,
+baseline covered 1/4 English positive cases and 1/1 Chinese case; candidate covered
+4/4 and 1/1. The English negative control returned zero memories in both arms.
+Every final returned memory was required and its receipts matched the cold source
+records. All 12 complete corpus snapshots matched before and after reopening and
+after recall; no source or placement mutation was observed.
+
+Final filtering was not perfect initial selection: baseline selected two distinct
+non-target memories in the two-evidence case and one in the absent-answer case;
+candidate selected one non-target in the two-evidence case. Ranking removed these
+before the final response. The export preserves those intermediate selections.
+
+This attempt made 54 HTTP requests (26 baseline, 28 candidate; 27 count/generation
+pairs), reserving USD0.270000 within its USD0.40/80-request cap. The existing USD50
+phase moved from 8 requests /USD0.040000 reserved to 62 requests /USD0.310000
+reserved, with zero unsettled calls. Cumulative known usage was USD0.035212,
+including USD0.032110 from this attempt; 31 cumulative calls had unknown cost,
+including 27 count calls here. Known usage is not the total bill, and reservations
+were not refunded. The separate earlier USD20 campaign was not used or reset.
+
+These observations support the intended candidate-input mechanism on this small
+synthetic sample. The 224-record successes still have incomplete coverage.
+Chinese/paraphrase results do not demonstrate an advantage from literal matching:
+both versions succeeded on these small controls. There was no answer model,
+extraction, memory-update test, installed-client live test or real-user evaluation.
+No general quality percentage, statistical superiority or release endorsement
+follows. Model-guided topic routing and update/adoption reliability remain open.

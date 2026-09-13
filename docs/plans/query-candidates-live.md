@@ -53,3 +53,22 @@ OpenAI Docs confirms the unchanged standard text pricing of USD0.40 input /
 USD1.60 output per million tokens on the
 [official model page](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
 Unknown count-call usage remains reserved and is not reported as a zero bill.
+
+## Execution record
+
+Executed once on 2026-09-13 after offline and independent reviews, using candidate
+`d1381aed856effd4448236a872cf3ecaced92fe9`, baseline
+`b3429f1246c942b3b8adcb68e955d68abb7716c2` and frozen operator SHA256
+`53d73b7e30174f4733e4a4f026e7088f44ecc44ed27f01c233515a0899450ad2`.
+The fixture hash above was unchanged. All 12 scheduled arms were retained, with
+54 requests /270000 microUSD additional reservation, no halt and no retry.
+The existing phase ended at 62 requests /310000 microUSD reserved, zero unsettled,
+35212 microUSD known usage and 31 unknown-cost requests. Reservations are not the
+total bill and no earlier campaign was reset or reused.
+
+Baseline covered all required targets in 2/5 positive cases (2/6 target records);
+candidate in 5/5 (6/6). Both negative controls returned no memories. Intermediate
+selection included distractors subsequently removed by ranking. Large-store
+coverage remained `budget_exhausted`; all source snapshots remained unchanged.
+See the [retained evidence and limitations](../evidence/query-candidates.md).
+This record does not change the frozen acceptance criteria or authorize a rerun.
