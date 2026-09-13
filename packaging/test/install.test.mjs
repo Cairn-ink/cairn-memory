@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -12,6 +12,7 @@ import { createExperimentRequestGuard, authorizeQualificationExtension } from '.
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { createQualificationLiveSession } from '../../evaluation/live/qualification-session.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
+import { getQualificationPilotPins, runQualificationPilot } from '../../evaluation/live/qualification-pilot.mjs';
 import { fileURLToPath } from 'node:url';
 
 const requireSDK = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
@@ -56,6 +57,102 @@ async function call(client, name, args = {}) {
   return result;
 }
 const ok = (result) => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
+
+for (const mode of ['success', 'invalid-first-qualification', 'transport-failure']) {
+  test(`installed qualification pilot retains all six cases with ${mode} fake upstream`, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'cairn-installed-qualification-pilot-'));
+    const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 1000 };
+    createExperimentBudget(ledger).close();
+    const policy = experimentPolicy();
+    createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('No setup transport') }).close();
+    const privateDirectory = join(root, 'evidence'); mkdirSync(privateDirectory, { mode: 0o700 });
+    const apiKey = 'synthetic-pilot-parent-key';
+    let sends = 0; let qualifications = 0;
+    const report = await runQualificationPilot({ ledger, expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 },
+      apiKey, nodePath: realpathSync(process.execPath), cairnExecutable: realpathSync(installation.executable),
+      cairnArtifact: artifact.artifactPath, cairnArtifactSha256: hash(artifact.artifactPath),
+      privateDirectory, pins: getQualificationPilotPins(), fetchImpl: async (url, options) => {
+        sends++;
+        assert.equal(new Headers(options.headers).get('authorization'), `Bearer ${apiKey}`);
+        if (mode === 'transport-failure') return new Response('synthetic unavailable', { status: 503 });
+        const payload = JSON.parse(options.body);
+        if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+        const input = JSON.parse(payload.input[0].content[0].text); let output;
+        assert.equal(Object.hasOwn(input, 'expected'), false); assert.equal(Object.hasOwn(input, 'query'), false);
+        if (payload.text.format.name === 'cairn_extract') {
+          assert.deepEqual(Object.keys(input), ['messages']);
+          output = { items: [{ content: input.messages[0].content, kind: 'preference', confidence: 0.9, sourceIndices: [0] }] };
+        } else if (payload.text.format.name === 'cairn_qualify') {
+          qualifications++;
+          output = { qualifications: input.items.map(item => ({ itemIndex: item.itemIndex,
+            qualification: { version: 1, slot: { subject: null, property: null, scope: null, applies: null },
+              value: null, attribution: 'unknown', commitment: 'unknown', anchors: [{ receiptIndex: 0, start: 0,
+                end: mode === 'invalid-first-qualification' && qualifications === 1 ? 999 : item.sources[0].excerpt.length,
+                text: item.sources[0].excerpt, fields: ['value'] }] } })) };
+        } else {
+          assert.equal(payload.text.format.name, 'cairn_classify');
+          output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
+        }
+        return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
+          incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+          usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
+      } });
+    assert.equal(report.semanticReviewRequired, true);
+    assert.equal(report.cases.length, 6);
+    const events = report.cases.flatMap(item => [item.events.initial, item.events.later]);
+    assert.equal(events.length, 12);
+    assert.equal(JSON.stringify(report).includes(apiKey), false);
+    if (mode === 'success') {
+      assert.equal(sends, 72);
+      assert.ok(events.every(event => event.status === 'completed'), JSON.stringify(report));
+    } else if (mode === 'invalid-first-qualification') {
+      assert.equal(sends, 64);
+      assert.equal(events[0].status, 'failed'); assert.equal(events[1].status, 'not_run');
+      assert.ok(events.slice(2).every(event => event.status === 'completed'), JSON.stringify(report));
+    } else {
+      assert.equal(sends, 1);
+      assert.equal(events[0].status, 'failed');
+      assert.ok(events.slice(1).every(event => event.status === 'not_run'), JSON.stringify(report));
+    }
+    assert.equal(existsSync(join(ledger.directory, 'qualification-pilot-v1-intent.json')), true);
+    const verify = createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('No verification transport') });
+    try {
+      const state = verify.getState();
+      assert.equal(state.requestCount, sends); assert.equal(state.reservedMicroUsd, sends * 5000);
+      assert.ok(state.attempts.every(attempt => attempt.outcome !== null));
+    } finally { verify.close(); }
+    const intentPath = join(ledger.directory, 'qualification-pilot-v1-intent.json');
+    const intentBefore = readFileSync(intentPath);
+    const retryDirectory = join(root, 'retry-evidence'); mkdirSync(retryDirectory, { mode: 0o700 });
+    const retry = await runQualificationPilot({ ledger,
+      expectedCheckpoint: { requestCount: sends, reservedMicroUsd: sends * 5000 },
+      apiKey, nodePath: realpathSync(process.execPath), cairnExecutable: realpathSync(installation.executable),
+      cairnArtifact: artifact.artifactPath, cairnArtifactSha256: hash(artifact.artifactPath),
+      privateDirectory: retryDirectory, pins: getQualificationPilotPins(),
+      fetchImpl: () => assert.fail('Existing intent must prevent repeat transport') });
+    assert.equal(retry.status, 'halted');
+    assert.ok(retry.cases.every(item => item.events.initial.status === 'not_run' && item.events.later.status === 'not_run'));
+    assert.deepEqual(readFileSync(intentPath), intentBefore);
+  });
+}
+
+test('installed qualification pilot preserves a partial intent without sending or repairing it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'cairn-pilot-partial-intent-'));
+  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 1000 };
+  createExperimentBudget(ledger).close();
+  createExperimentRequestGuard({ ledger, policy: experimentPolicy(), fetchImpl: () => assert.fail('No setup transport') }).close();
+  const intentPath = join(ledger.directory, 'qualification-pilot-v1-intent.json');
+  writeFileSync(intentPath, '{partial', { flag: 'wx', mode: 0o600 });
+  const directory = join(root, 'evidence'); mkdirSync(directory, { mode: 0o700 });
+  const report = await runQualificationPilot({ ledger, expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 },
+    apiKey: 'synthetic-key', nodePath: realpathSync(process.execPath), cairnExecutable: realpathSync(installation.executable),
+    cairnArtifact: artifact.artifactPath, cairnArtifactSha256: hash(artifact.artifactPath),
+    privateDirectory: directory, pins: getQualificationPilotPins(), fetchImpl: () => assert.fail('No partial-intent transport') });
+  assert.equal(report.status, 'halted');
+  assert.equal(report.budgetAfter.requestCount, 0);
+  assert.equal(readFileSync(intentPath, 'utf8'), '{partial');
+});
 
 test('installed qualified MCP launcher uses the shared capability guard through an authenticated proxy', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'cairn-qualified-guard-install-'));

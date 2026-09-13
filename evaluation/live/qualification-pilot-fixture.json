@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "id": "qualification-pilot-v1",
+  "provenance": "Six root-selected cases from twelve independently authored bilingual synthetic cases. Author saw no Cairn implementation or existing fixtures. Root converted speaker labels to roles and selected languages; root is not blinded. Expectations are not measured outcomes and never enter model inputs.",
+  "cases": [
+    {
+      "id": "01_changed_preference",
+      "language": "en",
+      "initial": [{"role":"user","content":"I prefer weekly summaries in detailed paragraphs."}],
+      "later": [{"role":"user","content":"I now prefer summaries with at most five bullet points. Use that going forward."}],
+      "query": "What summary format do I prefer now, and what did I prefer before?",
+      "expected": {
+        "current": "At most five bullet points for weekly summaries.",
+        "history": "Previously preferred detailed paragraphs.",
+        "reason": "The user explicitly changed the preference; no motivation was supplied.",
+        "prohibitedInference": "Do not invent a motivation or extend the preference to every kind of writing.",
+        "reconfirmation": "Answer the format directly; abstain from explaining why."
+      }
+    },
+    {
+      "id": "02_temporary_exception",
+      "language": "zh-TW",
+      "initial": [{"role":"user","content":"平常請用繁體中文回覆我。"}],
+      "later": [{"role":"user","content":"只有這封給倫敦客戶的信，用英文寫。"}],
+      "query": "下一次一般聊天，你應該用哪種語言？",
+      "expected": {
+        "current": "Traditional Chinese remains the general preference.",
+        "history": "English was requested for one client letter.",
+        "reason": "The later instruction explicitly limits the exception to that letter.",
+        "prohibitedInference": "Do not replace the general language preference with English.",
+        "reconfirmation": "No reconfirmation is needed for ordinary chat."
+      }
+    },
+    {
+      "id": "04_suggestion_without_adoption",
+      "language": "en",
+      "initial": [{"role":"user","content":"I have not decided what time to set my reading reminder."}],
+      "later": [{"role":"assistant","content":"You could consider 8 p.m."},{"role":"user","content":"I will think about it; I have not chosen."}],
+      "query": "What reading reminder time did I choose?",
+      "expected": {
+        "current": "No reminder time has been selected.",
+        "history": "The assistant suggested 8 p.m.; the user deferred.",
+        "reason": "There was no user adoption.",
+        "prohibitedInference": "Do not store or report 8 p.m. as the user's decision.",
+        "reconfirmation": "State that the time is undecided; ask for a choice if one is needed."
+      }
+    },
+    {
+      "id": "05_disproved_decision_premise",
+      "language": "zh-TW",
+      "initial": [{"role":"user","content":"這次田野調查就選記錄工具 A，因為它能完全離線操作。"}],
+      "later": [{"role":"user","content":"我測過了，A 每次開啟都需要連網。原本以為它能完全離線，是我弄錯了。"}],
+      "query": "這次田野調查最後選哪個工具？為什麼？",
+      "expected": {
+        "current": "A is the last explicitly selected tool, but its stated premise has been disproved and the final choice needs reconfirmation.",
+        "history": "A was selected because the user believed it worked entirely offline.",
+        "reason": "Preserve offline capability as the historical selection reason while marking that belief as corrected.",
+        "prohibitedInference": "Never invent a switch to B, a new reason for A, or an explicit cancellation that the user did not state.",
+        "reconfirmation": "Do not assert a settled final choice; explain the invalidated premise and request reconfirmation."
+      }
+    },
+    {
+      "id": "09_explicit_unresolved_contradiction",
+      "language": "en",
+      "initial": [{"role":"user","content":"My notes say the next workshop has a maximum of twenty participants."}],
+      "later": [{"role":"user","content":"Another note says the maximum is thirty. Both concern the same workshop; I do not know which is right. Do not settle it yet."}],
+      "query": "What is the participant limit for the next workshop?",
+      "expected": {
+        "current": "The limit is unresolved between twenty and thirty.",
+        "history": "Two conflicting notes concern the same workshop.",
+        "reason": "The user explicitly withheld resolution; neither source was established as authoritative.",
+        "prohibitedInference": "Do not choose thirty merely because it was mentioned later, average the values, or claim a confirmed change.",
+        "reconfirmation": "State the conflict and request confirmation before supplying a definitive limit."
+      }
+    },
+    {
+      "id": "10_real_change_with_reason",
+      "language": "zh-TW",
+      "initial": [{"role":"user","content":"每週團隊會議安排星期二，因為設計師那天有空。"}],
+      "later": [{"role":"user","content":"從下週起固定改星期四。設計師轉組了，現在要配合客服星期四的空檔。"}],
+      "query": "下週起會議是哪天？為什麼改？",
+      "expected": {
+        "current": "Thursdays from next week onward; the effective date must be retained.",
+        "history": "Previously Tuesdays to accommodate the designer.",
+        "reason": "The designer changed teams, and the new schedule accommodates support's Thursday availability.",
+        "prohibitedInference": "Do not apply the change before its effective date or preserve the old reason as the reason for Thursday.",
+        "reconfirmation": "No reconfirmation is needed about the weekday or stated reason."
+      }
+    }
+  ]
+}
