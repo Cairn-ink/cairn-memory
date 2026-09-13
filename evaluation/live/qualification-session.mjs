@@ -7,18 +7,24 @@ const fail = code => { throw new Error(code); };
 // A parent-only provider boundary for explicitly authorized capture experiments.
 // It never creates a ledger or implies the later operator's smaller per-run cap.
 export function createQualificationLiveSession(options) {
-  return createSession(options, 'qualificationExtension', 'cairn_qualify',
+  return createSession(options, 'qualificationExtension', ['cairn_extract', 'cairn_classify', 'cairn_qualify'],
     createQualificationExperimentRequestGuard, 'qualification');
 }
 
 export function createCandidateQualificationLiveSession(options) {
-  return createSession(options, 'candidateQualificationExtension', 'cairn_qualifyCandidates',
+  return createSession(options, 'candidateQualificationExtension', ['cairn_extract', 'cairn_classify', 'cairn_qualifyCandidates'],
     createCandidateQualificationExperimentRequestGuard, 'candidate_qualification');
+}
+
+export function createSourceSupportLiveSession(options) {
+  return createSession(options, 'candidateQualificationExtension',
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_select', 'cairn_rank'],
+    createCandidateQualificationExperimentRequestGuard, 'source_support');
 }
 
 // Only the named public factories select these closed capabilities. Caller
 // options cannot select a method, guard constructor or authorization kind.
-function createSession(options, extensionKey, method, createGuard, errorKind) {
+function createSession(options, extensionKey, methods, createGuard, errorKind) {
   if (!options || typeof options !== 'object' || Array.isArray(options)
     || Object.keys(options).sort().join(',') !== ['apiKey', 'fetchImpl', 'ledger', extensionKey].sort().join(',')) {
     fail(`invalid_${errorKind}_session`);
@@ -38,7 +44,7 @@ function createSession(options, extensionKey, method, createGuard, errorKind) {
       parsed = JSON.parse(encoded);
     } catch { fail(`invalid_${errorKind}_request`); }
     if (parsed?.model !== MODEL_ID
-      || !['cairn_extract', 'cairn_classify', method].includes(parsed?.text?.format?.name)) {
+      || !methods.includes(parsed?.text?.format?.name)) {
       fail(`invalid_${errorKind}_request`);
     }
     return guard.cairnFetch(`https://api.openai.com/v1${path}`, {

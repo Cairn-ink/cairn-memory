@@ -237,6 +237,14 @@ free. Full gates and independent review precede execution; passing structural
 capture is not semantic/currentness accuracy. See
 [the frozen acceptance](plans/candidate-qualification-pilot.md).
 
+The separate source-support experiment reuses that exact existing candidate
+capability, but a new closed session additionally permits baseline select/rank.
+The old capture-only sessions and their caps are unchanged. A new fixed attempt
+limits all eight cases to 96 HTTP/US$0.48 reservation, and its installed operator
+enforces six requests per capture/recall phase. It never provisions a new grant,
+resets the ledger or repeats old failures. See the
+[fresh source-support contract](plans/fresh-source-support-pilot.md).
+
 ## What is protected
 
 The supported request subset is deliberately narrow: nonstreaming Chat

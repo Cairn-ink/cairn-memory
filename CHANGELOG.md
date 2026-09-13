@@ -1,5 +1,14 @@
 # Changelog
 
+## Candidate — fresh source-support experiment
+
+- Add a separate eight-case installed capture/qualified-recall experiment with
+  fixed source/query/rubric provenance, original capability reuse, per-phase
+  limits and a 96-HTTP/US$0.48 conservative cap inside the existing phase budget.
+- Keep prior experiments unchanged; preserve failed/empty/not-run outcomes and
+  request-free cold inspection/replay. This operator is not a consumer feature,
+  semantic score, general reliability claim or permission to publish a package.
+
 ## Private candidate — v2 interpretation guidance
 
 - Clarify independent source-supported descriptors, proposal attribution and

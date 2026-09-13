@@ -2,6 +2,8 @@ export const QUALIFICATION_PILOT_LIMITS = Object.freeze({ requests: 100, microUs
   reservationMicroUsd: 5000 });
 export const CANDIDATE_QUALIFICATION_LIMITS = Object.freeze({ requests: 36, microUsd: 180000,
   reservationMicroUsd: 5000 });
+export const SOURCE_SUPPORT_LIMITS = Object.freeze({ requests: 96, microUsd: 480000,
+  reservationMicroUsd: 5000 });
 const fail = code => { throw new Error(code); };
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
@@ -9,14 +11,19 @@ const integer = value => Number.isSafeInteger(value) && value >= 0;
 
 /** Additional one-shot cap only; send must use the existing durable campaign guard. */
 export function createQualificationPilotAttempt(options) {
-  return createAttempt(options, QUALIFICATION_PILOT_LIMITS, 'cairn_qualify');
+  return createAttempt(options, QUALIFICATION_PILOT_LIMITS, ['cairn_extract', 'cairn_qualify', 'cairn_classify']);
 }
 
 export function createCandidateQualificationAttempt(options) {
-  return createAttempt(options, CANDIDATE_QUALIFICATION_LIMITS, 'cairn_qualifyCandidates');
+  return createAttempt(options, CANDIDATE_QUALIFICATION_LIMITS, ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify']);
 }
 
-function createAttempt(options, limits, qualificationMethod) {
+export function createSourceSupportAttempt(options) {
+  return createAttempt(options, SOURCE_SUPPORT_LIMITS,
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_select', 'cairn_rank']);
+}
+
+function createAttempt(options, limits, methods) {
   if (!exact(options, ['readState', 'checkPins', 'persist', 'send', 'expectedCheckpoint'])) fail('invalid_attempt');
   const { readState, checkPins, persist, send, expectedCheckpoint } = options;
   if ([readState, checkPins, persist, send].some(value => typeof value !== 'function')
@@ -49,7 +56,7 @@ function createAttempt(options, limits, qualificationMethod) {
         let parsed;
         try { parsed = JSON.parse(body); } catch { fail('request_rejected'); }
         if (parsed?.model !== 'gpt-4.1-mini-2025-04-14'
-          || !['cairn_extract', qualificationMethod, 'cairn_classify'].includes(parsed?.text?.format?.name)) fail('request_rejected');
+          || !methods.includes(parsed?.text?.format?.name)) fail('request_rejected');
         await checkPins(); checkState();
         if (requests >= limits.requests || reservedMicroUsd + 5000 > limits.microUsd) fail('attempt_limit');
         requests++; reservedMicroUsd += 5000;
