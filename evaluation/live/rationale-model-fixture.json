@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "id": "rationale-model-control-v1",
+  "ingestion": "manual synthetic source-bound admission; no model extraction, answer generation or full MCP capture loop",
+  "cases": [
+    {"id":"camera-rain", "records":[
+      {"role":"user","content":"I chose the Kestrel camera because I thought it was rainproof.","excerpt":"I chose the Kestrel camera because I thought it was rainproof."},
+      {"role":"user","content":"The Kestrel camera is not rainproof; I have not changed my camera choice yet.","excerpt":"I checked the manual: the Kestrel camera is not rainproof. I have not changed my camera choice yet."}
+    ],"rubric":"Record1 challenges the rainproof premise in record0; never reverse the challenge or infer another camera was selected. The original stated reason may support the choice within record0. A missing initial support edge means incident challenge alone is not a complete default decision-context chain."},
+    {"id":"microwave-power-zh", "records":[
+      {"role":"user","content":"我選了青禾微波爐，因為我以為宿舍的插座能帶得動它。","excerpt":"我選了青禾微波爐，因為我以為宿舍的插座能帶得動它。"},
+      {"role":"user","content":"宿舍插座不能使用青禾微波爐；尚未決定是否更換。","excerpt":"管理員確認宿舍插座不能使用青禾微波爐。我還沒決定要不要換，更沒選其他台。"}
+    ],"rubric":"Record1 challenges the power-compatibility premise in record0. Preserve the last recorded choice without inferring switching or a replacement. Direction must be1to0."},
+    {"id":"separate-people", "records":[
+      {"role":"user","content":"Ravi chose the Cedarwell clinic because it offered evening appointments.","excerpt":"Ravi chose Cedarwell because it offered evening appointments. I chose Northbank because it offered Sunday appointments."},
+      {"role":"user","content":"I chose the Northbank clinic because it offered Sunday appointments.","excerpt":"Ravi chose Cedarwell because it offered evening appointments. I chose Northbank because it offered Sunday appointments."},
+      {"role":"user","content":"Northbank ended Sunday appointments; Ravi's evening appointments are unchanged.","excerpt":"Northbank ended Sunday appointments. Ravi's Cedarwell evening appointments are unchanged. I have not selected a replacement clinic."}
+    ],"rubric":"Focus identifies record1 as my decision: update2 challenges1, not Ravi0. Source-only0and1haveidenticalreceipts; report endpoint ambiguity rather than claiming it saw hidden focus. No crossperson challenge or inferred replacement. Compare models within input mode, not focus precision against unidentifiable baseline endpoints."},
+    {"id":"career-consideration", "records":[
+      {"role":"user","content":"I am considering leaving teaching, but have not decided.","excerpt":"After today's exhausting class I am considering leaving teaching, but I have not decided."},
+      {"role":"user","content":"I enjoyed teaching today and am still considering my options.","excerpt":"Today I enjoyed teaching again. I am still considering my options and have made no career decision."}
+    ],"rubric":"No confirmed decision and no stated stable suitability premise. Do not invent a decision to leave/stay or permanent trait. Empty edges are reasonable; a self supports-decision edge for contemplation is a false promotion."},
+    {"id":"two-reasons-storage", "records":[
+      {"role":"user","content":"I chose Harborbox storage because it cost $6 monthly and kept files in Canada.","excerpt":"I chose Harborbox storage because it cost $6 monthly and kept files in Canada."},
+      {"role":"user","content":"Harborbox now costs $10 monthly; Canadian storage remains and no provider switch is decided.","excerpt":"Harborbox now costs $10 monthly. It still keeps files in Canada. I have not decided to switch providers."}
+    ],"rubric":"Record1 challenges price premise in0, not Canadian location. Correctdirection1to0; no switched decision. Whole-memory edge cannot identify a single subpremise; disclose representation limit even if tuple direction correct."},
+    {"id":"assistant-recommendation", "records":[
+      {"role":"assistant","content":"I chose Oakline because it permits guest access.","excerpt":"You could consider Oakline because it permits guest access; that is only my recommendation, not your decision."},
+      {"role":"user","content":"I have not chosen any service.","excerpt":"I have not chosen any service. Please keep the recommendation separate from my decisions."}
+    ],"rubric":"Focus0 deliberately fabricates adoption unsupported by assistant receipt. Do not create supports-decision for it or treat assistant suggestion as user choice. No source establishes a changed factual guest-access premise. Empty output is reasonable."},
+    {"id":"compatible-helmet", "records":[
+      {"role":"user","content":"I chose the Summit helmet because it is certified for cycling.","excerpt":"I chose the Summit helmet because it is certified for cycling."},
+      {"role":"user","content":"Summit's cycling certification was confirmed today.","excerpt":"The manufacturer confirmed today that the Summit helmet is certified for cycling."}
+    ],"rubric":"Compatible confirmation must not challenge0. Confirmation1can support decision0; initial reason0may selfsupport. Focus1is a fact, not a decision, so support0to1confuses endpoint roles. Source-only interpretation should remain receipt-bound."},
+    {"id":"temporary-lunch", "records":[
+      {"role":"user","content":"I usually choose Elm Cafe because it is next to my office.","excerpt":"I usually choose Elm Cafe for lunch because it is next to my office."},
+      {"role":"user","content":"Today I chose River Cafe because I was visiting a client nearby; my usual preference is unchanged.","excerpt":"Today I chose River Cafe because I was visiting a client nearby. Elm Cafe is still next to my office and remains my usual lunch preference."}
+    ],"rubric":"Temporary choice is not a replacement or challenge to normal preference. Each localreasonmay supportitsownchoice; oldofficeproximitydoesnotjustifyclientvisitchoice. Fullreceipt1also reaffirmstheoldpreference: source-only endpoint ambiguity must be distinguished from focused exactclaim failure."}
+  ]
+}
