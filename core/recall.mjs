@@ -5,6 +5,7 @@ import { fail, object, identifier, revision, denseArray } from './validation.mjs
 
 const selectPrompt = readFileSync(new URL('./prompts/recall-select.md', import.meta.url), 'utf8');
 const rankPrompt = readFileSync(new URL('./prompts/recall-rank.md', import.meta.url), 'utf8');
+const qualifiedRankPrompt = readFileSync(new URL('./prompts/recall-rank-qualified.md', import.meta.url), 'utf8');
 const key = (ref) => JSON.stringify([ref.namespaceIndex, ref.memoryId, ref.revision]);
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
@@ -28,7 +29,7 @@ function selection(output, allowed, maximum, model, stage) {
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize,
-  validateFresh = () => {} }) {
+  validateFresh = () => {}, includeQualification = false }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
@@ -72,6 +73,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   const candidates = [...chosen.values()].map((ref) => {
     validateFresh([...chosen.values()]);
     const request = { namespace: readSet[ref.namespaceIndex], tokenBudget: 4000,
+      ...(includeQualification ? { includeQualification: true } : {}),
       refs: [{ memoryId: ref.memoryId, revision: ref.revision }] };
     const receipts = [];
     const receiptIds = new Set();
@@ -98,7 +100,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   });
   let ranked = [];
   if (candidates.length) {
-    const rankOutput = await callModel(model, 'rank', rankPrompt, { query, limit,
+    const rankOutput = await callModel(model, 'rank', includeQualification ? qualifiedRankPrompt : rankPrompt, { query, limit,
       candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },
       { validateFresh: () => validateFresh(candidates) });
     ranked = selection(rankOutput, new Map(candidates.map((ref) => [key(ref), ref])), limit, model, 'rank');

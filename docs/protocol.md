@@ -141,8 +141,15 @@ remain 64KiB input/256KiB output; oversized input rejects, not truncates. SQLite
 retention, backup and erasure limitations remain unchanged.
 
 `inspect_memory.includeQualification` exposes existing bounded source metadata
-only for a namespace-owned ID, not list queries. It is keyless, preserves receipt
-pagination and does not add qualifications to recall/provider inputs. No telemetry,
+only for a namespace-owned ID, not list queries. It is keyless and preserves receipt
+pagination. Separately, local `recall_memory.includeQualification` carries complete
+bounded qualification or null through fetch, ranking and final read. It defaults
+on when source-qualified capture is configured; explicit false is a compatibility
+opt-out. Without capture configuration, absent retains legacy behavior and true
+opts in. Qualification counts within existing budgets and is never stripped to
+fit. Anchors can refer to receipts outside the returned prefix; inspect receipt
+pages for their source context. Null or unknown is not confirmation; even an
+adopted label is not execution authority. No telemetry,
 hosted plugin/HTTP schema change, account authority or execution consent is
 introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-capture).
 

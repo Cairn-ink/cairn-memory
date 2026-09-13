@@ -40,7 +40,7 @@ someone who can edit your process configuration or read your database file.
 | Tool | Input | Behavior |
 | --- | --- | --- |
 | remember_memory | content, optional kind | Explicit memory plus receipt derived from supplied content |
-| recall_memory | query, optional limit (1–12) | Same bounded model-driven core recall with current source evidence |
+| recall_memory | query, optional limit (1–12), includeQualification | Same bounded model-driven core recall; source qualification defaults on with qualified capture |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
@@ -160,6 +160,17 @@ inspection. The flag is invalid on listing calls, even when false. Existing
 receipt pagination remains unchanged; qualification anchors can reference
 receipts outside the selected page. Correction clears qualification; forgetting
 removes access. Retained historical qualifications remain inspectable.
+
+With either capture qualification mode configured, `recall_memory` defaults to
+`includeQualification:true`: the complete source description travels through
+ranking and into returned items. Explicit false opts out for compatibility.
+An unconfigured server retains legacy behavior unless true is requested; this
+also works for existing qualified data after reopening with a recall model.
+Recall still needs a model; inspection is the keyless operation. Null denotes
+unqualified evidence, not confirmation. Source descriptions count within the
+existing fetch/rank budgets; insufficient space fails rather than dropping
+anchors. Receipt prefixes can remain incomplete, so follow inspection pages
+before claiming missing source context. Retrieval coverage is not truth coverage.
 
 Source binding is not semantic truth: the qualifier's subject, attribution,
 commitment and other labels remain unverified interpretations. Capture creates

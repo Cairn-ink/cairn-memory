@@ -368,7 +368,7 @@ export function createMemoryRuntime(input) {
       .map((row) => ({ ...row }));
   }
 
-  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current') {
+  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false) {
     ready();
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
@@ -379,11 +379,12 @@ export function createMemoryRuntime(input) {
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
       const memory = detailDto(row);
       return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch,
+        ...(includeQualification ? { qualification: qualificationStorage.inspect(row) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
     });
   }
 
-  function recallSnapshot(candidates, selected, namespaces = []) {
+  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
@@ -396,10 +397,12 @@ export function createMemoryRuntime(input) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision) fail('index_revision_conflict');
       }
+      const qualifications = includeQualification ? rows.map(row => qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         return { memory, receipts: receiptPrefix(memory.id, 0, candidates[index].receiptLimit),
-          receiptCount: memory.receiptCount };
+          receiptCount: memory.receiptCount,
+          ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
     });
   }

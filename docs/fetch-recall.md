@@ -175,6 +175,35 @@ snapshot.
 
 ## Honest coverage limits
 
+### Source qualification on the read path
+
+Pass `includeQualification:true` to `core.fetch` or `core.recall` to carry the
+existing complete bounded qualification DTO with each item. Unqualified records
+return `qualification:null`, meaning missing support, not confirmed truth. Absent
+or false retains the legacy response shape. Only booleans are accepted; enabled
+fetch cursors cannot be reused with disabled reads or vice versa.
+
+Qualification, including every anchor, counts inside the 4,000-token fetch
+envelope and the 6,000-token ranking input. It is never removed to fit a budget;
+oversized items fail explicitly. Ranking receives source descriptions, and the
+final transaction rereads validated qualification with current memory and receipt
+prefixes. No model/counter runs after that read. MOC navigation is unchanged.
+
+An anchor may cite a receipt outside the bounded receipt prefix. Its exact text,
+receipt ID and digest remain present; use `get` receipt pagination to inspect the
+full source record. Do not infer absent speaker context or antecedents. Submitted
+roles and model labels are unverified: quoted, proposed, considered, unknown and
+temporary applicability are not adopted global preferences. Even adopted is a
+source interpretation, not proof of consent or current execution authorization.
+Relevant rejected or considered evidence is not excluded merely by its label.
+
+This does not infer identity, retire claims, resolve disagreement or establish a
+decision's causal dependency. In particular, a challenged reason for choice A
+does not establish choice B. The frozen [v2 pilot](../evaluations/results/candidate-qualification-pilot-v1.json)
+shows five storage completions among six cases, not five semantic passes: null
+descriptors, a rejected punctuation value and incomplete antecedent provenance
+remain observed limitations. This read-path change does not rescore that run.
+
 Recall reads at most two bounded candidate pages per namespace and two receipt pages
 per candidate. Each selection round can use only refs visible in that round;
 finished namespaces are skipped without renumbering them. `namespaces` reports

@@ -1,5 +1,14 @@
 # Changelog
 
+## Private candidate — source-qualified recall
+
+- Carry opt-in complete source qualification through counted fetch, ranking and
+  authoritative recall snapshots. Preserve legacy reads and budgets; never strip
+  anchors to fit. Local MCP defaults this on with source-qualified capture.
+- Retain the frozen six-case v2 pilot: five storage completions, one rejected
+  case, incomplete semantic descriptors and one antecedent-provenance gap. This
+  is not five semantic passes, general reliability, a release or disclosure clearance.
+
 ## Private candidate — explicit v2 qualification experiment
 
 - Add a separate baseline-only candidate-qualification capability and narrowly

@@ -11,14 +11,15 @@ export function memoryRefs(input) {
   return refs;
 }
 
-export function fetchMemories({ runtime, model, ns, refs, view = 'current', budget, cursor, binding, encodeCursor }) {
+export function fetchMemories({ runtime, model, ns, refs, view = 'current', budget, cursor, binding, encodeCursor,
+  includeQualification = false }) {
   countTokens(model, '');
   if (cursor && (Object.keys(cursor.a).length !== 2 ||
       !Number.isSafeInteger(cursor.a.index) || cursor.a.index < 0 || cursor.a.index >= refs.length ||
       !Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0)) fail('invalid_cursor');
   const index = cursor?.a.index ?? 0;
   const offset = cursor?.a.offset ?? 0;
-  const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view);
+  const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view, includeQualification);
   const available = page.receipts?.length ?? 0;
   const capacity = Math.min(100, available);
   for (let take = capacity; take >= 0; take--) {
@@ -29,6 +30,7 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
     const value = {
       items: page.memory ? [{ memory: page.memory, receipts: page.receipts.slice(0, take),
         receiptCount: page.memory.receiptCount,
+        ...(includeQualification ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}) }] : [],
       nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch, a: next }),
       exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
