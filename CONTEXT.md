@@ -50,6 +50,11 @@ A decision whose recorded supporting premise no longer holds, without evidence
 that its source has adopted a different decision.
 _Avoid_: Cancelled decision, replacement decision
 
+**Reconfirmation suggestion**:
+An unverified interpretation that new evidence challenges a recorded reason for
+a decision, warranting review without establishing either source as true.
+_Avoid_: Confirmed invalid premise, cancelled decision, adopted replacement
+
 **Unresolved conflict**:
 Incompatible assertions within the same subject, property, time and scope for
 which the available evidence does not justify a resolution.

@@ -10,6 +10,7 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
+import { proposeRationale } from './rationale.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -570,6 +571,34 @@ export function openMemoryCore(input) {
     } catch (error) { return failure(error); }
   }
 
+  async function reviewRationale(input) {
+    try {
+      runtime.ready();
+      object(input, ['namespace', 'refs']);
+      const ns = contractNamespace(input.namespace);
+      denseArray(input.refs, 2, 6);
+      const refs = memoryRefs(input.refs);
+      const snapshot = runtime.rationaleSnapshot(ns, refs);
+      const validateFresh = () => {
+        if (JSON.stringify(runtime.rationaleSnapshot(ns, refs)) !== JSON.stringify(snapshot)) {
+          throw new MemoryStoreError('revision_conflict');
+        }
+      };
+      const proposals = await proposeRationale(model, snapshot.sources, validateFresh);
+      return success(runtime.commitRationale(ns, refs, snapshot, proposals));
+    } catch (error) { return failure(error); }
+  }
+
+  function getRationale(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'memoryId', 'revision']);
+      return runtime.getRationale(contractNamespace(input.namespace), {
+        memoryId: contractId(input.memoryId), revision: contractRevision(input.revision),
+      });
+    });
+  }
+
   async function capture(input) {
     try {
       runtime.ready();
@@ -620,6 +649,7 @@ export function openMemoryCore(input) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
+    reviewRationale, getRationale,
     close() {
       runtime.close();
       return success(null);

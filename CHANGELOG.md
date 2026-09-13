@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — embedded proposed rationale
+
+- Add source-bound, model-proposed decision/premise/challenge links and keyless
+  bounded inspection in the shared core; schema 12 invalidates links on source
+  or revision changes. No decision replacement or truth/adoption assertion.
+- This embedded slice requires an injected `relate` method. Automatic capture,
+  real-provider/MCP integration and new semantic evidence are not delivered by
+  this change. See `docs/source-backed-rationale.md`.
+
 The private-hold language in historical entries records each stage's status at
 the time. The minimum identifier fix was publicly delivered through PR #69 and
 [GHSA-42p4-q4pr-vpwf](https://github.com/Cairn-ink/cairn-memory/security/advisories/GHSA-42p4-q4pr-vpwf)
