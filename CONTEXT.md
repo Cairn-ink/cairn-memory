@@ -78,6 +78,12 @@ A specific passage of recorded evidence supporting an attributed assertion or
 qualification; its existence does not prove that its interpretation is correct.
 _Avoid_: Semantic proof, execution permission
 
+**Evidence candidate**:
+A bounded exact passage prepared from a canonical source receipt for a model to
+select. Selecting it permits precise source attachment, not trusted semantic
+interpretation, identity or adoption. Its index is local to one model request.
+_Avoid_: Verified fact, persistent claim identity
+
 **Adoption evidence**:
 Recorded evidence that a source committed to a proposed value within a stated
 scope, rather than merely quoted, considered or received it as advice.

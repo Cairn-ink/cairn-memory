@@ -126,7 +126,7 @@ function failure(error) {
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification']);
   const captureQualification = Object.hasOwn(input, 'captureQualification') ? input.captureQualification : undefined;
-  if (Object.hasOwn(input, 'captureQualification') && captureQualification !== 'source-bound-v1') {
+  if (Object.hasOwn(input, 'captureQualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
     throw new MemoryStoreError('invalid_input');
   }
   const model = input.model;

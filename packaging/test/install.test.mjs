@@ -369,6 +369,63 @@ test('installed core and adapter capture source qualifications without granting 
     installation.directory, artifact.userconfig).trim(), 'installed_automatic_qualification_passed');
 });
 
+test('installed v2 core and adapter compile source selections without model offsets or coverage', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import { DatabaseSync } from 'node:sqlite';
+    import { openMemoryCore } from './node_modules/${packageName}/core/contract.mjs';
+    import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const namespace={ownerId:'synthetic-installed-v2',scope:'personal',projectId:null};
+    const source='I prefer calm captions 🌙.';
+    const methods=[]; let sends=0;
+    const model=createOpenAIModel({apiKey:'synthetic',fetchImpl:async(url,options)=>{
+      sends++; const payload=JSON.parse(options.body);
+      if(url.endsWith('/input_tokens'))return Response.json({object:'response.input_tokens',input_tokens:120});
+      const method=payload.text.format.name;methods.push(method);
+      const input=JSON.parse(payload.input[0].content[0].text);let output;
+      if(method==='cairn_extract')output={items:[{content:source,kind:'preference',confidence:0.9,sourceIndices:[0]}]};
+      else if(method==='cairn_qualifyCandidates'){
+        assert.deepEqual(Object.keys(input),['items']);
+        output={qualifications:input.items.map(item=>{
+          assert.deepEqual(Object.keys(item).sort(),['candidates','content','itemIndex','kind']);
+          assert.deepEqual(Object.keys(item.candidates[0]).sort(),['candidateIndex','role','text']);
+          assert.equal(item.candidates[0].text,source);
+          const known=value=>({value,evidenceIndices:[item.candidates[0].candidateIndex]});
+          const unknown=()=>({value:null,evidenceIndices:[]});
+          return{itemIndex:item.itemIndex,subject:known('user'),property:known('caption tone'),
+            scope:unknown(),applies:unknown(),value:known('calm'),attribution:known('direct'),commitment:known('adopted')};
+        })};
+      }else{assert.equal(method,'cairn_classify');output={items:input.memories.map(m=>({memoryId:m.id,parentIds:[]}))};}
+      return Response.json({object:'response',model:payload.model,status:'completed',error:null,incomplete_details:null,
+        output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(output)}]}],
+        usage:{input_tokens:120,output_tokens:100,total_tokens:220}});
+    }});
+    const ok=r=>{assert.equal(r.ok,true,JSON.stringify(r));return r.value;};
+    const path='./qualification-v2.sqlite';
+    const request={namespace,client:'synthetic',sessionId:'s',eventId:'v2-event',
+      messages:[{id:'v2-message',role:'user',content:source}],causal:{streamId:'v2-stream',sequence:1}};
+    let core=openMemoryCore({path,model,captureQualification:'source-bound-v2'});
+    const result=ok(await core.capture(request));
+    assert.deepEqual(result.reconciliation,{status:'unresolved',reason:'qualification_requires_identity',retiredCount:0});
+    const memoryId=result.admission.memories[0].id;
+    const before=ok(core.get({namespace,memoryId,includeQualification:true}));
+    assert.equal(before.qualification.version,1);assert.equal(before.qualification.value,'calm');
+    assert.deepEqual(before.qualification.anchors[0].fields,['subject','property','value','attribution','commitment']);
+    assert.equal(before.qualification.anchors[0].text,source);
+    assert.equal(before.qualification.anchors[0].start,0);assert.equal(before.qualification.anchors[0].end,source.length);
+    assert.deepEqual(methods,['cairn_extract','cairn_qualifyCandidates','cairn_classify']);assert.equal(sends,6);
+    core.close();core=openMemoryCore({path,model,captureQualification:'source-bound-v2'});
+    assert.deepEqual(ok(core.get({namespace,memoryId,includeQualification:true})),before);
+    assert.equal(ok(await core.capture(request)).duplicate,true);assert.equal(sends,6);core.close();
+    core=openMemoryCore({path,model,captureQualification:'source-bound-v1'});
+    assert.equal((await core.capture(request)).error.code,'event_payload_conflict');assert.equal(sends,6);core.close();
+    const db=new DatabaseSync(path);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM qualified_claim_bindings').get().n,0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM qualified_slots').get().n,0);db.close();
+    console.log('installed_candidate_qualification_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_candidate_qualification_passed');
+});
+
 test('installed shared core preserves opt-in qualification across restart and clears it on correction and forget', () => {
   const probe = `import assert from 'node:assert/strict';
     import { openMemoryCore } from './node_modules/${packageName}/core/contract.mjs';

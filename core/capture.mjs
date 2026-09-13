@@ -5,6 +5,7 @@ import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { reconcileCapture } from './ordered-capture.mjs';
 import { qualifyExtractedItems } from './automatic-qualification.mjs';
+import { qualifyCandidateItems } from './qualification-candidates.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
@@ -55,7 +56,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
     let items;
     try { items = extractedItems(output, snapshot); }
     catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
-    if (captureQualification && items.length) items = await qualifyExtractedItems(model, items);
+    if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
+      ? await qualifyCandidateItems(model, items) : await qualifyExtractedItems(model, items);
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
       const judged = captureQualification

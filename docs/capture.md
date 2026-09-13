@@ -63,8 +63,9 @@ receipt retention follow [the local store limits](local-store.md).
 ## Opt-in automatic source qualification
 
 Construct `openMemoryCore({ path, model, captureQualification: 'source-bound-v1' })`
-to qualify newly extracted memories. Absence preserves legacy behavior; explicit
-undefined, null and other values reject before opening storage. The setting is
+to qualify newly extracted memories with the v1 model contract. The separate
+`source-bound-v2` mode is described below. Absence preserves legacy behavior;
+explicit undefined, null and unsupported values reject before opening storage. The setting is
 snapshotted, not read from caller configuration again during capture. It is not
 a new MCP, HTTP or capture input field. Legacy mode is explicitly unprotected
 against semantic errors in automatic retirement.
@@ -103,6 +104,43 @@ ordered capture, every nonempty extraction durably returns reconciliation
 including dedup/suppression outcomes. The legacy reconcile model is not called,
 no slots are bound, and no old memories retire. Empty extraction uses the
 existing no-change outcome. Replay retains the recorded outcome.
+
+### Core-owned evidence candidates (v2)
+
+`captureQualification: 'source-bound-v2'` uses `model.qualifyCandidates` instead
+of `model.qualify`. The v1 model API, stored S1 qualification DTO and default
+capture behavior are unchanged. This core/adapter option is not yet an accepted
+MCP CLI mode; its paid method remains denied by existing experiment guards.
+
+Core partitions every retained canonical receipt into nonoverlapping windows
+of at most 200 UTF-16 units, without splitting Unicode code points or dropping
+text. Model input is `{items:[{itemIndex,content,kind,candidates:[{candidateIndex,
+role,text}]}]}`. Candidate indices are unique across that batch, not persistent
+identities. Trusted receipt identifiers and character offsets are not model input.
+Before windowing, v2 applies admission's final receipt canonicalization, including
+trimming whitespace left at a truncation boundary, so anchors describe exactly
+the stored excerpt. This does not repair or relocate a model-supplied quote.
+
+Output is `{qualifications:[{itemIndex,subject,property,scope,applies,value,
+attribution,commitment}]}`. Each named field is `{value,evidenceIndices}`: a
+descriptive nullable label or existing attribution/commitment enum, plus zero
+to four distinct references from that item's candidates. Known values require
+evidence. Unknown values may cite context, and even all-unknown output must
+explicitly select at least one candidate overall. Four distinct candidates per
+qualification is the maximum; additional evidence rejects rather than being lost.
+
+Core builds exact offsets/text and derives each anchor's field coverage from
+those selections, then applies the unchanged S1 validator. The model does not
+calculate character positions, copy quotes, or maintain a separate coverage list.
+Missing/foreign references, unsupported values or incomplete batches fail
+atomically; there is no v1 repair, fallback citation or guessed evidence.
+
+The same input/output/time bounds apply. Windows can split a phrase and complex
+batches may exceed the input budget; neither is hidden by dropping evidence or
+increasing provider limits. Multiple selected windows can support one field.
+Precise evidence attachment does not prove correct interpretation, shared slot
+identity, adoption or currentness. Both qualified modes keep ordered retirement
+unresolved until trusted identity is separately established.
 
 This slice produces inspectable provenance, not completed automatic updating.
 Independent subject/slot identity, atomicity, adoption, premise tracking and

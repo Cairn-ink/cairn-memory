@@ -9,7 +9,7 @@ const refs = object({ refs: array(object({ namespaceIndex: integer,
   memoryId: string, revision: { type: 'integer', minimum: 1 } }), 24) });
 
 // This export is also the existing live guard's method allowlist. Reconcile
-// and qualify remain dynamic-only until a separately authorized guard extension exists.
+// and qualification methods remain dynamic-only until a separately authorized guard extension exists.
 export const schemas = {
   extract: object({ items: array(object({ content: { type: 'string', maxLength: 600 },
     kind: { type: 'string', enum: ['fact', 'preference', 'decision', 'instruction', 'context'] },
@@ -39,6 +39,44 @@ const snapshotIndices = (values, maximum) => {
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'qualifyCandidates') {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+    const items = Array.from(list(input.items));
+    if (!items.length || items.length > 5) invalid();
+    const itemIndices = items.map(item => index(item?.itemIndex));
+    if (sorted(itemIndices).length !== items.length) invalid();
+    const allCandidateIndices = new Set();
+    const variants = items.map(item => {
+      const candidates = Array.from(list(item.candidates));
+      if (!candidates.length) invalid();
+      const candidateIndices = candidates.map(candidate => {
+        const candidateIndex = index(candidate?.candidateIndex);
+        if (allCandidateIndices.has(candidateIndex)) invalid();
+        allCandidateIndices.add(candidateIndex);
+        return candidateIndex;
+      });
+      // Core checks duplicate selections, aggregate anchor count and complete
+      // item coverage. The provider schema restricts each field to this item's
+      // candidates without claiming that a selected quote entails the value.
+      const field = (known, unknown) => ({ anyOf: [
+        object({ value: known, evidenceIndices: {
+          ...array(constrained(integer, candidateIndices), 4), minItems: 1,
+        } }),
+        object({ value: unknown, evidenceIndices: {
+          ...array(constrained(integer, candidateIndices), 4), minItems: 0,
+        } }),
+      ] });
+      const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
+      const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
+      return object({ itemIndex: constrained(integer, [item.itemIndex]),
+        subject: descriptive(160), property: descriptive(160),
+        scope: descriptive(120), applies: descriptive(120), value: descriptive(160),
+        attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
+        commitment: categorical(['adopted', 'considered', 'rejected']),
+      });
+    });
+    return object({ qualifications: { ...array({ anyOf: variants }, items.length), minItems: items.length } });
+  }
   if (method === 'qualify') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
     const items = list(input.items);

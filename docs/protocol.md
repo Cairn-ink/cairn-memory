@@ -97,6 +97,14 @@ receive personal text in these bounded fields, so hosts must configure a
 provider appropriate for their data. No telemetry or paid-call permission is
 added. See [capture](capture.md#opt-in-automatic-source-qualification).
 
+The separate core-only `source-bound-v2` mode sends bounded deterministic source
+candidates with request-local indices and speaker roles to `qualifyCandidates`.
+The model selects evidence per field; core computes exact source offsets/text and
+coverage, then validates the unchanged S1 DTO. Receipt identities remain local.
+This does not authorize the new paid method or expose a new MCP/HTTP payload.
+Source precision is not semantic truth or trusted slot membership. See
+[v2 candidate production](capture.md#core-owned-evidence-candidates-v2).
+
 The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)
 are not HTTP/plugin/MCP payload fields and do not widen these schemas. A trusted
 local host supplies stream order; it is not accepted as authenticated chronology.

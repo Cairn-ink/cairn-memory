@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "qualification-diagnostic-v1",
+  "sourceCommit": "a75f821bb6ca4159a99632d1dd05b1667113d478",
+  "artifactSha256": "0dbec2806ccf51eba615f9e548c60d21f19122ca6db50ce8ac366a8a3235c233",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "status": "failed",
+  "cases": 1,
+  "admittedMemories": 0,
+  "diagnostic": {"version": 1, "stage": "qualify", "layer": "core_validation", "reason": "invalid_qualification"},
+  "observedStructuralProblems": {
+    "declaredStart": 0,
+    "declaredEnd": 41,
+    "quoteUtf16Length": 55,
+    "sourceUtf16Length": 56,
+    "uncitedKnownField": "value"
+  },
+  "offlineValidatorReplay": {
+    "original": "rejected",
+    "offsetOnlyCounterfactual": "rejected",
+    "offsetAndCoverageCounterfactual": "structurally_accepted",
+    "admittedOrRepaired": false,
+    "semanticInterpretation": "not_established"
+  },
+  "accounting": {
+    "httpRequests": 4,
+    "reservedMicroUsd": 20000,
+    "providerKnownUsageMicroUsd": 701,
+    "unknownCostCountRequests": 2,
+    "unsettledRequests": 0,
+    "phaseReservedMicroUsdAfter": 450000,
+    "phaseLimitMicroUsd": 50000000
+  },
+  "limitations": [
+    "One new synthetic diagnostic, not a rerun or replacement of any prior failed case.",
+    "Observed cause cannot be retroactively assigned to the preceding six-case pilot.",
+    "Core rejection correctly prevented malformed source metadata from being admitted.",
+    "Corrected bookkeeping would not establish useful subject/property/value interpretation.",
+    "No semantic or currentness accuracy claim is supported."
+  ],
+  "independentReview": "confirmed_diagnostic_and_read_only_counterfactuals"
+}
