@@ -274,6 +274,17 @@ export function createMemoryRuntime(input) {
     });
   }
 
+  function transitionQualifiedSet(ns, input) {
+    ready();
+    return transaction(db, () => {
+      const ids = input.predecessors.map(ref => ref.memoryId);
+      if (new Set(ids).size !== ids.length || ids.includes(input.replacement.memoryId)) fail('invalid_ref');
+      const previous = input.predecessors.map(ref => qualifiedRow(ns, ref));
+      const replacement = qualifiedRow(ns, input.replacement);
+      return supersessionStorage.retireQualifiedSet(ns, previous, replacement);
+    });
+  }
+
   function legacyGet(ns, id) {
     ready();
     return transaction(db, () => legacyDto(currentRow(ns, id)));
@@ -401,7 +412,8 @@ export function createMemoryRuntime(input) {
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable });
   const supersessionStorage = createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
-    evaluateQualified: qualifiedTransitionStorage.evaluate, epoch });
+    evaluateQualified: qualifiedTransitionStorage.evaluate,
+    evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
   });
@@ -409,7 +421,7 @@ export function createMemoryRuntime(input) {
     supersessionStorage, receiptKey, isSuppressed });
 
   return Object.freeze({
-    identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified,
+    identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
     claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },

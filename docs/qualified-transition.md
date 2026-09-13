@@ -68,6 +68,42 @@ revisions are hard errors. Corrupt bindings or source evidence return
 old references produces a revision/history error; no new durable manual replay
 result is introduced. Existing ordered-capture event replay remains unchanged.
 
+## Resolve a complete set of current claims
+
+```js
+core.transitionQualifiedSet({ namespace,
+  predecessors: [
+    { memoryId: oldId, expectedRevision: oldRevision },
+    { memoryId: reaffirmedId, expectedRevision: reaffirmedRevision }
+  ],
+  replacement: { memoryId: newId, expectedRevision: newRevision } });
+```
+
+This separate local method accepts 1–5 distinct predecessors and one distinct
+replacement, all already admitted, current and revision guarded. Every field is
+required and extra keys are rejected. It uses the same stored-slot, source and
+direct/adopted policy as the pair method; every predecessor must have a known
+value different from the replacement. All referenced qualifications and bindings
+are inspected before an ordinary unresolved result. Old claims may reaffirm one
+value or have different values: choosing this complete set is the trusted
+caller's explicit instruction, not automatically inferred chronology.
+
+The references must cover every current, nondeleted bound member of the slot.
+Omitting even a same-value reaffirmation returns `additional_current_claims`
+without mutation. Historical/deleted members do not consume the input allowance.
+Discovery returns at most seven rows (six permitted members plus a sentinel);
+this does not bound historical rows SQLite may visit. Corrupt foreign current
+membership among returned rows fails `storage_error`.
+
+Success returns `{status:'applied',reason:null,retiredCount,previous:[{id,
+revision}],replacement:{id,revision},indexRevision}`, with predecessors sorted by
+ID. Existing incoming history edges plus new edges cannot exceed five;
+`supersession_limit` fails before retirement begins. All retirements reuse the
+same mutation seam in one transaction, including suppression, invalidation and
+epoch changes. Any late failure rolls the whole set back. Unresolved and hard
+errors have the same meaning as the pair operation; successful replay is not
+idempotent and fails its revision/history guards. The pair API remains unchanged.
+
 ## Protected and unprotected paths
 
 The shared retirement seam fences any qualified endpoint from legacy direct

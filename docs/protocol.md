@@ -76,6 +76,12 @@ input field is added, and no new data leaves the local database. Ordinary
 unqualified-to-unqualified automatic retirement remains unprotected; qualified
 endpoints cannot silently fall back to it.
 
+`transitionQualifiedSet` adds only bounded local references to 1–5 predecessors
+and one replacement. Every current bound member must be explicitly revision
+guarded; the operation never silently retires omitted memories. No new stored
+fields, external payloads or inferred permissions are added. It shares the pair
+operation's source guards and atomically preserves all predecessor histories.
+
 ### Separate local ordered-capture boundary
 
 The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)

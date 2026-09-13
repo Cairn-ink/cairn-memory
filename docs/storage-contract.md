@@ -48,6 +48,11 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
   before retiring an already-admitted predecessor. Legacy retirement is fenced
   whenever either endpoint is qualified; automatic unqualified retirement remains
   unprotected by these guards.
+- `transitionQualifiedSet`: retire 1–5 explicitly revision-guarded qualified
+  predecessors into one already-admitted replacement, only with complete current
+  slot coverage and validated sources. Existing plus new incoming history links
+  are limited to five; all writes succeed or roll back together. This local-only
+  trusted-manual method does not change pair transitions or automatic capture.
 - `correct` and `forget`: revision checks, replacement/removal of active receipts,
   persistent suppression and atomic invalidation of inspection cursors.
 - Explicit [supersede](supersession.md): atomically admit a replacement and

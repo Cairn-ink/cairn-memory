@@ -1,5 +1,15 @@
 # Changelog
 
+## Private candidate — complete qualified transition sets
+
+- Add local-only `transitionQualifiedSet` for 1–5 explicitly revision-guarded
+  predecessors sharing one established slot with their replacement. Require full
+  current-member coverage, revalidate all referenced sources, preflight existing
+  history-edge capacity and retire atomically through the existing engine.
+  Preserve the pair API and qualified retirement fences. This trusted-manual
+  extension does not establish automatic memory-update reliability or clear the
+  inherited private security disclosure hold.
+
 ## Private candidate — trusted-manual qualified transitions
 
 - Add immutable server-generated claim slots and manual single-claim bindings,

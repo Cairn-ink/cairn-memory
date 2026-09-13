@@ -326,6 +326,17 @@ export function openMemoryCore(input) {
     });
   }
 
+  function transitionQualifiedSet(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'predecessors', 'replacement']);
+      const predecessors = denseArray(input.predecessors, 1, 5).map(qualifiedRef)
+        .sort((left, right) => left.memoryId < right.memoryId ? -1 : left.memoryId > right.memoryId ? 1 : 0);
+      return runtime.transitionQualifiedSet(contractNamespace(input.namespace), {
+        predecessors, replacement: qualifiedRef(input.replacement) });
+    });
+  }
+
   function claimAdmission(input) {
     return invoke(() => {
       runtime.ready();
@@ -589,7 +600,7 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified,
+    admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     close() {

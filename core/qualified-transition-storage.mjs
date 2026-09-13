@@ -90,6 +90,10 @@ export function createQualifiedTransitionStorage({ db, qualificationStorage, adv
       AND m.id NOT IN (?, ?) LIMIT 1`).get(left.slot_id, previous.id, replacement.id)) {
       return { reason: 'additional_current_claims' };
     }
+    return supportedTransition(previous, before, replacement, after);
+  }
+
+  function supportedTransition(previous, before, replacement, after) {
     if (before.value === null || after.value === null) return { reason: 'value_unknown' };
     if (before.value === after.value) return { reason: 'same_value' };
     if (before.attribution !== 'direct' || after.attribution !== 'direct') return { reason: 'attribution_unsupported' };
@@ -100,5 +104,36 @@ export function createQualifiedTransitionStorage({ db, qualificationStorage, adv
     return { reason: null, receiptIds };
   }
 
-  return { bind, evaluate };
+  function evaluateSet(ns, previous, replacement) {
+    // Inspect every source/binding first. An unsupported early claim must not
+    // mask corruption on a later referenced member.
+    const records = [...previous, replacement].map(memory => {
+      const qualification = qualificationStorage.inspect(memory);
+      return { memory, qualification, member: inspect(ns, memory, qualification) };
+    });
+    if (records.some(record => !record.qualification)) return { reason: 'qualification_missing' };
+    if (records.some(record => !record.member)) return { reason: 'binding_missing' };
+    const after = records.at(-1);
+    if (records.some(record => record.member.slot_id !== after.member.slot_id ||
+        !same(record.qualification.slot, after.qualification.slot))) return { reason: 'slot_mismatch' };
+    // Seven returned rows reveal overflow beyond five predecessors and their
+    // replacement. Historical bindings may still be visited by SQLite.
+    const current = db.prepare(`SELECT m.id, m.owner_id, m.scope, m.project_id
+      FROM qualified_claim_bindings b JOIN memories m ON m.id = b.memory_id
+      WHERE b.slot_id = ? AND m.deleted = 0 AND m.currentness = 'current'
+      ORDER BY m.id LIMIT 7`).all(after.member.slot_id);
+    if (current.some(memory => !owned(memory, ns))) fail('storage_error');
+    const requested = new Set(records.map(record => record.memory.id));
+    if (current.length !== requested.size || current.some(memory => !requested.has(memory.id))) {
+      return { reason: 'additional_current_claims' };
+    }
+    let verdict;
+    for (const before of records.slice(0, -1)) {
+      verdict = supportedTransition(before.memory, before.qualification, replacement, after.qualification);
+      if (verdict.reason) return verdict;
+    }
+    return verdict;
+  }
+
+  return { bind, evaluate, evaluateSet };
 }

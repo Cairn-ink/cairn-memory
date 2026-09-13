@@ -113,6 +113,46 @@ test('installed core enforces trusted qualified transitions and retains history 
     installation.directory, artifact.userconfig).trim(), 'installed_qualified_transition_passed');
 });
 
+test('installed core atomically resolves a complete qualified set without dropping reaffirmations', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import {openMemoryCore} from './node_modules/${packageName}/core/contract.mjs';
+    const namespace={ownerId:'synthetic-installed-transition-set',scope:'personal',projectId:null};
+    const path='./qualified-transition-set.sqlite'; let core=openMemoryCore({path});
+    const ok=r=>{assert.equal(r.ok,true,JSON.stringify(r));return r.value;};
+    const admit=(content,value)=>ok(core.admit({namespace,memory:{content,kind:'preference'},
+      receipts:[{client:'synthetic',sessionId:'session',eventId:content,role:'user',excerpt:content}],
+      qualification:{version:1,slot:{subject:'I',property:'transport',scope:'commute',applies:'recurring'},
+        value,attribution:'direct',commitment:'adopted',anchors:[{receiptIndex:0,start:0,end:content.length,text:content,
+          fields:['subject','property','scope','applies','value','attribution','commitment']}]}})).memory;
+    const previous=admit('I choose the violet tram for my recurring commute.','violet tram');
+    const reaffirmed=admit('I still choose the violet tram for my recurring commute.','violet tram');
+    const replacement=admit('I now choose the blue bus for my recurring commute.','blue bus');
+    const bind=(memory,slotId)=>ok(core.bindQualifiedClaim({namespace,memoryId:memory.id,
+      expectedRevision:memory.revision,slotId,singleClaim:true})).slotId;
+    const slotId=bind(previous,null); bind(reaffirmed,slotId); bind(replacement,slotId);
+    const ref=memory=>({memoryId:memory.id,expectedRevision:memory.revision});
+    const read=memory=>ok(core.get({namespace,memoryId:memory.id,includeQualification:true}));
+    const before=[previous,reaffirmed,replacement].map(read);
+    const omitted=ok(core.transitionQualifiedSet({namespace,predecessors:[ref(previous)],replacement:ref(replacement)}));
+    assert.equal(omitted.status,'unresolved'); assert.equal(omitted.reason,'additional_current_claims');
+    assert.equal(omitted.retiredCount,0); assert.deepEqual([previous,reaffirmed,replacement].map(read),before);
+    const applied=ok(core.transitionQualifiedSet({namespace,predecessors:[ref(reaffirmed),ref(previous)],replacement:ref(replacement)}));
+    assert.equal(applied.status,'applied'); assert.equal(applied.retiredCount,2);
+    assert.deepEqual(applied.previous.map(memory=>memory.id),[previous.id,reaffirmed.id].sort());
+    const history=[previous,reaffirmed].map(read);
+    for (const memory of history) { assert.equal(memory.memory.state,'historical');
+      assert.equal(memory.qualification.value,'violet tram');
+      assert.equal(memory.supersession.replacement.memoryId,replacement.id);
+      assert.equal(memory.supersession.evidenceAvailable,true); }
+    assert.equal(read(replacement).memory.state,'active');
+    core.close(); core=openMemoryCore({path});
+    assert.deepEqual([previous,reaffirmed].map(read),history);
+    assert.equal(read(replacement).memory.state,'active');
+    core.close(); console.log('installed_qualified_transition_set_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_qualified_transition_set_passed');
+});
+
 test('installed core rejects malformed Unicode namespace identities', () => {
   const probe = `import assert from 'node:assert/strict';
     import {openMemoryCore} from './node_modules/${packageName}/core/contract.mjs';

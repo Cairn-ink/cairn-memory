@@ -5,7 +5,7 @@ const where = 'owner_id = ? AND scope = ? AND project_id = ?';
 
 /** Durable directional history. Mutation callers own the enclosing transaction. */
 export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
-  invalidateConflicts, invalidateMemory, evaluateQualified, epoch }) {
+  invalidateConflicts, invalidateMemory, evaluateQualified, evaluateQualifiedSet, epoch }) {
   const requiresQualification = (previous, replacement) => Boolean(db.prepare(
     'SELECT 1 FROM memory_qualifications WHERE memory_id IN (?, ?) LIMIT 1').get(previous.id, replacement.id));
 
@@ -23,8 +23,22 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
       replacement: { id: replacement.id, revision: replacement.revision } };
   }
 
+  function retireQualifiedSet(ns, previous, replacement) {
+    const verdict = evaluateQualifiedSet(ns, previous, replacement);
+    if (verdict.reason) return { status: 'unresolved', reason: verdict.reason,
+      retiredCount: 0, indexRevision: epoch(ns) };
+    const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
+      WHERE replacement_memory_id = ?`).get(replacement.id).n;
+    if (incoming + previous.length > 5) fail('supersession_limit');
+    const retired = previous.map(memory => retireMutation(ns, memory, replacement, verdict.receiptIds));
+    return { status: 'applied', reason: null, retiredCount: retired.length,
+      previous: retired.map(result => result.previous),
+      replacement: { id: replacement.id, revision: replacement.revision },
+      indexRevision: retired.at(-1).indexRevision };
+  }
+
   // The only bypass of the legacy fence is this lexical helper reached after
-  // evaluateQualified. No public DTO or model output can supply a capability.
+  // qualified policy evaluation. No public DTO or model output can supply a capability.
   function retireMutation(ns, previous, replacement, receiptIds) {
     if (previous.id === replacement.id) fail('invalid_ref');
     const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
@@ -70,5 +84,5 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
       evidenceAvailable: receiptIds.length === bound.length };
   }
 
-  return { retire, retireQualified, requiresQualification, inspect };
+  return { retire, retireQualified, retireQualifiedSet, requiresQualification, inspect };
 }
