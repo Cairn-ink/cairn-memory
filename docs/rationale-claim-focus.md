@@ -1,5 +1,8 @@
 # Experimental claim-focused rationale input
 
+The [one-shot real-model comparison](claim-focus-ablation-results.md) did not pass
+the semantic gate. This mode remains experimental and is not promoted to defaults.
+
 The embedded core can explicitly include a memory's stored interpretation as an
 unverified endpoint focus:
 
