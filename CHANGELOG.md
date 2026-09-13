@@ -1,5 +1,16 @@
 # Changelog
 
+## Private candidate — source-candidate capture over MCP
+
+- Accept explicit `--capture-qualification source-bound-v2` in the local MCP
+  server and experiment launcher, reusing the existing capture/inspection tools
+  and shared core. Preserve default/v1 behavior, mode-bound replay and caller
+  authority limits. Configuration diagnostics report the chosen mode without
+  opening storage or contacting providers.
+- Installed fake-provider verification covers source selection, cold inspection,
+  replay and mode conflicts. This is not semantic-quality evidence, a paid-method
+  grant, publication or security-disclosure clearance.
+
 ## Private candidate — core-owned qualification evidence
 
 - Add explicit core `source-bound-v2` and optional adapter `qualifyCandidates`,

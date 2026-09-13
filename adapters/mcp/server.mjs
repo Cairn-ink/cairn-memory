@@ -16,7 +16,7 @@ export function createCairnServer(options = {}) {
   const { path, namespace, model } = options;
   const configured = Object.hasOwn(options, 'captureQualification');
   const captureQualification = configured ? options.captureQualification : undefined;
-  if (configured && captureQualification !== 'source-bound-v1') throw new Error('invalid_mcp_configuration');
+  if (configured && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) throw new Error('invalid_mcp_configuration');
   // Snapshot authority once; tool arguments can never select another namespace.
   const binding = structuredClone(namespace);
   const core = openMemoryCore({ path, model, ...(configured ? { captureQualification } : {}) });

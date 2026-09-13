@@ -229,6 +229,75 @@ test('installed qualified MCP launcher uses the shared capability guard through 
   assert.deepEqual(session.getState(), state);
 });
 
+test('installed v2 MCP launcher captures and cold-replays without granting a paid method', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'cairn-installed-v2-mcp-'));
+  const databasePath = join(root, 'memory.sqlite');
+  let sends = 0; let readOnly = false; let active;
+  const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
+    assert.equal(readOnly, false, 'Inspection, replay and mode mismatch must make no request');
+    sends++; const payload = JSON.parse(body);
+    if (route === '/responses/input_tokens') return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+    assert.equal(route, '/responses');
+    const input = JSON.parse(payload.input[0].content[0].text); let output;
+    if (payload.text.format.name === 'cairn_extract') output = { items: [{ content: input.messages[0].content,
+      kind: 'preference', confidence: 0.9, sourceIndices: [0] }] };
+    else if (payload.text.format.name === 'cairn_qualifyCandidates') output = { qualifications: input.items.map(item => ({
+      itemIndex: item.itemIndex,
+      subject: { value: null, evidenceIndices: [item.candidates[0].candidateIndex] },
+      property: { value: null, evidenceIndices: [] }, scope: { value: null, evidenceIndices: [] },
+      applies: { value: null, evidenceIndices: [] }, value: { value: null, evidenceIndices: [] },
+      attribution: { value: 'unknown', evidenceIndices: [] }, commitment: { value: 'unknown', evidenceIndices: [] },
+    })) };
+    else {
+      assert.equal(payload.text.format.name, 'cairn_classify');
+      output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
+    }
+    return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
+      incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
+        content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+      usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
+  } } });
+  t.after(async () => { if (active) await active.close(); await proxy.close(); });
+  const config = join(root, 'transport.json');
+  writeFileSync(config, JSON.stringify({ version: 1, packageRoot: installation.packagePath, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
+  const start = async (mode = 'source-bound-v2') => {
+    const transport = new StdioClientTransport({ command: process.execPath,
+      args: [fileURLToPath(new URL('../../evaluation/live/cairn-launcher.mjs', import.meta.url)),
+        '--db', databasePath, '--owner', 'synthetic-v2-mcp', '--capture-qualification', mode],
+      env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
+    active = new Client({ name: 'synthetic-installed-v2', version: '1.0.0' });
+    await active.connect(transport); return active;
+  };
+  let client = await start();
+  assert.equal((await client.listTools()).tools.length, 6);
+  const batches = ['上午請用清單。', '下午請用段落。'].map((content, index) => ({
+    batchId: 'v2-installed-' + index, messages: [{ role: 'user', content }],
+  }));
+  const records = [];
+  for (const batch of batches) {
+    const capture = ok(await call(client, 'capture_memory', batch));
+    const record = ok(await call(client, 'inspect_memory', { memoryId: capture.admission.memories[0].id, includeQualification: true }));
+    assert.equal(record.memory.state, 'active'); assert.equal(record.qualification.anchors[0].text, batch.messages[0].content);
+    records.push(record);
+  }
+  assert.equal(sends, 12); await client.close(); readOnly = true;
+  client = await start();
+  for (let index = 0; index < records.length; index++) {
+    assert.deepEqual(ok(await call(client, 'inspect_memory', { memoryId: records[index].memory.id, includeQualification: true })), records[index]);
+    assert.equal(ok(await call(client, 'capture_memory', batches[index])).duplicate, true);
+  }
+  await client.close(); client = await start('source-bound-v1');
+  assert.equal((await call(client, 'capture_memory', batches[0])).error.code, 'event_payload_conflict');
+  assert.equal(sends, 12);
+  await client.close();
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    assert.equal(db.prepare('SELECT count(*) AS n FROM qualified_claim_bindings').get().n, 0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM qualified_slots').get().n, 0);
+  } finally { db.close(); }
+});
+
 test('installed MCP captures qualified submitted text and reopens without new provider requests', async (t) => {
   const directory = installation.directory;
   const databasePath = join(directory, 'mcp-qualified.sqlite');

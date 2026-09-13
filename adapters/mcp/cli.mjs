@@ -9,13 +9,14 @@ Usage:
   cairn-memory --check-config --db PATH --owner ID [--project ID]
   cairn-memory --db PATH --owner ID [--project ID]
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v1
+  cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
 Normal startup waits for an MCP client on stdin; stdout is protocol-only.
 Tools: remember_memory, recall_memory, inspect_memory, correct_memory, forget_memory.
 Remember saves explicit content, not automatically extracted conversations.
---capture-qualification source-bound-v1 adds capture_memory for explicitly
+--capture-qualification source-bound-v1 or source-bound-v2 adds capture_memory for explicitly
 submitted messages. No background capture or hooks are installed. Submitted
 roles/text are claims, not authenticated human intent. Qualification binds
 source text, not semantic truth; incompatible active memories may remain.
@@ -23,6 +24,8 @@ Semantic recall and opted-in capture need OPENAI_API_KEY in the process
 environment (never arguments). They send selected text to OpenAI and may incur
 charges; no account spending cap is enforced. Inspection (including source
 qualification), explicit remember, correction and forgetting remain keyless.
+V2 uses core-owned source candidates; v1 retains model-written source anchors.
+Neither mode proves meaning, resolves currentness or grants update authority.
 Save only on actual user intent. Remembered consent is not execution authority.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
@@ -41,7 +44,8 @@ export function parseConfiguration(args) {
   identifier(values.get('--owner'));
   if (values.has('--project')) identifier(values.get('--project'));
   if (values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
-  if (values.has('--capture-qualification') && values.get('--capture-qualification') !== 'source-bound-v1') {
+  if (values.has('--capture-qualification')
+    && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
     throw new Error('invalid_mcp_configuration');
   }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),

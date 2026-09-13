@@ -107,11 +107,18 @@ and review provider retention policy before handling real conversations.
 
 ## Opt-in submitted source-qualified capture
 
-Add `--capture-qualification source-bound-v1` to the startup command to expose
+Add `--capture-qualification source-bound-v2` (or the compatible v1 mode) to expose
 `capture_memory` as a sixth tool. Absence retains the existing five tools; invalid
 settings reject before opening storage. Library hosts can supply the same
 `captureQualification` constructor setting to `createCairnServer`. The namespace
 and mode are snapshotted at construction, never selected by tool arguments.
+
+V2 asks the model to select source evidence per interpreted field; the shared
+core computes exact quotes, character offsets and field coverage. V1 retains
+its original model-written anchor contract. Both store the same S1 metadata,
+and neither proves interpretation or authorizes automatic replacement. Reusing
+a completed batch under the other mode fails rather than reinterpreting it.
+See [core-owned evidence candidates](capture.md#core-owned-evidence-candidates-v2).
 
 ```json
 {

@@ -97,11 +97,12 @@ receive personal text in these bounded fields, so hosts must configure a
 provider appropriate for their data. No telemetry or paid-call permission is
 added. See [capture](capture.md#opt-in-automatic-source-qualification).
 
-The separate core-only `source-bound-v2` mode sends bounded deterministic source
+The separate `source-bound-v2` mode sends bounded deterministic source
 candidates with request-local indices and speaker roles to `qualifyCandidates`.
 The model selects evidence per field; core computes exact source offsets/text and
 coverage, then validates the unchanged S1 DTO. Receipt identities remain local.
-This does not authorize the new paid method or expose a new MCP/HTTP payload.
+The local MCP constructor can select this mode without changing tool inputs.
+This does not authorize the new experiment paid method or expose a new HTTP payload.
 Source precision is not semantic truth or trusted slot membership. See
 [v2 candidate production](capture.md#core-owned-evidence-candidates-v2).
 
@@ -120,7 +121,7 @@ SQLite backup/journal and local access limitations remain as documented in
 ### Opt-in local MCP submitted capture
 
 The separate local stdio server can opt into `capture_memory` with constructor
-mode/CLI flag `source-bound-v1`. This adds bounded caller-submitted message text
+mode/CLI flag `source-bound-v1` or `source-bound-v2`. This adds bounded caller-submitted message text
 and claimed user/assistant roles, not a transcript reader or authenticated human
 intent. Host-bound namespace, client and session cannot be overridden by tool
 arguments. A caller batch ID is an opaque replay key, not authority; deterministic

@@ -58,7 +58,8 @@ function parseArguments(args) {
     values.set(args[index], args[index + 1]);
   }
   if (!values.has('--db') || !values.has('--owner')) fail();
-  if (values.has('--capture-qualification') && values.get('--capture-qualification') !== 'source-bound-v1') fail();
+  if (values.has('--capture-qualification')
+    && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) fail();
   return {
     path: values.get('--db'),
     namespace: {
