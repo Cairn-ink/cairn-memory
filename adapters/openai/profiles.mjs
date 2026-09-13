@@ -20,17 +20,23 @@ const sol = Object.freeze({ model: SOL_RATIONALE_MODEL, contextWindow: 1050000,
   reasoning: Object.freeze({ effort: 'none' }), reservationUnits: 55600,
   inputRate: 5, outputRate: 20 });
 
-export function modelProfile(extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL) {
+function rationaleProfile(model) {
+  if (![DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, SOL_RATIONALE_MODEL].includes(model)) {
+    throw new Error('invalid_openai_configuration');
+  }
+  return model === DEFAULT_MODEL ? baseline : model === LUNA_EXTRACTION_MODEL ? luna : sol;
+}
+
+export function modelProfile(extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL,
+  basisModel = DEFAULT_MODEL) {
   if (extractionModel !== DEFAULT_MODEL && extractionModel !== EXPERIMENTAL_EXTRACTION_MODEL &&
       extractionModel !== LUNA_EXTRACTION_MODEL) {
     throw new Error('invalid_openai_configuration');
   }
-  if (![DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, SOL_RATIONALE_MODEL].includes(rationaleModel)) {
-    throw new Error('invalid_openai_configuration');
-  }
+  const relate = rationaleProfile(rationaleModel); const reviewBasis = rationaleProfile(basisModel);
   return Object.freeze({ extract: extractionModel === DEFAULT_MODEL ? baseline :
     extractionModel === EXPERIMENTAL_EXTRACTION_MODEL ? experimental : luna,
     qualify: baseline, qualifyCandidates: baseline,
-    relate: rationaleModel === DEFAULT_MODEL ? baseline : rationaleModel === LUNA_EXTRACTION_MODEL ? luna : sol,
+    relate, reviewBasis,
     classify: baseline, select: baseline, rank: baseline, reconcile: baseline });
 }

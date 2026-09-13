@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — experimental source-bound decision-basis review
+
+- Embedded callers can inspect exact quoted decision, premise and update units
+  without persisting model proposals or changing recorded decisions/history.
+- Typed links distinguish support from challenges to current applicability;
+  roles and semantics remain unverified. Independent basis model control and
+  installed prompt are opt-in; old paid guards deny the new method.
+  See `docs/source-basis-review.md` for boundaries and missing quality evidence.
+
 ## Evidence — rationale model control v1
 
 - Preserve 48 real-model installed-core arms comparing baseline, Luna and Sol

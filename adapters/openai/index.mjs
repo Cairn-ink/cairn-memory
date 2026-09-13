@@ -87,8 +87,9 @@ function parseOutput(response, inputTokens, model, diagnose) {
 }
 
 export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
-  extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL, onDiagnostic, ...unknown } = {}) {
-  const profile = modelProfile(extractionModel, rationaleModel);
+  extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL, basisModel = DEFAULT_MODEL,
+  onDiagnostic, ...unknown } = {}) {
+  const profile = modelProfile(extractionModel, rationaleModel, basisModel);
   const contextWindow = Math.min(...Object.values(profile).map((entry) => entry.contextWindow));
   if (typeof apiKey !== 'string' || !apiKey.trim() || /[\r\n]/.test(apiKey) ||
       typeof fetchImpl !== 'function' || Object.keys(unknown).length ||
@@ -165,6 +166,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     qualify: (request) => invoke('qualify', request),
     qualifyCandidates: (request) => invoke('qualifyCandidates', request),
     relate: (request) => invoke('relate', request),
+    reviewBasis: (request) => invoke('reviewBasis', request),
     classify: (request) => invoke('classify', request),
     select: (request) => invoke('select', request),
     rank: (request) => invoke('rank', request),

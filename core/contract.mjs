@@ -12,6 +12,7 @@ import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { proposeRationale } from './rationale.mjs';
+import { reviewSourceBasis } from './source-basis.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -603,6 +604,28 @@ export function openMemoryCore(input) {
     } catch (error) { return failure(error); }
   }
 
+  async function reviewDecisionBasis(input) {
+    try {
+      runtime.ready();
+      object(input, ['namespace', 'refs']);
+      const ns = contractNamespace(input.namespace);
+      denseArray(input.refs, 1, 6);
+      const refs = memoryRefs(input.refs);
+      const snapshot = runtime.rationaleSnapshot(ns, refs);
+      const validateFresh = () => {
+        if (JSON.stringify(runtime.rationaleSnapshot(ns, refs)) !== JSON.stringify(snapshot)) {
+          throw new MemoryStoreError('revision_conflict');
+        }
+      };
+      const proposal = await reviewSourceBasis(model, snapshot.sources, validateFresh);
+      const result = { ...proposal, sources: snapshot.sources, indexRevision: snapshot.indexRevision,
+        status: 'unassessed', interpretationStatus: 'model-proposed', persistence: 'not-stored' };
+      if (JSON.stringify(result).length > 24000) throw new MemoryStoreError('context_item_too_large');
+      validateFresh();
+      return success(result);
+    } catch (error) { return failure(error); }
+  }
+
   function getRationale(input) {
     return invoke(() => {
       runtime.ready();
@@ -678,7 +701,7 @@ export function openMemoryCore(input) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
-    reviewRationale, getRationale,
+    reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();
       return success(null);

@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { buildArtifact, command, packageName } from '../build.mjs';
+
+test('installed source-basis review loads its prompt and compiles exact source units without persisting them', { timeout: 60000 }, async t => {
+  const artifact = buildArtifact(); const root = mkdtempSync(join(tmpdir(), 'cairn-installed-basis-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-basis', private: true, version: '0.0.0' }), { flag: 'wx' });
+  command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], root, artifact.userconfig);
+  const packageRoot = join(root, 'node_modules', packageName);
+  const { openMemoryCore } = await import(pathToFileURL(join(packageRoot, 'core/index.mjs')).href);
+  const { createOpenAIModel } = await import(pathToFileURL(join(packageRoot, 'adapters/openai/index.mjs')).href);
+  const proposal = { units: [{ memory: 0, receipt: 0, role: 'decision', quote: 'I chose A' },
+    { memory: 0, receipt: 0, role: 'premise', quote: 'it folds' }],
+  links: [{ from: 1, to: 0, relation: 'supports-decision' }] };
+  const calls = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic', basisModel: 'gpt-5.6-sol', fetchImpl: async (url, options) => {
+    const body = JSON.parse(options.body); calls.push(body);
+    return Response.json(url.endsWith('/input_tokens') ? { object: 'response.input_tokens', input_tokens: 500 } : {
+      object: 'response', model: body.model, status: 'completed', error: null, incomplete_details: null,
+      output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(proposal) }] }],
+      usage: { input_tokens: 500, output_tokens: 100, total_tokens: 600 },
+    });
+  } });
+  const path = join(root, 'memory.sqlite'); const core = openMemoryCore({ path, model }); t.after(() => core.close());
+  const namespace = { ownerId: 'synthetic-private', scope: 'personal', projectId: null };
+  const admitted = core.admit({ namespace, memory: { content: 'Misleading generated interpretation', kind: 'context' },
+    receipts: [{ client: 'synthetic', sessionId: 'synthetic', eventId: 'synthetic', role: 'user', excerpt: 'I chose A because it folds.' }] });
+  assert.equal(admitted.ok, true); const { id: memoryId, revision } = admitted.value.memory;
+  const review = await core.reviewDecisionBasis({ namespace, refs: [{ memoryId, revision }] });
+  assert.equal(review.ok, true); assert.equal(review.value.units.length, 2); assert.equal(review.value.persistence, 'not-stored');
+  assert.equal(calls.length, 2); assert.equal(calls[1].text.format.name, 'cairn_reviewBasis');
+  assert.equal(calls[1].model, 'gpt-5.6-sol'); assert.match(calls[1].instructions, /historically valid premise/);
+  assert.equal(JSON.stringify(calls).includes('Misleading generated interpretation'), false);
+  core.close(); const cold = openMemoryCore({ path }); t.after(() => cold.close());
+  assert.equal(cold.getRationale({ namespace, memoryId, revision }).value.edges.length, 0);
+});
