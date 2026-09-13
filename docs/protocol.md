@@ -44,6 +44,26 @@ These tools provide honest manual memory in clients without lifecycle hooks. The
 
 ## Versioning
 
+### Separate local qualification boundary
+
+The local core's optional manual [claim qualification](claim-qualification.md)
+records bounded subject, property, scope/applicability, value, attribution and
+commitment descriptions with exact receipt anchors. These newly captured labels
+can contain personal information. They are untrusted memory content, not
+instructions, permissions, verified identity or proof of semantic truth. Only a
+trusted local caller supplies them; automatic capture and HTTP/MCP/model schemas
+are not widened, and no provider transmission or telemetry is added.
+
+Label text must already satisfy canonical normalization/redaction. Anchors bind
+actual namespace-owned source receipts; their IDs, SHA256 excerpt digests and
+original memory revision are server-derived. Equality proves source linkage,
+not entailment or adoption. Live qualification rows are cleared on correction
+and forgetting, including legacy mutation paths. Historical retirement retains
+qualifications until forgetting. Plaintext labels and link/digest metadata remain
+subject to the local file, backup, journal and secure-erasure limitations in
+[the store](local-store.md). The opt-in inspection flag is a local core field,
+not a new hosted wire or MCP capability.
+
 ### Separate local ordered-capture boundary
 
 The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)

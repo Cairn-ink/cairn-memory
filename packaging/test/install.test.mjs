@@ -50,6 +50,32 @@ async function call(client, name, args = {}) {
 }
 const ok = (result) => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 
+test('installed shared core preserves opt-in qualification across restart and clears it on correction and forget', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import { openMemoryCore } from './node_modules/${packageName}/core/contract.mjs';
+    const namespace={ownerId:'synthetic-installed-qualification',scope:'personal',projectId:null};
+    const content='I choose the violet tram 🚋.';
+    const receipt={client:'synthetic',sessionId:'session',eventId:'source',role:'user',excerpt:content};
+    const qualification={version:1,slot:{subject:'I',property:'transport',scope:null,applies:null},value:'violet tram',attribution:'direct',commitment:'adopted',
+      anchors:[{receiptIndex:0,start:0,end:content.length,text:content,fields:['subject','property','value','attribution','commitment']}]};
+    const ok=r=>{assert.equal(r.ok,true,JSON.stringify(r));return r.value;};
+    const path='./qualification.sqlite'; let core=openMemoryCore({path});
+    const admitted=ok(core.admit({namespace,memory:{content,kind:'fact'},receipts:[receipt],qualification}));
+    const read=()=>ok(core.get({namespace,memoryId:admitted.memory.id,includeQualification:true}));
+    const before=read(); assert.equal(before.qualification.anchors[0].text,content);
+    assert.equal(Object.hasOwn(ok(core.get({namespace,memoryId:admitted.memory.id})),'qualification'),false);
+    core.close(); core=openMemoryCore({path}); assert.deepEqual(read(),before);
+    const corrected=ok(core.correct({namespace,memoryId:admitted.memory.id,expectedRevision:admitted.memory.revision,content,kind:'fact',receipt:{...receipt,eventId:'correction'}}));
+    assert.equal(read().qualification,null);
+    ok(core.forget({namespace,memoryId:admitted.memory.id,expectedRevision:corrected.memory.revision}));
+    core.close(); core=openMemoryCore({path});
+    const result=core.get({namespace,memoryId:admitted.memory.id,includeQualification:true});
+    assert.deepEqual(result,{ok:false,error:{code:'memory_not_found',retryable:false}});
+    core.close(); console.log('installed_qualification_lifecycle_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_qualification_lifecycle_passed');
+});
+
 test('archive inspection and installed hashes prove the explicit single-source runtime allowlist', (t) => {
   assert.equal(hash(artifact.artifactPath), artifact.sha256);
   assert.match(artifact.sha256, /^[a-f0-9]{64}$/);

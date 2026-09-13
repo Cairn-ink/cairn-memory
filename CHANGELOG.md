@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — bounded claim qualification storage
+
+- Add optional trusted qualification to manual explicit/inferred admission, with
+  immutable bounded labels, exact receipt anchors and opt-in core inspection.
+  Preserve bindings across filing, receipt additions and historical retirement;
+  clear them atomically on correction/forget. Conflicting qualified dedup fails.
+  Upgrade SQLite v9 to v10 without legacy backfill. No automatic qualification,
+  model/MCP exposure or retirement-rule change is included; provenance checks
+  do not establish semantic truth or repair update-quality failures.
+
 ## Unreleased — current-memory candidate allowance
 
 - Exclude retained history and tombstones from recall's 1,024-row candidate

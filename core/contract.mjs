@@ -9,6 +9,7 @@ import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
+import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -183,7 +184,7 @@ export function openMemoryCore(input) {
   function admit(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memory", "receipts", "conflictHints"]);
+      object(input, ["namespace", "memory", "receipts", "conflictHints", "qualification"]);
       const ns = contractNamespace(input.namespace);
       const memory = contractMemory(input.memory);
       if (!Array.isArray(input.receipts) || input.receipts.length < 1 || input.receipts.length > 4) {
@@ -191,7 +192,9 @@ export function openMemoryCore(input) {
       }
       const receipts = input.receipts.map(contractReceipt);
       const conflictHints = contractConflictHints(input.conflictHints);
-      const result = runtime.admit(ns, { ...memory, receipts, conflictHints });
+      if (Object.hasOwn(input, 'qualification')) qualificationSources(input.memory.content, input.receipts);
+      const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
+      const result = runtime.admit(ns, { ...memory, receipts, conflictHints, qualification });
       return { memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated, indexRevision: result.indexRevision };
     });
@@ -223,7 +226,10 @@ export function openMemoryCore(input) {
   function get(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memoryId", "receiptLimit", "receiptCursor"]);
+      object(input, ["namespace", "memoryId", "receiptLimit", "receiptCursor", "includeQualification"]);
+      if (Object.hasOwn(input, 'includeQualification') && typeof input.includeQualification !== 'boolean') {
+        throw new MemoryStoreError('invalid_input');
+      }
       const ns = contractNamespace(input.namespace);
       const memoryId = contractId(input.memoryId);
       const count = contractLimit(input.receiptLimit);
@@ -231,11 +237,12 @@ export function openMemoryCore(input) {
         m: memoryId, l: count };
       let cursor;
       if (input.receiptCursor !== undefined) cursor = decodeCursor(input.receiptCursor, binding);
-      const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e);
+      const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e, input.includeQualification === true);
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
       return { memory: page.memory, receipts, placements: page.placements, conflicts: page.conflicts,
+        ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
           a: { createdAt: last.createdAt, id: last.id } }), exhausted };
@@ -302,13 +309,15 @@ export function openMemoryCore(input) {
 
   function admissionItems(input) {
     return denseArray(input, 0, 5).map((item) => {
-      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints']);
+      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification']);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
       const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
       const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
       const conflictHints = contractConflictHints(item.conflictHints);
-      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints };
+      if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
+      const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
+      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints, qualification };
     });
   }
 

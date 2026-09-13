@@ -6,6 +6,7 @@ import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
+import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -144,8 +145,10 @@ export function createMemoryRuntime(input) {
       AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
     const now = new Date().toISOString();
     if (existing) {
+      if (value.qualification !== undefined && value.content !== existing.content) fail('qualification_conflict');
       let changed = false;
       for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds)) || changed;
+      qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content);
       const explicit = value.origin === "explicit";
       const kind = explicit ? value.kind : existing.kind;
       const origin = explicit ? "explicit" : existing.origin;
@@ -175,6 +178,7 @@ export function createMemoryRuntime(input) {
       value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now);
     for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds);
     const memory = activeRow(ns, id);
+    qualificationStorage.bind(memory, value.qualification, value.receipts, false, value.content);
     return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
       indexRevision: advanceEpoch(ns), changed: true, insertedReceiptIds };
   }
@@ -195,6 +199,7 @@ export function createMemoryRuntime(input) {
       const now = new Date().toISOString();
       conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
+      qualificationStorage.clear(id);
       db.prepare(`UPDATE memories SET content = ?, fingerprint = ?, kind = ?,
         origin = 'explicit', confidence = 1, revision = revision + 1, updated_at = ?
         WHERE id = ?`).run(value.content, value.fingerprint, value.kind, now, id);
@@ -218,6 +223,7 @@ export function createMemoryRuntime(input) {
       const now = new Date().toISOString();
       conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
+      qualificationStorage.clear(id);
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`)
         .run(now, id);
@@ -292,7 +298,7 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function getPage(ns, id, count, anchor, expectedEpoch) {
+  function getPage(ns, id, count, anchor, expectedEpoch, includeQualification = false) {
     ready();
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
@@ -314,6 +320,7 @@ export function createMemoryRuntime(input) {
         receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
         placements: mocStorage.placementRefs(ns, id),
         conflicts: conflictStorage.inspect(ns, id),
+        ...(includeQualification ? { qualification: qualificationStorage.inspect(memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
     });
@@ -363,6 +370,7 @@ export function createMemoryRuntime(input) {
   }
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, advanceEpoch });
+  const qualificationStorage = createQualificationStorage({ db, receiptKey });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable });
