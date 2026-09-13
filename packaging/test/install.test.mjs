@@ -76,6 +76,24 @@ test('installed shared core preserves opt-in qualification across restart and cl
     installation.directory, artifact.userconfig).trim(), 'installed_qualification_lifecycle_passed');
 });
 
+test('installed core rejects malformed Unicode namespace identities', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import {openMemoryCore} from './node_modules/${packageName}/core/contract.mjs';
+    const core=openMemoryCore({path:':memory:'});
+    for (const code of [0xd800,0xdc00]) {
+      const bad=String.fromCharCode(code);
+      for (const namespace of [{ownerId:'synthetic-'+bad,scope:'personal',projectId:null},
+        {ownerId:'synthetic',scope:'project',projectId:'project-'+bad}]) {
+        const result=core.admit({namespace,memory:{content:'Synthetic marker',kind:'fact'},
+          receipts:[{client:'synthetic',sessionId:'session',eventId:'event',role:'user',excerpt:'Synthetic marker'}]});
+        assert.deepEqual(result,{ok:false,error:{code:'invalid_input',retryable:false}});
+      }
+    }
+    core.close(); console.log('installed_identifier_boundary_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_identifier_boundary_passed');
+});
+
 test('archive inspection and installed hashes prove the explicit single-source runtime allowlist', (t) => {
   assert.equal(hash(artifact.artifactPath), artifact.sha256);
   assert.match(artifact.sha256, /^[a-f0-9]{64}$/);

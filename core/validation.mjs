@@ -29,7 +29,7 @@ export function denseArray(value, min, max) {
 }
 
 export function identifier(value) {
-  if (typeof value !== "string" || !value || value.length > 200 ||
+  if (typeof value !== "string" || !value || !value.isWellFormed() || value.length > 200 ||
       value.trim() !== value || /[\x00-\x1f\x7f]/.test(value)) fail("invalid_identifier");
   return value;
 }

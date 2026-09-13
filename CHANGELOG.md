@@ -1,5 +1,15 @@
 # Changelog
 
+## Private candidate — Unicode identifier integration (disclosure hold)
+
+- Integrate the separately reviewed malformed-Unicode identifier guard with
+  qualification storage, preserving both installed-core regression probes.
+  Combined offline gates passed on Node 22.16 and 24, including 351 core tests
+  and 16 artifact tests on each runtime; no model calls were made. Independent
+  review of the frozen integrated commit remains required.
+  This local integration does not release the SECURITY.md private coordination
+  hold or authorize a public push, PR, disclosure, merge or deployment.
+
 ## Unreleased — bounded claim qualification storage
 
 - Add optional trusted qualification to manual explicit/inferred admission, with
