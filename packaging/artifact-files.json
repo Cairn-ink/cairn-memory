@@ -31,6 +31,8 @@
   "core/rationale-schema.mjs",
   "core/rationale-storage.mjs",
   "core/rationale.mjs",
+  "core/source-basis.mjs",
+  "core/prompts/review-decision-basis.md",
   "core/prompts/relate-rationale.md",
   "core/prompts/relate-claim-focus.md",
   "core/recall.mjs",
