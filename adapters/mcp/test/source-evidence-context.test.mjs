@@ -90,6 +90,10 @@ for (const mode of [undefined, 'source-bound-v1', 'source-bound-v2']) {
     assert.equal((await hosted.client.listTools()).tools.length, mode ? 6 : 5);
     assertSources(await recall(hosted, { contextMode: 'source-evidence' }), details);
     assertSources(await recall(hosted, { contextMode: 'source-evidence', includeQualification: false }), details);
+    const scanned = await recall(hosted, { contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });
+    assertSources(scanned, details);
+    assert.equal(scanned.result.selection.strategy, 'complete-map');
+    assert.equal((await call(hosted.client, 'recall_memory', { query: 'sources', selectionMode: 'bounded-source-scan' })).error.code, 'invalid_input');
     const conflict = await call(hosted.client, 'recall_memory', { query: 'sources', contextMode: 'source-evidence', includeQualification: true });
     assert.equal(conflict.ok, false); assert.equal(conflict.error.code, 'invalid_input');
     const legacy = await recall(hosted);

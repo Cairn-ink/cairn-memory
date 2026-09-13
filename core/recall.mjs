@@ -32,13 +32,14 @@ function selection(output, allowed, maximum, model, stage) {
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize,
-  validateFresh = () => {}, includeQualification = false, contextMode }) {
+  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
   }
   const maps = [];
   const chosen = new Map();
+  let strategy = 'model-selected';
   for (let round = 0; round < 2; round++) {
     const visible = [];
     const allowed = new Map();
@@ -57,6 +58,13 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
       }
     });
     if (!visible.length) break;
+    if (selectionMode === 'bounded-source-scan' && round === 0 &&
+        maps.every(page => page.exhausted && page.nextCursor === null) && allowed.size <= 24 &&
+        readSet.every((_, index) => [...allowed.values()].filter(ref => ref.namespaceIndex === index).length <= 12)) {
+      for (const [identity, ref] of allowed) chosen.set(identity, ref);
+      strategy = 'complete-map';
+      break;
+    }
     const maxRefs = Math.min(24, 36 - chosen.size);
     const output = await callModel(model, 'select', selectPrompt, { query, maps: visible, maxRefs },
       { validateFresh: () => validateFresh([...chosen.values()]) });
@@ -113,6 +121,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   }
   // No model/counter callback may follow the authoritative final read.
   const memories = finalize(candidates, ranked.map((ref) => candidates.findIndex((item) => key(item) === key(ref))));
-  return { memories, namespaces, coverage: namespaces.every((ns) => ns.mapExhausted && ns.fetchExhausted)
+  return { memories, namespaces,
+    ...(selectionMode ? { selection: { mode: selectionMode, strategy, semanticCoverage: 'unassessed' } } : {}),
+    coverage: namespaces.every((ns) => ns.mapExhausted && ns.fetchExhausted)
     ? 'complete' : 'budget_exhausted' };
 }

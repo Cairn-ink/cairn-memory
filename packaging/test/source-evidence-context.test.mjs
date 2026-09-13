@@ -93,4 +93,8 @@ test('installed source context omits deliberately wrong interpretations from ran
   sourceMode = false;
   const legacy = await call('recall_memory', { query: query.query });
   assert.equal(legacy.memories[0].memory.content, wrong); assert.equal(sends, 18);
+  sourceMode = true;
+  const scanned = await call('recall_memory', { ...query, selectionMode: 'bounded-source-scan' });
+  assertSources(scanned.memories[0]); assert.equal(sends, 20);
+  assert.deepEqual(scanned.selection, { mode: 'bounded-source-scan', strategy: 'complete-map', semanticCoverage: 'unassessed' });
 });
