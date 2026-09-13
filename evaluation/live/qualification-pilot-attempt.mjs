@@ -4,6 +4,8 @@ export const CANDIDATE_QUALIFICATION_LIMITS = Object.freeze({ requests: 36, micr
   reservationMicroUsd: 5000 });
 export const SOURCE_SUPPORT_LIMITS = Object.freeze({ requests: 96, microUsd: 480000,
   reservationMicroUsd: 5000 });
+export const RATIONALE_LIMITS = Object.freeze({ requests: 384, microUsd: 1920000,
+  reservationMicroUsd: 5000 });
 const fail = code => { throw new Error(code); };
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
@@ -21,6 +23,11 @@ export function createCandidateQualificationAttempt(options) {
 export function createSourceSupportAttempt(options) {
   return createAttempt(options, SOURCE_SUPPORT_LIMITS,
     ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_select', 'cairn_rank']);
+}
+
+export function createRationaleAttempt(options) {
+  return createAttempt(options, RATIONALE_LIMITS,
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relate', 'cairn_select', 'cairn_rank']);
 }
 
 function createAttempt(options, limits, methods) {

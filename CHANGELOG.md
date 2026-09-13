@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — bounded rationale experiment preparation
+
+- Add a separate explicit baseline rationale-pipeline experiment capability,
+  parent-only session and fixed 384-request/US$1.92 attempt limit within the
+  existing shared ledger. Older grants remain unchanged and deny `relate`.
+- Offline preparation only: no new live evidence or semantic-quality claim.
+  See `docs/plans/rationale-experiment.md` for the remaining installed pilot.
+
 ## Unreleased — opt-in automatic rationale loop
 
 - Add explicit source-bound-v2 capture rationale configuration, bounded current

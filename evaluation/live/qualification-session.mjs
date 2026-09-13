@@ -1,5 +1,6 @@
 import { createQualificationExperimentRequestGuard,
-  createCandidateQualificationExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
+  createCandidateQualificationExperimentRequestGuard,
+  createRationaleExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { experimentPolicy, MODEL_ID } from './session.mjs';
 
 const fail = code => { throw new Error(code); };
@@ -20,6 +21,12 @@ export function createSourceSupportLiveSession(options) {
   return createSession(options, 'candidateQualificationExtension',
     ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_select', 'cairn_rank'],
     createCandidateQualificationExperimentRequestGuard, 'source_support');
+}
+
+export function createRationaleLiveSession(options) {
+  return createSession(options, 'rationaleExtension',
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify', 'cairn_relate', 'cairn_select', 'cairn_rank'],
+    createRationaleExperimentRequestGuard, 'rationale');
 }
 
 // Only the named public factories select these closed capabilities. Caller

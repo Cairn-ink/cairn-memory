@@ -33,6 +33,9 @@ const QUALIFICATION_KIND = Object.freeze({ filename: QUALIFICATION_FILENAME, met
 const CANDIDATE_QUALIFICATION_KIND = Object.freeze({
   filename: 'experiment-candidate-qualification-extension.json', method: 'cairn_qualifyCandidates',
 });
+const RATIONALE_KIND = Object.freeze({
+  filename: 'experiment-rationale-extension.json', method: 'cairn_relate',
+});
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -371,11 +374,12 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   const format = body.text.format;
   exactKeys(format, ['name', 'schema', 'strict', 'type'], 'unsupported_request');
   if (typeof format.name !== 'string') fail('unsupported_request');
-  const match = (qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates)$/u
+  const match = (qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate)$/u
+    : qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates)$/u
     : qualificationMethod === QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualify)$/u
     : reconciliation ? /^cairn_(extract|classify|select|rank|reconcile)$/u
     : /^cairn_(extract|classify|select|rank)$/u).exec(format.name);
-  if (['reconcile', 'qualify', 'qualifyCandidates'].includes(match?.[1]) && body.model !== DEFAULT_MODEL) fail('unsupported_request');
+  if (['reconcile', 'qualify', 'qualifyCandidates', 'relate'].includes(match?.[1]) && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   let expectedSchema;
@@ -705,6 +709,12 @@ export function authorizeCandidateQualificationExtension(options) {
   return authorizeQualification(options, CANDIDATE_QUALIFICATION_KIND);
 }
 
+// Explicitly authorizes the fixed baseline automatic-rationale pipeline, not
+// arbitrary methods or an alteration of an older capability file.
+export function authorizeRationaleExtension(options) {
+  return authorizeQualification(options, RATIONALE_KIND);
+}
+
 function authorizeQualification(options, kind) {
   exactKeys(options, ['ledger', 'policy', 'authorizationId']);
   const configuration = qualificationConfiguration(options, kind);
@@ -755,6 +765,13 @@ export function createCandidateQualificationExperimentRequestGuard(options) {
   const qualification = snapshotExtension(options.candidateQualificationExtension);
   return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
     null, null, qualification, CANDIDATE_QUALIFICATION_KIND);
+}
+
+export function createRationaleExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'rationaleExtension', 'fetchImpl']);
+  const qualification = snapshotExtension(options.rationaleExtension);
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    null, null, qualification, RATIONALE_KIND);
 }
 
 function constructGuard(options, extension = null, reconciliation = null, qualification = null,

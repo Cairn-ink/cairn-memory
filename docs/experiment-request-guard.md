@@ -247,6 +247,35 @@ resets the ledger or repeats old failures. See the
 
 ## What is protected
 
+### Separate rationale pipeline capability
+
+`authorizeRationaleExtension({ledger,policy,authorizationId})` exclusively binds
+`experiment-rationale-extension.json` to the existing settled baseline ledger.
+The returned `rationaleExtension` is required by
+`createRationaleExperimentRequestGuard({ledger,policy,rationaleExtension,fetchImpl})`.
+Its `method: 'cairn_relate'` identifies a closed pipeline grant: baseline extract,
+qualifyCandidates, classify, relate, select and rank. It grants no alternate
+model, legacy qualify or reconcile. None of the five older guards gains relate
+from the file's presence, and their tokens cannot substitute for the new one.
+The shared immutable-binding, checkpoint, accounting and response limits apply.
+The underlying guard retains its existing baseline host channel; the narrower
+parent session below does not expose it or authorize host calls for this pilot.
+
+`createRationaleLiveSession({ledger,apiKey,fetchImpl,rationaleExtension})` permits
+only those six methods on Responses generation/input-count paths. Keys and
+transport are explicitly supplied by the parent; no environment discovery.
+`createRationaleAttempt` adds a closed 384-request/US$1.92 reservation ceiling
+inside the existing US$50 cumulative campaign. It serializes calls, verifies
+pins/checkpoints around persistence and transport, and permanently halts on
+failure or accounting drift. It does not itself create an exclusive persistent
+run intent: the installed runner must do that before live calls. A caller cannot
+configure additional methods or a larger cap. Unknown costs are not refunded.
+
+This preparation does not provision a real capability or run an experiment.
+The following installed runner must freeze cases, rubric and hashes, refuse a
+previous intent, retain failed/not-run cases, and pass independent review before
+execution. See [acceptance and sequence](plans/rationale-experiment.md).
+
 The supported request subset is deliberately narrow: nonstreaming Chat
 Completions text/function-tool messages for the host, and the existing Cairn
 adapter's Responses count/generation payloads. Wrong endpoints, models, shapes,
