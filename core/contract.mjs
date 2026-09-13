@@ -585,18 +585,21 @@ export function openMemoryCore(input) {
   async function reviewRationale(input) {
     try {
       runtime.ready();
-      object(input, ['namespace', 'refs']);
+      object(input, ['namespace', 'refs', 'inputMode']);
+      const inputMode = input.inputMode;
+      if (Object.hasOwn(input, 'inputMode') && inputMode !== 'claim-focus-v1') throw new MemoryStoreError('invalid_input');
       const ns = contractNamespace(input.namespace);
       denseArray(input.refs, 1, 6);
       const refs = memoryRefs(input.refs);
-      const snapshot = runtime.rationaleSnapshot(ns, refs);
+      const snapshot = runtime.rationaleSnapshot(ns, refs, inputMode);
       const validateFresh = () => {
-        if (JSON.stringify(runtime.rationaleSnapshot(ns, refs)) !== JSON.stringify(snapshot)) {
+        if (JSON.stringify(runtime.rationaleSnapshot(ns, refs, inputMode)) !== JSON.stringify(snapshot)) {
           throw new MemoryStoreError('revision_conflict');
         }
       };
       const proposals = await proposeRationale(model, snapshot.sources, validateFresh);
-      return success(runtime.commitRationale(ns, refs, snapshot, proposals));
+      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals),
+        ...(inputMode ? { inputMode } : {}) });
     } catch (error) { return failure(error); }
   }
 

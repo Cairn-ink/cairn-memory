@@ -451,7 +451,7 @@ export function createMemoryRuntime(input) {
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
-    rationaleSnapshot(ns, refs) { ready(); return rationaleStorage.snapshot(ns, refs); },
+    rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
     commitRationale(ns, refs, snapshot, proposals) { ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals); },
     getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },
     claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },

@@ -4,10 +4,13 @@ import { object, denseArray, fail } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 
 const system = readFileSync(new URL('./prompts/relate-rationale.md', import.meta.url), 'utf8');
+const focusGuidance = readFileSync(new URL('./prompts/relate-claim-focus.md', import.meta.url), 'utf8');
 
 export async function proposeRationale(model, sources, validateFresh) {
-  const output = await callModel(model, 'relate', system, {
+  const focused = sources.some(source => source.focus);
+  const output = await callModel(model, 'relate', focused ? `${system}\n${focusGuidance}` : system, {
     memories: sources.map((source, index) => ({ index,
+      ...(source.focus ? { focus: { content: source.focus.content, interpretationStatus: 'unverified' } } : {}),
       receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt })) })),
   }, { validateFresh, failureCode: 'rationale_failed' });
   try {
