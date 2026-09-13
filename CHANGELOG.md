@@ -1,5 +1,14 @@
 # Changelog
 
+## Evidence — rationale pilot v1
+
+- Preserve the one-shot 16-arm real-provider installed MCP comparison with a
+  source-linked public export. All mechanics completed; semantic gate failed:
+  missed challenged reasons, ambiguous subject binding and one false-decision
+  link remain. Expose proposals separately from returned graph projections.
+- Record conservative/known/unknown costs and independent agent judgments without
+  rerunning failures or changing product defaults. See `docs/rationale-pilot-results.md`.
+
 ## Unreleased — installed rationale comparison runner
 
 - Freeze eight synthetic two-event cases and a separate evaluator-only rubric.
