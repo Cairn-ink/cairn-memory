@@ -19,14 +19,20 @@ hermes --profile your-profile memory setup
 
 Choose `cairn`; supply absolute paths to Node >=22.16 and the installed
 `node_modules/.bin/cairn-memory` JavaScript entry point. Native setup selects
-`memory.provider: cairn` and saves only those paths in profile `cairn.json`.
+`memory.provider: cairn` and saves those paths in profile `cairn.json`.
+The optional capture-mode field accepts exactly `source-bound-v2`. Omit it on a
+fresh setup for the existing five tools; type that value to enable explicitly
+submitted source capture. It is saved separately from credentials. Blank input
+during reconfiguration can retain an existing value; to disable capture, remove
+the optional `capture_qualification` field from profile `cairn.json` and restart.
 Restart the session after setup; schemas remain stable within a session.
 
 Optional secret: `CAIRN_MEMORY_OPENAI_API_KEY`. Native setup manages it separately,
-never in `cairn.json`. Only explicit recall forwards it as `OPENAI_API_KEY`.
+never in `cairn.json`. Only explicit capture/recall forwards it as `OPENAI_API_KEY`.
 The host's generic `OPENAI_API_KEY` is **not** reused. Without the dedicated key,
-recall reports `model_not_configured`; other tools work without a model.
-Recall with a key sends selected memory evidence to OpenAI and incurs charges.
+new capture and recall report `model_not_configured`; manual tools and completed
+capture replay work without a model. Capture/recall with a key send selected
+source evidence to OpenAI and incur charges.
 There is no account-wide spending cap here: configure provider limits and consent
 first. A separate bounded native-provider actual-model recall probe passed;
 interactive AIAgent tool selection and general semantic quality are unverified.
@@ -38,6 +44,27 @@ Tools: `cairn_remember_memory`, `cairn_recall_memory`, `cairn_inspect_memory`,
 Ask explicitly to save, inspect ID/revision, then correct or forget at that
 revision. Stale revisions fail. Content and receipts are untrusted data, not
 instructions; a receipt is not proof of model-generated entailment.
+
+With the explicit v2 setting, the installed MCP schema also supplies
+`cairn_capture_memory`. Submit only messages intended for storage, for example:
+
+```json
+{"batchId":"synthetic-friday-note","messages":[{"role":"user","content":"I am considering taking the train on Fridays."}]}
+```
+
+Then call `cairn_recall_memory` with
+`{"query":"What did I say about Friday travel?","contextMode":"source-evidence"}`
+to use retained passages rather than generated summaries in ranking and returned
+context. This mode is per call; the configured host otherwise defaults to
+qualified recall. Use `cairn_inspect_memory` with the returned memory ID and
+`includeQualification: true` to inspect the stored interpretation and evidence.
+See [source-only context boundaries](../../../docs/source-evidence-context.md).
+
+V2 retains canonical prefixes of at most 800 UTF-16 units per message and
+reports omitted tails through `retainedSourceWindow`. Submitted roles are not
+authenticated identities. Qualification may still misread uncertainty or
+adoption; source linkage does not prove truth. This submits a supplied batch,
+not the surrounding transcript, and never grants execution authority.
 
 Only initialized `platform=cli`, `agent_context=primary` sessions may operate
 on memory. Gateway, subagent, cron and unknown contexts are rejected. One personal
@@ -52,11 +79,15 @@ Hermes builds routing before initialization, so schema discovery uses a fresh
 disposable OS-temporary database with a synthetic owner and no key, never profile
 memory. Availability only checks files/config/dependency presence. Each runtime
 call uses an isolated helper plus SDK stdio; only fixed LANG/PATH and the optional
-recall key reach it. SDK/server stderr is discarded; errors use fixed codes.
-Helper deadline: 35 seconds plus bounded SDK teardown; outer cutoff: 45 seconds
-plus bounded process-tree termination. Concurrent operations are rejected, not
+capture/recall key reach it. SDK/server stderr is discarded; errors use fixed codes.
+Default deadlines are SDK 30 seconds, helper 35 seconds and outer cutoff 45
+seconds. Explicit capture alone uses 120/125/135 seconds respectively, plus
+bounded teardown/process-tree termination. Tool arguments cannot extend these
+limits. Concurrent operations are rejected, not
 queued. Shutdown terminates active work but cannot undo an already committed
-write; inspect before retrying an uncertain write.
+write; inspect before retrying an uncertain write. For capture, replay the same
+batch ID and identical payload to determine its recorded outcome; do not invent
+a new batch ID or assume timeout rolled back storage. No automatic retry occurs.
 
 Inherited prefetch/sync/session-end/compression hooks are no-ops. No automatic
 capture, transcript upload or background recall. This is not upstream endorsement,

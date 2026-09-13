@@ -44,4 +44,137 @@ These tools provide honest manual memory in clients without lifecycle hooks. The
 
 ## Versioning
 
+### Separate local qualification boundary
+
+The local core's optional manual [claim qualification](claim-qualification.md)
+records bounded subject, property, scope/applicability, value, attribution and
+commitment descriptions with exact receipt anchors. These newly captured labels
+can contain personal information. They are untrusted memory content, not
+instructions, permissions, verified identity or proof of semantic truth. Only a
+trusted local caller supplies them; automatic capture and HTTP/MCP/model schemas
+are not widened, and no provider transmission or telemetry is added.
+
+Label text must already satisfy canonical normalization/redaction. Anchors bind
+actual namespace-owned source receipts; their IDs, SHA256 excerpt digests and
+original memory revision are server-derived. Equality proves source linkage,
+not entailment or adoption. Live qualification rows are cleared on correction
+and forgetting, including legacy mutation paths. Historical retirement retains
+qualifications until forgetting. Plaintext labels and link/digest metadata remain
+subject to the local file, backup, journal and secure-erasure limitations in
+[the store](local-store.md). The opt-in inspection flag is a local core field,
+not a new hosted wire or MCP capability.
+
+### Separate local trusted-transition boundary
+
+The local core's [trusted-manual transition methods](qualified-transition.md)
+add immutable slot descriptors and membership links within the exact namespace.
+They are manual attestations of identity and single-claim shape, not verified
+semantic facts or permissions. Only already-admitted source-valid qualifications
+can bind. Correction/forget clears memberships and empty slots; historical
+members retain their descriptors until removed. No model, MCP, HTTP or capture
+input field is added, and no new data leaves the local database. Ordinary
+unqualified-to-unqualified automatic retirement remains unprotected; qualified
+endpoints cannot silently fall back to it.
+
+`transitionQualifiedSet` adds only bounded local references to 1–5 predecessors
+and one replacement. Every current bound member must be explicitly revision
+guarded; the operation never silently retires omitted memories. No new stored
+fields, external payloads or inferred permissions are added. It shares the pair
+operation's source guards and atomically preserves all predecessor histories.
+
+### Separate local ordered-capture boundary
+
+The optional constructor mode `captureQualification: 'source-bound-v1'` adds
+one model-bound payload containing bounded extracted item text/kind and its
+canonical receipt excerpts/roles with local numeric positions. No trusted
+identity, full source transcript or slot attestation reaches this new stage.
+The stored S1 labels/anchors are model assertions, not authority or truth.
+Unknown metadata cannot trigger a fallback to legacy retirement. This mode
+stores/replays unresolved ordered outcomes until identity is separately
+established. It changes neither MCP/HTTP inputs nor receipt retention; existing
+SQLite journal, backup and erasure limitations still apply. Model providers
+receive personal text in these bounded fields, so hosts must configure a
+provider appropriate for their data. No telemetry or paid-call permission is
+added. See [capture](capture.md#opt-in-automatic-source-qualification).
+
+The separate `source-bound-v2` mode sends bounded deterministic source
+candidates with request-local indices and speaker roles to `qualifyCandidates`.
+The model selects evidence per field; core computes exact source offsets/text and
+coverage, then validates the unchanged S1 DTO. Receipt identities remain local.
+The local MCP constructor can select this mode without changing tool inputs.
+This does not authorize the new experiment paid method or expose a new HTTP payload.
+Source precision is not semantic truth or trusted slot membership. See
+[v2 candidate production](capture.md#core-owned-evidence-candidates-v2).
+
+The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)
+are not HTTP/plugin/MCP payload fields and do not widen these schemas. A trusted
+local host supplies stream order; it is not accepted as authenticated chronology.
+Opaque stream/event IDs, positions and receipt linkage persist in the local
+database and can reveal relationships to someone with file access. Do not embed
+secrets or personal text in them. Only bounded message/candidate text and source
+excerpts reach an injected judgment provider; the causal identifiers do not.
+No new telemetry is added. Historical retirement retains old text until explicit
+forgetting, and content-free event/progress metadata remains for replay safety.
+SQLite backup/journal and local access limitations remain as documented in
+[the store](local-store.md).
+
+### Opt-in local MCP submitted capture
+
+The separate local stdio server can opt into `capture_memory` with constructor
+mode/CLI flag `source-bound-v1` or `source-bound-v2`. This adds bounded caller-submitted message text
+and claimed user/assistant roles, not a transcript reader or authenticated human
+intent. Host-bound namespace, client and session cannot be overridden by tool
+arguments. A caller batch ID is an opaque replay key, not authority; deterministic
+message IDs hash the versioned batch/index tuple. IDs are not encryption and
+must not contain secrets. No causal ordering, qualifications, slot bindings or
+transition decisions are accepted from tool arguments.
+
+The shared core normalizes and redacts submitted text before model processing,
+then stores its existing bounded receipts and validated model qualifications.
+In v2, extraction and receipt construction use the same canonical 800-unit
+prefixes, while full submitted text remains bound by the event digest. Successful
+v2 responses add retainedSourceWindow with an 800 UTF-16-unit per-message limit
+and original indices whose normalized source tails are omitted. This exposes
+retention limits, not the execution version of an old duplicate, a complete
+conversation, source sufficiency or truth. No caller window override is accepted.
+The extra model stage sees canonical receipt excerpts and bounded extracted text,
+not namespace/client/session/event IDs. Role and qualifier labels remain
+unverified assertions. This tool does not decide currentness or retire memories;
+competing active claims can remain. Configuration is not verified model access
+and confers no per-user spending cap. Keys remain environment-only, and syntax
+checking contacts neither storage nor providers. Existing MCP transport caps
+remain 64KiB input/256KiB output; oversized input rejects, not truncates. SQLite
+retention, backup and erasure limitations remain unchanged.
+
+`inspect_memory.includeQualification` exposes existing bounded source metadata
+only for a namespace-owned ID, not list queries. It is keyless and preserves receipt
+pagination. Separately, local `recall_memory.includeQualification` carries complete
+bounded qualification or null through fetch, ranking and final read. It defaults
+on when source-qualified capture is configured; explicit false is a compatibility
+opt-out. Without capture configuration, absent retains legacy behavior and true
+opts in. Qualification counts within existing budgets and is never stripped to
+fit. Anchors can refer to receipts outside the returned prefix; inspect receipt
+pages for their source context. Null or unknown is not confirmation; even an
+adopted label is not execution authority. No telemetry,
+hosted plugin/HTTP schema change, account authority or execution consent is
+introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-capture).
+
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
+
+### Opt-in local source evidence context
+
+Local fetch/recall and MCP recall may select `contextMode: 'source-evidence'`.
+This exposes complete retained receipt excerpts and claimed user/assistant roles
+without model summaries, kind/confidence or qualifications in rank/final memory
+context. It reduces that payload to source IDs, record ID/revision/lifecycle,
+source text/roles/count and core-owned omission/coverage markers. No new captured
+personal fields, provider method, telemetry or hosted wire schema is introduced.
+
+Source roles and passages remain untrusted; even explicit remember may contain
+an assertion supplied by a client, not an authenticated transcript. Source
+selection remains unassessed and MOC routing labels remain model interpretations.
+Complete retained sources must fit the existing budgets or fail; no context
+expansion, dropped conditions or inferred authority is allowed. Inspection can
+still expose the original model interpretation. File-access, journals, backups
+and logical forgetting retain their existing limitations. See
+[source evidence context](source-evidence-context.md).

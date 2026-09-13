@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "heldout-english-filed-224",
+      "size": 224,
+      "placement": "late",
+      "query": "What is the inspection interval for the Velmora lighthouse prism?",
+      "targets": ["The Velmora lighthouse prism requires inspection every seventeen days."],
+      "distractorPrefix": "Synthetic calibration ledger records amber washers in numbered trays",
+      "expected": {
+        "requiredTargets": [0],
+        "forbidden": ["unsupported_memory"],
+        "note": "Only target index 0 supplies the requested interval; late correct filing should not prevent sourced retrieval. Required indexes refer to the targets array."
+      }
+    },
+    {
+      "id": "heldout-english-unfiled-224",
+      "size": 224,
+      "placement": "unfiled",
+      "query": "Where is the spare key for the Oskelin observatory cabinet?",
+      "targets": ["The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl."],
+      "distractorPrefix": "Synthetic calibration ledger records copper spacers in numbered pouches",
+      "expected": {
+        "requiredTargets": [0],
+        "forbidden": ["unsupported_memory"],
+        "note": "The unfiled target alone supports the key location; unrelated filed calibration records provide no answer. Required indexes refer to the targets array."
+      }
+    },
+    {
+      "id": "heldout-english-multiple-misfiled-224",
+      "size": 224,
+      "placement": "misfiled",
+      "query": "What container and temperature are required for transporting the Teralune orchid bulbs?",
+      "targets": [
+        "Transport the Teralune orchid bulbs in a perforated cedar crate.",
+        "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport."
+      ],
+      "distractorPrefix": "Synthetic calibration ledger records slate buttons in numbered envelopes",
+      "expected": {
+        "requiredTargets": [0, 1],
+        "forbidden": ["unsupported_memory"],
+        "note": "Both source records are necessary: one supplies the container and the other the temperature. Misfiling does not alter either fact. Required indexes refer to the targets array."
+      }
+    },
+    {
+      "id": "heldout-chinese-contiguous-control-16",
+      "size": 16,
+      "placement": "late",
+      "query": "我的通勤方式是什麼？",
+      "targets": ["我每天搭乘霧港電車上班。"],
+      "distractorPrefix": "Synthetic calibration ledger records glass rings in numbered cartons",
+      "expected": {
+        "requiredTargets": [0],
+        "forbidden": ["unsupported_memory"],
+        "note": "The source states the user's commute by fictional Wugang tram. Query and source contain different whole contiguous Chinese letter runs; semantic success must not be credited to literal token matching. Required indexes refer to the targets array."
+      }
+    },
+    {
+      "id": "heldout-english-paraphrase-control-16",
+      "size": 16,
+      "placement": "unfiled",
+      "query": "How do I travel to work?",
+      "targets": ["My commute uses Orlaven streetcars."],
+      "distractorPrefix": "Synthetic calibration ledger records zinc clips in numbered sleeves",
+      "expected": {
+        "requiredTargets": [0],
+        "forbidden": ["unsupported_memory"],
+        "note": "The first-person source directly supports commuting by fictional Orlaven streetcars despite zero distinct lowercase whole-token overlap with the query. Required indexes refer to the targets array."
+      }
+    },
+    {
+      "id": "heldout-absent-answer-control-16",
+      "size": 16,
+      "placement": "late",
+      "query": "What is the access phrase for the Drovessa garden gate?",
+      "targets": [],
+      "distractorPrefix": "Synthetic calibration ledger records brass discs in numbered bins",
+      "expected": {
+        "requiredTargets": [],
+        "forbidden": ["unsupported_memory"],
+        "note": "No source records an access phrase or the named garden gate. Expected sourced recall is empty; calibration records cannot support an answer."
+      }
+    }
+  ]
+}

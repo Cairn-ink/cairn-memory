@@ -1,10 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startExperimentProxy } from './proxy.mjs';
+import { privateDirectory, privateWrite, inspectArtifact } from './installed-capture-support.mjs';
 
 export const CAPTURE_LOOP_VERSION = 'installed-capture-mcp-v1';
 export const CAPTURE_LOOP_FIXTURE = Object.freeze({
@@ -16,7 +16,6 @@ export const CAPTURE_LOOP_FIXTURE = Object.freeze({
   extractionModel: 'gpt-5.4-mini-2026-03-17',
 });
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const fail = (code) => { throw new Error(code); };
 const value = (envelope) => envelope?.ok === true ? envelope.value : null;
 const complete = (envelope) => value(envelope)?.coverage === 'complete'
@@ -89,42 +88,6 @@ export function inspectCaptureLoopStage(stage, record, state = {}) {
       && missing(record.after) && value(record.list)?.memories?.length === 0;
   }
   return { stage, passedAutomated: Boolean(passed), semanticReviewRequired: true };
-}
-
-function privateDirectory(directory) {
-  const resolved = path.resolve(directory);
-  const stat = lstatSync(resolved);
-  if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(resolved) !== resolved
-    || (process.platform !== 'win32' && (stat.mode & 0o777) !== 0o700)
-    || readdirSync(resolved).length) fail('unsafe_private_directory');
-  return resolved;
-}
-function privateWrite(filename, data) {
-  writeFileSync(filename, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-}
-
-function inspectArtifact(executable, archive, expectedHash) {
-  if (!/^[a-f0-9]{64}$/u.test(expectedHash)) fail('invalid_cairn_artifact');
-  const artifact = realpathSync(archive);
-  if (hash(readFileSync(artifact)) !== expectedHash) fail('unpinned_cairn_artifact');
-  const packageRoot = path.dirname(path.dirname(realpathSync(executable)));
-  const entry = (relative) => execFileSync('tar', ['-xOzf', artifact, `package/${relative}`],
-    { maxBuffer: 2_000_000, stdio: ['ignore', 'pipe', 'ignore'] });
-  const manifestBytes = entry('package.json');
-  const manifest = JSON.parse(manifestBytes);
-  if (manifest.name !== 'cairn-memory-local-preview' || !Array.isArray(manifest.files)
-    || !manifest.files.includes('core/contract.mjs') || !manifest.files.includes('adapters/openai/index.mjs')) fail('invalid_cairn_artifact');
-  const sourceHashes = {};
-  for (const relative of new Set([...manifest.files, 'package.json'])) {
-    if (typeof relative !== 'string' || !/^[a-zA-Z0-9_./-]+$/u.test(relative)
-      || path.isAbsolute(relative) || relative.split('/').some((part) => part === '..' || part === '.')) fail('invalid_cairn_artifact');
-    const filename = path.join(packageRoot, relative);
-    if (realpathSync(filename) !== filename || !lstatSync(filename).isFile()) fail('cairn_install_source_mismatch');
-    const installed = hash(readFileSync(filename));
-    if (installed !== hash(entry(relative))) fail('cairn_install_source_mismatch');
-    sourceHashes[relative] = installed;
-  }
-  return { packageRoot, artifactSha256: expectedHash, sourceHashes };
 }
 
 export async function runInstalledCaptureLoop({ session, nodePath, cairnExecutable, cairnArtifact,

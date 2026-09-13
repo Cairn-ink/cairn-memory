@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "candidate-qualification-heldout-v1",
+  "sourceCommit": "133d32757611c3b5224a415077d3a55bcf88a9b2",
+  "artifactSha256": "6cdf309d94cad09fd6dbb221f78fb3f249000979ba67944711d0db23d8b3c9a1",
+  "fixtureSha256": "acbf7efc39ffaece1f9ab93f870a47494530d4cdde37293ada671dfc201c6691",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "mode": "source-bound-v2",
+  "provenance": "Independently authored, root-curated synthetic cases; not fully blinded. Evaluator criteria never entered model inputs.",
+  "status": "completed_with_failures",
+  "scheduledCases": 6,
+  "completedCases": 5,
+  "storedRecords": 6,
+  "generalAccuracyClaim": false,
+  "cases": [
+    { "id": "quoted_third_party", "status": "completed", "httpRequests": 6, "storedRecords": 1, "coldReplayVerified": true, "finding": "Colleague preference remains quoted, not user adoption. Structured scope is incomplete." },
+    { "id": "assistant_proposal_without_adoption", "status": "completed", "httpRequests": 6, "storedRecords": 1, "coldReplayVerified": true, "finding": "Prose preserves suggestion; qualification says direct rather than proposed, with null descriptive fields. Duration question omitted. No invented acceptance observed." },
+    { "id": "temporary_exception", "status": "failed", "httpRequests": 4, "storedRecords": 0, "coldReplayVerified": false, "error": "invalid_model_output", "diagnostic": { "stage": "qualifyCandidates", "layer": "core_validation", "reason": "invalid_qualification" }, "finding": "Fullwidth punctuation in a descriptive value violates canonical input. Independent offline NFKC-only counterfactual compiles; no repair, admission or successful lifecycle was performed." },
+    { "id": "uncertain_reflection", "status": "completed", "httpRequests": 6, "storedRecords": 1, "coldReplayVerified": true, "finding": "Prose retains uncertainty and undecided status. All-null/unknown qualification adds little structured information." },
+    { "id": "explicit_adopted_preference", "status": "completed", "httpRequests": 6, "storedRecords": 1, "coldReplayVerified": true, "finding": "Prose preserves future invitations and formal tone; direct/adopted is supported. Structured applicability and value remain null." },
+    { "id": "reason_challenged_without_new_choice", "status": "completed", "httpRequests": 6, "storedRecords": 2, "coldReplayVerified": true, "finding": "Prose preserves proposal, challenged premise and no choice. Both qualifications are unknown. The user's anaphoric response lacks the assistant antecedent in its selected receipts; no dependency link is established." }
+  ],
+  "accounting": {
+    "requestLimit": 36, "reservationLimitMicroUsd": 180000,
+    "httpRequests": 34, "reservedMicroUsd": 170000,
+    "knownUsageMicroUsd": 8166, "additionalUnknownCostRequests": 17,
+    "phaseRequests": 124, "phaseReservedMicroUsd": 620000,
+    "phaseKnownUsageMicroUsd": 48413, "phaseUnknownCostRequests": 62,
+    "unsettled": 0, "phaseLimitMicroUsd": 50000000
+  },
+  "limitations": [
+    "Five storage completions are not five semantic passes or general reliability.",
+    "No unsupported user adoption observed in stored outputs is not proof it cannot occur.",
+    "No real-user, automatic identity, currentness, rationale-link or answer-quality evaluation.",
+    "Prior failed runs remain unchanged; no failed source was retried or reclassified."
+  ]
+}

@@ -103,6 +103,43 @@ Additional fixed errors are `invalid_extension` and `extension_busy`; existing
 binding/ledger errors also apply. Merely provisioning or passing offline tests
 does not establish provider access, source fidelity or a product default.
 
+### Separately authorized reconciliation capability
+
+The optional local capture judgment port is **not** enabled by either constructor
+above. After specific owner authorization, a trusted operator may call
+`authorizeReconciliationExtension({ledger, policy, extension, authorizationId})`.
+`extension` is the existing expected extraction-extension token, not a discovered
+file. Setup verifies it under the reservation writer lock, requires an open fully
+settled ledger, and exclusively writes a separate fsynced mode0600
+`experiment-reconciliation-extension.json`. The new record binds the exact
+original ledger, policy, extraction token and creation checkpoint; it never
+rewrites their files, allowance or historical reservations. Identical setup is
+idempotent; mismatched or partial state is not overwritten or repaired.
+
+Explicitly inject the returned expected token into
+`createReconciliationExperimentRequestGuard({ledger, policy, extension,
+reconciliationExtension, fetchImpl})`. Both tokens, their files, original binding
+and settled historical prefixes are checked at construction and before each
+request. No file alone enables a method. Existing baseline/extraction-only
+guards remain unchanged even when the new file exists.
+
+The combined guard adds only `cairn_reconcile` on the original baseline model and
+fixed Responses count/generation endpoints, with strict request-scoped schema,
+7024 input/1024 generation-output ceilings and unchanged baseline reservations,
+prices and timeouts. Alternate model selection remains extraction-only. All
+methods share the original cumulative ledger; there is no second allowance,
+automatic retry, fallback or default transport.
+
+These local records contain identifiers/configuration/counters, not keys or
+conversations. They protect against mismatched operator state, not a malicious
+same-user process that can replace both files and expected tokens. Provisioning
+is a real local mutation requiring operator authority; constructing a reviewed
+primitive, passing tests or merging its PR does not supply human consent.
+Before any paid run, freeze fixtures/code, state the attempt/request/reservation
+cap, inspect actual remaining settled budget, and obtain the missing method grant.
+Never create a ledger or new allowance to replenish an existing campaign.
+See [the offline acceptance](plans/reconciliation-guard.md).
+
 Fetch options are exactly `{method, redirect, signal, headers, body}`. Headers
 allow only JSON content type and Bearer authorization. Host messages allow text
 and function-tool history; media, streaming, multiple completions and unknown
@@ -133,6 +170,80 @@ command. The caller provides an existing ledger, a fixed policy and the only
 transport this guard will use. It does not patch global networking or intercept
 an arbitrary Python host. Pinned Hermes routing remains to be verified before a
 real chat experiment; a JavaScript transport test is not that host verification.
+
+## Separate qualification capability
+
+`authorizeQualificationExtension({ledger,policy,authorizationId})` explicitly
+provisions `experiment-qualification-extension.json` against an already bound
+baseline policy and an open, settled ledger. It records the exact ledger/policy,
+fixed `cairn_qualify` method and DEFAULT_MODEL, plus the settled creation
+checkpoint. This independent capability requires neither extraction nor
+reconciliation authorization and grants neither alternative models nor reconcile.
+
+Construct `createQualificationExperimentRequestGuard({ledger,policy,
+qualificationExtension,fetchImpl})` with the returned detached frozen token.
+It adds qualification to the existing baseline methods through the same guard
+engine, reservation ledger and settlement path. The original baseline,
+extraction-extension and reconciliation-extension constructors still reject
+qualification, even when the new file exists. Static adapter paid allowlists
+are unchanged. The guard's schema equality and provider/token bounds remain
+unchanged; valid source anchors do not prove model interpretation is correct.
+
+Provisioning takes the existing SQLite writer lock, uses the shared exclusive
+0600/fsynced binding writer and never initializes or replenishes a ledger.
+Repeated identical authorization returns the same token; changed, partial or
+unsafe bindings fail without overwrite or repair. Token, file, policy and
+settled prefix are checked at construction and on every request, including
+after caller-owned request accessors and before reservation. This protects
+against accidental state mismatch, not a malicious same-user process replacing
+both expected tokens and their files.
+
+The separate `createQualificationLiveSession` uses this capability and the
+existing baseline experiment policy. It permits only baseline extract, qualify
+and classify Responses count/generation routes, with a mandatory injected
+transport and key. The cumulative ledger may be at most US$50; no new allowance
+is created. The real key stays with this parent session while the experiment
+launcher receives only an authenticated loopback capability. The launcher can
+pass `--capture-qualification source-bound-v1` to the installed MCP server.
+
+Neither constructing this primitive nor passing offline tests authorizes a paid
+run. The later pilot operator must separately enforce its US$1/100-HTTP delta,
+freeze new synthetic cases/artifact/operator hashes, inspect remaining settled
+budget, acquire an exclusive one-shot intent and retain failures without retries
+or refunds. This preparation accesses no real key, ledger or model service.
+See [acceptance](plans/qualification-experiment-guard.md).
+
+## Separate candidate qualification capability
+
+`authorizeCandidateQualificationExtension({ledger,policy,authorizationId})`
+creates an independently bound, baseline-only grant for `cairn_qualifyCandidates`.
+It uses `experiment-candidate-qualification-extension.json`, not the v1 file.
+`createCandidateQualificationExperimentRequestGuard` requires the returned
+`candidateQualificationExtension` explicitly. Old factories do not infer it
+from a file's presence, and neither qualifier grant substitutes for the other.
+The same settled ledger, immutable policy and reservation accounting apply.
+
+`createCandidateQualificationLiveSession({ledger,apiKey,fetchImpl,
+candidateQualificationExtension})` restricts that grant further to extract,
+qualifyCandidates and classify count/generation routes. Credentials and the
+one-attempt provider transport remain parent-only; construction discovers none.
+It does not authorize host completion, reconciliation or a larger total budget.
+
+The closed candidate pilot uses six newly authored cases and a 36-HTTP/US$0.18
+additional reservation limit within the existing phase. It preserves an
+exclusive ledger-scoped intent, all failed/not-run cases, bounded private
+synthetic traces and diagnostic events. Cold inspection and replay are request
+free. Full gates and independent review precede execution; passing structural
+capture is not semantic/currentness accuracy. See
+[the frozen acceptance](plans/candidate-qualification-pilot.md).
+
+The separate source-support experiment reuses that exact existing candidate
+capability, but a new closed session additionally permits baseline select/rank.
+The old capture-only sessions and their caps are unchanged. A new fixed attempt
+limits all eight cases to 96 HTTP/US$0.48 reservation, and its installed operator
+enforces six requests per capture/recall phase. It never provisions a new grant,
+resets the ledger or repeats old failures. See the
+[fresh source-support contract](plans/fresh-source-support-pilot.md).
 
 ## What is protected
 

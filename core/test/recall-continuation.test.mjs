@@ -174,7 +174,8 @@ test('T06: another connection mutating during either selection round never emits
     other = openMemoryCore({ path }); t.after(() => other.close());
     const result = await recall(core);
     assert.equal(result.ok, false);
-    assert.ok(['cursor_stale', 'revision_conflict'].includes(result.error.code), JSON.stringify(result));
+    assert.equal(result.error.code, 'index_revision_conflict',
+      'query snapshot freshness detects the namespace mutation immediately after selection');
     assert.deepEqual(Object.keys(result), ['ok', 'error']);
   }
 });

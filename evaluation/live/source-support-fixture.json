@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "id": "source-support-v1",
+  "provenance": "Eight independently authored synthetic source cases; root saw cases before execution, not blinded. Coffee/sugar prompt example and all earlier pilot sources excluded.",
+  "cases": [
+    {
+      "id": "fresh_scope_01",
+      "messages": [
+        {
+          "role": "user",
+          "content": "For recordings of my pottery demonstrations, always keep the kiln temperatures in Celsius. I’ve decided that’s the standard for that series."
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0
+        ],
+        "subject": "user",
+        "property": "temperature unit preference",
+        "value": "Celsius",
+        "scope": "pottery demonstration recording series",
+        "unsupported": "Do not generalize to all activities or measurements."
+      },
+      "query": "What temperature unit should I use for the pottery demonstration recordings?"
+    },
+    {
+      "id": "fresh_exception_02",
+      "messages": [
+        {
+          "role": "user",
+          "content": "我平常騎腳踏車去陶藝教室；今天要搬一箱黏土，所以只這次搭計程車，下次仍會騎車。"
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0
+        ],
+        "subject": "使用者",
+        "property": "前往陶藝教室的交通方式",
+        "value": "通常騎腳踏車；今天例外搭計程車",
+        "scope": "本次搬黏土",
+        "unsupported": "不可改成固定搭計程車或所有搬東西皆搭計程車；實際日期未知。"
+      },
+      "query": "我下次去陶藝教室要怎麼去？今天為什麼不同？"
+    },
+    {
+      "id": "fresh_report_03",
+      "messages": [
+        {
+          "role": "user",
+          "content": "My colleague Priya says she prefers supplier spreadsheets sorted by renewal date. I haven’t decided how I want mine sorted."
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0
+        ],
+        "subject": "Priya",
+        "property": "spreadsheet sorting preference",
+        "value": "renewal date",
+        "scope": "supplier spreadsheets, user-reported",
+        "unsupported": "Not user/team preference or authenticated direct Priya statement; user's preference and sort direction unknown."
+      },
+      "query": "How does Priya want supplier spreadsheets sorted, and have I chosen my own sorting?"
+    },
+    {
+      "id": "fresh_proposal_04",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "You could take the overnight train to save the cost of a hotel."
+        },
+        {
+          "role": "user",
+          "content": "Do those compartments have somewhere to lock a suitcase?"
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0,
+          1
+        ],
+        "subject": "user",
+        "property": "information requested",
+        "value": "whether compartments have a place to lock a suitcase",
+        "scope": "proposed overnight train",
+        "unsupported": "No transport adoption, hotel-saving priority or claimed luggage locks. Suggestion may cite only0; standalone expanded question requires0+1."
+      },
+      "query": "Have I chosen how to travel, and what did I ask about the proposed train?"
+    },
+    {
+      "id": "fresh_uncertain_05",
+      "messages": [
+        {
+          "role": "user",
+          "content": "也許我比較喜歡種香草，而不是觀花植物？目前只試過羅勒，還不確定是不是因為它剛好長得很好。"
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0
+        ],
+        "subject": "使用者",
+        "property": "暫時種植偏好猜想",
+        "value": "可能較喜歡香草而非觀花植物",
+        "scope": "目前只試過羅勒的有限經驗",
+        "unsupported": "不得確定偏好、不喜歡觀花植物或固定偏好成因；未來選擇未知。"
+      },
+      "query": "我是不是已經確定比較喜歡種香草？依據是什麼？"
+    },
+    {
+      "id": "fresh_choice_06",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "For this backup, would you like the 1 TB drive or the 4 TB drive?"
+        },
+        {
+          "role": "user",
+          "content": "I'll take the 4 TB one because my video archive is already larger than 1 TB."
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0,
+          1
+        ],
+        "subject": "user",
+        "property": "backup drive choice",
+        "value": "4 TB drive",
+        "scope": "this backup",
+        "reason": "video archive exceeds1TB",
+        "unsupported": "Not completed purchase, universal drive preference, archive>4TB; brand/exactsizeunknown."
+      },
+      "query": "What backup drive did I choose, and why?"
+    },
+    {
+      "id": "fresh_challenge_07",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "這次登山午餐可以帶花生醬三明治，準備起來很快。"
+        },
+        {
+          "role": "user",
+          "content": "你怎麼又推薦那個？你有先確認同行的人能不能吃嗎？"
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0,
+          1
+        ],
+        "subject": "使用者",
+        "property": "對助理建議的質疑",
+        "value": "是否確認同行者能吃花生醬三明治",
+        "scope": "這次登山午餐",
+        "unsupported": "未提供任何人過敏/飲食限制的答案、口味或最終選擇；不可自造替代方案。"
+      },
+      "query": "登山午餐的建議遇到什麼質疑？目前有定案嗎？"
+    },
+    {
+      "id": "fresh_distinct_08",
+      "messages": [
+        {
+          "role": "user",
+          "content": "My cat's name is Miso. Separately, I bought a chess set yesterday."
+        }
+      ],
+      "criteria": {
+        "necessary_messages": [
+          0
+        ],
+        "claims": [
+          {
+            "subject": "user's cat",
+            "property": "name",
+            "value": "Miso"
+          },
+          {
+            "subject": "user",
+            "property": "purchase",
+            "value": "chess set",
+            "scope": "yesterday relative to message"
+          }
+        ],
+        "unsupported": "Not chess set namedMiso, giftforcat, regularplayinghabit; motivation/date/relationshipunknown."
+      },
+      "query": "What is my cat's name, and what did I buy yesterday?"
+    }
+  ]
+}

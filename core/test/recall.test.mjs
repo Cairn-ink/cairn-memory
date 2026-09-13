@@ -178,7 +178,7 @@ test('query redaction precedes model input and adapter mutation cannot rewrite f
 test('many-to-many navigation deduplicates memory references before fetch', async (t) => {
   const { core } = fixture(t, { select: [({ input }) => {
     const refs = input.maps[0].items.filter((i) => i.type === 'ref' && i.ref.childType === 'memory');
-    assert.equal(refs.length, 2);
+    assert.equal(refs.length, 1, 'private query pages choose one real placement per memory, preserving candidate slots');
     return { refs: [{ namespaceIndex: 0, memoryId: refs[0].ref.childId, revision: refs[0].ref.childRevision }] };
   }] });
   const m = admit(core, 'Cross-topic reference');

@@ -144,11 +144,13 @@ test('missing model, missing/invalid counter, context overrun and adapter timeou
   }
 });
 
-test('incomplete map permits only visible existing choices and forbids speculative creation', async (t) => {
+test('incomplete topic catalog permits only visible existing choices and forbids speculative creation', async (t) => {
   const { core, model } = fixture(t, [newTopic, ({ input }) => ({ items: input.memories.map((m) => ({
     memoryId: m.id, parentIds: [input.map.find((i) => i.type === 'moc' && i.moc.level === 'L1').moc.id],
-  })) })]);
-  for (let i = 0; i < 55; i++) {
+  })) })], { countTokens: () => 1 });
+  // Previously 55 groups plus their references truncated the mixed map. Only
+  // topics now consume this limit; 101 topics isolates the actual catalog cap.
+  for (let i = 0; i < 101; i++) {
     const memory = admit(core, `Seed topic ${i}.`);
     ok(core.applyPlacement({ namespace,
       proposal: { items: [{ memoryId: memory.id, parentIds: [], newL1: { title: `Topic ${i}`, parentL2Ids: [] } }] },
@@ -159,6 +161,8 @@ test('incomplete map permits only visible existing choices and forbids speculati
   error(await core.classifyPlacement(request(core, [target])), 'invalid_model_output');
   const classified = ok(await core.classifyPlacement(request(core, [target])));
   assert.equal(classified.basedOn.mapExhausted, false);
+  assert.equal(model.calls[0].input.map.length, 100);
+  assert.ok(model.calls[0].input.map.every((item) => item.type === 'moc'));
   assert.equal(ok(apply(core, classified)).createdMocs.length, 0);
   assert.equal(model.calls.length, 2);
 });

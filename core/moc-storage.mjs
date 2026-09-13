@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
+import { QUERY_SCAN_LIMIT } from './query-candidates.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -29,6 +30,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     const sources = db.prepare(`SELECT s.memory_revision, memory.* FROM moc_title_sources s
       LEFT JOIN memories memory ON memory.id = s.memory_id WHERE s.moc_id = ?`).all(moc.id);
     if (sources.length === 0 || sources.some((source) => !source.id || source.deleted ||
+        source.currentness !== 'current' ||
         source.owner_id !== moc.owner_id || source.scope !== moc.scope ||
         source.project_id !== moc.project_id || source.revision !== source.memory_revision)) return null;
     return moc.title;
@@ -139,7 +141,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const memories = new Map();
       for (const item of items) {
         const memory = db.prepare(`SELECT * FROM memories WHERE ${namespaceWhere}
-          AND id = ? AND deleted = 0`).get(...boundary(ns), item.memoryId);
+          AND id = ? AND deleted = 0 AND currentness = 'current'`).get(...boundary(ns), item.memoryId);
         if (!memory) fail("memory_not_found");
         if (memory.revision !== expected.get(item.memoryId)) fail("revision_conflict");
         memories.set(item.memoryId, memory);
@@ -315,7 +317,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (expected.size !== ids.length || ids.some((id) => !expected.has(id))) fail("invalid_input");
       const memories = ids.map((id) => {
         const memory = db.prepare(`SELECT * FROM memories WHERE ${namespaceWhere}
-          AND id = ? AND deleted = 0`).get(...boundary(ns), id);
+          AND id = ? AND deleted = 0 AND currentness = 'current'`).get(...boundary(ns), id);
         if (!memory) fail("memory_not_found");
         if (memory.revision !== expected.get(id)) fail("revision_conflict");
         return memoryDto(memory, true);
@@ -338,20 +340,65 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
   const titleExpression = `CASE WHEN NOT EXISTS
     (SELECT 1 FROM moc_title_sources missing LEFT JOIN memories source
       ON source.id = missing.memory_id WHERE missing.moc_id = moc.id AND
-      (source.id IS NULL OR source.deleted = 1 OR source.owner_id != moc.owner_id OR
+      (source.id IS NULL OR source.deleted = 1 OR source.currentness != 'current' OR source.owner_id != moc.owner_id OR
        source.scope != moc.scope OR source.project_id != moc.project_id OR
        source.revision != missing.memory_revision))
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
-  function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label }) {
+  function queryCandidateRows(ns, { score, memoryLabel }) {
+    return transaction(db, () => {
+      assertIndexAvailable(ns);
+      const currentEpoch = epoch(ns);
+      // The existing partial index excludes history/tombstones before traversal.
+      // Require that access path: a missing index must not trigger a full scan.
+      // Projection-rejected current rows still consume the bounded allowance.
+      const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness FROM memories
+        INDEXED BY capture_current_memories WHERE ${namespaceWhere}
+          AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
+        .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
+      const eligible = [];
+      for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
+        if (memory.deleted || memory.currentness !== 'current') continue;
+        // Respect active-generation membership, never bypass its read authority.
+        if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+          AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
+        eligible.push({ memory, score: score(memory.content) });
+      }
+      eligible.sort((a, b) => b.score - a.score ||
+        (a.memory.id < b.memory.id ? -1 : a.memory.id > b.memory.id ? 1 : 0));
+      const rows = eligible.map(({ memory }) => {
+        const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
+          JOIN mocs parent ON parent.id = r.moc_id
+          WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
+            AND parent.level = 1 AND parent.revision = r.moc_revision
+          ORDER BY parent.canonical_title, parent.id LIMIT 1`)
+          .get(memory.id, memory.revision, ...boundary(ns));
+        return { item: placement
+          ? { type: 'ref', ref: memoryRef(placement), label: memoryLabel(memory.content) }
+          : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
+            label: memoryLabel(memory.content) } };
+      });
+      return { rows, epoch: currentEpoch, scanExhausted: scanned.length <= QUERY_SCAN_LIMIT };
+    });
+  }
+
+  function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
+    catalogOnly = false }) {
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
       let rows;
-      if (!parentRef) {
+      if (catalogOnly) {
+        // Classification needs the complete topic catalog, not every placement or
+        // unfiled body. Filter before paging so memory growth cannot crowd it out.
+        rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
+          FROM mocs moc WHERE ${qualifiedNamespace("moc")}
+          ORDER BY moc.level, COALESCE(${titleExpression}, ''), moc.id
+          LIMIT ? OFFSET ?`).all(...boundary(ns), count, offset);
+      } else if (!parentRef) {
         const recall = purpose === "recall" ? 1 : 0;
         const sql = `WITH candidates AS (
           SELECT 'moc' row_kind, moc.level sort_level, COALESCE(${titleExpression}, '') sort_title,
@@ -522,7 +569,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     });
   }
 
-  return Object.freeze({ applyPlacement, linkMocs, classificationSnapshot, mapRows,
+  return Object.freeze({ applyPlacement, linkMocs, classificationSnapshot, mapRows, queryCandidateRows,
     placementRefs, mocDto, invalidateMemory,
     assertEpoch(ns, expected) { return transaction(db, () => assertEpochValue(ns, expected)); } });
 }

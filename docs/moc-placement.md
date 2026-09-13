@@ -18,11 +18,22 @@ not write. Submit the returned proposal separately using `applyPlacement`, with
 the returned memory revisions and index revision. A stale proposal fails without
 creating partial groups or restoring deleted content.
 
-The model sees only selected memories and a bounded, current classification
-map. Content/labels are untrusted data, not instructions. Only visible existing
-IDs at the correct hierarchy level may be selected. If the map is incomplete,
+The model sees only selected memories and a bounded, current MOC-only catalog
+in its existing `map` field. Unrelated memory references, labels and unfiled
+bodies do not consume this catalog's budget. Content/titles are untrusted data,
+not instructions. Only visible existing IDs at the correct hierarchy level may
+be selected. If the topic catalog is incomplete,
 the classifier cannot infer that a topic is absent and propose a new one.
 Failure leaves admitted memories inspectable through model-free `list`/`get`.
+
+The catalog retains both levels, including empty groups and null stale titles,
+and uses the same namespace/index authority as public maps. It presents at most
+100 topics within a 4000-token success envelope; it does not follow additional
+pages. `mapExhausted` in model input and `basedOn` describes this topic catalog,
+so it may be true even when the public mixed map is incomplete. The catalog's
+internal cursors cannot continue public maps. Public `map` inputs, results and
+ordering, and recall navigation, are unchanged. This removes a memory-count
+bottleneck, not the limits on large topic catalogs or a model-quality claim.
 
 `applyPlacement` may also be called directly by a trusted embedding application
 with a handcrafted proposal. Its transaction still validates namespace, IDs,

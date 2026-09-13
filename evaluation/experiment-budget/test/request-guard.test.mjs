@@ -264,6 +264,38 @@ test('L4: unsupported method/model/reasoning and widened extension rejected befo
   assert.equal(guard.getState().requestCount, 0); guard.close();
 });
 
+test('ordered reconciliation is not implicitly authorized by either existing guard', async (t) => {
+  for (const extended of [false, true]) {
+    await t.test(extended ? 'extraction extension' : 'baseline', async (t) => {
+      const { ledger, configured, extension } = extendedWorkspace(t);
+      let sends = 0;
+      const opts = { ledger, policy: configured, fetchImpl: async () => { sends += 1; assert.fail('no I/O'); } };
+      const guard = extended
+        ? createExtendedExperimentRequestGuard({ ...opts, extension })
+        : createExperimentRequestGuard(opts);
+      const input = {
+        messages: [{ index: 0, role: 'user', content: 'Move the review to Monday.' }],
+        items: [{ index: 0, content: 'Review is Monday.', kind: 'fact', sourceIndices: [0] }],
+        candidates: [{ index: 0, content: 'Review is Friday.', kind: 'fact',
+          receipts: [{ role: 'user', excerpt: 'Review is Friday.' }] }],
+      };
+      try {
+        for (const generation of [false, true]) {
+          const body = { ...extractionBody(DEFAULT_MODEL, generation),
+            input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(input) }] }],
+            text: { format: { name: 'cairn_reconcile', type: 'json_schema', strict: true,
+              schema: schemasFor('reconcile', input) } } };
+          await assert.rejects(guard.cairnFetch(generation ? urls.generation : urls.count, options(body)),
+            guardError('unsupported_request'));
+        }
+        assert.equal(guard.getState().requestCount, 0);
+        assert.equal(guard.getState().reservedMicroUsd, 0);
+        assert.equal(sends, 0);
+      } finally { guard.close(); }
+    });
+  }
+});
+
 test('L4/L5: alternate count and baseline host retain shared request cap without model fallback', async (t) => {
   const { ledger, configured, extension } = extendedWorkspace(t, { requestCap: 2 });
   const calls = [];

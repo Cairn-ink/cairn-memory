@@ -48,6 +48,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:core
       - run: npm run demo:store
+      - run: npm run demo:history
       - run: npm run demo:moc
       - run: npm run demo:recall
       - run: npm run demo:admission

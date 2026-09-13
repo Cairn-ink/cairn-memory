@@ -33,6 +33,21 @@ profile, which is a programmatic adapter option. MCP `remember_memory` saves
 explicit content directly; it does not run that extractor. Those extraction
 scores therefore do not certify the MCP recall experience.
 
+The [paired update-reliability experiment](docs/evidence/qualified-comparison.md)
+also remains failed: the experimental source-ordered capture path can retire an
+unchanged fact or another person's still-valid preference. A source receipt and
+model-declared update labels are not a truth guarantee. This is separate from
+the MCP tools' explicit remember/correct operations; no automatic transcript
+capture or new quality certification is implied.
+
+The latest [eight-case source-support pilot](evaluations/results/source-support-v1.json)
+stored and recalled all ten records but still showed false adoption and lost
+uncertainty. Optional [source-only context](docs/source-evidence-context.md)
+separates retained passages from generated interpretations; it does not certify
+source completeness or downstream answers. The
+[integration inventory](docs/source-reliability-integration.md) distinguishes
+shipped security work, developer-preview changes and unfinished reliability goals.
+
 ## Try the local memory layer
 
 Prerequisites: Node >=22.16, npm and `tar`. Model-free remember/inspect/correct/
@@ -51,6 +66,12 @@ installer builds and installs the inspected archive, downloads pinned public npm
 dependencies without install scripts, and prints a generic stdio command/args.
 Copy that command/args into your client's local MCP configuration; it does not
 modify client settings for you. Add `--project PROJECT_ID` for project scope.
+
+For explicit submitted-message capture, add
+`--capture-qualification source-bound-v2` to the install command. The generated
+settings then expose a sixth tool, `capture_memory`; omission keeps five tools.
+See the [capture → source-only recall → inspection walkthrough](packaging/README.md#opt-in-to-submitted-source-capture)
+for key setup, model costs and interpretation limits. This is not passive capture.
 
 The directory contains `app/` (replaceable installation), `data/` (persistent
 memory location), and `installation-receipt.json` (artifact hash, local paths,
@@ -94,7 +115,7 @@ The walkthrough does not impose a provider account spending limit.
 | --- | --- |
 | `remember_memory` | Explicitly save one memory and its receipt |
 | `recall_memory` | Model-guided retrieval of current memories and receipts |
-| `inspect_memory` | List memories or inspect an ID and current revision |
+| `inspect_memory` | List memories (optionally active/historical), or inspect an ID, revision and receipts |
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
 

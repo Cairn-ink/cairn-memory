@@ -60,7 +60,7 @@ function topic(core, db, memories, title = 'Synthetic topic') {
     proposal: { items: memories.map((m) => ({ memoryId: m.id, parentIds: [], newL1: { title, parentL2Ids: [] } })) } })).createdMocs[0];
 }
 function rawMemories(db, count) {
-  const insert = db.prepare("INSERT INTO memories VALUES (?,'rebuild','personal','',?,?,'fact','explicit',1,1,0,'2025-01-01','2025-01-01','unfiled')");
+  const insert = db.prepare("INSERT INTO memories (id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at,filing_status) VALUES (?,'rebuild','personal','',?,?,'fact','explicit',1,1,0,'2025-01-01','2025-01-01','unfiled')");
   db.exec('BEGIN');
   for (let i = 0; i < count; i++) { const id = `synthetic-${String(i).padStart(5, '0')}`; insert.run(id, id, id); }
   db.exec('COMMIT');
@@ -318,7 +318,7 @@ test('R01 foreign and orphan reference gaps consume bounded pages without exposi
   for (const includeOwned of [false, true]) {
     const { core, db } = fixture(t);
     const count = 90;
-    const memory = db.prepare("INSERT INTO memories VALUES (?,?,'personal','',?,?,'fact','explicit',1,1,0,'2025','2025','unfiled')");
+    const memory = db.prepare("INSERT INTO memories (id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at,filing_status) VALUES (?,?,'personal','',?,?,'fact','explicit',1,1,0,'2025','2025','unfiled')");
     const moc = db.prepare("INSERT INTO mocs VALUES (?,?,'personal','',?,?,?,1,'2025','2025')");
     const source = db.prepare('INSERT INTO moc_title_sources VALUES (?,?,1)');
     const membership = db.prepare('INSERT INTO moc_memory_refs VALUES (?,1,?,1)');

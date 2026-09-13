@@ -41,8 +41,25 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
 - `list`: metadata only, including unfiled memories, bounded keyset pages beyond
   any recent-40 window. No content or receipt excerpts are returned here.
 - `get`: content with separately paginated receipts at a consistent revision.
+- Optional manual [claim qualification](claim-qualification.md) on admission,
+  with immutable source bindings and opt-in `get.includeQualification` inspection.
+- Trusted-manual [qualified transitions](qualified-transition.md) bind single
+  claims to immutable server-generated slots and enforce source-backed guards
+  before retiring an already-admitted predecessor. Legacy retirement is fenced
+  whenever either endpoint is qualified; automatic unqualified retirement remains
+  unprotected by these guards.
+- `transitionQualifiedSet`: retire 1–5 explicitly revision-guarded qualified
+  predecessors into one already-admitted replacement, only with complete current
+  slot coverage and validated sources. Existing plus new incoming history links
+  are limited to five; all writes succeed or roll back together. This local-only
+  trusted-manual method does not change pair transitions or automatic capture.
 - `correct` and `forget`: revision checks, replacement/removal of active receipts,
   persistent suppression and atomic invalidation of inspection cursors.
+- Explicit [supersede](supersession.md): atomically admit a replacement and
+  preserve the predecessor as historical, with source-bound transition metadata.
+  Inspection `list/get` includes labeled history; current recall/navigation
+  excludes it. Opt-in [ordered capture](capture.md#opt-in-source-ordered-reconciliation)
+  composes this history mechanism without promoting inferred claims to explicit authority.
 
 The exact inputs, result fields and acceptance gates are in the
 [S2a plan](plans/s2-storage-contract.md). Unknown fields are rejected. The subsequent
@@ -75,10 +92,13 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1, v3, v4, v5 or v6 format performs an atomic upgrade to v7, retaining
+Opening the committed v1, v3, v4, v5, v6, v7, v8, v9 or v10 format performs an atomic upgrade to v11, retaining
 existing memory/source data, revisions and suppression. Back up the file while
-all writers are closed before upgrading meaningful data. Old v1/v3/v4/v5/v6 binaries cannot
-open v7; there is no downgrade tool. The unmerged engine draft reserved v2; this
+all older-runtime processes and connections (including idle readers) are closed
+before upgrading meaningful data. Mixed-version coexistence is unsupported;
+an already-open old process is not retroactively fenced. Older binaries cannot
+open v11; there is no downgrade tool. Existing receipts remain unordered; no past
+chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
 not reset. Reconciliation with that draft belongs to the later engine work.

@@ -1,0 +1,657 @@
+{
+  "version": "currentness-review-v1",
+  "reviewerType": "agent",
+  "reportDigest": "79ec51eb0718999dc019adc4ed64540f19b55f87b9045962fe0a25f9e0a74238",
+  "assertions": [
+    {
+      "caseId": "C1-explicit-update",
+      "namespaceKey": "primary",
+      "memoryId": "8149c350-d71f-44c7-af93-06477be4485b",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C1-explicit-update",
+      "namespaceKey": "primary",
+      "memoryId": "6d982276-bc73-4e04-8514-227aa6a9790a",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C1-explicit-update",
+      "namespaceKey": "primary",
+      "memoryId": "8149c350-d71f-44c7-af93-06477be4485b",
+      "revision": 3,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": true
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "namespaceKey": "primary",
+      "memoryId": "b45475b1-9718-44ab-a220-9386331cddd3",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "namespaceKey": "primary",
+      "memoryId": "f0f8ea1e-5f83-40db-ab05-5e8051e29a4f",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "namespaceKey": "primary",
+      "memoryId": "8d176857-8203-48c3-a2b4-a34685dc2f50",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "namespaceKey": "primary",
+      "memoryId": "50b964a0-bc5f-477b-816e-141b14744659",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "namespaceKey": "primary",
+      "memoryId": "93042d34-8433-45dc-be68-3583abfc54ad",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "namespaceKey": "primary",
+      "memoryId": "be961b6b-613c-4c57-9458-6ed489c571e6",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "namespaceKey": "primary",
+      "memoryId": "7a46a170-a934-48d1-a222-7bc4afa043c2",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "namespaceKey": "primary",
+      "memoryId": "ac1ca558-69ac-4ac5-9e22-5eee48db1fab",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "namespaceKey": "primary",
+      "memoryId": "54419397-aa21-49ec-82c0-dd5bd93874f9",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "namespaceKey": "primary",
+      "memoryId": "b0daf29c-cecc-4156-84ec-37a0b50c6488",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "namespaceKey": "primary",
+      "memoryId": "7a46a170-a934-48d1-a222-7bc4afa043c2",
+      "revision": 3,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": true
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "namespaceKey": "primary",
+      "memoryId": "44b9e254-ac0f-45ad-a988-3ebaf16a2286",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "namespaceKey": "secondary",
+      "memoryId": "9f07cc49-313d-49bd-8ca6-15d5b92b1c8d",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "namespaceKey": "primary",
+      "memoryId": "cf568f6c-b200-4eef-b91a-3cb8f7e63cf6",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "namespaceKey": "primary",
+      "memoryId": "fbdb7170-b8c5-422b-b6b1-75ca686e7cf6",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "namespaceKey": "primary",
+      "memoryId": "cf568f6c-b200-4eef-b91a-3cb8f7e63cf6",
+      "revision": 3,
+      "supported": true,
+      "currentnessValid": false,
+      "retirementJustified": false
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "namespaceKey": "primary",
+      "memoryId": "dabdc73a-3602-405d-a909-aace9075d5d5",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "namespaceKey": "primary",
+      "memoryId": "41038cbc-bb53-4504-9528-d95c96aad648",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "namespaceKey": "primary",
+      "memoryId": "bde14ba6-b20c-479a-ad88-f01fe15ec23e",
+      "revision": 2,
+      "supported": true,
+      "currentnessValid": true,
+      "retirementJustified": null
+    }
+  ],
+  "required": [
+    {
+      "caseId": "C1-explicit-update",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "6d982276-bc73-4e04-8514-227aa6a9790a",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C1-explicit-update",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "8149c350-d71f-44c7-af93-06477be4485b",
+          "revision": 3
+        }
+      ]
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "b45475b1-9718-44ab-a220-9386331cddd3",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "f0f8ea1e-5f83-40db-ab05-5e8051e29a4f",
+          "revision": 2
+        },
+        {
+          "namespaceKey": "primary",
+          "memoryId": "8d176857-8203-48c3-a2b4-a34685dc2f50",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "50b964a0-bc5f-477b-816e-141b14744659",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "be961b6b-613c-4c57-9458-6ed489c571e6",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "requiredIndex": 2,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "93042d34-8433-45dc-be68-3583abfc54ad",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "ac1ca558-69ac-4ac5-9e22-5eee48db1fab",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "54419397-aa21-49ec-82c0-dd5bd93874f9",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "requiredIndex": 2,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "b0daf29c-cecc-4156-84ec-37a0b50c6488",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "requiredIndex": 3,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "7a46a170-a934-48d1-a222-7bc4afa043c2",
+          "revision": 3
+        }
+      ]
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "44b9e254-ac0f-45ad-a988-3ebaf16a2286",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "secondary",
+          "memoryId": "9f07cc49-313d-49bd-8ca6-15d5b92b1c8d",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "requiredIndex": 2,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "44b9e254-ac0f-45ad-a988-3ebaf16a2286",
+          "revision": 2
+        },
+        {
+          "namespaceKey": "secondary",
+          "memoryId": "9f07cc49-313d-49bd-8ca6-15d5b92b1c8d",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "fbdb7170-b8c5-422b-b6b1-75ca686e7cf6",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "fbdb7170-b8c5-422b-b6b1-75ca686e7cf6",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "requiredIndex": 0,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "bde14ba6-b20c-479a-ad88-f01fe15ec23e",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "requiredIndex": 1,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "41038cbc-bb53-4504-9528-d95c96aad648",
+          "revision": 2
+        },
+        {
+          "namespaceKey": "primary",
+          "memoryId": "bde14ba6-b20c-479a-ad88-f01fe15ec23e",
+          "revision": 2
+        }
+      ]
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "requiredIndex": 2,
+      "met": true,
+      "evidence": [
+        {
+          "namespaceKey": "primary",
+          "memoryId": "dabdc73a-3602-405d-a909-aace9075d5d5",
+          "revision": 2
+        }
+      ]
+    }
+  ],
+  "forbidden": [
+    {
+      "caseId": "C1-explicit-update",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "forbiddenIndex": 1,
+      "absent": true
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "forbiddenIndex": 1,
+      "absent": true
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "forbiddenIndex": 1,
+      "absent": true
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "forbiddenIndex": 2,
+      "absent": true
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "forbiddenIndex": 1,
+      "absent": true
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "forbiddenIndex": 2,
+      "absent": true
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "forbiddenIndex": 0,
+      "absent": true
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "forbiddenIndex": 1,
+      "absent": true
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "forbiddenIndex": 2,
+      "absent": true
+    }
+  ],
+  "queries": [
+    {
+      "caseId": "C1-explicit-update",
+      "queryId": "c1-current",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "6d982276-bc73-4e04-8514-227aa6a9790a",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C2-proposal-and-uncertainty",
+      "queryId": "c2-confirmed",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "b45475b1-9718-44ab-a220-9386331cddd3",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C3-attributed-disagreement",
+      "queryId": "c3-accounts",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "50b964a0-bc5f-477b-816e-141b14744659",
+          "revision": 2,
+          "relevant": true
+        },
+        {
+          "memoryId": "be961b6b-613c-4c57-9458-6ed489c571e6",
+          "revision": 2,
+          "relevant": true
+        },
+        {
+          "memoryId": "93042d34-8433-45dc-be68-3583abfc54ad",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "queryId": "c4-reviews",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "ac1ca558-69ac-4ac5-9e22-5eee48db1fab",
+          "revision": 2,
+          "relevant": true
+        },
+        {
+          "memoryId": "b0daf29c-cecc-4156-84ec-37a0b50c6488",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C4-subject-and-property",
+      "queryId": "c4-deployment",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "54419397-aa21-49ec-82c0-dd5bd93874f9",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "queryId": "c5-primary",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "44b9e254-ac0f-45ad-a988-3ebaf16a2286",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C5-namespace-isolation",
+      "queryId": "c5-secondary",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "9f07cc49-313d-49bd-8ca6-15d5b92b1c8d",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C6-historical-quotation",
+      "queryId": "c6-current",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "fbdb7170-b8c5-422b-b6b1-75ca686e7cf6",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    },
+    {
+      "caseId": "C7-evidence-injection",
+      "queryId": "c7-authorized",
+      "answered": true,
+      "relevance": [
+        {
+          "memoryId": "bde14ba6-b20c-479a-ad88-f01fe15ec23e",
+          "revision": 2,
+          "relevant": true
+        },
+        {
+          "memoryId": "dabdc73a-3602-405d-a909-aace9075d5d5",
+          "revision": 2,
+          "relevant": true
+        }
+      ]
+    }
+  ]
+}

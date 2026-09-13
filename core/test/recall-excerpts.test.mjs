@@ -68,7 +68,7 @@ test('unrelated and absent answers remain empty without ranking fallback', async
   }
 });
 
-test('public recall maps and classification inputs retain their original prefix labels', async (t) => {
+test('public maps retain prefix labels while classification uses a separate topic catalog', async (t) => {
   const { core, model } = fixture(t);
   const target = admit(core, filler + fact);
   const before = ok(core.map({ namespace }));
@@ -85,7 +85,11 @@ test('public recall maps and classification inputs retain their original prefix 
   ok(await core.classifyPlacement({ namespace, memoryIds: [target.id],
     expectedMemoryRevisions: [{ memoryId: target.id, revision: target.revision }],
     mapRevision: classificationBefore.indexRevision }));
-  assert.deepEqual(classificationInput.map, classificationBefore.items);
+  // Public map compatibility remains unchanged. Classification now intentionally
+  // excludes memory references; its selected source still carries the full body.
+  assert.deepEqual(classificationInput.map, []);
+  assert.equal(classificationInput.mapExhausted, true);
+  assert.equal(classificationInput.memories[0].content, filler + fact);
   assert.deepEqual(core.map({ namespace, query: 'saffron' }),
     { ok: false, error: { code: 'invalid_input', retryable: false } });
 });

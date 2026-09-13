@@ -1,0 +1,3771 @@
+{
+  "version": "query-candidates-live-v1",
+  "kind": "compact synthetic evidence export",
+  "provenance": {
+    "commits": {
+      "baseline": "b3429f1246c942b3b8adcb68e955d68abb7716c2",
+      "candidate": "d1381aed856effd4448236a872cf3ecaced92fe9",
+      "support": "5dbf73c78d8c4b4196dd016db39a766b25a7da39"
+    },
+    "fixtureSha256": "3273cdc78202deb00a590dae17b8887ebb5f3404af7e568f4181bca047311beb",
+    "operatorSha256": "53d73b7e30174f4733e4a4f026e7088f44ecc44ed27f01c233515a0899450ad2",
+    "nodeVersion": "v22.16.0",
+    "modelId": "gpt-4.1-mini-2025-04-14",
+    "startedAt": "2026-09-13T03:10:12.649Z",
+    "completedAt": "2026-09-13T03:11:59.651Z",
+    "schedule": "Frozen fixture order; baseline first on odd-numbered cases, candidate first on even",
+    "fixtureAuthorBoundary": "Independently authored metadata held out from implementation/test authors; author saw specification and audited implementation; not blinded",
+    "omissions": [
+      "Local database paths and operational authorization/policy bindings",
+      "Full distractor corpus snapshots: deterministic source recipe, corpus hashes and source-bound targets retained",
+      "Full selection/ranking inputs and HTTP envelopes: trace summaries, output refs, usage/accounting and raw artifact hashes retained",
+      "Incremental private checkpoints: raw artifact hashes retained"
+    ],
+    "hashEncoding": "Corpus and input hashes use UTF-8 JSON.stringify(value), retained array order, no trailing newline. Artifact hashes use original file bytes.",
+    "hashLimit": "Hashes bind private omitted artifacts; public export alone cannot reconstruct those artifacts.",
+    "corpusRecipe": "In each separate store, explicitly admit size-targets.length distractors first, content = distractorPrefix + ' ' + one-based ordinal + '.', followed by targets in fixture order; synthetic user receipts repeat the content. File distractors under AAA Archive, targets under ZZZ Target topic or ZZZ Recipes for misfiled; unfiled targets remain unfiled. UUIDs and timestamps are generated independently per store."
+  },
+  "accounting": {
+    "before": {
+      "requests": 8,
+      "reservedMicroUsd": 40000,
+      "state": "open",
+      "unsettled": 0,
+      "knownUsageMicroUsd": 3102,
+      "unknownCostRequests": 4
+    },
+    "after": {
+      "requests": 62,
+      "reservedMicroUsd": 310000,
+      "state": "open",
+      "unsettled": 0,
+      "knownUsageMicroUsd": 35212,
+      "unknownCostRequests": 31
+    },
+    "attempt": {
+      "requests": 54,
+      "reservedMicroUsd": 270000,
+      "knownUsageMicroUsd": 32110,
+      "unknownCostRequests": 27,
+      "allowedRequests": 80,
+      "allowedMicroUsd": 400000,
+      "halted": false
+    },
+    "note": "Known usage excludes unknown-cost calls and is not the total bill. Conservative reservations are not refunded."
+  },
+  "summary": {
+    "baseline": {
+      "caseArms": 6,
+      "observed": 6,
+      "positiveCases": 5,
+      "positiveCasesWithAllTargets": 2,
+      "requiredTargetRecords": 6,
+      "returnedRequiredTargetRecords": 2,
+      "negativeCases": 1,
+      "negativeCasesWithEmptyRecall": 1,
+      "irrelevantReturnedMemories": 0,
+      "requests": 26
+    },
+    "candidate": {
+      "caseArms": 6,
+      "observed": 6,
+      "positiveCases": 5,
+      "positiveCasesWithAllTargets": 5,
+      "requiredTargetRecords": 6,
+      "returnedRequiredTargetRecords": 6,
+      "negativeCases": 1,
+      "negativeCasesWithEmptyRecall": 1,
+      "irrelevantReturnedMemories": 0,
+      "requests": 28
+    }
+  },
+  "arms": [
+    {
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "size": 224,
+      "placement": "late",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "c887f643-e534-49bd-94dd-733031573045",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:10:19.008Z",
+              "updatedAt": "2026-09-13T03:10:19.023Z",
+              "content": "The Velmora lighthouse prism requires inspection every seventeen days."
+            },
+            "receipts": [
+              {
+                "id": "bb7ae7ba-86fa-446b-9184-2fb622d3c7ef",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-223",
+                "role": "user",
+                "excerpt": "The Velmora lighthouse prism requires inspection every seventeen days.",
+                "createdAt": "2026-09-13T03:10:19.008Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "cd50a117-2a06-4621-b7ca-a58ab290671e",
+                "mocRevision": 1,
+                "title": "ZZZ Target topic"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": false
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "What is the inspection interval for the Velmora lighthouse prism?",
+        "startedAt": "2026-09-13T03:10:19.227Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "completedAt": "2026-09-13T03:10:24.270Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 0,
+        "allRequiredTargetsReturned": false,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 224,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "0d2e0c4c4f419485b635fb6de38fde433489bf93a44acc967f9855a43652435d",
+        "coldBefore": "0d2e0c4c4f419485b635fb6de38fde433489bf93a44acc967f9855a43652435d",
+        "coldAfter": "0d2e0c4c4f419485b635fb6de38fde433489bf93a44acc967f9855a43652435d"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        1,
+        2
+      ]
+    },
+    {
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "size": 224,
+      "placement": "late",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "23dc1c4a-48dc-4e3b-8112-0535bb6080c1",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:10:30.752Z",
+              "updatedAt": "2026-09-13T03:10:30.766Z",
+              "content": "The Velmora lighthouse prism requires inspection every seventeen days."
+            },
+            "receipts": [
+              {
+                "id": "5d909b75-0989-4a68-8f49-c36303312092",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-223",
+                "role": "user",
+                "excerpt": "The Velmora lighthouse prism requires inspection every seventeen days.",
+                "createdAt": "2026-09-13T03:10:30.752Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "489793ba-d710-4a2e-9b4f-cb8853371f0e",
+                "mocRevision": 1,
+                "title": "ZZZ Target topic"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "What is the inspection interval for the Velmora lighthouse prism?",
+        "startedAt": "2026-09-13T03:10:30.957Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "23dc1c4a-48dc-4e3b-8112-0535bb6080c1",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:10:30.752Z",
+                  "updatedAt": "2026-09-13T03:10:30.766Z",
+                  "content": "The Velmora lighthouse prism requires inspection every seventeen days."
+                },
+                "receipts": [
+                  {
+                    "id": "5d909b75-0989-4a68-8f49-c36303312092",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-223",
+                    "role": "user",
+                    "excerpt": "The Velmora lighthouse prism requires inspection every seventeen days.",
+                    "createdAt": "2026-09-13T03:10:30.752Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "completedAt": "2026-09-13T03:10:38.125Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 1,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 224,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "86901e3b1d19869a1b576cad10c69b67fb75314e3a5f8c4e740740a2269f49db",
+        "coldBefore": "86901e3b1d19869a1b576cad10c69b67fb75314e3a5f8c4e740740a2269f49db",
+        "coldAfter": "86901e3b1d19869a1b576cad10c69b67fb75314e3a5f8c4e740740a2269f49db"
+      },
+      "requestCount": 6,
+      "traceSequences": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "size": 224,
+      "placement": "unfiled",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "d8fa0074-e654-4131-bb63-9f1d4258574f",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 1,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:10:44.616Z",
+              "updatedAt": "2026-09-13T03:10:44.616Z",
+              "content": "The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl."
+            },
+            "receipts": [
+              {
+                "id": "3e9ff4fe-54c2-48b3-86ed-a6ac9a0e0160",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-223",
+                "role": "user",
+                "excerpt": "The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl.",
+                "createdAt": "2026-09-13T03:10:44.616Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "Where is the spare key for the Oskelin observatory cabinet?",
+        "startedAt": "2026-09-13T03:10:44.822Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "d8fa0074-e654-4131-bb63-9f1d4258574f",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 1,
+                  "state": "active",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:10:44.616Z",
+                  "updatedAt": "2026-09-13T03:10:44.616Z",
+                  "content": "The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl."
+                },
+                "receipts": [
+                  {
+                    "id": "3e9ff4fe-54c2-48b3-86ed-a6ac9a0e0160",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-223",
+                    "role": "user",
+                    "excerpt": "The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl.",
+                    "createdAt": "2026-09-13T03:10:44.616Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "completedAt": "2026-09-13T03:10:51.314Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 1,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 224,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "90679a7849870ef99e4acded70875c75606d1f077588ae0b5b553479fa189042",
+        "coldBefore": "90679a7849870ef99e4acded70875c75606d1f077588ae0b5b553479fa189042",
+        "coldAfter": "90679a7849870ef99e4acded70875c75606d1f077588ae0b5b553479fa189042"
+      },
+      "requestCount": 6,
+      "traceSequences": [
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "size": 224,
+      "placement": "unfiled",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "0d466ba6-8afa-4f19-b31d-8325cf5a64a4",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 1,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:10:57.963Z",
+              "updatedAt": "2026-09-13T03:10:57.963Z",
+              "content": "The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl."
+            },
+            "receipts": [
+              {
+                "id": "8235c597-e011-489e-8bc1-94e16f3c4a0f",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-223",
+                "role": "user",
+                "excerpt": "The spare key for the Oskelin observatory cabinet is inside the violet ceramic owl.",
+                "createdAt": "2026-09-13T03:10:57.963Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": false
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "Where is the spare key for the Oskelin observatory cabinet?",
+        "startedAt": "2026-09-13T03:10:58.225Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:03.072Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 0,
+        "allRequiredTargetsReturned": false,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 224,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "5cb680ac7dee92b5215d893134d0262a416ef2d77eb18a0675a3055e6c2fb210",
+        "coldBefore": "5cb680ac7dee92b5215d893134d0262a416ef2d77eb18a0675a3055e6c2fb210",
+        "coldAfter": "5cb680ac7dee92b5215d893134d0262a416ef2d77eb18a0675a3055e6c2fb210"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        9,
+        10
+      ]
+    },
+    {
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "size": 224,
+      "placement": "misfiled",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "9989c930-91d5-43fa-bbd4-465a6de6a32a",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:11.158Z",
+              "updatedAt": "2026-09-13T03:11:11.181Z",
+              "content": "Transport the Teralune orchid bulbs in a perforated cedar crate."
+            },
+            "receipts": [
+              {
+                "id": "604748ae-8b81-49cc-bf0f-488a73d7bdcb",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-222",
+                "role": "user",
+                "excerpt": "Transport the Teralune orchid bulbs in a perforated cedar crate.",
+                "createdAt": "2026-09-13T03:11:11.158Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "3dea86b2-6717-4a87-ac67-f15fc909f201",
+                "mocRevision": 2,
+                "title": "ZZZ Recipes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": false
+        },
+        {
+          "targetIndex": 1,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "a61f6d56-5489-4677-a101-d133cae599b8",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:11.206Z",
+              "updatedAt": "2026-09-13T03:11:11.228Z",
+              "content": "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport."
+            },
+            "receipts": [
+              {
+                "id": "094206ce-2a24-4783-be25-3d887d23799e",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-223",
+                "role": "user",
+                "excerpt": "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport.",
+                "createdAt": "2026-09-13T03:11:11.206Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "3dea86b2-6717-4a87-ac67-f15fc909f201",
+                "mocRevision": 2,
+                "title": "ZZZ Recipes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": false
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "What container and temperature are required for transporting the Teralune orchid bulbs?",
+        "startedAt": "2026-09-13T03:11:11.541Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:17.081Z"
+      },
+      "checks": {
+        "requiredTargets": 2,
+        "returnedRequiredTargets": 0,
+        "allRequiredTargetsReturned": false,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 2,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 224,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "6959dc3a35d04dbbc54fa8314c3a4454a108819615deca205acad61f27b58a6c",
+        "coldBefore": "6959dc3a35d04dbbc54fa8314c3a4454a108819615deca205acad61f27b58a6c",
+        "coldAfter": "6959dc3a35d04dbbc54fa8314c3a4454a108819615deca205acad61f27b58a6c"
+      },
+      "requestCount": 6,
+      "traceSequences": [
+        11,
+        12,
+        13
+      ]
+    },
+    {
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "size": 224,
+      "placement": "misfiled",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "c28ab857-fb03-4c9c-83bb-dcce0e7cf81e",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:23.598Z",
+              "updatedAt": "2026-09-13T03:11:23.612Z",
+              "content": "Transport the Teralune orchid bulbs in a perforated cedar crate."
+            },
+            "receipts": [
+              {
+                "id": "07bdcc89-7202-479d-aa00-89c75f93f86c",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-222",
+                "role": "user",
+                "excerpt": "Transport the Teralune orchid bulbs in a perforated cedar crate.",
+                "createdAt": "2026-09-13T03:11:23.598Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "672a5602-7e52-485c-a656-ce487f555daa",
+                "mocRevision": 2,
+                "title": "ZZZ Recipes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        },
+        {
+          "targetIndex": 1,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "33fa7d57-44f7-44f1-a1a9-fc61550c7fa3",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:23.624Z",
+              "updatedAt": "2026-09-13T03:11:23.636Z",
+              "content": "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport."
+            },
+            "receipts": [
+              {
+                "id": "e8c0951c-2135-41e6-938b-7a5ed80bbb44",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-223",
+                "role": "user",
+                "excerpt": "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport.",
+                "createdAt": "2026-09-13T03:11:23.624Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "672a5602-7e52-485c-a656-ce487f555daa",
+                "mocRevision": 2,
+                "title": "ZZZ Recipes"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "What container and temperature are required for transporting the Teralune orchid bulbs?",
+        "startedAt": "2026-09-13T03:11:23.868Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "c28ab857-fb03-4c9c-83bb-dcce0e7cf81e",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:11:23.598Z",
+                  "updatedAt": "2026-09-13T03:11:23.612Z",
+                  "content": "Transport the Teralune orchid bulbs in a perforated cedar crate."
+                },
+                "receipts": [
+                  {
+                    "id": "07bdcc89-7202-479d-aa00-89c75f93f86c",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-222",
+                    "role": "user",
+                    "excerpt": "Transport the Teralune orchid bulbs in a perforated cedar crate.",
+                    "createdAt": "2026-09-13T03:11:23.598Z"
+                  }
+                ],
+                "receiptCount": 1
+              },
+              {
+                "memory": {
+                  "id": "33fa7d57-44f7-44f1-a1a9-fc61550c7fa3",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:11:23.624Z",
+                  "updatedAt": "2026-09-13T03:11:23.636Z",
+                  "content": "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport."
+                },
+                "receipts": [
+                  {
+                    "id": "e8c0951c-2135-41e6-938b-7a5ed80bbb44",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-223",
+                    "role": "user",
+                    "excerpt": "Keep the Teralune orchid bulbs at eleven degrees Celsius during transport.",
+                    "createdAt": "2026-09-13T03:11:23.624Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:31.145Z"
+      },
+      "checks": {
+        "requiredTargets": 2,
+        "returnedRequiredTargets": 2,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 1,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 224,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "e28622090ca3173ec2ee5398f059adf3e886b8c242e5af70835e4c1f44b94871",
+        "coldBefore": "e28622090ca3173ec2ee5398f059adf3e886b8c242e5af70835e4c1f44b94871",
+        "coldAfter": "e28622090ca3173ec2ee5398f059adf3e886b8c242e5af70835e4c1f44b94871"
+      },
+      "requestCount": 6,
+      "traceSequences": [
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "size": 16,
+      "placement": "late",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "22a40d3c-a9c7-4daf-8be4-814c045aa647",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:31.963Z",
+              "updatedAt": "2026-09-13T03:11:31.975Z",
+              "content": "我每天搭乘霧港電車上班。"
+            },
+            "receipts": [
+              {
+                "id": "cbc756bc-a9db-48ec-9c46-baa767255380",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-15",
+                "role": "user",
+                "excerpt": "我每天搭乘霧港電車上班。",
+                "createdAt": "2026-09-13T03:11:31.963Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "356201c9-7ebe-4303-8998-2b1d2bcf230b",
+                "mocRevision": 1,
+                "title": "ZZZ Target topic"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "我的通勤方式是什麼？",
+        "startedAt": "2026-09-13T03:11:32.052Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "22a40d3c-a9c7-4daf-8be4-814c045aa647",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:11:31.963Z",
+                  "updatedAt": "2026-09-13T03:11:31.975Z",
+                  "content": "我每天搭乘霧港電車上班。"
+                },
+                "receipts": [
+                  {
+                    "id": "cbc756bc-a9db-48ec-9c46-baa767255380",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-15",
+                    "role": "user",
+                    "excerpt": "我每天搭乘霧港電車上班。",
+                    "createdAt": "2026-09-13T03:11:31.963Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:38.955Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 1,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 16,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "00c676aa1b2fd155988361f1f16d67d326e34713a4bd42782af141fd5939467f",
+        "coldBefore": "00c676aa1b2fd155988361f1f16d67d326e34713a4bd42782af141fd5939467f",
+        "coldAfter": "00c676aa1b2fd155988361f1f16d67d326e34713a4bd42782af141fd5939467f"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        17,
+        18
+      ]
+    },
+    {
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "size": 16,
+      "placement": "late",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "6231367a-34d9-42ca-8ebe-cbb1ac78ee64",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 2,
+              "state": "active",
+              "filing": {
+                "status": "filed"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:39.708Z",
+              "updatedAt": "2026-09-13T03:11:39.722Z",
+              "content": "我每天搭乘霧港電車上班。"
+            },
+            "receipts": [
+              {
+                "id": "912ba374-de43-42aa-9de3-29786758aeee",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-15",
+                "role": "user",
+                "excerpt": "我每天搭乘霧港電車上班。",
+                "createdAt": "2026-09-13T03:11:39.708Z"
+              }
+            ],
+            "placements": [
+              {
+                "mocId": "34ee1992-6d1c-48ec-aceb-7c573632a07f",
+                "mocRevision": 1,
+                "title": "ZZZ Target topic"
+              }
+            ],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "我的通勤方式是什麼？",
+        "startedAt": "2026-09-13T03:11:39.789Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "6231367a-34d9-42ca-8ebe-cbb1ac78ee64",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:11:39.708Z",
+                  "updatedAt": "2026-09-13T03:11:39.722Z",
+                  "content": "我每天搭乘霧港電車上班。"
+                },
+                "receipts": [
+                  {
+                    "id": "912ba374-de43-42aa-9de3-29786758aeee",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-15",
+                    "role": "user",
+                    "excerpt": "我每天搭乘霧港電車上班。",
+                    "createdAt": "2026-09-13T03:11:39.708Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:43.647Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 1,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 16,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "28bcd6dc60b513830499adc95d488feea7c21d9bc91631c1cb07ad4306083468",
+        "coldBefore": "28bcd6dc60b513830499adc95d488feea7c21d9bc91631c1cb07ad4306083468",
+        "coldAfter": "28bcd6dc60b513830499adc95d488feea7c21d9bc91631c1cb07ad4306083468"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        19,
+        20
+      ]
+    },
+    {
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "size": 16,
+      "placement": "unfiled",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "7e5a20af-15a1-4d8a-a30b-bc94fa46c1ef",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 1,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:44.403Z",
+              "updatedAt": "2026-09-13T03:11:44.403Z",
+              "content": "My commute uses Orlaven streetcars."
+            },
+            "receipts": [
+              {
+                "id": "b1dc6806-6de5-4728-956b-7f0ea7c18e0c",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-15",
+                "role": "user",
+                "excerpt": "My commute uses Orlaven streetcars.",
+                "createdAt": "2026-09-13T03:11:44.403Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "How do I travel to work?",
+        "startedAt": "2026-09-13T03:11:44.466Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "7e5a20af-15a1-4d8a-a30b-bc94fa46c1ef",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 1,
+                  "state": "active",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:11:44.403Z",
+                  "updatedAt": "2026-09-13T03:11:44.403Z",
+                  "content": "My commute uses Orlaven streetcars."
+                },
+                "receipts": [
+                  {
+                    "id": "b1dc6806-6de5-4728-956b-7f0ea7c18e0c",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-15",
+                    "role": "user",
+                    "excerpt": "My commute uses Orlaven streetcars.",
+                    "createdAt": "2026-09-13T03:11:44.403Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:48.850Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 1,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 16,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "ffb96fb4012fd6205aed16f86caa6666b5ab473a766c376f9343a5a32a71779b",
+        "coldBefore": "ffb96fb4012fd6205aed16f86caa6666b5ab473a766c376f9343a5a32a71779b",
+        "coldAfter": "ffb96fb4012fd6205aed16f86caa6666b5ab473a766c376f9343a5a32a71779b"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        21,
+        22
+      ]
+    },
+    {
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "size": 16,
+      "placement": "unfiled",
+      "status": "observed",
+      "targets": [
+        {
+          "targetIndex": 0,
+          "required": true,
+          "record": {
+            "memory": {
+              "id": "e7f2d449-68a4-4328-9ade-8c5c9d370344",
+              "namespace": {
+                "ownerId": "synthetic-query-probe",
+                "scope": "personal",
+                "projectId": null
+              },
+              "kind": "fact",
+              "origin": "explicit",
+              "confidence": 1,
+              "revision": 1,
+              "state": "active",
+              "filing": {
+                "status": "unfiled"
+              },
+              "receiptCount": 1,
+              "createdAt": "2026-09-13T03:11:49.613Z",
+              "updatedAt": "2026-09-13T03:11:49.613Z",
+              "content": "My commute uses Orlaven streetcars."
+            },
+            "receipts": [
+              {
+                "id": "dc401510-67a5-483b-a56c-00e2011abee0",
+                "client": "query-probe",
+                "sessionId": "synthetic",
+                "eventId": "source-15",
+                "role": "user",
+                "excerpt": "My commute uses Orlaven streetcars.",
+                "createdAt": "2026-09-13T03:11:49.613Z"
+              }
+            ],
+            "placements": [],
+            "conflicts": [],
+            "nextReceiptCursor": null,
+            "exhausted": true
+          },
+          "returned": true
+        }
+      ],
+      "recall": {
+        "status": "observed",
+        "query": "How do I travel to work?",
+        "startedAt": "2026-09-13T03:11:49.670Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "e7f2d449-68a4-4328-9ade-8c5c9d370344",
+                  "namespace": {
+                    "ownerId": "synthetic-query-probe",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 1,
+                  "state": "active",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:11:49.613Z",
+                  "updatedAt": "2026-09-13T03:11:49.613Z",
+                  "content": "My commute uses Orlaven streetcars."
+                },
+                "receipts": [
+                  {
+                    "id": "dc401510-67a5-483b-a56c-00e2011abee0",
+                    "client": "query-probe",
+                    "sessionId": "synthetic",
+                    "eventId": "source-15",
+                    "role": "user",
+                    "excerpt": "My commute uses Orlaven streetcars.",
+                    "createdAt": "2026-09-13T03:11:49.613Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:52.921Z"
+      },
+      "checks": {
+        "requiredTargets": 1,
+        "returnedRequiredTargets": 1,
+        "allRequiredTargetsReturned": true,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": null,
+        "sourceRecordCount": 16,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "a5ca224c03574ee19c09038dfeeadf9894ea881c0f4a9eca181b870e44a0aaef",
+        "coldBefore": "a5ca224c03574ee19c09038dfeeadf9894ea881c0f4a9eca181b870e44a0aaef",
+        "coldAfter": "a5ca224c03574ee19c09038dfeeadf9894ea881c0f4a9eca181b870e44a0aaef"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        23,
+        24
+      ]
+    },
+    {
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "candidate",
+      "size": 16,
+      "placement": "late",
+      "status": "observed",
+      "targets": [],
+      "recall": {
+        "status": "observed",
+        "query": "What is the access phrase for the Drovessa garden gate?",
+        "startedAt": "2026-09-13T03:11:53.766Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:55.166Z"
+      },
+      "checks": {
+        "requiredTargets": 0,
+        "returnedRequiredTargets": 0,
+        "allRequiredTargetsReturned": null,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 0,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": true,
+        "sourceRecordCount": 16,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "db177b69d794f0c883301042a054e3cc375bbad1469de3ad4ceb0deb88486523",
+        "coldBefore": "db177b69d794f0c883301042a054e3cc375bbad1469de3ad4ceb0deb88486523",
+        "coldAfter": "db177b69d794f0c883301042a054e3cc375bbad1469de3ad4ceb0deb88486523"
+      },
+      "requestCount": 2,
+      "traceSequences": [
+        25
+      ]
+    },
+    {
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "size": 16,
+      "placement": "late",
+      "status": "observed",
+      "targets": [],
+      "recall": {
+        "status": "observed",
+        "query": "What is the access phrase for the Drovessa garden gate?",
+        "startedAt": "2026-09-13T03:11:56.013Z",
+        "result": {
+          "ok": true,
+          "value": {
+            "memories": [],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-query-probe",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "completedAt": "2026-09-13T03:11:59.349Z"
+      },
+      "checks": {
+        "requiredTargets": 0,
+        "returnedRequiredTargets": 0,
+        "allRequiredTargetsReturned": null,
+        "irrelevantReturnedMemories": 0,
+        "intermediateSelectedNonTargets": 1,
+        "returnedReceiptsMatchColdSources": true,
+        "negativeEmpty": true,
+        "sourceRecordCount": 16,
+        "warmEqualsColdBefore": true,
+        "coldBeforeEqualsColdAfter": true
+      },
+      "corpusSha256": {
+        "warm": "b7874056624438e93045c1177e00ceac46f1030eeefab69821d3b9756de830f2",
+        "coldBefore": "b7874056624438e93045c1177e00ceac46f1030eeefab69821d3b9756de830f2",
+        "coldAfter": "b7874056624438e93045c1177e00ceac46f1030eeefab69821d3b9756de830f2"
+      },
+      "requestCount": 4,
+      "traceSequences": [
+        26,
+        27
+      ]
+    }
+  ],
+  "traces": [
+    {
+      "sequence": 1,
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "9ac35f2b139aaac40d30e0f5a84a2520c1cd653471097bb932d10468addec429",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 38,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 37,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 2,
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "1cb951fcb0606a627e5bc82650843a7e91b88aeac912e99087ac70466d322624",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 37,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 37,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 3,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "1aca5d518d37790ad83a261338374429f128dd6122dbe5ee786698ebe494f260",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 38,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 38,
+        "visibleTargetIds": [
+          "23dc1c4a-48dc-4e3b-8112-0535bb6080c1"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "23dc1c4a-48dc-4e3b-8112-0535bb6080c1",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 4,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "67de9d18b50821436e110b58210d10a6d1f0432f0d6470d36df186f383679c72",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 38,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 38,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 5,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "method": "rank",
+      "inputSha256": "c5451c2df95ae52697181cd3326ac008e2128a1336187307c7c3d5d7bff21766",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": [
+          "23dc1c4a-48dc-4e3b-8112-0535bb6080c1"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "23dc1c4a-48dc-4e3b-8112-0535bb6080c1",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 6,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "b304cb1db005fa2926d4d30fe19343323fa1ee58dea3b3c9af4701dabe36674d",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 38,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 38,
+        "visibleTargetIds": [
+          "d8fa0074-e654-4131-bb63-9f1d4258574f"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "d8fa0074-e654-4131-bb63-9f1d4258574f",
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 7,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "c127d62e7b142d3dc5a4ff5ee3d5ab98069c4bc0db43fc0bb53f451197be3b33",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 38,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 38,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 8,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "method": "rank",
+      "inputSha256": "f52a28d7e2d703c81c34aceae9f0f3508ef7b8d241ee13d4fcf0d019bb4a9f75",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": [
+          "d8fa0074-e654-4131-bb63-9f1d4258574f"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "d8fa0074-e654-4131-bb63-9f1d4258574f",
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 9,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "d424aeea7c4a8d7024c10e123982cc4db032b73346f15722b9c1d16c5077e811",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 38,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 37,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 10,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "7192235d7310c56b5f92c4577d87bd0b7e6650747cb98f119c0f4181920533e9",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 37,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 37,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 11,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "fa32196ad3d1d71d23f7121eb5ce2812c6eba4ead0b4596783d9f20962ba1d6e",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 40,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 39,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "0bc70cbf-b966-40db-be21-4f9d3d644f9c",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 12,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "bf4dade0361cab0d72a21b790337e6286b2a44205e2eceba1aa74f458ceb0ae0",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 39,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 39,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "3cec76d2-94eb-4dd2-b635-a507872c3e22",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 13,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "method": "rank",
+      "inputSha256": "49be5a76330ccf8115ec840016249cba6c5dd0df07136e181edb3f1b86e26067",
+      "inputSummary": {
+        "candidates": 2,
+        "candidateTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 14,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "be54dc891c85285cb753d10449bc4c70c7d28290843c1409ee86aa2906ab4b18",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 40,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 40,
+        "visibleTargetIds": [
+          "c28ab857-fb03-4c9c-83bb-dcce0e7cf81e",
+          "33fa7d57-44f7-44f1-a1a9-fc61550c7fa3"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "33fa7d57-44f7-44f1-a1a9-fc61550c7fa3",
+            "revision": 2
+          },
+          {
+            "namespaceIndex": 0,
+            "memoryId": "c28ab857-fb03-4c9c-83bb-dcce0e7cf81e",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 15,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "b50a05f50f79284b25c52dabf54c227509d431cbb8ae6687922e1423913f65a8",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 41,
+            "exhausted": false
+          }
+        ],
+        "visibleMemoryRefs": 41,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "3e8a3c3a-e30c-48d1-a4cc-be08c4bb1c32",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 16,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "method": "rank",
+      "inputSha256": "e3fad0c5f75b4e5e5e32eaecc0baf3bbeb5605ca49ecaaed129f7b197b3f470a",
+      "inputSummary": {
+        "candidates": 3,
+        "candidateTargetIds": [
+          "c28ab857-fb03-4c9c-83bb-dcce0e7cf81e",
+          "33fa7d57-44f7-44f1-a1a9-fc61550c7fa3"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "c28ab857-fb03-4c9c-83bb-dcce0e7cf81e",
+            "revision": 2
+          },
+          {
+            "namespaceIndex": 0,
+            "memoryId": "33fa7d57-44f7-44f1-a1a9-fc61550c7fa3",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 17,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "ab65a15eb8c561285419f52f91c7bedcc3a37dc256c99e7cc073c11353defd75",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 16,
+            "exhausted": true
+          }
+        ],
+        "visibleMemoryRefs": 16,
+        "visibleTargetIds": [
+          "22a40d3c-a9c7-4daf-8be4-814c045aa647"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "22a40d3c-a9c7-4daf-8be4-814c045aa647",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 18,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "method": "rank",
+      "inputSha256": "b008ea3bf219944aee782d123cf0cca18a40fc40e59c75e083295c9b0ca31a11",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": [
+          "22a40d3c-a9c7-4daf-8be4-814c045aa647"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "22a40d3c-a9c7-4daf-8be4-814c045aa647",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 19,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "5a1b176e037eacc690c9783b3a2c7528280ef27659cdb5e0d80aa0302ea9215f",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 18,
+            "exhausted": true
+          }
+        ],
+        "visibleMemoryRefs": 16,
+        "visibleTargetIds": [
+          "6231367a-34d9-42ca-8ebe-cbb1ac78ee64"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "6231367a-34d9-42ca-8ebe-cbb1ac78ee64",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 20,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "method": "rank",
+      "inputSha256": "cd7fa51dca32640af1dbee4807eea2170ea41479b4d8f7673ffadac1663c1be0",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": [
+          "6231367a-34d9-42ca-8ebe-cbb1ac78ee64"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "6231367a-34d9-42ca-8ebe-cbb1ac78ee64",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 21,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "a907e4ed14a562ebf95b47e3ab22b492a97fd92340ab99c84b373da28112cbac",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 17,
+            "exhausted": true
+          }
+        ],
+        "visibleMemoryRefs": 16,
+        "visibleTargetIds": [
+          "7e5a20af-15a1-4d8a-a30b-bc94fa46c1ef"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "7e5a20af-15a1-4d8a-a30b-bc94fa46c1ef",
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 22,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "method": "rank",
+      "inputSha256": "ffa2dffe91677de9f039f11d99ddb664b0f6c3567f91c9bd52d78d6e1a171f22",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": [
+          "7e5a20af-15a1-4d8a-a30b-bc94fa46c1ef"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "7e5a20af-15a1-4d8a-a30b-bc94fa46c1ef",
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 23,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "1284b0c805592f0bad7810d064da3c3275f2c1a594615215d37c18e8d02d84a6",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 16,
+            "exhausted": true
+          }
+        ],
+        "visibleMemoryRefs": 16,
+        "visibleTargetIds": [
+          "e7f2d449-68a4-4328-9ade-8c5c9d370344"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "e7f2d449-68a4-4328-9ade-8c5c9d370344",
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 24,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "method": "rank",
+      "inputSha256": "91ad459e59eafed3398c2525894aae5bf2e7b07d7e9bee5e14a3df73191e20c6",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": [
+          "e7f2d449-68a4-4328-9ade-8c5c9d370344"
+        ]
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "e7f2d449-68a4-4328-9ade-8c5c9d370344",
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 25,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "candidate",
+      "method": "select",
+      "inputSha256": "ac977299840bb41eb8484e669e51fed55a913dc7ca53e30ff83df3ccef2edb72",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 16,
+            "exhausted": true
+          }
+        ],
+        "visibleMemoryRefs": 16,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    },
+    {
+      "sequence": 26,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "method": "select",
+      "inputSha256": "fce7ce3db460bb204d058b82f330a8f1c5f4b7d780c52053b673383db2a78846",
+      "inputSummary": {
+        "pages": [
+          {
+            "namespaceIndex": 0,
+            "items": 17,
+            "exhausted": true
+          }
+        ],
+        "visibleMemoryRefs": 16,
+        "visibleTargetIds": []
+      },
+      "output": {
+        "refs": [
+          {
+            "namespaceIndex": 0,
+            "memoryId": "68284823-200e-48db-bd37-0783829f60be",
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 27,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "method": "rank",
+      "inputSha256": "cdca013d9e7aab988c473bd83e20145dfe68c6c062060366ab2d510a8ae92b35",
+      "inputSummary": {
+        "candidates": 1,
+        "candidateTargetIds": []
+      },
+      "output": {
+        "refs": []
+      }
+    }
+  ],
+  "requests": [
+    {
+      "sequence": 1,
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 9,
+        "reservedMicroUsd": 45000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 3102,
+        "unknownCostRequests": 5
+      }
+    },
+    {
+      "sequence": 2,
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4801,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4806
+      },
+      "after": {
+        "requests": 10,
+        "reservedMicroUsd": 50000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 5031,
+        "unknownCostRequests": 5
+      }
+    },
+    {
+      "sequence": 3,
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 11,
+        "reservedMicroUsd": 55000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 5031,
+        "unknownCostRequests": 6
+      }
+    },
+    {
+      "sequence": 4,
+      "caseId": "heldout-english-filed-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4835,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4840
+      },
+      "after": {
+        "requests": 12,
+        "reservedMicroUsd": 60000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 6973,
+        "unknownCostRequests": 6
+      }
+    },
+    {
+      "sequence": 5,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 13,
+        "reservedMicroUsd": 65000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 6973,
+        "unknownCostRequests": 7
+      }
+    },
+    {
+      "sequence": 6,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4813,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 44,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4857
+      },
+      "after": {
+        "requests": 14,
+        "reservedMicroUsd": 70000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 8970,
+        "unknownCostRequests": 7
+      }
+    },
+    {
+      "sequence": 7,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 15,
+        "reservedMicroUsd": 75000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 8970,
+        "unknownCostRequests": 8
+      }
+    },
+    {
+      "sequence": 8,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4813,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4818
+      },
+      "after": {
+        "requests": 16,
+        "reservedMicroUsd": 80000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 10904,
+        "unknownCostRequests": 8
+      }
+    },
+    {
+      "sequence": 9,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 17,
+        "reservedMicroUsd": 85000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 10904,
+        "unknownCostRequests": 9
+      }
+    },
+    {
+      "sequence": 10,
+      "caseId": "heldout-english-filed-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 491,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 44,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 535
+      },
+      "after": {
+        "requests": 18,
+        "reservedMicroUsd": 90000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 11172,
+        "unknownCostRequests": 9
+      }
+    },
+    {
+      "sequence": 11,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 19,
+        "reservedMicroUsd": 95000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 11172,
+        "unknownCostRequests": 10
+      }
+    },
+    {
+      "sequence": 12,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4810,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 41,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4851
+      },
+      "after": {
+        "requests": 20,
+        "reservedMicroUsd": 100000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 13162,
+        "unknownCostRequests": 10
+      }
+    },
+    {
+      "sequence": 13,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 21,
+        "reservedMicroUsd": 105000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 13162,
+        "unknownCostRequests": 11
+      }
+    },
+    {
+      "sequence": 14,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4838,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4843
+      },
+      "after": {
+        "requests": 22,
+        "reservedMicroUsd": 110000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 15106,
+        "unknownCostRequests": 11
+      }
+    },
+    {
+      "sequence": 15,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 23,
+        "reservedMicroUsd": 115000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 15106,
+        "unknownCostRequests": 12
+      }
+    },
+    {
+      "sequence": 16,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 504,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 41,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 545
+      },
+      "after": {
+        "requests": 24,
+        "reservedMicroUsd": 120000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 15374,
+        "unknownCostRequests": 12
+      }
+    },
+    {
+      "sequence": 17,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 25,
+        "reservedMicroUsd": 125000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 15374,
+        "unknownCostRequests": 13
+      }
+    },
+    {
+      "sequence": 18,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4870,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4875
+      },
+      "after": {
+        "requests": 26,
+        "reservedMicroUsd": 130000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 17330,
+        "unknownCostRequests": 13
+      }
+    },
+    {
+      "sequence": 19,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 27,
+        "reservedMicroUsd": 135000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 17330,
+        "unknownCostRequests": 14
+      }
+    },
+    {
+      "sequence": 20,
+      "caseId": "heldout-english-unfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4790,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4795
+      },
+      "after": {
+        "requests": 28,
+        "reservedMicroUsd": 140000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 19254,
+        "unknownCostRequests": 14
+      }
+    },
+    {
+      "sequence": 21,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 29,
+        "reservedMicroUsd": 145000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 19254,
+        "unknownCostRequests": 15
+      }
+    },
+    {
+      "sequence": 22,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4913,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 42,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4955
+      },
+      "after": {
+        "requests": 30,
+        "reservedMicroUsd": 150000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 21288,
+        "unknownCostRequests": 15
+      }
+    },
+    {
+      "sequence": 23,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 31,
+        "reservedMicroUsd": 155000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 21288,
+        "unknownCostRequests": 16
+      }
+    },
+    {
+      "sequence": 24,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4871,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 40,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4911
+      },
+      "after": {
+        "requests": 32,
+        "reservedMicroUsd": 160000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 23301,
+        "unknownCostRequests": 16
+      }
+    },
+    {
+      "sequence": 25,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 33,
+        "reservedMicroUsd": 165000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 23301,
+        "unknownCostRequests": 17
+      }
+    },
+    {
+      "sequence": 26,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 743,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 748
+      },
+      "after": {
+        "requests": 34,
+        "reservedMicroUsd": 170000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 23607,
+        "unknownCostRequests": 17
+      }
+    },
+    {
+      "sequence": 27,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 35,
+        "reservedMicroUsd": 175000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 23607,
+        "unknownCostRequests": 18
+      }
+    },
+    {
+      "sequence": 28,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4897,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 81,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4978
+      },
+      "after": {
+        "requests": 36,
+        "reservedMicroUsd": 180000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 25696,
+        "unknownCostRequests": 18
+      }
+    },
+    {
+      "sequence": 29,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 37,
+        "reservedMicroUsd": 185000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 25696,
+        "unknownCostRequests": 19
+      }
+    },
+    {
+      "sequence": 30,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 4937,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 45,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 4982
+      },
+      "after": {
+        "requests": 38,
+        "reservedMicroUsd": 190000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 27743,
+        "unknownCostRequests": 19
+      }
+    },
+    {
+      "sequence": 31,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 39,
+        "reservedMicroUsd": 195000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 27743,
+        "unknownCostRequests": 20
+      }
+    },
+    {
+      "sequence": 32,
+      "caseId": "heldout-english-multiple-misfiled-224",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 1021,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 81,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1102
+      },
+      "after": {
+        "requests": 40,
+        "reservedMicroUsd": 200000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 28282,
+        "unknownCostRequests": 20
+      }
+    },
+    {
+      "sequence": 33,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 41,
+        "reservedMicroUsd": 205000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 28282,
+        "unknownCostRequests": 21
+      }
+    },
+    {
+      "sequence": 34,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 2135,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 42,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2177
+      },
+      "after": {
+        "requests": 42,
+        "reservedMicroUsd": 210000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 29204,
+        "unknownCostRequests": 21
+      }
+    },
+    {
+      "sequence": 35,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 43,
+        "reservedMicroUsd": 215000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 29204,
+        "unknownCostRequests": 22
+      }
+    },
+    {
+      "sequence": 36,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 481,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 42,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 523
+      },
+      "after": {
+        "requests": 44,
+        "reservedMicroUsd": 220000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 29465,
+        "unknownCostRequests": 22
+      }
+    },
+    {
+      "sequence": 37,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 45,
+        "reservedMicroUsd": 225000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 29465,
+        "unknownCostRequests": 23
+      }
+    },
+    {
+      "sequence": 38,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 2272,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 40,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2312
+      },
+      "after": {
+        "requests": 46,
+        "reservedMicroUsd": 230000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 30438,
+        "unknownCostRequests": 23
+      }
+    },
+    {
+      "sequence": 39,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 47,
+        "reservedMicroUsd": 235000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 30438,
+        "unknownCostRequests": 24
+      }
+    },
+    {
+      "sequence": 40,
+      "caseId": "heldout-chinese-contiguous-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 477,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 40,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 517
+      },
+      "after": {
+        "requests": 48,
+        "reservedMicroUsd": 240000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 30693,
+        "unknownCostRequests": 24
+      }
+    },
+    {
+      "sequence": 41,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 49,
+        "reservedMicroUsd": 245000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 30693,
+        "unknownCostRequests": 25
+      }
+    },
+    {
+      "sequence": 42,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 2258,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 45,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2303
+      },
+      "after": {
+        "requests": 50,
+        "reservedMicroUsd": 250000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 31669,
+        "unknownCostRequests": 25
+      }
+    },
+    {
+      "sequence": 43,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 51,
+        "reservedMicroUsd": 255000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 31669,
+        "unknownCostRequests": 26
+      }
+    },
+    {
+      "sequence": 44,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 487,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 45,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 532
+      },
+      "after": {
+        "requests": 52,
+        "reservedMicroUsd": 260000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 31936,
+        "unknownCostRequests": 26
+      }
+    },
+    {
+      "sequence": 45,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 53,
+        "reservedMicroUsd": 265000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 31936,
+        "unknownCostRequests": 27
+      }
+    },
+    {
+      "sequence": 46,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 2154,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 44,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2198
+      },
+      "after": {
+        "requests": 54,
+        "reservedMicroUsd": 270000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 32869,
+        "unknownCostRequests": 27
+      }
+    },
+    {
+      "sequence": 47,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 55,
+        "reservedMicroUsd": 275000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 32869,
+        "unknownCostRequests": 28
+      }
+    },
+    {
+      "sequence": 48,
+      "caseId": "heldout-english-paraphrase-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 479,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 44,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 523
+      },
+      "after": {
+        "requests": 56,
+        "reservedMicroUsd": 280000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 33132,
+        "unknownCostRequests": 28
+      }
+    },
+    {
+      "sequence": 49,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 57,
+        "reservedMicroUsd": 285000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 33132,
+        "unknownCostRequests": 29
+      }
+    },
+    {
+      "sequence": 50,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "candidate",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 2249,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2254
+      },
+      "after": {
+        "requests": 58,
+        "reservedMicroUsd": 290000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 34040,
+        "unknownCostRequests": 29
+      }
+    },
+    {
+      "sequence": 51,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 59,
+        "reservedMicroUsd": 295000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 34040,
+        "unknownCostRequests": 30
+      }
+    },
+    {
+      "sequence": 52,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_select",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 2274,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 38,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2312
+      },
+      "after": {
+        "requests": 60,
+        "reservedMicroUsd": 300000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 35011,
+        "unknownCostRequests": 30
+      }
+    },
+    {
+      "sequence": 53,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses/input_tokens",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": null,
+      "after": {
+        "requests": 61,
+        "reservedMicroUsd": 305000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 35011,
+        "unknownCostRequests": 31
+      }
+    },
+    {
+      "sequence": 54,
+      "caseId": "heldout-absent-answer-control-16",
+      "arm": "baseline",
+      "endpoint": "/v1/responses",
+      "method": "cairn_rank",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "reservedMicroUsd": 5000,
+      "httpStatus": 200,
+      "usage": {
+        "input_tokens": 481,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 486
+      },
+      "after": {
+        "requests": 62,
+        "reservedMicroUsd": 310000,
+        "state": "open",
+        "unsettled": 0,
+        "knownUsageMicroUsd": 35212,
+        "unknownCostRequests": 31
+      }
+    }
+  ],
+  "rawArtifactSha256": {
+    "query-heldout.json": "3273cdc78202deb00a590dae17b8887ebb5f3404af7e568f4181bca047311beb",
+    "query-intent.json": "b894a29dde44677ee64fc530019bac48a780af1d3c73c0d1f2c69ee1f5ba2ed3",
+    "query-probe.mjs": "53d73b7e30174f4733e4a4f026e7088f44ecc44ed27f01c233515a0899450ad2",
+    "query-request-1-reserved.json": "4ccbae44856036ef92936a1bdc9f7ed5f83f44ff1f701c76cee6c23f3391998c",
+    "query-request-1-settled.json": "1023ace231d88f3f14b6e6033053a9f93aef6ee0d3bace89494d2bbd889ba457",
+    "query-request-10-reserved.json": "397a76998940bc3e9a72fe67e399fdd6334e23ce57e52f8d8f3d4382e0668105",
+    "query-request-10-settled.json": "e2548f694871aff94b3fa710b7d3723f853a0a144b458a29f3991e6709380726",
+    "query-request-11-reserved.json": "e01ac617c8b6851e72fcca04587544b694f6182a0711fa1b75531f172f40c0a7",
+    "query-request-11-settled.json": "cbf2760ad289bd5cc569a0a4bd871740fc5bac3c20429571d754bbd149f37a4a",
+    "query-request-12-reserved.json": "62adcaa3d8ebe919709cc2603d56dea33a92a799906a5607341c642088b02905",
+    "query-request-12-settled.json": "8c564d5a7a3d3d505c0adc5a4d19ce5f961667b431e3e48bab4b0e22beaf4736",
+    "query-request-13-reserved.json": "bb2887054c9ccd3e7b2c987064fe1035df64ddb296fc27945c7edd6bab1b09ce",
+    "query-request-13-settled.json": "673a46973ae88aa4543ada3ddc67bb8f27de47b3bb7fe6e344f3980bd4ed9c69",
+    "query-request-14-reserved.json": "bd1ca32a9b13affebf401f61970a72cf5fc8e79590b4f75d29a7da2d3bd048c6",
+    "query-request-14-settled.json": "65c1a7dc47f81542b8903caf1a581be3ca8b92d31a723b70621b924ccf614921",
+    "query-request-15-reserved.json": "9967df5b0d3e3b46ca350d663dc859502bc68bd280e48a4fe270bd3fb9979eb2",
+    "query-request-15-settled.json": "8685171e0c490d2aa4365061eb8171ee5414b3f492c197a240bc7ca495c24c37",
+    "query-request-16-reserved.json": "b7b074afdc687e0d6ca6c4603500f499138d11f7f340952c43e1291693710bca",
+    "query-request-16-settled.json": "82357d94d4d57e0fdc0ab1513c7e56adc4302e8fc6c884480ff3aee77833de68",
+    "query-request-17-reserved.json": "ea4cf98e6231904b0e03c16bb9b2746eec50982fd5681bcc44aaa0d1bb9572f1",
+    "query-request-17-settled.json": "f69e35d0274c8f69de874fa866c65fa928b71273402710c8e94d273c2fae5f9e",
+    "query-request-18-reserved.json": "4e9efb3afa8564ac666694890204983ed5943a43789cf6efd199f4909457d1a4",
+    "query-request-18-settled.json": "34dea820acd3f771c87843aacf3788fd7fcb4a0d864340c446614a0d6f104b22",
+    "query-request-19-reserved.json": "03f8f4196907d8880d78790f028161675401a0cd13a44a826a2ea894df1d9211",
+    "query-request-19-settled.json": "f6b66f7ba4e01170098cd5475aef0e88df8d86d5e591b4d3f07c4f7a3b0fa51c",
+    "query-request-2-reserved.json": "f8add4fe26c716b40f02b14e441ea259471183da764fd6a9de31d0fe84080fc3",
+    "query-request-2-settled.json": "b14bec2ea139458b43b868cb93f35daf5bb154bffb350948a624d2def7b242b8",
+    "query-request-20-reserved.json": "b524e630a091622f8f5d77acaacc1f5f648eb3b828ebc7192bb9a9215c6f756e",
+    "query-request-20-settled.json": "c163ad13174327a9237601fbb0a2494993829b9126fb45d04b7e28beaf233586",
+    "query-request-21-reserved.json": "0396939efae15402854e6eb1f9e725a65bb744819ac5c31b1e04c7ae515c5d10",
+    "query-request-21-settled.json": "03685b8f177f05618214a80a0ebb2c7e9b34ccc8d05922e8abf92bb23b4f62ce",
+    "query-request-22-reserved.json": "ea12030ac4e46c0f3e79d0d5b873ec72f2af02525e23c286e91a8a5c2eafb326",
+    "query-request-22-settled.json": "c35443437ca7c4775e310c983314cdbc0eb52dc9f116e9900d506f8ff9a980e3",
+    "query-request-23-reserved.json": "5c9d4a243fc3dea7cf337bcbdc4f7256d4bf9296c242e0807f805678927e1c27",
+    "query-request-23-settled.json": "80efaab2d0303e1e239930d92b711f61071ac01e615016092a896a45f4be96af",
+    "query-request-24-reserved.json": "658d0d5d8c6a3c8ea2d3558778f3cb52e42f121692e8abcb1517856bdd4ad375",
+    "query-request-24-settled.json": "924fc00bf7652189deb4d8aff29f93c48b7270153e0f8a7a5978d1e882cb1b6f",
+    "query-request-25-reserved.json": "36290dbcaa8c341b12393f0fd39ea58ad23722c03288e41aac65646cf12a4d60",
+    "query-request-25-settled.json": "83bc34464bc1f384729fd6e294f494efb1f4099c197adfab6e4be986d046f042",
+    "query-request-26-reserved.json": "ebe461ed32b9d9d829040ec2336ad850a41506a88fcf417f7291359891b26fc9",
+    "query-request-26-settled.json": "d761e44626c96ee262941c3fe3c3c349f53ae62ab9e0e6e9de16ef4b5ba7a51d",
+    "query-request-27-reserved.json": "4318687ddd0f56345c7b6b9e68c729001fa9a4abd9894601b730f02b3384026c",
+    "query-request-27-settled.json": "57b66090f738c520f48ff7a221b5a46eaa3217666d43e904336f60db87bbe70e",
+    "query-request-28-reserved.json": "ab5b5fe5bc80d22ea3fdc5b34cd5d14f02d69caf1cb76b62af254f835862e462",
+    "query-request-28-settled.json": "348b7c0e1c05d2375dff970624664c8555e61efc149cdfe8e1ab73a9a6f75699",
+    "query-request-29-reserved.json": "5f9b5d5f0e5e2466781eeed0f44529e24f68b8ac4efdf29029daec538bf6182f",
+    "query-request-29-settled.json": "2fb7653a59169a239fef920cb130057363b3ecabc9ad5701860791d9235585b0",
+    "query-request-3-reserved.json": "8ded4a0e22297f104112dc432727e658e90c0522cd5b3224bc94a4d5e1526790",
+    "query-request-3-settled.json": "0e78cd8789b72173c1af5516bcf49f15b082e8359a1774737917d93139d1782f",
+    "query-request-30-reserved.json": "91880ea955465f85f739e20b7709708258f6e687a2ebb8d6443f251d8eb8b94e",
+    "query-request-30-settled.json": "96c33530e7785a0167baed62ba611019083f2ad2e4d1b4be9656c81422052057",
+    "query-request-31-reserved.json": "f3d58c0824a592a27e527abcbab16599c2bb4b3a15b9f72ad41631caabc9c4a5",
+    "query-request-31-settled.json": "736d34a010ff11bdf0cd84a3f23297a55843bd7829259dd0c7efee753ada2e1c",
+    "query-request-32-reserved.json": "26191dba66f4b70f84a4cb49fcb9493f6b04bdd37d12934aab1def6c81b39369",
+    "query-request-32-settled.json": "ee7f94ee39de69a995b2e8b8bae1451ef3934f95c4ce4f7c714b885b51d5a5f2",
+    "query-request-33-reserved.json": "265c77d8bdcdad4964fe3cf30955c033c746f9037a8a7085fe5a52e5a61e0d87",
+    "query-request-33-settled.json": "3324a83bc644fd08e8ed63775b81105dba2acb81b147f5660e57bf8fcaa2d455",
+    "query-request-34-reserved.json": "c8fce9111a354d73a87c29da84d3a6c3b8d40575609f5e0d981a16398816c38b",
+    "query-request-34-settled.json": "75bd53114688a7597e36d9f74bf81493c84ddc3216312da6922b5161558116d8",
+    "query-request-35-reserved.json": "87dbe540224564076137f4cb58158cc4366741be0b7186a24ada9bbbcb430356",
+    "query-request-35-settled.json": "549bdaf0f3431dcbb0ffc1637215ad9c247363751f666baf2fa0c15f951d4ef0",
+    "query-request-36-reserved.json": "7b4b6c723b2d402347cde18ca54f0d313ea590b5ea67dcaa3dcd895fd493b13e",
+    "query-request-36-settled.json": "21e1d8d2a704b729f12e918eb9690b9080972fcecdc16373b6db3bba972bacca",
+    "query-request-37-reserved.json": "96d7beeb7172127ce45f3ac68c441fa5612073fc26de7cdc1239fcba03f5f2aa",
+    "query-request-37-settled.json": "70244f9ebcd877b75ce72d87fff9b0e8fe7a9f4d787c9c94461bddf3a43877b5",
+    "query-request-38-reserved.json": "08f7077d1c22e3d2ceabd3dab802883ac745edb46e43c7de8dd3fdf9a4939e7b",
+    "query-request-38-settled.json": "023e37f59f50a8b34ee12ef6c6abedb933078a4aa78986d9ffd11d76e60948db",
+    "query-request-39-reserved.json": "84db0c271dbb30d1c5f9e9a2e6476ef31655dca714df0550294719b8c79a9092",
+    "query-request-39-settled.json": "639aaa71629654e96bbde8e21ab30d39480fd813f79a8c54073d4e03dc578197",
+    "query-request-4-reserved.json": "171a72048ea36b31a5ea26ef9f638330e9bf60fd7adcc3204bbe7cb3c5db5f0c",
+    "query-request-4-settled.json": "2f060dd30d6bbfccc384b4ece4dd8fb4ddcb27a67ab4a9ca4f7fc590f21dfd15",
+    "query-request-40-reserved.json": "8f65a6e9d9b2e0bce04ac4da4273b71baf7deae964d0519ef13abaaffb1c71b2",
+    "query-request-40-settled.json": "ab855201e3936be2f3d1448d6d2e028a2b9d4f8f5e16739d472b41154949a660",
+    "query-request-41-reserved.json": "e43405c211141913981563e83b781d7469882a7074b206e61b12a007050b3d8c",
+    "query-request-41-settled.json": "87f296e3398713902419ac64042773f42a4094d79c2e81e94d4d16e7076c6075",
+    "query-request-42-reserved.json": "0ac09fd735cebd028896cf04c8a5e40dce53bfbcf5f8b14c387d7cda7a1a04b8",
+    "query-request-42-settled.json": "e5a8ad1294ce656249e2b0b11964694ae9a3bc736784449c6c1890d2fb33b380",
+    "query-request-43-reserved.json": "29eef4cb32a697bba2d8bd44b24cd6236b644970f9b5fbfa57efa1af5a6ef3d4",
+    "query-request-43-settled.json": "67f2aa1f420d119d1ef8f074b02caba097415c4d0e3a089bc49c11938bbf8034",
+    "query-request-44-reserved.json": "362cd6f012729e44c87122f921172ad53fb97f44cacb8da333dbd19d3b5f1164",
+    "query-request-44-settled.json": "4c1132b25dec00b7940dc7d0b8c24c8750b086bec39af13187efedeaa03ab962",
+    "query-request-45-reserved.json": "bf96ecf066ae0f042f786b55de11a9cfe0503b866df9e3172e3f44d64c6eba2b",
+    "query-request-45-settled.json": "295f9e82d2f6a6a95cd501ceb0c517e63bb72124875def5ca49d45b9032fac9a",
+    "query-request-46-reserved.json": "d4f3d9c8a0ff63ab521e4e9ee5815b1f9e784c3c8f21376db7ddbe2015b183c9",
+    "query-request-46-settled.json": "265cfe2bafa85e48f24e5b6982a14ebd7fa88e5f368f580938c59262ca8c545f",
+    "query-request-47-reserved.json": "eaa19141afc8cbaba7b515a838eaed5a21d2e47a2bac69ce11cb451bdd1ea2ba",
+    "query-request-47-settled.json": "229d69eeaceb32eaad5db1b61b77e1b9e7d8d49f89fe58439665146d67959e74",
+    "query-request-48-reserved.json": "f2e4d1111575ed89a9a0e7a50aa66309e8d73c719871af0fcc3fedb2cc69bebc",
+    "query-request-48-settled.json": "eeb13db94c51f2c13a18b2fef0d0652f492897dd9841227cda55c99f1214d294",
+    "query-request-49-reserved.json": "3a1ab80157c40ba995d957d57de48389c85d1db4aa7c3c1dec276f55f9e28bea",
+    "query-request-49-settled.json": "f80dd732b0e597c037539dc8819c36cecf112a5d52b354f220ba4ce5c147a2a5",
+    "query-request-5-reserved.json": "9331e0cfee1ab428502f3d49be1f5f99fb2e1fe11fe638f7f3b2fd80d8ecd911",
+    "query-request-5-settled.json": "5fdf7a02d188ff15a577fa6170e178d402bf4c48b68539d365b73eae78f5ce9d",
+    "query-request-50-reserved.json": "02aa93d4a759b5d6400581b04e5256e94db4246297312e60ef2f462bfa4406e4",
+    "query-request-50-settled.json": "e194c1d569dd3a44e8c6c7fc7ed9218f9ac65fd9a36d97d49e181c34b81a0ce0",
+    "query-request-51-reserved.json": "a3a7c04f4be3e47a5c74603b19b8b4d0a607a011a0c4bd660182cfbce8b0aa59",
+    "query-request-51-settled.json": "772717e5e71414b04879d15c8b28bcc6f6905b21efc8749ab19c1b7ab007e54c",
+    "query-request-52-reserved.json": "496de482fcdefb70d8fbdc48fd6e99b2f50f3b1c135afd05c1a061a96d65b894",
+    "query-request-52-settled.json": "b9c34348acd951be52b0081b0c8c77d110af1dfcde58a5ee92a22df48ffa00d6",
+    "query-request-53-reserved.json": "350ffb6ab08d3e5e96fb560bd2136da53ba2b1bc2397cabd195c75e796c6c30a",
+    "query-request-53-settled.json": "93ee83b9fa9bd9ff361d4bfb85959c022ff9e262cd643ae53de45871bc5f369b",
+    "query-request-54-reserved.json": "374a2cc00aa56d02ee70c9734424a1b578df8ba6255e39030541683014ac317c",
+    "query-request-54-settled.json": "145e20ebcae4cbe2a883501e95b367b16144a2fcfdfe8899b1cb6d9276ee807a",
+    "query-request-6-reserved.json": "ef76a4c64be0769b8294a1a1c4baf5ea7ebb195748e0fca4aa46623287d4f1ab",
+    "query-request-6-settled.json": "bb27cb969c5f4d74e82e46d55a5b99ec467201d79c13d1de546a6846b83610f4",
+    "query-request-7-reserved.json": "185bab8d1c78cf2409c6e414f63198300b95adf8f1760f6e396c8604319f735e",
+    "query-request-7-settled.json": "776a78ef29336c5eb692eb3261619790f182ac9fe35f70e964fc7eae2bbf1332",
+    "query-request-8-reserved.json": "4c65ab3189aa1724b0d38aba0f1801f2a4a903445290b78ae92a24cb1d6db718",
+    "query-request-8-settled.json": "e4f3c085814adca70086758779afb49c0182aa1ae6327f660e1533176d2de1ba",
+    "query-request-9-reserved.json": "e663b9e02c6c859d70e6019cd56f619918afd9526dc632d72e1137a72b4f3085",
+    "query-request-9-settled.json": "1aafb8eafc0a89b609866377ffe0ee5d7f6e1935c991a2d221d709c07192332b",
+    "query-result.json": "cf599e2b573bfe5bad0246fafcf791f89d797eabe82937a6721f1bfcc3c3ef94",
+    "query-stage-1.json": "f581e7d0c0b87dfa3d14ee0b6c269f61baa494eaefde3882fd191a6e6252c605",
+    "query-stage-10.json": "88921208d5f07a13742e21295162e6b6c18814742edc2cab35ca0219004293b2",
+    "query-stage-11.json": "b5771a6e1096c586235f00bf51f7409e0770ac30ce5fc404550e567b145303cf",
+    "query-stage-12.json": "ad6e113ad79e48b0b54abb27011732a74028bda26500522fbdedf8689fc997bf",
+    "query-stage-13.json": "3722bb5b5b9eeb8aece196b3afabd45941743751156ddb6f9cfc7f52bc8a2165",
+    "query-stage-14.json": "4ae42a9265a5506c40951a4a60c25e31c0a83e9a58c4e22caf2faf501b05e03d",
+    "query-stage-15.json": "2469324c848ee7079c28b8d46b2a0942cebff6fb576266fb5e3fdb234be8af23",
+    "query-stage-16.json": "ec6ed15c23c9608bb2cdaa48a836220ddfdca40454cde90fc40f61c63faf850b",
+    "query-stage-17.json": "a8c1a240b418d20d307ea08c666fb0414193c8421101556d429d8299b919290c",
+    "query-stage-18.json": "d80278abcaf9ef0a561659cc2d619c6e2cb2f292bf457e0e8f3a0d651f36e8dd",
+    "query-stage-19.json": "c964bedf70ba6008b30100f06753cd732c12b6a389dc36c3122bae81c27a261e",
+    "query-stage-2.json": "f1c471e7ecaa6474604ec83ae366e88d57a05931ed9d9da175d928d4566c9fb1",
+    "query-stage-20.json": "cf6cfc5b31154822d7d6a0027486db015c772f173fa6e7ebedb73e413ca79c20",
+    "query-stage-21.json": "a0fb6103d3b274b2d89d8fb49d8f3374a9e762af661783cffd4228dedca49557",
+    "query-stage-22.json": "c05ce2ac21bcdee49154fbbe508c075ba3a1144df0f9709e609d2ced589c54bc",
+    "query-stage-23.json": "0c1fd0623835ea0fb24e89aeb0d9935e4b9122406d8c897eaab17be85a704b75",
+    "query-stage-24.json": "fd9963b1fa2f5f43f7e16a3a4920677c2f4c9da66f847c780f0b6aa8011dacc9",
+    "query-stage-25.json": "32c5aa5bc2b4c361b6f5433520ad933f809c4969e6cd8a4024849e4b6db73224",
+    "query-stage-26.json": "fd14587591188e3ed990ce943a82dac8efef3bb39f0e20985662e1d628d9aa73",
+    "query-stage-27.json": "dfac6f4ed530609e895026be454c4d3cbf08276c5582e8b0d4b6fbc5dbc70269",
+    "query-stage-28.json": "f424b97efa873d315c2cb8999552328dce661e786e30b5c8da990f9301b3f1ae",
+    "query-stage-29.json": "02c7506e1a604ecb17fcd9bcf50acd58c2b39c960db2ffea914061e8ac7201da",
+    "query-stage-3.json": "80b93be6947bd77a3fb2e2a18da083467b74d02ba21b0faffd56bb33694a28f5",
+    "query-stage-30.json": "ea158dc2f3d1a16d9038e3cb11c1647f3efa4e20702783289ea275ce2c8d3e42",
+    "query-stage-31.json": "182d3db669430bd3557d7e1701fa73479ae934984c8d0bd759a99b4b4ace6f76",
+    "query-stage-32.json": "8db8b9d508a434f7897d265c3537de95c9e376a771ba948147897497cbd5e463",
+    "query-stage-33.json": "8241ea1c006ce77b4111250ebc1130d89d18b876f50167ac8d3b55ca0b4df231",
+    "query-stage-34.json": "6334715b0702d54fe9a666529be3ede33e7b3808ff8086d4417ad470f8b8374b",
+    "query-stage-35.json": "93bd37c492b00148b3b692776fc60269f8e5a960ed26297d60d674b76f9e9c2c",
+    "query-stage-36.json": "35a75f8d929c509da87ac3e82715e11304e90ede5db9a1920b0f2b5cd74b5f6c",
+    "query-stage-37.json": "7320d2bf2cc323398cef55a628b627543276dc82df14cfc2ff1b5c3f1f7f5709",
+    "query-stage-38.json": "b4e845a9ec6d87bd5488fa67207264f6de7b64c1867a6161a099ccc0a536fbb1",
+    "query-stage-39.json": "5d60074d94906840062a22d680a2a4d74359cebf77222fc1df49b43319f9f2c6",
+    "query-stage-4.json": "92f02b10b56504b0fd6584a83960d9add8a25e916278ca7e8e15f01bb1e36ddf",
+    "query-stage-40.json": "908d8eb3a21f22a3f748747c6fdd8d7964349378bbaf4874cc28a0e24c2fac7a",
+    "query-stage-41.json": "dc733b4989206d793dc8d2219e2d9ee457132444ef03e18970b784f036a2feb4",
+    "query-stage-42.json": "a10fc81a30967d997c00e62d8afdbc1f2e8c201b05d5ab076a557710de3f94fc",
+    "query-stage-43.json": "7a0366f53357ec2f0dbbcc1ebf6346f1a6e17364b6c1a5348da3261c386c0c73",
+    "query-stage-44.json": "452f03d62bc17bc4e9a7af468c7f926588b933745e54e7f08ba70048841da497",
+    "query-stage-45.json": "beb86d24dd5629adc719b234a1924b4e64787b685373ab7f639634a6a89caba1",
+    "query-stage-46.json": "f4781ecb38ec1bccb9aa2d9187a3673e6d1e7167b79d0ec598365d695828e59b",
+    "query-stage-47.json": "ed742fd32f047882d1641f15afba4bb7e922c957a3f1f3dc59dd155c1f6f7125",
+    "query-stage-48.json": "87252985c34c753c4c51c5983d6df8150a27952bb75c616ca8a497a9c08e5f29",
+    "query-stage-5.json": "75ebc2879d85e10287be179a1f6f5a23799469c35092f4dc1a86089a17fb7bce",
+    "query-stage-6.json": "905dfca13d4dbaf9b8c3a39a3368b0e2f229495abb670526be55bb871d93a969",
+    "query-stage-7.json": "9e9924b97e62f1f2b700f08d5641063d88b4bd020e942226c33a4749816c2a87",
+    "query-stage-8.json": "8b84b5fff8b2a69de25f7ef2a8003a7d9213fcd7dbd470e66a5645613eeb040a",
+    "query-stage-9.json": "3e18559917b962e857d1727210d9affe6fdb99574c9878cff4045956c374c28e",
+    "query-trace-1-input.json": "8bd4697b9a4ac60e6d7f9f8a5389c1a9f7579a58dd47aacf0d2cf43221d9ea89",
+    "query-trace-1-output.json": "a1e41e561dd8e5ff083521fa1a6d11c43cb0e42283cd7bafe66cfb4ec842ea3b",
+    "query-trace-10-input.json": "0c064f53407bcd8fbec1f52915556be91ef56b31e9a6de62fa78d194cbc7e96a",
+    "query-trace-10-output.json": "d88d001568ede51b835a1be3e4be0e5ead8563f4c5cb157af2b1ae5cae999e0a",
+    "query-trace-11-input.json": "3c0265d6c9e34056459cbe71e7a1da356f7755b815908a643cfbdbfb312d032c",
+    "query-trace-11-output.json": "cb2f77cf108452cad60d69d3a1c784c50b578e5aab15431b5b6bc44bbf0edd34",
+    "query-trace-12-input.json": "929670d15d1ff51d83f1f2b6103a9863fd4daf66460092a47f9d506835e130fd",
+    "query-trace-12-output.json": "a87532036661786bbfa02a03107ad9ac193dba6842a827e13a7f7950f3b1f41d",
+    "query-trace-13-input.json": "eec3c55b612c407e21026c7f2a3b6792a68d1960ea5fabdacd845a9945f15a24",
+    "query-trace-13-output.json": "5c26e20b5a173fa9067becc86a6e976c39dd6e095b4b078d2bbbd7ec4c6f995a",
+    "query-trace-14-input.json": "bbb507687950a3a9c0b8e5fc84fca9df951d9ab7193aa145b8f020716e5e2320",
+    "query-trace-14-output.json": "66cf51ce25588b6a55e2dea75b559959816b303b71886ca9ad32e234211072b6",
+    "query-trace-15-input.json": "276c0e11b9ec5d22c9a08f24206f851f913adc3eb5a83488cba165d0ddb8cb51",
+    "query-trace-15-output.json": "f0f652239355264ec8e8dbcee92404a78a25d3f017956618fef5a503dc95c991",
+    "query-trace-16-input.json": "cd0ecfc316ab8fa92b3d6a517611479f698bb30491ed98f6b9cb4f54482cc03d",
+    "query-trace-16-output.json": "bfad489104267abf0abc698f7361a99c8eb3c3f46b8bf1f43407f3b6501e2e52",
+    "query-trace-17-input.json": "258657fbff3376cad8cedc5f5b8e8a856b7b7f99a23bc6bb5058197768448135",
+    "query-trace-17-output.json": "c9244a4c465a4f86cd64464fdc0c49a3741ac594b4be6d35ba4c1dab1707933d",
+    "query-trace-18-input.json": "dae3784e5ea65eeacb27171773b989327e4f4e2cfa3888c4854952da16e7ad7c",
+    "query-trace-18-output.json": "1e266bef1bc0aae188446f6a5306afbd67d931a0880bb2e06c9145758b398441",
+    "query-trace-19-input.json": "de19ce94309a9288c32264ff13db12bbcc96d7ba3e58da3fe1ce234a11e3699b",
+    "query-trace-19-output.json": "0ff3c89dff491851d9def127749242fca145c85b90407b520ed1e1d91eaf7f5d",
+    "query-trace-2-input.json": "af4dda02efe7102c54e18bd3237fbaa976657665e9c4d17eb81338ab1806674e",
+    "query-trace-2-output.json": "a1e41e561dd8e5ff083521fa1a6d11c43cb0e42283cd7bafe66cfb4ec842ea3b",
+    "query-trace-20-input.json": "ff09e0d39304fe9166ca362fd47a08b4dec9d8f48327f384a043d5459a5c3dd5",
+    "query-trace-20-output.json": "b645ac51f6e50665fb244e4f40a985046139342269b3dcde5b8b25a41af05af3",
+    "query-trace-21-input.json": "433473058e113914409aa5c27da3ae0c154e93b3b0ebdc689cc9c083d16ff0cd",
+    "query-trace-21-output.json": "02efb70b9059066d2026315c098cf4ccd302b5da5232e364bb8fde3479d55d3e",
+    "query-trace-22-input.json": "db87c54ad3e3c73329aa559197f91e767826b66eeb820c41e7ca6efb736af4ed",
+    "query-trace-22-output.json": "4e63b27132e768856b9ad25f3f61ebb542669f60b30447c2031de5cf00086850",
+    "query-trace-23-input.json": "d666c2f721aa4b646277547a15f51b1b502fea034ddda3d42fa6e8f0323928cd",
+    "query-trace-23-output.json": "36f342fd22f1ed26f099b08cbad0e1a4039f9baa7b136b82f1e67ef74b0f66d9",
+    "query-trace-24-input.json": "44ef94829dd16445cb218e6946dd7558ec397e8c653e983bd9de5ea0d5482970",
+    "query-trace-24-output.json": "6cf2fe78d55ae42b4a284f18f3d58011a0ad2f19d30e29f0d99411e57b800752",
+    "query-trace-25-input.json": "7b0850ec89db0641b8d49738857c4bf0ff3af8204423dc389570d94ea913286a",
+    "query-trace-25-output.json": "81a18955558e20bf7555d9791ec68c0a08b30faa33e11180563a74fb4065f389",
+    "query-trace-26-input.json": "0abb627c3d35fe66c6b60c5c504e3e2e7e1e4647473fe135a2fa83111322a444",
+    "query-trace-26-output.json": "72818307609afaa3ca010df76074cb959766c1ae2e5df60b5316a066711f08c2",
+    "query-trace-27-input.json": "c99dba3532743e1f46355fd233c0b6937b5c0091d8375981107e0c4c1cd8ade3",
+    "query-trace-27-output.json": "5ed835d6aba73d623ed12e36a44cbb9c1ad94252ea48c6b36bea5bf3f1892982",
+    "query-trace-3-input.json": "8b62ca748016e2f8e500e596a6c0738cc1f63a22f7b2266c411255c9262eb764",
+    "query-trace-3-output.json": "ccf16ed91b0492d4d27ce220e8fc0f11e08bb880b4733f8dbce4faacf8329ea7",
+    "query-trace-4-input.json": "b496431947811ed918b480bab971a055145b30b97ce49a6f87d911673c98a22e",
+    "query-trace-4-output.json": "8e51d40c2e2e73013fd1b9979f4c5c2d7b4866e3d1433ea9cab401d931d069f5",
+    "query-trace-5-input.json": "f886aceaeb02fcd116bed8e34c4118958919876308fc74681ffdd5679766f6a2",
+    "query-trace-5-output.json": "157509e50e75a9f26a455bdddc81cca6ff5ebe497e20bea9a93ffab7b6cb2919",
+    "query-trace-6-input.json": "eb1b8bdb4248ddf589ab6cb7486a4fe7f80d40cdcdde64a7265b6c1149f8da2b",
+    "query-trace-6-output.json": "145203e313806fdce05a0b9ebb8d4a0dcf865341a8052a1bb5e89b65a369a53f",
+    "query-trace-7-input.json": "09da4dd0288aa4eccc0a64a8aabcb88d1b59cf67ab14e73ab47d419c3ed881e4",
+    "query-trace-7-output.json": "9f15e098113831ec5119463732c6130c071e4cb9e40add5c9d05247272d3977f",
+    "query-trace-8-input.json": "0725cda346728ef326a605013e2982709b71f056228bd8e9da68dc9d31caebb4",
+    "query-trace-8-output.json": "da725225b58d1c229d73306454642422e6fd1fdb4ef6b4be24b862d87ab79ec3",
+    "query-trace-9-input.json": "b9e1cda5e5ffd16f4810306125a5a9fa536c5c5a607fa7d649ccaee99f16c1ac",
+    "query-trace-9-output.json": "d88d001568ede51b835a1be3e4be0e5ead8563f4c5cb157af2b1ae5cae999e0a"
+  }
+}

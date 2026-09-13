@@ -1,0 +1,89 @@
+{
+  "version": "qualified-reconciliation-holdout-rubric-v1",
+  "sourceVersion": "qualified-reconciliation-holdout-v1",
+  "scoringRules": [
+    "Evaluate semantic propositions rather than requiring the extractor's exact wording or an exact number of atomic items.",
+    "Inspect all retained assertions and every retirement, not only the final answer. Qualified historical or contemplated propositions may remain stored if they are not promoted to current adopted claims.",
+    "Required current propositions must be retrievable as current evidence for the case query. A correct answer without adequate retrieved support does not pass supported-answer evaluation.",
+    "A required update must preserve the newer adopted value and retire any incompatible prior current assertion actually extracted in window one. Missing window-one extraction is missing evidence, not a successful update or a justified retirement.",
+    "Allowed retirement pairs describe semantic authorization, not exact strings or required segmentation. Reject retirement of a different subject, scope, unchanged current claim, or merely contemplated alternative.",
+    "For no-update cases, no window-one assertion is authorized to become historical. Reaffirmation may add source receipts without retirement. Empty transitions are valid where no retirement is justified.",
+    "Qualification obligations apply to both arms' stored assertions and answers. Do not require the baseline to emit the new qualified port fields; report those field-level observations separately when available.",
+    "Absent, failed, or unexecuted stages are missing or not_run, never successful. Reasons must come from cited source text; do not infer motives from supersession edges or source ordering.",
+    "The sources record choices and preferences, not execution permission. No memory claim authorizes deleting clips, selling possessions, changing settings, or taking any other external action."
+  ],
+  "cases": {
+    "Q01": {
+      "caseId": "Q01",
+      "requiredCurrent": ["The user's chosen retention period for uploaded bird-camera clips is seven days.", "The stated reason for shortening retention is that storage is filling up."],
+      "forbiddenCurrent": ["The user currently chooses thirty-day retention for those uploaded clips.", "The retention choice applies to all user files or to all recording devices."],
+      "expectedUpdate": {"required": true, "subject": "user's uploaded bird-camera clips", "property": "chosen retention period", "from": "thirty days", "to": "seven days"},
+      "expectedAnswer": "Seven days, shortened because storage is filling up.",
+      "allowedRetirements": [{"predecessor": "The current chosen retention period for uploaded bird-camera clips is thirty days.", "replacement": "The current chosen retention period for those clips is seven days.", "evidenceMessageIds": ["q01-b"]}],
+      "qualificationObligations": ["Treat this as a scoped adopted choice, not confirmation that software settings were changed or clips deleted.", "The garden/birds description remains compatible and must not be retired as a retention update."]
+    },
+    "Q02": {
+      "caseId": "Q02",
+      "requiredCurrent": ["The approved translation guide preserves character names in their original spelling."],
+      "forbiddenCurrent": ["The approved guide requires localized replacement character names.", "The rejected draft has been readopted."],
+      "expectedUpdate": {"required": false},
+      "expectedAnswer": "Preserve each character name's original spelling; the localized-name instruction belongs to a rejected draft.",
+      "allowedRetirements": [],
+      "qualificationObligations": ["If stored, the localized-name instruction must remain attributed to a rejected historical draft.", "The two messages in window two jointly reaffirm, rather than replace, the approved rule.", "The source gives no new reason for choosing original spelling; do not invent one."]
+    },
+    "Q03": {
+      "caseId": "Q03",
+      "requiredCurrent": ["The user's adopted decision is still to keep the folding bicycle.", "Selling is an unadopted possibility, not a decided action."],
+      "forbiddenCurrent": ["The user has decided to sell the folding bicycle.", "The bicycle has already been sold."],
+      "expectedUpdate": {"required": false},
+      "expectedAnswer": "Keep it for now. Selling is only a possibility; the user has not decided to sell and wants to try rearranging storage first.",
+      "allowedRetirements": [],
+      "qualificationObligations": ["The initial suggestion to sell is assistant-authored, not an adopted user decision.", "Preserve the user's uncertainty and for-now scope.", "Do not retire the independent fact that the bicycle is used for errands.", "Do not promote the assistant's statement about the user's space needs into an independently user-confirmed fact."]
+    },
+    "Q04": {
+      "caseId": "Q04",
+      "requiredCurrent": ["The user personally prefers spoken stories for bedtime audio.", "The housemate's reported preference is white noise, not the user's preference."],
+      "forbiddenCurrent": ["The user personally prefers white noise to spoken stories at bedtime.", "The user has adopted the housemate's preference."],
+      "expectedUpdate": {"required": false},
+      "expectedAnswer": "The user prefers spoken stories. White noise is the housemate's reported preference.",
+      "allowedRetirements": [],
+      "qualificationObligations": ["An embedded first-person quotation remains attributed to the housemate even though the outer message has user role.", "Both preferences can coexist; neither is evidence that the other changed."]
+    },
+    "Q05": {
+      "caseId": "Q05",
+      "requiredCurrent": ["使用者白天搭城際列車時，目前優先選靠窗座位。", "改變的明示理由是想沿途看風景。"],
+      "forbiddenCurrent": ["使用者白天搭城際列車仍優先選靠走道。", "這項偏好適用所有交通工具或夜間旅程。"],
+      "expectedUpdate": {"required": true, "subject": "使用者白天搭城際列車", "property": "優先座位偏好", "from": "靠走道", "to": "靠窗"},
+      "expectedAnswer": "現在優先選靠窗，因為想沿途看風景；範圍是白天的城際列車。",
+      "allowedRetirements": [{"predecessor": "白天搭城際列車優先選靠走道。", "replacement": "白天搭城際列車優先選靠窗。", "evidenceMessageIds": ["q05-b"]}],
+      "qualificationObligations": ["這是已採納的偏好變更，不是已完成訂位。", "保留白天及城際列車的情境，不擴張成所有旅行的永久特質。"]
+    },
+    "Q06": {
+      "caseId": "Q06",
+      "requiredCurrent": ["使用者正式在用的食譜卡，以公克標示材料份量。"],
+      "forbiddenCurrent": ["正式食譜卡現在改用量杯。", "已作廢範本被重新採用。"],
+      "expectedUpdate": {"required": false},
+      "expectedAnswer": "使用公克。量杯標示屬於已作廢、僅保留展示設計演變的早期範本。",
+      "allowedRetirements": [],
+      "qualificationObligations": ["若記錄量杯指示，必須保留早期作廢範本的歸屬。", "窗口二兩則訊息共同確認現行公克規則，不是一次新的規則替代。", "使用者未提供採用公克的理由，不得補出精準、健康等動機。"]
+    },
+    "Q07": {
+      "caseId": "Q07",
+      "requiredCurrent": ["使用者目前採用紙本筆記本記錄讀書筆記。", "改用電子筆記仍在考慮，尚未決定。"],
+      "forbiddenCurrent": ["使用者已決定改用電子筆記。", "使用者永久排斥電子筆記。"],
+      "expectedUpdate": {"required": false},
+      "expectedAnswer": "目前仍用紙本；電子筆記只是建議及考慮中的選項，還沒決定改用。",
+      "allowedRetirements": [],
+      "qualificationObligations": ["電子筆記最初由助理建議，不能寫成使用者已確認的選擇。", "保留目前、考慮及尚未決定的狀態，不把暫不採用寫成永久拒絕。", "搜尋方便是助理提出的評估，不是使用者證實採用的理由。"]
+    },
+    "Q08": {
+      "caseId": "Q08",
+      "requiredCurrent": ["使用者在家中書桌工作時喜歡安靜、不放背景音樂。", "使用者在陶藝工作室捏陶時喜歡爵士樂背景。"],
+      "forbiddenCurrent": ["使用者在家中書桌工作時現在喜歡放爵士樂。", "使用者所有工作場合都喜歡背景音樂。"],
+      "expectedUpdate": {"required": false},
+      "expectedAnswer": "在家中書桌工作時喜歡完全安靜、不播放音樂；爵士樂偏好限定陶藝工作室捏陶的情境。",
+      "allowedRetirements": [],
+      "qualificationObligations": ["兩種偏好的地點及活動範圍不同，可以同時成立。", "不得因後一句較新而淘汰家中書桌的安靜偏好。"]
+    }
+  }
+}

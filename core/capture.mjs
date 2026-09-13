@@ -1,10 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { captureSnapshot, extractedItems } from './capture-input.mjs';
+import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { reconcileCapture } from './ordered-capture.mjs';
+import { qualifyExtractedItems } from './automatic-qualification.mjs';
+import { qualifyCandidateItems } from './qualification-candidates.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
+const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
 async function classifyAdmission(model, namespace, admission, operations) {
@@ -37,22 +41,36 @@ async function classifyAdmission(model, namespace, admission, operations) {
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations }) {
-  const snapshot = captureSnapshot(input);
+export async function captureMessages({ model, input, operations, captureQualification }) {
+  const snapshot = captureSnapshot(input, captureQualification);
+  const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  const sourceMessages = retained?.messages ?? snapshot.messages;
+  // Retention coverage of this submitted snapshot, not an attestation of which
+  // extraction policy executed an earlier duplicate batch.
+  const coverage = retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {};
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
-  const claim = unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
-  if (claim.processing || claim.duplicate) return claim;
+  const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
+    : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
+  if (claim.processing || claim.duplicate) return retained ? { ...claim, ...coverage } : claim;
   const owned = { ...key, token: claim.token };
   let finished;
   try {
-    const output = await callModel(model, 'extract', system, {
-      messages: snapshot.messages.map(({ role, content }, index) => ({ index, role, content })),
+    const output = await callModel(model, 'extract', retained ? retainedSystem : system, {
+      messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })),
     }, { failureCode: 'extraction_failed' });
     let items;
-    try { items = extractedItems(output, snapshot); }
+    try { items = extractedItems(output, snapshot, retained?.messages); }
     catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
-    finished = unwrap(operations.finishAdmission({ ...owned, items }));
+    if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
+      ? await qualifyCandidateItems(model, items) : await qualifyExtractedItems(model, items);
+    if (snapshot.causal) {
+      const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
+      const judged = captureQualification
+        ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery });
+      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
+    } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned); } catch { /* The bounded lease can expire. */ }
@@ -62,5 +80,7 @@ export async function captureMessages({ model, input, operations }) {
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };
   const classification = await classifyAdmission(model, snapshot.namespace, admission, operations);
-  return { duplicate: false, admission, classification };
+  return { duplicate: false, admission, classification,
+    ...coverage,
+    ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}) };
 }

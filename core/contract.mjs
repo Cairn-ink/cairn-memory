@@ -8,12 +8,15 @@ import { recallMemories } from './recall.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
+import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
+import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
 const statusOrder = ["filed", "unfiled"];
+const stateOrder = ['active', 'historical'];
 
 function contractNamespace(input) {
   object(input, ["ownerId", "scope", "projectId"]);
@@ -98,6 +101,14 @@ function statuses(value = statusOrder) {
   return statusOrder.filter((item) => value.includes(item));
 }
 
+function states(value = stateOrder) {
+  denseArray(value, 1, 2);
+  if (value.some(state => !stateOrder.includes(state)) || new Set(value).size !== value.length) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  return stateOrder.filter(state => value.includes(state));
+}
+
 function success(value) {
   return { ok: true, value };
 }
@@ -113,7 +124,11 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model']);
+  object(input, ['path', 'model', 'captureQualification']);
+  const captureQualification = Object.hasOwn(input, 'captureQualification') ? input.captureQualification : undefined;
+  if (Object.hasOwn(input, 'captureQualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
+    throw new MemoryStoreError('invalid_input');
+  }
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   const runtime = createMemoryRuntime({ path: input.path });
@@ -173,7 +188,7 @@ export function openMemoryCore(input) {
   function admit(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memory", "receipts", "conflictHints"]);
+      object(input, ["namespace", "memory", "receipts", "conflictHints", "qualification"]);
       const ns = contractNamespace(input.namespace);
       const memory = contractMemory(input.memory);
       if (!Array.isArray(input.receipts) || input.receipts.length < 1 || input.receipts.length > 4) {
@@ -181,7 +196,9 @@ export function openMemoryCore(input) {
       }
       const receipts = input.receipts.map(contractReceipt);
       const conflictHints = contractConflictHints(input.conflictHints);
-      const result = runtime.admit(ns, { ...memory, receipts, conflictHints });
+      if (Object.hasOwn(input, 'qualification')) qualificationSources(input.memory.content, input.receipts);
+      const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
+      const result = runtime.admit(ns, { ...memory, receipts, conflictHints, qualification });
       return { memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated, indexRevision: result.indexRevision };
     });
@@ -190,15 +207,17 @@ export function openMemoryCore(input) {
   function list(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "statuses", "limit", "cursor"]);
+      object(input, ["namespace", "statuses", "states", "limit", "cursor"]);
       const ns = contractNamespace(input.namespace);
       const selected = statuses(input.statuses);
+      const selectedStates = states(input.states);
       const count = contractLimit(input.limit);
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: "list",
-        f: selected.join(","), l: count };
+        f: selected.join(","), l: count,
+        ...(selectedStates.length === 1 ? { states: selectedStates[0] } : {}) };
       let cursor;
       if (input.cursor !== undefined) cursor = decodeCursor(input.cursor, binding);
-      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e);
+      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e, selectedStates);
       const memories = page.rows.slice(0, count);
       const exhausted = page.rows.length <= count;
       const last = memories.at(-1);
@@ -211,7 +230,10 @@ export function openMemoryCore(input) {
   function get(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memoryId", "receiptLimit", "receiptCursor"]);
+      object(input, ["namespace", "memoryId", "receiptLimit", "receiptCursor", "includeQualification"]);
+      if (Object.hasOwn(input, 'includeQualification') && typeof input.includeQualification !== 'boolean') {
+        throw new MemoryStoreError('invalid_input');
+      }
       const ns = contractNamespace(input.namespace);
       const memoryId = contractId(input.memoryId);
       const count = contractLimit(input.receiptLimit);
@@ -219,11 +241,13 @@ export function openMemoryCore(input) {
         m: memoryId, l: count };
       let cursor;
       if (input.receiptCursor !== undefined) cursor = decodeCursor(input.receiptCursor, binding);
-      const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e);
+      const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e, input.includeQualification === true);
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
       return { memory: page.memory, receipts, placements: page.placements, conflicts: page.conflicts,
+        ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
+        ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
           a: { createdAt: last.createdAt, id: last.id } }), exhausted };
     });
@@ -254,12 +278,67 @@ export function openMemoryCore(input) {
     });
   }
 
+  function supersede(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'memoryId', 'expectedRevision', 'replacement', 'receipts']);
+      const ns = contractNamespace(input.namespace);
+      const id = contractId(input.memoryId);
+      const expectedRevision = contractRevision(input.expectedRevision);
+      const replacement = contractMemory(input.replacement);
+      const receipts = denseArray(input.receipts, 1, 4).map(contractReceipt);
+      return runtime.supersede(ns, id, { ...replacement, receipts }, expectedRevision);
+    });
+  }
+
   function admissionKey(input) {
     if (typeof input.payloadDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.payloadDigest)) {
       throw new MemoryStoreError('invalid_input');
     }
     return { client: contractId(input.client), eventId: contractId(input.eventId),
       payloadDigest: input.payloadDigest };
+  }
+
+  function exactFields(input, fields) {
+    object(input, fields);
+    if (fields.some(field => !Object.hasOwn(input, field))) throw new MemoryStoreError('invalid_input');
+  }
+
+  function qualifiedRef(input) {
+    exactFields(input, ['memoryId', 'expectedRevision']);
+    return { memoryId: contractId(input.memoryId), expectedRevision: contractRevision(input.expectedRevision) };
+  }
+
+  function bindQualifiedClaim(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'memoryId', 'expectedRevision', 'slotId', 'singleClaim']);
+      if (input.singleClaim !== true) throw new MemoryStoreError('invalid_input');
+      const ns = contractNamespace(input.namespace);
+      return runtime.bindQualifiedClaim(ns, { memoryId: contractId(input.memoryId),
+        expectedRevision: contractRevision(input.expectedRevision),
+        slotId: input.slotId === null ? null : contractId(input.slotId) });
+    });
+  }
+
+  function transitionQualified(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'predecessor', 'replacement']);
+      return runtime.transitionQualified(contractNamespace(input.namespace), {
+        predecessor: qualifiedRef(input.predecessor), replacement: qualifiedRef(input.replacement) });
+    });
+  }
+
+  function transitionQualifiedSet(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'predecessors', 'replacement']);
+      const predecessors = denseArray(input.predecessors, 1, 5).map(qualifiedRef)
+        .sort((left, right) => left.memoryId < right.memoryId ? -1 : left.memoryId > right.memoryId ? 1 : 0);
+      return runtime.transitionQualifiedSet(contractNamespace(input.namespace), {
+        predecessors, replacement: qualifiedRef(input.replacement) });
+    });
   }
 
   function claimAdmission(input) {
@@ -274,6 +353,20 @@ export function openMemoryCore(input) {
     });
   }
 
+  function admissionItems(input) {
+    return denseArray(input, 0, 5).map((item) => {
+      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification']);
+      if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
+          item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
+      const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
+      const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
+      const conflictHints = contractConflictHints(item.conflictHints);
+      if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
+      const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
+      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints, qualification };
+    });
+  }
+
   function finishAdmission(input) {
     return invoke(() => {
       runtime.ready();
@@ -281,15 +374,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = denseArray(input.items, 0, 5).map((item) => {
-        object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints']);
-        if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
-            item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
-        const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
-        const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
-        const conflictHints = contractConflictHints(item.conflictHints);
-        return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints };
-      });
+      const items = admissionItems(input.items);
       return runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -355,7 +440,7 @@ export function openMemoryCore(input) {
     return mapPage(input);
   }
 
-  function mapPage(input, navigation) {
+  function mapPage(input, navigation, { catalogOnly = false } = {}) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
@@ -374,21 +459,38 @@ export function openMemoryCore(input) {
       countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
+      if (catalogOnly) binding.o = 'classification_catalog';
       if (navigation) Object.assign(binding, { o: 'recall_map',
-        q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION });
+        q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
+        policy: QUERY_CANDIDATE_VERSION, scan: QUERY_SCAN_LIMIT });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
-      const page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
-        ...(navigation ? { memoryLabel: navigation.excerpt } : {}) });
+      let page;
+      if (navigation) {
+        const key = namespaceBinding(ns);
+        let snapshot = navigation.pages.get(key);
+        if (!snapshot) {
+          snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt });
+          navigation.pages.set(key, snapshot);
+        }
+        if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
+        runtime.assertEpoch(ns, snapshot.epoch);
+        if (offset > snapshot.rows.length) throw new MemoryStoreError('invalid_cursor');
+        page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
+      } else {
+        page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
+          catalogOnly });
+      }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
         if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
         const selected = page.rows.slice(0, take);
-        const exhausted = take === page.rows.length;
+        const pageEnded = take === page.rows.length;
+        const exhausted = pageEnded && page.scanExhausted !== false;
         const value = { items: selected.filter((row) => row.item).map((row) => row.item),
-          nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
+          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
@@ -404,22 +506,37 @@ export function openMemoryCore(input) {
   function fetch(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ['namespace', 'refs', 'cursor', 'tokenBudget']);
+      object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget', 'includeQualification', 'contextMode']);
+      const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
+      if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
+      const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
+      if ((Object.hasOwn(input, 'contextMode') && contextMode !== 'source-evidence') ||
+          (contextMode === 'source-evidence' && includeQualification)) throw new MemoryStoreError('invalid_input');
       const ns = contractNamespace(input.namespace);
       const refs = memoryRefs(input.refs);
+      const view = input.view === undefined ? 'current' : input.view;
+      if (!['current', 'historical'].includes(view)) throw new MemoryStoreError('invalid_input');
       const budget = contractRevision(input.tokenBudget ?? 4000);
       if (budget > 4000) throw new MemoryStoreError('invalid_input');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,
-        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url') };
+        r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url'),
+        ...(view === 'historical' ? { view } : {}),
+        ...(includeQualification ? { includeQualification: true } : {}),
+        ...(contextMode === 'source-evidence' ? { contextMode } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, budget, cursor, binding, encodeCursor });
+      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
     });
   }
 
   async function recall(input) {
     try {
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode']);
+      const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
+      if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
+      const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
+      if ((Object.hasOwn(input, 'contextMode') && contextMode !== 'source-evidence') ||
+          (contextMode === 'source-evidence' && includeQualification)) throw new MemoryStoreError('invalid_input');
       let namespaces;
       try {
         denseArray(input.readSet, 1, 2);
@@ -430,15 +547,25 @@ export function openMemoryCore(input) {
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
-      const navigation = { excerpt: createQueryExcerpt(query),
+      const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
+      const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
+        namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
+        revision: candidate.revision,
+      })), [], namespaces.flatMap((namespace) => {
+        const page = navigation.pages.get(namespaceBinding(namespace));
+        return page ? [{ namespace, indexRevision: page.epoch }] : [];
+      }));
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch,
+        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode,
+        validateFresh,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
-        })), selected),
+          ...(contextMode === 'source-evidence' ? { sourceEvidence: candidate.item } : {}),
+        })), selected, namespaces.map((namespace) => ({ namespace,
+          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
       }));
     } catch (error) { return failure(error); }
   }
@@ -446,11 +573,23 @@ export function openMemoryCore(input) {
   async function capture(input) {
     try {
       runtime.ready();
-      object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages']);
-      const namespace = publicNamespace(contractNamespace(input.namespace));
-      return success(await captureMessages({ model, input: { ...input, namespace },
+      object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
+      const ns = contractNamespace(input.namespace);
+      const namespace = publicNamespace(ns);
+      return success(await captureMessages({ model, captureQualification, input: { ...input, namespace },
         operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
-          classifyPlacement, applyPlacement } }));
+          classifyPlacement, applyPlacement,
+          ordered: {
+            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot)),
+            prepare(snapshot, order, extracted) {
+              return invoke(() => {
+                const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
+                return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
+              });
+            },
+            finish: (snapshot, token, order, prepared, judged) =>
+              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged)),
+          } } }));
     } catch (error) { return failure(error); }
   }
 
@@ -467,7 +606,8 @@ export function openMemoryCore(input) {
         throw new MemoryStoreError('model_not_configured');
       }
       const snapshot = runtime.classificationSnapshot(ns, ids, guards, index);
-      const mapped = map({ namespace: input.namespace, purpose: 'classification' });
+      const mapped = mapPage({ namespace: input.namespace, purpose: 'classification' },
+        undefined, { catalogOnly: true });
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
       const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
@@ -477,7 +617,8 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, claimAdmission, finishAdmission, abandonAdmission,
+    admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
+    claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     close() {
       runtime.close();

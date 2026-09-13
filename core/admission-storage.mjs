@@ -14,14 +14,15 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     row.payload_digest === input.payloadDigest && row.token === input.token &&
     row.lease_expires_at > now;
 
-  function claimAdmission(ns, input) {
+  function claimAdmission(ns, input, hooks) {
     return transaction(db, () => {
       const row = read(ns, input);
       if (row && row.payload_digest !== input.payloadDigest) fail("event_payload_conflict");
       if (row?.state === "completed") {
         return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
-          suppressedCount: row.suppressed_count };
+          suppressedCount: row.suppressed_count, ...hooks?.replay() };
       }
+      const prepared = hooks?.prepare(row);
       // Read trusted time only once the write lock has been acquired.
       const now = Date.now();
       if (row && row.lease_expires_at > now) return { processing: true };
@@ -35,13 +36,17 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
           .run(...key(ns, input), input.payloadDigest, token, now + input.leaseMs);
       }
-      return { token };
+      return { token, ...prepared };
     });
   }
 
-  function finishAdmission(ns, input) {
+  function finishAdmission(ns, input, hooks) {
     return transaction(db, () => {
       if (!live(read(ns, input), input, Date.now())) fail("stale_admission");
+      // The public manual finish cannot bypass ordered capture's private proof.
+      if (!hooks && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
+        .get(...key(ns, input))) fail('stale_admission');
+      hooks?.validate();
       const ids = new Set();
       let suppressedCount = 0;
       const activeItems = [];
@@ -55,11 +60,14 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         activeItems.push(item);
       }
       const entries = activeItems.map((item) => {
-        const memoryId = admitMutation(ns, item).memory.id;
+        const result = admitMutation(ns, item);
+        const memoryId = result.memory.id;
         ids.add(memoryId);
-        return { memoryId, hints: item.conflictHints };
+        return { memoryId, hints: item.conflictHints, item,
+          insertedReceiptIds: result.insertedReceiptIds };
       });
       conflictStorage.insertBatch(ns, entries, "inferred-hint");
+      const extra = hooks?.admitted(entries);
       const memoryIds = [...ids];
       // Resolve revisions after the entire batch: later exact matches can attach
       // receipts to an earlier result while preserving its first occurrence order.
@@ -67,7 +75,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       db.prepare(`UPDATE admission_claims SET state = 'completed', token = NULL,
         lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${where}`)
         .run(JSON.stringify(memoryIds), suppressedCount, ...key(ns, input));
-      return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns) };
+      hooks?.complete();
+      return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
     });
   }
 

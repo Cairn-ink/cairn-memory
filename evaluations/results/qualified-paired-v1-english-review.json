@@ -1,0 +1,476 @@
+{
+  "version": "qualified-paired-semantic-review-v1",
+  "reviewer": "independent-standards-agent",
+  "language": "en",
+  "cases": [
+    {
+      "caseId": "Q01",
+      "arm": "baseline",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "a1e8982b-d4bc-447a-9ee8-d2bbde843948",
+          "content": "The camera captures only birds in the user's garden.",
+          "supported": true,
+          "reason": "Supported by q01-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "a2691f6e-69fe-45f8-a1a6-3eae1b8382c7",
+          "content": "For the bird-camera project, the chosen retention period for uploaded clips is thirty days.",
+          "supported": true,
+          "reason": "Supported by q01-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "7352e6d6-d9ef-4708-ba6c-bf4d51d73690",
+          "content": "The chosen retention period for the uploaded bird-camera clips is seven days instead of thirty.",
+          "supported": true,
+          "reason": "Supported by q01-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "76885b04-7576-43ee-ab78-645d30730f65",
+          "content": "The shorter retention period was chosen because storage is filling up.",
+          "supported": true,
+          "reason": "Supported by q01-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [
+        {
+          "predecessorId": "a2691f6e-69fe-45f8-a1a6-3eae1b8382c7",
+          "successorId": "7352e6d6-d9ef-4708-ba6c-bf4d51d73690",
+          "justified": true,
+          "reason": "q01-b explicitly adopts seven instead of thirty days for the same uploaded clips; the bound replacement receipt supports this change."
+        }
+      ],
+      "currentState": {
+        "status": "pass",
+        "reason": "Seven-day scoped choice and explicit storage reason are active; incompatible thirty-day choice is historical and compatible bird/garden fact remains active."
+      },
+      "requiredRetrieval": {
+        "status": "pass",
+        "reason": "Retrieved current decision and source-backed storage reason cover both required propositions."
+      },
+      "answer": {
+        "status": "pass",
+        "reason": "Seven days and storage filling up are supported by retrieved q01-b; no claim that settings were executed."
+      },
+      "positiveUpdate": {
+        "status": "pass",
+        "reason": "Actual first-window thirty-day assertion was retired in favor of explicitly adopted seven-day choice."
+      },
+      "overall": "pass",
+      "notes": []
+    },
+    {
+      "caseId": "Q01",
+      "arm": "qualified",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "c9d4797b-f7bd-401c-bb73-07495ca177a2",
+          "content": "For the bird-camera project, the chosen retention period for uploaded clips is 30 days.",
+          "supported": true,
+          "reason": "Supported by q01-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "d45ae7e4-5030-4e67-ade3-40c668c3de6d",
+          "content": "The camera captures only birds in the user's garden.",
+          "supported": true,
+          "reason": "Supported by q01-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "20b21441-4787-4106-9fe8-d1edc8c2a168",
+          "content": "For uploaded bird-camera clips, the chosen retention period is seven days instead of thirty.",
+          "supported": true,
+          "reason": "Supported by q01-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "830f19e0-ca5e-49e0-8a60-1e5cfb3420dd",
+          "content": "The shorter retention period was chosen because storage is filling up.",
+          "supported": true,
+          "reason": "Supported by q01-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "ea2f27c2-6328-478e-a23c-6a1f10a0005c",
+          "content": "The retention setting for those uploaded bird-camera clips has been decided now.",
+          "supported": true,
+          "reason": "Supported by q01-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [
+        {
+          "predecessorId": "c9d4797b-f7bd-401c-bb73-07495ca177a2",
+          "successorId": "20b21441-4787-4106-9fe8-d1edc8c2a168",
+          "justified": true,
+          "reason": "q01-b explicitly adopts seven instead of thirty days for the same uploaded clips; the bound replacement receipt supports this change."
+        }
+      ],
+      "currentState": {
+        "status": "pass",
+        "reason": "Seven-day scoped choice and storage reason are active; thirty-day assertion is historical and garden fact remains active."
+      },
+      "requiredRetrieval": {
+        "status": "pass",
+        "reason": "Current choice and explicit reason both retrieved with q01-b receipts."
+      },
+      "answer": {
+        "status": "pass",
+        "reason": "Answer reports the decided seven-day setting and recorded reason, not completed external action."
+      },
+      "positiveUpdate": {
+        "status": "pass",
+        "reason": "Actual thirty-day predecessor was retired for the explicitly adopted seven-day replacement."
+      },
+      "overall": "pass",
+      "notes": [
+        "Additional claim that the setting has been decided is redundant but source-supported."
+      ]
+    },
+    {
+      "caseId": "Q02",
+      "arm": "qualified",
+      "operationStatus": "incomplete",
+      "claims": [
+        {
+          "memoryId": "4abaa7fe-77c2-4478-ac1f-3eae4852bbb7",
+          "content": "The user adopted the rule to leave character names in their original spelling when revising the translation guide.",
+          "supported": true,
+          "reason": "Supported by q02-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "d3f5b823-61c7-4d53-8ed0-0a9e7ecacff9",
+          "content": "The user's current translation instructions say to leave character names in their original spelling.",
+          "supported": true,
+          "reason": "Supported by q02-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [],
+      "currentState": {
+        "status": "missing",
+        "reason": "Second capture failed invalid_model_output; original state survived but completed handling of new evidence is absent."
+      },
+      "requiredRetrieval": {
+        "status": "missing",
+        "reason": "Recall was not_run after failed second capture."
+      },
+      "answer": {
+        "status": "missing",
+        "reason": "Answer was not_run after failed second capture."
+      },
+      "positiveUpdate": {
+        "status": "not_applicable",
+        "reason": "No update authorized; failed operation is not a successful abstention."
+      },
+      "overall": "missing",
+      "notes": [
+        "Both persisted first-window assertions are source-supported. No retirement occurred, but the second window was not successfully processed."
+      ]
+    },
+    {
+      "caseId": "Q02",
+      "arm": "baseline",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "1b0be473-68d2-4588-829a-6c444420a368",
+          "content": "The user’s current translation instructions say to leave character names in their original spelling.",
+          "supported": true,
+          "reason": "Supported by q02-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "c2a8235a-6f31-451c-a4c4-0a85669b781c",
+          "content": "The user adopted that rule when revising the translation guide.",
+          "supported": true,
+          "reason": "Supported by q02-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "165e07a1-22db-4024-a1ef-cb47073078b0",
+          "content": "The approved translation guide is still the revised one, and it preserves a character’s original name spelling.",
+          "supported": true,
+          "reason": "Supported by q02-c in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "4533c4d0-bb4a-4ee6-ad3f-6d15d8af2b69",
+          "content": "The rejected draft proposed replacing every character name with a local equivalent, but it was rejected and kept only as an example of a disliked translation approach.",
+          "supported": true,
+          "reason": "Supported by q02-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "7a420c3e-55ab-43c3-9657-a61921d4c7eb",
+          "content": "Finding the rejected draft has not changed the user’s instructions.",
+          "supported": true,
+          "reason": "Supported by q02-c in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [
+        {
+          "predecessorId": "c2a8235a-6f31-451c-a4c4-0a85669b781c",
+          "successorId": "165e07a1-22db-4024-a1ef-cb47073078b0",
+          "justified": false,
+          "reason": "q02-c reaffirms the unchanged approved guide; neither message retracts the earlier adoption event. No first-window assertion is authorized to retire."
+        }
+      ],
+      "currentState": {
+        "status": "pass",
+        "reason": "Final active assertions preserve approved original spelling and explicitly qualify the rejected draft. The separate retirement judgment fails."
+      },
+      "requiredRetrieval": {
+        "status": "pass",
+        "reason": "Approved original-spelling rule is retrieved with current and original evidence."
+      },
+      "answer": {
+        "status": "pass",
+        "reason": "Answer correctly preserves original spelling and invents no reason."
+      },
+      "positiveUpdate": {
+        "status": "not_applicable",
+        "reason": "No update authorized."
+      },
+      "overall": "fail",
+      "notes": [
+        "Correct current answer does not excuse retiring the still-supported original adoption record."
+      ]
+    },
+    {
+      "caseId": "Q03",
+      "arm": "baseline",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "22616b21-2b07-4e85-b942-000c9d6021db",
+          "content": "The user has decided to keep their folding bicycle.",
+          "supported": true,
+          "reason": "Supported by q03-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "84d22916-8a5b-4d87-aceb-f2a8327d2296",
+          "content": "The folding bicycle is the bicycle the user uses for errands.",
+          "supported": true,
+          "reason": "Supported by q03-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "2289a53c-d1b3-4d9c-aa2a-c327a00b3c2e",
+          "content": "The user has not decided to sell the folding bicycle and wants to try rearranging the storage area first; for now, the decision to keep the bicycle still stands.",
+          "supported": true,
+          "reason": "Supported by q03-b, q03-c in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [],
+      "currentState": {
+        "status": "pass",
+        "reason": "Active records preserve keeping, errands use, and explicit unadopted selling possibility with for-now scope."
+      },
+      "requiredRetrieval": {
+        "status": "fail",
+        "reason": "Only the first-window keeping assertion and receipt were retrieved; no evidence of the second-window contemplated-but-unadopted selling possibility was retrieved."
+      },
+      "answer": {
+        "status": "pass",
+        "reason": "The concise answer that the user decided to keep the bicycle is correct and supported; it does not assert permanence or completed action."
+      },
+      "positiveUpdate": {
+        "status": "not_applicable",
+        "reason": "No adopted change."
+      },
+      "overall": "fail",
+      "notes": [
+        "Answer omits later qualification but makes no contrary or permanent claim. The stronger required-retrieval criterion fails independently."
+      ]
+    },
+    {
+      "caseId": "Q03",
+      "arm": "qualified",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "2bf9f2c1-5b66-47a1-844a-bae4256a686b",
+          "content": "The user uses their folding bicycle for errands.",
+          "supported": true,
+          "reason": "Supported by q03-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "a37a10c3-2468-4aa0-a095-769096e26eb9",
+          "content": "The user has decided to keep their folding bicycle.",
+          "supported": true,
+          "reason": "Supported by q03-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "d372b2da-2927-42ae-a8e9-670d6cc897b4",
+          "content": "The user has not decided to sell the folding bicycle and wants to try rearranging the storage area first; keeping the bicycle still stands for now.",
+          "supported": true,
+          "reason": "Supported by q03-b, q03-c in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [],
+      "currentState": {
+        "status": "pass",
+        "reason": "Keeping, errands use, and contemplating sale without adoption remain correctly qualified and active."
+      },
+      "requiredRetrieval": {
+        "status": "pass",
+        "reason": "Retrieved original keeping decision plus later unadopted possibility, storage rearrangement, and for-now qualification."
+      },
+      "answer": {
+        "status": "pass",
+        "reason": "Answer preserves no decision to sell, trying rearrangement first, and keeping for now, all supported by retrieved user evidence."
+      },
+      "positiveUpdate": {
+        "status": "not_applicable",
+        "reason": "No adopted change."
+      },
+      "overall": "pass",
+      "notes": []
+    },
+    {
+      "caseId": "Q04",
+      "arm": "qualified",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "111053da-776b-4162-9810-ef979cf501ef",
+          "content": "The user prefers spoken stories for their own bedtime audio rather than white noise.",
+          "supported": true,
+          "reason": "Supported by q04-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "edd44af0-ae11-47aa-a281-83f0547ca57c",
+          "content": "The housemate prefers white noise to spoken stories at bedtime.",
+          "supported": true,
+          "reason": "Supported by q04-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [
+        {
+          "predecessorId": "111053da-776b-4162-9810-ef979cf501ef",
+          "successorId": "edd44af0-ae11-47aa-a281-83f0547ca57c",
+          "justified": false,
+          "reason": "q04-b reports a different person's preference. It does not replace the user's own preference in q04-a; receipt binding is not semantic authorization."
+        }
+      ],
+      "currentState": {
+        "status": "fail",
+        "reason": "User's still-current spoken-story preference was wrongly made historical; only the distinct housemate preference remains active."
+      },
+      "requiredRetrieval": {
+        "status": "fail",
+        "reason": "Only housemate preference was retrieved; required user's spoken-story preference is absent."
+      },
+      "answer": {
+        "status": "fail",
+        "reason": "Answer transfers housemate's white-noise preference to the user, contradicting q04-a and not supported by retrieved attributed q04-b."
+      },
+      "positiveUpdate": {
+        "status": "not_applicable",
+        "reason": "No change to the user's preference was authorized."
+      },
+      "overall": "fail",
+      "notes": [
+        "Both extracted claim texts preserve subject identity; the failure is wrongful cross-subject retirement followed by answer attribution loss."
+      ]
+    },
+    {
+      "caseId": "Q04",
+      "arm": "baseline",
+      "operationStatus": "completed",
+      "claims": [
+        {
+          "memoryId": "c4a07317-ca64-4795-aedf-c472963902dc",
+          "content": "The user prefers spoken stories for bedtime audio and does not prefer white noise.",
+          "supported": true,
+          "reason": "Supported by q04-a in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        },
+        {
+          "memoryId": "9c532875-2468-47d0-83fc-a67f5b889bf0",
+          "content": "The user's housemate prefers white noise to spoken stories at bedtime.",
+          "supported": true,
+          "reason": "Supported by q04-b in its recorded source context; support of the text is separate from whether retirement/currentness is justified."
+        }
+      ],
+      "retirements": [],
+      "currentState": {
+        "status": "pass",
+        "reason": "Both personal spoken-story and housemate white-noise preferences coexist with distinct subjects."
+      },
+      "requiredRetrieval": {
+        "status": "fail",
+        "reason": "Only user's spoken-story preference was retrieved; frozen rubric additionally requires the attributed housemate preference."
+      },
+      "answer": {
+        "status": "pass",
+        "reason": "Answer correctly states user's spoken-story preference, supported by retrieved q04-a; no incorrect attribution."
+      },
+      "positiveUpdate": {
+        "status": "not_applicable",
+        "reason": "No update authorized."
+      },
+      "overall": "fail",
+      "notes": [
+        "This is a required-retrieval completeness failure, not an incorrect answer or state corruption."
+      ]
+    }
+  ],
+  "summary": {
+    "caseArms": 8,
+    "distinctPersistedClaims": 26,
+    "supportedClaims": 26,
+    "retirements": 4,
+    "justifiedRetirements": 2,
+    "sourceCheckpoint": "qualified-paired-v1-stage-68.json",
+    "gradingNote": "Claim support evaluates recorded text against attributed source; final currentness and retirement are separately graded. Overall missing denotes incomplete processing, not success.",
+    "byArm": {
+      "baseline": {
+        "caseArms": 4,
+        "claims": 14,
+        "retirements": 2,
+        "justifiedRetirements": 1,
+        "overall": {
+          "pass": 1,
+          "fail": 3
+        },
+        "currentState": {
+          "pass": 4
+        },
+        "requiredRetrieval": {
+          "pass": 2,
+          "fail": 2
+        },
+        "answer": {
+          "pass": 4
+        },
+        "positiveUpdate": {
+          "pass": 1,
+          "not_applicable": 3
+        }
+      },
+      "qualified": {
+        "caseArms": 4,
+        "claims": 12,
+        "retirements": 2,
+        "justifiedRetirements": 1,
+        "overall": {
+          "pass": 2,
+          "missing": 1,
+          "fail": 1
+        },
+        "currentState": {
+          "pass": 2,
+          "missing": 1,
+          "fail": 1
+        },
+        "requiredRetrieval": {
+          "pass": 2,
+          "missing": 1,
+          "fail": 1
+        },
+        "answer": {
+          "pass": 2,
+          "missing": 1,
+          "fail": 1
+        },
+        "positiveUpdate": {
+          "pass": 1,
+          "not_applicable": 3
+        }
+      }
+    }
+  }
+}

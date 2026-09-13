@@ -167,3 +167,34 @@ explicit fixture variables are supplied: `CAIRN_HERMES_CHECKOUT`,
 `CAIRN_HERMES_PYTHON`, `CAIRN_NODE`, `CAIRN_EXECUTABLE`, `CAIRN_ARTIFACT` and
 `CAIRN_ARTIFACT_SHA256`. This opt-in test uses scripted HTTP, not a provider key.
 Pure lifecycle predicate tests run without Hermes. A CI skip is not host evidence.
+
+## Fresh source-support pilot
+
+`runSourceSupportPilot` in `evaluation/live/source-support-pilot.mjs` is a
+separate one-shot operator, not a replay of either failed qualification pilot.
+Eight independently authored synthetic sources were seen by the root before
+execution: they are not blinded. The frozen fixture keeps exact source text,
+one query and evaluator-only criteria. Only submitted messages and the query
+reach MCP; criteria and expected interpretation never enter provider inputs.
+
+Supply the existing `candidateQualificationExtension` with authorization ID
+`candidate-qualification-heldout-v1`, plus the existing ledger/checkpoint,
+explicit parent key/fetch, Node/executable/archive/hash, fresh private directory
+and `getSourceSupportPilotPins()` output. Construction never provisions a grant.
+The source-support intent is exclusive across that ledger and is not resumable.
+
+Each case uses installed v2 capture, source inspection and one qualified recall,
+then a cold inspection and duplicate replay fenced against HTTP. At most six
+capture and six recall HTTP requests per case are permitted: 96 overall,
+480000 microUSD conservatively reserved, within the original phase limit.
+Old session/attempt method restrictions remain unchanged. A failed capture is
+not retried; failed recall does not become a semantic success because storage
+worked. All eight case slots, private traces, diagnostics, capability hash and
+budget changes remain inspectable. Unknown costs are not zero.
+
+Offline fixtures verify orchestration and boundaries only. A separately
+authorized actual execution and independent semantic review must distinguish
+source sufficiency, useful/accurate descriptors, retained conditions, unsupported
+strengthening and recall availability. There is no generated-answer/judge call,
+automatic currentness resolution or rationale dependency implementation here.
+See [acceptance](plans/fresh-source-support-pilot.md).

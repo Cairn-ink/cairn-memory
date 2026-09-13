@@ -1,0 +1,628 @@
+{
+  "namespace": {
+    "ownerId": "v8-synthetic",
+    "scope": "personal",
+    "projectId": null
+  },
+  "schema": [
+    {
+      "type": "index",
+      "name": "active_identity",
+      "sql": "CREATE UNIQUE INDEX active_identity ON memories(owner_id, scope, project_id, fingerprint)\n      WHERE deleted = 0"
+    },
+    {
+      "type": "index",
+      "name": "child_moc_edges",
+      "sql": "CREATE INDEX child_moc_edges ON moc_edges(child_id, parent_id)"
+    },
+    {
+      "type": "index",
+      "name": "index_memory_keyset",
+      "sql": "CREATE INDEX index_memory_keyset ON memories(owner_id, scope, project_id, id)"
+    },
+    {
+      "type": "index",
+      "name": "index_moc_keyset",
+      "sql": "CREATE INDEX index_moc_keyset ON mocs(owner_id, scope, project_id, id)"
+    },
+    {
+      "type": "index",
+      "name": "memory_moc_refs",
+      "sql": "CREATE INDEX memory_moc_refs ON moc_memory_refs(memory_id, moc_id)"
+    },
+    {
+      "type": "index",
+      "name": "memory_receipts",
+      "sql": "CREATE INDEX memory_receipts ON receipts(memory_id, created_at, id)"
+    },
+    {
+      "type": "index",
+      "name": "memory_title_sources",
+      "sql": "CREATE INDEX memory_title_sources ON moc_title_sources(memory_id, moc_id)"
+    },
+    {
+      "type": "index",
+      "name": "namespace_memories",
+      "sql": "CREATE INDEX namespace_memories ON memories(\n      owner_id, scope, project_id, deleted, updated_at DESC, id)"
+    },
+    {
+      "type": "index",
+      "name": "namespace_moc_titles",
+      "sql": "CREATE UNIQUE INDEX namespace_moc_titles ON mocs(\n      owner_id, scope, project_id, level, canonical_title)"
+    },
+    {
+      "type": "index",
+      "name": "namespace_mocs",
+      "sql": "CREATE INDEX namespace_mocs ON mocs(\n      owner_id, scope, project_id, level, canonical_title, id)"
+    },
+    {
+      "type": "index",
+      "name": "replacement_supersessions",
+      "sql": "CREATE INDEX replacement_supersessions ON memory_supersessions(replacement_memory_id)"
+    },
+    {
+      "type": "index",
+      "name": "right_memory_conflicts",
+      "sql": "CREATE INDEX right_memory_conflicts ON memory_conflicts(right_memory_id)"
+    },
+    {
+      "type": "table",
+      "name": "admission_claims",
+      "sql": "CREATE TABLE admission_claims (\n      owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),\n      project_id TEXT NOT NULL,\n      client TEXT NOT NULL,\n      event_id TEXT NOT NULL,\n      payload_digest TEXT NOT NULL CHECK (\n        length(payload_digest) = 64 AND payload_digest NOT GLOB '*[^0-9a-f]*'),\n      state TEXT NOT NULL CHECK (state IN ('pending','completed')),\n      token TEXT,\n      lease_expires_at INTEGER,\n      memory_ids TEXT,\n      suppressed_count INTEGER,\n      PRIMARY KEY (owner_id, scope, project_id, client, event_id),\n      CHECK ((scope = 'personal' AND project_id = '') OR\n             (scope = 'project' AND length(project_id) > 0)),\n      CHECK ((state = 'pending' AND token IS NOT NULL AND lease_expires_at IS NOT NULL\n        AND memory_ids IS NULL AND suppressed_count IS NULL) OR\n        (state = 'completed' AND token IS NULL AND lease_expires_at IS NULL\n        -- Five opaque IDs of up to 200 characters, doubled by JSON escaping,\n        -- plus quotes, commas and brackets (including IDs preserved by migration).\n        AND memory_ids IS NOT NULL AND length(memory_ids) <= 2016\n        AND suppressed_count IS NOT NULL AND suppressed_count BETWEEN 0 AND 5))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "index_edges",
+      "sql": "CREATE TABLE index_edges (generation TEXT NOT NULL, parent_id TEXT NOT NULL,\n      child_id TEXT NOT NULL, parent_revision INTEGER NOT NULL, child_revision INTEGER NOT NULL,\n      PRIMARY KEY(generation,parent_id,child_id)) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "index_generations",
+      "sql": "CREATE TABLE index_generations (\n      id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,\n      captured_epoch INTEGER NOT NULL, page_limit INTEGER NOT NULL,\n      phase INTEGER NOT NULL, last_key TEXT NOT NULL, sequence INTEGER NOT NULL,\n      published INTEGER NOT NULL DEFAULT 0\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "index_memories",
+      "sql": "CREATE TABLE index_memories (generation TEXT NOT NULL, id TEXT NOT NULL,\n      revision INTEGER NOT NULL, PRIMARY KEY(generation,id)) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "index_memory_refs",
+      "sql": "CREATE TABLE index_memory_refs (generation TEXT NOT NULL, moc_id TEXT NOT NULL,\n      memory_id TEXT NOT NULL, moc_revision INTEGER NOT NULL, memory_revision INTEGER NOT NULL,\n      PRIMARY KEY(generation,moc_id,memory_id)) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "index_mocs",
+      "sql": "CREATE TABLE index_mocs (generation TEXT NOT NULL, id TEXT NOT NULL,\n      revision INTEGER NOT NULL, PRIMARY KEY(generation,id)) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "index_title_sources",
+      "sql": "CREATE TABLE index_title_sources (generation TEXT NOT NULL, moc_id TEXT NOT NULL,\n      memory_id TEXT NOT NULL, memory_revision INTEGER NOT NULL,\n      PRIMARY KEY(generation,moc_id,memory_id)) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "memories",
+      "sql": "CREATE TABLE memories (\n      id TEXT PRIMARY KEY,\n      owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),\n      project_id TEXT NOT NULL,\n      fingerprint TEXT NOT NULL,\n      content TEXT,\n      kind TEXT NOT NULL,\n      origin TEXT NOT NULL CHECK (origin IN ('explicit','agent-inferred')),\n      confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),\n      revision INTEGER NOT NULL CHECK (revision > 0),\n      deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0,1)),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL, filing_status TEXT NOT NULL DEFAULT 'unfiled'\n      CHECK (filing_status IN ('filed','unfiled')), currentness TEXT NOT NULL DEFAULT 'current'\n    CHECK (currentness IN ('current','historical')),\n      CHECK ((scope = 'personal' AND project_id = '') OR\n             (scope = 'project' AND length(project_id) > 0)),\n      CHECK ((deleted = 0 AND content IS NOT NULL) OR (deleted = 1 AND content IS NULL))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "memory_conflicts",
+      "sql": "CREATE TABLE memory_conflicts (\n      left_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,\n      left_revision INTEGER NOT NULL CHECK (left_revision > 0),\n      right_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,\n      right_revision INTEGER NOT NULL CHECK (right_revision > 0),\n      relation TEXT NOT NULL CHECK (relation = 'contradicts'),\n      source TEXT NOT NULL CHECK (source IN ('explicit-hint','inferred-hint')),\n      PRIMARY KEY (left_memory_id, left_revision, right_memory_id, right_revision, relation, source),\n      CHECK (left_memory_id < right_memory_id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "memory_supersessions",
+      "sql": "CREATE TABLE memory_supersessions (\n      owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),\n      project_id TEXT NOT NULL,\n      previous_memory_id TEXT PRIMARY KEY REFERENCES memories(id),\n      previous_revision INTEGER NOT NULL CHECK (previous_revision > 0),\n      replacement_memory_id TEXT NOT NULL REFERENCES memories(id),\n      replacement_revision INTEGER NOT NULL CHECK (replacement_revision > 0),\n      -- Four opaque 200-unit IDs, including worst-case JSON escaping/delimiters.\n      receipt_ids TEXT NOT NULL CHECK (length(receipt_ids) <= 1613),\n      CHECK (previous_memory_id != replacement_memory_id),\n      CHECK ((scope = 'personal' AND project_id = '') OR\n             (scope = 'project' AND length(project_id) > 0))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "moc_edges",
+      "sql": "CREATE TABLE moc_edges (\n      parent_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,\n      parent_revision INTEGER NOT NULL CHECK (parent_revision > 0),\n      child_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,\n      child_revision INTEGER NOT NULL CHECK (child_revision > 0),\n      PRIMARY KEY (parent_id, child_id),\n      CHECK (parent_id != child_id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "moc_memory_refs",
+      "sql": "CREATE TABLE moc_memory_refs (\n      moc_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,\n      moc_revision INTEGER NOT NULL CHECK (moc_revision > 0),\n      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,\n      memory_revision INTEGER NOT NULL CHECK (memory_revision > 0),\n      PRIMARY KEY (moc_id, memory_id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "moc_title_sources",
+      "sql": "CREATE TABLE moc_title_sources (\n      moc_id TEXT NOT NULL REFERENCES mocs(id) ON DELETE CASCADE,\n      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,\n      memory_revision INTEGER NOT NULL CHECK (memory_revision > 0),\n      PRIMARY KEY (moc_id, memory_id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "mocs",
+      "sql": "CREATE TABLE mocs (\n      id TEXT PRIMARY KEY,\n      owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),\n      project_id TEXT NOT NULL,\n      level INTEGER NOT NULL CHECK (level IN (1,2)),\n      title TEXT NOT NULL,\n      canonical_title TEXT NOT NULL,\n      revision INTEGER NOT NULL CHECK (revision > 0),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      CHECK ((scope = 'personal' AND project_id = '') OR\n             (scope = 'project' AND length(project_id) > 0))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "namespace_epochs",
+      "sql": "CREATE TABLE namespace_epochs (\n      owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL CHECK (scope IN ('personal','project')),\n      project_id TEXT NOT NULL,\n      epoch INTEGER NOT NULL CHECK (epoch >= 1),\n      PRIMARY KEY (owner_id, scope, project_id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "namespace_index_state",
+      "sql": "CREATE TABLE namespace_index_state (\n      owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,\n      active_generation TEXT, PRIMARY KEY(owner_id, scope, project_id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "receipts",
+      "sql": "CREATE TABLE receipts (\n      id TEXT NOT NULL UNIQUE,\n      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,\n      receipt_key TEXT NOT NULL,\n      client TEXT NOT NULL,\n      session_id TEXT NOT NULL,\n      event_id TEXT NOT NULL,\n      role TEXT NOT NULL CHECK (role IN ('user','assistant')),\n      excerpt TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      PRIMARY KEY (memory_id, receipt_key)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "store_metadata",
+      "sql": "CREATE TABLE store_metadata (\n      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n      store_id TEXT NOT NULL UNIQUE,\n      cursor_secret TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "suppressed",
+      "sql": "CREATE TABLE suppressed (\n      owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL,\n      project_id TEXT NOT NULL,\n      fingerprint TEXT NOT NULL,\n      PRIMARY KEY (owner_id, scope, project_id, fingerprint)\n    ) STRICT"
+    },
+    {
+      "type": "trigger",
+      "name": "index_memories_delete",
+      "sql": "CREATE TRIGGER index_memories_delete AFTER DELETE ON memories BEGIN DELETE FROM index_memories WHERE id = OLD.id\n      AND generation IN (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = OLD.owner_id AND s.scope = OLD.scope AND s.project_id = OLD.project_id); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_memories_insert",
+      "sql": "CREATE TRIGGER index_memories_insert AFTER INSERT ON memories BEGIN INSERT OR REPLACE INTO index_memories(generation,id,revision)\n      SELECT (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id),r.id,r.revision\n      FROM memories r WHERE r.id = NEW.id AND r.deleted = 0 AND r.currentness = 'current' AND (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id) IS NOT NULL; END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_memories_update",
+      "sql": "CREATE TRIGGER index_memories_update AFTER UPDATE ON memories BEGIN UPDATE index_memories SET id = NEW.id,revision = NEW.revision\n      WHERE id = OLD.id AND generation IN\n        (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = OLD.owner_id AND s.scope = OLD.scope AND s.project_id = OLD.project_id);\n      DELETE FROM index_memories WHERE id = NEW.id\n        AND generation IN (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = OLD.owner_id AND s.scope = OLD.scope AND s.project_id = OLD.project_id)\n        AND NOT EXISTS (SELECT 1 FROM memories r WHERE r.id = NEW.id AND r.deleted = 0 AND r.currentness = 'current'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_edges_delete",
+      "sql": "CREATE TRIGGER index_moc_edges_delete AFTER DELETE ON moc_edges BEGIN DELETE FROM index_edges WHERE parent_id = OLD.parent_id AND child_id = OLD.child_id\n      AND generation IN (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.parent_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN mocs c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.child_id); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_edges_insert",
+      "sql": "CREATE TRIGGER index_moc_edges_insert AFTER INSERT ON moc_edges BEGIN INSERT OR REPLACE INTO index_edges(generation,parent_id,child_id,parent_revision,child_revision)\n      SELECT (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id),r.parent_id,r.child_id,r.parent_revision,r.child_revision\n      FROM moc_edges r JOIN mocs p ON p.id = r.parent_id JOIN mocs c ON c.id = r.child_id WHERE r.parent_id = NEW.parent_id AND r.child_id = NEW.child_id AND p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level = 2 AND c.level = 1 AND p.revision = r.parent_revision AND c.revision = r.child_revision AND (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id) IS NOT NULL; END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_edges_update",
+      "sql": "CREATE TRIGGER index_moc_edges_update AFTER UPDATE ON moc_edges BEGIN UPDATE index_edges SET parent_id = NEW.parent_id,child_id = NEW.child_id,parent_revision = NEW.parent_revision,child_revision = NEW.child_revision\n      WHERE parent_id = OLD.parent_id AND child_id = OLD.child_id AND generation IN\n        (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.parent_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN mocs c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.child_id);\n      DELETE FROM index_edges WHERE parent_id = NEW.parent_id AND child_id = NEW.child_id\n        AND generation IN (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.parent_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN mocs c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.child_id)\n        AND NOT EXISTS (SELECT 1 FROM moc_edges r JOIN mocs p ON p.id = r.parent_id JOIN mocs c ON c.id = r.child_id WHERE r.parent_id = NEW.parent_id AND r.child_id = NEW.child_id AND p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level = 2 AND c.level = 1 AND p.revision = r.parent_revision AND c.revision = r.child_revision); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_memory_refs_delete",
+      "sql": "CREATE TRIGGER index_moc_memory_refs_delete AFTER DELETE ON moc_memory_refs BEGIN DELETE FROM index_memory_refs WHERE moc_id = OLD.moc_id AND memory_id = OLD.memory_id\n      AND generation IN (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.moc_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN memories c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.memory_id); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_memory_refs_insert",
+      "sql": "CREATE TRIGGER index_moc_memory_refs_insert AFTER INSERT ON moc_memory_refs BEGIN INSERT OR REPLACE INTO index_memory_refs(generation,moc_id,memory_id,moc_revision,memory_revision)\n      SELECT (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id),r.moc_id,r.memory_id,r.moc_revision,r.memory_revision\n      FROM moc_memory_refs r JOIN mocs p ON p.id = r.moc_id JOIN memories c ON c.id = r.memory_id WHERE r.moc_id = NEW.moc_id AND r.memory_id = NEW.memory_id AND p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level = 1 AND c.deleted = 0 AND p.revision = r.moc_revision AND c.revision = r.memory_revision AND c.currentness = 'current' AND (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id) IS NOT NULL; END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_memory_refs_update",
+      "sql": "CREATE TRIGGER index_moc_memory_refs_update AFTER UPDATE ON moc_memory_refs BEGIN UPDATE index_memory_refs SET moc_id = NEW.moc_id,memory_id = NEW.memory_id,moc_revision = NEW.moc_revision,memory_revision = NEW.memory_revision\n      WHERE moc_id = OLD.moc_id AND memory_id = OLD.memory_id AND generation IN\n        (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.moc_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN memories c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.memory_id);\n      DELETE FROM index_memory_refs WHERE moc_id = NEW.moc_id AND memory_id = NEW.memory_id\n        AND generation IN (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.moc_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN memories c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.memory_id)\n        AND NOT EXISTS (SELECT 1 FROM moc_memory_refs r JOIN mocs p ON p.id = r.moc_id JOIN memories c ON c.id = r.memory_id WHERE r.moc_id = NEW.moc_id AND r.memory_id = NEW.memory_id AND p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level = 1 AND c.deleted = 0 AND p.revision = r.moc_revision AND c.revision = r.memory_revision AND c.currentness = 'current'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_title_sources_delete",
+      "sql": "CREATE TRIGGER index_moc_title_sources_delete AFTER DELETE ON moc_title_sources BEGIN DELETE FROM index_title_sources WHERE moc_id = OLD.moc_id AND memory_id = OLD.memory_id\n      AND generation IN (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.moc_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN memories c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.memory_id); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_title_sources_insert",
+      "sql": "CREATE TRIGGER index_moc_title_sources_insert AFTER INSERT ON moc_title_sources BEGIN INSERT OR REPLACE INTO index_title_sources(generation,moc_id,memory_id,memory_revision)\n      SELECT (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id),r.moc_id,r.memory_id,r.memory_revision\n      FROM moc_title_sources r JOIN mocs p ON p.id = r.moc_id JOIN memories c ON c.id = r.memory_id WHERE r.moc_id = NEW.moc_id AND r.memory_id = NEW.memory_id AND p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level IN (1,2) AND c.deleted = 0 AND c.revision = r.memory_revision AND c.currentness = 'current' AND (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id) IS NOT NULL; END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_moc_title_sources_update",
+      "sql": "CREATE TRIGGER index_moc_title_sources_update AFTER UPDATE ON moc_title_sources BEGIN UPDATE index_title_sources SET moc_id = NEW.moc_id,memory_id = NEW.memory_id,memory_revision = NEW.memory_revision\n      WHERE moc_id = OLD.moc_id AND memory_id = OLD.memory_id AND generation IN\n        (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.moc_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN memories c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.memory_id);\n      DELETE FROM index_title_sources WHERE moc_id = NEW.moc_id AND memory_id = NEW.memory_id\n        AND generation IN (SELECT s.active_generation FROM namespace_index_state s JOIN mocs p ON s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id\n        WHERE p.id = OLD.moc_id\n       UNION SELECT s.active_generation FROM namespace_index_state s\n        JOIN memories c ON s.owner_id = c.owner_id AND s.scope = c.scope AND s.project_id = c.project_id\n        WHERE c.id = OLD.memory_id)\n        AND NOT EXISTS (SELECT 1 FROM moc_title_sources r JOIN mocs p ON p.id = r.moc_id JOIN memories c ON c.id = r.memory_id WHERE r.moc_id = NEW.moc_id AND r.memory_id = NEW.memory_id AND p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level IN (1,2) AND c.deleted = 0 AND c.revision = r.memory_revision AND c.currentness = 'current'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_mocs_delete",
+      "sql": "CREATE TRIGGER index_mocs_delete AFTER DELETE ON mocs BEGIN DELETE FROM index_mocs WHERE id = OLD.id\n      AND generation IN (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = OLD.owner_id AND s.scope = OLD.scope AND s.project_id = OLD.project_id); END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_mocs_insert",
+      "sql": "CREATE TRIGGER index_mocs_insert AFTER INSERT ON mocs BEGIN INSERT OR REPLACE INTO index_mocs(generation,id,revision)\n      SELECT (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id),r.id,r.revision\n      FROM mocs r WHERE r.id = NEW.id AND r.level IN (1,2) AND (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id) IS NOT NULL; END"
+    },
+    {
+      "type": "trigger",
+      "name": "index_mocs_update",
+      "sql": "CREATE TRIGGER index_mocs_update AFTER UPDATE ON mocs BEGIN UPDATE index_mocs SET id = NEW.id,revision = NEW.revision\n      WHERE id = OLD.id AND generation IN\n        (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = OLD.owner_id AND s.scope = OLD.scope AND s.project_id = OLD.project_id);\n      DELETE FROM index_mocs WHERE id = NEW.id\n        AND generation IN (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = OLD.owner_id AND s.scope = OLD.scope AND s.project_id = OLD.project_id)\n        AND NOT EXISTS (SELECT 1 FROM mocs r WHERE r.id = NEW.id AND r.level IN (1,2)); END"
+    },
+    {
+      "type": "view",
+      "name": "index_read_edges",
+      "sql": "CREATE VIEW index_read_edges AS\n      SELECT r.* FROM moc_edges r LEFT JOIN mocs p ON p.id = r.parent_id WHERE (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id) IS NULL\n      UNION ALL SELECT r.* FROM moc_edges r JOIN mocs p ON p.id = r.parent_id JOIN mocs c ON c.id = r.child_id\n      JOIN index_edges i ON i.parent_id = r.parent_id AND i.child_id = r.child_id AND i.parent_revision = r.parent_revision AND i.child_revision = r.child_revision AND i.generation = (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id)\n      WHERE p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level = 2 AND c.level = 1 AND p.revision = r.parent_revision AND c.revision = r.child_revision"
+    },
+    {
+      "type": "view",
+      "name": "index_read_memories",
+      "sql": "CREATE VIEW index_read_memories AS\n      SELECT r.* FROM memories r WHERE (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id) IS NULL AND r.currentness = 'current'\n      UNION ALL SELECT r.* FROM memories r\n      JOIN index_memories i ON i.id = r.id AND i.revision = r.revision AND i.generation = (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id)\n      WHERE r.deleted = 0 AND r.currentness = 'current'"
+    },
+    {
+      "type": "view",
+      "name": "index_read_memory_refs",
+      "sql": "CREATE VIEW index_read_memory_refs AS\n      SELECT r.* FROM moc_memory_refs r LEFT JOIN mocs p ON p.id = r.moc_id WHERE (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id) IS NULL AND NOT EXISTS (SELECT 1 FROM memories h WHERE h.id = r.memory_id AND h.currentness = 'historical')\n      UNION ALL SELECT r.* FROM moc_memory_refs r JOIN mocs p ON p.id = r.moc_id JOIN memories c ON c.id = r.memory_id\n      JOIN index_memory_refs i ON i.moc_id = r.moc_id AND i.memory_id = r.memory_id AND i.moc_revision = r.moc_revision AND i.memory_revision = r.memory_revision AND i.generation = (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id)\n      WHERE p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level = 1 AND c.deleted = 0 AND p.revision = r.moc_revision AND c.revision = r.memory_revision AND c.currentness = 'current'"
+    },
+    {
+      "type": "view",
+      "name": "index_read_mocs",
+      "sql": "CREATE VIEW index_read_mocs AS\n      SELECT r.* FROM mocs r WHERE (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id) IS NULL\n      UNION ALL SELECT r.* FROM mocs r\n      JOIN index_mocs i ON i.id = r.id AND i.revision = r.revision AND i.generation = (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = r.owner_id AND s.scope = r.scope AND s.project_id = r.project_id)\n      WHERE r.level IN (1,2)"
+    },
+    {
+      "type": "view",
+      "name": "index_read_title_sources",
+      "sql": "CREATE VIEW index_read_title_sources AS\n      SELECT r.* FROM moc_title_sources r LEFT JOIN mocs p ON p.id = r.moc_id WHERE (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id) IS NULL AND NOT EXISTS (SELECT 1 FROM memories h WHERE h.id = r.memory_id AND h.currentness = 'historical')\n      UNION ALL SELECT r.* FROM moc_title_sources r JOIN mocs p ON p.id = r.moc_id JOIN memories c ON c.id = r.memory_id\n      JOIN index_title_sources i ON i.moc_id = r.moc_id AND i.memory_id = r.memory_id AND i.memory_revision = r.memory_revision AND i.generation = (SELECT active_generation FROM namespace_index_state s WHERE s.owner_id = p.owner_id AND s.scope = p.scope AND s.project_id = p.project_id)\n      WHERE p.owner_id = c.owner_id AND p.scope = c.scope AND p.project_id = c.project_id AND p.level IN (1,2) AND c.deleted = 0 AND c.revision = r.memory_revision AND c.currentness = 'current'"
+    }
+  ],
+  "tables": [
+    {
+      "name": "admission_claims",
+      "rows": [
+        {
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "client": "test",
+          "event_id": "completed",
+          "payload_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "state": "completed",
+          "token": null,
+          "lease_expires_at": null,
+          "memory_ids": "[]",
+          "suppressed_count": 0
+        }
+      ]
+    },
+    {
+      "name": "index_edges",
+      "rows": []
+    },
+    {
+      "name": "index_generations",
+      "rows": [
+        {
+          "id": "65924915-4072-490e-a392-109fcc90df0c",
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "captured_epoch": 6,
+          "page_limit": 500,
+          "phase": 5,
+          "last_key": "null",
+          "sequence": 1,
+          "published": 1
+        },
+        {
+          "id": "bcd3e2eb-0fbd-4d8c-be6d-13ecc3d86201",
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "captured_epoch": 7,
+          "page_limit": 1,
+          "phase": 0,
+          "last_key": "[\"5c86b21b-f489-44a8-bc2b-2f9d2f169d2f\"]",
+          "sequence": 1,
+          "published": 0
+        }
+      ]
+    },
+    {
+      "name": "index_memories",
+      "rows": [
+        {
+          "generation": "65924915-4072-490e-a392-109fcc90df0c",
+          "id": "5c86b21b-f489-44a8-bc2b-2f9d2f169d2f",
+          "revision": 1
+        },
+        {
+          "generation": "65924915-4072-490e-a392-109fcc90df0c",
+          "id": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+          "revision": 2
+        },
+        {
+          "generation": "bcd3e2eb-0fbd-4d8c-be6d-13ecc3d86201",
+          "id": "5c86b21b-f489-44a8-bc2b-2f9d2f169d2f",
+          "revision": 1
+        }
+      ]
+    },
+    {
+      "name": "index_memory_refs",
+      "rows": []
+    },
+    {
+      "name": "index_mocs",
+      "rows": []
+    },
+    {
+      "name": "index_title_sources",
+      "rows": []
+    },
+    {
+      "name": "memories",
+      "rows": [
+        {
+          "id": "8fd96db7-a35c-4c93-83b8-ca9fc2105856",
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "fingerprint": "6b597a6cc03595e19a35096352704fa7164a4f482acc0cbf58b19597905645f8",
+          "content": "Synthetic Friday",
+          "kind": "fact",
+          "origin": "explicit",
+          "confidence": 1,
+          "revision": 2,
+          "deleted": 0,
+          "created_at": "2026-09-11T17:50:19.388Z",
+          "updated_at": "2026-09-11T17:50:19.456Z",
+          "filing_status": "unfiled",
+          "currentness": "historical"
+        },
+        {
+          "id": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "fingerprint": "2eb281ced5e3a48415222b58081e1f28656896bb71f6340fa2e63a26481d9c46",
+          "content": "Synthetic Monday",
+          "kind": "fact",
+          "origin": "explicit",
+          "confidence": 1,
+          "revision": 2,
+          "deleted": 0,
+          "created_at": "2026-09-11T17:50:19.414Z",
+          "updated_at": "2026-09-11T17:50:19.455Z",
+          "filing_status": "unfiled",
+          "currentness": "current"
+        },
+        {
+          "id": "5c86b21b-f489-44a8-bc2b-2f9d2f169d2f",
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "fingerprint": "ed8a7d7904ff816f526868376ab01e9bba4fc0cbe422cda2a0bc2f33687cbc63",
+          "content": "Synthetic third",
+          "kind": "fact",
+          "origin": "explicit",
+          "confidence": 1,
+          "revision": 1,
+          "deleted": 0,
+          "created_at": "2026-09-11T17:50:19.429Z",
+          "updated_at": "2026-09-11T17:50:19.429Z",
+          "filing_status": "unfiled",
+          "currentness": "current"
+        }
+      ]
+    },
+    {
+      "name": "memory_conflicts",
+      "rows": []
+    },
+    {
+      "name": "memory_supersessions",
+      "rows": [
+        {
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "previous_memory_id": "8fd96db7-a35c-4c93-83b8-ca9fc2105856",
+          "previous_revision": 1,
+          "replacement_memory_id": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+          "replacement_revision": 2,
+          "receipt_ids": "[\"79fa2e45-7c0b-4208-904d-33c00f13dd9a\"]"
+        }
+      ]
+    },
+    {
+      "name": "moc_edges",
+      "rows": []
+    },
+    {
+      "name": "moc_memory_refs",
+      "rows": []
+    },
+    {
+      "name": "moc_title_sources",
+      "rows": []
+    },
+    {
+      "name": "mocs",
+      "rows": []
+    },
+    {
+      "name": "namespace_epochs",
+      "rows": [
+        {
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "epoch": 7
+        }
+      ]
+    },
+    {
+      "name": "namespace_index_state",
+      "rows": [
+        {
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "active_generation": "65924915-4072-490e-a392-109fcc90df0c"
+        }
+      ]
+    },
+    {
+      "name": "receipts",
+      "rows": [
+        {
+          "id": "94cbd906-18c8-4c87-a36c-9a9cffd214f7",
+          "memory_id": "8fd96db7-a35c-4c93-83b8-ca9fc2105856",
+          "receipt_key": "3061ac47fd92a218f1606e28cde9dafaa28c41bb79cc5ab8fde9b3d05d35e728",
+          "client": "test",
+          "session_id": "s",
+          "event_id": "Synthetic Friday",
+          "role": "user",
+          "excerpt": "Synthetic Friday",
+          "created_at": "2026-09-11T17:50:19.388Z"
+        },
+        {
+          "id": "845ca55d-5198-41e6-9842-6d080ef1312a",
+          "memory_id": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+          "receipt_key": "ba92a77b0026c9fc43a17a15427ba58fa906fc394008c345bb81f96d6c9631e4",
+          "client": "test",
+          "session_id": "s",
+          "event_id": "Synthetic Monday",
+          "role": "user",
+          "excerpt": "Synthetic Monday",
+          "created_at": "2026-09-11T17:50:19.414Z"
+        },
+        {
+          "id": "2162ce6b-7fd6-47e6-8b44-b82887417742",
+          "memory_id": "5c86b21b-f489-44a8-bc2b-2f9d2f169d2f",
+          "receipt_key": "a8a81fba25b7f0ae1ee7949a5b1c3e158f4be28a62742de6809267d47c2a5934",
+          "client": "test",
+          "session_id": "s",
+          "event_id": "Synthetic third",
+          "role": "user",
+          "excerpt": "Synthetic third",
+          "created_at": "2026-09-11T17:50:19.429Z"
+        },
+        {
+          "id": "79fa2e45-7c0b-4208-904d-33c00f13dd9a",
+          "memory_id": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+          "receipt_key": "61048ef81cbea47239dd6d321d8a8e63dc8dfd3a722384aeb118f335bb57b2cc",
+          "client": "test",
+          "session_id": "s",
+          "event_id": "Monday replacement evidence",
+          "role": "user",
+          "excerpt": "Monday replacement evidence",
+          "created_at": "2026-09-11T17:50:19.455Z"
+        }
+      ]
+    },
+    {
+      "name": "store_metadata",
+      "rows": [
+        {
+          "singleton": 1,
+          "store_id": "3b48f43d-75a1-431d-8688-312999148a3c",
+          "cursor_secret": "73d2a9635babe69f5c3c1f2d8fdc533610fe29652e32e26b37e530d60a6fa3ae"
+        }
+      ]
+    },
+    {
+      "name": "suppressed",
+      "rows": [
+        {
+          "owner_id": "v8-synthetic",
+          "scope": "personal",
+          "project_id": "",
+          "fingerprint": "6b597a6cc03595e19a35096352704fa7164a4f482acc0cbf58b19597905645f8"
+        }
+      ]
+    }
+  ],
+  "history": {
+    "memory": {
+      "id": "8fd96db7-a35c-4c93-83b8-ca9fc2105856",
+      "namespace": {
+        "ownerId": "v8-synthetic",
+        "scope": "personal",
+        "projectId": null
+      },
+      "kind": "fact",
+      "origin": "explicit",
+      "confidence": 1,
+      "revision": 2,
+      "state": "historical",
+      "filing": {
+        "status": "unfiled"
+      },
+      "receiptCount": 1,
+      "createdAt": "2026-09-11T17:50:19.388Z",
+      "updatedAt": "2026-09-11T17:50:19.456Z",
+      "content": "Synthetic Friday"
+    },
+    "receipts": [
+      {
+        "id": "94cbd906-18c8-4c87-a36c-9a9cffd214f7",
+        "client": "test",
+        "sessionId": "s",
+        "eventId": "Synthetic Friday",
+        "role": "user",
+        "excerpt": "Synthetic Friday",
+        "createdAt": "2026-09-11T17:50:19.388Z"
+      }
+    ],
+    "placements": [],
+    "conflicts": [],
+    "supersession": {
+      "previousRevision": 1,
+      "replacement": {
+        "memoryId": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+        "revision": 2,
+        "currentRevision": 2,
+        "state": "active"
+      },
+      "receiptIds": [
+        "79fa2e45-7c0b-4208-904d-33c00f13dd9a"
+      ],
+      "evidenceAvailable": true
+    },
+    "nextReceiptCursor": null,
+    "exhausted": true
+  },
+  "key": {
+    "namespace": {
+      "ownerId": "v8-synthetic",
+      "scope": "personal",
+      "projectId": null
+    },
+    "client": "test",
+    "eventId": "completed",
+    "payloadDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "cursor": "eyJ2IjoxLCJzIjoiM2I0OGY0M2QtNzVhMS00MzFkLTg2ODgtMzEyOTk5MTQ4YTNjIiwibiI6Ik1JYUhqY285SUNGbENaUTdRNUhKd0h5YzNpS2pnZjNUdE5KeGlSbzNwWTgiLCJvIjoibGlzdCIsImYiOiJmaWxlZCx1bmZpbGVkIiwibCI6MSwiZSI6NywiYSI6eyJ1cGRhdGVkQXQiOiIyMDI2LTA5LTExVDE3OjUwOjE5LjQ1NloiLCJpZCI6IjhmZDk2ZGI3LWEzNWMtNGM5My04M2I4LWNhOWZjMjEwNTg1NiJ9fQ.2VG_0iTYLlMtF2UXv8VwYcjfrShM7YRmJJbESeQ9AXo",
+  "next": {
+    "memories": [
+      {
+        "id": "c3dfca3e-4fc6-4501-9b00-eda2b34a71ff",
+        "namespace": {
+          "ownerId": "v8-synthetic",
+          "scope": "personal",
+          "projectId": null
+        },
+        "kind": "fact",
+        "origin": "explicit",
+        "confidence": 1,
+        "revision": 2,
+        "state": "active",
+        "filing": {
+          "status": "unfiled"
+        },
+        "receiptCount": 2,
+        "createdAt": "2026-09-11T17:50:19.414Z",
+        "updatedAt": "2026-09-11T17:50:19.455Z"
+      }
+    ],
+    "nextCursor": "eyJ2IjoxLCJzIjoiM2I0OGY0M2QtNzVhMS00MzFkLTg2ODgtMzEyOTk5MTQ4YTNjIiwibiI6Ik1JYUhqY285SUNGbENaUTdRNUhKd0h5YzNpS2pnZjNUdE5KeGlSbzNwWTgiLCJvIjoibGlzdCIsImYiOiJmaWxlZCx1bmZpbGVkIiwibCI6MSwiZSI6NywiYSI6eyJ1cGRhdGVkQXQiOiIyMDI2LTA5LTExVDE3OjUwOjE5LjQ1NVoiLCJpZCI6ImMzZGZjYTNlLTRmYzYtNDUwMS05YjAwLWVkYTJiMzRhNzFmZiJ9fQ.Q_RLuXPRbwzzl3AaQnitXVTnbV_BpZCvkWVpV6u0ejk",
+    "exhausted": false
+  },
+  "rebuild": {
+    "namespace": {
+      "ownerId": "v8-synthetic",
+      "scope": "personal",
+      "projectId": null
+    },
+    "expectedIndexRevision": 7,
+    "limit": 1,
+    "cursor": "eyJ2IjoxLCJzIjoiM2I0OGY0M2QtNzVhMS00MzFkLTg2ODgtMzEyOTk5MTQ4YTNjIiwibiI6Ik1JYUhqY285SUNGbENaUTdRNUhKd0h5YzNpS2pnZjNUdE5KeGlSbzNwWTgiLCJvIjoicmVidWlsZCIsImwiOjEsInIiOjcsImUiOjcsImEiOnsiZ2VuZXJhdGlvbiI6ImJjZDNlMmViLTBmYmQtNGQ4Yy1iZTZkLTEzZWNjM2Q4NjIwMSIsInBoYXNlIjowLCJzZXF1ZW5jZSI6MX19.EKGRVCKS5B_FeXi5GGqHukqCdbcJm_l8Hxn0KYiTMo8"
+  }
+}

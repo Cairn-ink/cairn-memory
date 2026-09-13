@@ -162,8 +162,11 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
     extract: (request) => invoke('extract', request),
+    qualify: (request) => invoke('qualify', request),
+    qualifyCandidates: (request) => invoke('qualifyCandidates', request),
     classify: (request) => invoke('classify', request),
     select: (request) => invoke('select', request),
     rank: (request) => invoke('rank', request),
+    reconcile: (request) => invoke('reconcile', request),
   });
 }

@@ -28,6 +28,10 @@ runtime versions run this example as well.
 For fetch/recall changes also run `npm run demo:recall`. Its scripted models test
 orchestration, not semantic relevance. Both core CI runtime versions run it.
 
+For historical evidence views also run `npm run demo:history` on both core
+runtimes. It uses synthetic explicit supersession and a local token counter,
+not model-generated updates, temporal inference or a hosted service.
+
 For admission-claim changes also run `npm run demo:admission`, which uses a fresh
 synthetic SQLite database and handcrafted trusted inferred items, not extraction.
 

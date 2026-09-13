@@ -1,5 +1,262 @@
 # Changelog
 
+The private-hold language in historical entries records each stage's status at
+the time. The minimum identifier fix was publicly delivered through PR #69 and
+[GHSA-42p4-q4pr-vpwf](https://github.com/Cairn-ink/cairn-memory/security/advisories/GHSA-42p4-q4pr-vpwf)
+on 2026-09-13. This integration does not publish a package or certify semantic
+reliability.
+
+## Candidate — native Hermes submitted capture
+
+- Add explicit v2-only capture configuration to the native Hermes provider,
+  using the installed MCP tool schema and shared engine. Preserve the five-tool
+  default, keyless discovery, profile binding and inert transcript hooks.
+- Limit dedicated-key forwarding to explicit capture/recall and give capture
+  bounded longer deadlines. Timeout is not evidence of rollback; inspect and
+  replay the same batch rather than automatically retrying a new one.
+
+## Candidate — qualified installation settings
+
+- Accept an explicit source-bound capture mode during preview installation and
+  preserve it in the private startup receipt after a matching configuration check.
+  Default installation remains five-tool and credentials remain separate.
+- Document explicit submission, per-call source-only recall and inspection.
+  Installed fake-provider tests verify the generated settings, not semantic
+  accuracy, passive capture or named-client compatibility.
+
+## Candidate — source evidence context
+
+- Add opt-in source-only fetch/recall context: complete retained passages and
+  submitted roles, without generated summaries or qualification labels in rank
+  and returned memory context. Keep existing modes and counted budgets unchanged.
+- Preserve the frozen eight-case real pilot: all ten records were recalled, but
+  semantic errors included false adoption and lost uncertainty. Source-first
+  usage does not repair selection gaps or prove truth or downstream answer quality.
+
+## Candidate — fresh source-support experiment
+
+- Add a separate eight-case installed capture/qualified-recall experiment with
+  fixed source/query/rubric provenance, original capability reuse, per-phase
+  limits and a 96-HTTP/US$0.48 conservative cap inside the existing phase budget.
+- Keep prior experiments unchanged; preserve failed/empty/not-run outcomes and
+  request-free cold inspection/replay. This operator is not a consumer feature,
+  semantic score, general reliability claim or permission to publish a package.
+
+## Private candidate — v2 interpretation guidance
+
+- Clarify independent source-supported descriptors, proposal attribution and
+  settled versus uncertain commitment in the v2 qualification prompt. Keep
+  unknown values valid, preserve conditions, and provide a scoped example.
+- No schema, authority, budget or legacy/v1 behavior changes. Offline contract
+  verification is not measured semantic improvement; earlier pilot failures
+  remain unchanged and public delivery is still held for security coordination.
+
+## Private candidate — retained-source extraction
+
+- Align v2 extractor input and selected receipts to the same canonical retained
+  800-unit source windows. Preserve complete input digests and legacy/v1 paths.
+  Report omitted source tails through retainedSourceWindow on v2 success/replay.
+- Guide v2 source selection to retain antecedents with anaphoric responses.
+  This is not an entailment validator or measured semantic improvement; omitted
+  tails cannot supply claims, and old duplicates do not attest execution policy.
+
+## Private candidate — canonical v2 description labels
+
+- Compile v2 descriptive labels with declared NFKC normalization before unchanged
+  strict S1 validation. Preserve raw/final limits, exact source anchors, nulls,
+  enums and atomic failure; do not truncate, rewrite sources or infer identity.
+- Retain the original failed pilot unchanged. This mechanical fix does not
+  demonstrate semantic quality, complete antecedent selection or useful labels.
+
+## Private candidate — source-qualified recall
+
+- Carry opt-in complete source qualification through counted fetch, ranking and
+  authoritative recall snapshots. Preserve legacy reads and budgets; never strip
+  anchors to fit. Local MCP defaults this on with source-qualified capture.
+- Retain the frozen six-case v2 pilot: five storage completions, one rejected
+  case, incomplete semantic descriptors and one antecedent-provenance gap. This
+  is not five semantic passes, general reliability, a release or disclosure clearance.
+
+## Private candidate — explicit v2 qualification experiment
+
+- Add a separate baseline-only candidate-qualification capability and narrowly
+  routed session to the shared experiment accounting boundary. Preserve every
+  old guard's method restrictions and immutable grants; no budget replenishment.
+- Prepare one frozen six-case installed v2 experiment with a 36-request/US$0.18
+  ceiling, source traces, finite diagnostics and request-free cold replay. Keep
+  earlier failed pilots intact and distinguish structural storage from semantic
+  quality. This entry does not claim the experiment passed or clear disclosure,
+  release or deployment gates.
+
+## Private candidate — source-candidate capture over MCP
+
+- Accept explicit `--capture-qualification source-bound-v2` in the local MCP
+  server and experiment launcher, reusing the existing capture/inspection tools
+  and shared core. Preserve default/v1 behavior, mode-bound replay and caller
+  authority limits. Configuration diagnostics report the chosen mode without
+  opening storage or contacting providers.
+- Installed fake-provider verification covers source selection, cold inspection,
+  replay and mode conflicts. This is not semantic-quality evidence, a paid-method
+  grant, publication or security-disclosure clearance.
+
+## Private candidate — core-owned qualification evidence
+
+- Add explicit core `source-bound-v2` and optional adapter `qualifyCandidates`,
+  preserving v1, default capture and stored S1 qualifications. Core generates
+  bounded Unicode-safe evidence windows, derives exact anchors and field
+  coverage from selected references, and applies unchanged source validation.
+  V2 matches admission's final receipt canonicalization at truncation boundaries.
+- Keep qualified ordered updates unresolved without trusted identity. This is
+  mechanical source linkage, not verified interpretation, adoption or currentness.
+  MCP exposure and paid-method authorization remain separate, denied gates;
+  no release, deployment or security-disclosure clearance is included.
+
+## Private candidate — explicit qualification experiment capability
+
+- Add an independent, baseline-only qualification capability to the existing
+  request guard, preserving all three old deny-by-default constructors and
+  accounting. Immutable authorization binds the settled existing ledger and
+  is rechecked after request accessors before reservation.
+- Prepare a narrowly routed qualification session and installed-MCP launcher
+  integration for fake-HTTP verification. No real ledger/key access, paid pilot,
+  budget replenishment or disclosure-hold clearance is included.
+
+## Private candidate — explicit qualified capture over local MCP
+
+- Opt-in `--capture-qualification source-bound-v1` exposes `capture_memory` for
+  explicitly submitted batches through the same core. Keep default five tools,
+  fixed namespace, keyless explicit writes and bounded source retention.
+- Add keyless `inspect_memory.includeQualification` for ID inspection, preserving
+  receipt pagination. Submitted roles and model labels remain unverified source
+  claims, not human authentication, safe automatic updates or execution consent.
+  No passive hooks, trusted bindings, retirement, paid calls or disclosure-hold
+  clearance is included in this private delivery slice.
+
+## Private candidate — automatic source qualification
+
+- Add opt-in local `captureQualification: 'source-bound-v1'`: one bounded model
+  batch describes extracted claims against exact persisted receipt excerpts.
+  Validate and atomically store qualifications without automatic slot binding.
+  Ordered capture preserves evidence with unresolved
+  `qualification_requires_identity`, never legacy retirement in this mode.
+  Mode-bound replay prevents reinterpreting legacy events as qualified. This is
+  inspectable model provenance, not proven truth or automatic-update reliability.
+  No paid calls, publication or disclosure-hold clearance is included.
+
+## Private candidate — complete qualified transition sets
+
+- Add local-only `transitionQualifiedSet` for 1–5 explicitly revision-guarded
+  predecessors sharing one established slot with their replacement. Require full
+  current-member coverage, revalidate all referenced sources, preflight existing
+  history-edge capacity and retire atomically through the existing engine.
+  Preserve the pair API and qualified retirement fences. This trusted-manual
+  extension does not establish automatic memory-update reliability or clear the
+  inherited private security disclosure hold.
+
+## Private candidate — trusted-manual qualified transitions
+
+- Add immutable server-generated claim slots and manual single-claim bindings,
+  with atomic v10→v11 migration and empty-slot cleanup on correction/forget.
+  Apply source-validated transitions between already-admitted qualified memories
+  or retain both as unresolved; fence legacy retirement of qualified endpoints.
+  Ordered capture preserves admission and replay when fenced. Unqualified legacy
+  retirement and model interpretation remain explicitly unprotected. No public
+  disclosure, release, deployment or model calls are part of this private slice.
+
+## Private candidate — Unicode identifier integration (disclosure hold)
+
+- Integrate the separately reviewed malformed-Unicode identifier guard with
+  qualification storage, preserving both installed-core regression probes.
+  Combined offline gates passed on Node 22.16 and 24, including 351 core tests
+  and 16 artifact tests on each runtime; no model calls were made. Independent
+  review of the frozen integrated commit remains required.
+  This local integration does not release the SECURITY.md private coordination
+  hold or authorize a public push, PR, disclosure, merge or deployment.
+
+## Unreleased — bounded claim qualification storage
+
+- Add optional trusted qualification to manual explicit/inferred admission, with
+  immutable bounded labels, exact receipt anchors and opt-in core inspection.
+  Preserve bindings across filing, receipt additions and historical retirement;
+  clear them atomically on correction/forget. Conflicting qualified dedup fails.
+  Upgrade SQLite v9 to v10 without legacy backfill. No automatic qualification,
+  model/MCP exposure or retirement-rule change is included; provenance checks
+  do not establish semantic truth or repair update-quality failures.
+
+## Unreleased — current-memory candidate allowance
+
+- Exclude retained history and tombstones from recall's 1,024-row candidate
+  allowance using the existing current-memory partial index. Projection-rejected
+  current rows still consume the allowance; current sentinels retain incomplete
+  coverage. Bump the private candidate cursor policy to v2 and fail closed when
+  the required index is missing. No new migration, public-map change or scoring
+  change is included. Frozen v1 evidence remains unchanged; offline tests do not
+  establish model-quality or latency improvements.
+
+## Unreleased — bounded query-aware candidates
+
+- Score current exact-namespace memory bodies by distinct literal query-token
+  overlap before recall page packing, scanning at most 1,024 raw rows plus a
+  sentinel. Preserve real placement refs, deduplicate multiparent memories and
+  retain zero-overlap candidates. Private selection omits group headers; public
+  maps, classification and model ports are unchanged. Scan-limited results keep
+  incomplete coverage, and callback/final epoch checks also protect empty recall.
+  These offline controls establish bounded reachability, not semantic quality.
+
+## Unreleased — MOC architecture diagnostic
+
+- Add a synthetic cold-store visibility diagnostic and corpus-wide SQLite FTS5
+  baseline, retaining late-topic retrieval misses, Chinese/paraphrase lexical
+  failures and the 101-unfiled-memory classification failure. Separate oracle
+  visibility from semantic quality and provider cost; no runtime changes or paid
+  calls accompany this evidence. See [the report](docs/evidence/moc-architecture.md).
+
+## Unreleased — paired reconciliation evidence
+
+- Retain one frozen old/new comparison on eight new bilingual synthetic cases,
+  with per-claim, retirement, retrieval and answer review. Neither version meets
+  the full frozen gate; retain invalid-output and wrong-retirement failures.
+- Add a one-shot paired harness, private append-only evidence writer and a
+  conservative additional request/spending cap over an existing campaign guard.
+  No runtime tuning, paid retries, release, default-model change or new reliability
+  claim accompanies this evidence.
+
+## Unreleased — bounded classification catalog
+
+- Classify placement against a MOC-only catalog, so unrelated unfiled memories
+  and placement references cannot crowd out topics or prevent first-topic
+  creation. Preserve namespace/revision checks and reject new topics when the
+  topic catalog itself is incomplete. Public maps and recall are unchanged;
+  this is an input-selection fix, not evidence of semantic classification quality.
+
+## Unreleased — explicit MCP history inspection
+
+- Add optional active/historical filters to the existing local `inspect_memory`
+  listing mode. Keep the same five tools and no-key inspection path; document
+  how to follow retained change evidence without inventing reasons or dates.
+
+## Unreleased — explicit historical evidence view
+
+- Add local `list({states})` filtering and opt-in `fetch({view: 'historical'})`
+  for retained superseded evidence with source receipts and supersession metadata.
+  Current recall/fetch defaults remain unchanged. This is not date-based temporal
+  QA, full revision history, automatic motive inference or a new MCP surface.
+
+## Unreleased — qualified reconciliation candidate
+
+- Require explicit relation, value-change and adoption judgments in the
+  experimental injected reconcile port. Only a consistent adopted replacement
+  can retire prior memory; validated nonretiring judgments preserve it. Custom
+  models must update nonempty outputs; old bare tuples fail closed. No database
+  or hosted protocol change, and no new real-model reliability claim.
+
+## Unreleased — ordered live evidence
+
+- Retain one real-provider ordered-history, seven-case currentness and installed
+  MCP lifecycle attempt with independent agent review. Explicit updates and the
+  narrow installed lifecycle pass; reaffirming the current fact wrongly retires
+  it in C6, so broader currentness acceptance remains failed. No runtime changes.
+
 ## Unreleased — well-formed local identifiers
 
 - Reject malformed Unicode identifiers at the shared core boundary. Valid
@@ -23,6 +280,38 @@
 All notable changes follow semantic versioning.
 
 ## Unreleased
+
+- Prepare an installed ordered-capture lifecycle gate with fresh MCP consumers,
+  source-bound history, scoped correction/forgetting, isolation and explicit
+  failure retention. Scripted installed tests are not real-model acceptance or
+  autonomous host capture; prior evidence remains unchanged.
+
+- Freeze a separate seven-case currentness diagnostic covering confirmed updates
+  and non-update cases, with complete raw history and independent source,
+  currentness, retention and recall labels. Scripted offline acceptance does not
+  establish real-model quality or replace the original failed history audit.
+
+- Prepare a separately versioned ordered-history diagnostic retaining complete
+  raw history alongside an explicit current-only projection for the unchanged
+  v1 scorer. Historical retirement requires separate independent review; frozen
+  original failures and denominators remain intact. Offline harness checks are
+  not real-model acceptance or a new semantic-quality score.
+
+- Prepare a separate immutable reconciliation experiment authorization and an
+  explicit combined request guard. Existing guards still reject reconciliation;
+  only an owner-authorized operator may provision real campaign state. Offline
+  tests do not grant permission, replenish budgets or establish model quality.
+
+- Add opt-in local source-ordered capture reconciliation with inferred-authority
+  preservation, atomic history/progress fencing, bounded unresolved outcomes and
+  durable replay. Schema v9 retains content-free causal provenance; legacy
+  captures and MCP input schemas are unchanged. Offline tests do not establish
+  real-model quality, and existing paid guards do not authorize the new port.
+
+- Add explicit revision-safe `core.supersede` with atomic replacement admission,
+  preserved historical evidence and current-only recall/navigation. Schema v8
+  separates history from forgetting; no automatic capture reconciliation or
+  semantic-quality improvement is claimed by this storage foundation.
 
 - Add an explicit Luna extraction-only experiment and an opt-in durable model
   authorization extension over the original shared experiment budget. Defaults,
