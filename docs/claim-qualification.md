@@ -2,8 +2,11 @@
 
 Trusted local callers may attach one qualification to a newly admitted memory.
 This records their interpretation with exact source anchors. It does not establish
-semantic truth, a shared subject identity, adoption, or safe retirement. Automatic
-capture and existing retirement judgments do not produce or enforce qualifications.
+semantic truth, a shared subject identity, adoption, or safe retirement. The
+opt-in [source-qualified capture mode](capture.md#opt-in-automatic-source-qualification)
+also produces validated qualifications from model assertions. It never creates
+trusted slot bindings, and it preserves ordered evidence as unresolved rather
+than invoking legacy retirement. Default capture does not produce qualifications.
 
 ```js
 const receipt = { client: 'synthetic', sessionId: 'session', eventId: 'event',
@@ -96,7 +99,9 @@ before upgrading meaningful data and retain a backup.
 
 Labels may contain personal information. They are local untrusted content, never
 instructions or authority. Digests and source links are not encryption. No new
-automatic capture, telemetry, model transmission or MCP exposure is introduced.
+telemetry or MCP exposure is introduced by manual qualification storage. The
+separate opt-in automatic capture mode transmits bounded item/source text as
+documented in [capture](capture.md#opt-in-automatic-source-qualification).
 Correction/forget removes live qualification rows; database backups/journals and
 secure-erasure limitations remain as documented in [local storage](local-store.md).
 

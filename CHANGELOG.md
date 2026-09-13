@@ -1,5 +1,16 @@
 # Changelog
 
+## Private candidate — automatic source qualification
+
+- Add opt-in local `captureQualification: 'source-bound-v1'`: one bounded model
+  batch describes extracted claims against exact persisted receipt excerpts.
+  Validate and atomically store qualifications without automatic slot binding.
+  Ordered capture preserves evidence with unresolved
+  `qualification_requires_identity`, never legacy retirement in this mode.
+  Mode-bound replay prevents reinterpreting legacy events as qualified. This is
+  inspectable model provenance, not proven truth or automatic-update reliability.
+  No paid calls, publication or disclosure-hold clearance is included.
+
 ## Private candidate — complete qualified transition sets
 
 - Add local-only `transitionQualifiedSet` for 1–5 explicitly revision-guarded

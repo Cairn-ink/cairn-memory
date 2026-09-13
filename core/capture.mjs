@@ -4,6 +4,7 @@ import { callModel } from './model-call.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { reconcileCapture } from './ordered-capture.mjs';
+import { qualifyExtractedItems } from './automatic-qualification.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
@@ -38,8 +39,8 @@ async function classifyAdmission(model, namespace, admission, operations) {
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations }) {
-  const snapshot = captureSnapshot(input);
+export async function captureMessages({ model, input, operations, captureQualification }) {
+  const snapshot = captureSnapshot(input, captureQualification);
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
@@ -54,9 +55,12 @@ export async function captureMessages({ model, input, operations }) {
     let items;
     try { items = extractedItems(output, snapshot); }
     catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
+    if (captureQualification && items.length) items = await qualifyExtractedItems(model, items);
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
-      const judged = await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery });
+      const judged = captureQualification
+        ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery });
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
   } catch (error) {

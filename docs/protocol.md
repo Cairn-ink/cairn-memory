@@ -84,6 +84,19 @@ operation's source guards and atomically preserves all predecessor histories.
 
 ### Separate local ordered-capture boundary
 
+The optional constructor mode `captureQualification: 'source-bound-v1'` adds
+one model-bound payload containing bounded extracted item text/kind and its
+canonical receipt excerpts/roles with local numeric positions. No trusted
+identity, full source transcript or slot attestation reaches this new stage.
+The stored S1 labels/anchors are model assertions, not authority or truth.
+Unknown metadata cannot trigger a fallback to legacy retirement. This mode
+stores/replays unresolved ordered outcomes until identity is separately
+established. It changes neither MCP/HTTP inputs nor receipt retention; existing
+SQLite journal, backup and erasure limitations still apply. Model providers
+receive personal text in these bounded fields, so hosts must configure a
+provider appropriate for their data. No telemetry or paid-call permission is
+added. See [capture](capture.md#opt-in-automatic-source-qualification).
+
 The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)
 are not HTTP/plugin/MCP payload fields and do not widen these schemas. A trusted
 local host supplies stream order; it is not accepted as authenticated chronology.

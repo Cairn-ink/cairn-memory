@@ -124,7 +124,11 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model']);
+  object(input, ['path', 'model', 'captureQualification']);
+  const captureQualification = Object.hasOwn(input, 'captureQualification') ? input.captureQualification : undefined;
+  if (Object.hasOwn(input, 'captureQualification') && captureQualification !== 'source-bound-v1') {
+    throw new MemoryStoreError('invalid_input');
+  }
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   const runtime = createMemoryRuntime({ path: input.path });
@@ -559,7 +563,7 @@ export function openMemoryCore(input) {
       object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
-      return success(await captureMessages({ model, input: { ...input, namespace },
+      return success(await captureMessages({ model, captureQualification, input: { ...input, namespace },
         operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
           classifyPlacement, applyPlacement,
           ordered: {

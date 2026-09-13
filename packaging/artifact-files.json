@@ -1,5 +1,6 @@
 [
   "core/admission-storage.mjs",
+  "core/automatic-qualification.mjs",
   "core/capture-input.mjs",
   "core/capture.mjs",
   "core/claim-qualification-input.mjs",
@@ -31,6 +32,7 @@
   "core/validation.mjs",
   "core/prompts/classify-placement.md",
   "core/prompts/extract-memories.md",
+  "core/prompts/qualify-memories.md",
   "core/prompts/reconcile-memories.md",
   "core/prompts/recall-rank.md",
   "core/prompts/recall-select.md",

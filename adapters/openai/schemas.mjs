@@ -9,7 +9,7 @@ const refs = object({ refs: array(object({ namespaceIndex: integer,
   memoryId: string, revision: { type: 'integer', minimum: 1 } }), 24) });
 
 // This export is also the existing live guard's method allowlist. Reconcile
-// remains dynamic-only until a separately authorized guard extension exists.
+// and qualify remain dynamic-only until a separately authorized guard extension exists.
 export const schemas = {
   extract: object({ items: array(object({ content: { type: 'string', maxLength: 600 },
     kind: { type: 'string', enum: ['fact', 'preference', 'decision', 'instruction', 'context'] },
@@ -39,6 +39,33 @@ const snapshotIndices = (values, maximum) => {
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'qualify') {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+    const items = list(input.items);
+    if (!items.length || items.length > 5) invalid();
+    const itemIndices = items.map(item => index(item?.itemIndex));
+    if (sorted(itemIndices).length !== items.length) invalid();
+    const nullable = maximum => ({ type: ['string', 'null'], minLength: 1, maxLength: maximum });
+    const variants = items.map(item => {
+      const sources = list(item.sources);
+      const receiptIndices = sources.map(source => index(source?.receiptIndex));
+      if (!sources.length || sources.length > 4 || sorted(receiptIndices).length !== sources.length) invalid();
+      return object({ itemIndex: constrained(integer, [item.itemIndex]), qualification: object({
+        version: { type: 'integer', enum: [1] },
+        slot: object({ subject: nullable(160), property: nullable(160), scope: nullable(120), applies: nullable(120) }),
+        value: nullable(160),
+        attribution: { type: 'string', enum: ['direct', 'reported', 'quoted', 'proposed', 'unknown'] },
+        commitment: { type: 'string', enum: ['adopted', 'considered', 'rejected', 'unknown'] },
+        anchors: { ...array(object({ receiptIndex: constrained(integer, receiptIndices),
+          start: { ...integer, maximum: 799 }, end: { type: 'integer', minimum: 1, maximum: 800 },
+          text: { type: 'string', minLength: 1, maxLength: 200 },
+          fields: { ...array({ type: 'string', enum: ['subject', 'property', 'scope', 'applies', 'value',
+            'attribution', 'commitment'] }, 7), minItems: 1 },
+        }), 4), minItems: 1 },
+      }) });
+    });
+    return object({ qualifications: { ...array({ anyOf: variants }, items.length), minItems: items.length } });
+  }
   if (method === 'reconcile') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
     const messageIndices = snapshotIndices(input.messages, 24);

@@ -4,7 +4,7 @@ import { boundedText, denseArray, fail, identifier, object, revision } from './v
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
 /** Copy trusted identity and normalize every message before claiming or calling a model. */
-export function captureSnapshot(input) {
+export function captureSnapshot(input, captureQualification) {
   try {
     const namespace = { ownerId: input.namespace.ownerId, scope: input.namespace.scope,
       projectId: input.namespace.projectId };
@@ -21,6 +21,9 @@ export function captureSnapshot(input) {
       const id = identifier(message.id);
       const role = message.role;
       if (!['user', 'assistant'].includes(role)) fail('invalid_input');
+      if (captureQualification && (typeof message.content !== 'string' || !message.content.isWellFormed())) {
+        fail('invalid_input');
+      }
       return { id, role, content: boundedText(message.content, 4000) };
     });
     if (new Set(messages.map((message) => message.id)).size !== messages.length ||
@@ -28,11 +31,14 @@ export function captureSnapshot(input) {
       fail('invalid_input');
     }
     const payloadDigest = createHash('sha256').update(JSON.stringify([
-      causal ? 'cairn.capture.v2' : 'cairn.capture.v1', [namespace.ownerId, namespace.scope, namespace.projectId],
+      captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
+      [namespace.ownerId, namespace.scope, namespace.projectId],
       client, eventId, sessionId, messages.map(({ id, role, content }) => [id, role, content]),
       ...(causal ? [[causal.streamId, causal.sequence]] : []),
+      ...(captureQualification ? [captureQualification] : []),
     ]), 'utf8').digest('hex');
-    return { namespace, client, eventId, sessionId, messages, payloadDigest, ...(causal ? { causal } : {}) };
+    return { namespace, client, eventId, sessionId, messages, payloadDigest, ...(causal ? { causal } : {}),
+      ...(captureQualification ? { captureQualification } : {}) };
   } catch { fail('invalid_input'); }
 }
 
@@ -42,6 +48,9 @@ export function extractedItems(output, snapshot) {
     object(output, ['items']);
     return denseArray(output.items, 0, 5).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'sourceIndices']);
+      if (snapshot.captureQualification && (typeof item.content !== 'string' || !item.content.isWellFormed())) {
+        fail('invalid_model_output');
+      }
       const content = boundedText(item.content, 600);
       if (!kinds.includes(item.kind) || typeof item.confidence !== 'number' ||
           !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1) {

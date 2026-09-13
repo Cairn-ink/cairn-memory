@@ -60,7 +60,58 @@ tokenizer. No automatic host integration or semantic-quality claim is bundled.
 Scripted tests prove boundary/lifecycle behavior only. Storage and
 receipt retention follow [the local store limits](local-store.md).
 
+## Opt-in automatic source qualification
+
+Construct `openMemoryCore({ path, model, captureQualification: 'source-bound-v1' })`
+to qualify newly extracted memories. Absence preserves legacy behavior; explicit
+undefined, null and other values reject before opening storage. The setting is
+snapshotted, not read from caller configuration again during capture. It is not
+a new MCP, HTTP or capture input field. Legacy mode is explicitly unprotected
+against semantic errors in automatic retirement.
+
+For nonempty extraction, call `model.qualify` once before admission, under the
+same 6000-input/1024-output token ceilings and 30-second deadline. The input is
+`{items:[{itemIndex,content,kind,sources:[{receiptIndex,role,excerpt}]}]}`; receipt
+indices are local to each item, regardless of original message index order.
+Only exact canonical/redacted receipt excerpts (at most 800 UTF-16 units) reach
+this stage, not full messages or namespace/client/session/event identifiers.
+The adapter's qualifier uses its pinned baseline model independently of the
+extraction profile. No additional paid-guard method is enabled by this feature.
+
+Output is exactly `{qualifications:[{itemIndex,qualification}]}` with every item
+represented once. Each nonnull qualification follows [the S1 contract](claim-qualification.md).
+Unknown/null descriptions are allowed; schema validity and exact source anchors
+do not establish truth, identity, adoption, atomicity or execution permission.
+Model descriptions remain unverified interpretations. Evidence past the stored
+800-unit excerpt cannot support an anchor, even if extraction saw it. There is
+no quote relocation, larger transcript retention or trusted single-claim binding.
+
+Invalid metadata, malformed Unicode, a missing qualifier, timeout or token
+overflow fails explicitly; there is no silent unqualified fallback. Validation
+of all items precedes their shared atomic admission. Existing unqualified
+duplicates are not backfilled: qualification mismatch fails
+`qualification_conflict`. Suppression retains the existing forgotten-content
+protection. Empty extraction and completed replay make no qualifier call.
+The 125-second admission lease is unchanged; extract and qualify are at most
+two precommit model deadlines. Classification still occurs after admission.
+
+The mode participates in a versioned payload digest. Reusing an event under
+another mode fails `event_payload_conflict`, rather than claiming that a legacy
+event was qualified. Legacy-mode digest bytes remain unchanged. In enabled
+ordered capture, every nonempty extraction durably returns reconciliation
+`{status:'unresolved',reason:'qualification_requires_identity',retiredCount:0}`,
+including dedup/suppression outcomes. The legacy reconcile model is not called,
+no slots are bound, and no old memories retire. Empty extraction uses the
+existing no-change outcome. Replay retains the recorded outcome.
+
+This slice produces inspectable provenance, not completed automatic updating.
+Independent subject/slot identity, atomicity, adoption, premise tracking and
+positive semantic update validation remain required before that claim is valid.
+
 ## Opt-in source-ordered reconciliation
+
+For source-qualified capture, see the separate constructor mode below. It skips
+the legacy reconciliation judgment and does not automatically retire memories.
 
 The local JavaScript API accepts `causal: {streamId, sequence}`. This does not
 change the HTTP/plugin/MCP schemas. Without it, capture keeps the existing
