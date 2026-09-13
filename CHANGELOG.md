@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — decision-chain validation for source-basis challenges
+
+- Reject a current-basis challenge unless its premise also supports a decision
+  in the same proposal. Preserve whole-output rejection, source data and all
+  existing bounds; never manufacture adoption or repair the graph.
+- Structural chains do not prove semantic correctness or resolve time/scope
+  errors. No model default, persistence or migration changes.
+
 ## Unreleased — bounded source-basis comparison preparation
 
 - Separate basis-only experiment capability and parent session keep every old

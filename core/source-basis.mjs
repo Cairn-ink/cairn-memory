@@ -47,6 +47,12 @@ export function compileDecisionBasis(output, sources) {
     if (seen.has(key)) fail('invalid_model_output'); seen.add(key);
     return { from: link.from, to: link.to, relation: link.relation, interpretationStatus: 'model-proposed' };
   });
+  // A current-basis challenge must belong to a proposed decision chain. This
+  // proves graph structure only, not adoption or agreement of time and scope.
+  const supportedPremises = new Set(links.filter(link => link.relation === 'supports-decision').map(link => link.from));
+  if (links.some(link => link.relation === 'challenges-current-basis' && !supportedPremises.has(link.to))) {
+    fail('invalid_model_output');
+  }
   return { units, links };
 }
 

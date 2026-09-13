@@ -161,3 +161,34 @@ test('SB10 changing output getters cannot bypass the compiled proposal token bud
   await assert.rejects(reviewSourceBasis(model, sources, () => {}), { code: 'invalid_model_output' });
   assert.equal(reads, 2);
 });
+test('SB11 challenges require a support chain to a decision, not just compatible endpoint roles', async t => {
+  const f = fixture(t); const before = f.stored();
+  for (const links of [
+    [{ from: 3, to: 1, relation: 'challenges-current-basis' }],
+    [{ from: 3, to: 1, relation: 'challenges-current-basis' }, { from: 2, to: 0, relation: 'supports-decision' }],
+  ]) {
+    f.model.reviewBasis = () => ({ units: output().units, links });
+    assert.equal((await f.review()).error?.code, 'invalid_model_output');
+    assert.deepEqual(f.stored(), before);
+  }
+  f.model.reviewBasis = () => ({ units: [output().units[1], output().units[3]],
+    links: [{ from: 1, to: 0, relation: 'challenges-current-basis' }] });
+  assert.equal((await f.review()).error?.code, 'invalid_model_output');
+  assert.deepEqual(f.stored(), before);
+});
+test('SB12 graph validation is order independent and does not require every unit to be linked', async t => {
+  const f = fixture(t);
+  f.model.reviewBasis = () => ({ units: output().units, links: [...output().links].reverse() });
+  assert.equal(ok(await f.review()).links.length, 3);
+  f.model.reviewBasis = () => ({ units: output().units, links: [output().links[0], output().links[2]] });
+  assert.equal(ok(await f.review()).units.length, 4);
+  f.model.reviewBasis = () => ({ units: output().units, links: [] });
+  assert.equal(ok(await f.review()).links.length, 0);
+});
+test('SB13 one source-backed premise can support multiple proposed decisions without order dependence', async t => {
+  const f = fixture(t, 'I chose Pinevault because it cost $8 monthly and kept files in Japan. I chose annual billing for the same price.');
+  f.model.reviewBasis = () => ({ units: [...output().units,
+    { memory: 0, receipt: 0, role: 'decision', quote: 'I chose annual billing' }],
+  links: [output().links[2], { from: 1, to: 4, relation: 'supports-decision' }, ...output().links.slice(0, 2)] });
+  assert.equal(ok(await f.review()).links.length, 4);
+});

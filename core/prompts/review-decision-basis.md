@@ -23,6 +23,10 @@ the source permits this without losing their qualifications.
 
 challenges-current-basis links go from an update unit to the particular premise
 whose present applicability it changes. Do not reverse the direction. This is
+allowed only when that premise also supports a recorded decision through a
+supports-decision link in this proposal. Do not invent a decision or supporting
+link to complete the chain; omit unsupported interpretations instead. A valid
+chain alone does not establish adoption, shared subject, time or scope. This is
 not a claim that a historically valid premise was false: a price may have been
 correct then but changed now. Preserve the original reason and the update;
 do not erase history, invalidate other unchanged reasons or infer a new choice.
