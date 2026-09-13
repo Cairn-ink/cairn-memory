@@ -44,6 +44,11 @@ export function createRationaleModelAttempt(options) {
   return createAttempt(options, RATIONALE_MODEL_LIMITS, ['cairn_relate'], RATIONALE_MODEL_RESERVATIONS);
 }
 
+export function createBasisComparisonAttempt(options) {
+  return createAttempt(options, RATIONALE_MODEL_LIMITS,
+    ['cairn_relate', 'cairn_reviewBasis'], RATIONALE_MODEL_RESERVATIONS);
+}
+
 function createAttempt(options, limits, methods, modelReservations = null) {
   if (!exact(options, ['readState', 'checkPins', 'persist', 'send', 'expectedCheckpoint'])) fail('invalid_attempt');
   const { readState, checkPins, persist, send, expectedCheckpoint } = options;

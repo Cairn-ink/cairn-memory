@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — bounded source-basis comparison preparation
+
+- Separate basis-only experiment capability and parent session keep every old
+  grant unchanged. A closed comparison attempt permits relate/reviewBasis with
+  three fixed models, capped at 96 HTTP / US$2.048 inside the aggregate ledger.
+- Offline safety checks are not semantic evidence; no paid run, automatic grant,
+  default promotion or publication. See `docs/source-basis-comparison.md`.
+
 ## Unreleased — experimental source-bound decision-basis review
 
 - Embedded callers can inspect exact quoted decision, premise and update units
