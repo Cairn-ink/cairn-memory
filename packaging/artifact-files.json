@@ -1,6 +1,7 @@
 [
   "core/admission-storage.mjs",
   "core/automatic-qualification.mjs",
+  "core/automatic-rationale.mjs",
   "core/capture-input.mjs",
   "core/capture.mjs",
   "core/claim-qualification-input.mjs",
@@ -45,6 +46,7 @@
   "core/prompts/recall-rank-qualified.md",
   "core/source-evidence.mjs",
   "core/prompts/recall-rank-source-evidence.md",
+  "core/prompts/recall-rank-rationale-evidence.md",
   "core/prompts/recall-select.md",
   "adapters/mcp/cli.mjs",
   "adapters/mcp/server.mjs",

@@ -7,7 +7,7 @@ import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
-import { sourceEvidence } from './source-evidence.mjs';
+import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
@@ -386,12 +386,17 @@ export function createMemoryRuntime(input) {
       const row = candidate?.currentness === view ? candidate : undefined;
       const reason = !row ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
-      if (contextMode === 'source-evidence') return { source: readSourceEvidence(row), epoch: currentEpoch };
+      if (isSourceContext(contextMode)) return { source: readUsageEvidence(ns, row, contextMode), epoch: currentEpoch };
       const memory = detailDto(row);
       return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch,
         ...(includeQualification ? { qualification: qualificationStorage.inspect(row) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
     });
+  }
+
+  function readUsageEvidence(ns, row, mode) {
+    return { ...readSourceEvidence(row), ...(mode === 'rationale-evidence'
+      ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
   }
 
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
@@ -407,9 +412,9 @@ export function createMemoryRuntime(input) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision) fail('index_revision_conflict');
       }
-      if (contextMode === 'source-evidence') {
+      if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
-          const source = readSourceEvidence(row);
+          const source = readUsageEvidence(candidates[index].namespace, row, contextMode);
           if (JSON.stringify(source) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
           return source;
         });

@@ -1,4 +1,5 @@
 import { countTokens } from './model-budget.mjs';
+import { isSourceContext } from './source-evidence.mjs';
 import { fail, object, identifier, revision, denseArray } from './validation.mjs';
 
 export function memoryRefs(input) {
@@ -19,9 +20,9 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
       !Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0)) fail('invalid_cursor');
   const index = cursor?.a.index ?? 0;
   const offset = cursor?.a.offset ?? 0;
-  if (contextMode === 'source-evidence' && offset !== 0) fail('invalid_cursor');
+  if (isSourceContext(contextMode) && offset !== 0) fail('invalid_cursor');
   const page = runtime.fetchPage(ns, refs[index], offset, cursor?.e, view, includeQualification, contextMode);
-  if (contextMode === 'source-evidence') {
+  if (isSourceContext(contextMode)) {
     const exhausted = index === refs.length - 1;
     const value = { items: page.source ? [page.source] : [],
       nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch, a: { index: index + 1, offset: 0 } }),

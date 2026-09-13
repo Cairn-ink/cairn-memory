@@ -6,6 +6,7 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 import { reconcileCapture } from './ordered-capture.mjs';
 import { qualifyExtractedItems } from './automatic-qualification.mjs';
 import { qualifyCandidateItems } from './qualification-candidates.mjs';
+import { reviewCapturedRationale } from './automatic-rationale.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
@@ -41,7 +42,7 @@ async function classifyAdmission(model, namespace, admission, operations) {
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations, captureQualification }) {
+export async function captureMessages({ model, input, operations, captureQualification, captureRationale }) {
   const snapshot = captureSnapshot(input, captureQualification);
   const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
   const sourceMessages = retained?.messages ?? snapshot.messages;
@@ -52,7 +53,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
     : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
-  if (claim.processing || claim.duplicate) return retained ? { ...claim, ...coverage } : claim;
+  if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
+    ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
+      previousOutcome: 'unavailable' } } : {}) };
   const owned = { ...key, token: claim.token };
   let finished;
   try {
@@ -80,7 +83,10 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };
   const classification = await classifyAdmission(model, snapshot.namespace, admission, operations);
+  const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
+    classification, sourceMessages, operations }) : undefined;
   return { duplicate: false, admission, classification,
+    ...(captureRationale ? { rationale } : {}),
     ...coverage,
     ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}) };
 }

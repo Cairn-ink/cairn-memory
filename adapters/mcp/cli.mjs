@@ -26,13 +26,18 @@ charges; no account spending cap is enforced. Inspection (including source
 qualification), explicit remember, correction and forgetting remain keyless.
 V2 uses core-owned source candidates; v1 retains model-written source anchors.
 Neither mode proves meaning, resolves currentness or grants update authority.
+--capture-rationale source-bound-v1 requires --capture-qualification source-bound-v2.
+It attempts proposed rationale after saving/classification and adds keyless inspect_rationale.
+Check the separate rationale status; duplicate batches do not repeat this pass.
+Allow at least 180 seconds for opted-in capture (four bounded model stages).
+recall_memory contextMode rationale-evidence includes linked unverified evidence.
 Save only on actual user intent. Remembered consent is not execution authority.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
 `;
 
 export function parseConfiguration(args) {
-  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification']);
+  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -48,9 +53,12 @@ export function parseConfiguration(args) {
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--capture-rationale') && (values.get('--capture-rationale') !== 'source-bound-v1' ||
+      values.get('--capture-qualification') !== 'source-bound-v2')) throw new Error('invalid_mcp_configuration');
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
-    ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}) };
+    ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
+    ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}) };
 }
 
 export async function start(args = process.argv.slice(2), env = process.env) {
@@ -71,6 +79,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
         capture: key ? 'configured-not-verified' : 'model_not_configured',
         qualificationModel: key ? DEFAULT_MODEL : null } : {}),
       databaseOpened: false, providerContacted: false,
+      ...(config.captureRationale ? { captureRationale: config.captureRationale,
+        rationale: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
       unverified: ['database-readiness', 'credential-validity', 'model-availability'],
     }, null, 2));
     return;

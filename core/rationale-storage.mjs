@@ -49,8 +49,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     });
   }
 
-  function inspect(ns, ref) {
-    return transaction(db, () => {
+  function inspectInside(ns, ref) {
       const sources = new Map([[ref.memoryId, source(ns, ref)]]);
       const edges = [];
       const incoming = (id, relation) => db.prepare(`SELECT * FROM rationale_edges
@@ -77,8 +76,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       return bounded({ root: { memoryId: ref.memoryId, revision: ref.revision },
         status: edges.some(edge => edge.relation === 'challenges-premise') ? 'reconfirmation-suggested' : 'unassessed',
         sources: [...sources.values()], edges, coverage: 'linked-evidence-only', indexRevision: epoch(ns) });
-    });
   }
 
-  return { snapshot, commit, inspect };
+  return { snapshot, commit, inspectInside, inspect: (ns, ref) => transaction(db, () => inspectInside(ns, ref)) };
 }

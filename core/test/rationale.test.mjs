@@ -63,7 +63,7 @@ test('R3 strict output and input validation never partially writes', async t => 
     f.model.relate = () => output; error(await f.review(), 'invalid_model_output');
     assert.equal(f.db.prepare('SELECT count(*) n FROM rationale_edges').get().n, 0);
   }
-  for (const refs of [[], f.refs.slice(0, 1), [f.refs[0], f.refs[0]], Array(7).fill(f.refs[0])]) error(await f.review({ refs }), 'invalid_input');
+  for (const refs of [[], [f.refs[0], f.refs[0]], Array(7).fill(f.refs[0])]) error(await f.review({ refs }), 'invalid_input');
   error(await f.review({ extra: true }), 'invalid_input');
   error(await f.review({ namespace: { ...namespace, ownerId: 'other' } }), 'memory_not_found');
   error(await f.review({ refs: [{ ...f.refs[0], revision: 999 }, f.refs[1]] }), 'revision_conflict');

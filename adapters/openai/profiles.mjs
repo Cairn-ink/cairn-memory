@@ -21,6 +21,6 @@ export function modelProfile(extractionModel = DEFAULT_MODEL) {
   }
   return Object.freeze({ extract: extractionModel === DEFAULT_MODEL ? baseline :
     extractionModel === EXPERIMENTAL_EXTRACTION_MODEL ? experimental : luna,
-    qualify: baseline, qualifyCandidates: baseline,
+    qualify: baseline, qualifyCandidates: baseline, relate: baseline,
     classify: baseline, select: baseline, rank: baseline, reconcile: baseline });
 }

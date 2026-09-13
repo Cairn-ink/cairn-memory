@@ -1,5 +1,7 @@
 import { boundedText, identifier, revision, fail } from './validation.mjs';
 
+export const isSourceContext = mode => ['source-evidence', 'rationale-evidence'].includes(mode);
+
 // Called only inside the authoritative runtime transaction. Interpretation
 // fields and source identity metadata never enter this closed usage projection.
 export function sourceEvidence(memory, receipts, receiptCount, receiptKey) {
