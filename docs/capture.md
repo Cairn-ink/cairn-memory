@@ -130,6 +130,16 @@ evidence. Unknown values may cite context, and even all-unknown output must
 explicitly select at least one candidate overall. Four distinct candidates per
 qualification is the maximum; additional evidence rejects rather than being lost.
 
+V2 compiles the five descriptive labels (subject/property/scope/applies/value)
+with NFKC normalization before strict S1 validation. Null is preserved; raw and
+normalized text must fit the existing 160/120 UTF-16 bounds. This does not trim,
+collapse whitespace, redact, truncate, replace enums or add missing evidence.
+Invalid Unicode, secret-like/noncanonical labels, unsupported values and
+normalization expansion beyond limits still reject atomically. Model responses
+remain raw in experiment evidence; sources and anchor bytes are never altered
+by label normalization. NFKC can fold compatibility styles, not prove meaning
+or shared slot identity. Manual S1 and v1 remain strictly canonical-input APIs.
+
 Core builds exact offsets/text and derives each anchor's field coverage from
 those selections, then applies the unchanged S1 validator. The model does not
 calculate character positions, copy quotes, or maintain a separate coverage list.

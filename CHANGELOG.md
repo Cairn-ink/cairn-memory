@@ -1,5 +1,13 @@
 # Changelog
 
+## Private candidate — canonical v2 description labels
+
+- Compile v2 descriptive labels with declared NFKC normalization before unchanged
+  strict S1 validation. Preserve raw/final limits, exact source anchors, nulls,
+  enums and atomic failure; do not truncate, rewrite sources or infer identity.
+- Retain the original failed pilot unchanged. This mechanical fix does not
+  demonstrate semantic quality, complete antecedent selection or useful labels.
+
 ## Private candidate — source-qualified recall
 
 - Carry opt-in complete source qualification through counted fetch, ranking and

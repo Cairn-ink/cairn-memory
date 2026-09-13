@@ -5,6 +5,7 @@ import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
+const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
 const system = readFileSync(new URL('./prompts/qualify-candidates.md', import.meta.url), 'utf8');
 const exact = (value, keys) => {
   object(value, keys);
@@ -58,7 +59,15 @@ export function createQualificationCandidateSnapshot(items) {
   } catch { fail('invalid_model_output'); }
 }
 
-/** Compile selections, never repair metadata or interpret semantic support. */
+// Descriptive labels, unlike exact source anchors, have a declared v2 NFKC
+// compilation step. S1 still validates the result without sanitizing or truncating.
+function canonicalLabel(value, limit) {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !value.isWellFormed() || value.length > limit) fail('invalid_model_output');
+  return value.normalize('NFKC');
+}
+
+/** Compile selected evidence and canonical labels; never infer semantic support. */
 export function compileQualificationCandidates(output, snapshot) {
   try {
     exact(output, ['qualifications']);
@@ -81,7 +90,7 @@ export function compileQualificationCandidates(output, snapshot) {
           !Number.isSafeInteger(id) || !candidates.has(id))) fail('invalid_model_output');
         const unknown = value === null || (['attribution', 'commitment'].includes(field) && value === 'unknown');
         if (!unknown && !references.length) fail('invalid_model_output');
-        values[field] = value;
+        values[field] = Object.hasOwn(LABEL_LIMITS, field) ? canonicalLabel(value, LABEL_LIMITS[field]) : value;
         for (const id of references) {
           if (!selected.has(id)) selected.set(id, []);
           selected.get(id).push(field);

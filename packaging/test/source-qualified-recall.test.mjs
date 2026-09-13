@@ -33,7 +33,7 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
       case 'cairn_qualifyCandidates': output = { qualifications: input.items.map(item => {
         const field = value => ({ value, evidenceIndices: [item.candidates[0].candidateIndex] });
         return { itemIndex: item.itemIndex, subject: field('welcome screen'), property: field('illustration'),
-          scope: field(null), applies: field('proposal only'), value: field('small illustration'),
+          scope: field(null), applies: field('proposal only'), value: field('small，illustration'),
           attribution: field('proposed'), commitment: field('considered') };
       }) }; break;
       case 'cairn_classify': output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) }; break;
@@ -80,6 +80,7 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
   assert.equal(sends, 6);
   const memoryId = capture.admission.memories[0].id;
   const inspected = await call('inspect_memory', { memoryId, includeQualification: true });
+  assert.equal(inspected.qualification.value, 'small,illustration');
   expectedQualification = inspected.qualification;
   const warm = await call('recall_memory', { query: 'welcome illustration proposal' });
   assert.deepEqual(warm.memories[0].qualification, inspected.qualification);
