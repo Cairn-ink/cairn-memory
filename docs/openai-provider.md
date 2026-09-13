@@ -1,5 +1,10 @@
 # Optional OpenAI adapter — source preview
 
+The embedded adapter can separately select an experimental
+[rationale model](rationale-model-controls.md). This changes only an explicitly
+configured relate port, not other methods or MCP defaults, and grants no paid
+experiment route or quality claim.
+
 This source adapter connects the same core's extract/reconcile/classify/select/rank ports
 to pinned `gpt-4.1-mini-2025-04-14`. One synthetic real-provider lifecycle has
 passed; see the [run evidence](plans/live-provider.md). Neither that smoke test
