@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "qualification-pilot-v1",
+  "sourceCommit": "7ddf79160684eef19180b3c298145886c8705fdc",
+  "fixtureSha256": "2f9859d309b145253bb6b37060a0723111045a0f9ad50ad42e095343ba40fec5",
+  "artifactSha256": "0dbec2806ccf51eba615f9e548c60d21f19122ca6db50ce8ac366a8a3235c233",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "status": "completed_with_failures",
+  "caseCount": 6,
+  "completedCases": 0,
+  "failedCases": 6,
+  "plannedEvents": 12,
+  "failedInitialEvents": 6,
+  "notRunDependentEvents": 6,
+  "cases": [
+    {"id": "01_changed_preference", "initial": "invalid_model_output", "later": "not_run"},
+    {"id": "02_temporary_exception", "initial": "invalid_model_output", "later": "not_run"},
+    {"id": "04_suggestion_without_adoption", "initial": "invalid_model_output", "later": "not_run"},
+    {"id": "05_disproved_decision_premise", "initial": "invalid_model_output", "later": "not_run"},
+    {"id": "09_explicit_unresolved_contradiction", "initial": "invalid_model_output", "later": "not_run"},
+    {"id": "10_real_change_with_reason", "initial": "invalid_model_output", "later": "not_run"}
+  ],
+  "accounting": {
+    "httpRequests": 24,
+    "http200": 24,
+    "reservedMicroUsd": 120000,
+    "providerKnownUsageMicroUsd": 4334,
+    "unknownCostCountRequests": 12,
+    "unsettledRequests": 0,
+    "phaseReservedMicroUsdAfter": 430000,
+    "phaseLimitMicroUsd": 50000000
+  },
+  "observations": [
+    "Every case reached qualification after extraction; no classification requests occurred.",
+    "No source qualification was admitted, so no semantic or currentness accuracy claim is supported.",
+    "Empty warm/cold inspections do not demonstrate successful memory persistence.",
+    "Finite diagnostic events and raw qualification outputs were not retained; the exact rejection cause is unknown.",
+    "No failed or not-run event was retried, replaced or removed from the denominator."
+  ],
+  "review": {
+    "independentEvidenceReview": "confirmed_failure_denominators_and_diagnostic_gap",
+    "semanticAccuracy": "not_established",
+    "currentnessAccuracy": "not_evaluated",
+    "releaseQualification": "not_passed"
+  }
+}
