@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "source-basis-comparison-v1",
+  "ingestion": "manual-source-admission; interpretation-only; not extraction or retrieval",
+  "cases": [
+    {"id":"projector-fan", "records":[
+      {"role":"user","content":"I chose Mistbeam because its fan was below 25 dB and it had HDMI.","excerpt":"I chose Mistbeam because its fan was below 25 dB and it had HDMI."},
+      {"role":"user","content":"Mistbeam fan now measures 42 dB; HDMI remains; no replacement chosen.","excerpt":"Mistbeam's replacement fan now measures 42 dB. HDMI still works. I have not chosen a replacement projector."}
+    ]},
+    {"id":"insurance-price-zh", "records":[
+      {"role":"user","content":"我選松鹿保險，因為年費六千元且包含牙科。","excerpt":"我去年選松鹿保險，因為年費六千元，而且包含牙科。"},
+      {"role":"user","content":"松鹿今年續保費九千元，牙科保障不變，尚未决定是否換。","excerpt":"松鹿今年續保費變成九千元，牙科保障不變。我還沒決定是否換保險。去年的六千元帳單沒有錯。"}
+    ]},
+    {"id":"two-speakers-one-receipt", "records":[
+      {"role":"user","content":"Nora and I chose different travel plans for different reasons.","excerpt":"Nora chose the harbor ferry because her bicycle is allowed. I chose the ridge bus because it runs after midnight."},
+      {"role":"user","content":"The ridge bus no longer runs after midnight; Nora's ferry bicycle access is unchanged.","excerpt":"The ridge bus no longer runs after midnight. Nora's harbor ferry still allows her bicycle. Neither of us has selected another travel plan."}
+    ]},
+    {"id":"career-feeling-zh", "records":[
+      {"role":"user","content":"我今天覺得帶新人很累，正在考慮申請個人貢獻者職位。","excerpt":"我今天覺得帶新人很累，所以正在考慮申請個人貢獻者職位，但還沒有決定。這不代表我一直都不適合帶人。"},
+      {"role":"user","content":"隔天休息後感覺好多了，仍未決定轉職。","excerpt":"隔天睡飽後，我感覺帶新人沒有昨天那麼累。我仍然沒有決定是否轉職。"}
+    ]},
+    {"id":"assistant-only-advice", "records":[
+      {"role":"assistant","content":"Assistant recommends a paid archive because it supports exports.","excerpt":"I recommend the paid Amber Archive because it supports CSV exports."},
+      {"role":"user","content":"User has not adopted the Amber Archive recommendation.","excerpt":"That is your recommendation, not my decision. I have not selected Amber Archive or authorized a purchase."}
+    ]},
+    {"id":"temporary-work-scope", "records":[
+      {"role":"user","content":"Normally I work at the library on Tuesdays because it is quiet.","excerpt":"Normally I work at the library on Tuesdays because it is quiet."},
+      {"role":"user","content":"This Tuesday only I work at home due to a snow closure; normal library plan remains.","excerpt":"This Tuesday only, I chose to work at home because the library is closed for snow. My usual Tuesday library plan remains unchanged."}
+    ]},
+    {"id":"positive-reaffirmation", "records":[
+      {"role":"user","content":"I chose the Cedar carrier because it supports a 20 kg load.","excerpt":"I chose the Cedar carrier because it supports a 20 kg load."},
+      {"role":"user","content":"Independent test confirms the Cedar carrier supports 20 kg.","excerpt":"The independent test confirmed that the Cedar carrier supports a 20 kg load."}
+    ]},
+    {"id":"late-historical-report", "records":[
+      {"role":"user","content":"On September 12 I selected the Summit printer because the new firmware supports duplex.","excerpt":"On September 12 I selected the Summit printer because the September 10 firmware now supports duplex printing."},
+      {"role":"user","content":"An August 2 review arrived later and predates duplex firmware.","excerpt":"I received an old review today. Dated August 2, it says the Summit printer does not support duplex. That review predates the September 10 firmware; I confirmed duplex still works today."}
+    ]}
+  ]
+}
