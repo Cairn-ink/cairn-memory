@@ -18,6 +18,7 @@
   "core/ordered-capture-storage.mjs",
   "core/ordered-capture.mjs",
   "core/placement-input.mjs",
+  "core/query-candidates.mjs",
   "core/query-excerpt.mjs",
   "core/recall.mjs",
   "core/runtime.mjs",

@@ -27,7 +27,8 @@ function selection(output, allowed, maximum, model, stage) {
   } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
-export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize }) {
+export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize,
+  validateFresh = () => {} }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
@@ -39,7 +40,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     const allowed = new Map();
     readSet.forEach((namespace, namespaceIndex) => {
       const previous = maps[namespaceIndex];
-      if (previous?.exhausted) return;
+      if (previous && (previous.exhausted || previous.nextCursor === null)) return;
       const page = unwrap(map({ namespace, purpose: 'recall', tokenBudget: 4000,
         ...(previous ? { cursor: previous.nextCursor } : {}) }));
       maps[namespaceIndex] = page;
@@ -53,7 +54,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     });
     if (!visible.length) break;
     const maxRefs = Math.min(24, 36 - chosen.size);
-    const output = await callModel(model, 'select', selectPrompt, { query, maps: visible, maxRefs });
+    const output = await callModel(model, 'select', selectPrompt, { query, maps: visible, maxRefs },
+      { validateFresh: () => validateFresh([...chosen.values()]) });
     const selected = selection(output, allowed, maxRefs, model, 'select');
     for (let i = 0; i < readSet.length; i++) {
       if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
@@ -68,6 +70,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: maps[i].exhausted,
     fetchExhausted: true }));
   const candidates = [...chosen.values()].map((ref) => {
+    validateFresh([...chosen.values()]);
     const request = { namespace: readSet[ref.namespaceIndex], tokenBudget: 4000,
       refs: [{ memoryId: ref.memoryId, revision: ref.revision }] };
     const receipts = [];
@@ -76,6 +79,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     let item;
     for (let round = 0; round < 2; round++) {
       page = unwrap(fetch({ ...request, ...(page ? { cursor: page.nextCursor } : {}) }));
+      validateFresh([...chosen.values()]);
       if (page.invalidRefs.length || page.items.length !== 1) fail('revision_conflict');
       const current = page.items[0];
       if (current.memory.id !== ref.memoryId || current.memory.revision !== ref.revision) {
@@ -95,7 +99,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   let ranked = [];
   if (candidates.length) {
     const rankOutput = await callModel(model, 'rank', rankPrompt, { query, limit,
-      candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) });
+      candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },
+      { validateFresh: () => validateFresh(candidates) });
     ranked = selection(rankOutput, new Map(candidates.map((ref) => [key(ref), ref])), limit, model, 'rank');
   }
   // No model/counter callback may follow the authoritative final read.

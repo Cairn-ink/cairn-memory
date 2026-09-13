@@ -8,6 +8,7 @@ import { recallMemories } from './recall.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
+import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -405,21 +406,36 @@ export function openMemoryCore(input) {
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
       if (catalogOnly) binding.o = 'classification_catalog';
       if (navigation) Object.assign(binding, { o: 'recall_map',
-        q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION });
+        q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
+        policy: QUERY_CANDIDATE_VERSION, scan: QUERY_SCAN_LIMIT });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
-      const page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
-        catalogOnly,
-        ...(navigation ? { memoryLabel: navigation.excerpt } : {}) });
+      let page;
+      if (navigation) {
+        const key = namespaceBinding(ns);
+        let snapshot = navigation.pages.get(key);
+        if (!snapshot) {
+          snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt });
+          navigation.pages.set(key, snapshot);
+        }
+        if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
+        runtime.assertEpoch(ns, snapshot.epoch);
+        if (offset > snapshot.rows.length) throw new MemoryStoreError('invalid_cursor');
+        page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
+      } else {
+        page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
+          catalogOnly });
+      }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
         if (take === 0 && page.rows.length > 0) throw new MemoryStoreError('context_item_too_large');
         const selected = page.rows.slice(0, take);
-        const exhausted = take === page.rows.length;
+        const pageEnded = take === page.rows.length;
+        const exhausted = pageEnded && page.scanExhausted !== false;
         const value = { items: selected.filter((row) => row.item).map((row) => row.item),
-          nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
+          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take } }),
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
@@ -464,15 +480,24 @@ export function openMemoryCore(input) {
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
-      const navigation = { excerpt: createQueryExcerpt(query),
+      const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
+      const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
+        namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
+        revision: candidate.revision,
+      })), [], namespaces.flatMap((namespace) => {
+        const page = navigation.pages.get(namespaceBinding(namespace));
+        return page ? [{ namespace, indexRevision: page.epoch }] : [];
+      }));
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch,
+        validateFresh,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
-        })), selected),
+        })), selected, namespaces.map((namespace) => ({ namespace,
+          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch }))),
       }));
     } catch (error) { return failure(error); }
   }

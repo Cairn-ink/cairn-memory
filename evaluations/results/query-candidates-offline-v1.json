@@ -1,0 +1,2365 @@
+{
+  "version": "query-candidate-offline-v1",
+  "baselineRuntime": "b3429f1246c942b3b8adcb68e955d68abb7716c2",
+  "harnessCommit": "f86dbb1bd3a197c2b1c0fb1c656b1532e1dc8b6f",
+  "harnessPath": "evaluation/live/moc-retrieval-diagnostic.mjs",
+  "harnessAdaptation": "Module import resolution points to candidate core and unchanged lexical helper; fixture and oracle code are unchanged.",
+  "runtimeSha256": {
+    "core/query-candidates.mjs": "37f5294d840fdf93d8634fcbdd0c949b089af0b3b101d34babe65150d0d0891f",
+    "core/contract.mjs": "d1800855a60197daa23a2ed72ebafa7c43ebaf4255065277b9fd667ebc32ae01",
+    "core/moc-storage.mjs": "e961aa4c12657401b825bb1125702141f53db1064cc2dba78f700592e4ba462e",
+    "core/recall.mjs": "6e9c072d94b52d5793de7e1dcc5a735b3e261a47e2ef2935c32b0f231491b762",
+    "core/runtime.mjs": "957b69e2dcc453d67d619c1cb72bae8440ebbe29da70196be72e35c0869b1c57"
+  },
+  "diagnostic": {
+    "version": "moc-architecture-diagnostic-v1",
+    "providerRequests": 0,
+    "counter": "synthetic-constant-one; row-ceiling control, not provider token accounting",
+    "model": "target-ID visibility oracle; NOT a semantic-quality model",
+    "outputLimit": 12,
+    "lexicalWork": "full active corpus in temporary FTS5; not equal candidate work to bounded MOC",
+    "cases": [
+      {
+        "id": "english-small",
+        "size": 16,
+        "placement": "late",
+        "query": "Who owns the Juniper migration?",
+        "targets": [
+          "Mira owns the Juniper migration."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "999ac4b8-b707-4d61-bead-adb8dbdfdf59"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 16,
+        "targetMapPages": [
+          1
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "999ac4b8-b707-4d61-bead-adb8dbdfdf59",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T02:59:50.237Z",
+                  "updatedAt": "2026-09-13T02:59:50.250Z",
+                  "content": "Mira owns the Juniper migration."
+                },
+                "receipts": [
+                  {
+                    "id": "b4b93ba7-5fa2-4315-abc0-e48991670188",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira owns the Juniper migration.",
+                    "createdAt": "2026-09-13T02:59:50.237Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "mocElapsedMs": 7.217339000000038,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "999ac4b8-b707-4d61-bead-adb8dbdfdf59",
+              "273a0221-a5e5-46c0-9cab-27adb81fb835",
+              "38547c83-e856-4398-b4c1-a85534bb4dbd",
+              "3c74bd92-f919-4079-860b-d14f26bd4025",
+              "60689cf3-efc1-4e6b-b9a8-fa9dc4b1ab78",
+              "6881dd43-4326-4940-87cc-a759eddaa1fc",
+              "7fe6f370-d6cd-4fe2-8f9b-154fd51ee22b",
+              "8a196b35-7822-4842-9949-6c12d4c3cdb1",
+              "8f6e2199-fbbc-42a2-b2f2-78b34298c083",
+              "a28dc067-50e9-4092-86c3-dac61f776d08",
+              "a3ee0e8e-39a5-4aea-998d-a48543a2bb07",
+              "acd498b0-f590-4a47-9d9f-6a917842f58f",
+              "c0662ff1-2007-47f3-a166-11518f56e1a2",
+              "c39fbc02-b8c3-4257-9d72-375be58c31fb",
+              "de772f3e-449f-4fce-a2c8-4d486b066782",
+              "e1d88474-cc05-4349-86c4-b7ac8a1ebb6b"
+            ],
+            "mapItemCount": 16,
+            "inputBytes": 4238
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "999ac4b8-b707-4d61-bead-adb8dbdfdf59"
+            ],
+            "inputBytes": 719
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "999ac4b8-b707-4d61-bead-adb8dbdfdf59"
+          ],
+          "scores": [
+            -10.514618225632054
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Who",
+            "owns",
+            "the",
+            "Juniper",
+            "migration"
+          ],
+          "matchExpression": "\"Who\" OR \"owns\" OR \"the\" OR \"Juniper\" OR \"migration\"",
+          "scannedDocuments": 16
+        },
+        "lexicalElapsedMs": 0.9481499999999414,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 492.05352600000003
+      },
+      {
+        "id": "unfiled-distractors",
+        "size": 16,
+        "placement": "late",
+        "unfiledDistractors": true,
+        "query": "Who owns the Juniper migration?",
+        "targets": [
+          "Mira owns the Juniper migration."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "ed885d28-031d-4aa6-bb82-e12b2b399458"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 16,
+        "targetMapPages": [
+          1
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "ed885d28-031d-4aa6-bb82-e12b2b399458",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T02:59:50.525Z",
+                  "updatedAt": "2026-09-13T02:59:50.538Z",
+                  "content": "Mira owns the Juniper migration."
+                },
+                "receipts": [
+                  {
+                    "id": "29d8d926-a60d-43c0-9571-1ef6e28d3938",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira owns the Juniper migration.",
+                    "createdAt": "2026-09-13T02:59:50.525Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "mocElapsedMs": 4.254097999999999,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "ed885d28-031d-4aa6-bb82-e12b2b399458",
+              "0dc31029-0901-4845-9e74-56897c2c59ef",
+              "18d0eeea-620e-406c-a0a6-3cb009007219",
+              "197557d6-1436-4855-ab84-d4138d8256f1",
+              "26edd96e-84df-435d-a42d-ad71bd3736ef",
+              "44e9bc5a-d02e-4d37-841f-910755780276",
+              "644cdd42-305b-42c9-a005-8740c84415a5",
+              "7acc0de6-dc6e-4e2c-92e4-3f9459285681",
+              "83655d7b-0aff-4711-b3fe-110f0fdd410f",
+              "88b36c76-e340-4fb9-ae1d-65b0c4a46cc8",
+              "9cf0540f-4a2a-4e9c-a356-e5f0e6f12d37",
+              "9f72d9d3-ba11-4253-9990-e9f283178172",
+              "aae56a46-b0d6-46d6-b05f-893b530621cd",
+              "d13a1f05-d760-40b5-a83f-d3aa00998f0d",
+              "edabe9a7-e0ec-4f4f-b21e-2b3c360d739b",
+              "f17e5dba-f04b-481d-8d1c-c72d064151b4"
+            ],
+            "mapItemCount": 16,
+            "inputBytes": 2543
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "ed885d28-031d-4aa6-bb82-e12b2b399458"
+            ],
+            "inputBytes": 719
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "ed885d28-031d-4aa6-bb82-e12b2b399458"
+          ],
+          "scores": [
+            -10.514618225632054
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Who",
+            "owns",
+            "the",
+            "Juniper",
+            "migration"
+          ],
+          "matchExpression": "\"Who\" OR \"owns\" OR \"the\" OR \"Juniper\" OR \"migration\"",
+          "scannedDocuments": 16
+        },
+        "lexicalElapsedMs": 0.47199999999998,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 273.98552200000006
+      },
+      {
+        "id": "english-late",
+        "size": 224,
+        "placement": "late",
+        "query": "Who owns the Juniper migration?",
+        "targets": [
+          "Mira owns the Juniper migration."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "ff0b1f98-66e8-4aca-901a-9fba583d5020"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 224,
+        "targetMapPages": [
+          3
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "ff0b1f98-66e8-4aca-901a-9fba583d5020",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:01.546Z",
+                  "updatedAt": "2026-09-13T03:00:01.574Z",
+                  "content": "Mira owns the Juniper migration."
+                },
+                "receipts": [
+                  {
+                    "id": "08983e18-4603-48c1-a641-5b9f2f2f686c",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira owns the Juniper migration.",
+                    "createdAt": "2026-09-13T03:00:01.546Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "mocElapsedMs": 40.16089499999907,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "ff0b1f98-66e8-4aca-901a-9fba583d5020",
+              "0056f2c5-b205-470f-8f94-b9231b903e88",
+              "00b9e2c4-6187-48f6-a626-d27961871f40",
+              "0118c73e-d4df-48cd-9988-951b27cfa4c4",
+              "01ba8cbc-69c4-4d55-96fe-42385e28357c",
+              "028abf0e-d58f-4ace-9ddb-cc73c38df00b",
+              "0378d0f6-b3fa-46eb-9318-9a367898f452",
+              "04e3dd67-dc64-46e6-ac9f-844b75e33003",
+              "05e8482d-c2a7-412b-9ad0-22e25cb4f417",
+              "067a718d-2247-4675-8eac-996758c64838",
+              "06bffc27-c5ea-4c5d-b36a-62a0866d1246",
+              "09061e0c-5117-4d3a-80d7-7a97a0e4d988",
+              "0928e13b-fe9b-4b51-9a06-39b5a7ac8ca0",
+              "0d147975-14aa-4f42-b0fa-616c6b14e8d0",
+              "0f0c8afe-d5fd-45e8-a1fa-ad33b572f64d",
+              "0f7b6dc7-77ca-46c4-93d1-aefe3872035c",
+              "1332f5c9-fa49-4622-8adf-819dcbe01e6a",
+              "13eaa5d1-cd4a-4406-8a83-c4c92995d881",
+              "141b66a7-d37e-4029-9d81-3bcccbb226ba",
+              "14388701-f67b-4e7f-bab0-292367726a19",
+              "14a467c3-8661-46fe-9dc1-899bd95e6d10",
+              "16037103-08b5-4c7a-a61a-3a056e605de9",
+              "1730f0ca-9264-4c49-9aef-a225c0a0414c",
+              "180e0b34-4450-499f-ae0c-ccadc1ace9ff",
+              "183d2690-a7f9-4401-bb99-434d97b4184a",
+              "1b701ff7-63f0-4a1a-a224-3309b2f89532",
+              "23894ea7-e5d3-4a4b-a8ef-59df2656af70",
+              "25a1b618-e859-4d32-b8be-ba6dffc18163",
+              "266d953b-8657-4681-84e5-8dc679118530",
+              "271d3251-d483-49c4-8913-2ef6f1022772",
+              "28963353-4382-45c9-89a9-85194054fd2d",
+              "28b72b12-c2f2-48d8-aa80-f3abd084b064",
+              "2997db9b-24f8-4b59-be34-955c53782077",
+              "2f9c5b34-4f52-4149-aeac-90b3f82f65de",
+              "317f0b4d-154c-4f14-b091-8c8dbac9e9bc",
+              "3181aa14-c047-4529-935d-17057163ea78",
+              "33b985c9-f158-478a-8168-cfe700d7ccce",
+              "3444d3ba-a212-4434-a402-c4c32caca97e",
+              "34a84217-d97d-41cc-b35d-3e60058d51e4",
+              "36061876-4b98-45f3-abc4-1a7e3dcbe81d",
+              "36cbc904-1cad-4d90-90b1-1443a2a4299f",
+              "37317c4e-b22a-49da-855d-24d4f6cfaa91",
+              "377d193c-3a87-4758-b592-657cb8a47c6b",
+              "3a055b3d-8452-4ecc-98b8-8da017b7203c",
+              "3ad66869-9bf2-4785-bd43-208fbcd62238",
+              "3b9aa6fd-458c-4c10-86f5-178e52c4fb71",
+              "3bfdeee0-a153-46f7-9f3a-b85494ba06a4",
+              "3c275972-54a9-406c-8a5e-b1b57175ce52",
+              "3d4b68f6-8273-4b89-84cb-525a4b21e6c0",
+              "3d723e94-f02a-4e78-97e3-8bb1479732a7",
+              "3e1175df-fa9b-465d-84ce-1fe60c487491",
+              "412319b5-80ac-413b-818f-7b85c807d40d",
+              "42fb964e-06ba-4ca0-afa2-1ac585036010",
+              "45360a34-db67-44bb-bbb8-a5466d26db34",
+              "4590e829-7862-436a-aff3-31fa3fa6e953",
+              "47dfcce1-89c6-4436-b5f6-082e9aca7f7e",
+              "47fcac03-782e-482f-823c-6fbf353db8e7",
+              "49f31456-40d4-4a8a-a75a-fb442f9f1ddd",
+              "4aa1111e-3353-4740-ba21-2e6af5272720",
+              "4cba63b3-bfa3-4516-87e7-ecf5aaba03df",
+              "4cc40db2-fa5f-491c-84be-a5fb7894f5d9",
+              "4e33b5fc-03ab-4aeb-ac09-d88800195d8d",
+              "4ef92315-34c0-4f15-86ea-ee3b9e8a41a0",
+              "50c40596-b1cf-4174-9096-08c035ba8e06",
+              "517fd145-62aa-41f8-af87-4b488c6063d5",
+              "51dad65b-c691-4884-a872-e13ff4d44a6b",
+              "537b6bb7-5344-466e-91cd-5b1d193856ff",
+              "53842138-bc56-4232-a689-aa88d04ed4f4",
+              "54cda409-cda0-4adb-a948-6985c8cfae41",
+              "55665d3d-0b09-4592-9d42-5c730c942d75",
+              "55ec8ad5-051a-4978-8939-7c06a571b19b",
+              "56051b5b-f0ba-44f2-a779-a5567565e506",
+              "561e86c9-8e6c-4803-82ee-67288aa4facd",
+              "595beaa7-3e11-4f88-9ec7-bb1f646936c8",
+              "5b5182eb-fc55-4d01-b19c-44a2030395bc",
+              "5b8860e8-b535-4350-82b8-40dd06dbb5fb",
+              "5bae0110-d9d1-4e6d-8612-888db9a3afd2",
+              "5bafee92-b7af-4382-b151-9da5d40cab2a",
+              "5bd69b35-4a42-40f7-9831-b41323657c62",
+              "5c5d8b56-c76e-4fb2-b447-cbc3ec0f703c",
+              "5f798c60-7c32-4674-8321-3ad867c7408f",
+              "5f9a8e6f-5f9f-4f41-b056-e340ff8abd48",
+              "606edc1a-20ca-43e2-8f82-89a16d655706",
+              "60bf4d2b-e71a-4126-b09a-3eff9e50ed52",
+              "61ad5986-b730-4adc-9ec7-29a8d1b127bc",
+              "6203a185-2511-4057-9434-1d72a53985b1",
+              "625672c4-2b9d-41cd-b226-834edd3715b1",
+              "635411de-3951-4d9a-9a5b-267f6e77230d",
+              "6452c17e-020f-4954-8ffa-680cd29005a8",
+              "65252aff-0080-4c40-9a74-bb57c309fd99",
+              "65269282-d769-41c1-940f-8c64bd9f0ed8",
+              "6561310e-7f25-4298-9261-0a1e702309ed",
+              "6639677c-f088-42da-9ce3-4438b2a5dad1",
+              "676493b5-ab14-4568-a282-97b2badf8267",
+              "6c6459f3-8813-4c49-b2cf-cbf8df5c16a7",
+              "6f831457-41c8-4ab7-b629-a29b85507eec",
+              "7125ddbc-38a6-4d8b-ba2b-f04f8bac687c",
+              "71a84fd6-0746-44c9-bcf9-58ba23f534e6",
+              "7345acdb-b8c1-44d7-b51a-07f2bdb3c6d9",
+              "763868d2-be7e-4714-958d-3dcb31e872b1"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26296
+          },
+          {
+            "method": "select",
+            "visibleIds": [
+              "76539d18-e159-4129-91d6-c905d3554d1e",
+              "787f8043-3c5a-4e75-998d-0f2bd57aa3d2",
+              "7880fe41-ea75-48f1-b84f-657b4d915dfb",
+              "788d9b6b-3199-4f4b-821b-27cf053c40bc",
+              "78ebe025-eb91-45a2-b3e2-1a67de06fea8",
+              "78f0c65e-77ba-46d5-a20d-3f1778432d28",
+              "79673b57-7fa7-4f38-bde1-61b0b00b1616",
+              "7b01a53c-5455-4e99-9621-fe96d1e72e71",
+              "7b5695f6-ad32-45eb-9f7f-d95ed80225b6",
+              "7bf28e84-4040-4fc7-9a72-9c02e1b538dc",
+              "7c7fd54d-4464-4936-8e0d-4d4681b717e4",
+              "7cb1b658-7b20-4991-afdb-5bd9624a07d7",
+              "7e51dee5-0ec4-4952-9d0c-5c5aa416dde9",
+              "7ea07e95-46ba-4119-88c7-2d23d8c76ca3",
+              "803351e5-fc16-4020-81fc-ae875b850eb1",
+              "81c5cf2e-3528-47c4-969d-f452fb2e6e17",
+              "81dc21d7-1218-458c-a4fb-15f36c7b4112",
+              "82e9e7c0-4d69-42f1-a0ad-4119b444e5b1",
+              "83041e42-3323-49ca-a7bf-ce481a51dc26",
+              "8513385d-b73d-482a-b8eb-1e94e9221b84",
+              "87591fdf-d4d6-4b84-ad53-3247b9bd04a5",
+              "890a7c8e-218f-4e2d-8c0e-ffa843701f11",
+              "8c0db30d-5764-43c0-aa8c-f34a8250aa71",
+              "8c7df60b-2bb5-4e0e-97ab-fcfc175e459b",
+              "8d501674-35cd-483e-b728-33669e256890",
+              "8d89d296-b0af-4cb3-a8af-bd52dd52306a",
+              "8e53fa23-751a-4fd9-aa90-bc5cc00d35f4",
+              "8e58cfeb-f26e-4410-b416-ab6400abbf4b",
+              "8f48dae7-f658-4b58-b446-c5388f603cff",
+              "8fdeccd5-9d76-4e76-8cb6-243cae05bf1e",
+              "90d624ce-dec7-4526-b216-527d05eacf42",
+              "91a0b065-9533-4ad4-aa96-e029be6cec86",
+              "934b3881-eccd-4e4b-be2a-721a5ce3ab8c",
+              "950de574-735f-42ee-9c3c-c361707fd5c0",
+              "96e0c83d-f76b-4829-b31f-2a1f2651b88a",
+              "98acdf46-1f46-4b37-9745-7d27222461c7",
+              "9a783aed-13c1-406f-8be5-3d22f2e05308",
+              "9e996a07-3c11-4b93-b354-829d67419836",
+              "a0067c4b-a1d4-4643-9f93-712396e5773e",
+              "a22368d0-2568-4da3-b52a-0a664323539e",
+              "a3d553fa-4c12-4d4f-becb-ca57974b10d0",
+              "a3e50b3f-16c2-48ff-b16f-48c38b3fa065",
+              "a6a61bd3-8642-4891-b5b6-253da0fcccbf",
+              "a6ed3910-eb77-4e41-a641-4b6407cffa9b",
+              "a88222ab-0d1f-4c07-a6de-9c868b07b77a",
+              "a9adccf4-d10d-4b90-a4e0-5ee4e049e42d",
+              "aa5e516a-5b9c-49db-8d17-f0fe249d58dd",
+              "aad17b2b-1af8-4a88-a6a6-9350500543a5",
+              "aafc920d-e0e0-449b-a52c-bc45260e6425",
+              "ad1fb392-f214-4a6a-91ed-5a21cf59f00a",
+              "afb76199-4063-4360-b6ed-b4c3abc5f7ce",
+              "b52dd48b-75c2-4cd4-843f-7328dd65f108",
+              "b556ad69-36b2-4554-b8ab-dab12da73cf8",
+              "b5a317cb-984b-4cae-9628-21afa529a9b8",
+              "ba61a4ee-bbc6-40db-8cae-db3c340818b9",
+              "bbb01b8f-9293-4f51-b387-e6da4ac0e438",
+              "bbde4af7-0fd5-4e30-81c8-99a6d5ce381c",
+              "bd10fd95-18b1-41b8-8434-5a99fd98c1cf",
+              "be1eb68a-1362-43d5-b285-1444cf13b704",
+              "beb949f1-307f-420b-ba29-9692323b13b7",
+              "beb9e259-f4a0-4c6f-bf66-12b3e73532e0",
+              "bf2ca374-ad86-4bf3-88bb-b167130803d8",
+              "c184f3b8-1e94-45ee-88eb-f2593d484b9c",
+              "c209add1-1ad8-4384-b081-5813ed272416",
+              "c364438a-d98f-40fa-82b5-c844d947daf3",
+              "c40d7470-d7c3-438f-a816-ade5b13e24a4",
+              "c6d50d17-fb58-4b5e-919e-b5adcb98d479",
+              "c749713e-78c6-40aa-a64d-46d9040bd698",
+              "c97ff09f-2948-430e-9688-09dac217434d",
+              "c994bd9a-9c62-4bba-994f-ab3c065fbbee",
+              "c9f10c0f-f7e6-4339-a9b0-51471cf80050",
+              "cb0828c2-2a07-4018-bcc5-ea8b8da0960b",
+              "cb46c75b-50c5-41b9-acc9-402fd605a793",
+              "cd9e108f-e619-4aa8-a4c0-12c72a0ccb0a",
+              "ce5d9fe8-85f4-4615-b455-87422b65a372",
+              "cf389a2f-6066-4082-aa76-a4c6072223e3",
+              "cf7769ea-56b2-4143-8593-8d3973ef039d",
+              "d03d5f2f-c189-47fc-a8cb-1016a35095a0",
+              "d0cf6daa-780a-4160-b21f-9682d2222351",
+              "d17b151a-acc0-492b-aee5-dcd02e86e69c",
+              "d3c57fe2-5977-4c44-bdea-350963e8f32e",
+              "d3d173e4-b39c-42a3-b83b-5d2bde56e272",
+              "d61faa30-5384-4adf-afae-20bbcc3b18a0",
+              "d63c8b34-0069-4196-907e-b66781aeec2f",
+              "d63f956e-e4be-44b0-a120-30c5356b6ce9",
+              "d7ba55b4-9275-43ec-96ac-6632ad79ae34",
+              "d80a9b19-f8fa-41dc-a55a-922298999feb",
+              "d89f72c5-33ca-4bdf-9e4c-b380d353968a",
+              "d8feb293-21b7-4139-8348-c749b821b164",
+              "d9a7bb64-7758-4d0a-9700-12bb5ed91ecc",
+              "de42d2cf-7be1-45e1-be2c-829675680513",
+              "de4d1973-d1d5-4837-9801-cc72d2573cf7",
+              "e4af6a6b-af2d-4b06-85ef-2c7dea30980b",
+              "e4b1496c-e37c-4001-9ab3-3f4fe171ad98",
+              "e58b6d02-b4dc-44cb-9f98-137892e5a44d",
+              "e5b8f374-fa74-435d-a3c1-632856d910a5",
+              "e692d9a1-c355-4891-ab7e-2bdf311078d2",
+              "e6b86696-d977-4033-b7a6-06a740478241",
+              "e9409392-3c2c-49eb-a50b-aee69db8749d",
+              "e96ddc86-ac32-4a9c-81f9-2144eda3942e"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26324
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "ff0b1f98-66e8-4aca-901a-9fba583d5020"
+            ],
+            "inputBytes": 719
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "ff0b1f98-66e8-4aca-901a-9fba583d5020"
+          ],
+          "scores": [
+            -22.655359502258097
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Who",
+            "owns",
+            "the",
+            "Juniper",
+            "migration"
+          ],
+          "matchExpression": "\"Who\" OR \"owns\" OR \"the\" OR \"Juniper\" OR \"migration\"",
+          "scannedDocuments": 224
+        },
+        "lexicalElapsedMs": 0.7925070000001142,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 11236.227841
+      },
+      {
+        "id": "english-misfiled",
+        "size": 224,
+        "placement": "misfiled",
+        "query": "Who owns the Juniper migration?",
+        "targets": [
+          "Mira owns the Juniper migration."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "1bfea774-94cf-44ba-9ed5-3b7d904911ce"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 224,
+        "targetMapPages": [
+          3
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "1bfea774-94cf-44ba-9ed5-3b7d904911ce",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:11.376Z",
+                  "updatedAt": "2026-09-13T03:00:11.388Z",
+                  "content": "Mira owns the Juniper migration."
+                },
+                "receipts": [
+                  {
+                    "id": "05a63478-1194-48c5-af16-4da09094f9db",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira owns the Juniper migration.",
+                    "createdAt": "2026-09-13T03:00:11.376Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "mocElapsedMs": 38.08923800000048,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "1bfea774-94cf-44ba-9ed5-3b7d904911ce",
+              "0055dbc0-f958-4af7-aa87-9742b200a4f0",
+              "0343f446-3103-4617-afce-cd89103e682b",
+              "0385d0fd-4471-4da0-b14b-56636be43358",
+              "07c13ef0-0b1f-4040-809e-a9b953d30b40",
+              "080ed7c2-784b-43f4-bf3a-9da834cf81f7",
+              "0832f491-3e8c-42e9-8adc-6e916a8f51be",
+              "0af21829-e8cc-44be-84c2-324ed596560c",
+              "0afb1575-38aa-4de3-8237-7bb40e9790dc",
+              "0caa14f5-8700-4b0d-a88a-6930fce142c5",
+              "113f214a-8d7c-4413-ae2b-ff9c92d2f49d",
+              "1277d6f1-b236-4b5a-9f6c-e459f311fe1a",
+              "144cd3af-8f35-4869-bd63-a16f172ca9e0",
+              "156b85b1-ef40-4187-94a5-af15bba49ef4",
+              "17ef82fb-f379-4bb2-b973-5d51e4eab390",
+              "1821a364-a5d9-4627-b206-8e1be2565a1d",
+              "1a2cd9dc-0097-42a6-9bf0-48c3f1b9547c",
+              "1a688fec-407d-40d5-a5a3-6025b606e0ff",
+              "1a901d2c-52e8-47d5-9fe5-56daae81dd44",
+              "1a98f266-36b8-4cbd-8ae8-3fb1796d1e95",
+              "1c6128af-a08c-4848-8b3a-5d7f781ce4ca",
+              "1db03e9b-a99c-4b99-bd86-03f8eb9d953b",
+              "1ddf2193-3011-4635-bd52-c5c6f1da94d5",
+              "201aab95-538f-4cfb-b71e-a5c28902b1c2",
+              "21c7dd4b-1aa1-45c9-9ab9-926a02d105f3",
+              "2333c02e-32e5-4401-b3ed-162ad6e66a22",
+              "2382411a-5b3f-4498-8314-b716a7aa7450",
+              "23e50fb2-ef10-4663-a989-855c7f4699a0",
+              "23fc8ef4-a9b4-4462-9862-62e4bade7e8c",
+              "247410aa-e9d4-4f28-ac00-af9f0c483243",
+              "24a09478-5468-492e-8955-8ead2d6ad6c1",
+              "2528b247-d307-4774-8b73-7ac12cb23004",
+              "25c31e1b-303b-431e-a337-e7580b9face8",
+              "27d446c9-6452-4395-b867-90322aaacafc",
+              "29579b10-1bb2-4ce3-9caf-38f959760767",
+              "29c40d3f-fa3d-4998-85f5-4f97e5bae5a1",
+              "2a18a4ed-5e07-4833-93bb-1fe4b5e12c74",
+              "2b62319a-0519-4358-9865-1f7aef5dd0aa",
+              "2c441f7b-ba62-4a54-aa03-0dee097cdec8",
+              "2cf8df00-d259-4e90-b039-db05ea31deb4",
+              "2d0857e0-2470-498e-949e-8bc4a014a92c",
+              "2d245352-e94a-4ead-98c5-4498fa735a09",
+              "2d5108d3-146e-4759-8366-d0e269236e89",
+              "2e0956cd-25e2-44bb-b799-7fb08ac554a3",
+              "306ef313-ff1b-4476-8f15-0bdd0ac422f8",
+              "321bee02-f633-4dae-b49e-37260b98aa1f",
+              "33843730-c950-420e-b31d-c4e301053279",
+              "361b9d4d-5054-410f-ac53-a79f9fa0b66f",
+              "363ade91-ae15-4042-b6ba-95e7873880eb",
+              "365f2427-bf7f-4bc0-b524-fee1701f834a",
+              "37638c11-df7e-4ab4-a850-e98be31b83f1",
+              "380da286-fc30-4b31-8caf-1291219e0095",
+              "38566e58-9e26-4201-a96e-0f276b1078b6",
+              "393d1d1b-4dc2-4ed0-904d-83d3a094f748",
+              "3bd750a7-7235-496a-955c-be0526f0cbf6",
+              "3c783639-17e7-4306-bbcd-ca1a228ece78",
+              "3c7ddca5-744a-47dd-b3f2-e007825e716f",
+              "3d942dcd-ac91-4d44-bdb3-5ece3784eaa0",
+              "3f58d971-3db6-4565-bd16-4341e908f2ee",
+              "3ff44466-24ca-4c13-a50e-902988d78d3c",
+              "42b48657-7744-41fe-8732-2e783e3783f2",
+              "43d45282-2994-4abe-8951-64ae3cc7059c",
+              "441a87f1-9c2e-48c3-97fd-ecfd3afe7ff3",
+              "452c0254-0274-4ef3-b327-55ea6f0bf521",
+              "458f3295-394b-4110-9b2a-d8b1799703a8",
+              "47a72c79-78e0-429b-b81e-4f27a951dd79",
+              "486f352c-badc-4ed6-a0d7-d331bc600d3f",
+              "488ffae0-002f-4079-ae5e-e000e02adb7c",
+              "48daad24-d0f8-4386-a4f3-5fb12d6063bf",
+              "4a44029c-e80d-4f44-a612-21679bb5e400",
+              "4b15687d-195b-4198-b032-d9c7331413ea",
+              "4bb626a5-490b-489c-8fa5-d67ae06b41da",
+              "4c4dc87c-4da8-4593-9248-6706fc3d107a",
+              "4c5ce906-b930-4237-9fe2-0a4840f6ae89",
+              "4e0190ec-e9fc-434f-b76b-0a82095911a3",
+              "4eb82092-6a81-4fec-9873-db99ae4eac19",
+              "50de380a-cb12-431f-a9b5-f03bac57ea5b",
+              "50f8c2a9-62d7-4a4b-8602-e6def86269cb",
+              "528a2dfe-189e-4533-8e99-5f81afcb2fcd",
+              "52c51fc5-9f10-4305-b369-d719ea41edf0",
+              "52c8a428-5a0b-478c-be51-86027cdcb1a1",
+              "52da2727-1642-464d-933c-7165376f7361",
+              "537a4897-8a79-4981-8c69-16083e91afe7",
+              "53c19cbc-c76c-4f87-aeb0-96e875bc15d7",
+              "55590b48-505a-4748-a877-aab7b88ccde5",
+              "55a2ce74-565a-4066-a8bb-d3a12cb14310",
+              "56e61385-f5d1-478a-8a84-c89310d17ecf",
+              "575a1a47-df75-43e6-98f2-d669c877e608",
+              "577cd677-4c09-41cb-99f8-ae55439efefc",
+              "579d4bfe-d93c-4dcb-a974-9a9821868b4d",
+              "5915b4a6-ea93-4117-87da-ddec5b8e0234",
+              "5ade7007-24e2-42f5-814f-3cc0f7f845a9",
+              "5ca1c883-e8d5-45ae-9e65-637bf9d6a7f4",
+              "5cb4eda8-b080-49ac-a6e7-9ee2a952ad11",
+              "5d7fbe9a-65a3-4b5a-9598-a865b919fed9",
+              "5fb00e71-f395-4426-9b96-04396e76ccb4",
+              "61af4d65-1b71-4551-8056-e796f6273e5a",
+              "63592f23-b17b-4c9a-8415-67b680232900",
+              "640b3fe3-8370-4bbf-afc5-a075a7ed48ba",
+              "64e25ad4-082d-4448-8fb8-c4e530ee6402"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26276
+          },
+          {
+            "method": "select",
+            "visibleIds": [
+              "65172d74-b5fb-47b4-847c-04732c315e6b",
+              "65d615ab-4707-4c3e-b63f-6472acf92f06",
+              "6841a643-b46b-46de-972a-bc642e44b1d1",
+              "68cd48d4-7c5c-40d0-b660-bcfa50dbe99e",
+              "690b8ecf-c87d-4f0c-a2d8-01674ee456ae",
+              "6996c178-b28d-4258-be66-1aa5bfbb02ee",
+              "6ace12fa-1c4f-4240-9295-28ec86a6d4eb",
+              "70718bcf-4955-4fae-a99e-a6277b829e6d",
+              "710fc3b6-ac48-4691-9723-5247f4e6be25",
+              "7201c32d-ede2-492f-a770-a6dec6322a40",
+              "729c2e2d-4e7a-414c-a649-48c462616deb",
+              "7454a731-5fe3-4728-85c2-c6a56d50dfad",
+              "750a9e06-c4c1-4f15-bdf6-7f9216e30100",
+              "77a3781e-6c3b-49f1-8ce0-97acc3a16898",
+              "781aeddf-12f7-41f3-ae83-ebfc83e8c4c1",
+              "796414d4-02f3-44cb-8abc-85ec3bd02123",
+              "798bceb9-b2df-44e6-99d7-2d8e4bc6a348",
+              "7befe496-5ca9-4e86-ab8e-3e3bb6070436",
+              "7c989ba2-b307-4c67-85b1-b86aa67d0956",
+              "7e06ab3e-20c4-4863-af20-1d5ce775a8ba",
+              "7fd78d5e-ed16-4ac8-bfcf-3538304715a8",
+              "8043f2ec-6046-4d72-8b80-fb72492e9572",
+              "8053c1f2-62dd-4bec-afbd-89c49ef8e428",
+              "80a6da8c-0078-47be-9b49-e25d7ca255d7",
+              "8181291c-9904-4723-ab82-ff964f9c7b88",
+              "82774c01-b8e1-4c41-8b47-15311c6efe26",
+              "83a6b1c0-192f-4df0-a59d-b6b6a1a0a14f",
+              "83e00c84-ef0b-4c4a-85b1-ba02ebd7e11d",
+              "85c6284d-7eae-455c-9707-fd4e57009ca2",
+              "87349bba-a9be-4298-bf45-7e75e162b639",
+              "873bbc3b-1eca-4dc9-abf3-3d637c84d64a",
+              "8aabb51c-e6a2-4365-b0ea-cfe2cb46b820",
+              "8b322108-af3c-4f93-bcf1-1a338d8f30ac",
+              "8d3cd231-5f3d-48e2-bfeb-b0ba435c4fe1",
+              "8d930556-610a-445d-af7e-2e72bdd8e0e7",
+              "8dc9d939-ad2b-40a1-b3ba-e7610e38529f",
+              "8e61eadb-1575-425d-aecd-00e960b18e2a",
+              "8eac9ffb-b29a-498e-9dc3-9bab9282cebd",
+              "90aa0f03-28d5-40d0-9632-f8aac3317a41",
+              "999dbab9-86b7-49c4-8b56-3b87064b4b25",
+              "9bac9fd7-e0b8-4edb-9fe5-40dbc8ec150c",
+              "9c49bd08-c3f7-4d51-8f00-c8ee9523c7dc",
+              "9dd683e5-888f-459f-b61a-a3be34413376",
+              "9e86aa70-7585-4c55-bd83-91a84add15a4",
+              "9eb09a2d-ae03-439e-88c0-b6f270b1eff0",
+              "9ed370d4-3f98-4e60-8968-bc8aba8faf5e",
+              "9ee963ad-781e-45e5-8ea4-37f64068740e",
+              "a0803e0a-5352-4c93-abb5-406d70054a5f",
+              "a1e4b67d-e39c-4f43-8ce5-e4137e0f6b8d",
+              "a276f912-b196-4ac0-9be4-c8e3b5ee210c",
+              "a2a41e94-a267-4d2f-af17-3dadf57a688c",
+              "a4b30291-4c8d-49c0-b0cf-739d5d0f7706",
+              "a4c60102-4bef-4363-a1df-eed54659416a",
+              "a688dcf1-3ada-415e-bff1-352b1136748d",
+              "a6b4f05d-6dba-4f04-a76d-1265626da2fd",
+              "a6d9d2f3-9e58-452f-a3f9-4e84d63b3558",
+              "a7607876-3380-4f15-b46c-0fd20d84413c",
+              "aa21fe54-e1dd-4f90-8397-e47099e82f3e",
+              "ab38e281-c821-42a3-9d96-82f59e046f3e",
+              "ace10147-4421-4b16-b633-6e6d03d8ebc3",
+              "ad08e241-7ebc-4d6d-9262-3207430ba307",
+              "ae16a794-347e-4d09-9b93-94435c30d99d",
+              "af239730-8eb6-4986-aebb-13eff052faaf",
+              "b01e6819-4978-4c3b-b104-f50100b12cfc",
+              "b3113a83-e499-447a-8c69-2f609a9c34d3",
+              "b6648429-7cb0-4f49-aa17-32cfc96c3ba7",
+              "b8d87beb-fb00-4e4c-8ec8-f6ed2bd6d0be",
+              "ba788d33-1f46-4c43-8bd2-edad04c3dd74",
+              "bb3f07f3-b3bf-4382-b679-c459444f1180",
+              "bb7eeec5-3142-4d3a-bede-76e09f65027e",
+              "bc7aa0f0-84a8-4816-89b2-5dcadf1dbff2",
+              "bdbb09b5-1dde-408f-9058-98715cd8bb15",
+              "bdede808-4978-4129-9cda-7ccb8477f0ae",
+              "bf38a1ee-29ff-4521-aa5e-fdec6f5c09b6",
+              "c0e05c21-262a-4774-b742-62b2c9817d6d",
+              "c471e4b1-140c-4597-9cf1-0193866b4e16",
+              "c56cb218-8d2c-451d-b38b-d20add20aaf6",
+              "c62dfeff-2a02-4609-b3eb-b36f43d92f1f",
+              "ca5cae11-fe4d-4422-b2cc-dffee6567f7a",
+              "ca8c50f0-6a88-42cb-84c2-8f0d5c93c7a3",
+              "cabc53c6-f615-43c9-b114-899f8e909fa9",
+              "cafb8b51-b1bc-4c3c-b580-5f0ca56aba6e",
+              "cb2147c2-dee0-48d8-95fb-0494eda18eb0",
+              "ccb596fe-884c-4197-af31-cdf8e42512a2",
+              "cd65ffd5-168f-48ee-9de0-afcf7b96d07f",
+              "ce5367df-5ca5-4f41-b5c8-a38b1f755533",
+              "d1d1c353-9cdf-4a27-be64-d0067309919b",
+              "d2027d46-94c3-42a3-955a-4e45dd90b3de",
+              "d48492d7-629e-4e56-b030-34c30d852be2",
+              "d4a15232-24a8-47a3-a205-22f0e1f651b0",
+              "d7ac1e63-5e74-4387-b5a9-66e04a349d22",
+              "d7d4cd97-da60-47aa-82c6-2818b45afa7c",
+              "d962d345-ae0d-46a8-a27d-731e6229e23c",
+              "d9e322ec-65b9-46bd-b938-c4db8864a6df",
+              "d9e6e974-acdf-439a-836d-dcdfc8528455",
+              "da13a2cd-f80e-4050-b709-308bbc543edc",
+              "dc12d4f3-ae99-4294-8aad-46d90b9a19e3",
+              "dd6f4a42-249f-459e-a992-6e6f07ee704a",
+              "dda9e39d-7d53-4dc5-9739-db735b485d34",
+              "ddcc119a-66f2-4d87-88dc-53c9ca8e16d8"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26332
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "1bfea774-94cf-44ba-9ed5-3b7d904911ce"
+            ],
+            "inputBytes": 719
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "1bfea774-94cf-44ba-9ed5-3b7d904911ce"
+          ],
+          "scores": [
+            -22.655359502258097
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Who",
+            "owns",
+            "the",
+            "Juniper",
+            "migration"
+          ],
+          "matchExpression": "\"Who\" OR \"owns\" OR \"the\" OR \"Juniper\" OR \"migration\"",
+          "scannedDocuments": 224
+        },
+        "lexicalElapsedMs": 0.735713999998552,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 9769.092394000001
+      },
+      {
+        "id": "english-early",
+        "size": 224,
+        "placement": "early",
+        "query": "Who owns the Juniper migration?",
+        "targets": [
+          "Mira owns the Juniper migration."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "8347bb04-c76d-4469-99b2-14f3e64a83de"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 224,
+        "targetMapPages": [
+          1
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "8347bb04-c76d-4469-99b2-14f3e64a83de",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:18.333Z",
+                  "updatedAt": "2026-09-13T03:00:18.345Z",
+                  "content": "Mira owns the Juniper migration."
+                },
+                "receipts": [
+                  {
+                    "id": "eda8d08f-0583-48e6-8ce1-e8c7597c4049",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira owns the Juniper migration.",
+                    "createdAt": "2026-09-13T03:00:18.333Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "mocElapsedMs": 41.00135700000101,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "8347bb04-c76d-4469-99b2-14f3e64a83de",
+              "019b1d7e-3d1b-4cab-ac5c-08900a18a621",
+              "01f0b0c9-f929-4b1a-9d58-111b19b18f80",
+              "02b13b88-7201-4d25-ae1d-c73756693819",
+              "03a5eb46-1aea-41f2-b7f8-5e53d13228e5",
+              "04c1afe8-cb5c-4075-9208-9324c95fd7d7",
+              "06537a87-c114-4594-bd33-c7465e914ce0",
+              "08449a79-fcd0-4986-891f-9de3b0074d66",
+              "08fbd4be-a00a-4afd-a8cc-d184a73d89d0",
+              "0be2a7d0-ce26-4562-b8d6-1d1d6ab13664",
+              "0bed8325-087b-4184-b90d-cf45c4b8b5ec",
+              "0c722a26-7b08-4c9e-84af-81f9e37ee14e",
+              "0e41bd3a-16bd-4f82-a72e-39ec6b3f5733",
+              "10906b40-2247-46a6-89a3-c6440ce52349",
+              "10bb656d-5e22-4498-b829-c368d866ebc9",
+              "11363405-5efa-4389-a829-f235ca3f4b40",
+              "13151741-def4-4c79-8687-830b1ba1b47a",
+              "13992bcd-e253-4460-a042-9e80ee1ac494",
+              "1406bf6c-9462-40ab-9a54-843bfc6542f1",
+              "14da36e8-6c95-4e01-b26e-67de4fe77269",
+              "16d049d5-7642-44cc-9985-2678a6184115",
+              "17654f7d-2e26-4a1c-9a10-c6ff9dfe8b50",
+              "1862642b-803a-4824-9243-13f999ad6ec5",
+              "19fca346-3016-42b7-aa1b-59983955824a",
+              "1e49dcd0-e489-400d-a6fc-cfd5909be066",
+              "1e6afc42-8625-473d-a77a-3ae8ad538d99",
+              "20724e56-738b-4cb0-ac66-9a01b48a1b01",
+              "21392060-95cf-4aa7-a9c0-6a3c31e42da8",
+              "21a49f97-f2fa-4417-949f-8afea044cc2d",
+              "23068a66-7937-4dd7-86e7-c9f331197550",
+              "23c6cb1e-2540-46c2-b948-6a9e0e2e9dfa",
+              "24adedbf-81c6-4d77-afb1-fd6671e0f68b",
+              "2525e470-2889-40bd-9039-764380a554eb",
+              "2618af95-339f-418a-8ab8-e5c944a722dd",
+              "26ebb84e-0210-4305-953f-09b7aae2ee1f",
+              "280d6723-57c4-4904-b9d8-2ed996d1d5e7",
+              "281a389d-44de-4568-a878-c5bf0cc12084",
+              "2912b4d8-91d3-40a6-bdb6-2c79355ee067",
+              "2ae535a9-b9f0-4632-a156-09025fa583b7",
+              "2b56f89b-a78c-400e-b5a6-26a54ec534e8",
+              "2bf09aa5-03b1-4ce2-9c43-cb142d6bc894",
+              "2d942d36-218a-471b-9ae7-9d5678cfa132",
+              "2e3b5aac-4e86-4a0f-8c7a-643aecf49081",
+              "30302235-f38b-4ece-8ff2-94d18bb36341",
+              "306b2888-e488-471c-9484-f397214b7bf2",
+              "3099633f-7f4d-44dd-8491-886df6848fd1",
+              "31a16d25-b861-4cd1-8eba-a80fc5875704",
+              "367a6969-cf0d-4139-a171-a357039b813e",
+              "36a65198-de49-4465-ba7c-353c37a631b4",
+              "384d39b2-8163-402c-9241-6f8fe6c47837",
+              "38596a9f-e2e6-48ce-80af-3912edb13cd3",
+              "390d4ef0-c0c6-4613-ba0e-5057066ba9ee",
+              "3b51e6a1-ab23-463e-ba42-7d9b8683b104",
+              "423fb953-bb55-46cf-8668-dda33541918b",
+              "42e09c44-f91d-4257-83ff-3969aaab07cf",
+              "4375242b-086c-4730-8471-fed5f2904c5b",
+              "43e969e4-82fc-49fa-9fd5-1ff2750914be",
+              "44a295c4-65d9-4f4f-9f5d-fea7295a74f5",
+              "44fc2f61-5beb-4ef6-a0a0-6bcab97ef4d6",
+              "46171cbc-3e13-4642-9808-dd0792de5daf",
+              "46630e65-74b6-4b33-9923-0cd0dd130a65",
+              "46ecf965-c94b-4c7f-9a3a-89ae8405fd06",
+              "4715f09d-e738-4837-b7a6-5930789d5166",
+              "478351df-1bdb-4a20-abd9-10fc210c34b3",
+              "479dd62c-9fa1-4a4c-b31e-aa23a180057a",
+              "47f01c52-8d30-431b-a81c-39f42a80a9b7",
+              "49d3b2e2-fd7a-4679-af4b-521cafdaaabb",
+              "4a0131bc-20ee-4c20-93b7-54cc38e7b507",
+              "4afc7140-ebe3-4ff7-9fca-bf666a823b2e",
+              "4c029bcf-7813-4044-8b84-f10d15def1e8",
+              "4d6599a2-3624-44eb-9a93-450dc2e2b2c7",
+              "4df977f5-6c00-4526-a93a-e880324aa62f",
+              "4f5196cd-8088-40ca-b658-17da776c1f08",
+              "5041110a-c372-42c5-9971-d0463c3dd7c1",
+              "51b77903-02e9-464e-bfcb-6de5e6e7c3b5",
+              "5299ba79-8a5c-4345-8062-606e5c3071ba",
+              "52fdafa0-db04-4838-a50a-5e62312f378c",
+              "540442c9-ef69-474d-a0a1-b0fba6e95418",
+              "546fd01e-6adb-42a1-b07d-8b908feda702",
+              "558488ad-244d-4ecf-81e4-8c7d15b4cb4d",
+              "5990869f-6467-421d-8b75-19fb3b314b84",
+              "5a0be242-6418-47ad-8cc7-06df4caab2fa",
+              "5ac87cb6-8f3a-43d3-839c-6b95741dbdc8",
+              "5b4eae49-3433-4103-8019-b719a10fe6cd",
+              "5b6a43bb-d2ba-448f-b6b0-8eadc23ce202",
+              "5cc01d77-534f-4a51-a645-5fcc4d919c88",
+              "5d8d5cc5-d04b-48be-9a04-f0acb0fa82bb",
+              "5e5bf2e1-4dea-40c3-b42b-28615da351a8",
+              "6460c6d3-5d71-4926-b8b3-e72a5ebc28c9",
+              "64b26059-f3de-404b-ae67-c92bbf8ae33e",
+              "658c2af9-9088-4be9-836d-7e5d03e5f969",
+              "667e7621-4681-4d71-98d9-dc7ab5f35f3e",
+              "67ba30d1-5e10-4543-8b8e-f43d785d3ee1",
+              "67c7d4d4-d7a4-43f3-8d6e-2a867a08f679",
+              "68ebb3a9-febf-4dee-88ca-01e97a99ae65",
+              "6b5de4dd-0c0f-4c14-8ff0-c6dab7e4fda6",
+              "6bdaf294-b4c2-470d-8c2e-8c6a3aa35418",
+              "6c59a8a8-690b-479b-87a0-af772f43e697",
+              "6cfddb0a-b974-41ec-86fa-df718124e305",
+              "6d4699cf-f628-43fe-a81b-bc74140bd5ab"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26302
+          },
+          {
+            "method": "select",
+            "visibleIds": [
+              "6e178ef5-9c19-4954-bb04-bf04a4d8ccb4",
+              "6e3db0f8-45e7-4ab1-a71f-fbb31bfc5f6e",
+              "704f0147-776c-4c4a-9213-afb34169763e",
+              "721882f8-7f07-4b0c-a2bb-f2f94e723f9f",
+              "7236efd3-20c0-4531-b67b-a37cafe8ca5d",
+              "73e9bc00-2a62-483f-907c-45eafacbf432",
+              "74264bc4-53e2-4bc7-ac9c-736949bda257",
+              "7436ad6c-752d-481f-8baa-5ee18f634854",
+              "76f27d0a-c0f3-4530-8430-5ab9e3a646cd",
+              "78d341d3-a9bf-4d29-ae4b-51fd784e07f0",
+              "7ae35632-8d74-404b-ae14-dc049d681a46",
+              "7b2483e3-8cb1-4778-ace9-b8f7ebc286c1",
+              "7c73f0fd-5b0d-4176-ae4c-f674a0a98c86",
+              "7d32698b-f5c8-4d07-9193-76cae312d518",
+              "7f938be3-80f7-4ada-94ae-04c5d238ff02",
+              "807eecb9-5232-41cf-bfa3-577817d4a7c5",
+              "810a5e5e-2f64-475b-8a06-f3bbc7006716",
+              "81c1c840-c943-4d4e-bcca-8c2a4b958768",
+              "829dc713-d3bb-48e6-8820-833a15c6cb45",
+              "82e4fd9d-d9cb-41fd-a24c-695ab015a36e",
+              "83440f72-8cf5-4bfb-92d3-17bcf13fc363",
+              "87b5d39f-9a64-4531-859a-3016d8c45cb9",
+              "8803e750-a0cb-4637-a8d8-ef096df5198c",
+              "88e458c0-8362-4abc-af23-ce91e2a70966",
+              "8970788b-24d1-455b-a991-b5897d70c11d",
+              "8a07e19a-1b35-44fd-b2d1-7d385add4587",
+              "8df0a5d2-bb90-46d6-ac04-d88f5b2363e9",
+              "8e5648b6-30fc-4108-98db-451c33aeb57c",
+              "8e890147-218f-4cf5-9eb7-1bfc3f4b446a",
+              "8e9b71c8-4aab-4605-b1bf-936f827417f3",
+              "8eb0c071-56e1-4b24-8916-3deb11e64c85",
+              "90c96846-f288-4c95-b3fa-c6b874d7f47d",
+              "91c69d0d-6c2b-4b12-9160-e0f67af14970",
+              "95097c1d-2b6f-4eca-ac19-f96ed8eba3ab",
+              "96a8c951-7374-4b84-b8e0-1e57cfff6306",
+              "96c76f14-3345-4567-adcb-5cb62a5a3de7",
+              "97bed054-5f18-4175-b515-9c3631a19987",
+              "982445d8-b8c7-431d-a4cf-56d083a4e9bf",
+              "98eaf629-1e35-4095-b0b7-47bed646b963",
+              "994c6136-645f-47d1-8026-51e3e3d9bc56",
+              "99555e1d-415c-48b2-889a-872c3a9c8a64",
+              "99adc498-103b-4fc6-befc-b1d91103ab4c",
+              "9bea9a37-a5b3-441f-8dac-2e4db729730c",
+              "9bf099d1-7b24-448a-b12e-65e849b93149",
+              "9d1ee6e1-9d79-4622-8422-ac4e367fb74a",
+              "9eb78df8-1d3e-4f03-bda0-88dd45b203c0",
+              "9fa92d97-580a-4c29-9c52-6964da787380",
+              "a09bc5d1-3ed6-48fc-8c52-08155b82d489",
+              "a2583dea-250d-459c-b292-bbbe28527a92",
+              "a4ce131d-5077-45e2-981d-fcd76a90ebb3",
+              "a7462731-172a-4852-9e3d-5a20bd2601d9",
+              "ab16b231-5d5c-4b6a-ac95-bbfcbf3f12ec",
+              "abc62158-bc46-44c7-9eaa-e3e046cd261e",
+              "ad00522c-7eb4-41fc-b345-63b323ed6e3a",
+              "ae132d19-99eb-4f59-a714-0c5d763ed516",
+              "ae61a36c-c837-4710-a71c-8dba7c7d6072",
+              "b1787709-eb56-437a-9082-64209876dfbe",
+              "b1e59ac7-1ae8-46e0-b688-5b5dfdba8ea5",
+              "b35fa5a0-9387-4d21-bab7-bc346aca1795",
+              "b3a834f0-5a82-46ed-a9d2-88b7cf90a36d",
+              "b64ecd6c-fa53-4b22-8097-fd85c8c07365",
+              "b7080d2c-7888-42e6-8ebb-01f32bb44e33",
+              "b86cb232-9b8c-47cc-80f5-6af9f48b49c1",
+              "b8f6fe1d-4219-4257-b1f8-63ecbde4935e",
+              "bc227450-2bd5-4497-a42a-8d5e45fd8b54",
+              "bda4ff38-9546-4fa2-b1bf-a7c0c8e4f7bb",
+              "be78f519-a2d4-4023-a19d-18a9ea9e6f67",
+              "be82ea48-e27f-4311-9a25-0844022e02f0",
+              "bf476285-638f-40d8-850a-a3dd491384ed",
+              "c10c95c9-8538-4bce-b110-d9f96aba5031",
+              "c1ff62bf-5183-4476-beff-5200473c08b9",
+              "c34488ca-dbb0-4a19-9fcc-a843208cdb55",
+              "c5e6fa2a-29b0-4cf5-b470-fc0669dfa53c",
+              "c656bc5e-8a50-4038-99ee-8fad3cd65d11",
+              "c6c808fa-32b1-479b-852e-b1215e6d8651",
+              "c73f7de1-75b7-4d32-9ffe-14b68e5a40ed",
+              "c7449212-f02f-4062-a6a5-e901692e0ee8",
+              "c78b56cf-7eef-40c2-89cc-44653580bc96",
+              "c8adeccc-588b-447c-8b17-7006d49aa95c",
+              "c9859336-65e4-461e-92ca-4691bfa4e378",
+              "ca095432-db0f-4633-b435-7fa03ffe23d8",
+              "cc768efc-11e1-495f-9229-d52951d3a164",
+              "ccc60f65-844c-44fc-abda-92b5f45f45ed",
+              "cf4c1367-d354-475d-a4e1-cc77d2726fa7",
+              "d04fe3c1-ff48-4e13-b96b-f73104dacc7f",
+              "d16b34b4-07c3-45ae-b20f-a92ea3402055",
+              "d31f25b3-38fa-47ef-8cc9-4b4dc67d44f1",
+              "d363ba27-a4a5-4ab5-b147-e3009dcbfa18",
+              "d473d5f8-8910-4378-a47e-b951ac924eea",
+              "d481fbff-d06e-4ab2-bd0a-53ff21a60075",
+              "d642e3c5-1201-4b09-9d38-146b655984c1",
+              "d6739c2b-3f9c-40fd-b11e-8a10f73dd596",
+              "d907ce6d-8334-491c-abad-0294c1750139",
+              "d989148c-286f-4613-8cb6-81ac630143c5",
+              "da40450f-1e76-4e15-a8f9-009597fd92d2",
+              "da48dff3-6c03-4d4c-9876-901c607d5779",
+              "dc893ae5-43d0-429e-a900-0c7f4ad21071",
+              "dd08a7c5-f95d-4660-afe4-7424fe9f9c43",
+              "dd3f3a7d-1fc7-4098-9c94-8398e18ef567",
+              "de886805-0b84-4b3b-b163-2e171b278e01"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26314
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "8347bb04-c76d-4469-99b2-14f3e64a83de"
+            ],
+            "inputBytes": 719
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "8347bb04-c76d-4469-99b2-14f3e64a83de"
+          ],
+          "scores": [
+            -22.655359502258097
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Who",
+            "owns",
+            "the",
+            "Juniper",
+            "migration"
+          ],
+          "matchExpression": "\"Who\" OR \"owns\" OR \"the\" OR \"Juniper\" OR \"migration\"",
+          "scannedDocuments": 224
+        },
+        "lexicalElapsedMs": 0.6968439999982365,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 6961.833206000003
+      },
+      {
+        "id": "unfiled-behind-filed",
+        "size": 224,
+        "placement": "unfiled",
+        "query": "Who owns the Juniper migration?",
+        "targets": [
+          "Mira owns the Juniper migration."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "94623d3f-148b-4b0b-abc5-b7c2bef13be3"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 224,
+        "targetMapPages": [
+          3
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "94623d3f-148b-4b0b-abc5-b7c2bef13be3",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 1,
+                  "state": "active",
+                  "filing": {
+                    "status": "unfiled"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:28.673Z",
+                  "updatedAt": "2026-09-13T03:00:28.673Z",
+                  "content": "Mira owns the Juniper migration."
+                },
+                "receipts": [
+                  {
+                    "id": "ce2f22c0-7de3-4af6-a377-752aab017507",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira owns the Juniper migration.",
+                    "createdAt": "2026-09-13T03:00:28.673Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "mocElapsedMs": 49.516474000003655,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "94623d3f-148b-4b0b-abc5-b7c2bef13be3",
+              "0008257f-11ef-498b-b20d-8117be57e06f",
+              "001a0e26-8710-4cff-a160-ace6d37415df",
+              "0416ee50-0393-4321-af6e-211ad2f2eb18",
+              "0481cdde-fc09-4e1b-a516-38ea1c667044",
+              "051a963c-6d7c-4909-bb5e-3b941d5dae36",
+              "05b9fe8c-851f-4457-86a5-51c5c54074ed",
+              "085a586a-5aec-4591-b23d-5f6f063e3eba",
+              "091cdc69-b2ec-4cb6-9e1e-45ced89064d0",
+              "09432b7c-ddcc-421b-922c-23fb41e3dfb4",
+              "0bf1c884-1fc1-4606-b1ec-cd318bbddfec",
+              "0df8bc5e-8969-4506-b585-b7b0b8a0f1cc",
+              "0e4d7fb4-9358-4d1b-b011-da1deef0f0c6",
+              "0e5b75be-432b-4b32-9b03-c355b4e01d1a",
+              "0e7598ea-7c5a-4c78-8ccb-1d2d1467e210",
+              "0fa0efbb-7374-414a-ab84-4865791ce39d",
+              "0faba0c7-48d5-4b8d-b24d-9bacc6b452b5",
+              "0fd2e9c0-2761-444b-b34a-862e1e98d8fa",
+              "10f73231-8a03-4849-b51d-0e2b1881f32e",
+              "127474e4-9f68-45d7-a2e7-5ecd115d1f51",
+              "12c86658-1528-4aeb-8b1c-ea4fba6f1f55",
+              "1441e2ab-0338-4d8b-8c3d-c53162d8d1bf",
+              "14e5dda4-1ca0-41d2-b175-21ecb26464cd",
+              "156914c5-41a9-45e1-9677-7119b662f489",
+              "15bc22c5-8d45-489b-b099-16ce7005a001",
+              "1603ac97-f0ab-4206-97a5-675cf9ff1898",
+              "173d8c74-8497-4b7c-8970-a18a86bcaff0",
+              "178ca478-8c4c-4638-8684-0f99d6072b4a",
+              "17da9f7b-f484-4c0f-9176-247fa3783f2f",
+              "180dbc5a-b2fd-423f-8713-0d4d17d2bc76",
+              "1adfa64e-7b05-49e9-9e0c-3780e20ae769",
+              "1d574501-d397-4a5f-a3e8-1b32b6e8c152",
+              "1d802a35-0141-477f-a6c0-f020a394a125",
+              "1e369a33-98cb-4da8-97ea-b59dfdecf96b",
+              "1eb9e1f1-b2d5-4499-90b2-4ed61f126b81",
+              "2151cd57-9e3a-4a7c-883c-6ed9313e61b7",
+              "222213b5-8cbf-4690-a4a8-1a772e01a763",
+              "242a9fe4-3e36-4645-bcba-5dd7ca2d3cb4",
+              "2465c2f9-0f21-4201-9dbe-597b54b846cf",
+              "24d7cc3f-f412-42ef-89de-29f4fe11e246",
+              "24f2075f-9803-4853-88bf-ec210c0605f7",
+              "263483b9-7098-4695-ade1-c7ba42ea4d87",
+              "2932542c-0ab9-4b77-87ac-60c639d657c7",
+              "29c3eb48-e3d3-4392-9bac-cc090c445b84",
+              "2a21389e-d64d-4e0a-abc0-59ccf6cb8e24",
+              "2a438dee-ba3a-4e4f-8104-c2b8dd497185",
+              "2aedb0f4-8736-4866-b614-e69374c37167",
+              "2b169b49-d5fd-4dad-af39-75c602525813",
+              "2bfd5cf0-c186-4629-a67b-65e26fc4188e",
+              "2d07a519-c4da-40b2-95fa-b1c558f66405",
+              "2d3f3eb9-171c-4481-876c-9ba6f7d691be",
+              "2e02943e-11e6-4edf-b86f-bc21a33cd00e",
+              "2e213d46-4773-4a29-9126-05fbccfcf9cf",
+              "2e33d570-04a5-448f-86b3-34a618430f87",
+              "2e42e128-9521-411b-a6b8-8525e6665b66",
+              "2eaa1e28-a812-4bda-a101-2c5b7b4e0914",
+              "2f1ce384-eed1-4980-9f0f-4250e8d4bb3e",
+              "34ab49e5-ef8f-4b90-8073-d60f0f5a4830",
+              "34b979ad-e7e5-4a5c-81d3-a10b35e08db1",
+              "35590a3d-7538-4c14-bb32-417306722034",
+              "358340e2-fea4-4a02-9a5a-44057fd13722",
+              "359dde5a-2f3a-413b-85f9-b10c610920c5",
+              "35ace83a-9f1c-4edb-8bd5-03afe504343d",
+              "37530d18-3bc6-4d94-9f4c-6ac350b05570",
+              "375cea66-63a2-4ea1-ae7f-684328667382",
+              "386538fd-2c32-4378-98b9-89e86cdeeec2",
+              "39bc733d-e1f6-411b-9564-6bbe7db51a54",
+              "3bb8f3b8-01f4-4233-898c-2aa94309e1c7",
+              "3caa627f-413c-4018-bcac-443a81aabb75",
+              "3defb5c7-5a45-49b0-94ed-7d355c5cc0d4",
+              "42730fa1-4d05-44fd-9b49-e6a1565f043e",
+              "435e313b-f843-4494-978f-2a35ef836358",
+              "43aacc36-2f41-4f68-a797-6a5d4e25f4c4",
+              "4405a9a6-e23e-4967-9e26-59b4c3147242",
+              "456c9b07-0d49-4b1e-991e-321362d12eab",
+              "45ead56b-58d2-4196-baad-65b6977a66e3",
+              "471f4ea6-0e4d-4212-906c-1ebb1ea35c72",
+              "484e853e-0f00-483a-ae8b-95cb33b60c44",
+              "49f3c262-eaec-43fb-ba8d-be50c70d153c",
+              "4ec772b4-c6eb-4515-bba6-2de92d972623",
+              "4ed5c909-c8a9-4e20-b325-27d2efb83c14",
+              "50e383ab-25f9-440b-8e02-21af8b8c2a3b",
+              "5253893e-1aff-4cd5-97ab-07f39c46dd91",
+              "561ac78b-ffff-473c-9347-b6be9bf668f9",
+              "5659b525-e34d-4ed6-96eb-a7404a5cf0c1",
+              "56d9bc55-0a92-4970-a85e-8f742c651a83",
+              "57edef37-408b-4c98-a0a7-c164c1bf31ff",
+              "589a54df-f694-46e7-9325-2ca3520d53c3",
+              "58feeef5-7939-46e5-88f6-03811c8ee542",
+              "5b646c2b-a338-4336-9e24-b45a0bdb2969",
+              "6025d688-358c-402d-aaee-79a764a66d3e",
+              "61292fc3-10d9-4ec1-af08-b705a008e6fc",
+              "61608d1a-e0bd-408c-b9f1-238e21f986ba",
+              "640f465d-c1a4-459c-80f4-341b92c97088",
+              "644d4ba9-abac-40b3-8b9d-e5f9d640086c",
+              "681cffdf-3aa2-4955-ab57-c0ef4171ed3f",
+              "6a22532f-bd42-4052-b448-e205c5dfda5c",
+              "6b9b82ff-2b50-4b31-bdce-9fefa1c75456",
+              "6c78a651-75ea-4f58-a301-96bdbae24408",
+              "6c93ef5c-4aa0-45e0-a461-a46d784379f8"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26174
+          },
+          {
+            "method": "select",
+            "visibleIds": [
+              "6d25be49-6be1-47c9-9b05-15977615f89e",
+              "6edb8055-0bf6-47c2-a318-c20c46986c02",
+              "6f859587-9427-41bc-9578-7a02e4eed021",
+              "6fd5346b-fed3-45c2-bc6c-80ad1d081b26",
+              "7048ef7c-787d-4c55-b031-65f5dd0d8f74",
+              "70492a8c-9ba3-4e9d-9f9d-a1229871fb7d",
+              "721b41b5-7fb9-439d-9d52-812019fefb50",
+              "76ff227b-0329-4aa4-9d39-5197bb5c8f2d",
+              "78c96733-814b-4947-a88a-f790e5eb3f49",
+              "78f086e8-c97d-498b-90a3-4002ef5a56c1",
+              "79f0c6d5-d240-4b72-b555-e3c83f662b7d",
+              "7b5d0c5f-f119-4b5e-a16a-45a6852ba55c",
+              "7b89a8a2-5193-4e9a-9da2-c39dab754caa",
+              "7c013481-cb4d-4c71-a926-f07444899411",
+              "7c414e93-3328-4e75-afd0-47fb8299e2d2",
+              "7d3026c2-5da6-49c5-855c-9ae7a805c004",
+              "7f0bb6ba-c46d-4b35-8939-471004ea4330",
+              "8068f83d-adb3-47ba-8d21-78d45bdf5c43",
+              "80a00e7f-30a2-43fe-ac5c-9bb97864f9d7",
+              "8136d766-2905-4e82-a336-6df3793b2833",
+              "8223e112-4023-4b06-b1a5-81f4877e5133",
+              "83d8f503-e51f-46fc-b5b0-de4fa6117516",
+              "853bc3b8-ea22-4393-b1c9-b521920b7802",
+              "862194e5-354b-474c-b723-a93ae6b2b4b2",
+              "871e57a7-4503-4f83-89b9-d2c9aed2e60e",
+              "878ab49e-a5d8-4568-8639-b99eb5302f1a",
+              "88111387-efcb-4ac8-9abe-9f2df3803b89",
+              "88db8493-ea07-43dd-9779-65aaad64b8a6",
+              "8919445f-f163-4c94-8cf5-dd588d3ae869",
+              "89887bbd-a11e-4900-8033-e6cf578d3118",
+              "89ac75c1-ec9d-48bb-9542-cda905f0b0f0",
+              "89fb0721-0ea8-4eb1-bbad-1064e8a8a944",
+              "8ac4b0fc-7513-48c8-b671-9e8078f49994",
+              "8acbda65-5eab-46db-af0f-cd3ace868ca7",
+              "8b09666d-714b-4654-aad2-2607e8c714ac",
+              "8c03fea0-45b9-42e1-841f-f2801be9fc53",
+              "8e8d1cb1-003c-4e5e-8980-eb2b1f475970",
+              "90504900-9f8e-489d-b88a-dffc373cf886",
+              "91504a71-3773-4f17-b7d8-26b29522b78d",
+              "9258832b-a3d5-421b-b74d-67306d3021b3",
+              "93b9eae2-ec19-4b92-9004-ea778f67cc4d",
+              "95f1c0cf-5e17-4c0c-a694-2589e647cd23",
+              "97880808-ba48-4fba-b037-a93aec755d6f",
+              "9b80026c-86f7-4153-9ae7-ba09250a99f3",
+              "9e4dd1e9-f92b-4bec-bba6-17440a2419fc",
+              "9f6bdcb0-6be9-4eea-8c62-f88333e524ed",
+              "a03b409a-7277-4cf2-8fec-b15fbf4cc7ba",
+              "a2552c62-56d1-4d47-be2f-9dc190ef246d",
+              "a3ddd532-dd6a-4920-913a-ac8cab78a112",
+              "a5d13df8-f419-4ee9-adbf-3219156d0438",
+              "a68d3dc6-161c-4c2e-b204-cc592fd73766",
+              "a8f168ab-e455-4b9f-9f9c-69928bb8cd16",
+              "aa754fd6-77a4-4a6d-a2a4-03fab26874bd",
+              "ab1719af-ddee-4015-b2f2-f3a249f34e4a",
+              "abd9717c-98fb-408a-9976-f4bb68ba23f8",
+              "acb2c6d3-508c-40bb-931d-5a65f1b053d7",
+              "acfddf5b-b6b4-4763-b302-0cf01ff2a162",
+              "af894198-244c-433c-abe6-fa12c57c8f3d",
+              "af99b37e-d30d-4d80-bed3-5f4dcad6f95a",
+              "b0e91fe9-d83e-48e3-ae58-045e65304b40",
+              "b51af41b-bf25-4ffe-a7f3-d3744a44da48",
+              "b5307d91-ea40-44ae-87ca-60310fa0fe5f",
+              "b5f2314b-55f5-4436-a7be-0c9706606b20",
+              "b604d008-d129-4c66-ad15-d59df610e972",
+              "b64f9475-a5cd-431e-a1b3-079bf288f81f",
+              "b72d83d5-0228-4aba-8e9d-4320b765d674",
+              "b7438336-c48e-44a7-858a-e41b7e0e539a",
+              "b8906477-4dcc-4d56-934a-6d09815037e6",
+              "b9b54388-6404-4002-a204-b3209067b98b",
+              "b9babf91-3a78-4b6e-b29f-5c795266ee50",
+              "be151515-8a97-4ddc-a7d0-0b2e4f73b9d7",
+              "be75b837-19d7-4928-972f-141fbf3e029d",
+              "be9d0cb3-2ec1-46ff-8a48-a0f54511f67c",
+              "bf1475d2-8198-46eb-9bbf-d2e5147e72af",
+              "c0eb6efe-cacf-4b47-bb5f-b0cda631e9ac",
+              "c0fd3f2a-8327-4b3c-a2ee-92d0679fb58e",
+              "c2ee25ec-bae8-4859-a174-8d7c1a869939",
+              "c3785a95-3d01-4a1b-9b12-bb777648391b",
+              "c3da9ffa-f356-4c30-bf73-1e23c04aa9ba",
+              "c986a18c-eb98-49eb-ab13-bb640a9591cf",
+              "c9daa512-9a5a-4680-8d32-a5d212b42340",
+              "cbb297d3-fbf7-4832-a2ba-d81a0fdc7293",
+              "cbbea255-92c3-4b4d-9644-59c31a7f31c6",
+              "cbbf536d-61df-489f-8581-95be170defd3",
+              "cbd9edf6-d0d6-4a1d-b7b0-d0d4505435d5",
+              "ce6e2835-5389-4fb0-b884-52f39045c681",
+              "d19ae89a-44d0-4e23-a1d2-c9d4960ac62b",
+              "d2ddbe79-e228-4ab3-9fa3-c02026164387",
+              "d537734e-68b9-4a28-8fec-6091ffe1e89a",
+              "d704a3cf-c01a-413a-8c5d-66fef437040b",
+              "d8f0b995-a1ca-4aa3-bab2-f9da6bfd5cdd",
+              "da6322ae-c885-467e-bbe4-1f535f41e08c",
+              "de2942a6-a347-4b8c-b52a-94589b235e16",
+              "de3ef0b8-55a1-4bbb-95ee-d7952cd31873",
+              "e326e9a4-ffe7-4675-9e6f-26edd677b69b",
+              "e37b8758-f2b6-4f1e-af13-d2fcd63d31ac",
+              "e3b598c6-4adc-4898-8b41-c27377fe8c5d",
+              "e4adecb6-51a0-4dbc-96eb-d45e810782df",
+              "e5af0e71-f539-45da-a1d0-4c142e07b798",
+              "e5d54936-ae52-4674-81e4-9d16e273d16d"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26326
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "94623d3f-148b-4b0b-abc5-b7c2bef13be3"
+            ],
+            "inputBytes": 721
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "94623d3f-148b-4b0b-abc5-b7c2bef13be3"
+          ],
+          "scores": [
+            -22.655359502258097
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Who",
+            "owns",
+            "the",
+            "Juniper",
+            "migration"
+          ],
+          "matchExpression": "\"Who\" OR \"owns\" OR \"the\" OR \"Juniper\" OR \"migration\"",
+          "scannedDocuments": 224
+        },
+        "lexicalElapsedMs": 0.7275850000005448,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 10376.530517000003
+      },
+      {
+        "id": "chinese-contiguous",
+        "size": 16,
+        "placement": "late",
+        "query": "小林",
+        "targets": [
+          "維護窗口由小林負責。"
+        ],
+        "status": "observed",
+        "targetIds": [
+          "b2df08ec-4284-4740-832b-fabe89e4a896"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 16,
+        "targetMapPages": [
+          1
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "b2df08ec-4284-4740-832b-fabe89e4a896",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:29.856Z",
+                  "updatedAt": "2026-09-13T03:00:29.888Z",
+                  "content": "維護窗口由小林負責。"
+                },
+                "receipts": [
+                  {
+                    "id": "d2a2f2bf-dfe8-4569-b33a-9a6641390d38",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "維護窗口由小林負責。",
+                    "createdAt": "2026-09-13T03:00:29.856Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "mocElapsedMs": 6.7035499999983585,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "00299826-54f5-4594-8c18-3775dcec4014",
+              "0469441e-ad69-4adb-886f-235815582bdd",
+              "44b1ebc7-b1f2-489a-b964-34b0134b1cbc",
+              "4639cb30-9261-4f52-b2e6-204bae2b4515",
+              "66f0d6b4-f0c0-4742-b31d-827e63e4b2bb",
+              "6f4cd90f-15f2-4592-82a4-876490f15058",
+              "72da71f4-3ab1-4648-af68-42a50521ff26",
+              "7af78e8f-7611-4605-8447-9378dbd2e235",
+              "82fd0ffe-f0c8-4d42-8ac5-80664d4ba20f",
+              "a64b9749-7dad-4094-91a8-16e80d6e1354",
+              "b2df08ec-4284-4740-832b-fabe89e4a896",
+              "b38f0bc1-a08f-46cb-8a30-8c0bf8ac7261",
+              "bbbe41ec-42fb-4fbd-af53-1efbab1f9e25",
+              "c23668a6-754b-4dc7-9e51-fdccba1f71ea",
+              "cb6db5e1-7803-45f6-874f-44e074c01f9e",
+              "f5a6e2a4-2b38-4b7b-9c1a-90d452b22da3"
+            ],
+            "mapItemCount": 16,
+            "inputBytes": 4211
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "b2df08ec-4284-4740-832b-fabe89e4a896"
+            ],
+            "inputBytes": 690
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [],
+          "scores": [],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "小林"
+          ],
+          "matchExpression": "\"小林\"",
+          "scannedDocuments": 16
+        },
+        "lexicalElapsedMs": 0.4785100000008242,
+        "targetLexicalCount": 0,
+        "namespaceIsolated": true,
+        "elapsedMs": 1059.8204620000033
+      },
+      {
+        "id": "chinese-spaced-control",
+        "size": 16,
+        "placement": "late",
+        "query": "小林",
+        "targets": [
+          "小林 負責 維護窗口。"
+        ],
+        "status": "observed",
+        "targetIds": [
+          "aa93b9ea-d0f9-4fae-ae19-ea639d810fd4"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 16,
+        "targetMapPages": [
+          1
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "aa93b9ea-d0f9-4fae-ae19-ea639d810fd4",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:30.854Z",
+                  "updatedAt": "2026-09-13T03:00:30.878Z",
+                  "content": "小林 負責 維護窗口。"
+                },
+                "receipts": [
+                  {
+                    "id": "325f59fa-1d41-4d22-80bf-010aae96e04b",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "小林 負責 維護窗口。",
+                    "createdAt": "2026-09-13T03:00:30.854Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "mocElapsedMs": 4.630763000001025,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "aa93b9ea-d0f9-4fae-ae19-ea639d810fd4",
+              "24f6d27f-a02c-44b6-8eaf-e7cee75709ea",
+              "255705a3-b158-4f33-b093-dbf85efaef4b",
+              "2ba57543-0c74-4b65-b851-aa655a7c5760",
+              "397fc919-66ff-4b01-9599-f8f8ecd3c690",
+              "3a9cf523-09f2-48cc-9d69-5daedd3a8893",
+              "3ed8bcd4-047e-4c66-8e4a-5dcb2c052fd8",
+              "4a639ce4-01df-4c49-a9ad-c82de91388d3",
+              "62b4e457-0a45-46ee-b019-296359c8e6dd",
+              "6ff6b42f-ee18-4123-b7bb-ab21cbc4bdee",
+              "836979ee-f94e-4f4b-808b-43bc57243ce7",
+              "88d6e750-21db-468d-b4c1-7b66afb23431",
+              "b38a1c74-6892-4b5d-a19f-2df21b6fca12",
+              "d39338dc-1651-46e3-b8c1-99bbe6cb78f8",
+              "d85e46e2-6e50-4f1c-8b4d-650389099f18",
+              "e12a817c-1a63-4995-a5cc-fac2b2f624ef"
+            ],
+            "mapItemCount": 16,
+            "inputBytes": 4210
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "aa93b9ea-d0f9-4fae-ae19-ea639d810fd4"
+            ],
+            "inputBytes": 688
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [
+            "aa93b9ea-d0f9-4fae-ae19-ea639d810fd4"
+          ],
+          "scores": [
+            -3.022249891057342
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "小林"
+          ],
+          "matchExpression": "\"小林\"",
+          "scannedDocuments": 16
+        },
+        "lexicalElapsedMs": 0.4607289999985369,
+        "targetLexicalCount": 1,
+        "namespaceIsolated": true,
+        "elapsedMs": 980.0599659999934
+      },
+      {
+        "id": "paraphrase-control",
+        "size": 16,
+        "placement": "late",
+        "query": "vehicle caretaker",
+        "targets": [
+          "Mira maintains the automobile."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "6c5300c4-8336-4b9d-ae33-741be294c845"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 16,
+        "targetMapPages": [
+          1
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "6c5300c4-8336-4b9d-ae33-741be294c845",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:31.753Z",
+                  "updatedAt": "2026-09-13T03:00:31.776Z",
+                  "content": "Mira maintains the automobile."
+                },
+                "receipts": [
+                  {
+                    "id": "c6a1724f-55a4-44ee-bfca-e44b5649d1e8",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira maintains the automobile.",
+                    "createdAt": "2026-09-13T03:00:31.753Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": true,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "complete"
+          }
+        },
+        "mocElapsedMs": 3.932534999999916,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "078810af-ef5e-47dc-98e4-e4d2f82b90f3",
+              "0d0fbd9f-f2b9-417f-b73a-d048fcfa09bc",
+              "2b59d162-d4e3-4f71-a5b6-ddba26976cce",
+              "3d37c321-68e0-48bb-9a0f-5016e32a2f13",
+              "3dbced25-c327-4be3-bd85-9338f274a743",
+              "519ff1c4-8322-47a7-8e77-aba9675a8165",
+              "6259cef5-c217-415f-9845-6831f40db469",
+              "6c5300c4-8336-4b9d-ae33-741be294c845",
+              "7c54d04e-70cf-4e7b-a416-235111ddd699",
+              "913eb078-f591-45e0-bcb8-818511a1eaaa",
+              "b32a4b93-4679-45b0-8282-0a33a859b029",
+              "b3b56063-3d00-48a8-b714-0b9833a9691b",
+              "c79aae1f-ab54-4dd0-9162-e447c3b537d1",
+              "ca3f8738-7466-477b-8810-c0d2f7eb2f9e",
+              "d1b4fe8e-2840-44e8-9d10-7b66b50d6b4e",
+              "fe448288-5839-43c9-84c6-2c0187c88b3d"
+            ],
+            "mapItemCount": 16,
+            "inputBytes": 4222
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "6c5300c4-8336-4b9d-ae33-741be294c845"
+            ],
+            "inputBytes": 701
+          }
+        ],
+        "targetVisibleCount": 1,
+        "targetRecalledCount": 1,
+        "lexical": {
+          "ids": [],
+          "scores": [],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "vehicle",
+            "caretaker"
+          ],
+          "matchExpression": "\"vehicle\" OR \"caretaker\"",
+          "scannedDocuments": 16
+        },
+        "lexicalElapsedMs": 0.32082700000319164,
+        "targetLexicalCount": 0,
+        "namespaceIsolated": true,
+        "elapsedMs": 874.9841510000042
+      },
+      {
+        "id": "multi-evidence-late",
+        "size": 224,
+        "placement": "late",
+        "query": "Juniper owner deadline",
+        "targets": [
+          "Mira is the Juniper owner.",
+          "The Juniper deadline is Thursday."
+        ],
+        "status": "observed",
+        "targetIds": [
+          "4f9c2d73-b4df-4806-b810-f59bf524723e",
+          "e92d95ed-c55a-41ab-885a-ef8f5b10213e"
+        ],
+        "coldDirectReadSupported": true,
+        "fullInventoryCount": 224,
+        "targetMapPages": [
+          3,
+          3
+        ],
+        "allTargetsInventoried": true,
+        "recall": {
+          "ok": true,
+          "value": {
+            "memories": [
+              {
+                "memory": {
+                  "id": "4f9c2d73-b4df-4806-b810-f59bf524723e",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:40.246Z",
+                  "updatedAt": "2026-09-13T03:00:40.258Z",
+                  "content": "Mira is the Juniper owner."
+                },
+                "receipts": [
+                  {
+                    "id": "56f93ae5-bca2-44c6-ba58-51dde5563eb2",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-0",
+                    "role": "user",
+                    "excerpt": "Mira is the Juniper owner.",
+                    "createdAt": "2026-09-13T03:00:40.246Z"
+                  }
+                ],
+                "receiptCount": 1
+              },
+              {
+                "memory": {
+                  "id": "e92d95ed-c55a-41ab-885a-ef8f5b10213e",
+                  "namespace": {
+                    "ownerId": "synthetic-moc-audit",
+                    "scope": "personal",
+                    "projectId": null
+                  },
+                  "kind": "fact",
+                  "origin": "explicit",
+                  "confidence": 1,
+                  "revision": 2,
+                  "state": "active",
+                  "filing": {
+                    "status": "filed"
+                  },
+                  "receiptCount": 1,
+                  "createdAt": "2026-09-13T03:00:40.273Z",
+                  "updatedAt": "2026-09-13T03:00:40.285Z",
+                  "content": "The Juniper deadline is Thursday."
+                },
+                "receipts": [
+                  {
+                    "id": "0c247b60-788b-441a-abdb-d136a02689e1",
+                    "client": "moc-diagnostic",
+                    "sessionId": "synthetic",
+                    "eventId": "target-1",
+                    "role": "user",
+                    "excerpt": "The Juniper deadline is Thursday.",
+                    "createdAt": "2026-09-13T03:00:40.273Z"
+                  }
+                ],
+                "receiptCount": 1
+              }
+            ],
+            "namespaces": [
+              {
+                "namespace": {
+                  "ownerId": "synthetic-moc-audit",
+                  "scope": "personal",
+                  "projectId": null
+                },
+                "mapExhausted": false,
+                "fetchExhausted": true
+              }
+            ],
+            "coverage": "budget_exhausted"
+          }
+        },
+        "mocElapsedMs": 58.90566000000399,
+        "observations": [
+          {
+            "method": "select",
+            "visibleIds": [
+              "4f9c2d73-b4df-4806-b810-f59bf524723e",
+              "e92d95ed-c55a-41ab-885a-ef8f5b10213e",
+              "01570a1f-8940-4851-ab3c-0dc34cdb80ce",
+              "051c550d-174a-45cf-afca-4ce17370a4ce",
+              "0a351547-2a22-4b44-8201-9849b040d769",
+              "0b1af7bf-53de-493b-9557-ad76b190b635",
+              "0c94fd6f-9eb6-4984-bd9e-7e949958200c",
+              "0d0de6f6-f56d-48ed-b9bb-52f613cf2654",
+              "0d525c8f-aa08-4234-b40a-f2e849cc2655",
+              "0e320eda-319e-4835-bd0f-089ad62848e5",
+              "0e72a3e1-0363-447b-bfae-7a87fd7e5acf",
+              "0f803a23-9466-4aef-a4ff-7cf0d2dda1af",
+              "10072429-ac54-40fc-9b61-de62e4abb43e",
+              "104d0cfe-8dbc-418a-9cfc-d66ab79c4685",
+              "108c0440-8288-4ca0-a418-70c20fef6cd2",
+              "12b21c73-6739-46bb-a6e8-2d7e13626dfe",
+              "139f7f6f-a7ab-4ef7-9ed6-544b1355f268",
+              "13a25520-e211-4486-ab3f-16fbbdd9afe3",
+              "145da6ba-83a1-4b6a-a5af-a258afb32b8b",
+              "168ab0fb-797c-4bab-8910-f86c295ea5b5",
+              "17b0fb8e-fd9a-4ce4-a4ba-1f9b751313ea",
+              "180ceaf6-5e11-4d05-81ff-eb50aeb06dad",
+              "1a44088a-e7f3-4031-90bf-b4a5d1d71c5a",
+              "1d2b1fc0-b97f-4024-b162-f91e546faf00",
+              "1fe616a2-09aa-4476-a998-ac589d0d9055",
+              "205d3840-088e-4c98-98d8-9256f88a991e",
+              "214d5e9c-da13-493a-afbd-8919fb4307b1",
+              "21feb60f-e9f3-419e-829b-c25da16d7fc5",
+              "22c2df2d-a011-4c1c-b086-0b059cec31a4",
+              "2362fbe4-bb66-4b51-b926-6a017300fcbe",
+              "242d8bda-3cf0-4f97-b7bc-fe806e3bf490",
+              "24c7c1c1-6057-4579-b363-c25d17620eb5",
+              "2521a3d7-aafc-4271-aeae-3b29bffe6639",
+              "254f5896-1187-4939-98d9-3661154d23bb",
+              "25ffc219-3d1d-403f-bfce-5114e3837e3a",
+              "26761834-8c64-468e-81fb-56d3c8fcb248",
+              "2762f80b-3b12-4aac-9b7c-e0fed2680bf7",
+              "281f9ed0-e317-4d0b-b28e-49f4fee5d1ae",
+              "28998930-06e9-45c1-bc6a-656b470ce47f",
+              "2a26f03b-4c8f-498f-91bc-146fc9200c70",
+              "2ef33b52-4ec3-407a-92cf-51489863ef01",
+              "306a1370-01e7-446d-8f6d-cb8edcd44bc6",
+              "313d1931-a464-49f3-85b7-facea40c2d4d",
+              "31505a53-8618-4950-a4e5-6ca4297358fb",
+              "3219ce76-e1bf-4681-b64a-6c5431713e9a",
+              "32b9ea87-3c7c-4e6a-9d69-c4ad2b35cc6e",
+              "32dad77b-9979-49ca-9c6a-6a89ac406745",
+              "32f3f799-b1b9-4e8b-b1a3-5b4ed5b805a1",
+              "350c968c-921a-40fb-884f-6b4925e580d5",
+              "35889336-e1a5-49b0-852c-6552b551fc19",
+              "35cbe0ef-a7b1-45ea-afcc-19af722acf9e",
+              "367027f7-fd78-4508-9efb-dac3ad81e120",
+              "3760a8d4-fc95-485c-a52f-5bb8f0f979d1",
+              "38157832-fb12-4d0f-80bc-28e02536befe",
+              "391966f1-c09f-4b64-a317-962f046b9972",
+              "3a116fd9-28fd-4aca-83b2-f5d7a7ddc342",
+              "3a2d119b-f77e-461a-9abe-4b94a74f09d5",
+              "3a8fb382-4ae7-4fa0-a213-02bbaa0a236b",
+              "3bbc7cc7-4923-4b4f-84a0-11d6813f6641",
+              "3e33c858-81f6-44ab-bf5d-089b1a0ace5d",
+              "3f7f48f1-3066-4892-a4b6-d2c712fcc50b",
+              "4054d67f-8cca-4b3d-acda-3df88edcf856",
+              "410ebca4-ea56-405b-b734-21c475bdd5c2",
+              "417f2033-dc87-4e8a-8afb-ea11d334d350",
+              "41849da5-fb89-4361-91b3-0e6c1844ca5a",
+              "4194d703-359c-47e6-8fb2-ae8e986b35d2",
+              "430e5bc5-2578-4fc0-844f-8da6da7e4aad",
+              "4582cc6e-0795-4517-8174-87f4170f9ed1",
+              "4596d7c0-b74a-4267-ad30-fb4145f85609",
+              "4618c250-4403-4ed1-aea7-b1a2f7966ee2",
+              "4752eee1-8f10-4670-869d-ee582803c4d3",
+              "4999c8f2-f682-4605-bc1c-7468633d519f",
+              "4a34c094-9335-4048-b2c5-dc0fd96b19ee",
+              "4a47eea9-b6f2-449a-be9f-baf68729dcfa",
+              "4b20617c-4c25-46a2-9107-17d83bffcfec",
+              "4d3be2de-d945-4944-8b01-6d60db089d22",
+              "4d54a343-0b45-4188-b124-1e96f96452bb",
+              "4d854d87-64e1-4e19-9adc-cde53322b4f9",
+              "4e882aa5-2668-4767-977b-365c9cd205b1",
+              "4ea3e5b9-4f05-42fb-aaf1-36dc25baba50",
+              "512b924e-37e7-47a0-902d-4cef02037fe1",
+              "5291a7b8-4d16-42f9-ab91-1b8757c1ff85",
+              "54b0ee0d-0bef-4559-84e6-c1b5a1df3f95",
+              "55494077-5923-4279-b9bc-f3c9fda29fec",
+              "5817e88f-1b64-45bc-9419-2ba27c3d4ec9",
+              "5bf9a744-2a16-4450-b0f7-683bd4d94177",
+              "5d11ea56-5ad9-4c17-b1e2-31b7b28c8d8e",
+              "5d15c35d-75fd-452a-840e-da7f3e807002",
+              "5df973bf-69d4-40e7-9495-8a329ad1beca",
+              "5eaf8abc-a691-4b1e-bc46-0833bf8093bd",
+              "5fc8c1e4-5ec7-4faf-9fb9-636cc9aae9a9",
+              "61ee87da-db1c-49b4-bdc4-0b70a04cc0bc",
+              "65e3be7d-5245-468f-a5f7-45c8ced50a02",
+              "6734877e-e1cd-49cd-98c4-08b63c6eb287",
+              "687743d7-5260-43be-9d40-30ca13927176",
+              "6992ce9f-7b76-4367-8ffa-b112e099b98a",
+              "6a0150c4-ba4f-49da-8677-f73af2a786cc",
+              "6b0f3c1c-8bd0-4842-b76c-53a7427c2392",
+              "6b82811d-8ace-4797-bf6e-bdddd2fe9274",
+              "72397ac3-f43c-4baa-87af-3eff0c61b73f"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26280
+          },
+          {
+            "method": "select",
+            "visibleIds": [
+              "725b07db-c4f9-49ce-a2d6-c29f3c8dab9c",
+              "75490a88-74b9-4757-8ed2-25f63897ce52",
+              "7699de6a-9b7b-416e-8577-853b1201d894",
+              "76b8aaf5-c27e-453b-aa48-25db63f37095",
+              "77cd6bee-4187-44f1-88e2-bb93506ce03d",
+              "77f7812f-3d55-401c-9b80-3d6097b3dd68",
+              "7881e03d-db33-4651-a6c4-84e82d231ca4",
+              "79471472-c644-4b45-8474-7fd5ad8b7e28",
+              "794a30f0-c18e-487e-8b15-770d48e585c0",
+              "7a16d192-6a26-4028-844d-8d8a7c505b7b",
+              "7ba345ae-1e93-494d-a726-0f3cd68a66bc",
+              "7c617e8b-07e8-4fca-a775-1f332c0baecd",
+              "7cc4701c-3e8a-4498-82e1-c3e820ac7161",
+              "7d564c09-1c94-4ad0-b65b-72d7571aaebd",
+              "80335919-0055-4e8e-a433-f8fc8fab49df",
+              "8288ae20-724e-42a7-9322-ec817a684cb8",
+              "82e3b939-36e7-47c5-9659-9a8068576585",
+              "8381c754-a644-40dc-8e54-af4eb07811ee",
+              "85615a99-0dbf-4355-81fe-b1f2edb0a96a",
+              "86450c19-9f5b-49ba-846f-2de62bb7dd2d",
+              "86b873d5-9514-4d35-b11a-d54acc5fc296",
+              "876f4db5-2003-4a92-8a28-2b25bdbdc711",
+              "8caf0912-885a-4ddf-aa91-c3dc28acf3f4",
+              "8cc00666-aabb-4e4c-9eff-bffe60d68362",
+              "8df2ae3d-6ec7-4c0d-adb9-c4c2f5721e36",
+              "8f170519-d105-4dec-83d7-ca422559e8bc",
+              "90ac4bac-929b-49c4-bf5e-c59b1d7191eb",
+              "929041af-8207-4178-8c01-8b188a1ebea3",
+              "92ef21b3-cd23-484f-bb05-fc742f8883ed",
+              "94be9350-16c6-4688-8c27-28fee10a102f",
+              "95a1bcb4-2f95-414a-bc73-18f3e0c07953",
+              "9a70eac8-bbe6-45e7-a806-0e9e961748ac",
+              "9cf8b212-a477-44d4-aed0-f5a8aee2e4fa",
+              "9ec2f8bb-649f-44fe-9ca6-9152b7737cef",
+              "a025eb8e-c73d-473e-b4b9-c6f16b5453ef",
+              "a18d7bef-10db-4e13-aef9-f350c5058a50",
+              "a2a489d1-8479-4684-92c3-e2c200bdffe9",
+              "a46963ae-8478-4c68-b4cb-781fa3837513",
+              "a5c589c2-2fdf-4bad-805b-b36b0d4eb0bf",
+              "a5ec8fda-3a32-4bdb-bb2a-b4a492c9ed8d",
+              "a7964a36-88ba-402a-9368-de243ca13142",
+              "a8c5b24c-ce54-45fc-8012-8f70213bd9a0",
+              "a90cb4b0-306c-4ef6-ad05-39004508445a",
+              "acd6e89b-ab0f-4e6c-b95b-40487cbaa73c",
+              "acf837b3-e0fb-4b69-b1e0-2fd1d81f52e1",
+              "ad6b0a52-63e0-4fc5-986d-dffd69eaaa5f",
+              "b240be5b-e3d3-4e2c-a13e-869eb42d9024",
+              "b31cb773-956c-49d4-8a3c-44682620980e",
+              "b6404afb-5f19-418e-8b5d-bc6605828e70",
+              "b7431295-af98-47d7-91dd-4d898ecb876e",
+              "b7989d5c-de11-42d6-a7b3-2873665470c2",
+              "b89251e6-a40b-4940-a07a-a96d9bee806f",
+              "b8de783f-5d29-49bb-80f4-5adb2443222b",
+              "b94c7dfd-0f86-4f9e-9929-bfef37e95a70",
+              "ba8152d8-641f-40db-b7e0-f3c3c7434075",
+              "bab969c6-2485-4c69-9969-35600cee44a6",
+              "bb09f127-9a2a-490c-916b-afaf9877b68d",
+              "bc9ad442-1e05-4a3e-a7b7-2e7545c96107",
+              "bd1f4e80-6999-4ef7-b2bb-dc830aea6674",
+              "bd5beb2a-3861-46a0-8206-86a9a36277c3",
+              "beb1a721-2c70-4526-9d1c-1b0e9804f91c",
+              "c06f79f0-f630-4010-9027-bd0274c3453f",
+              "c0da8b7f-3bdd-40a9-9d47-e764304e5bb9",
+              "c0ef3855-76b2-486a-a75b-2b0262902fea",
+              "c13d2768-8f5d-449a-b814-e0bba1bfd331",
+              "c2d02c57-8168-4768-8038-abaed5130b69",
+              "c481743e-f78e-480f-b30e-27d9369be1c2",
+              "c588f6eb-d95c-4dc7-ac4b-866436850895",
+              "c6d85751-e04c-4a2c-a5c6-27f880a3506b",
+              "c84b5f83-f02b-4312-9f59-60fff9617f1c",
+              "ca16690a-ccb5-4d75-865b-51ba2c15702e",
+              "cad33c8a-6b3d-4053-8228-ff1a4aa326e6",
+              "cc4ffcb6-8531-4b9a-ab1e-c88d4b1631d5",
+              "d085a4f1-91af-444c-8364-a3ffd28e7af2",
+              "d1968d4a-3dc1-4df7-97c6-7b911c1453b0",
+              "d2987b8d-5fe1-4d81-be7d-22501c569d98",
+              "d6bf381d-0f37-4e51-8a71-4b824a7cb73d",
+              "d7477091-bae1-4727-819b-004f41ac1557",
+              "d773b020-3ac6-4df4-a9be-18dbfe4f7ea4",
+              "d7f9a199-5079-492b-9f15-27d229db73ff",
+              "da869d8d-45d1-4270-834a-01eee7dcfb6b",
+              "dc689062-215a-477f-a082-99a05b8ae098",
+              "dd09f875-64c6-4102-bb71-fd8a6483d614",
+              "df57d749-c85c-4381-a4a3-e4551dc79e6d",
+              "e0e9915d-595a-47bc-93e4-77e9498ffcf8",
+              "e1732b57-9640-4556-a793-c8016eba1124",
+              "e21ad546-58f5-4d30-a72c-251672cb1ebb",
+              "e2d4c1d5-d3c2-402a-b250-4b1278eaa398",
+              "e354529d-e612-426f-9623-ea72f6b9f71f",
+              "e4dfc3d7-a577-4e73-a2fe-b75ce08d58d2",
+              "e5261bd4-721e-40cb-b79f-570cf0228984",
+              "e5aec5b2-7740-40de-a0ad-5cf328743e5d",
+              "e661ef48-c1fe-44ae-9352-dafdb0f3d120",
+              "e6635ad0-b92f-4309-95e6-ffeebddaa058",
+              "e7a823e7-29ec-4b4c-9dc1-5d7d3b33a494",
+              "e9ade189-b5f8-4096-9d2b-7c0f32d1a316",
+              "eab05bee-5c0d-4e8f-8b5d-19d56f0f66ce",
+              "eaba4251-1924-439c-a2e8-3f694c4af8cb",
+              "eb2be591-48da-4036-906d-a525e63db886",
+              "eb7190e7-f1b0-4a13-a09d-1661808a56f1"
+            ],
+            "mapItemCount": 100,
+            "inputBytes": 26281
+          },
+          {
+            "method": "rank",
+            "fetchedIds": [
+              "4f9c2d73-b4df-4806-b810-f59bf524723e",
+              "e92d95ed-c55a-41ab-885a-ef8f5b10213e"
+            ],
+            "inputBytes": 1350
+          }
+        ],
+        "targetVisibleCount": 2,
+        "targetRecalledCount": 2,
+        "lexical": {
+          "ids": [
+            "e92d95ed-c55a-41ab-885a-ef8f5b10213e",
+            "4f9c2d73-b4df-4806-b810-f59bf524723e"
+          ],
+          "scores": [
+            -10.739865339494767,
+            -10.739865339494767
+          ],
+          "tokenizer": "unicode61",
+          "queryTerms": [
+            "Juniper",
+            "owner",
+            "deadline"
+          ],
+          "matchExpression": "\"Juniper\" OR \"owner\" OR \"deadline\"",
+          "scannedDocuments": 224
+        },
+        "lexicalElapsedMs": 1.119961999997031,
+        "targetLexicalCount": 2,
+        "namespaceIsolated": true,
+        "elapsedMs": 8725.956162000002
+      }
+    ],
+    "classification": [
+      {
+        "size": 1,
+        "observations": [
+          {
+            "mapExhausted": true,
+            "mapItemCount": 0,
+            "mocCount": 0
+          }
+        ],
+        "result": {
+          "ok": true,
+          "value": {
+            "proposal": {
+              "items": [
+                {
+                  "memoryId": "20721462-ffa8-4889-a3e0-d03fd23e5a91",
+                  "parentIds": [],
+                  "newL1": {
+                    "title": "First category",
+                    "parentL2Ids": []
+                  }
+                }
+              ]
+            },
+            "basedOn": {
+              "memoryRevisions": [
+                {
+                  "memoryId": "20721462-ffa8-4889-a3e0-d03fd23e5a91",
+                  "revision": 1
+                }
+              ],
+              "indexRevision": 2,
+              "mapExhausted": true
+            }
+          }
+        }
+      },
+      {
+        "size": 101,
+        "observations": [
+          {
+            "mapExhausted": true,
+            "mapItemCount": 0,
+            "mocCount": 0
+          }
+        ],
+        "result": {
+          "ok": true,
+          "value": {
+            "proposal": {
+              "items": [
+                {
+                  "memoryId": "49a16ccf-77a1-4f3a-85c3-a7a91271036e",
+                  "parentIds": [],
+                  "newL1": {
+                    "title": "First category",
+                    "parentL2Ids": []
+                  }
+                }
+              ]
+            },
+            "basedOn": {
+              "memoryRevisions": [
+                {
+                  "memoryId": "49a16ccf-77a1-4f3a-85c3-a7a91271036e",
+                  "revision": 1
+                }
+              ],
+              "indexRevision": 102,
+              "mapExhausted": true
+            }
+          }
+        }
+      }
+    ]
+  }
+}

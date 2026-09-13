@@ -341,7 +341,7 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function recallSnapshot(candidates, selected) {
+  function recallSnapshot(candidates, selected, namespaces = []) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
@@ -350,6 +350,10 @@ export function createMemoryRuntime(input) {
         if (!row || row.revision !== revision) fail('revision_conflict');
         return row;
       });
+      for (const { namespace, indexRevision } of namespaces) {
+        indexStorage.assertAvailable(namespace);
+        if (epoch(namespace) !== indexRevision) fail('index_revision_conflict');
+      }
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         return { memory, receipts: receiptPrefix(memory.id, 0, candidates[index].receiptLimit),
@@ -390,6 +394,7 @@ export function createMemoryRuntime(input) {
     },
     linkMocs(ns, input) { ready(); return mocStorage.linkMocs(ns, input); },
     mapRows(ns, input) { ready(); return mocStorage.mapRows(ns, input); },
+    queryCandidateRows(ns, input) { ready(); return mocStorage.queryCandidateRows(ns, input); },
     classificationSnapshot(ns, ids, guards, index) {
       ready(); return mocStorage.classificationSnapshot(ns, ids, guards, index);
     },

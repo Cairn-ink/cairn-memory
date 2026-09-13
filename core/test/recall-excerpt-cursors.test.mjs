@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
+import { QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from '../query-candidates.mjs';
 
 const namespace = { ownerId: 'excerpt-cursor-test', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -49,6 +50,12 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
     assert.equal(typeof binding.q, 'string');
     assert.ok(binding.q.length > 20);
     assert.ok(binding.x);
+    assert.equal(binding.policy, QUERY_CANDIDATE_VERSION);
+    assert.equal(binding.scan, QUERY_SCAN_LIMIT);
+    assert.deepEqual(binding.a, { offset: 100 });
+    assert.equal(binding.l, 100);
+    assert.equal(binding.b, 4000);
+    assert.equal(Number.isSafeInteger(binding.e), true);
     assert.equal(JSON.stringify(binding).includes(query), false);
     assert.equal(core.map({ namespace, cursor }).error?.code, 'invalid_cursor');
     return cursor;

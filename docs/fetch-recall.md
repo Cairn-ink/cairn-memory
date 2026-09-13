@@ -111,12 +111,31 @@ fetched candidates. Empty arrays are valid. Forged IDs, revisions, extra fields
 and group IDs fail validation. All query/content/receipt/label text is untrusted
 data. Structural validation does not prove that a model judges relevance well.
 
-Recall's internal navigation now uses query-aware excerpts, still at most 120
+Recall's private candidate policy first scans at most 1,024 raw memory rows plus
+one sentinel in exact-namespace ID order using `index_memory_keyset`. Deleted and
+historical rows consume that allowance; only current, nondeleted records visible
+through the active index projection can become candidates. The snapshot is reused
+across both pages in one recall. Full bodies are scored by the number of distinct
+literal query tokens they contain, then sorted by descending score and stable ID.
+Zero-overlap records remain eligible: absence of a literal match does not prove
+absence of evidence. This is bounded literal candidate generation, not semantic
+search or a measured improvement in model quality.
+
+Each memory occupies one candidate slot, using its first valid current placement
+reference in canonical parent-title/ID order, or the existing unfiled fallback
+when it has no valid projected placement. Multiparent memories are deduplicated.
+Private candidate pages omit group headers and group-to-group edges, so selection
+loses that group context. Public map ordering, classification catalogs and stored
+organization are unchanged. Topic routing remains separate future work.
+
+Recall's internal navigation uses query-aware excerpts, still at most 120
 Unicode code points per memory. It chooses a contiguous slice of current stored
 content containing the most distinct literal query words, with an earliest-window
-tie break. It does not add candidates, change their order, or make extra model
-calls. Public `core.map` and classification keep their original prefix labels.
-Internal continuation cursors bind a keyed query digest and excerpt-policy version;
+tie break. Excerpts do not alter the full-body score or add model calls.
+Public `core.map` keeps its original prefix labels; the classification catalog
+is unchanged.
+Internal continuation cursors bind namespace, epoch, a keyed query digest,
+excerpt/candidate policy versions, scan allowance and position;
 the raw query is not embedded in them. Excerpts are counted before page packing.
 
 This is navigation evidence, not a summary or semantic search fallback. Matching
@@ -147,7 +166,7 @@ snapshot.
 
 ## Honest coverage limits
 
-Recall reads at most two bounded map pages per namespace and two receipt pages
+Recall reads at most two bounded candidate pages per namespace and two receipt pages
 per candidate. Each selection round can use only refs visible in that round;
 finished namespaces are skipped without renumbering them. `namespaces` reports
 `mapExhausted` and `fetchExhausted`; any truncated
@@ -155,6 +174,22 @@ input yields `coverage:'budget_exhausted'`, including empty results. `complete`
 means these bounded inputs were fully examined, not proof of relevance or perfect
 recall. Large candidate bodies can exceed model input limits and fail explicitly.
 Adaptive hierarchy traversal and paging beyond these ceilings are not implemented.
+Reaching the raw scan ceiling also keeps coverage incomplete, even when a matching
+memory was returned or all eligible rows in the scanned range fit in one page.
+At that terminal ceiling the private page has no next cursor; recall stops without
+repeating the scan or making an empty continuation call.
+
+The raw query returns at most 1,025 rows. At most 1,024 current projected bodies
+are scored, each bounded by the existing 4,000 UTF-16-unit input limit: at most
+4,096,000 UTF-16 units or 12,288,000 UTF-8 bytes in total. The sentinel body is
+returned but not scored. These are returned-row and JavaScript scoring bounds,
+not bounds on SQLite page I/O. Index membership and canonical placement lookups
+add auxiliary projection work; they are not included in the raw row allowance.
+No latency claim follows from these ceilings.
+On a fresh synthetic schema, `EXPLAIN QUERY PLAN` for the exact scan reports
+`SEARCH memories USING INDEX index_memory_keyset (owner_id=? AND scope=? AND project_id=?)`
+with no temporary ordering B-tree. That verifies the scan access path, not total
+page reads or the cost of auxiliary projection lookups.
 See [recall continuation](recall-continuation.md) for exact budgets and coverage.
 
 Run `npm run demo:recall` from a source checkout on Node >=22.16. The bundled

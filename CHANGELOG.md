@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — bounded query-aware candidates
+
+- Score current exact-namespace memory bodies by distinct literal query-token
+  overlap before recall page packing, scanning at most 1,024 raw rows plus a
+  sentinel. Preserve real placement refs, deduplicate multiparent memories and
+  retain zero-overlap candidates. Private selection omits group headers; public
+  maps, classification and model ports are unchanged. Scan-limited results keep
+  incomplete coverage, and callback/final epoch checks also protect empty recall.
+  These offline controls establish bounded reachability, not semantic quality.
+
 ## Unreleased — paired reconciliation evidence
 
 - Retain one frozen old/new comparison on eight new bilingual synthetic cases,

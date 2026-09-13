@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
+import { QUERY_SCAN_LIMIT } from './query-candidates.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -345,6 +346,41 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
+  function queryCandidateRows(ns, { score, memoryLabel }) {
+    return transaction(db, () => {
+      assertIndexAvailable(ns);
+      const currentEpoch = epoch(ns);
+      // Bound raw rows before filtering: tombstones/history consume allowance.
+      // index_memory_keyset supplies namespace equality followed by ID order.
+      const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness FROM memories
+        INDEXED BY index_memory_keyset WHERE ${namespaceWhere} ORDER BY id LIMIT ?`)
+        .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
+      const eligible = [];
+      for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
+        if (memory.deleted || memory.currentness !== 'current') continue;
+        // Respect active-generation membership, never bypass its read authority.
+        if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+          AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
+        eligible.push({ memory, score: score(memory.content) });
+      }
+      eligible.sort((a, b) => b.score - a.score ||
+        (a.memory.id < b.memory.id ? -1 : a.memory.id > b.memory.id ? 1 : 0));
+      const rows = eligible.map(({ memory }) => {
+        const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
+          JOIN mocs parent ON parent.id = r.moc_id
+          WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
+            AND parent.level = 1 AND parent.revision = r.moc_revision
+          ORDER BY parent.canonical_title, parent.id LIMIT 1`)
+          .get(memory.id, memory.revision, ...boundary(ns));
+        return { item: placement
+          ? { type: 'ref', ref: memoryRef(placement), label: memoryLabel(memory.content) }
+          : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
+            label: memoryLabel(memory.content) } };
+      });
+      return { rows, epoch: currentEpoch, scanExhausted: scanned.length <= QUERY_SCAN_LIMIT };
+    });
+  }
+
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
     catalogOnly = false }) {
     return transaction(db, () => {
@@ -531,7 +567,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     });
   }
 
-  return Object.freeze({ applyPlacement, linkMocs, classificationSnapshot, mapRows,
+  return Object.freeze({ applyPlacement, linkMocs, classificationSnapshot, mapRows, queryCandidateRows,
     placementRefs, mocDto, invalidateMemory,
     assertEpoch(ns, expected) { return transaction(db, () => assertEpochValue(ns, expected)); } });
 }

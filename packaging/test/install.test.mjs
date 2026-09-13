@@ -59,6 +59,8 @@ test('archive inspection and installed hashes prove the explicit single-source r
     assert.equal(/\.(?:sqlite|db|tgz)$/.test(path), false, path);
   }
   for (const path of runtimeFiles) assert.ok(artifact.files.includes(path), path);
+  assert.ok(artifact.files.includes('core/query-candidates.mjs'),
+    'installed recall must include the new shared candidate scorer');
   for (const [path, expected] of Object.entries(artifact.sourceHashes)) {
     assert.equal(hash(join(installation.packagePath, path)), expected, path);
   }
