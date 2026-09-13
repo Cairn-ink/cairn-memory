@@ -1,6 +1,9 @@
 # Opt-in rationale claim focus
 
 Base: `0469eac48412d29674357261cc0435096b256f5a`.
+After synchronizing the independently delivered evidence report, review against
+`efdfad08675fc27f3d9f2742316488e9036a7c0f`. Only changelog entries overlapped;
+both entries are retained and no core behavior changed during synchronization.
 
 ## Problem and hypothesis
 

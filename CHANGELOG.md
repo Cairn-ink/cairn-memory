@@ -8,6 +8,15 @@
 - This is an input-information ablation, not demonstrated semantic improvement.
   Automatic capture/MCP defaults are unchanged. See `docs/rationale-claim-focus.md`.
 
+## Evidence — source-selection ablation v1
+
+- Preserve all 16 one-shot installed MCP arms. Source scan recovered three
+  substantive updates excluded by baseline selection; one additional source
+  was ranking-dependent suggestion provenance. No irrelevant sources returned.
+- Manual oracle ingestion and eight synthetic pairs do not establish answer
+  accuracy or rationale quality. Default recall is unchanged and the rationale
+  semantic gate remains failed. See `docs/source-scan-ablation-results.md`.
+
 ## Unreleased — bounded source-selection experiment
 
 - Freeze eight synthetic oracle-ingested cases and a one-shot installed MCP
