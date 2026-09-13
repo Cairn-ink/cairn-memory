@@ -17,8 +17,10 @@ const evidence = core.getRationale({ namespace,
   memoryId: decision.id, revision: decision.revision });
 ```
 
-`reviewRationale` uses one host-injected `model.relate` method. It sends only
+`reviewRationale` uses one host-injected `model.relate` method. By default it sends only
 local indices, source excerpts and submitted roles from 1–6 current memories.
+Embedded callers can separately opt into [unverified claim focus](rationale-claim-focus.md)
+with `inputMode: 'claim-focus-v1'`; automatic capture remains source-only.
 The optional OpenAI adapter now implements the port; the embedded caller can also
 inject another model. Explicit review callers select references; optional capture
 uses bounded MOC discovery. Semantic accuracy is not established. No model runs

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — experimental rationale claim focus
+
+- Embedded review may opt into unverified stored-content focus alongside complete
+  receipts to distinguish claims sharing a source. Exact focus participates in
+  existing snapshot, freshness and budget bounds; source-only defaults remain.
+- This is an input-information ablation, not demonstrated semantic improvement.
+  Automatic capture/MCP defaults are unchanged. See `docs/rationale-claim-focus.md`.
+
 ## Unreleased — bounded source-selection experiment
 
 - Freeze eight synthetic oracle-ingested cases and a one-shot installed MCP

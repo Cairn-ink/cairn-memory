@@ -2,6 +2,14 @@
 
 ### Embedded proposed-rationale boundary
 
+Explicit embedded `reviewRationale` with `inputMode: 'claim-focus-v1'` additionally
+sends each current memory's stored content as an unverified focus alongside its
+complete indexed receipts. This expands provider-visible personal text, not
+evidence or authority. No namespace, persistent IDs, timestamps, kind/confidence
+or qualification is added to this payload. Focus joins the exact bounded
+snapshot/freshness checks. The default and automatic capture remain source-only;
+there is no new MCP/HTTP field or telemetry. See [claim focus](rationale-claim-focus.md).
+
 Explicit [incident-proposal inspection](rationale-inspection.md) exposes all
 directly incoming/outgoing proposals and their bounded source evidence for a
 current root in the same namespace. It is an opt-in read view, always unassessed,
@@ -24,7 +32,8 @@ execution authority. Link hashes remain local. No new telemetry is added.
 The optional [embedded rationale API](source-backed-rationale.md) sends complete
 bounded retained excerpts and submitted roles to an injected `relate` method,
 using request-local indices. It does not send owner, client, session or event IDs,
-generated summaries or qualifications. These passages may contain personal data;
+generated summaries or qualifications unless the explicit claim-focus mode above
+is selected. These passages may contain personal data;
 the host must explicitly supply an appropriate model. No provider is enabled by
 default. The local MCP opt-in above now uses this boundary; hosted HTTP is unchanged.
 

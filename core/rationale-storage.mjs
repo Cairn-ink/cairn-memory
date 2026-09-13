@@ -10,19 +10,25 @@ const bounded = value => {
 
 /** Only current, exact-namespace sources. No model call occurs in a transaction. */
 export function createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch }) {
-  function source(ns, ref) {
+  function source(ns, ref, includeFocus = false) {
     const row = currentRow(ns, ref.memoryId);
     if (!row) fail('memory_not_found');
     if (row.revision !== ref.revision) fail('revision_conflict');
-    return readSourceEvidence(row);
+    return { ...readSourceEvidence(row),
+      ...(includeFocus ? { focus: { content: row.content, interpretationStatus: 'unverified' } } : {}) };
   }
 
-  function snapshot(ns, refs) {
-    return transaction(db, () => bounded({ sources: refs.map(ref => source(ns, ref)), indexRevision: epoch(ns) }));
+  function snapshotInside(ns, refs, inputMode) {
+    return bounded({ sources: refs.map(ref => source(ns, ref, inputMode === 'claim-focus-v1')), indexRevision: epoch(ns),
+      ...(inputMode ? { inputMode } : {}) });
+  }
+
+  function snapshot(ns, refs, inputMode) {
+    return transaction(db, () => snapshotInside(ns, refs, inputMode));
   }
 
   function assertSnapshot(ns, refs, expected) {
-    const actual = bounded({ sources: refs.map(ref => source(ns, ref)), indexRevision: epoch(ns) });
+    const actual = snapshotInside(ns, refs, expected.inputMode);
     if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('revision_conflict');
   }
 
