@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — fixed rationale-model comparison attempt
+
+- Add a relation-only parent session and a closed 96-HTTP / US$2.048 local
+  comparison cap inside the existing ledger. Existing attempt limits remain.
+- No operator, paid run, automatic grant or model-quality claim is included.
+
 ## Unreleased — isolated rationale-model experiment guard
 
 - Add a separately bound, relation-only experimental capability for baseline,

@@ -8,6 +8,10 @@ export const RATIONALE_LIMITS = Object.freeze({ requests: 384, microUsd: 1920000
   reservationMicroUsd: 5000 });
 export const SOURCE_SCAN_LIMITS = Object.freeze({ requests: 64, microUsd: 320000,
   reservationMicroUsd: 5000 });
+export const RATIONALE_MODEL_LIMITS = Object.freeze({ requests: 96, microUsd: 2048000 });
+const RATIONALE_MODEL_RESERVATIONS = Object.freeze({
+  'gpt-4.1-mini-2025-04-14': 5000, 'gpt-5.6-luna': 3000, 'gpt-5.6-sol': 56000,
+});
 const fail = code => { throw new Error(code); };
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
@@ -36,7 +40,11 @@ export function createSourceScanAttempt(options) {
   return createAttempt(options, SOURCE_SCAN_LIMITS, ['cairn_select', 'cairn_rank']);
 }
 
-function createAttempt(options, limits, methods) {
+export function createRationaleModelAttempt(options) {
+  return createAttempt(options, RATIONALE_MODEL_LIMITS, ['cairn_relate'], RATIONALE_MODEL_RESERVATIONS);
+}
+
+function createAttempt(options, limits, methods, modelReservations = null) {
   if (!exact(options, ['readState', 'checkPins', 'persist', 'send', 'expectedCheckpoint'])) fail('invalid_attempt');
   const { readState, checkPins, persist, send, expectedCheckpoint } = options;
   if ([readState, checkPins, persist, send].some(value => typeof value !== 'function')
@@ -68,18 +76,20 @@ function createAttempt(options, limits, methods) {
           || !(signal instanceof AbortSignal)) fail('request_rejected');
         let parsed;
         try { parsed = JSON.parse(body); } catch { fail('request_rejected'); }
-        if (parsed?.model !== 'gpt-4.1-mini-2025-04-14'
+        if ((modelReservations === null ? parsed?.model !== 'gpt-4.1-mini-2025-04-14'
+          : !Object.prototype.hasOwnProperty.call(modelReservations, parsed?.model))
           || !methods.includes(parsed?.text?.format?.name)) fail('request_rejected');
+        const reservation = modelReservations === null ? 5000 : modelReservations[parsed.model];
         await checkPins(); checkState();
-        if (requests >= limits.requests || reservedMicroUsd + 5000 > limits.microUsd) fail('attempt_limit');
-        requests++; reservedMicroUsd += 5000;
+        if (requests >= limits.requests || reservedMicroUsd + reservation > limits.microUsd) fail('attempt_limit');
+        requests++; reservedMicroUsd += reservation;
         entry = { sequence: requests, endpoint: path, method: parsed.text.format.name,
-          reservedMicroUsd: 5000, status: 'reserved' };
+          reservedMicroUsd: reservation, status: 'reserved' };
         await persist(`request-${requests}-reserved`, entry);
         await checkPins(); checkState();
         if (halted || readOnly) fail(readOnly ? 'read_only_request' : 'operator_halted');
         const response = await send(path, body, { signal });
-        expected = { requestCount: expected.requestCount + 1, reservedMicroUsd: expected.reservedMicroUsd + 5000 };
+        expected = { requestCount: expected.requestCount + 1, reservedMicroUsd: expected.reservedMicroUsd + reservation };
         checkState();
         if (!response?.ok || response.redirected) fail('transport_failed');
         await persist(`request-${requests}-settled`, { ...entry, status: 'settled', httpStatus: response.status });
