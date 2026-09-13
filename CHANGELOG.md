@@ -1,5 +1,13 @@
 # Changelog
 
+## Evidence — rationale model control v1
+
+- Preserve 48 real-model installed-core arms comparing baseline, Luna and Sol
+  within source-only and claim-focus modes, including remaining failures.
+- Model capacity helps selected cases but does not resolve whole-memory premise
+  ambiguity or establish full-loop reliability. No default model is promoted.
+  See `docs/rationale-model-control-results.md`.
+
 ## Unreleased — fixed rationale-model comparison attempt
 
 - Add a relation-only parent session and a closed 96-HTTP / US$2.048 local
