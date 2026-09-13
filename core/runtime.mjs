@@ -453,7 +453,7 @@ export function createMemoryRuntime(input) {
     listPage, getPage, fetchPage, recallSnapshot,
     rationaleSnapshot(ns, refs) { ready(); return rationaleStorage.snapshot(ns, refs); },
     commitRationale(ns, refs, snapshot, proposals) { ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals); },
-    getRationale(ns, ref) { ready(); return rationaleStorage.inspect(ns, ref); },
+    getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },
     claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
