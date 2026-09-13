@@ -1,0 +1,3204 @@
+{
+  "version": 1,
+  "id": "source-scan-ablation-v1",
+  "status": "completed",
+  "ingestion": "manual-oracle",
+  "semanticReview": "required-not-inferred",
+  "fixtureSha256": "6e31bfd44eaf42de5c0c55e3ccbea617633547155869eec3c2b5d9d02f374eb5",
+  "artifactSha256": "8301225177082582399ee56177a644ad3d7644f68c1c0200e6a5432646baca07",
+  "runnerSha256": "05f6239c74abe812258b398036c006e1b5ee61f0b763be6d9100ad975507bf95",
+  "limits": {
+    "requests": 64,
+    "microUsd": 320000,
+    "reservationMicroUsd": 5000
+  },
+  "budgetBefore": {
+    "requestCount": 492,
+    "reservedMicroUsd": 2460000,
+    "knownUsageMicroUsd": 142217,
+    "unknownCostRequests": 246,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "budgetAfter": {
+    "requestCount": 538,
+    "reservedMicroUsd": 2690000,
+    "knownUsageMicroUsd": 150609,
+    "unknownCostRequests": 269,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "attempt": {
+    "requests": 46,
+    "reservedMicroUsd": 230000,
+    "halted": null,
+    "readOnly": false
+  },
+  "cases": [
+    {
+      "id": "printer-connection-baseline",
+      "caseId": "printer-connection",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 5632.663355,
+      "returnedSourceIndices": [
+        0
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 1,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "b2171b60-7db7-49cc-a591-436ccf769a55",
+            "revision": 1,
+            "content": "Printer choice and wireless convenience",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "895d0cef-1eb4-4490-b690-2a32e94d6c4e",
+              "role": "user",
+              "excerpt": "I chose the Marigold printer because I was told it prints wirelessly."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "ee4eee62-633d-476e-a0fc-b75d0c26b0f6",
+            "revision": 1,
+            "content": "Connection requirements",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "8161a95a-48ba-49df-81ba-2c3e4be6c52c",
+              "role": "user",
+              "excerpt": "The Marigold manual says printing requires a USB cable. I have not changed my printer choice yet."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "ef4c6810-0844-42e3-ae71-e7cd863e8277",
+            "revision": 1,
+            "content": "Paper supplies",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "2e2f0c48-52c3-4d95-b5e7-6bc4368bcab3",
+              "role": "user",
+              "excerpt": "I keep spare paper in the blue cupboard."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "b2171b60-7db7-49cc-a591-436ccf769a55",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "895d0cef-1eb4-4490-b690-2a32e94d6c4e",
+                  "role": "user",
+                  "excerpt": "I chose the Marigold printer because I was told it prints wirelessly."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "Which printer did I choose, why, and what about that reason needs checking now?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Printer choice and wireless convenience",
+                    "ref": {
+                      "memoryId": "b2171b60-7db7-49cc-a591-436ccf769a55",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Connection requirements",
+                    "ref": {
+                      "memoryId": "ee4eee62-633d-476e-a0fc-b75d0c26b0f6",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Paper supplies",
+                    "ref": {
+                      "memoryId": "ef4c6810-0844-42e3-ae71-e7cd863e8277",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "b2171b60-7db7-49cc-a591-436ccf769a55",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Which printer did I choose, why, and what about that reason needs checking now?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "b2171b60-7db7-49cc-a591-436ccf769a55",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "895d0cef-1eb4-4490-b690-2a32e94d6c4e",
+                    "role": "user",
+                    "excerpt": "I chose the Marigold printer because I was told it prints wirelessly."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "b2171b60-7db7-49cc-a591-436ccf769a55",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "printer-connection-source-scan",
+      "caseId": "printer-connection",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 2671.5593200000003,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "3e860ccc-c800-4999-a66c-0149b2ba8b08",
+            "revision": 1,
+            "content": "Printer choice and wireless convenience",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "8866a1bf-13f4-44c0-ba18-7f1ef9fc9c39",
+              "role": "user",
+              "excerpt": "I chose the Marigold printer because I was told it prints wirelessly."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "34763583-1809-4f39-bba0-78a30a630374",
+            "revision": 1,
+            "content": "Connection requirements",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "d111dc37-7877-486d-ba4c-11d6df19e86e",
+              "role": "user",
+              "excerpt": "The Marigold manual says printing requires a USB cable. I have not changed my printer choice yet."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "03d00603-c057-430a-bec8-fbba4456b648",
+            "revision": 1,
+            "content": "Paper supplies",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "17d3d2f1-ece0-4708-90b2-61ab7f21b02b",
+              "role": "user",
+              "excerpt": "I keep spare paper in the blue cupboard."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "3e860ccc-c800-4999-a66c-0149b2ba8b08",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "8866a1bf-13f4-44c0-ba18-7f1ef9fc9c39",
+                  "role": "user",
+                  "excerpt": "I chose the Marigold printer because I was told it prints wirelessly."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "34763583-1809-4f39-bba0-78a30a630374",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "d111dc37-7877-486d-ba4c-11d6df19e86e",
+                  "role": "user",
+                  "excerpt": "The Marigold manual says printing requires a USB cable. I have not changed my printer choice yet."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Which printer did I choose, why, and what about that reason needs checking now?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "3e860ccc-c800-4999-a66c-0149b2ba8b08",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8866a1bf-13f4-44c0-ba18-7f1ef9fc9c39",
+                    "role": "user",
+                    "excerpt": "I chose the Marigold printer because I was told it prints wirelessly."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "03d00603-c057-430a-bec8-fbba4456b648",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "17d3d2f1-ece0-4708-90b2-61ab7f21b02b",
+                    "role": "user",
+                    "excerpt": "I keep spare paper in the blue cupboard."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "34763583-1809-4f39-bba0-78a30a630374",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d111dc37-7877-486d-ba4c-11d6df19e86e",
+                    "role": "user",
+                    "excerpt": "The Marigold manual says printing requires a USB cable. I have not changed my printer choice yet."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "3e860ccc-c800-4999-a66c-0149b2ba8b08",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "34763583-1809-4f39-bba0-78a30a630374",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "voice-backup-zh-source-scan",
+      "caseId": "voice-backup-zh",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 2684.578509000001,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "0630ed47-9535-438f-a87d-fd6b8bed2b0e",
+            "revision": 1,
+            "content": "錄音工具選擇",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "e6e62086-d667-4c89-ae27-d526242c349b",
+              "role": "user",
+              "excerpt": "我決定用白鷺錄音,因為以為它能在沒有網路時自動備份。"
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "7e84eb11-4711-4e46-93bd-ec62d44098eb",
+            "revision": 1,
+            "content": "備份條件",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "e0e93ecf-8f9d-4bac-b440-d48aa31c521a",
+              "role": "user",
+              "excerpt": "實測白鷺錄音的自動備份必須連上網路。我還沒有決定換工具。"
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "8295f233-8a6e-4f15-bfc5-cdcd9450d323",
+            "revision": 1,
+            "content": "麥克風位置",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "36dbe436-ff86-4839-94db-c184a90c905f",
+              "role": "user",
+              "excerpt": "我的麥克風放在書桌右邊。"
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "0630ed47-9535-438f-a87d-fd6b8bed2b0e",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "e6e62086-d667-4c89-ae27-d526242c349b",
+                  "role": "user",
+                  "excerpt": "我決定用白鷺錄音,因為以為它能在沒有網路時自動備份。"
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "7e84eb11-4711-4e46-93bd-ec62d44098eb",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "e0e93ecf-8f9d-4bac-b440-d48aa31c521a",
+                  "role": "user",
+                  "excerpt": "實測白鷺錄音的自動備份必須連上網路。我還沒有決定換工具。"
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "我決定用哪個錄音工具,原本看中什麼,現在需要重新確認什麼?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "0630ed47-9535-438f-a87d-fd6b8bed2b0e",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "e6e62086-d667-4c89-ae27-d526242c349b",
+                    "role": "user",
+                    "excerpt": "我決定用白鷺錄音,因為以為它能在沒有網路時自動備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "7e84eb11-4711-4e46-93bd-ec62d44098eb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "e0e93ecf-8f9d-4bac-b440-d48aa31c521a",
+                    "role": "user",
+                    "excerpt": "實測白鷺錄音的自動備份必須連上網路。我還沒有決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "8295f233-8a6e-4f15-bfc5-cdcd9450d323",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "36dbe436-ff86-4839-94db-c184a90c905f",
+                    "role": "user",
+                    "excerpt": "我的麥克風放在書桌右邊。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "0630ed47-9535-438f-a87d-fd6b8bed2b0e",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "7e84eb11-4711-4e46-93bd-ec62d44098eb",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "voice-backup-zh-baseline",
+      "caseId": "voice-backup-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 4768.238786,
+      "returnedSourceIndices": [
+        0
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 1,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "b964b10d-fdca-41b7-a36c-ea5cfbb865ae",
+            "revision": 1,
+            "content": "錄音工具選擇",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "52e491a3-aa15-4c54-ba09-3c8ca41c7e46",
+              "role": "user",
+              "excerpt": "我決定用白鷺錄音,因為以為它能在沒有網路時自動備份。"
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "054640ad-312c-43d8-bfa5-c20794b87fda",
+            "revision": 1,
+            "content": "備份條件",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "68d6ea71-64ac-49fb-ad54-c14f04506074",
+              "role": "user",
+              "excerpt": "實測白鷺錄音的自動備份必須連上網路。我還沒有決定換工具。"
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "5fde531d-f6f4-492a-b88f-352fde1ec881",
+            "revision": 1,
+            "content": "麥克風位置",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "a72a215b-24c1-4744-807d-181786cb4a6b",
+              "role": "user",
+              "excerpt": "我的麥克風放在書桌右邊。"
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "b964b10d-fdca-41b7-a36c-ea5cfbb865ae",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "52e491a3-aa15-4c54-ba09-3c8ca41c7e46",
+                  "role": "user",
+                  "excerpt": "我決定用白鷺錄音,因為以為它能在沒有網路時自動備份。"
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "我決定用哪個錄音工具,原本看中什麼,現在需要重新確認什麼?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "備份條件",
+                    "ref": {
+                      "memoryId": "054640ad-312c-43d8-bfa5-c20794b87fda",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "麥克風位置",
+                    "ref": {
+                      "memoryId": "5fde531d-f6f4-492a-b88f-352fde1ec881",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "錄音工具選擇",
+                    "ref": {
+                      "memoryId": "b964b10d-fdca-41b7-a36c-ea5cfbb865ae",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "b964b10d-fdca-41b7-a36c-ea5cfbb865ae",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "我決定用哪個錄音工具,原本看中什麼,現在需要重新確認什麼?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "b964b10d-fdca-41b7-a36c-ea5cfbb865ae",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "52e491a3-aa15-4c54-ba09-3c8ca41c7e46",
+                    "role": "user",
+                    "excerpt": "我決定用白鷺錄音,因為以為它能在沒有網路時自動備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "b964b10d-fdca-41b7-a36c-ea5cfbb865ae",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "two-people-baseline",
+      "caseId": "two-people",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 5744.209440000002,
+      "returnedSourceIndices": [
+        2,
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 3,
+        "retainedRequired": 3,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "e3928001-caee-4f83-a693-2a1fd310f797",
+            "revision": 1,
+            "content": "Nia's planner",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "6f4c788b-8fcd-4a03-aaed-12273f050d30",
+              "role": "user",
+              "excerpt": "Nia chose Tansy Planner because she thought it could share calendars without an account."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "917f6cf4-d19c-49a3-be49-0a93c83ba5cb",
+            "revision": 1,
+            "content": "My planner",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "dc8ea011-a86c-4282-9dc2-ff5d3e8534a6",
+              "role": "user",
+              "excerpt": "I chose Violet Planner for its large print."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "7c5a3e8f-ca0b-416a-9969-250164b1afdf",
+            "revision": 1,
+            "content": "Sharing rules and my decision",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "6bedcadb-390b-4c58-be0f-5573ac0a5fd9",
+              "role": "user",
+              "excerpt": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "7c5a3e8f-ca0b-416a-9969-250164b1afdf",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "6bedcadb-390b-4c58-be0f-5573ac0a5fd9",
+                  "role": "user",
+                  "excerpt": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "e3928001-caee-4f83-a693-2a1fd310f797",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "6f4c788b-8fcd-4a03-aaed-12273f050d30",
+                  "role": "user",
+                  "excerpt": "Nia chose Tansy Planner because she thought it could share calendars without an account."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "917f6cf4-d19c-49a3-be49-0a93c83ba5cb",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "dc8ea011-a86c-4282-9dc2-ff5d3e8534a6",
+                  "role": "user",
+                  "excerpt": "I chose Violet Planner for its large print."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "What changed about Nia's planner reason, and did my own planner choice change?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Nia's planner",
+                    "ref": {
+                      "memoryId": "e3928001-caee-4f83-a693-2a1fd310f797",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Sharing rules and my decision",
+                    "ref": {
+                      "memoryId": "7c5a3e8f-ca0b-416a-9969-250164b1afdf",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "My planner",
+                    "ref": {
+                      "memoryId": "917f6cf4-d19c-49a3-be49-0a93c83ba5cb",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "e3928001-caee-4f83-a693-2a1fd310f797",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "7c5a3e8f-ca0b-416a-9969-250164b1afdf",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "917f6cf4-d19c-49a3-be49-0a93c83ba5cb",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "What changed about Nia's planner reason, and did my own planner choice change?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "e3928001-caee-4f83-a693-2a1fd310f797",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "6f4c788b-8fcd-4a03-aaed-12273f050d30",
+                    "role": "user",
+                    "excerpt": "Nia chose Tansy Planner because she thought it could share calendars without an account."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "7c5a3e8f-ca0b-416a-9969-250164b1afdf",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "6bedcadb-390b-4c58-be0f-5573ac0a5fd9",
+                    "role": "user",
+                    "excerpt": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "917f6cf4-d19c-49a3-be49-0a93c83ba5cb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "dc8ea011-a86c-4282-9dc2-ff5d3e8534a6",
+                    "role": "user",
+                    "excerpt": "I chose Violet Planner for its large print."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "7c5a3e8f-ca0b-416a-9969-250164b1afdf",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "e3928001-caee-4f83-a693-2a1fd310f797",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "917f6cf4-d19c-49a3-be49-0a93c83ba5cb",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "two-people-source-scan",
+      "caseId": "two-people",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 2975.715175000001,
+      "returnedSourceIndices": [
+        2,
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 3,
+        "retainedRequired": 3,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "93ac2686-4437-4f11-a124-be82052da0bd",
+            "revision": 1,
+            "content": "Nia's planner",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "89b0a729-8709-4a62-87dc-8208f64d4f95",
+              "role": "user",
+              "excerpt": "Nia chose Tansy Planner because she thought it could share calendars without an account."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "720f82ba-7b1e-4598-8b4c-a19fb42867d1",
+            "revision": 1,
+            "content": "My planner",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "884f996b-7257-4ca7-9c8e-31cccd384ab6",
+              "role": "user",
+              "excerpt": "I chose Violet Planner for its large print."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "437478a0-e1d9-44ac-ae2a-b2e95bf4a5cb",
+            "revision": 1,
+            "content": "Sharing rules and my decision",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "c15a2c7f-641a-4732-94cf-ecd464901a02",
+              "role": "user",
+              "excerpt": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "437478a0-e1d9-44ac-ae2a-b2e95bf4a5cb",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "c15a2c7f-641a-4732-94cf-ecd464901a02",
+                  "role": "user",
+                  "excerpt": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "93ac2686-4437-4f11-a124-be82052da0bd",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "89b0a729-8709-4a62-87dc-8208f64d4f95",
+                  "role": "user",
+                  "excerpt": "Nia chose Tansy Planner because she thought it could share calendars without an account."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "720f82ba-7b1e-4598-8b4c-a19fb42867d1",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "884f996b-7257-4ca7-9c8e-31cccd384ab6",
+                  "role": "user",
+                  "excerpt": "I chose Violet Planner for its large print."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "What changed about Nia's planner reason, and did my own planner choice change?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "93ac2686-4437-4f11-a124-be82052da0bd",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "89b0a729-8709-4a62-87dc-8208f64d4f95",
+                    "role": "user",
+                    "excerpt": "Nia chose Tansy Planner because she thought it could share calendars without an account."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "437478a0-e1d9-44ac-ae2a-b2e95bf4a5cb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "c15a2c7f-641a-4732-94cf-ecd464901a02",
+                    "role": "user",
+                    "excerpt": "Nia found Tansy requires an account to share calendars. I am still using Violet Planner for its large print."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "720f82ba-7b1e-4598-8b4c-a19fb42867d1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "884f996b-7257-4ca7-9c8e-31cccd384ab6",
+                    "role": "user",
+                    "excerpt": "I chose Violet Planner for its large print."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "437478a0-e1d9-44ac-ae2a-b2e95bf4a5cb",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "93ac2686-4437-4f11-a124-be82052da0bd",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "720f82ba-7b1e-4598-8b4c-a19fb42867d1",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "temporary-route-source-scan",
+      "caseId": "temporary-route",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 3230.9545560000006,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "921eac33-8cf9-4537-a268-b0621fe660f1",
+            "revision": 1,
+            "content": "Usual travel",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "223397ab-03ea-4e45-bc6d-fece36c915f5",
+              "role": "user",
+              "excerpt": "I normally walk to work because it is close."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "144a655b-16fd-4cfb-a1fe-01cb151ff1da",
+            "revision": 1,
+            "content": "Tuesday exception",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "2fb8f92d-ec8b-4a3c-abba-8219660dad5f",
+              "role": "user",
+              "excerpt": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "a28b50f6-f6a2-4300-871c-1c3093ba7a13",
+            "revision": 1,
+            "content": "Weekend sport",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "be2ec0d3-b9cd-448f-b048-f0afbc292c49",
+              "role": "user",
+              "excerpt": "I play badminton on Saturday."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "921eac33-8cf9-4537-a268-b0621fe660f1",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "223397ab-03ea-4e45-bc6d-fece36c915f5",
+                  "role": "user",
+                  "excerpt": "I normally walk to work because it is close."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "144a655b-16fd-4cfb-a1fe-01cb151ff1da",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "2fb8f92d-ec8b-4a3c-abba-8219660dad5f",
+                  "role": "user",
+                  "excerpt": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "What is my normal way to work, and how is Tuesday different?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "144a655b-16fd-4cfb-a1fe-01cb151ff1da",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "2fb8f92d-ec8b-4a3c-abba-8219660dad5f",
+                    "role": "user",
+                    "excerpt": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "921eac33-8cf9-4537-a268-b0621fe660f1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "223397ab-03ea-4e45-bc6d-fece36c915f5",
+                    "role": "user",
+                    "excerpt": "I normally walk to work because it is close."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "a28b50f6-f6a2-4300-871c-1c3093ba7a13",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "be2ec0d3-b9cd-448f-b048-f0afbc292c49",
+                    "role": "user",
+                    "excerpt": "I play badminton on Saturday."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "921eac33-8cf9-4537-a268-b0621fe660f1",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "144a655b-16fd-4cfb-a1fe-01cb151ff1da",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "temporary-route-baseline",
+      "caseId": "temporary-route",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 5281.578945999998,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "4350d48d-08c1-41ae-bcbd-a0e3e4478b4c",
+            "revision": 1,
+            "content": "Usual travel",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "5b571a24-02e7-4bca-8f96-58339d492ae7",
+              "role": "user",
+              "excerpt": "I normally walk to work because it is close."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "8daed5c1-11ec-4b3a-9834-b91107556c08",
+            "revision": 1,
+            "content": "Tuesday exception",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "2d2947fa-51e7-46f8-8065-b56d37ee483f",
+              "role": "user",
+              "excerpt": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "50f64a0c-5f5c-4932-9d84-c9c9b3cf4327",
+            "revision": 1,
+            "content": "Weekend sport",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "f6664e97-57ae-477e-9d3c-ad267ffa360c",
+              "role": "user",
+              "excerpt": "I play badminton on Saturday."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "4350d48d-08c1-41ae-bcbd-a0e3e4478b4c",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "5b571a24-02e7-4bca-8f96-58339d492ae7",
+                  "role": "user",
+                  "excerpt": "I normally walk to work because it is close."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "8daed5c1-11ec-4b3a-9834-b91107556c08",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "2d2947fa-51e7-46f8-8065-b56d37ee483f",
+                  "role": "user",
+                  "excerpt": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "What is my normal way to work, and how is Tuesday different?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Tuesday exception",
+                    "ref": {
+                      "memoryId": "8daed5c1-11ec-4b3a-9834-b91107556c08",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Usual travel",
+                    "ref": {
+                      "memoryId": "4350d48d-08c1-41ae-bcbd-a0e3e4478b4c",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Weekend sport",
+                    "ref": {
+                      "memoryId": "50f64a0c-5f5c-4932-9d84-c9c9b3cf4327",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "8daed5c1-11ec-4b3a-9834-b91107556c08",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "4350d48d-08c1-41ae-bcbd-a0e3e4478b4c",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "What is my normal way to work, and how is Tuesday different?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "8daed5c1-11ec-4b3a-9834-b91107556c08",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "2d2947fa-51e7-46f8-8065-b56d37ee483f",
+                    "role": "user",
+                    "excerpt": "This Tuesday only I will ride the bus while carrying equipment. That does not change my normal walking routine."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "4350d48d-08c1-41ae-bcbd-a0e3e4478b4c",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5b571a24-02e7-4bca-8f96-58339d492ae7",
+                    "role": "user",
+                    "excerpt": "I normally walk to work because it is close."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "4350d48d-08c1-41ae-bcbd-a0e3e4478b4c",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "8daed5c1-11ec-4b3a-9834-b91107556c08",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "uncertain-course-baseline",
+      "caseId": "uncertain-course",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 5368.582883000003,
+      "returnedSourceIndices": [
+        2,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 3,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "0b0b3f68-385f-41aa-8442-485c0c7f3507",
+            "revision": 1,
+            "content": "Possible course",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "86b95e49-b8cc-4d01-81e3-61f2d2320b6e",
+              "role": "assistant",
+              "excerpt": "You could consider the evening teaching course."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "47d18b01-ee49-4d11-b1f0-09a72cf24c99",
+            "revision": 1,
+            "content": "Initial reaction",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "887272d1-43de-4d7b-a28c-90982175a8f9",
+              "role": "user",
+              "excerpt": "I might try that course, but I have not enrolled or decided."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "320d494f-4d0b-457e-bc12-dfe06a8e3363",
+            "revision": 1,
+            "content": "Later reflection",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "d752b3ab-0253-4491-a3a7-51334eef1f46",
+              "role": "user",
+              "excerpt": "After a better day at work I feel more confident, but I still have not decided about the teaching course."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "320d494f-4d0b-457e-bc12-dfe06a8e3363",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "d752b3ab-0253-4491-a3a7-51334eef1f46",
+                  "role": "user",
+                  "excerpt": "After a better day at work I feel more confident, but I still have not decided about the teaching course."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "47d18b01-ee49-4d11-b1f0-09a72cf24c99",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "887272d1-43de-4d7b-a28c-90982175a8f9",
+                  "role": "user",
+                  "excerpt": "I might try that course, but I have not enrolled or decided."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "Have I committed to the teaching course, and what were the actual stages of my thinking?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Possible course",
+                    "ref": {
+                      "memoryId": "0b0b3f68-385f-41aa-8442-485c0c7f3507",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Later reflection",
+                    "ref": {
+                      "memoryId": "320d494f-4d0b-457e-bc12-dfe06a8e3363",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Initial reaction",
+                    "ref": {
+                      "memoryId": "47d18b01-ee49-4d11-b1f0-09a72cf24c99",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "0b0b3f68-385f-41aa-8442-485c0c7f3507",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "320d494f-4d0b-457e-bc12-dfe06a8e3363",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "47d18b01-ee49-4d11-b1f0-09a72cf24c99",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Have I committed to the teaching course, and what were the actual stages of my thinking?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "0b0b3f68-385f-41aa-8442-485c0c7f3507",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "86b95e49-b8cc-4d01-81e3-61f2d2320b6e",
+                    "role": "assistant",
+                    "excerpt": "You could consider the evening teaching course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "320d494f-4d0b-457e-bc12-dfe06a8e3363",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d752b3ab-0253-4491-a3a7-51334eef1f46",
+                    "role": "user",
+                    "excerpt": "After a better day at work I feel more confident, but I still have not decided about the teaching course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "47d18b01-ee49-4d11-b1f0-09a72cf24c99",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "887272d1-43de-4d7b-a28c-90982175a8f9",
+                    "role": "user",
+                    "excerpt": "I might try that course, but I have not enrolled or decided."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "320d494f-4d0b-457e-bc12-dfe06a8e3363",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "47d18b01-ee49-4d11-b1f0-09a72cf24c99",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "uncertain-course-source-scan",
+      "caseId": "uncertain-course",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 3201.0377169999992,
+      "returnedSourceIndices": [
+        2,
+        1,
+        0
+      ],
+      "sourceCoverage": {
+        "required": 3,
+        "retainedRequired": 3,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "a2af07f0-4243-495e-b2cc-ce2addbd8a95",
+            "revision": 1,
+            "content": "Possible course",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "2cfedf62-0286-4743-abf6-3f1359f17d23",
+              "role": "assistant",
+              "excerpt": "You could consider the evening teaching course."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "caff0a4e-c320-4035-a512-cd027ab558c5",
+            "revision": 1,
+            "content": "Initial reaction",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "c42da88e-f3e0-4248-834d-7e318a34288b",
+              "role": "user",
+              "excerpt": "I might try that course, but I have not enrolled or decided."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "429be11d-8eb3-43bf-bf32-f0d44a06de24",
+            "revision": 1,
+            "content": "Later reflection",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "f102ba93-849a-4560-850e-1dde7c66d1a2",
+              "role": "user",
+              "excerpt": "After a better day at work I feel more confident, but I still have not decided about the teaching course."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "429be11d-8eb3-43bf-bf32-f0d44a06de24",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "f102ba93-849a-4560-850e-1dde7c66d1a2",
+                  "role": "user",
+                  "excerpt": "After a better day at work I feel more confident, but I still have not decided about the teaching course."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "caff0a4e-c320-4035-a512-cd027ab558c5",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "c42da88e-f3e0-4248-834d-7e318a34288b",
+                  "role": "user",
+                  "excerpt": "I might try that course, but I have not enrolled or decided."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "a2af07f0-4243-495e-b2cc-ce2addbd8a95",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "2cfedf62-0286-4743-abf6-3f1359f17d23",
+                  "role": "assistant",
+                  "excerpt": "You could consider the evening teaching course."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Have I committed to the teaching course, and what were the actual stages of my thinking?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "a2af07f0-4243-495e-b2cc-ce2addbd8a95",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "2cfedf62-0286-4743-abf6-3f1359f17d23",
+                    "role": "assistant",
+                    "excerpt": "You could consider the evening teaching course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "429be11d-8eb3-43bf-bf32-f0d44a06de24",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f102ba93-849a-4560-850e-1dde7c66d1a2",
+                    "role": "user",
+                    "excerpt": "After a better day at work I feel more confident, but I still have not decided about the teaching course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "caff0a4e-c320-4035-a512-cd027ab558c5",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "c42da88e-f3e0-4248-834d-7e318a34288b",
+                    "role": "user",
+                    "excerpt": "I might try that course, but I have not enrolled or decided."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "429be11d-8eb3-43bf-bf32-f0d44a06de24",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "caff0a4e-c320-4035-a512-cd027ab558c5",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "a2af07f0-4243-495e-b2cc-ce2addbd8a95",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "two-conditions-source-scan",
+      "caseId": "two-conditions",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 2857.919047000003,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "8c11872f-fc92-4414-9499-4bff16902e7b",
+            "revision": 1,
+            "content": "Storage selection",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "af13c6e9-e309-4504-8424-5f1f117f73b3",
+              "role": "user",
+              "excerpt": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "80fdb0b1-3153-48ae-aca7-9df237b874fc",
+            "revision": 1,
+            "content": "Subscription update",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "ca4b16bf-0e14-4d3e-bf96-9ae35d173105",
+              "role": "user",
+              "excerpt": "Larch now costs 19 credits monthly; local encryption still works. I have not selected a replacement."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "fc7df1a4-0664-40f5-8ea1-63ebc4cc4dc8",
+            "revision": 1,
+            "content": "Unrelated trip cost",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "7ffdf7e3-9314-4599-beb1-f68217530746",
+              "role": "user",
+              "excerpt": "My last train ride cost 19 credits."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "8c11872f-fc92-4414-9499-4bff16902e7b",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "af13c6e9-e309-4504-8424-5f1f117f73b3",
+                  "role": "user",
+                  "excerpt": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "80fdb0b1-3153-48ae-aca7-9df237b874fc",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "ca4b16bf-0e14-4d3e-bf96-9ae35d173105",
+                  "role": "user",
+                  "excerpt": "Larch now costs 19 credits monthly; local encryption still works. I have not selected a replacement."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Why did I select Larch Storage, which reason changed, and which still holds?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "8c11872f-fc92-4414-9499-4bff16902e7b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "af13c6e9-e309-4504-8424-5f1f117f73b3",
+                    "role": "user",
+                    "excerpt": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "80fdb0b1-3153-48ae-aca7-9df237b874fc",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "ca4b16bf-0e14-4d3e-bf96-9ae35d173105",
+                    "role": "user",
+                    "excerpt": "Larch now costs 19 credits monthly; local encryption still works. I have not selected a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "fc7df1a4-0664-40f5-8ea1-63ebc4cc4dc8",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7ffdf7e3-9314-4599-beb1-f68217530746",
+                    "role": "user",
+                    "excerpt": "My last train ride cost 19 credits."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "8c11872f-fc92-4414-9499-4bff16902e7b",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "80fdb0b1-3153-48ae-aca7-9df237b874fc",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "two-conditions-baseline",
+      "caseId": "two-conditions",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 4639.280283,
+      "returnedSourceIndices": [
+        0
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 1,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "ca62ffbe-0dbd-47f0-8358-d1b232c35b0c",
+            "revision": 1,
+            "content": "Storage selection",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "d3c2da5f-f795-45cc-b216-642d318ee89e",
+              "role": "user",
+              "excerpt": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "aa54a13a-c41f-4b22-b2d3-61f5a44dfd64",
+            "revision": 1,
+            "content": "Subscription update",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "10336f4b-2673-49d7-bec1-99e48de65fbc",
+              "role": "user",
+              "excerpt": "Larch now costs 19 credits monthly; local encryption still works. I have not selected a replacement."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "f678679b-1e14-47d1-af31-ba8e55f5dbc1",
+            "revision": 1,
+            "content": "Unrelated trip cost",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "a7a3dcad-d6a9-434a-a21e-ba729cb2499d",
+              "role": "user",
+              "excerpt": "My last train ride cost 19 credits."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "ca62ffbe-0dbd-47f0-8358-d1b232c35b0c",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "d3c2da5f-f795-45cc-b216-642d318ee89e",
+                  "role": "user",
+                  "excerpt": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "Why did I select Larch Storage, which reason changed, and which still holds?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Storage selection",
+                    "ref": {
+                      "memoryId": "ca62ffbe-0dbd-47f0-8358-d1b232c35b0c",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Subscription update",
+                    "ref": {
+                      "memoryId": "aa54a13a-c41f-4b22-b2d3-61f5a44dfd64",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Unrelated trip cost",
+                    "ref": {
+                      "memoryId": "f678679b-1e14-47d1-af31-ba8e55f5dbc1",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "ca62ffbe-0dbd-47f0-8358-d1b232c35b0c",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Why did I select Larch Storage, which reason changed, and which still holds?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "ca62ffbe-0dbd-47f0-8358-d1b232c35b0c",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d3c2da5f-f795-45cc-b216-642d318ee89e",
+                    "role": "user",
+                    "excerpt": "I chose Larch Storage because it cost 6 credits monthly and supported local encryption."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "ca62ffbe-0dbd-47f0-8358-d1b232c35b0c",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "compatible-confirmation-baseline",
+      "caseId": "compatible-confirmation",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 5790.5906840000025,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "c653df0e-09fe-4d1b-8d0b-ba3b1415547a",
+            "revision": 1,
+            "content": "Lamp choice",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "e0d114c6-e2d1-4391-9ed0-28cec2974e5b",
+              "role": "user",
+              "excerpt": "I chose the Iris lamp because its brightness can be adjusted."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "b8d58be2-8e4b-46e4-a9bd-1714f239028d",
+            "revision": 1,
+            "content": "Lamp test",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "7f32b2bf-819e-451f-95ce-a6bc39991b90",
+              "role": "user",
+              "excerpt": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "80fca994-53c3-43e6-8848-e6193ffb353a",
+            "revision": 1,
+            "content": "Desk dimensions",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "59e93331-a81d-4adb-a835-8d50559c37e4",
+              "role": "user",
+              "excerpt": "My desk is 110 centimetres wide."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "c653df0e-09fe-4d1b-8d0b-ba3b1415547a",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "e0d114c6-e2d1-4391-9ed0-28cec2974e5b",
+                  "role": "user",
+                  "excerpt": "I chose the Iris lamp because its brightness can be adjusted."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "b8d58be2-8e4b-46e4-a9bd-1714f239028d",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "7f32b2bf-819e-451f-95ce-a6bc39991b90",
+                  "role": "user",
+                  "excerpt": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ]
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "Why did I choose the Iris lamp and what did the later test show?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Lamp test",
+                    "ref": {
+                      "memoryId": "b8d58be2-8e4b-46e4-a9bd-1714f239028d",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Lamp choice",
+                    "ref": {
+                      "memoryId": "c653df0e-09fe-4d1b-8d0b-ba3b1415547a",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Desk dimensions",
+                    "ref": {
+                      "memoryId": "80fca994-53c3-43e6-8848-e6193ffb353a",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "c653df0e-09fe-4d1b-8d0b-ba3b1415547a",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "b8d58be2-8e4b-46e4-a9bd-1714f239028d",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        },
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Why did I choose the Iris lamp and what did the later test show?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "c653df0e-09fe-4d1b-8d0b-ba3b1415547a",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "e0d114c6-e2d1-4391-9ed0-28cec2974e5b",
+                    "role": "user",
+                    "excerpt": "I chose the Iris lamp because its brightness can be adjusted."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "b8d58be2-8e4b-46e4-a9bd-1714f239028d",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7f32b2bf-819e-451f-95ce-a6bc39991b90",
+                    "role": "user",
+                    "excerpt": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "c653df0e-09fe-4d1b-8d0b-ba3b1415547a",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "b8d58be2-8e4b-46e4-a9bd-1714f239028d",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 4,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "compatible-confirmation-source-scan",
+      "caseId": "compatible-confirmation",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 2692.089663000006,
+      "returnedSourceIndices": [
+        0,
+        1
+      ],
+      "sourceCoverage": {
+        "required": 2,
+        "retainedRequired": 2,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "db3c6af5-cf2d-49b9-8cd5-caf722956201",
+            "revision": 1,
+            "content": "Lamp choice",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "fec54ecb-9fc2-4bac-ba5a-51b494473360",
+              "role": "user",
+              "excerpt": "I chose the Iris lamp because its brightness can be adjusted."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "e1bb49f8-fa4f-4b8d-857f-582c7923331d",
+            "revision": 1,
+            "content": "Lamp test",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "96b7b3cf-6f83-4f33-86ea-cae1feca8002",
+              "role": "user",
+              "excerpt": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "5526987e-8628-42da-8fe4-1f65a29028ca",
+            "revision": 1,
+            "content": "Desk dimensions",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "5592ea94-74b0-4d49-9bf8-24d9fa98f3b9",
+              "role": "user",
+              "excerpt": "My desk is 110 centimetres wide."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [
+            {
+              "memory": {
+                "id": "db3c6af5-cf2d-49b9-8cd5-caf722956201",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "fec54ecb-9fc2-4bac-ba5a-51b494473360",
+                  "role": "user",
+                  "excerpt": "I chose the Iris lamp because its brightness can be adjusted."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            },
+            {
+              "memory": {
+                "id": "e1bb49f8-fa4f-4b8d-857f-582c7923331d",
+                "revision": 1,
+                "currentness": "current"
+              },
+              "receipts": [
+                {
+                  "id": "96b7b3cf-6f83-4f33-86ea-cae1feca8002",
+                  "role": "user",
+                  "excerpt": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."
+                }
+              ],
+              "receiptCount": 1,
+              "interpretationStatus": "omitted",
+              "sourceSelectionCoverage": "unassessed"
+            }
+          ],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Why did I choose the Iris lamp and what did the later test show?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "e1bb49f8-fa4f-4b8d-857f-582c7923331d",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "96b7b3cf-6f83-4f33-86ea-cae1feca8002",
+                    "role": "user",
+                    "excerpt": "I tested the Iris lamp today and its brightness control works well. This confirms my original reason."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "db3c6af5-cf2d-49b9-8cd5-caf722956201",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "fec54ecb-9fc2-4bac-ba5a-51b494473360",
+                    "role": "user",
+                    "excerpt": "I chose the Iris lamp because its brightness can be adjusted."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "5526987e-8628-42da-8fe4-1f65a29028ca",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5592ea94-74b0-4d49-9bf8-24d9fa98f3b9",
+                    "role": "user",
+                    "excerpt": "My desk is 110 centimetres wide."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": [
+              {
+                "namespaceIndex": 0,
+                "memoryId": "db3c6af5-cf2d-49b9-8cd5-caf722956201",
+                "revision": 1
+              },
+              {
+                "namespaceIndex": 0,
+                "memoryId": "e1bb49f8-fa4f-4b8d-857f-582c7923331d",
+                "revision": 1
+              }
+            ]
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "absent-choice-source-scan",
+      "caseId": "absent-choice",
+      "arm": "source-scan",
+      "status": "completed",
+      "durationMs": 2131.5245090000026,
+      "returnedSourceIndices": [],
+      "sourceCoverage": {
+        "required": 0,
+        "retainedRequired": 0,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "91e3fc72-012d-4d26-8ea0-4dc5066ed961",
+            "revision": 1,
+            "content": "Snacks",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "5a6825fc-d90f-4923-9a82-ec871113fa95",
+              "role": "user",
+              "excerpt": "I like sliced pears."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "13e2a285-6828-4b20-b687-b49a7765d641",
+            "revision": 1,
+            "content": "Music",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "e0da7e61-3d02-48c9-853b-dc7b9c9201ab",
+              "role": "user",
+              "excerpt": "I listen to piano music while cooking."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": [],
+          "selection": {
+            "mode": "bounded-source-scan",
+            "strategy": "complete-map",
+            "semanticCoverage": "unassessed"
+          }
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_rank",
+          "input": {
+            "query": "Which telescope did I finally buy and why?",
+            "limit": 6,
+            "candidates": [
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "13e2a285-6828-4b20-b687-b49a7765d641",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "e0da7e61-3d02-48c9-853b-dc7b9c9201ab",
+                    "role": "user",
+                    "excerpt": "I listen to piano music while cooking."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "namespaceIndex": 0,
+                "memory": {
+                  "id": "91e3fc72-012d-4d26-8ea0-4dc5066ed961",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5a6825fc-d90f-4923-9a82-ec871113fa95",
+                    "role": "user",
+                    "excerpt": "I like sliced pears."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ]
+          },
+          "output": {
+            "refs": []
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "absent-choice-baseline",
+      "caseId": "absent-choice",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 2241.792196000002,
+      "returnedSourceIndices": [],
+      "sourceCoverage": {
+        "required": 0,
+        "retainedRequired": 0,
+        "retainedIrrelevant": 0
+      },
+      "records": [
+        {
+          "memory": {
+            "id": "d8c09d8b-8329-444a-a53d-ea77bfbe1293",
+            "revision": 1,
+            "content": "Snacks",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "8117a9cf-1f1a-47b4-8e5a-a1239820604d",
+              "role": "user",
+              "excerpt": "I like sliced pears."
+            }
+          ]
+        },
+        {
+          "memory": {
+            "id": "4e4af051-185a-406f-8001-4a6e24db98bf",
+            "revision": 1,
+            "content": "Music",
+            "kind": "context",
+            "state": "active"
+          },
+          "receipts": [
+            {
+              "id": "e26f109f-63bf-4e76-95f3-635810cb4141",
+              "role": "user",
+              "excerpt": "I listen to piano music while cooking."
+            }
+          ]
+        }
+      ],
+      "recall": {
+        "ok": true,
+        "value": {
+          "coverage": "complete",
+          "memories": []
+        }
+      },
+      "stages": [
+        {
+          "method": "cairn_select",
+          "input": {
+            "query": "Which telescope did I finally buy and why?",
+            "maxRefs": 24,
+            "maps": [
+              {
+                "namespaceIndex": 0,
+                "exhausted": true,
+                "items": [
+                  {
+                    "type": "unfiled",
+                    "label": "Music",
+                    "ref": {
+                      "memoryId": "4e4af051-185a-406f-8001-4a6e24db98bf",
+                      "revision": 1
+                    }
+                  },
+                  {
+                    "type": "unfiled",
+                    "label": "Snacks",
+                    "ref": {
+                      "memoryId": "d8c09d8b-8329-444a-a53d-ea77bfbe1293",
+                      "revision": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "output": {
+            "refs": []
+          },
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    }
+  ]
+}
