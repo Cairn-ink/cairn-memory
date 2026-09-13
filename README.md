@@ -59,6 +59,12 @@ dependencies without install scripts, and prints a generic stdio command/args.
 Copy that command/args into your client's local MCP configuration; it does not
 modify client settings for you. Add `--project PROJECT_ID` for project scope.
 
+For explicit submitted-message capture, add
+`--capture-qualification source-bound-v2` to the install command. The generated
+settings then expose a sixth tool, `capture_memory`; omission keeps five tools.
+See the [capture → source-only recall → inspection walkthrough](packaging/README.md#opt-in-to-submitted-source-capture)
+for key setup, model costs and interpretation limits. This is not passive capture.
+
 The directory contains `app/` (replaceable installation), `data/` (persistent
 memory location), and `installation-receipt.json` (artifact hash, local paths,
 owner/project and stdio settings). No key is stored. Unlike `--check-config`, the

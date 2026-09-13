@@ -36,6 +36,53 @@ upgrade instructions below. The preview trusts local process/filesystem access;
 owner labels are not OS access control. POSIX permissions are not a Windows ACL
 guarantee. No cross-platform compatibility is claimed beyond recorded tests.
 
+## Opt in to submitted source capture
+
+For a fresh installation with the sixth `capture_memory` tool, use:
+
+```sh
+npm run install:preview -- --directory /absolute/new/cairn-qualified --owner local-user --capture-qualification source-bound-v2
+```
+
+The installer also accepts `source-bound-v1`; omission preserves the five-tool
+configuration. The private receipt records the selected mode and includes it in
+`stdio.args`. Copy the generated command and arguments unchanged into a local
+MCP client. Supply `OPENAI_API_KEY` separately through that client's secret
+environment for the server process; the installer never reads or stores it.
+Installation and its configuration check make no model requests.
+
+Once connected, explicitly call `capture_memory` with a batch ID and only the
+messages you intend to save, for example:
+
+```json
+{"batchId":"synthetic-note-001","messages":[{"role":"user","content":"I am considering taking the train on Fridays."}]}
+```
+
+Then call `recall_memory` with source-only context selected on that call:
+
+```json
+{"query":"What did I say about Friday travel?","contextMode":"source-evidence"}
+```
+
+Use a returned memory ID with `inspect_memory` and `includeQualification: true`
+to compare the retained passages against the stored model interpretation.
+Source-only recall omits generated summaries and qualification labels from
+ranking and returned context; it does not repair source selection or prove truth.
+Without `contextMode`, this configured host retains its qualified-recall default.
+
+Capture and semantic recall send selected text to the model provider and can
+incur charges; there is no account-wide spending cap. V2 uses canonical retained
+prefixes of at most 800 UTF-16 units per message and reports omitted tails in
+`retainedSourceWindow`. Submitted roles are not authenticated identities, and
+qualification can still misinterpret uncertainty or adoption. Reuse the same
+batch ID and payload for replay; do not create fresh IDs to retry blindly.
+See [capture limits](../docs/standalone-mcp.md#opt-in-submitted-source-qualified-capture)
+and [source-only context boundaries](../docs/source-evidence-context.md).
+
+This is explicit local MCP submission, not passive conversation capture, a
+remote ChatGPT connector, or a claim of Hermes capture compatibility. No public
+registry installation command is provided.
+
 ## Manual archive install and start
 
 Use Node >=22.16 and npm, with the downloaded local archive's SHA-256 verified
@@ -78,7 +125,7 @@ is only a programmatic adapter option, not a CLI switch or a recall quality prom
 
 ## Inspect, correct and delete
 
-The five tools are `remember_memory`, `recall_memory`, `inspect_memory`,
+The five default tools are `remember_memory`, `recall_memory`, `inspect_memory`,
 `correct_memory`, and `forget_memory`. Remember accepts content (<=600 characters)
 and optional kind. Inspect without a memoryId lists metadata; inspect by memoryId
 returns content, receipts and current revision. List pages use limit/cursor;

@@ -7,7 +7,7 @@ import { buildArtifact, command, packageName } from './build.mjs';
 function configuration(args) {
   const [major, minor] = process.versions.node.split('.').map(Number);
   if (major < 22 || (major === 22 && minor < 16)) throw new Error('unsupported_runtime');
-  const allowed = new Set(['--directory', '--owner', '--project']);
+  const allowed = new Set(['--directory', '--owner', '--project', '--capture-qualification']);
   const values = new Map();
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
@@ -19,6 +19,10 @@ function configuration(args) {
   const requested = values.get('--directory');
   const ownerId = identifier(values.get('--owner'));
   const projectId = values.has('--project') ? identifier(values.get('--project')) : null;
+  const captureQualification = values.get('--capture-qualification');
+  if (values.has('--capture-qualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
+    throw new Error('invalid_arguments');
+  }
   if (typeof requested !== 'string' || !isAbsolute(requested) || /[\x00-\x1f\x7f]/.test(requested) ||
       requested.split(/[\\/]/).some((part) => part === '.' || part === '..')) throw new Error('invalid_directory');
   const directory = resolve(requested);
@@ -31,7 +35,7 @@ function configuration(args) {
       if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('invalid_parent');
       if (parent === dirname(parent)) break;
     }
-    return { directory, ownerId, projectId };
+    return { directory, ownerId, projectId, ...(captureQualification ? { captureQualification } : {}) };
   }
   throw new Error('existing_directory');
 }
@@ -39,7 +43,7 @@ function configuration(args) {
 // The command seam lets offline verification use the same installation workflow.
 export function installPreview(args, { runCommand = command } = {}) {
   try {
-    const { directory, ownerId, projectId } = configuration(args);
+    const { directory, ownerId, projectId, captureQualification } = configuration(args);
     const artifact = buildArtifact();
     // Revalidate after building, before claiming the new directory exclusively.
     configuration(args);
@@ -57,14 +61,19 @@ export function installPreview(args, { runCommand = command } = {}) {
     const executable = join(app, 'node_modules', packageName, 'bin/cairn-memory.mjs');
     const databasePath = join(data, 'memory.sqlite');
     const stdio = { command: process.execPath, args: [executable, '--db', databasePath, '--owner', ownerId,
-      ...(projectId === null ? [] : ['--project', projectId])] };
+      ...(projectId === null ? [] : ['--project', projectId]),
+      ...(captureQualification ? ['--capture-qualification', captureQualification] : [])] };
     const check = JSON.parse(runCommand(stdio.command, [executable, '--check-config', ...stdio.args.slice(1)], app, userconfig));
     if (check.ok !== true || check.databaseOpened !== false || check.providerContacted !== false ||
-        check.modelKeyPresent !== false) throw new Error('configuration_check_failed');
+        check.modelKeyPresent !== false ||
+        (captureQualification !== undefined && check.captureQualification !== captureQualification)) {
+      throw new Error('configuration_check_failed');
+    }
     const receiptPath = join(directory, 'installation-receipt.json');
     const receipt = { artifact: { path: artifact.artifactPath, sha256: artifact.sha256,
       name: artifact.name, version: artifact.version, sourceHashes: artifact.sourceHashes },
-    executable, databasePath, ownerId, projectId, stdio };
+    executable, databasePath, ownerId, projectId, stdio,
+    ...(captureQualification ? { captureQualification } : {}) };
     writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
     return { receiptPath, ...receipt };
   } catch {

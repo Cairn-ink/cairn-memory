@@ -1,5 +1,14 @@
 # Changelog
 
+## Candidate — qualified installation settings
+
+- Accept an explicit source-bound capture mode during preview installation and
+  preserve it in the private startup receipt after a matching configuration check.
+  Default installation remains five-tool and credentials remain separate.
+- Document explicit submission, per-call source-only recall and inspection.
+  Installed fake-provider tests verify the generated settings, not semantic
+  accuracy, passive capture or named-client compatibility.
+
 ## Candidate — source evidence context
 
 - Add opt-in source-only fetch/recall context: complete retained passages and
