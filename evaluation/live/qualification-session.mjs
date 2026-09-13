@@ -1,7 +1,8 @@
 import { createQualificationExperimentRequestGuard,
   createCandidateQualificationExperimentRequestGuard,
   createRationaleExperimentRequestGuard,
-  createRationaleModelsExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
+  createRationaleModelsExperimentRequestGuard,
+  createBasisModelsExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { experimentPolicy, MODEL_ID } from './session.mjs';
 
 const fail = code => { throw new Error(code); };
@@ -33,6 +34,12 @@ export function createRationaleLiveSession(options) {
 export function createRationaleModelLiveSession(options) {
   return createSession(options, 'rationaleModelsExtension', ['cairn_relate'],
     createRationaleModelsExperimentRequestGuard, 'rationale_models',
+    [MODEL_ID, 'gpt-5.6-luna', 'gpt-5.6-sol']);
+}
+
+export function createBasisModelLiveSession(options) {
+  return createSession(options, 'basisModelsExtension', ['cairn_reviewBasis'],
+    createBasisModelsExperimentRequestGuard, 'basis_models',
     [MODEL_ID, 'gpt-5.6-luna', 'gpt-5.6-sol']);
 }
 

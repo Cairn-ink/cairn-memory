@@ -53,6 +53,8 @@ test('SBA2 every existing paid guard denies the new method for all three models 
   const candidateQualificationExtension = guards.authorizeCandidateQualificationExtension(auth);
   const rationaleExtension = guards.authorizeRationaleExtension(auth);
   const rationaleModelsExtension = guards.authorizeRationaleModelsExtension(auth);
+  // Merely adding a new grant must not upgrade any already existing factory.
+  guards.authorizeBasisModelsExtension(auth);
   const handles = [guards.createExperimentRequestGuard(base), guards.createExtendedExperimentRequestGuard({ ...base, extension }),
     guards.createReconciliationExperimentRequestGuard({ ...base, extension, reconciliationExtension }),
     guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension }),
