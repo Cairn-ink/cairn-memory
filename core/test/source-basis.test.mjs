@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
-import { compileDecisionBasis } from '../source-basis.mjs';
+import { compileDecisionBasis, reviewSourceBasis } from '../source-basis.mjs';
 
 const namespace = { ownerId: 'private-basis-owner', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -148,4 +148,16 @@ test('SB9 exact provenance cannot prove a proposed role; even a wrong role never
   assert.equal(result.units[0].anchor.text, 'I have not decided.');
   assert.equal(result.status, 'unassessed'); assert.equal(result.persistence, 'not-stored');
   assert.deepEqual(f.stored(), before);
+});
+test('SB10 changing output getters cannot bypass the compiled proposal token budget', async () => {
+  const sources = Array.from({ length: 6 }, (_, i) => ({ memory: { id: `source-${i}`, revision: 1 },
+    receipts: [{ id: `receipt-${i}`, role: 'user', excerpt: `${i}${'x'.repeat(199)}` }] }));
+  const units = sources.map((source, memory) => ({ memory, receipt: 0, role: 'premise',
+    quote: source.receipts[0].excerpt }));
+  assert.ok(JSON.stringify({ units, links: [] }).length > 1024);
+  let reads = 0;
+  const model = { contextWindow: 8192, countTokens: text => text.length,
+    reviewBasis: () => ({ get units() { return ++reads === 1 ? [] : units; }, links: [] }) };
+  await assert.rejects(reviewSourceBasis(model, sources, () => {}), { code: 'invalid_model_output' });
+  assert.equal(reads, 2);
 });

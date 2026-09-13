@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { callModel } from './model-call.mjs';
+import { countTokens } from './model-budget.mjs';
 import { object, denseArray, fail } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 
@@ -54,6 +55,16 @@ export async function reviewSourceBasis(model, sources, validateFresh) {
     memories: sources.map((source, index) => ({ index,
       receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt })) })),
   }, { validateFresh, failureCode: 'rationale_failed' });
-  try { return compileDecisionBasis(output, sources); }
+  // Adapter objects may have changing getters. Recheck the detached proposal
+  // that compilation actually consumes, not an earlier serialization of it.
+  let snapshot, text;
+  try { snapshot = structuredClone(output); text = JSON.stringify(snapshot); }
+  catch { emitDiagnostic(model, 'reviewBasis', 'core_validation', 'invalid_rationale'); fail('invalid_model_output'); }
+  validateFresh();
+  if (typeof text !== 'string' || text.length > 40_000 || countTokens(model, text) > 1024) {
+    emitDiagnostic(model, 'reviewBasis', 'core_validation', 'invalid_rationale'); fail('invalid_model_output');
+  }
+  validateFresh();
+  try { return compileDecisionBasis(snapshot, sources); }
   catch { emitDiagnostic(model, 'reviewBasis', 'core_validation', 'invalid_rationale'); fail('invalid_model_output'); }
 }
