@@ -29,3 +29,14 @@ Public review base: `ee1ba832dbe9bdf2f23b120b5a6ba2eb42c29c68`.
 
 Intermediate local integration merge commits preserve ancestry; they are not
 verified delivery candidates until the final D4 gates and review pass.
+
+## Diagnostic compatibility acceptance
+
+PR64's old test expects late targets to remain invisible. The root reproduced
+its failure on the integrated query-aware core: `english-late` visibility was 1,
+not the historically expected 0 (8 tests passed, 1 failed). Do not regress core
+behavior to satisfy that old assertion. Keep the original report bytes intact
+and assert its historical misses separately. Current-runtime tests must require
+exact target reachability, preserve public-map page observations as a distinct
+measurement, and require the now-complete classification catalog. No permissive
+zero-or-one assertion or overwritten historical result is acceptable.
