@@ -47,7 +47,12 @@ miss a valid relation; no inferred unit is trusted consent or objective truth.
 The view permits at most eight units, ten typed links and 200 UTF-16 units per
 quote, using existing 24,000-unit source/result bounds, 6,000 local input tokens,
 1,024 output tokens and 30-second core timeout. Duplicate units/links, bad
-indices, wrong role directions and selflinks fail rather than truncate. Source,
+indices, wrong role directions and selflinks fail rather than truncate.
+Each challenge must target a premise that also has a support
+link to a decision in the same proposal, regardless of link order. Missing chains
+reject the whole proposal; the core never invents decisions or repairs links.
+Unlinked units and empty proposals remain allowed. A complete chain still does
+not prove adoption or shared subject, time and scope. Source,
 revision and namespace epoch are checked around the asynchronous model call and
 after compilation. Corrupt source storage fails closed under existing errors.
 
