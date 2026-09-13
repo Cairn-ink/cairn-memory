@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "id": "claim-focus-ablation-v1",
+  "ingestion": "manual-authored-focus",
+  "cases": [
+    {
+      "id": "router-cable",
+      "records": [
+        {
+          "content": "I chose Osprey because I thought it needs no Ethernet cable.",
+          "role": "user",
+          "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+        },
+        {
+          "content": "Osprey requires Ethernet; I have not changed my router choice.",
+          "role": "user",
+          "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+        }
+      ],
+      "rubric": "Retain original choice/reason as support 0→0; update challenges premise 1→0, never reverse. Do not invent a new choice."
+    },
+    {
+      "id": "recorder-network-zh",
+      "records": [
+        {
+          "content": "我選河錄器是因為以為它不用網路就能備份。",
+          "role": "user",
+          "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+        },
+        {
+          "content": "河錄器備份需要網路,我還沒決定換工具。",
+          "role": "user",
+          "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+        }
+      ],
+      "rubric": "Original sourced decision/reason 0→0; later challenge 1→0, not reverse or replacement adoption."
+    },
+    {
+      "id": "shared-people",
+      "records": [
+        {
+          "content": "I chose Rye because its battery lasts all day.",
+          "role": "user",
+          "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+        },
+        {
+          "content": "Iris chose Fern because she thought it was light to carry.",
+          "role": "user",
+          "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+        },
+        {
+          "content": "Iris found Fern too heavy; my Rye battery reason is unchanged.",
+          "role": "user",
+          "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+        }
+      ],
+      "rubric": "Focus0 user Rye and focus1 Iris Fern have identical receipts but are different claims. Supports 0→0 and 1→1 are attributable. Challenge 2→1 only; 2→0 challenge is wrong person/property. Receipt2 compatible support of user choice is permissible only for focused endpoint0, not focus1."
+    },
+    {
+      "id": "career-not-decided",
+      "records": [
+        {
+          "content": "I am considering an analyst role but have not chosen.",
+          "role": "user",
+          "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+        },
+        {
+          "content": "Today's feedback changed my thinking; I still have not chosen.",
+          "role": "user",
+          "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+        }
+      ],
+      "rubric": "No supports-decision edge: neither source adopts a job. No explicit premise tied to a decision here; omission is appropriate, changing thinking is not automatic adoption."
+    },
+    {
+      "id": "two-premises",
+      "records": [
+        {
+          "content": "I chose Slate for its low price and encrypted sync.",
+          "role": "user",
+          "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+        },
+        {
+          "content": "Slate now costs seventeen credits; encryption remains and no replacement is chosen.",
+          "role": "user",
+          "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+        }
+      ],
+      "rubric": "Original support 0→0 and update challenge 1→0; retain receipt distinction that price changed but encryption did not. A graph alone cannot express which sub-premise changed, so do not claim atomic reason resolution."
+    },
+    {
+      "id": "unsupported-focus",
+      "records": [
+        {
+          "content": "I chose Lyra because its timetable is convenient.",
+          "role": "user",
+          "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+        }
+      ],
+      "rubric": "Deliberately unsupported stored focus. Both arms must abstain from supports-decision; candidate must not launder the interpretation into adoption. Empty edges is appropriate."
+    },
+    {
+      "id": "compatible-lamp",
+      "records": [
+        {
+          "content": "I chose Pebble because its lamp is bright enough.",
+          "role": "user",
+          "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+        },
+        {
+          "content": "Testing confirmed Pebble's brightness reason.",
+          "role": "user",
+          "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+        }
+      ],
+      "rubric": "Support 0→0 and compatible support 1→0 are sourced. No challenges-premise edge; no invented contradiction."
+    },
+    {
+      "id": "temporary-travel",
+      "records": [
+        {
+          "content": "I usually choose the tram because it avoids traffic.",
+          "role": "user",
+          "excerpt": "I usually choose the tram because it avoids traffic."
+        },
+        {
+          "content": "For Thursday only I will take a taxi because I carry a box.",
+          "role": "user",
+          "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+        }
+      ],
+      "rubric": "Both choices have separately scoped reasons, support0→0 and1→1 permissible. No cross-scope challenges-premise; temporary exception does not refute the normal routine."
+    }
+  ]
+}

@@ -1,0 +1,5171 @@
+{
+  "version": 1,
+  "id": "claim-focus-ablation-v1",
+  "status": "completed",
+  "ingestion": "manual-authored-focus",
+  "semanticReview": "required-not-inferred",
+  "sourceHead": "bd4bb5c718570d97d2ba93797079f9eb48636933",
+  "fixtureSha256": "f4002b94bd4bb2bc2efd1594300084021e40b9cfa466eba999a287a35605d141",
+  "operatorSha256": "cf202a9db4c12756c46515ac2e05bb6be4fd76ca560a4da02c21a555df722d35",
+  "rubricSha256": "fa1fe16bd2a9525eb8bf35745c01d76e02a857067495f3199bc4a3fc95924e9c",
+  "artifactSha256": "ea3976ec01f1852d0e7bc7ae00f9d26d877eac55a28f397a3fcdad82176405fb",
+  "limits": {
+    "requests": 32,
+    "microUsd": 160000,
+    "perArmRequests": 2
+  },
+  "budgetBefore": {
+    "requestCount": 538,
+    "reservedMicroUsd": 2690000,
+    "knownUsageMicroUsd": 150609,
+    "unknownCostRequests": 269,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "budgetAfter": {
+    "requestCount": 570,
+    "reservedMicroUsd": 2850000,
+    "knownUsageMicroUsd": 155449,
+    "unknownCostRequests": 285,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "attempt": {
+    "requests": 32,
+    "reservedMicroUsd": 160000,
+    "halted": null,
+    "readOnly": false
+  },
+  "cases": [
+    {
+      "id": "router-cable-baseline",
+      "caseId": "router-cable",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 2935.932034,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+              "revision": 1,
+              "content": "I chose Osprey because I thought it needs no Ethernet cable.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                "role": "user",
+                "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "454f1404-c204-45d9-bf66-b306fed5b3de",
+              "revision": 1,
+              "content": "Osprey requires Ethernet; I have not changed my router choice.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                "role": "user",
+                "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                "to": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                "relation": "challenges-premise",
+                "fromReceipt": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                "toReceipt": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "454f1404-c204-45d9-bf66-b306fed5b3de",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                "to": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                "relation": "challenges-premise",
+                "fromReceipt": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                "toReceipt": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                "to": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                "relation": "challenges-premise",
+                "fromReceipt": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                "toReceipt": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "454f1404-c204-45d9-bf66-b306fed5b3de",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "454f1404-c204-45d9-bf66-b306fed5b3de",
+                "to": "38b66b58-a623-499c-b1ec-ddb04a9f04c7",
+                "relation": "challenges-premise",
+                "fromReceipt": "67845630-0f35-4eda-bfb8-4ff654b85d04",
+                "toReceipt": "5485dcaf-bbd3-4c2f-8467-b8dedceaf0db",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 1,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "router-cable-focus",
+      "caseId": "router-cable",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1960.070565,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4076165a-0290-458c-b4df-d203588c62f0",
+              "revision": 1,
+              "content": "I chose Osprey because I thought it needs no Ethernet cable.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                "role": "user",
+                "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+              "revision": 1,
+              "content": "Osprey requires Ethernet; I have not changed my router choice.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                "role": "user",
+                "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "4076165a-0290-458c-b4df-d203588c62f0",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "4076165a-0290-458c-b4df-d203588c62f0",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                "to": "4076165a-0290-458c-b4df-d203588c62f0",
+                "relation": "challenges-premise",
+                "fromReceipt": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                "toReceipt": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "4076165a-0290-458c-b4df-d203588c62f0",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                "to": "4076165a-0290-458c-b4df-d203588c62f0",
+                "relation": "challenges-premise",
+                "fromReceipt": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                "toReceipt": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "4076165a-0290-458c-b4df-d203588c62f0",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "4076165a-0290-458c-b4df-d203588c62f0",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                "to": "4076165a-0290-458c-b4df-d203588c62f0",
+                "relation": "challenges-premise",
+                "fromReceipt": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                "toReceipt": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                    "role": "user",
+                    "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "4076165a-0290-458c-b4df-d203588c62f0",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                    "role": "user",
+                    "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a8a60031-8186-4e1c-94af-92a1d3df9751",
+                "to": "4076165a-0290-458c-b4df-d203588c62f0",
+                "relation": "challenges-premise",
+                "fromReceipt": "a39e1408-5c5b-406e-a947-422e717c8bce",
+                "toReceipt": "71850bb5-0e09-4874-a9a0-18648cf48ba5",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I chose Osprey because I thought it needs no Ethernet cable.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I chose Osprey because I thought it needs no Ethernet cable."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "Osprey requires Ethernet; I have not changed my router choice.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "The manual says Osprey requires Ethernet. That contradicts my earlier reason. I have not changed my router choice."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 1,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "recorder-network-zh-focus",
+      "caseId": "recorder-network-zh",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 2631.920917999999,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "f101dbbd-b69e-471b-9fc5-233c97146423",
+              "revision": 1,
+              "content": "我選河錄器是因為以為它不用網路就能備份。",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                "role": "user",
+                "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+              "revision": 1,
+              "content": "河錄器備份需要網路,我還沒決定換工具。",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                "role": "user",
+                "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "f101dbbd-b69e-471b-9fc5-233c97146423",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                "to": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                "relation": "challenges-premise",
+                "fromReceipt": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                "toReceipt": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                "to": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                "relation": "challenges-premise",
+                "fromReceipt": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                "toReceipt": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "f101dbbd-b69e-471b-9fc5-233c97146423",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                "to": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                "relation": "challenges-premise",
+                "fromReceipt": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                "toReceipt": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "f44e10fd-bae5-41f4-9213-3b95ca79a2ce",
+                "to": "f101dbbd-b69e-471b-9fc5-233c97146423",
+                "relation": "challenges-premise",
+                "fromReceipt": "7ca22c07-35a0-47ad-b346-84df128abae7",
+                "toReceipt": "489778fc-22dc-4469-955a-d465beb4c1ef",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "我選河錄器是因為以為它不用網路就能備份。",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "河錄器備份需要網路,我還沒決定換工具。",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 1,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "recorder-network-zh-baseline",
+      "caseId": "recorder-network-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 1714.8590679999998,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+              "revision": 1,
+              "content": "我選河錄器是因為以為它不用網路就能備份。",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                "role": "user",
+                "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+              "revision": 1,
+              "content": "河錄器備份需要網路,我還沒決定換工具。",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                "role": "user",
+                "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                "to": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                "relation": "challenges-premise",
+                "fromReceipt": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                "toReceipt": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                "to": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                "relation": "challenges-premise",
+                "fromReceipt": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                "toReceipt": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                "to": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                "relation": "challenges-premise",
+                "fromReceipt": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                "toReceipt": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                    "role": "user",
+                    "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                    "role": "user",
+                    "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7f34c95d-20fd-4ad4-9726-c60da9d895b1",
+                "to": "891db90a-a74f-414e-8e68-9ec344d48fd6",
+                "relation": "challenges-premise",
+                "fromReceipt": "7e2742f4-8f5d-4e6b-8a17-8c23861e799f",
+                "toReceipt": "416b1122-35bb-4697-8d4c-71ea2ba1cf1f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "我選河錄器是因為以為它不用網路就能備份。"
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "今天查到河錄器備份其實需要網路,原先的理由不成立了。我還沒決定換工具。"
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 1,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "shared-people-baseline",
+      "caseId": "shared-people",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 2070.9405609999994,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+              "revision": 1,
+              "content": "I chose Rye because its battery lasts all day.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "role": "user",
+                "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "6c95ace2-8576-436b-a067-93c306742a59",
+              "revision": 1,
+              "content": "Iris chose Fern because she thought it was light to carry.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "8ef8f67d-a639-4800-b534-738658b04414",
+                "role": "user",
+                "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+              "revision": 1,
+              "content": "Iris found Fern too heavy; my Rye battery reason is unchanged.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                "role": "user",
+                "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 3,
+          "inserted": 3,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 5
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "6c95ace2-8576-436b-a067-93c306742a59",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8ef8f67d-a639-4800-b534-738658b04414",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                    "role": "user",
+                    "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "to": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "relation": "supports-decision",
+                "fromReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "toReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "to": "6c95ace2-8576-436b-a067-93c306742a59",
+                "relation": "supports-decision",
+                "fromReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "toReceipt": "8ef8f67d-a639-4800-b534-738658b04414",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                "to": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "relation": "challenges-premise",
+                "fromReceipt": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                "toReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "6c95ace2-8576-436b-a067-93c306742a59",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "6c95ace2-8576-436b-a067-93c306742a59",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8ef8f67d-a639-4800-b534-738658b04414",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "to": "6c95ace2-8576-436b-a067-93c306742a59",
+                "relation": "supports-decision",
+                "fromReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "toReceipt": "8ef8f67d-a639-4800-b534-738658b04414",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                    "role": "user",
+                    "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                "to": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "relation": "challenges-premise",
+                "fromReceipt": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                "toReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "6c95ace2-8576-436b-a067-93c306742a59",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8ef8f67d-a639-4800-b534-738658b04414",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                    "role": "user",
+                    "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "to": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "relation": "supports-decision",
+                "fromReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "toReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "to": "6c95ace2-8576-436b-a067-93c306742a59",
+                "relation": "supports-decision",
+                "fromReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "toReceipt": "8ef8f67d-a639-4800-b534-738658b04414",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                "to": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "relation": "challenges-premise",
+                "fromReceipt": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                "toReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "6c95ace2-8576-436b-a067-93c306742a59",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "6c95ace2-8576-436b-a067-93c306742a59",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8ef8f67d-a639-4800-b534-738658b04414",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "to": "6c95ace2-8576-436b-a067-93c306742a59",
+                "relation": "supports-decision",
+                "fromReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "toReceipt": "8ef8f67d-a639-4800-b534-738658b04414",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                    "role": "user",
+                    "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "9bc8a805-c07d-400f-b338-f0c01c23c77b",
+                "to": "53ed5ac2-4d05-4e41-a220-d44f23b7e5b6",
+                "relation": "challenges-premise",
+                "fromReceipt": "271f6316-c869-4088-9880-54d7f3b5d0c9",
+                "toReceipt": "0b502b4a-5931-40cf-9c13-8e15f324e357",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                }
+              ]
+            },
+            {
+              "index": 2,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 0,
+              "relation": "supports-decision",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            },
+            {
+              "from": 0,
+              "to": 1,
+              "relation": "supports-decision",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            },
+            {
+              "from": 2,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "shared-people-focus",
+      "caseId": "shared-people",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1927.5673779999997,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+              "revision": 1,
+              "content": "I chose Rye because its battery lasts all day.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                "role": "user",
+                "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+              "revision": 1,
+              "content": "Iris chose Fern because she thought it was light to carry.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                "role": "user",
+                "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "56b7a1c8-7000-4af5-a111-802f6484e6d1",
+              "revision": 1,
+              "content": "Iris found Fern too heavy; my Rye battery reason is unchanged.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "5bbe4b00-c751-4a48-be6f-b31838eb5aa6",
+                "role": "user",
+                "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 5,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                "to": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                "relation": "challenges-premise",
+                "fromReceipt": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                "toReceipt": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                "to": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                "relation": "challenges-premise",
+                "fromReceipt": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                "toReceipt": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "56b7a1c8-7000-4af5-a111-802f6484e6d1",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "56b7a1c8-7000-4af5-a111-802f6484e6d1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5bbe4b00-c751-4a48-be6f-b31838eb5aa6",
+                    "role": "user",
+                    "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                "to": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                "relation": "challenges-premise",
+                "fromReceipt": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                "toReceipt": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                    "role": "user",
+                    "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "d004fb19-ca74-4dcf-8257-1da509bdbbce",
+                "to": "6d5a37aa-75f5-4b7f-92ca-996dc2a3fc9e",
+                "relation": "challenges-premise",
+                "fromReceipt": "fe61a6cc-ab31-4569-9d76-717b4b4a9b5e",
+                "toReceipt": "b8ab4b0d-9cee-4b39-a0b2-878b4a48b3d7",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 5,
+            "root": {
+              "memoryId": "56b7a1c8-7000-4af5-a111-802f6484e6d1",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "56b7a1c8-7000-4af5-a111-802f6484e6d1",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "5bbe4b00-c751-4a48-be6f-b31838eb5aa6",
+                    "role": "user",
+                    "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I chose Rye because its battery lasts all day.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "Iris chose Fern because she thought it was light to carry.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Iris chose Fern because she thought it was light to carry. I chose Rye because its battery lasts all day."
+                }
+              ]
+            },
+            {
+              "index": 2,
+              "focus": {
+                "content": "Iris found Fern too heavy; my Rye battery reason is unchanged.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Iris weighed Fern and found it too heavy, contradicting her reason. My Rye choice and battery reason are unchanged."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 1,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "career-not-decided-focus",
+      "caseId": "career-not-decided",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1364.1732510000002,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a60f8dda-3401-4095-9dbf-bf6337d250fb",
+              "revision": 1,
+              "content": "I am considering an analyst role but have not chosen.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "32b91fe8-0919-40e0-a033-46d6a3294c2a",
+                "role": "user",
+                "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "8c349ac0-6562-4e42-95d6-1639d2335977",
+              "revision": 1,
+              "content": "Today's feedback changed my thinking; I still have not chosen.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "38fdb9c0-fb75-48f9-8ded-a4ea8da0c7f3",
+                "role": "user",
+                "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 0,
+          "inserted": 0,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 3,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 3,
+            "root": {
+              "memoryId": "a60f8dda-3401-4095-9dbf-bf6337d250fb",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a60f8dda-3401-4095-9dbf-bf6337d250fb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "32b91fe8-0919-40e0-a033-46d6a3294c2a",
+                    "role": "user",
+                    "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 3,
+            "root": {
+              "memoryId": "8c349ac0-6562-4e42-95d6-1639d2335977",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "8c349ac0-6562-4e42-95d6-1639d2335977",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "38fdb9c0-fb75-48f9-8ded-a4ea8da0c7f3",
+                    "role": "user",
+                    "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 3,
+            "root": {
+              "memoryId": "a60f8dda-3401-4095-9dbf-bf6337d250fb",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a60f8dda-3401-4095-9dbf-bf6337d250fb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "32b91fe8-0919-40e0-a033-46d6a3294c2a",
+                    "role": "user",
+                    "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 3,
+            "root": {
+              "memoryId": "8c349ac0-6562-4e42-95d6-1639d2335977",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "8c349ac0-6562-4e42-95d6-1639d2335977",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "38fdb9c0-fb75-48f9-8ded-a4ea8da0c7f3",
+                    "role": "user",
+                    "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I am considering an analyst role but have not chosen.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "Today's feedback changed my thinking; I still have not chosen.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                }
+              ]
+            }
+          ],
+          "edges": [],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "career-not-decided-baseline",
+      "caseId": "career-not-decided",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 1457.5390140000018,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+              "revision": 1,
+              "content": "I am considering an analyst role but have not chosen.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                "role": "user",
+                "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "1589a73e-00ee-498f-b90b-5bceae932103",
+              "revision": 1,
+              "content": "Today's feedback changed my thinking; I still have not chosen.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                "role": "user",
+                "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                    "role": "user",
+                    "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "1589a73e-00ee-498f-b90b-5bceae932103",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                    "role": "user",
+                    "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "1589a73e-00ee-498f-b90b-5bceae932103",
+                "to": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                "relation": "challenges-premise",
+                "fromReceipt": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                "toReceipt": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "1589a73e-00ee-498f-b90b-5bceae932103",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "1589a73e-00ee-498f-b90b-5bceae932103",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                    "role": "user",
+                    "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                    "role": "user",
+                    "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "1589a73e-00ee-498f-b90b-5bceae932103",
+                "to": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                "relation": "challenges-premise",
+                "fromReceipt": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                "toReceipt": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                    "role": "user",
+                    "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "1589a73e-00ee-498f-b90b-5bceae932103",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                    "role": "user",
+                    "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "1589a73e-00ee-498f-b90b-5bceae932103",
+                "to": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                "relation": "challenges-premise",
+                "fromReceipt": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                "toReceipt": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "1589a73e-00ee-498f-b90b-5bceae932103",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "1589a73e-00ee-498f-b90b-5bceae932103",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                    "role": "user",
+                    "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                    "role": "user",
+                    "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "1589a73e-00ee-498f-b90b-5bceae932103",
+                "to": "0c1fd47c-7061-4b5b-92a0-a11138d13069",
+                "relation": "challenges-premise",
+                "fromReceipt": "085a1bd6-a510-4d16-a64d-aa2c6f4d6911",
+                "toReceipt": "689f7c30-eba8-4b26-b3fc-d1da2209f84a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I am considering an analyst role, but I have not chosen my next job."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Today's feedback made me question whether an analyst role suits me. I still have not chosen my next job."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 1,
+              "to": 0,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "two-premises-baseline",
+      "caseId": "two-premises",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 2303.219989000001,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+              "revision": 1,
+              "content": "I chose Slate for its low price and encrypted sync.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                "role": "user",
+                "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "6d3104ba-8dc3-4293-88f0-07412cf5f809",
+              "revision": 1,
+              "content": "Slate now costs seventeen credits; encryption remains and no replacement is chosen.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "efa89d7f-bb3c-45f7-ad2b-ee641fac0827",
+                "role": "user",
+                "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                    "role": "user",
+                    "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+                "to": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+                "relation": "supports-decision",
+                "fromReceipt": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                "toReceipt": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "6d3104ba-8dc3-4293-88f0-07412cf5f809",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "6d3104ba-8dc3-4293-88f0-07412cf5f809",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "efa89d7f-bb3c-45f7-ad2b-ee641fac0827",
+                    "role": "user",
+                    "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                    "role": "user",
+                    "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+                "to": "5aeaac94-d4fc-4563-ad4b-85eead120db2",
+                "relation": "supports-decision",
+                "fromReceipt": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                "toReceipt": "52c6dcfb-3d62-4581-95b8-0bd090fb38f1",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "6d3104ba-8dc3-4293-88f0-07412cf5f809",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "6d3104ba-8dc3-4293-88f0-07412cf5f809",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "efa89d7f-bb3c-45f7-ad2b-ee641fac0827",
+                    "role": "user",
+                    "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 0,
+              "relation": "supports-decision",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "two-premises-focus",
+      "caseId": "two-premises",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1576.2063600000001,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+              "revision": 1,
+              "content": "I chose Slate for its low price and encrypted sync.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                "role": "user",
+                "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+              "revision": 1,
+              "content": "Slate now costs seventeen credits; encryption remains and no replacement is chosen.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                "role": "user",
+                "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                    "role": "user",
+                    "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                    "role": "user",
+                    "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                "to": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                "relation": "challenges-premise",
+                "fromReceipt": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                "toReceipt": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                    "role": "user",
+                    "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                    "role": "user",
+                    "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                "to": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                "relation": "challenges-premise",
+                "fromReceipt": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                "toReceipt": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                    "role": "user",
+                    "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                    "role": "user",
+                    "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                "to": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                "relation": "challenges-premise",
+                "fromReceipt": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                "toReceipt": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                    "role": "user",
+                    "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                    "role": "user",
+                    "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7730d869-cc34-478c-affb-8a14ffbb27d3",
+                "to": "949e9810-4460-4c0a-89a1-058c2830c5ad",
+                "relation": "challenges-premise",
+                "fromReceipt": "d6100555-6fb6-4c70-bee1-459a5e9117ba",
+                "toReceipt": "6fdc5cc9-aa1b-4c39-9f88-fbb265db39b0",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I chose Slate for its low price and encrypted sync.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I chose Slate because it costs four credits and provides encrypted sync."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "Slate now costs seventeen credits; encryption remains and no replacement is chosen.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "Slate now costs seventeen credits, so my cheap-price reason no longer holds. Encrypted sync still works. I have not picked a replacement."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 1,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "unsupported-focus-focus",
+      "caseId": "unsupported-focus",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1222.4648180000004,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "da200e72-a401-4604-84d0-403cb6223b95",
+              "revision": 1,
+              "content": "I chose Lyra because its timetable is convenient.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "f75e2c35-5f0a-42ca-a1f3-2ff530c29234",
+                "role": "user",
+                "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 0,
+          "inserted": 0,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 2,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 2,
+            "root": {
+              "memoryId": "da200e72-a401-4604-84d0-403cb6223b95",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "da200e72-a401-4604-84d0-403cb6223b95",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f75e2c35-5f0a-42ca-a1f3-2ff530c29234",
+                    "role": "user",
+                    "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 2,
+            "root": {
+              "memoryId": "da200e72-a401-4604-84d0-403cb6223b95",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "da200e72-a401-4604-84d0-403cb6223b95",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f75e2c35-5f0a-42ca-a1f3-2ff530c29234",
+                    "role": "user",
+                    "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I chose Lyra because its timetable is convenient.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+                }
+              ]
+            }
+          ],
+          "edges": [],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "unsupported-focus-baseline",
+      "caseId": "unsupported-focus",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 1351.6380910000007,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "43c94216-1fe8-43d6-a3d6-f80c8f18826c",
+              "revision": 1,
+              "content": "I chose Lyra because its timetable is convenient.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "e21e9962-9567-40be-8447-ef989cc5ea37",
+                "role": "user",
+                "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 0,
+          "inserted": 0,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 2
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 2,
+            "root": {
+              "memoryId": "43c94216-1fe8-43d6-a3d6-f80c8f18826c",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "43c94216-1fe8-43d6-a3d6-f80c8f18826c",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "e21e9962-9567-40be-8447-ef989cc5ea37",
+                    "role": "user",
+                    "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 2,
+            "root": {
+              "memoryId": "43c94216-1fe8-43d6-a3d6-f80c8f18826c",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "43c94216-1fe8-43d6-a3d6-f80c8f18826c",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "e21e9962-9567-40be-8447-ef989cc5ea37",
+                    "role": "user",
+                    "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I am comparing Lyra because its timetable might be convenient, but I have not chosen a course."
+                }
+              ]
+            }
+          ],
+          "edges": [],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "compatible-lamp-baseline",
+      "caseId": "compatible-lamp",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 1683.6847869999983,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a94dc940-ae74-4236-aae8-1e63137ed554",
+              "revision": 1,
+              "content": "I chose Pebble because its lamp is bright enough.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "00a73d30-7459-49db-90ba-d535961aeea8",
+                "role": "user",
+                "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+              "revision": 1,
+              "content": "Testing confirmed Pebble's brightness reason.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                "role": "user",
+                "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "a94dc940-ae74-4236-aae8-1e63137ed554",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "00a73d30-7459-49db-90ba-d535961aeea8",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                "to": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                "relation": "supports-decision",
+                "fromReceipt": "00a73d30-7459-49db-90ba-d535961aeea8",
+                "toReceipt": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "00a73d30-7459-49db-90ba-d535961aeea8",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                "to": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                "relation": "supports-decision",
+                "fromReceipt": "00a73d30-7459-49db-90ba-d535961aeea8",
+                "toReceipt": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "a94dc940-ae74-4236-aae8-1e63137ed554",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "00a73d30-7459-49db-90ba-d535961aeea8",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                "to": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                "relation": "supports-decision",
+                "fromReceipt": "00a73d30-7459-49db-90ba-d535961aeea8",
+                "toReceipt": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "00a73d30-7459-49db-90ba-d535961aeea8",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a94dc940-ae74-4236-aae8-1e63137ed554",
+                "to": "58da3d53-024f-4a0a-9120-cf9fbaa7c360",
+                "relation": "supports-decision",
+                "fromReceipt": "00a73d30-7459-49db-90ba-d535961aeea8",
+                "toReceipt": "8c7b8bb5-044c-4c79-b393-9a5be771108a",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 1,
+              "relation": "supports-decision",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "compatible-lamp-focus",
+      "caseId": "compatible-lamp",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1664.4084250000014,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+              "revision": 1,
+              "content": "I chose Pebble because its lamp is bright enough.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                "role": "user",
+                "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+              "revision": 1,
+              "content": "Testing confirmed Pebble's brightness reason.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                "role": "user",
+                "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                "to": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                "relation": "supports-decision",
+                "fromReceipt": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                "toReceipt": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                "to": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                "relation": "supports-decision",
+                "fromReceipt": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                "toReceipt": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                "to": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                "relation": "supports-decision",
+                "fromReceipt": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                "toReceipt": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                    "role": "user",
+                    "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                    "role": "user",
+                    "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "ac2e5de4-d20f-4668-98aa-e32242fff35d",
+                "to": "a48dfbf8-a58f-4af5-a02a-5e81d13f3cb5",
+                "relation": "supports-decision",
+                "fromReceipt": "ab27abdd-96e9-43b6-8d64-7f4cad5954a0",
+                "toReceipt": "0d265f49-657b-4839-a1fa-a854d2d646a6",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I chose Pebble because its lamp is bright enough.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I chose Pebble because its lamp is bright enough for my desk."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "Testing confirmed Pebble's brightness reason.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I tested Pebble at my desk: its lamp is indeed bright enough, just as I thought when choosing it."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 1,
+              "relation": "supports-decision",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "temporary-travel-focus",
+      "caseId": "temporary-travel",
+      "arm": "focus",
+      "status": "completed",
+      "durationMs": 1574.196941000002,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+              "revision": 1,
+              "content": "I usually choose the tram because it avoids traffic.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                "role": "user",
+                "excerpt": "I usually choose the tram because it avoids traffic."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+              "revision": 1,
+              "content": "For Thursday only I will take a taxi because I carry a box.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "32e67a35-4568-41e9-8989-6adf482f6758",
+                "role": "user",
+                "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4,
+          "inputMode": "claim-focus-v1"
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "32e67a35-4568-41e9-8989-6adf482f6758",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                "to": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                "relation": "supports-decision",
+                "fromReceipt": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                "toReceipt": "32e67a35-4568-41e9-8989-6adf482f6758",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "32e67a35-4568-41e9-8989-6adf482f6758",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                "to": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                "relation": "supports-decision",
+                "fromReceipt": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                "toReceipt": "32e67a35-4568-41e9-8989-6adf482f6758",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "32e67a35-4568-41e9-8989-6adf482f6758",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                "to": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                "relation": "supports-decision",
+                "fromReceipt": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                "toReceipt": "32e67a35-4568-41e9-8989-6adf482f6758",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "32e67a35-4568-41e9-8989-6adf482f6758",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "7cfe85e8-d5a9-4da5-9df2-597a6195f357",
+                "to": "52f2d0ad-9dfe-4b07-8025-484b85672dbb",
+                "relation": "supports-decision",
+                "fromReceipt": "023cdccb-c67c-4bc6-ae2b-5d63a118ade8",
+                "toReceipt": "32e67a35-4568-41e9-8989-6adf482f6758",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "focus": {
+                "content": "I usually choose the tram because it avoids traffic.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I usually choose the tram because it avoids traffic."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "focus": {
+                "content": "For Thursday only I will take a taxi because I carry a box.",
+                "interpretationStatus": "unverified"
+              },
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 1,
+              "relation": "supports-decision",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    },
+    {
+      "id": "temporary-travel-baseline",
+      "caseId": "temporary-travel",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 1832.9944340000002,
+      "records": [
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+              "revision": 1,
+              "content": "I usually choose the tram because it avoids traffic.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                "role": "user",
+                "excerpt": "I usually choose the tram because it avoids traffic."
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "memory": {
+              "id": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+              "revision": 1,
+              "content": "For Thursday only I will take a taxi because I carry a box.",
+              "state": "active"
+            },
+            "receipts": [
+              {
+                "id": "d1c3b559-d36d-463b-989b-82055a66217f",
+                "role": "user",
+                "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+              }
+            ]
+          }
+        }
+      ],
+      "review": {
+        "ok": true,
+        "value": {
+          "proposed": 1,
+          "inserted": 1,
+          "interpretationStatus": "model-proposed",
+          "indexRevision": 4
+        }
+      },
+      "warm": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d1c3b559-d36d-463b-989b-82055a66217f",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                "to": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                "relation": "challenges-premise",
+                "fromReceipt": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                "toReceipt": "d1c3b559-d36d-463b-989b-82055a66217f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d1c3b559-d36d-463b-989b-82055a66217f",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                "to": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                "relation": "challenges-premise",
+                "fromReceipt": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                "toReceipt": "d1c3b559-d36d-463b-989b-82055a66217f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "cold": [
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d1c3b559-d36d-463b-989b-82055a66217f",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                "to": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                "relation": "challenges-premise",
+                "fromReceipt": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                "toReceipt": "d1c3b559-d36d-463b-989b-82055a66217f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "value": {
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "view": "incident-proposals",
+            "indexRevision": 4,
+            "root": {
+              "memoryId": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+              "revision": 1
+            },
+            "sources": [
+              {
+                "memory": {
+                  "id": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "d1c3b559-d36d-463b-989b-82055a66217f",
+                    "role": "user",
+                    "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "memory": {
+                  "id": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                  "revision": 1,
+                  "currentness": "current"
+                },
+                "receipts": [
+                  {
+                    "id": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                    "role": "user",
+                    "excerpt": "I usually choose the tram because it avoids traffic."
+                  }
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "81de5dcb-3d52-4a52-a4d3-23d0bd9e415b",
+                "to": "4a42df6a-c597-48b1-a10a-76d72cf9d97f",
+                "relation": "challenges-premise",
+                "fromReceipt": "f448fad4-ea10-427f-8c6e-be657d36a92c",
+                "toReceipt": "d1c3b559-d36d-463b-989b-82055a66217f",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ],
+      "proposals": [
+        {
+          "memories": [
+            {
+              "index": 0,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "I usually choose the tram because it avoids traffic."
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "receipts": [
+                {
+                  "index": 0,
+                  "role": "user",
+                  "excerpt": "For Thursday only I will take a taxi because I am carrying a box. My usual tram choice is unchanged."
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": 0,
+              "to": 1,
+              "relation": "challenges-premise",
+              "fromReceipt": 0,
+              "toReceipt": 0
+            }
+          ],
+          "outputAvailable": true
+        }
+      ],
+      "transport": {
+        "requests": 2,
+        "unavailableResponses": 0
+      }
+    }
+  ]
+}

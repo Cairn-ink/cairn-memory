@@ -1,5 +1,12 @@
 # Changelog
 
+## Evidence — claim-focus ablation v1
+
+- Preserve all 16 installed-core real-model arms. Unverified focus did not reliably
+  repair endpoint identity, direction or scope; semantic gate not passed.
+- Mechanical persistence succeeded but is not semantic accuracy. No promotion to
+  automatic capture defaults. See `docs/claim-focus-ablation-results.md`.
+
 ## Unreleased — experimental rationale claim focus
 
 - Embedded review may opt into unverified stored-content focus alongside complete
