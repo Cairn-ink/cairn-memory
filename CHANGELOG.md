@@ -1,5 +1,17 @@
 # Changelog
 
+## Private candidate — core-owned qualification evidence
+
+- Add explicit core `source-bound-v2` and optional adapter `qualifyCandidates`,
+  preserving v1, default capture and stored S1 qualifications. Core generates
+  bounded Unicode-safe evidence windows, derives exact anchors and field
+  coverage from selected references, and applies unchanged source validation.
+  V2 matches admission's final receipt canonicalization at truncation boundaries.
+- Keep qualified ordered updates unresolved without trusted identity. This is
+  mechanical source linkage, not verified interpretation, adoption or currentness.
+  MCP exposure and paid-method authorization remain separate, denied gates;
+  no release, deployment or security-disclosure clearance is included.
+
 ## Private candidate — explicit qualification experiment capability
 
 - Add an independent, baseline-only qualification capability to the existing
