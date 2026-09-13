@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — well-formed local identifiers
+
+- Reject malformed Unicode identifiers at the shared core boundary. Valid
+  identifiers retain exact spelling; no normalization or migration of existing
+  identifiers is performed. This candidate is held for private security
+  coordination, not a published fix or a claim about hosted-service exposure.
+
 ## Model-backed evidence candidate
 
 - Add an explicit shared-budget live experiment session, loopback host bridge,
