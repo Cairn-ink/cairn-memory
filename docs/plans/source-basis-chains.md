@@ -1,6 +1,6 @@
 # Require a decision chain for a current-basis challenge
 
-Base ceb285a44462fafc214048755af61c6a4b3841db. The source-basis comparison found
+Base e82f256f027742f1553ba6d5ff9693c531565340 after its evidence-only merge. The source-basis comparison found
 an accepted challenge between two different days' career feelings without any
 recorded decision unit. Source matching and role direction did not prevent it.
 

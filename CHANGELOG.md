@@ -8,6 +8,14 @@
 - Structural chains do not prove semantic correctness or resolve time/scope
   errors. No model default, persistence or migration changes.
 
+## Evidence — source-basis comparison v1
+
+- Preserve all48 real-model installed-core arms, including five rejected outputs
+  and accepted semantic mistakes. Exact quote/type checks are not entailment.
+- Source-bound units isolate affected reasons in selected cases, but attribution,
+  temporal scope and reaffirmation errors remain. No default promotion.
+  See `docs/source-basis-comparison-results.md`.
+
 ## Unreleased — bounded source-basis comparison preparation
 
 - Separate basis-only experiment capability and parent session keep every old
