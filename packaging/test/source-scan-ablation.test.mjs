@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +11,9 @@ import { createExperimentBudget } from '../../evaluation/experiment-budget/index
 import { createExperimentRequestGuard } from '../../evaluation/experiment-budget/request-guard.mjs';
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { getSourceScanPins, runSourceScanAblation } from '../../evaluation/live/source-scan-ablation.mjs';
+
+const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
+const { Client } = await import(pathToFileURL(sdk.resolve('@modelcontextprotocol/client')).href);
 
 let installed;
 function artifact() {
@@ -48,11 +53,19 @@ function setup(mode = 'success') {
     ...artifact(), privateDirectory: directory, pins: getSourceScanPins() } };
 }
 
-test('installed source-scan ablation retains all sixteen arms and wrong-source evidence, with immutable repeat denial', { timeout: 90000 }, async () => {
+test('installed source-scan ablation retains all sixteen arms and wrong-source evidence, with immutable repeat denial', { timeout: 90000 }, async t => {
+  const original = Client.prototype.callTool; let toolCalls = 0;
+  Client.prototype.callTool = function (...args) {
+    toolCalls++; assert.equal(args.length, 2);
+    assert.deepEqual(args[1], { timeout: 180000 });
+    return original.apply(this, args);
+  };
+  t.after(() => { Client.prototype.callTool = original; });
   const f = setup(), report = await runSourceScanAblation(f.options);
   assert.equal(report.status, 'completed', JSON.stringify(report)); assert.equal(report.cases.length, 16);
   assert.equal(report.ingestion, 'manual-oracle'); assert.equal(report.semanticReviewRequired, true);
   assert.equal(f.calls(), 48); assert.equal(report.budgetAfter.requestCount, 48);
+  assert.equal(toolCalls, 16);
   assert.equal(report.attempt.reservedMicroUsd, 240000); assert.equal(report.budgetAfter.unsettled, 0);
   for (const record of report.cases) {
     assert.equal(record.traces.length, record.arm === 'baseline' ? 4 : 2);

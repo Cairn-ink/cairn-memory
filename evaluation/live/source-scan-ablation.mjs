@@ -134,7 +134,7 @@ async function execute(options) {
           env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1' }, stderr: 'ignore' }));
         const response = await client.callTool({ name: 'recall_memory', arguments: {
           query: item.query, limit: 6, contextMode: 'source-evidence',
-          ...(item.arm === 'source-scan' ? { selectionMode: 'bounded-source-scan' } : {}) } }, undefined, { timeout: 180000 });
+          ...(item.arm === 'source-scan' ? { selectionMode: 'bounded-source-scan' } : {}) } }, { timeout: 180000 });
         active.recall = JSON.parse(response.content[0].text);
         if (!active.recall.ok) { active.status = 'recall_failed'; }
         else {
