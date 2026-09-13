@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — installed rationale comparison runner
+
+- Freeze eight synthetic two-event cases and a separate evaluator-only rubric.
+  Add a one-shot installed MCP baseline/rationale comparison with 16 retained
+  arms, guarded transport, keyless cold inspection/replay and forgetting checks.
+- No semantic score is implied by the scripted installed tests. Live execution
+  and independent source-versus-output assessment follow verification and review.
+  See `docs/plans/rationale-installed-pilot.md`.
+
 ## Unreleased — bounded rationale experiment preparation
 
 - Add a separate explicit baseline rationale-pipeline experiment capability,

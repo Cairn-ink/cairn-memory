@@ -105,6 +105,8 @@ jobs:
       - run: node packaging/verify-clean-cache.mjs
       - run: node packaging/prepare-cache.mjs
       - run: npm run test:artifact
+      - name: Installed rationale experiment with synthetic HTTP only
+        run: CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node --test evaluation/live/test/rationale-pilot.test.mjs
 
   experiment-budget:
     runs-on: ubuntu-latest
