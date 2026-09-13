@@ -37,7 +37,9 @@ not proof that the focus is entailed. Do not turn generated text into evidence.
    opt-in focus, including Chinese and two-person claims; hostile summary remains
    untrusted. Exercise focus mutation, bounds, wrong namespace, invalid mode and
    cold inspection. Run full core and contributor gates on Node 22.16 and 24,
-   adapter offline coverage, and independent dual review before PR/merge.
+   adapter offline coverage, installed-artifact startup and opt-in/default
+   behavior, and independent dual review before PR/merge. The runtime prompt
+   must be included byte-for-byte in the explicit artifact allowlist.
 6. Document the explicit expansion of model-visible personal text. Manual core
    API only in this slice: automatic capture/MCP defaults unchanged. Offline tests
    establish payload/safety behavior, not improved rationale semantics. A fresh,

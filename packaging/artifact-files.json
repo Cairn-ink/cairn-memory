@@ -32,6 +32,7 @@
   "core/rationale-storage.mjs",
   "core/rationale.mjs",
   "core/prompts/relate-rationale.md",
+  "core/prompts/relate-claim-focus.md",
   "core/recall.mjs",
   "core/runtime.mjs",
   "core/supersession-storage.mjs",
