@@ -1,5 +1,16 @@
 # Changelog
 
+## Private candidate — explicit qualified capture over local MCP
+
+- Opt-in `--capture-qualification source-bound-v1` exposes `capture_memory` for
+  explicitly submitted batches through the same core. Keep default five tools,
+  fixed namespace, keyless explicit writes and bounded source retention.
+- Add keyless `inspect_memory.includeQualification` for ID inspection, preserving
+  receipt pagination. Submitted roles and model labels remain unverified source
+  claims, not human authentication, safe automatic updates or execution consent.
+  No passive hooks, trusted bindings, retirement, paid calls or disclosure-hold
+  clearance is included in this private delivery slice.
+
 ## Private candidate — automatic source qualification
 
 - Add opt-in local `captureQualification: 'source-bound-v1'`: one bounded model

@@ -41,7 +41,8 @@ someone who can edit your process configuration or read your database file.
 | --- | --- | --- |
 | remember_memory | content, optional kind | Explicit memory plus receipt derived from supplied content |
 | recall_memory | query, optional limit (1–12) | Same bounded model-driven core recall with current source evidence |
-| inspect_memory | memoryId with optional receiptLimit/receiptCursor, OR limit/cursor/states | Page through receipts for one memory, or list this namespace with optional active/historical filtering |
+| inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
+| capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
@@ -61,7 +62,8 @@ ID inspection retains the old body/receipts and bounded replacement references.
 Historical does not mean current: recall excludes these records, correction is
 rejected, and forgetting remains available at the inspected revision. Supersession
 is not deletion or secure erasure; historical evidence remains until separately
-forgotten. No new supersede tool or automatic capture is added to MCP.
+forgotten. No new supersede tool or passive capture is added to MCP. The opt-in
+submitted capture tool below does not establish chronology or retire memories.
 Stop all old-runtime processes/connections, including idle readers, before the
 v8 database upgrade; mixed-version coexistence is unsupported.
 
@@ -102,6 +104,69 @@ to a model; redaction is best effort, not complete secret detection. The server
 does not capture transcripts or install hooks. Forgetting is not secure disk
 erasure; SQLite/WAL/backups may retain old bytes. Protect the database directory
 and review provider retention policy before handling real conversations.
+
+## Opt-in submitted source-qualified capture
+
+Add `--capture-qualification source-bound-v1` to the startup command to expose
+`capture_memory` as a sixth tool. Absence retains the existing five tools; invalid
+settings reject before opening storage. Library hosts can supply the same
+`captureQualification` constructor setting to `createCairnServer`. The namespace
+and mode are snapshotted at construction, never selected by tool arguments.
+
+```json
+{
+  "batchId": "synthetic-note-001",
+  "messages": [
+    {"role": "user", "content": "I am considering taking the train on Fridays."}
+  ]
+}
+```
+
+Submit only messages the user actually intends to save. This does not read a
+transcript, install a hook, authenticate a human speaker or establish execution
+permission. User/assistant roles and text are caller-submitted claims, not a
+verified transcript. Reuse the same batch ID and payload for retries; do not
+invent a fresh retry ID after failure. Completed replay makes no model calls;
+changing canonical content, role or order at the same batch ID conflicts.
+
+Batch IDs use the core's 200-unit opaque identifier rules. Supply 1–24 messages,
+each with 1–4000 UTF-16 units; the canonical total must not exceed 20000. The
+core rejects malformed Unicode and applies normalization and best-effort secret
+redaction. The server fixes client `cairn-local-mcp` and session
+`submitted-capture`; each source message ID is SHA-256 of the JSON array
+`['cairn.mcp.submitted-message.v1',batchId,index]`. These deterministic identifiers
+support replay, not authentication or encryption. Do not put secrets in batch IDs.
+
+The same core performs bounded extraction, then one qualification batch against
+the exact retained receipt excerpts (at most 800 UTF-16 units). This requires a
+configured model key and transmits selected text; it can incur charges, with no
+account spending cap. Empty extraction skips qualification. Missing model or
+invalid qualification fails explicitly without partial memories. Qualifying an
+existing unqualified duplicate fails rather than backfilling its provenance.
+Provider credentials remain environment-only; configuration checking verifies
+neither credentials nor model availability and contacts no provider or database.
+
+Inspect a result with
+`inspect_memory({memoryId:"returned-id",includeQualification:true})`. This works
+without a key, including after restart. Omitted/false preserves ordinary ID
+inspection. The flag is invalid on listing calls, even when false. Existing
+receipt pagination remains unchanged; qualification anchors can reference
+receipts outside the selected page. Correction clears qualification; forgetting
+removes access. Retained historical qualifications remain inspectable.
+
+Source binding is not semantic truth: the qualifier's subject, attribution,
+commitment and other labels remain unverified interpretations. Capture creates
+no trusted claim-slot bindings, accepts no causal sequence or transition input,
+and never retires previous memories. Incompatible active claims may coexist;
+recall does not automatically settle which is current. Inspect evidence before
+explaining a change, and state when reasons or identity are unknown. Existing
+explicit remember/correct tools remain keyless and are not silently reclassified.
+Remembered consent is never execution authorization.
+
+The 64KiB incoming transport cap still applies; some otherwise core-sized Unicode
+batches exceed it. Oversize input rejects rather than truncating the transcript.
+The 256KiB output cap also remains. No named-client compatibility or semantic
+accuracy claim follows from scripted stdio/installation tests.
 
 ## Limits and verification
 

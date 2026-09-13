@@ -27,6 +27,11 @@ _Avoid_: Decision, current assertion
 Attributable evidence tying a remembered assertion to captured source text.
 A receipt proves provenance, not the truth or continuing applicability of a claim.
 
+**Submitted evidence**:
+Source text and speaker roles supplied by a memory client as claims about a
+conversation, not an authenticated transcript or execution permission.
+_Avoid_: Verified human statement, authenticated consent
+
 **Historical assertion**:
 A claim retained as evidence of an earlier state, not presented as current.
 _Avoid_: Forgotten memory

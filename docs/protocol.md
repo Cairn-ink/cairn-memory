@@ -109,4 +109,32 @@ forgetting, and content-free event/progress metadata remains for replay safety.
 SQLite backup/journal and local access limitations remain as documented in
 [the store](local-store.md).
 
+### Opt-in local MCP submitted capture
+
+The separate local stdio server can opt into `capture_memory` with constructor
+mode/CLI flag `source-bound-v1`. This adds bounded caller-submitted message text
+and claimed user/assistant roles, not a transcript reader or authenticated human
+intent. Host-bound namespace, client and session cannot be overridden by tool
+arguments. A caller batch ID is an opaque replay key, not authority; deterministic
+message IDs hash the versioned batch/index tuple. IDs are not encryption and
+must not contain secrets. No causal ordering, qualifications, slot bindings or
+transition decisions are accepted from tool arguments.
+
+The shared core normalizes and redacts submitted text before model processing,
+then stores its existing bounded receipts and validated model qualifications.
+The extra model stage sees canonical receipt excerpts and bounded extracted text,
+not namespace/client/session/event IDs. Role and qualifier labels remain
+unverified assertions. This tool does not decide currentness or retire memories;
+competing active claims can remain. Configuration is not verified model access
+and confers no per-user spending cap. Keys remain environment-only, and syntax
+checking contacts neither storage nor providers. Existing MCP transport caps
+remain 64KiB input/256KiB output; oversized input rejects, not truncates. SQLite
+retention, backup and erasure limitations remain unchanged.
+
+`inspect_memory.includeQualification` exposes existing bounded source metadata
+only for a namespace-owned ID, not list queries. It is keyless, preserves receipt
+pagination and does not add qualifications to recall/provider inputs. No telemetry,
+hosted plugin/HTTP schema change, account authority or execution consent is
+introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-capture).
+
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.

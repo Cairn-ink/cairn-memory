@@ -50,6 +50,85 @@ async function call(client, name, args = {}) {
 }
 const ok = (result) => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 
+test('installed MCP captures qualified submitted text and reopens without new provider requests', async (t) => {
+  const directory = installation.directory;
+  const databasePath = join(directory, 'mcp-qualified.sqlite');
+  const tracePath = join(directory, 'mcp-qualified-calls.txt');
+  const fixturePath = join(directory, 'mcp-qualified-fixture.mjs');
+  // This generated fixture imports runtime and dependencies only from the installed archive.
+  writeFileSync(fixturePath, `import assert from 'node:assert/strict';
+    import { appendFileSync } from 'node:fs';
+    import { createRequire } from 'node:module';
+    import { createCairnServer } from './node_modules/${packageName}/adapters/mcp/server.mjs';
+    import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const requireInstalled=createRequire(new URL('./node_modules/${packageName}/package.json',import.meta.url));
+    const {serveStdio,StdioServerTransport}=await import(requireInstalled.resolve('@modelcontextprotocol/server/stdio'));
+    globalThis.fetch=()=>assert.fail('Native network forbidden');
+    const model=createOpenAIModel({apiKey:'synthetic-fake-only',fetchImpl:async(url,options)=>{
+      assert.notEqual(process.argv[4],'deny','Cold replay must not call transport');
+      const payload=JSON.parse(options.body); const method=payload.text.format.name;
+      appendFileSync(process.argv[3],method+'\\n');
+      if(url.endsWith('/input_tokens')) return new Response(JSON.stringify({object:'response.input_tokens',input_tokens:120}));
+      const input=JSON.parse(payload.input[0].content[0].text); let output;
+      if(method==='cairn_extract') output={items:[{content:input.messages[0].content,
+        kind:'preference',confidence:0.9,sourceIndices:[0]}]};
+      else if(method==='cairn_qualify') output={qualifications:input.items.map(item=>({itemIndex:item.itemIndex,
+        qualification:{version:1,slot:{subject:null,property:null,scope:null,applies:null},value:null,
+          attribution:'unknown',commitment:'unknown',anchors:[{receiptIndex:0,start:0,
+            end:item.sources[0].excerpt.length,text:item.sources[0].excerpt,fields:['value']}]}}))};
+      else if(method==='cairn_classify') output={items:input.memories.map(memory=>({memoryId:memory.id,parentIds:[]}))};
+      else assert.fail('Unexpected model method');
+      return new Response(JSON.stringify({object:'response',model:payload.model,status:'completed',error:null,
+        incomplete_details:null,output:[{type:'message',role:'assistant',status:'completed',
+          content:[{type:'output_text',text:JSON.stringify(output)}]}],
+        usage:{input_tokens:120,output_tokens:100,total_tokens:220}}));
+    }});
+    const handle=serveStdio(()=>createCairnServer({path:process.argv[2],model,
+      namespace:{ownerId:'synthetic-installed-qualified',scope:'personal',projectId:null},
+      captureQualification:'source-bound-v1'}),{
+        transport:new StdioServerTransport(process.stdin,process.stdout,{maxBufferSize:65536})});
+    process.stdin.once('end',()=>{void handle.close();});
+    process.once('SIGTERM',()=>{void handle.close();});`, { flag: 'wx' });
+  const start = async (deny = false) => {
+    const transport = new StdioClientTransport({ command: process.execPath,
+      args: [fixturePath, databasePath, tracePath, ...(deny ? ['deny'] : [])],
+      cwd: directory, env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
+    const client = new Client({ name: 'synthetic-qualified-install', version: '1.0.0' });
+    t.after(() => client.close());
+    await client.connect(transport);
+    return client;
+  };
+  let client = await start();
+  const tools = (await client.listTools()).tools;
+  assert.equal(tools.length, 6);
+  assert.equal(tools.find(tool => tool.name === 'capture_memory').annotations.openWorldHint, true);
+  const request = { batchId: 'installed-submitted-batch', messages: [{ role: 'user', content: '我偏好紫色的電車 🚋。' }] };
+  const captured = ok(await call(client, 'capture_memory', request));
+  assert.equal(captured.duplicate, false);
+  const memoryId = captured.admission.memories[0].id;
+  const before = ok(await call(client, 'inspect_memory', { memoryId, includeQualification: true }));
+  assert.equal(before.qualification.anchors[0].text, request.messages[0].content);
+  const anchor = before.qualification.anchors[0];
+  assert.equal(before.receipts.find(receipt => receipt.id === anchor.receiptId).excerpt.slice(anchor.start, anchor.end), anchor.text);
+  const calls = readFileSync(tracePath, 'utf8');
+  assert.equal(calls.split('\n').filter(method => method === 'cairn_qualify').length, 2);
+  await client.close();
+  client = await start(true);
+  assert.deepEqual(ok(await call(client, 'inspect_memory', { memoryId, includeQualification: true })), before);
+  assert.equal(ok(await call(client, 'capture_memory', request)).duplicate, true);
+  assert.equal(readFileSync(tracePath, 'utf8'), calls);
+  await client.close();
+  const keyless = await connect(t, installation, databasePath, { owner: 'synthetic-installed-qualified' });
+  assert.deepEqual(ok(await call(keyless, 'inspect_memory', { memoryId, includeQualification: true })), before);
+  await keyless.close();
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(databasePath);
+  try {
+    assert.equal(db.prepare('SELECT count(*) AS n FROM qualified_claim_bindings').get().n, 0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM qualified_slots').get().n, 0);
+  } finally { db.close(); }
+});
+
 test('installed core and adapter capture source qualifications without granting update authority', () => {
   const probe = `import assert from 'node:assert/strict';
     import { DatabaseSync } from 'node:sqlite';

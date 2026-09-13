@@ -64,3 +64,24 @@ test('invalid configuration fails with no reflected arguments or secrets', () =>
     assert.ok(!result.stderr.includes('synthetic'));
   }
 });
+
+test('qualified capture config reports explicit opt-in but unverified models without file or provider access', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cairn-qualified-config-'));
+  const path = join(directory, 'memory.sqlite');
+  const args = ['--check-config', '--db', path, '--owner', 'synthetic-owner',
+    '--capture-qualification', 'source-bound-v1'];
+  for (const key of ['', 'synthetic-key']) {
+    const result = run(args, key); assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.captureQualification, 'source-bound-v1');
+    assert.equal(report.capture, key ? 'configured-not-verified' : 'model_not_configured');
+    assert.equal(report.automaticCapture, false); assert.equal(report.databaseOpened, false);
+    assert.equal(report.providerContacted, false); assert.deepEqual(readdirSync(directory), []);
+    assert.ok(!result.stdout.includes('synthetic-key'));
+  }
+  for (const tail of [[], ['wrong'], ['source-bound-v1', '--capture-qualification', 'source-bound-v1']]) {
+    const result = run([...args.slice(0, -1), ...tail]);
+    assert.equal(result.status, 1); assert.equal(result.stdout, ''); assert.deepEqual(readdirSync(directory), []);
+  }
+  const help = run(['--help']); assert.match(help.stdout, /--capture-qualification/);
+});
