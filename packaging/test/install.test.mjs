@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test, { before } from 'node:test';
 import { buildArtifact, command, packageName, runtimeFiles } from '../build.mjs';
+import { createExperimentBudget } from '../../evaluation/experiment-budget/index.mjs';
+import { createExperimentRequestGuard, authorizeQualificationExtension } from '../../evaluation/experiment-budget/request-guard.mjs';
+import { experimentPolicy } from '../../evaluation/live/session.mjs';
+import { createQualificationLiveSession } from '../../evaluation/live/qualification-session.mjs';
+import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
+import { fileURLToPath } from 'node:url';
 
 const requireSDK = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(requireSDK.resolve('@modelcontextprotocol/client'));
@@ -49,6 +56,81 @@ async function call(client, name, args = {}) {
   return result;
 }
 const ok = (result) => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
+
+test('installed qualified MCP launcher uses the shared capability guard through an authenticated proxy', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'cairn-qualified-guard-install-'));
+  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 100 };
+  createExperimentBudget(ledger).close();
+  const policy = experimentPolicy();
+  createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('Provisioning has no transport') }).close();
+  const qualificationExtension = authorizeQualificationExtension({ ledger, policy, authorizationId: 'synthetic-installed-qualification' });
+  const parentKey = 'synthetic-parent-provider-key';
+  let sends = 0; let forbid = false;
+  const session = createQualificationLiveSession({ ledger, apiKey: parentKey, qualificationExtension,
+    fetchImpl: async (url, options) => {
+      assert.equal(forbid, false, 'Cold inspection/replay must not use provider transport'); sends++;
+      assert.equal(new Headers(options.headers).get('authorization'), `Bearer ${parentKey}`);
+      const payload = JSON.parse(options.body);
+      if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+      const input = JSON.parse(payload.input[0].content[0].text); let output;
+      if (payload.text.format.name === 'cairn_extract') output = { items: [{ content: input.messages[0].content,
+        kind: 'preference', confidence: 0.9, sourceIndices: [0] }] };
+      else if (payload.text.format.name === 'cairn_qualify') output = { qualifications: input.items.map(item => ({
+        itemIndex: item.itemIndex, qualification: { version: 1, slot: { subject: null, property: null, scope: null, applies: null },
+          value: null, attribution: 'unknown', commitment: 'unknown', anchors: [{ receiptIndex: 0, start: 0,
+            end: item.sources[0].excerpt.length, text: item.sources[0].excerpt, fields: ['value'] }] } })) };
+      else {
+        assert.equal(payload.text.format.name, 'cairn_classify');
+        output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
+      }
+      return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
+        incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
+          content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+        usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
+    } });
+  const proxy = await startExperimentProxy({ session });
+  t.after(async () => { await proxy.close(); session.close(); });
+  assert.notEqual(proxy.token, parentKey);
+  const config = join(root, 'launcher.json');
+  writeFileSync(config, JSON.stringify({ version: 1, packageRoot: installation.packagePath, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
+  const db = join(root, 'memory.sqlite');
+  const launcher = fileURLToPath(new URL('../../evaluation/live/cairn-launcher.mjs', import.meta.url));
+  const start = async () => {
+    const transport = new StdioClientTransport({ command: process.execPath,
+      args: [launcher, '--db', db, '--owner', 'synthetic-qualified-proxy', '--capture-qualification', 'source-bound-v1'],
+      cwd: installation.directory,
+      env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
+    const client = new Client({ name: 'synthetic-guard-install', version: '1.0.0' });
+    t.after(() => client.close()); await client.connect(transport); return client;
+  };
+  let client = await start();
+  const request = { batchId: 'guarded-installed-batch', messages: [{ role: 'user', content: '週報請用繁體中文。' }] };
+  const captured = ok(await call(client, 'capture_memory', request));
+  const memoryId = captured.admission.memories[0].id;
+  const before = ok(await call(client, 'inspect_memory', { memoryId, includeQualification: true }));
+  assert.equal(before.qualification.anchors[0].text, request.messages[0].content);
+  const state = session.getState();
+  assert.equal(sends, 6); assert.equal(state.requestCount, sends);
+  assert.equal(state.reservedMicroUsd, 30_000);
+  assert.equal(state.attempts.filter(attempt => attempt.actualMicroUsd === null).length, 3);
+  assert.ok(state.attempts.every(attempt => attempt.outcome !== null));
+  await client.close(); forbid = true;
+  client = await start();
+  assert.deepEqual(ok(await call(client, 'inspect_memory', { memoryId, includeQualification: true })), before);
+  assert.equal(ok(await call(client, 'capture_memory', request)).duplicate, true);
+  assert.deepEqual(session.getState(), state);
+  await client.close();
+  for (const flags of [['--capture-qualification', 'wrong'], ['--capture-qualification'],
+    ['--capture-qualification', 'source-bound-v1', '--capture-qualification', 'source-bound-v1']]) {
+    const invalidPath = join(root, 'invalid.sqlite');
+    const result = spawnSync(process.execPath, [launcher, '--db', invalidPath, '--owner', 'synthetic', ...flags],
+      { env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1' }, encoding: 'utf8' });
+    assert.equal(result.status, 1); assert.equal(result.stdout, '');
+    assert.equal(result.stderr.trim(), 'cairn_live_launcher_failed');
+    assert.equal(existsSync(invalidPath), false);
+  }
+  assert.deepEqual(session.getState(), state);
+});
 
 test('installed MCP captures qualified submitted text and reopens without new provider requests', async (t) => {
   const directory = installation.directory;

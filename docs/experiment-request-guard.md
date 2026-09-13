@@ -171,6 +171,48 @@ transport this guard will use. It does not patch global networking or intercept
 an arbitrary Python host. Pinned Hermes routing remains to be verified before a
 real chat experiment; a JavaScript transport test is not that host verification.
 
+## Separate qualification capability
+
+`authorizeQualificationExtension({ledger,policy,authorizationId})` explicitly
+provisions `experiment-qualification-extension.json` against an already bound
+baseline policy and an open, settled ledger. It records the exact ledger/policy,
+fixed `cairn_qualify` method and DEFAULT_MODEL, plus the settled creation
+checkpoint. This independent capability requires neither extraction nor
+reconciliation authorization and grants neither alternative models nor reconcile.
+
+Construct `createQualificationExperimentRequestGuard({ledger,policy,
+qualificationExtension,fetchImpl})` with the returned detached frozen token.
+It adds qualification to the existing baseline methods through the same guard
+engine, reservation ledger and settlement path. The original baseline,
+extraction-extension and reconciliation-extension constructors still reject
+qualification, even when the new file exists. Static adapter paid allowlists
+are unchanged. The guard's schema equality and provider/token bounds remain
+unchanged; valid source anchors do not prove model interpretation is correct.
+
+Provisioning takes the existing SQLite writer lock, uses the shared exclusive
+0600/fsynced binding writer and never initializes or replenishes a ledger.
+Repeated identical authorization returns the same token; changed, partial or
+unsafe bindings fail without overwrite or repair. Token, file, policy and
+settled prefix are checked at construction and on every request, including
+after caller-owned request accessors and before reservation. This protects
+against accidental state mismatch, not a malicious same-user process replacing
+both expected tokens and their files.
+
+The separate `createQualificationLiveSession` uses this capability and the
+existing baseline experiment policy. It permits only baseline extract, qualify
+and classify Responses count/generation routes, with a mandatory injected
+transport and key. The cumulative ledger may be at most US$50; no new allowance
+is created. The real key stays with this parent session while the experiment
+launcher receives only an authenticated loopback capability. The launcher can
+pass `--capture-qualification source-bound-v1` to the installed MCP server.
+
+Neither constructing this primitive nor passing offline tests authorizes a paid
+run. The later pilot operator must separately enforce its US$1/100-HTTP delta,
+freeze new synthetic cases/artifact/operator hashes, inspect remaining settled
+budget, acquire an exclusive one-shot intent and retain failures without retries
+or refunds. This preparation accesses no real key, ledger or model service.
+See [acceptance](plans/qualification-experiment-guard.md).
+
 ## What is protected
 
 The supported request subset is deliberately narrow: nonstreaming Chat

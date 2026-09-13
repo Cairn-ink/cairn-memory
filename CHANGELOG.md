@@ -1,5 +1,15 @@
 # Changelog
 
+## Private candidate — explicit qualification experiment capability
+
+- Add an independent, baseline-only qualification capability to the existing
+  request guard, preserving all three old deny-by-default constructors and
+  accounting. Immutable authorization binds the settled existing ledger and
+  is rechecked after request accessors before reservation.
+- Prepare a narrowly routed qualification session and installed-MCP launcher
+  integration for fake-HTTP verification. No real ledger/key access, paid pilot,
+  budget replenishment or disclosure-hold clearance is included.
+
 ## Private candidate — explicit qualified capture over local MCP
 
 - Opt-in `--capture-qualification source-bound-v1` exposes `capture_memory` for
