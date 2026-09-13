@@ -5,9 +5,11 @@ authorized namespace. Each selection round accepts only memory references
 visible in that round; a model cannot select another namespace or invent IDs.
 Candidates repeated through multiple parents/pages are fetched once.
 Candidates are distinct memories scored before packing by full-body literal query
-token overlap, then stable ID, from one raw namespace scan of at most 1,024 rows
-plus a sentinel. History and tombstones consume the allowance. Valid existing
-placement refs are preserved; memories without one use the public map's unfiled
+token overlap, then stable ID, from one namespace scan of at most 1,024 current,
+nondeleted rows plus a current sentinel. The existing `capture_current_memories`
+partial index excludes history/tombstones before traversal; those records no
+longer consume the allowance. Projection-rejected current rows still do. Valid
+existing placement refs are preserved; memories without one use the public map's unfiled
 fallback. Group headers and hierarchy edges are omitted from this private input,
 reducing group context; public maps and classification are unchanged.
 
@@ -23,9 +25,14 @@ coverage is budget_exhausted, including when no relevant candidate was selected.
 Complete means those examined ranges were exhausted, not that semantic relevance
 has been proven. A candidate requiring a third receipt page remains incomplete.
 An unscanned sentinel also keeps `mapExhausted:false`, including successful or
-empty recall. At the scan ceiling `nextCursor:null` ends traversal without claiming
-complete coverage. Private authenticated cursors bind namespace, epoch, query
+empty recall. Once all candidates within the scan allowance have been paged,
+`nextCursor:null` ends traversal without claiming complete coverage. Private
+authenticated cursors bind namespace, epoch, query
 digest, both navigation policies, the 1,024-row allowance and candidate offset.
+The candidate-policy binding is now `literal-current-memory-overlap-v2`; older
+policy cursors cannot silently continue with the new allowance. A missing partial
+index fails closed without an unbounded scan or new migration. This policy change
+does not reclassify frozen v1 evidence as a v2 quality result.
 
 Each map/fetch response retains its 4,000 counted-token ceiling. Every model call
 still has the stricter 6,000 input / 1,024 output limits and existing deadline.

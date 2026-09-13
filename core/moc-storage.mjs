@@ -350,10 +350,12 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
-      // Bound raw rows before filtering: tombstones/history consume allowance.
-      // index_memory_keyset supplies namespace equality followed by ID order.
+      // The existing partial index excludes history/tombstones before traversal.
+      // Require that access path: a missing index must not trigger a full scan.
+      // Projection-rejected current rows still consume the bounded allowance.
       const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness FROM memories
-        INDEXED BY index_memory_keyset WHERE ${namespaceWhere} ORDER BY id LIMIT ?`)
+        INDEXED BY capture_current_memories WHERE ${namespaceWhere}
+          AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
         .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
       const eligible = [];
       for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {

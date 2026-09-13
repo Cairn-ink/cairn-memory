@@ -51,6 +51,8 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
     assert.ok(binding.q.length > 20);
     assert.ok(binding.x);
     assert.equal(binding.policy, QUERY_CANDIDATE_VERSION);
+    assert.equal(binding.policy, 'literal-current-memory-overlap-v2');
+    assert.notEqual(binding.policy, 'literal-memory-overlap-v1');
     assert.equal(binding.scan, QUERY_SCAN_LIMIT);
     assert.deepEqual(binding.a, { offset: 100 });
     assert.equal(binding.l, 100);

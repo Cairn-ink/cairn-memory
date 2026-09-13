@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — current-memory candidate allowance
+
+- Exclude retained history and tombstones from recall's 1,024-row candidate
+  allowance using the existing current-memory partial index. Projection-rejected
+  current rows still consume the allowance; current sentinels retain incomplete
+  coverage. Bump the private candidate cursor policy to v2 and fail closed when
+  the required index is missing. No new migration, public-map change or scoring
+  change is included. Frozen v1 evidence remains unchanged; offline tests do not
+  establish model-quality or latency improvements.
+
 ## Unreleased — bounded query-aware candidates
 
 - Score current exact-namespace memory bodies by distinct literal query-token

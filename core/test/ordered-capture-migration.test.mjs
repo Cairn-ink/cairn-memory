@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
+import { createMemoryRuntime } from '../runtime.mjs';
 
 // Generated with Node22.16 from unmodified public core at
 // 58e55a40045dd82e566c7f5d2d922967ee5ffa3c in a fresh synthetic SQLite file.
@@ -44,6 +45,36 @@ test('O2 v8→v9 preserves every old value, history, replay, signed cursors and 
   assert.deepEqual(ok(core.claimAdmission({ ...saved.key, leaseMs: 1000 })), { duplicate: true, memoryIds: [], suppressedCount: 0 });
   let cursor = saved.rebuild.cursor;
   do { cursor = ok(core.rebuildIndex({ ...saved.rebuild, cursor })).nextCursor; } while (cursor);
+});
+
+test('current candidate partial index survives v8 migration and runtime reopen without another migration', (t) => {
+  const { path, db } = fixture(t);
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='capture_current_memories'").get().n, 0);
+  const expected = db.prepare(`SELECT id FROM memories WHERE owner_id=? AND scope=? AND project_id=?
+    AND deleted=0 AND currentness='current' ORDER BY id`).all(saved.namespace.ownerId, saved.namespace.scope, '');
+  for (let round = 0; round < 2; round++) {
+    const runtime = createMemoryRuntime({ path });
+    try {
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
+      const definition = db.prepare("SELECT sql FROM sqlite_master WHERE name='capture_current_memories'").get().sql;
+      assert.match(definition, /ON memories\(owner_id,scope,project_id,id\)\s+WHERE deleted = 0 AND currentness = 'current'/);
+      const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
+        FROM memories INDEXED BY capture_current_memories
+        WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND currentness='current'
+        ORDER BY id LIMIT ?`).all(saved.namespace.ownerId, saved.namespace.scope, '', 1025);
+      assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX capture_current_memories')));
+      assert.ok(plan.every(({ detail }) => !detail.includes('TEMP B-TREE')));
+      const scored = [];
+      const page = runtime.queryCandidateRows({ ...saved.namespace, projectId: '' }, {
+        score: (body) => { scored.push(body); return 0; }, memoryLabel: (body) => body,
+      });
+      assert.equal(page.scanExhausted, true);
+      assert.equal(scored.length, expected.length);
+      assert.deepEqual(page.rows.map(({ item }) => ({ id: item.type === 'unfiled' ? item.ref.memoryId : item.ref.childId })),
+        expected.map(({ id }) => ({ id })));
+      preserved(db);
+    } finally { runtime.close(); }
+  }
 });
 
 test('O2 migration collision leaves v8 schema and data unchanged and permits a clean retry', (t) => {

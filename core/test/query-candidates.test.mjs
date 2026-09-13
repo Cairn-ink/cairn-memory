@@ -26,8 +26,10 @@ function fixture(t, wanted = [], options = {}) {
   const model = createMockRecallModel({ countTokens: () => 1, select: [select, select], rank: [rank], ...options });
   const core = openMemoryCore({ path, model });
   const db = new DatabaseSync(path);
-  t.after(() => { db.close(); core.close(); });
-  return { core, db, model, wanted, path };
+  let closed = false;
+  const close = () => { if (!closed) { db.close(); core.close(); closed = true; } };
+  t.after(close);
+  return { core, db, model, wanted, path, close };
 }
 function admit(core, content, namespace = ns) {
   return ok(core.admit({ namespace, memory: { content, kind: 'fact' }, receipts: [{
@@ -36,7 +38,7 @@ function admit(core, content, namespace = ns) {
 }
 const id = (i) => `synthetic-${String(i).padStart(4, '0')}`;
 // Direct SQL is confined to fresh synthetic stores. Fixed IDs
-// make the raw 1024-row boundary and public-map position deterministic without
+// make the current 1024-row boundary and public-map position deterministic without
 // relying on random UUID ordering. Public admissions/placement are tested below.
 function seed(db, count, content = (i) => `Unrelated note ${i}`, state = () => 'current') {
   const insert = db.prepare(`INSERT INTO memories
@@ -123,28 +125,85 @@ test('multiple targets beyond public page two reach select and exact sourced rec
   assert.equal(result.coverage, 'budget_exhausted');
 });
 
-test('raw 1023/1024/1025 boundaries count historical and deleted rows before eligibility', async (t) => {
+test('current 1023/1024/1025 boundaries skip preceding and interleaved history/tombstones', async (t) => {
   for (const count of [1023, 1024, 1025]) {
-    const f = fixture(t, [id(count)]);
-    seed(f.db, count, (i) => `Lantern evidence ${i}`, (i) => i === count ? 'current' : i % 2 ? 'historical' : 'deleted');
+    const prefix = 2048;
+    const target = prefix + 3 * (count - 1) + 1;
+    const f = fixture(t, [id(target)]);
+    seed(f.db, prefix + count * 3,
+      (i) => i === target ? 'Lantern surviving evidence' : `Unrelated evidence ${i}`,
+      (i) => i <= prefix ? (i % 2 ? 'historical' : 'deleted') :
+        (i - prefix) % 3 === 1 ? 'current' : (i - prefix) % 3 === 2 ? 'historical' : 'deleted');
+    const runtime = createMemoryRuntime({ path: f.path });
+    t.after(() => runtime.close());
+    const scored = [];
+    const score = createQueryScore('Lantern');
+    const page = runtime.queryCandidateRows({ ...ns, projectId: '' }, {
+      score: (body) => { scored.push(body); return score(body); }, memoryLabel: (body) => body,
+    });
+    assert.equal(scored.length, Math.min(count, 1024));
+    assert.equal(scored.includes('Lantern surviving evidence'), count <= 1024);
+    assert.equal(page.rows.length, Math.min(count, 1024));
+    assert.equal(page.scanExhausted, count <= 1024);
+    const expected = Array.from({ length: Math.min(count, 1024) }, (_, i) => id(prefix + 3 * i + 1));
+    assert.deepEqual(page.rows.map(({ item }) => item.ref.memoryId).sort(), expected);
     const result = ok(await recall(f.core));
-    assert.deepEqual(result.memories.map(({ memory }) => memory.id), count <= 1024 ? [id(count)] : []);
-    assert.equal(result.coverage, count <= 1024 ? 'complete' : 'budget_exhausted');
-    assert.equal(result.namespaces[0].mapExhausted, count <= 1024);
-    assert.ok(f.model.calls.filter((call) => call.method === 'select').length <= 1,
-      'scan ceiling must not cause repeated empty continuation');
-    const visibleIds = f.model.calls.filter((call) => call.method === 'select').flatMap((call) => refs(call.input).map((ref) => ref.memoryId));
-    assert.deepEqual(visibleIds, count <= 1024 ? [id(count)] : []);
+    assert.deepEqual(result.memories.map(({ memory }) => memory.id), count <= 1024 ? [id(target)] : []);
+    if (count <= 1024) assert.equal(result.memories[0].receipts[0].excerpt, 'Lantern surviving evidence');
+    assert.equal(result.coverage, 'budget_exhausted', 'candidate pages remain incomplete even when the current scan ends');
+    assert.equal(result.namespaces[0].mapExhausted, false);
+    assert.equal(f.model.calls.filter((call) => call.method === 'select').length, 2);
   }
 });
 
-test('a matching result inside an incomplete scan retains incomplete coverage', async (t) => {
-  const f = fixture(t, [id(1024)]);
-  seed(f.db, 1025, (i) => `Lantern evidence ${i}`, (i) => i === 1024 ? 'current' : 'historical');
-  const result = ok(await recall(f.core));
-  assert.equal(result.memories[0].memory.id, id(1024));
-  assert.equal(result.coverage, 'budget_exhausted');
-  assert.equal(f.model.calls.filter((call) => call.method === 'select').length, 1);
+test('many retired records cannot starve a single current sourced target, including reopen', async (t) => {
+  const f = fixture(t, [id(4097)], { rank: [rank, rank] });
+  seed(f.db, 4097, (i) => `Lantern evidence ${i}`,
+    (i) => i === 4097 ? 'current' : i % 2 ? 'historical' : 'deleted');
+  const check = async (core) => {
+    const result = ok(await recall(core));
+    assert.equal(result.memories[0].memory.id, id(4097));
+    assert.equal(result.memories[0].receipts[0].excerpt, 'Lantern evidence 4097');
+    assert.equal(result.coverage, 'complete');
+  };
+  await check(f.core);
+  f.close(); // Close every SQLite handle before reopening the persisted store.
+  const reopened = openMemoryCore({ path: f.path, model: f.model });
+  t.after(() => reopened.close());
+  await check(reopened);
+  const db = new DatabaseSync(f.path);
+  t.after(() => db.close());
+  const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
+    FROM memories INDEXED BY capture_current_memories
+    WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND currentness='current'
+    ORDER BY id LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
+  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX capture_current_memories')));
+  assert.ok(plan.every(({ detail }) => !detail.includes('TEMP B-TREE')));
+});
+
+test('projection-rejected current rows consume allowance and a current sentinel never gives a fake cursor', async (t) => {
+  for (const target of [1024, 1025]) {
+    const f = fixture(t, [id(target)]);
+    seed(f.db, 1025, (i) => `Lantern evidence ${i}`);
+    const expectedIndexRevision = ok(f.core.map({ namespace: ns })).indexRevision;
+    let page = ok(f.core.rebuildIndex({ namespace: ns, expectedIndexRevision, limit: 500 }));
+    while (!page.exhausted) page = ok(f.core.rebuildIndex({ namespace: ns,
+      expectedIndexRevision, limit: 500, cursor: page.nextCursor }));
+    f.db.prepare('DELETE FROM index_memories WHERE id != ?').run(id(target));
+    const envelopes = [];
+    f.model.countTokens = (text) => {
+      const parsed = text ? JSON.parse(text) : null;
+      if (parsed?.value?.items) envelopes.push(parsed.value);
+      return 1;
+    };
+    const result = ok(await recall(f.core));
+    assert.deepEqual(result.memories.map(({ memory }) => memory.id), target === 1024 ? [id(target)] : []);
+    assert.equal(result.coverage, 'budget_exhausted');
+    assert.equal(f.model.calls.filter((call) => call.method === 'select').length, 1);
+    assert.equal(envelopes[0].exhausted, false);
+    assert.equal(envelopes[0].nextCursor, null);
+    assert.equal(envelopes[0].items.length, target === 1024 ? 1 : 0);
+  }
 });
 
 test('crowded score ties use ID order, retain zero overlap, and expose lexical limitations', async (t) => {
@@ -177,7 +236,7 @@ test('exact namespaces and small zero-overlap stores remain selectable', async (
   assert.ok(!JSON.stringify(f.model.calls).includes('Automobile candidate-tests other'));
 });
 
-test('a fully inspected namespace of 1024 rejected raw rows is complete and never loops', async (t) => {
+test('a namespace containing only history and tombstones is complete and never loops', async (t) => {
   const f = fixture(t);
   seed(f.db, 1024, (i) => `Private historical ${i}`, (i) => i % 2 ? 'deleted' : 'historical');
   const result = ok(await recall(f.core));
@@ -260,7 +319,7 @@ test('candidate pages obey token packing as well as the 100 item ceiling', async
   assert.equal(result.coverage, 'budget_exhausted');
 });
 
-test('raw scan scores at most 1024 bodies, excludes sentinel, and uses the namespace ID index', (t) => {
+test('current scan scores at most 1024 bodies, excludes sentinel, and uses the partial namespace index', (t) => {
   const f = fixture(t);
   seed(f.db, 1025, (i) => `記憶 body ${i}`);
   const runtime = createMemoryRuntime({ path: f.path });
@@ -276,12 +335,31 @@ test('raw scan scores at most 1024 bodies, excludes sentinel, and uses the names
   assert.equal(scored.reduce((sum, body) => sum + Buffer.byteLength(body), 0), expectedBytes);
   assert.equal(page.scanExhausted, false);
   const plan = f.db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
-    FROM memories INDEXED BY index_memory_keyset
-    WHERE owner_id=? AND scope=? AND project_id=? ORDER BY id LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
-  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX index_memory_keyset')));
+    FROM memories INDEXED BY capture_current_memories
+    WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND currentness='current'
+    ORDER BY id LIMIT ?`).all(ns.ownerId, ns.scope, '', 1025);
+  assert.ok(plan.some(({ detail }) => detail.includes('SEARCH memories USING INDEX capture_current_memories')));
   assert.ok(plan.every(({ detail }) => !detail.includes('TEMP B-TREE')));
   // These assertions bound returned rows and JS body scoring, not SQLite page
   // I/O, nor the auxiliary current-placement and projection lookup work.
+});
+
+test('missing current partial index fails closed before selection, including reopen', async (t) => {
+  const f = fixture(t);
+  admit(f.core, 'Lantern private evidence');
+  f.db.exec('DROP INDEX capture_current_memories');
+  const check = async (core) => {
+    assert.deepEqual(await recall(core), { ok: false, error: { code: 'storage_error', retryable: false } });
+    assert.equal(f.model.calls.length, 0);
+  };
+  await check(f.core);
+  f.close();
+  const reopened = openMemoryCore({ path: f.path, model: f.model });
+  t.after(() => reopened.close());
+  await check(reopened);
+  const db = new DatabaseSync(f.path);
+  t.after(() => db.close());
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='capture_current_memories'").get().n, 0);
 });
 
 test('stale or missing placement falls back to true unfiled and multiparent uses one real edge', async (t) => {
