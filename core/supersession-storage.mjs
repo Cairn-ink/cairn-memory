@@ -5,8 +5,27 @@ const where = 'owner_id = ? AND scope = ? AND project_id = ?';
 
 /** Durable directional history. Mutation callers own the enclosing transaction. */
 export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
-  invalidateConflicts, invalidateMemory }) {
+  invalidateConflicts, invalidateMemory, evaluateQualified, epoch }) {
+  const requiresQualification = (previous, replacement) => Boolean(db.prepare(
+    'SELECT 1 FROM memory_qualifications WHERE memory_id IN (?, ?) LIMIT 1').get(previous.id, replacement.id));
+
   function retire(ns, previous, replacement, receiptIds) {
+    if (requiresQualification(previous, replacement)) fail('qualified_transition_required');
+    return retireMutation(ns, previous, replacement, receiptIds);
+  }
+
+  function retireQualified(ns, previous, replacement) {
+    const verdict = evaluateQualified(ns, previous, replacement);
+    if (verdict.reason) return { status: 'unresolved', reason: verdict.reason,
+      retiredCount: 0, indexRevision: epoch(ns) };
+    const result = retireMutation(ns, previous, replacement, verdict.receiptIds);
+    return { status: 'applied', reason: null, retiredCount: 1, ...result,
+      replacement: { id: replacement.id, revision: replacement.revision } };
+  }
+
+  // The only bypass of the legacy fence is this lexical helper reached after
+  // evaluateQualified. No public DTO or model output can supply a capability.
+  function retireMutation(ns, previous, replacement, receiptIds) {
     if (previous.id === replacement.id) fail('invalid_ref');
     const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
       WHERE replacement_memory_id = ?`).get(replacement.id).n;
@@ -51,5 +70,5 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
       evidenceAvailable: receiptIds.length === bound.length };
   }
 
-  return { retire, inspect };
+  return { retire, retireQualified, requiresQualification, inspect };
 }

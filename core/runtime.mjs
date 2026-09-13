@@ -7,6 +7,7 @@ import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
+import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -250,6 +251,29 @@ export function createMemoryRuntime(input) {
     });
   }
 
+  function qualifiedRow(ns, ref) {
+    const memory = activeRow(ns, ref.memoryId);
+    if (!memory) fail('memory_not_found');
+    if (memory.revision !== ref.expectedRevision) fail('revision_conflict');
+    if (memory.currentness !== 'current') fail('memory_historical');
+    return memory;
+  }
+
+  function bindQualifiedClaim(ns, input) {
+    ready();
+    return transaction(db, () => qualifiedTransitionStorage.bind(ns, qualifiedRow(ns, input), input.slotId));
+  }
+
+  function transitionQualified(ns, input) {
+    ready();
+    return transaction(db, () => {
+      if (input.predecessor.memoryId === input.replacement.memoryId) fail('invalid_ref');
+      const previous = qualifiedRow(ns, input.predecessor);
+      const replacement = qualifiedRow(ns, input.replacement);
+      return supersessionStorage.retireQualified(ns, previous, replacement);
+    });
+  }
+
   function legacyGet(ns, id) {
     ready();
     return transaction(db, () => legacyDto(currentRow(ns, id)));
@@ -371,11 +395,13 @@ export function createMemoryRuntime(input) {
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, advanceEpoch });
   const qualificationStorage = createQualificationStorage({ db, receiptKey });
+  const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable });
   const supersessionStorage = createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
-    invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory });
+    invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
+    evaluateQualified: qualifiedTransitionStorage.evaluate, epoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
   });
@@ -383,7 +409,8 @@ export function createMemoryRuntime(input) {
     supersessionStorage, receiptKey, isSuppressed });
 
   return Object.freeze({
-    identity, ready, admit, correct, forget, supersede, legacyGet, legacyList, legacySearch,
+    identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified,
+    legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
     claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },
     discoverOrdered(ns, snapshot, order, items) {

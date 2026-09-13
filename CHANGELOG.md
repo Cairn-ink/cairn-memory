@@ -1,5 +1,15 @@
 # Changelog
 
+## Private candidate — trusted-manual qualified transitions
+
+- Add immutable server-generated claim slots and manual single-claim bindings,
+  with atomic v10→v11 migration and empty-slot cleanup on correction/forget.
+  Apply source-validated transitions between already-admitted qualified memories
+  or retain both as unresolved; fence legacy retirement of qualified endpoints.
+  Ordered capture preserves admission and replay when fenced. Unqualified legacy
+  retirement and model interpretation remain explicitly unprotected. No public
+  disclosure, release, deployment or model calls are part of this private slice.
+
 ## Private candidate — Unicode identifier integration (disclosure hold)
 
 - Integrate the separately reviewed malformed-Unicode identifier guard with

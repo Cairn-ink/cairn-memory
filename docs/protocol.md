@@ -64,6 +64,18 @@ subject to the local file, backup, journal and secure-erasure limitations in
 [the store](local-store.md). The opt-in inspection flag is a local core field,
 not a new hosted wire or MCP capability.
 
+### Separate local trusted-transition boundary
+
+The local core's [trusted-manual transition methods](qualified-transition.md)
+add immutable slot descriptors and membership links within the exact namespace.
+They are manual attestations of identity and single-claim shape, not verified
+semantic facts or permissions. Only already-admitted source-valid qualifications
+can bind. Correction/forget clears memberships and empty slots; historical
+members retain their descriptors until removed. No model, MCP, HTTP or capture
+input field is added, and no new data leaves the local database. Ordinary
+unqualified-to-unqualified automatic retirement remains unprotected; qualified
+endpoints cannot silently fall back to it.
+
 ### Separate local ordered-capture boundary
 
 The JavaScript core's optional [causal fields](capture.md#opt-in-source-ordered-reconciliation)

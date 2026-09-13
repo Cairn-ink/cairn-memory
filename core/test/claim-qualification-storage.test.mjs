@@ -49,7 +49,7 @@ test('S1/S2 explicit exact UTF-8 bindings, opt-in shape, no copied anchor text, 
   assert.deepEqual(q, { ...qualification(), boundRevision: saved.memory.revision, contentDigest: digest(content),
     anchors: [{ receiptId: detail.receipts[0].id, receiptDigest: digest(content), start: 0, end: content.length,
       text: content, fields: qualification().anchors[0].fields }] });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 10);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 11);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   assert.ok(!Object.keys(db.prepare('SELECT * FROM qualification_anchors').get()).includes('text'));
   for (const memory of ok(core.list({ namespace })).memories) assert.equal(Object.hasOwn(memory, 'qualification'), false);
@@ -121,19 +121,33 @@ for (const stage of ['anchor', 'second-memory', 'completion']) test(`S6 real SQL
 });
 
 test('S4 filing and explicit history preserve bindings, historical correction stays forbidden and forgetting clears them', (t) => {
-  const { core, db } = fixture(t); let memory = ok(core.admit(input())).memory;
+  const { core, db } = fixture(t);
+  const qualified = qualification(); Object.assign(qualified.slot, { scope: 'commute', applies: 'recurring' });
+  qualified.anchors[0].fields.push('scope', 'applies');
+  let memory = ok(core.admit(input({ qualification: qualified }))).memory;
   const original = ok(get(core, memory.id)).qualification;
   ok(core.applyPlacement({ namespace, proposal: { items: [{ memoryId: memory.id, parentIds: [], newL1: { title: 'Synthetic transport', parentL2Ids: [] } }] },
     expectedMemoryRevisions: [{ memoryId: memory.id, revision: memory.revision }], expectedIndexRevision: ok(core.map({ namespace })).indexRevision }));
   memory = ok(get(core, memory.id)).memory; assert.deepEqual(ok(get(core, memory.id)).qualification, original);
-  ok(core.supersede({ namespace, memoryId: memory.id, expectedRevision: memory.revision,
-    replacement: { content: 'I choose a synthetic bus.', kind: 'fact' }, receipts: [receipt('bus', 'I choose a synthetic bus.')] }));
+  const nextContent = 'I choose a synthetic bus.';
+  const nextQualification = structuredClone(qualified); nextQualification.value = 'synthetic bus';
+  Object.assign(nextQualification.anchors[0], { text: nextContent, end: nextContent.length });
+  const replacement = ok(core.admit(input({ memory: { content: nextContent, kind: 'fact' },
+    receipts: [receipt('bus', nextContent)], qualification: nextQualification }))).memory;
+  const slotId = ok(core.bindQualifiedClaim({ namespace, memoryId: memory.id,
+    expectedRevision: memory.revision, slotId: null, singleClaim: true })).slotId;
+  ok(core.bindQualifiedClaim({ namespace, memoryId: replacement.id,
+    expectedRevision: replacement.revision, slotId, singleClaim: true }));
+  assert.equal(ok(core.transitionQualified({ namespace,
+    predecessor: { memoryId: memory.id, expectedRevision: memory.revision },
+    replacement: { memoryId: replacement.id, expectedRevision: replacement.revision } })).status, 'applied');
   const history = ok(get(core, memory.id)); assert.equal(history.memory.state, 'historical'); assert.deepEqual(history.qualification, original);
   error(core.correct({ namespace, memoryId: memory.id, expectedRevision: history.memory.revision, content, kind: 'fact', receipt: receipt('correction') }), 'memory_historical');
   assert.deepEqual(ok(get(core, memory.id)).qualification, original);
   ok(core.forget({ namespace, memoryId: memory.id, expectedRevision: history.memory.revision }));
   error(get(core, memory.id), 'memory_not_found');
-  assert.equal(db.prepare('SELECT count(*) n FROM qualification_anchors').get().n, 0);
+  assert.equal(db.prepare('SELECT count(*) n FROM qualification_anchors WHERE memory_id=?').get(memory.id).n, 0);
+  assert.equal(ok(get(core, replacement.id)).qualification.value, 'synthetic bus');
 });
 
 for (const legacy of [false, true]) for (const action of ['correct', 'forget']) test(`S4 ${legacy ? 'legacy' : 'core'} ${action} clears metadata and inferred suppressed replay cannot restore it`, (t) => {

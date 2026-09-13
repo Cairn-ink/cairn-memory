@@ -43,6 +43,11 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
 - `get`: content with separately paginated receipts at a consistent revision.
 - Optional manual [claim qualification](claim-qualification.md) on admission,
   with immutable source bindings and opt-in `get.includeQualification` inspection.
+- Trusted-manual [qualified transitions](qualified-transition.md) bind single
+  claims to immutable server-generated slots and enforce source-backed guards
+  before retiring an already-admitted predecessor. Legacy retirement is fenced
+  whenever either endpoint is qualified; automatic unqualified retirement remains
+  unprotected by these guards.
 - `correct` and `forget`: revision checks, replacement/removal of active receipts,
   persistent suppression and atomic invalidation of inspection cursors.
 - Explicit [supersede](supersession.md): atomically admit a replacement and
@@ -82,12 +87,12 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1, v3, v4, v5, v6, v7, v8 or v9 format performs an atomic upgrade to v10, retaining
+Opening the committed v1, v3, v4, v5, v6, v7, v8, v9 or v10 format performs an atomic upgrade to v11, retaining
 existing memory/source data, revisions and suppression. Back up the file while
 all older-runtime processes and connections (including idle readers) are closed
 before upgrading meaningful data. Mixed-version coexistence is unsupported;
 an already-open old process is not retroactively fenced. Older binaries cannot
-open v10; there is no downgrade tool. Existing receipts remain unordered; no past
+open v11; there is no downgrade tool. Existing receipts remain unordered; no past
 chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,

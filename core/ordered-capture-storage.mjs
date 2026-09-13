@@ -133,6 +133,13 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         });
         const predecessors = new Set(resolved.map(row => row.previous.id));
         if (resolved.some(row => predecessors.has(row.replacement.id))) fail('invalid_ref');
+        // Decide the whole retirement set before the first retirement mutation.
+        // Preserve admissions and replay outcome, but never downgrade a qualified
+        // endpoint to legacy retirement based on a model verdict.
+        if (resolved.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement))) {
+          reconciliation = outcome('qualified_transition_required');
+          return { reconciliation };
+        }
         for (const row of resolved) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
         reconciliation = outcome(reason, resolved.length);
         return { reconciliation };

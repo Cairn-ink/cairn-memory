@@ -1,5 +1,11 @@
 # Explicit supersession and historical evidence
 
+Qualified endpoints now require the separate [trusted-manual transition](qualified-transition.md)
+boundary. `core.supersede` fails `qualified_transition_required` atomically when
+either endpoint is qualified; it cannot bypass stored slot/source checks. The
+legacy unqualified-to-unqualified operation below remains explicitly unprotected
+by those qualified guards.
+
 `core.supersede` is a trusted local caller's explicit assertion that one memory
 replaces another. It is not automatic semantic contradiction detection, a new
 MCP tool, or evidence that capture now understands changing decisions.

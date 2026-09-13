@@ -295,6 +295,37 @@ export function openMemoryCore(input) {
       payloadDigest: input.payloadDigest };
   }
 
+  function exactFields(input, fields) {
+    object(input, fields);
+    if (fields.some(field => !Object.hasOwn(input, field))) throw new MemoryStoreError('invalid_input');
+  }
+
+  function qualifiedRef(input) {
+    exactFields(input, ['memoryId', 'expectedRevision']);
+    return { memoryId: contractId(input.memoryId), expectedRevision: contractRevision(input.expectedRevision) };
+  }
+
+  function bindQualifiedClaim(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'memoryId', 'expectedRevision', 'slotId', 'singleClaim']);
+      if (input.singleClaim !== true) throw new MemoryStoreError('invalid_input');
+      const ns = contractNamespace(input.namespace);
+      return runtime.bindQualifiedClaim(ns, { memoryId: contractId(input.memoryId),
+        expectedRevision: contractRevision(input.expectedRevision),
+        slotId: input.slotId === null ? null : contractId(input.slotId) });
+    });
+  }
+
+  function transitionQualified(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'predecessor', 'replacement']);
+      return runtime.transitionQualified(contractNamespace(input.namespace), {
+        predecessor: qualifiedRef(input.predecessor), replacement: qualifiedRef(input.replacement) });
+    });
+  }
+
   function claimAdmission(input) {
     return invoke(() => {
       runtime.ready();
@@ -558,7 +589,8 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
-    admit, list, get, correct, forget, supersede, claimAdmission, finishAdmission, abandonAdmission,
+    admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified,
+    claimAdmission, finishAdmission, abandonAdmission,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     close() {
       runtime.close();
