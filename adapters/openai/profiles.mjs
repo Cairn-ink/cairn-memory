@@ -1,6 +1,7 @@
 export const DEFAULT_MODEL = 'gpt-4.1-mini-2025-04-14';
 export const EXPERIMENTAL_EXTRACTION_MODEL = 'gpt-5.4-mini-2026-03-17';
 export const LUNA_EXTRACTION_MODEL = 'gpt-5.6-luna';
+export const SOL_RATIONALE_MODEL = 'gpt-5.6-sol';
 
 const baseline = Object.freeze({ model: DEFAULT_MODEL, contextWindow: 1047576,
   reservationUnits: 4448, inputRate: 0.4, outputRate: 1.6 });
@@ -13,14 +14,23 @@ const experimental = Object.freeze({ model: EXPERIMENTAL_EXTRACTION_MODEL, conte
 const luna = Object.freeze({ model: LUNA_EXTRACTION_MODEL, contextWindow: 1050000,
   reasoning: Object.freeze({ effort: 'none' }), reservationUnits: 2985,
   inputRate: 0.25, outputRate: 1.2 });
+// Current Sol base input/output pricing is USD4/20 per million tokens.
+// Reserve input at the 1.25x cache-write ceiling, not an assumed invoice rate.
+const sol = Object.freeze({ model: SOL_RATIONALE_MODEL, contextWindow: 1050000,
+  reasoning: Object.freeze({ effort: 'none' }), reservationUnits: 55600,
+  inputRate: 5, outputRate: 20 });
 
-export function modelProfile(extractionModel = DEFAULT_MODEL) {
+export function modelProfile(extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL) {
   if (extractionModel !== DEFAULT_MODEL && extractionModel !== EXPERIMENTAL_EXTRACTION_MODEL &&
       extractionModel !== LUNA_EXTRACTION_MODEL) {
     throw new Error('invalid_openai_configuration');
   }
+  if (![DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, SOL_RATIONALE_MODEL].includes(rationaleModel)) {
+    throw new Error('invalid_openai_configuration');
+  }
   return Object.freeze({ extract: extractionModel === DEFAULT_MODEL ? baseline :
     extractionModel === EXPERIMENTAL_EXTRACTION_MODEL ? experimental : luna,
-    qualify: baseline, qualifyCandidates: baseline, relate: baseline,
+    qualify: baseline, qualifyCandidates: baseline,
+    relate: rationaleModel === DEFAULT_MODEL ? baseline : rationaleModel === LUNA_EXTRACTION_MODEL ? luna : sol,
     classify: baseline, select: baseline, rank: baseline, reconcile: baseline });
 }

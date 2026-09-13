@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — independent rationale model controls
+
+- Embedded OpenAI adapters can explicitly select Luna or Sol for relate alone,
+  independently of extraction. Existing baseline and MCP defaults remain.
+- No semantic success, live guard grant or automatic upgrade is implied.
+  See `docs/rationale-model-controls.md` for bounded framing and cost estimates.
+
 ## Evidence — claim-focus ablation v1
 
 - Preserve all 16 installed-core real-model arms. Unverified focus did not reliably

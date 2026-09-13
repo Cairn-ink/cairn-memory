@@ -87,8 +87,8 @@ function parseOutput(response, inputTokens, model, diagnose) {
 }
 
 export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
-  extractionModel = DEFAULT_MODEL, onDiagnostic, ...unknown } = {}) {
-  const profile = modelProfile(extractionModel);
+  extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL, onDiagnostic, ...unknown } = {}) {
+  const profile = modelProfile(extractionModel, rationaleModel);
   const contextWindow = Math.min(...Object.values(profile).map((entry) => entry.contextWindow));
   if (typeof apiKey !== 'string' || !apiKey.trim() || /[\r\n]/.test(apiKey) ||
       typeof fetchImpl !== 'function' || Object.keys(unknown).length ||
