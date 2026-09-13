@@ -9,6 +9,7 @@ import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
+import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -425,6 +426,7 @@ export function createMemoryRuntime(input) {
   }
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, advanceEpoch });
+  const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
   const qualificationStorage = createQualificationStorage({ db, receiptKey });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
@@ -444,6 +446,9 @@ export function createMemoryRuntime(input) {
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot,
+    rationaleSnapshot(ns, refs) { ready(); return rationaleStorage.snapshot(ns, refs); },
+    commitRationale(ns, refs, snapshot, proposals) { ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals); },
+    getRationale(ns, ref) { ready(); return rationaleStorage.inspect(ns, ref); },
     claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);

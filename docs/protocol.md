@@ -1,5 +1,23 @@
 # Compatibility protocol v0.1
 
+### Embedded proposed-rationale boundary
+
+The optional [embedded rationale API](source-backed-rationale.md) sends complete
+bounded retained excerpts and submitted roles to an injected `relate` method,
+using request-local indices. It does not send owner, client, session or event IDs,
+generated summaries or qualifications. These passages may contain personal data;
+the host must explicitly supply an appropriate model. No provider is enabled by
+default and this is not a new MCP or hosted HTTP capability.
+
+Local rows store endpoint/revision links, selected receipt IDs and SHA256 source
+digests with model-proposed relation types. These are sensitive relationship
+metadata, not anonymization, semantic proof, authenticated roles or permissions.
+Source text is not duplicated in relation rows. Exact namespace and current
+revision guards apply on inference and inspection; mutations clear affected
+links. Logical forgetting has the same journal/backup/secure-erasure limitations
+as the existing store. No telemetry, automatic execution, implicit supersession,
+data-sharing scope or user consent is introduced by a rationale proposal.
+
 This document describes the public contract implemented by the plugin. JSON Schemas under `schemas/` are normative for HTTP payload shape; this prose defines semantics.
 
 ## Authentication
