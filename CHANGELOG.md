@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — isolated rationale-model experiment guard
+
+- Add a separately bound, relation-only experimental capability for baseline,
+  Luna and Sol. Existing grants, defaults and aggregate ledger remain unchanged.
+- Fixed per-HTTP reservations include count calls; no live run is initiated.
+  See `docs/rationale-model-guard.md` for the separate operator prerequisites.
+
 ## Unreleased — independent rationale model controls
 
 - Embedded OpenAI adapters can explicitly select Luna or Sol for relate alone,

@@ -21,6 +21,7 @@ import {
   DEFAULT_MODEL,
   EXPERIMENTAL_EXTRACTION_MODEL,
   LUNA_EXTRACTION_MODEL,
+  SOL_RATIONALE_MODEL,
 } from '../../adapters/openai/profiles.mjs';
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { schemasFor } from '../../adapters/openai/schemas.mjs';
@@ -35,6 +36,9 @@ const CANDIDATE_QUALIFICATION_KIND = Object.freeze({
 });
 const RATIONALE_KIND = Object.freeze({
   filename: 'experiment-rationale-extension.json', method: 'cairn_relate',
+});
+const RATIONALE_MODELS_KIND = Object.freeze({
+  filename: 'experiment-rationale-models-extension.json', method: 'cairn_relate',
 });
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
@@ -350,12 +354,13 @@ function validateHostBody(body, channel, byteLength) {
 
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
-function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null) {
+function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
+  rationaleModels = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
     : baseKeys;
-  if ([EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL].includes(body.model)) expectedKeys.push('reasoning');
+  if ([EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL, SOL_RATIONALE_MODEL].includes(body.model)) expectedKeys.push('reasoning');
   exactKeys(body, expectedKeys, 'unsupported_request');
   if (body.model !== channel.model || typeof body.instructions !== 'string'
     || body.truncation !== 'disabled' || !Array.isArray(body.input) || body.input.length !== 1) {
@@ -367,19 +372,21 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   exactKeys(body.input[0].content[0], ['text', 'type'], 'unsupported_request');
   if (body.input[0].content[0].type !== 'input_text'
     || typeof body.input[0].content[0].text !== 'string') fail('unsupported_request');
-  if ([EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL].includes(body.model)) {
+  if ([EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL, SOL_RATIONALE_MODEL].includes(body.model)) {
     if (!deepEqual(body.reasoning, { effort: 'none' })) fail('unsupported_request');
   }
   exactKeys(body.text, ['format'], 'unsupported_request');
   const format = body.text.format;
   exactKeys(format, ['name', 'schema', 'strict', 'type'], 'unsupported_request');
   if (typeof format.name !== 'string') fail('unsupported_request');
-  const match = (qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate)$/u
+  const match = (rationaleModels ? /^cairn_(relate)$/u
+    : qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate)$/u
     : qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates)$/u
     : qualificationMethod === QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualify)$/u
     : reconciliation ? /^cairn_(extract|classify|select|rank|reconcile)$/u
     : /^cairn_(extract|classify|select|rank)$/u).exec(format.name);
-  if (['reconcile', 'qualify', 'qualifyCandidates', 'relate'].includes(match?.[1]) && body.model !== DEFAULT_MODEL) fail('unsupported_request');
+  if (!rationaleModels && ['reconcile', 'qualify', 'qualifyCandidates', 'relate'].includes(match?.[1])
+    && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   let expectedSchema;
@@ -682,12 +689,27 @@ export function createExperimentRequestGuard(options) { return constructGuard(op
 function qualificationConfiguration(options, kind) {
   // Reuse exact baseline policy validation without granting any extraction models.
   const { version, authorizationId, ledger, policy } = extensionConfiguration(options);
+  if (kind === RATIONALE_MODELS_KIND) {
+    const models = {};
+    for (const [model, input, output, reservation] of [
+      [DEFAULT_MODEL, 40, 160, 5000], [LUNA_EXTRACTION_MODEL, 25, 120, 3000],
+      [SOL_RATIONALE_MODEL, 500, 2000, 56000],
+    ]) {
+      models[model] = {};
+      for (const channel of ['cairnCount', 'cairnGeneration']) {
+        models[model][channel] = { ...policy[channel], model, reservedMicroUsd: reservation,
+          inputPrice: { microUsdNumerator: input, tokenDenominator: 100 },
+          outputPrice: { microUsdNumerator: output, tokenDenominator: 100 } };
+      }
+    }
+    return { version, authorizationId, ledger, policy, method: kind.method, models };
+  }
   return { version, authorizationId, ledger, policy, method: kind.method, model: DEFAULT_MODEL };
 }
 
 function verifyQualificationExtension(qualification, ledger, policy, kind) {
   exactKeys(qualification, ['version', 'authorizationId', 'ledger', 'policy',
-    'method', 'model', 'checkpoint'], 'invalid_extension');
+    'method', kind === RATIONALE_MODELS_KIND ? 'models' : 'model', 'checkpoint'], 'invalid_extension');
   const expected = qualificationConfiguration({ ledger, policy, authorizationId: qualification.authorizationId }, kind);
   exactKeys(qualification.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
   if (!safeInteger(qualification.checkpoint.requestCount) || !safeInteger(qualification.checkpoint.reservedMicroUsd)
@@ -713,6 +735,11 @@ export function authorizeCandidateQualificationExtension(options) {
 // arbitrary methods or an alteration of an older capability file.
 export function authorizeRationaleExtension(options) {
   return authorizeQualification(options, RATIONALE_KIND);
+}
+
+// A distinct immutable grant: relation-only model controls never alter older grants.
+export function authorizeRationaleModelsExtension(options) {
+  return authorizeQualification(options, RATIONALE_MODELS_KIND);
 }
 
 function authorizeQualification(options, kind) {
@@ -774,6 +801,13 @@ export function createRationaleExperimentRequestGuard(options) {
     null, null, qualification, RATIONALE_KIND);
 }
 
+export function createRationaleModelsExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'rationaleModelsExtension', 'fetchImpl']);
+  const qualification = snapshotExtension(options.rationaleModelsExtension);
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    null, null, qualification, RATIONALE_MODELS_KIND);
+}
+
 function constructGuard(options, extension = null, reconciliation = null, qualification = null,
   qualificationKind = QUALIFICATION_KIND) {
   const policy = validateConstructor(options);
@@ -810,9 +844,15 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
 
   const guardedFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
+    const rationaleModels = qualification !== null && qualificationKind === RATIONALE_MODELS_KIND;
+    if (rationaleModels && kind === 'hostCompletion') fail('unsupported_request');
     if (extension || qualification) verifyCapabilities();
     let channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);
+    if (rationaleModels) {
+      if (!own(qualification.models, snapshot.body.model)) fail('unsupported_request');
+      channel = qualification.models[snapshot.body.model][kind];
+    }
     if (extension && kind !== 'hostCompletion' && snapshot.body.model !== channel.model) {
       if (snapshot.body.text?.format?.name !== 'cairn_extract'
         || !own(extension.models, snapshot.body.model)) fail('unsupported_request');
@@ -821,7 +861,7 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
     const requestBytes = encoder.encode(snapshot.bodyText).byteLength;
     if (kind === 'hostCompletion') validateHostBody(snapshot.body, channel, requestBytes);
     else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', reconciliation !== null,
-      qualification === null ? null : qualificationKind.method);
+      qualification === null ? null : qualificationKind.method, rationaleModels);
 
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the new capability after those callbacks, before any reservation.
