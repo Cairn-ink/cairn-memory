@@ -1,5 +1,16 @@
 # Changelog
 
+## Private candidate — explicit v2 qualification experiment
+
+- Add a separate baseline-only candidate-qualification capability and narrowly
+  routed session to the shared experiment accounting boundary. Preserve every
+  old guard's method restrictions and immutable grants; no budget replenishment.
+- Prepare one frozen six-case installed v2 experiment with a 36-request/US$0.18
+  ceiling, source traces, finite diagnostics and request-free cold replay. Keep
+  earlier failed pilots intact and distinguish structural storage from semantic
+  quality. This entry does not claim the experiment passed or clear disclosure,
+  release or deployment gates.
+
 ## Private candidate — source-candidate capture over MCP
 
 - Accept explicit `--capture-qualification source-bound-v2` in the local MCP

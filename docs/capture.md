@@ -110,7 +110,8 @@ existing no-change outcome. Replay retains the recorded outcome.
 `captureQualification: 'source-bound-v2'` uses `model.qualifyCandidates` instead
 of `model.qualify`. The v1 model API, stored S1 qualification DTO and default
 capture behavior are unchanged. The local MCP server also accepts this explicit
-mode; its paid method remains denied by existing experiment guards.
+mode; its paid method remains denied by default. Maintainer experiments require
+the separately authorized candidate-qualification guard, not a v1 grant.
 
 Core partitions every retained canonical receipt into nonoverlapping windows
 of at most 200 UTF-16 units, without splitting Unicode code points or dropping

@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "id": "candidate-qualification-heldout-v1",
+  "authorship": "independent_no_repository_access_root_curated_not_fully_blind",
+  "cases": [
+    {
+      "id": "quoted_third_party",
+      "messages": [
+        {
+          "role": "user",
+          "content": "同事說：「我喜歡深色介面。」"
+        }
+      ],
+      "expected": {
+        "criteria": [
+          "Attribute the dark-interface preference to the colleague, not the user.",
+          "Quoted or reported attribution is acceptable; do not invent user adoption."
+        ],
+        "forbiddenInference": "The user prefers dark interfaces."
+      }
+    },
+    {
+      "id": "assistant_proposal_without_adoption",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "I suggest making the welcome screen a simple illustration."
+        },
+        {
+          "role": "user",
+          "content": "How long would that take?"
+        }
+      ],
+      "expected": {
+        "criteria": [
+          "Retain the illustration as an assistant proposal, not an adopted user layout.",
+          "The user's duration question does not establish acceptance; unknown/considered commitment is acceptable."
+        ],
+        "forbiddenInference": "The user adopted an illustrated welcome screen."
+      }
+    },
+    {
+      "id": "temporary_exception",
+      "messages": [
+        {
+          "role": "user",
+          "content": "只有這次展場導覽用英文，之後仍用繁體中文。"
+        }
+      ],
+      "expected": {
+        "criteria": [
+          "English applies only to this exhibition tour; Traditional Chinese remains the ongoing language.",
+          "Do not generalize the exception or lose its explicit condition."
+        ],
+        "forbiddenInference": "English is the user's ongoing language preference."
+      }
+    },
+    {
+      "id": "uncertain_reflection",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Maybe I would enjoy working from a quieter place; I haven't decided."
+        }
+      ],
+      "expected": {
+        "criteria": [
+          "The quieter-workplace idea is uncertain and not decided.",
+          "Do not convert consideration into a decision or permanent personal trait."
+        ],
+        "forbiddenInference": "The user has decided to work somewhere quieter."
+      }
+    },
+    {
+      "id": "explicit_adopted_preference",
+      "messages": [
+        {
+          "role": "user",
+          "content": "以後的活動邀請都用正式語氣，我已經決定了。"
+        }
+      ],
+      "expected": {
+        "criteria": [
+          "Formal tone is explicitly adopted for future event invitations.",
+          "Do not broaden it to every kind of writing."
+        ],
+        "forbiddenInference": "The user wants a formal tone for every kind of writing."
+      }
+    },
+    {
+      "id": "reason_challenged_without_new_choice",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "I recommend a carousel because it makes every photo immediately visible."
+        },
+        {
+          "role": "user",
+          "content": "That visibility claim is wrong. I haven't chosen a layout yet."
+        }
+      ],
+      "expected": {
+        "criteria": [
+          "The assistant proposed a carousel using an immediately-visible rationale; the user disputes that rationale and has not chosen a layout.",
+          "Do not claim the carousel itself was rejected or that another layout was selected."
+        ],
+        "forbiddenInference": "The user rejected the carousel itself or adopted another layout."
+      }
+    }
+  ]
+}

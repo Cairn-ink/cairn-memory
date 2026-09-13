@@ -1,5 +1,7 @@
 export const QUALIFICATION_PILOT_LIMITS = Object.freeze({ requests: 100, microUsd: 1_000_000,
   reservationMicroUsd: 5000 });
+export const CANDIDATE_QUALIFICATION_LIMITS = Object.freeze({ requests: 36, microUsd: 180000,
+  reservationMicroUsd: 5000 });
 const fail = code => { throw new Error(code); };
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
@@ -7,6 +9,14 @@ const integer = value => Number.isSafeInteger(value) && value >= 0;
 
 /** Additional one-shot cap only; send must use the existing durable campaign guard. */
 export function createQualificationPilotAttempt(options) {
+  return createAttempt(options, QUALIFICATION_PILOT_LIMITS, 'cairn_qualify');
+}
+
+export function createCandidateQualificationAttempt(options) {
+  return createAttempt(options, CANDIDATE_QUALIFICATION_LIMITS, 'cairn_qualifyCandidates');
+}
+
+function createAttempt(options, limits, qualificationMethod) {
   if (!exact(options, ['readState', 'checkPins', 'persist', 'send', 'expectedCheckpoint'])) fail('invalid_attempt');
   const { readState, checkPins, persist, send, expectedCheckpoint } = options;
   if ([readState, checkPins, persist, send].some(value => typeof value !== 'function')
@@ -18,8 +28,8 @@ export function createQualificationPilotAttempt(options) {
     && actual.attempts.every(item => item.outcome !== null)
     && actual.requestCount === expected.requestCount && actual.reservedMicroUsd === expected.reservedMicroUsd;
   if (!matches(initial) || !integer(initial.limitMicroUsd) || initial.limitMicroUsd > 50_000_000
-    || !integer(initial.requestCap) || initial.requestCap - expected.requestCount < 100
-    || initial.limitMicroUsd - expected.reservedMicroUsd < 1_000_000) fail('insufficient_budget');
+    || !integer(initial.requestCap) || initial.requestCap - expected.requestCount < limits.requests
+    || initial.limitMicroUsd - expected.reservedMicroUsd < limits.microUsd) fail('insufficient_budget');
   const before = structuredClone(expected);
   let halted = null, requests = 0, reservedMicroUsd = 0, readOnly = false, queue = Promise.resolve();
   const halt = code => { halted ??= code; return new Error(halted); };
@@ -39,9 +49,9 @@ export function createQualificationPilotAttempt(options) {
         let parsed;
         try { parsed = JSON.parse(body); } catch { fail('request_rejected'); }
         if (parsed?.model !== 'gpt-4.1-mini-2025-04-14'
-          || !['cairn_extract', 'cairn_qualify', 'cairn_classify'].includes(parsed?.text?.format?.name)) fail('request_rejected');
+          || !['cairn_extract', qualificationMethod, 'cairn_classify'].includes(parsed?.text?.format?.name)) fail('request_rejected');
         await checkPins(); checkState();
-        if (requests >= 100 || reservedMicroUsd + 5000 > 1_000_000) fail('attempt_limit');
+        if (requests >= limits.requests || reservedMicroUsd + 5000 > limits.microUsd) fail('attempt_limit');
         requests++; reservedMicroUsd += 5000;
         entry = { sequence: requests, endpoint: path, method: parsed.text.format.name,
           reservedMicroUsd: 5000, status: 'reserved' };

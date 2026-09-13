@@ -29,6 +29,10 @@ const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
 const RECONCILIATION_FILENAME = 'experiment-reconciliation-extension.json';
 const QUALIFICATION_FILENAME = 'experiment-qualification-extension.json';
+const QUALIFICATION_KIND = Object.freeze({ filename: QUALIFICATION_FILENAME, method: 'cairn_qualify' });
+const CANDIDATE_QUALIFICATION_KIND = Object.freeze({
+  filename: 'experiment-candidate-qualification-extension.json', method: 'cairn_qualifyCandidates',
+});
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -343,7 +347,7 @@ function validateHostBody(body, channel, byteLength) {
 
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
-function validateCairnBody(body, channel, generation, reconciliation = false, qualification = false) {
+function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -367,10 +371,11 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   const format = body.text.format;
   exactKeys(format, ['name', 'schema', 'strict', 'type'], 'unsupported_request');
   if (typeof format.name !== 'string') fail('unsupported_request');
-  const match = (qualification ? /^cairn_(extract|classify|select|rank|qualify)$/u
+  const match = (qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates)$/u
+    : qualificationMethod === QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualify)$/u
     : reconciliation ? /^cairn_(extract|classify|select|rank|reconcile)$/u
     : /^cairn_(extract|classify|select|rank)$/u).exec(format.name);
-  if (['reconcile', 'qualify'].includes(match?.[1]) && body.model !== DEFAULT_MODEL) fail('unsupported_request');
+  if (['reconcile', 'qualify', 'qualifyCandidates'].includes(match?.[1]) && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   let expectedSchema;
@@ -670,16 +675,16 @@ export function createReconciliationExperimentRequestGuard(options) {
 
 export function createExperimentRequestGuard(options) { return constructGuard(options); }
 
-function qualificationConfiguration(options) {
+function qualificationConfiguration(options, kind) {
   // Reuse exact baseline policy validation without granting any extraction models.
   const { version, authorizationId, ledger, policy } = extensionConfiguration(options);
-  return { version, authorizationId, ledger, policy, method: 'cairn_qualify', model: DEFAULT_MODEL };
+  return { version, authorizationId, ledger, policy, method: kind.method, model: DEFAULT_MODEL };
 }
 
-function verifyQualificationExtension(qualification, ledger, policy) {
+function verifyQualificationExtension(qualification, ledger, policy, kind) {
   exactKeys(qualification, ['version', 'authorizationId', 'ledger', 'policy',
     'method', 'model', 'checkpoint'], 'invalid_extension');
-  const expected = qualificationConfiguration({ ledger, policy, authorizationId: qualification.authorizationId });
+  const expected = qualificationConfiguration({ ledger, policy, authorizationId: qualification.authorizationId }, kind);
   exactKeys(qualification.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
   if (!safeInteger(qualification.checkpoint.requestCount) || !safeInteger(qualification.checkpoint.reservedMicroUsd)
     || qualification.checkpoint.requestCount > ledger.requestCap
@@ -688,13 +693,21 @@ function verifyQualificationExtension(qualification, ledger, policy) {
     fail('invalid_extension');
   }
   readBinding(path.join(expected.ledger.directory, BINDING_FILENAME), { version: 1, runId: ledger.runId, policy });
-  readBinding(path.join(expected.ledger.directory, QUALIFICATION_FILENAME), qualification);
+  readBinding(path.join(expected.ledger.directory, kind.filename), qualification);
 }
 
 // A separate operator action. No other capability is required, modified or granted.
 export function authorizeQualificationExtension(options) {
+  return authorizeQualification(options, QUALIFICATION_KIND);
+}
+
+export function authorizeCandidateQualificationExtension(options) {
+  return authorizeQualification(options, CANDIDATE_QUALIFICATION_KIND);
+}
+
+function authorizeQualification(options, kind) {
   exactKeys(options, ['ledger', 'policy', 'authorizationId']);
-  const configuration = qualificationConfiguration(options);
+  const configuration = qualificationConfiguration(options, kind);
   const ledger = reopenExperimentBudget(configuration.ledger);
   let lock;
   try {
@@ -704,13 +717,13 @@ export function authorizeQualificationExtension(options) {
       { version: 1, runId: configuration.ledger.runId, policy: configuration.policy });
     const state = ledger.getState();
     if (state.state !== 'open' || state.attempts.some(attempt => attempt.outcome === null)) fail('extension_busy');
-    const filename = path.join(configuration.ledger.directory, QUALIFICATION_FILENAME);
+    const filename = path.join(configuration.ledger.directory, kind.filename);
     let existing;
     try { existing = lstatSync(filename); }
     catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
     if (existing) {
       const qualification = readBinding(filename);
-      verifyQualificationExtension(qualification, configuration.ledger, configuration.policy);
+      verifyQualificationExtension(qualification, configuration.ledger, configuration.policy, kind);
       verifyExtensionCheckpoint(qualification, state);
       if (qualification.authorizationId !== configuration.authorizationId) fail('policy_mismatch');
       return deepFreeze(qualification);
@@ -718,7 +731,7 @@ export function authorizeQualificationExtension(options) {
     const qualification = { ...configuration,
       checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
     writeAuthorizationBinding(configuration.ledger.directory, filename, qualification);
-    verifyQualificationExtension(qualification, configuration.ledger, configuration.policy);
+    verifyQualificationExtension(qualification, configuration.ledger, configuration.policy, kind);
     verifyExtensionCheckpoint(qualification, state);
     return deepFreeze(qualification);
   } catch (error) {
@@ -737,7 +750,15 @@ export function createQualificationExperimentRequestGuard(options) {
     null, null, qualification);
 }
 
-function constructGuard(options, extension = null, reconciliation = null, qualification = null) {
+export function createCandidateQualificationExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'candidateQualificationExtension', 'fetchImpl']);
+  const qualification = snapshotExtension(options.candidateQualificationExtension);
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    null, null, qualification, CANDIDATE_QUALIFICATION_KIND);
+}
+
+function constructGuard(options, extension = null, reconciliation = null, qualification = null,
+  qualificationKind = QUALIFICATION_KIND) {
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
@@ -748,7 +769,7 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
   }
   const verifyCapabilities = () => {
     if (qualification) {
-      verifyQualificationExtension(qualification, ledgerConfiguration, policy);
+      verifyQualificationExtension(qualification, ledgerConfiguration, policy, qualificationKind);
       verifyExtensionCheckpoint(qualification, ledger.getState());
     } else if (reconciliation) {
       verifyReconciliationExtension(reconciliation, extension, ledgerConfiguration, policy);
@@ -782,7 +803,8 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
     }
     const requestBytes = encoder.encode(snapshot.bodyText).byteLength;
     if (kind === 'hostCompletion') validateHostBody(snapshot.body, channel, requestBytes);
-    else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', reconciliation !== null, qualification !== null);
+    else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', reconciliation !== null,
+      qualification === null ? null : qualificationKind.method);
 
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the new capability after those callbacks, before any reservation.

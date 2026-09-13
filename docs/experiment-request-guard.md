@@ -213,6 +213,30 @@ budget, acquire an exclusive one-shot intent and retain failures without retries
 or refunds. This preparation accesses no real key, ledger or model service.
 See [acceptance](plans/qualification-experiment-guard.md).
 
+## Separate candidate qualification capability
+
+`authorizeCandidateQualificationExtension({ledger,policy,authorizationId})`
+creates an independently bound, baseline-only grant for `cairn_qualifyCandidates`.
+It uses `experiment-candidate-qualification-extension.json`, not the v1 file.
+`createCandidateQualificationExperimentRequestGuard` requires the returned
+`candidateQualificationExtension` explicitly. Old factories do not infer it
+from a file's presence, and neither qualifier grant substitutes for the other.
+The same settled ledger, immutable policy and reservation accounting apply.
+
+`createCandidateQualificationLiveSession({ledger,apiKey,fetchImpl,
+candidateQualificationExtension})` restricts that grant further to extract,
+qualifyCandidates and classify count/generation routes. Credentials and the
+one-attempt provider transport remain parent-only; construction discovers none.
+It does not authorize host completion, reconciliation or a larger total budget.
+
+The closed candidate pilot uses six newly authored cases and a 36-HTTP/US$0.18
+additional reservation limit within the existing phase. It preserves an
+exclusive ledger-scoped intent, all failed/not-run cases, bounded private
+synthetic traces and diagnostic events. Cold inspection and replay are request
+free. Full gates and independent review precede execution; passing structural
+capture is not semantic/currentness accuracy. See
+[the frozen acceptance](plans/candidate-qualification-pilot.md).
+
 ## What is protected
 
 The supported request subset is deliberately narrow: nonstreaming Chat
