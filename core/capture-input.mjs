@@ -42,9 +42,25 @@ export function captureSnapshot(input, captureQualification) {
   } catch { fail('invalid_input'); }
 }
 
-/** The extractor chooses indices; all receipt identity and text comes from the snapshot. */
-export function extractedItems(output, snapshot) {
+/** Detached v2 evidence window. The complete snapshot and replay digest stay unchanged. */
+export function retainedSourceView(snapshot) {
   try {
+    const truncatedMessageIndices = [];
+    const messages = snapshot.messages.map((message, index) => {
+      const content = boundedText(boundedText(message.content, 800, true), 800, true);
+      if (content !== message.content) truncatedMessageIndices.push(index);
+      return Object.freeze({ ...message, content });
+    });
+    return Object.freeze({ messages: Object.freeze(messages),
+      retainedSourceWindow: Object.freeze({ maxUnitsPerMessage: 800,
+        truncatedMessageIndices: Object.freeze(truncatedMessageIndices) }) });
+  } catch { fail('invalid_input'); }
+}
+
+/** The extractor chooses indices; all receipt identity and text comes from the trusted source view. */
+export function extractedItems(output, snapshot, retainedMessages) {
+  try {
+    const sourceMessages = retainedMessages ?? snapshot.messages;
     object(output, ['items']);
     return denseArray(output.items, 0, 5).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'sourceIndices']);
@@ -58,13 +74,14 @@ export function extractedItems(output, snapshot) {
       }
       const indices = denseArray(item.sourceIndices, 1, 4);
       if (new Set(indices).size !== indices.length || indices.some((index) =>
-        !Number.isInteger(index) || index < 0 || index >= snapshot.messages.length)) {
+          !Number.isInteger(index) || index < 0 || index >= sourceMessages.length)) {
         fail('invalid_model_output');
       }
       const receipts = indices.map((index) => {
-        const message = snapshot.messages[index];
+        const message = sourceMessages[index];
         return { client: snapshot.client, sessionId: snapshot.sessionId,
-          eventId: message.id, role: message.role, excerpt: boundedText(message.content, 800, true) };
+          eventId: message.id, role: message.role,
+          excerpt: retainedMessages === undefined ? boundedText(message.content, 800, true) : message.content };
       });
       return { content, kind: item.kind, confidence: item.confidence, receipts,
         ...(snapshot.causal ? { sourceIndices: [...indices] } : {}) };

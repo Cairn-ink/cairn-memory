@@ -131,6 +131,12 @@ transition decisions are accepted from tool arguments.
 
 The shared core normalizes and redacts submitted text before model processing,
 then stores its existing bounded receipts and validated model qualifications.
+In v2, extraction and receipt construction use the same canonical 800-unit
+prefixes, while full submitted text remains bound by the event digest. Successful
+v2 responses add retainedSourceWindow with an 800 UTF-16-unit per-message limit
+and original indices whose normalized source tails are omitted. This exposes
+retention limits, not the execution version of an old duplicate, a complete
+conversation, source sufficiency or truth. No caller window override is accepted.
 The extra model stage sees canonical receipt excerpts and bounded extracted text,
 not namespace/client/session/event IDs. Role and qualifier labels remain
 unverified assertions. This tool does not decide currentness or retire memories;

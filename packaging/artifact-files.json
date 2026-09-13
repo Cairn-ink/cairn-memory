@@ -33,6 +33,7 @@
   "core/validation.mjs",
   "core/prompts/classify-placement.md",
   "core/prompts/extract-memories.md",
+  "core/prompts/extract-retained-sources.md",
   "core/prompts/qualify-memories.md",
   "core/prompts/qualify-candidates.md",
   "core/prompts/reconcile-memories.md",

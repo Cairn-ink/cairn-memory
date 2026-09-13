@@ -153,6 +153,13 @@ existing unqualified duplicate fails rather than backfilling its provenance.
 Provider credentials remain environment-only; configuration checking verifies
 neither credentials nor model availability and contacts no provider or database.
 
+`capture_memory` v2 results include `retainedSourceWindow`: the per-message
+800 UTF-16-unit limit and indices with omitted normalized source tails. V2
+extraction uses those same retained prefixes; tail-only facts are unavailable.
+Full-text changes still conflict with an existing batch ID. This field describes
+source retention, not semantic completeness or how an older duplicate was
+originally extracted. The client cannot override the source window.
+
 Inspect a result with
 `inspect_memory({memoryId:"returned-id",includeQualification:true})`. This works
 without a key, including after restart. Omitted/false preserves ordinary ID

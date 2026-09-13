@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { captureSnapshot, extractedItems } from './capture-input.mjs';
+import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
@@ -8,6 +8,7 @@ import { qualifyExtractedItems } from './automatic-qualification.mjs';
 import { qualifyCandidateItems } from './qualification-candidates.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
+const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
 async function classifyAdmission(model, namespace, admission, operations) {
@@ -42,19 +43,24 @@ async function classifyAdmission(model, namespace, admission, operations) {
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification }) {
   const snapshot = captureSnapshot(input, captureQualification);
+  const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  const sourceMessages = retained?.messages ?? snapshot.messages;
+  // Retention coverage of this submitted snapshot, not an attestation of which
+  // extraction policy executed an earlier duplicate batch.
+  const coverage = retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {};
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
     : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
-  if (claim.processing || claim.duplicate) return claim;
+  if (claim.processing || claim.duplicate) return retained ? { ...claim, ...coverage } : claim;
   const owned = { ...key, token: claim.token };
   let finished;
   try {
-    const output = await callModel(model, 'extract', system, {
-      messages: snapshot.messages.map(({ role, content }, index) => ({ index, role, content })),
+    const output = await callModel(model, 'extract', retained ? retainedSystem : system, {
+      messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })),
     }, { failureCode: 'extraction_failed' });
     let items;
-    try { items = extractedItems(output, snapshot); }
+    try { items = extractedItems(output, snapshot, retained?.messages); }
     catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items) : await qualifyExtractedItems(model, items);
@@ -75,5 +81,6 @@ export async function captureMessages({ model, input, operations, captureQualifi
     indexRevision: finished.indexRevision };
   const classification = await classifyAdmission(model, snapshot.namespace, admission, operations);
   return { duplicate: false, admission, classification,
+    ...coverage,
     ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}) };
 }

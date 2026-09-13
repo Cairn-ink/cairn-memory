@@ -113,6 +113,26 @@ capture behavior are unchanged. The local MCP server also accepts this explicit
 mode; its paid method remains denied by default. Maintainer experiments require
 the separately authorized candidate-qualification guard, not a v1 grant.
 
+V2 extraction now sees exactly the canonical receipt prefix that can be retained:
+at most 800 UTF-16 units per normalized/redacted submitted message, without split
+code points. The same detached view constructs selected receipts. Full normalized
+messages remain in the event digest, so changing an omitted tail still conflicts
+with an existing event. Legacy and v1 retain their prior extraction inputs.
+V2 source-selection guidance asks for antecedent and response receipts together
+when a standalone paraphrase expands pronouns; it cannot guarantee entailment or
+repair an omitted citation. More than four necessary messages requires narrowing
+to a supported claim or omitting it, not adding guessed neighbors.
+
+Successful v2 capture, including empty, processing and duplicate outcomes, adds
+`retainedSourceWindow:{maxUnitsPerMessage:800,truncatedMessageIndices:[...]}`.
+Indices refer to normalized submitted messages whose retained prefix omits text.
+This is retention coverage, not whole-conversation or semantic coverage. It is
+computed from the submitted snapshot and does not attest execution history:
+older v2 duplicate events may have been extracted from longer inputs. No replay
+reprocesses them. Failed captures retain existing finite error envelopes.
+Facts appearing only beyond a retained prefix cannot be extracted in this mode;
+larger receipts or alternative source windows require a separate design.
+
 Core partitions every retained canonical receipt into nonoverlapping windows
 of at most 200 UTF-16 units, without splitting Unicode code points or dropping
 text. Model input is `{items:[{itemIndex,content,kind,candidates:[{candidateIndex,

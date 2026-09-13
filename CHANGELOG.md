@@ -1,5 +1,14 @@
 # Changelog
 
+## Private candidate — retained-source extraction
+
+- Align v2 extractor input and selected receipts to the same canonical retained
+  800-unit source windows. Preserve complete input digests and legacy/v1 paths.
+  Report omitted source tails through retainedSourceWindow on v2 success/replay.
+- Guide v2 source selection to retain antecedents with anaphoric responses.
+  This is not an entailment validator or measured semantic improvement; omitted
+  tails cannot supply claims, and old duplicates do not attest execution policy.
+
 ## Private candidate — canonical v2 description labels
 
 - Compile v2 descriptive labels with declared NFKC normalization before unchanged
