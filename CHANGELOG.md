@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — bounded source-selection experiment
+
+- Freeze eight synthetic oracle-ingested cases and a one-shot installed MCP
+  comparison of label-prefilter and source-scan recall, with separate source
+  coverage/irrelevance evidence and a narrow 64-HTTP/US$0.32 attempt cap.
+- Offline preparation only; no live improvement claim. Existing grants, older
+  attempt caps and product defaults remain unchanged. See
+  `docs/source-scan-ablation.md`.
+
 ## Unreleased — opt-in bounded source-first selection
 
 - Offer a source-context recall mode that skips label prefiltering only for a
