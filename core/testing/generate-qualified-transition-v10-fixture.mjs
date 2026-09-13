@@ -51,4 +51,3 @@ const tables = schema.filter((r) => r.type === 'table').map(({ name }) => ({ nam
 console.log(JSON.stringify({ provenance: { base, node: process.version, recipe: 'core/testing/generate-qualified-transition-v10-fixture.mjs', synthetic: true },
   namespace, qualificationDetail, key, captureInput, captureResult, rebuild, cursor, next, history, schema, tables }, null, 2));
 db.close(); core.close();
-
