@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — opt-in bounded source-first selection
+
+- Offer a source-context recall mode that skips label prefiltering only for a
+  complete small MOC within existing candidate bounds. Larger maps keep the
+  original path; default recall is unchanged. Actual strategy is reported.
+- This may send more authorized source text to the ranker, with existing token
+  limits unchanged. It is an architectural ablation, not a semantic-quality
+  claim. See `docs/bounded-source-selection.md`.
+
 ## Evidence — rationale pilot v1
 
 - Preserve the one-shot 16-arm real-provider installed MCP comparison with a

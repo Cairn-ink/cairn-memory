@@ -538,10 +538,15 @@ export function openMemoryCore(input) {
   async function recall(input) {
     try {
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode']);
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
+      const selectionMode = input.selectionMode;
+      if (Object.hasOwn(input, 'selectionMode') &&
+          (selectionMode !== 'bounded-source-scan' || !isSourceContext(contextMode))) {
+        throw new MemoryStoreError('invalid_input');
+      }
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
           (isSourceContext(contextMode) && includeQualification)) throw new MemoryStoreError('invalid_input');
       let namespaces;
@@ -565,7 +570,7 @@ export function openMemoryCore(input) {
         return page ? [{ namespace, indexRevision: page.epoch }] : [];
       }));
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode,
+        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,

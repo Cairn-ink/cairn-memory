@@ -200,6 +200,13 @@ The protocol is alpha. Additive optional response fields may appear in `0.1.x`; 
 
 ### Opt-in local source evidence context
 
+Opt-in [bounded source-first recall](bounded-source-selection.md) may forward
+all eligible current memories in a complete small map to the configured ranker,
+including sources a routing-label model would omit. This expands source exposure
+within the explicit authorized read set, not namespace authority. Existing
+candidate, token, source and freshness bounds remain. It requires explicit source
+context and reports its actual strategy with semantic coverage unassessed.
+
 Local fetch/recall and MCP recall may select `contextMode: 'source-evidence'`.
 This exposes complete retained receipt excerpts and claimed user/assistant roles
 without model summaries, kind/confidence or qualifications in rank/final memory
