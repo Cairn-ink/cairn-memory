@@ -39,3 +39,23 @@ fresh fixtures and rubric, exact installed artifact/source hashes, model/input
 arms, a smaller cumulative run cap and an exclusive durable one-shot intent.
 Preserve failed/not-run arms and old experiment evidence. Passing fake HTTP
 proves transport mechanics, not model access or memory quality.
+
+## Additional fixed comparison cap
+
+`createRationaleModelLiveSession({ledger, rationaleModelsExtension, apiKey,
+fetchImpl})` in `evaluation/live/qualification-session.mjs` exposes only the
+three relation-model routes above. The caller supplies the existing capability,
+key and single-attempt transport explicitly; it discovers or provisions none.
+
+`createRationaleModelAttempt` in `evaluation/live/qualification-pilot-attempt.mjs`
+adds a closed 96-request / 2,048,000-microUSD cap. That covers eight cases ×
+three models × two input modes × count/generation in a balanced design. It is
+not permission to retry or refill a run. Excess expensive-model calls can hit
+the cost ceiling before the request count. Full headroom is required upfront.
+
+The serialized attempt persists local reservation evidence before sending,
+checks source pins and settled shared-ledger deltas, and permanently halts on
+transport, accounting or persistence failure. It does not replace the durable
+guard or itself acquire a one-shot intent. Wire every send through the parent
+session and freeze the operator, cases and artifact before actual use. These
+tests are synthetic plumbing checks; the proposed comparison has not run.

@@ -1,6 +1,7 @@
 import { createQualificationExperimentRequestGuard,
   createCandidateQualificationExperimentRequestGuard,
-  createRationaleExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
+  createRationaleExperimentRequestGuard,
+  createRationaleModelsExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { experimentPolicy, MODEL_ID } from './session.mjs';
 
 const fail = code => { throw new Error(code); };
@@ -29,9 +30,15 @@ export function createRationaleLiveSession(options) {
     createRationaleExperimentRequestGuard, 'rationale');
 }
 
+export function createRationaleModelLiveSession(options) {
+  return createSession(options, 'rationaleModelsExtension', ['cairn_relate'],
+    createRationaleModelsExperimentRequestGuard, 'rationale_models',
+    [MODEL_ID, 'gpt-5.6-luna', 'gpt-5.6-sol']);
+}
+
 // Only the named public factories select these closed capabilities. Caller
 // options cannot select a method, guard constructor or authorization kind.
-function createSession(options, extensionKey, methods, createGuard, errorKind) {
+function createSession(options, extensionKey, methods, createGuard, errorKind, models = [MODEL_ID]) {
   if (!options || typeof options !== 'object' || Array.isArray(options)
     || Object.keys(options).sort().join(',') !== ['apiKey', 'fetchImpl', 'ledger', extensionKey].sort().join(',')) {
     fail(`invalid_${errorKind}_session`);
@@ -50,7 +57,7 @@ function createSession(options, extensionKey, methods, createGuard, errorKind) {
       encoded = typeof body === 'string' ? body : JSON.stringify(body);
       parsed = JSON.parse(encoded);
     } catch { fail(`invalid_${errorKind}_request`); }
-    if (parsed?.model !== MODEL_ID
+    if (!models.includes(parsed?.model)
       || !methods.includes(parsed?.text?.format?.name)) {
       fail(`invalid_${errorKind}_request`);
     }
