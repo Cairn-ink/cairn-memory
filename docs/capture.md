@@ -150,6 +150,16 @@ evidence. Unknown values may cite context, and even all-unknown output must
 explicitly select at least one candidate overall. Four distinct candidates per
 qualification is the maximum; additional evidence rejects rather than being lost.
 
+The v2 interpretation prompt evaluates descriptors independently: unknown
+commitment does not require dropping a supported subject, attribute or condition.
+Its scoped coffee example is illustrative, never reusable evidence. It
+distinguishes offered proposals from direct assertions and settled choices from
+consideration, rejection or unknown commitment. Firsthand observation of an
+assistant's suggestion does not establish user adoption. Conditions, temporary
+exceptions and uncertainty must remain visible; unsupported fields stay unknown.
+These are model instructions, not an entailment checker or a measured quality
+result. Nested speech can remain ambiguous under the existing attribution enum.
+
 V2 compiles the five descriptive labels (subject/property/scope/applies/value)
 with NFKC normalization before strict S1 validation. Null is preserved; raw and
 normalized text must fit the existing 160/120 UTF-16 bounds. This does not trim,

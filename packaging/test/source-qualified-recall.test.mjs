@@ -21,6 +21,9 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
   const packageRoot = join(root, 'node_modules', packageName);
   const promptPath = 'core/prompts/recall-rank-qualified.md';
   assert.equal(createHash('sha256').update(readFileSync(join(packageRoot, promptPath))).digest('hex'), artifact.sourceHashes[promptPath]);
+  const qualifierPrompt = readFileSync(join(packageRoot, 'core/prompts/qualify-candidates.md'), 'utf8');
+  assert.equal(createHash('sha256').update(qualifierPrompt).digest('hex'), artifact.sourceHashes['core/prompts/qualify-candidates.md']);
+  assert.equal(qualifierPrompt, readFileSync(new URL('../../core/prompts/qualify-candidates.md', import.meta.url), 'utf8'));
   const source = 'I suggest a small welcome illustration 🚋; it is only a proposal.';
   let active, sends = 0, ranks = 0, forbid = false, expectedQualification;
   const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
@@ -30,7 +33,9 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
     let output;
     switch (payload.text.format.name) {
       case 'cairn_extract': output = { items: [{ content: source, kind: 'context', confidence: 0.8, sourceIndices: [0] }] }; break;
-      case 'cairn_qualifyCandidates': output = { qualifications: input.items.map(item => {
+      case 'cairn_qualifyCandidates':
+        assert.equal(payload.instructions, qualifierPrompt);
+        output = { qualifications: input.items.map(item => {
         const field = value => ({ value, evidenceIndices: [item.candidates[0].candidateIndex] });
         return { itemIndex: item.itemIndex, subject: field('welcome screen'), property: field('illustration'),
           scope: field(null), applies: field('proposal only'), value: field('small，illustration'),

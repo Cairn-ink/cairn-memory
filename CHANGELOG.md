@@ -1,5 +1,14 @@
 # Changelog
 
+## Private candidate — v2 interpretation guidance
+
+- Clarify independent source-supported descriptors, proposal attribution and
+  settled versus uncertain commitment in the v2 qualification prompt. Keep
+  unknown values valid, preserve conditions, and provide a scoped example.
+- No schema, authority, budget or legacy/v1 behavior changes. Offline contract
+  verification is not measured semantic improvement; earlier pilot failures
+  remain unchanged and public delivery is still held for security coordination.
+
 ## Private candidate — retained-source extraction
 
 - Align v2 extractor input and selected receipts to the same canonical retained

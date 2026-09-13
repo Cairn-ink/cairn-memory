@@ -35,6 +35,9 @@ All shown qualification and slot keys are required. Subject, property and value
 are null (unknown) or 1–160 UTF-16 units; scope and applies are null or 1–120.
 These labels must already equal the existing normalization/redaction result:
 noncanonical or secret-bearing labels are rejected, not silently rewritten.
+This describes manual S1 admission and v1. The separate v2 candidate compiler
+first applies bounded NFKC label normalization, then this same strict validator;
+see [capture](capture.md#opt-in-automatic-source-qualification).
 Qualification strings and qualified admission content/receipt strings must have
 well-formed Unicode. Unpaired surrogates fail before writes; existing unqualified
 paths keep their compatibility behavior.
@@ -86,8 +89,11 @@ and `receiptDigest` instead of `receiptIndex`, and reconstruct `text` from store
 receipts. Every source, key, digest, boundary and field is revalidated; missing,
 foreign, stale or malformed evidence fails `storage_error`. Qualification can
 repeat on each receipt page, including anchors outside that page. The flag may
-be toggled on a receipt cursor because it does not alter traversal. List, fetch,
-recall, model, HTTP and MCP inputs/outputs are unchanged.
+be toggled on a receipt cursor because it does not alter traversal. Manual
+qualification storage does not change list or legacy read response shapes.
+Separate opt-in [fetch/recall](fetch-recall.md) and [local MCP](standalone-mcp.md)
+paths can carry complete qualifications; their own documented flags, cursor
+binding and budget rules apply.
 
 ## Migration, retention and limits
 
