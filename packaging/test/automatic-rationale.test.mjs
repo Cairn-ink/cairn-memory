@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { buildArtifact, command, packageName } from '../build.mjs';
+import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
+import { rationaleModel } from '../../core/testing/rationale-model.mjs';
+
+const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
+const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
+const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
+
+test('installed adapter/core/MCP automatically retains and returns rationale, with keyless cold replay and forgetting', { timeout: 60000 }, async t => {
+  const artifact = buildArtifact(); const root = mkdtempSync(join(tmpdir(), 'cairn-installed-rationale-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-rationale', private: true, version: '0.0.0' }), { flag: 'wx' });
+  command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], root, artifact.userconfig);
+  const packageRoot = join(root, 'node_modules', packageName); const path = join(root, 'memory.sqlite');
+  const mock = rationaleModel(); const calls = []; let ranks = [];
+  const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
+    const payload = JSON.parse(body); calls.push({ route, method: payload.text.format.name });
+    if (route.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+    const method = payload.text.format.name.slice('cairn_'.length); assert.equal(typeof mock[method], 'function');
+    const input = JSON.parse(payload.input[0].content[0].text);
+    if (method === 'rank') ranks.push(input);
+    const output = await mock[method]({ input });
+    return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
+      output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+      usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } });
+  } } });
+  const config = join(root, 'transport.json');
+  writeFileSync(config, JSON.stringify({ version: 1, packageRoot, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
+  let active; t.after(async () => { if (active) await active.close(); await proxy.close(); });
+  const start = async key => {
+    active = new Client({ name: 'installed-rationale-test', version: '1.0.0' });
+    await active.connect(new StdioClientTransport({ command: process.execPath,
+      args: [fileURLToPath(new URL('../../evaluation/live/cairn-launcher.mjs', import.meta.url)), '--db', path, '--owner', 'synthetic',
+        '--capture-qualification', 'source-bound-v2', '--capture-rationale', 'source-bound-v1'],
+      env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: key, NODE_NO_WARNINGS: '1' }, stderr: 'pipe' }));
+  };
+  const call = async (name, args) => {
+    const response = await active.callTool({ name, arguments: args }); const result = JSON.parse(response.content[0].text);
+    assert.equal(result.ok, true, JSON.stringify(result)); return result.value;
+  };
+  await start(proxy.token); assert.equal((await active.listTools()).tools.length, 7);
+  const batches = [['one', 'I chose A because it supports offline work.'], ['two', 'I checked: A cannot work offline.']]
+    .map(([batchId, content]) => ({ batchId, messages: [{ role: 'user', content }] }));
+  for (const batch of batches) assert.equal((await call('capture_memory', batch)).rationale.status, 'reviewed');
+  assert.equal(calls.length, 16);
+  const recalled = await call('recall_memory', { query: 'Why chose A?', contextMode: 'rationale-evidence' });
+  assert.equal(calls.length, 20); const rootMemory = recalled.memories[0];
+  assert.equal(rootMemory.rationale.status, 'reconfirmation-suggested'); assert.equal(rootMemory.rationale.sources.length, 2);
+  assert.deepEqual(ranks[0].candidates[0].rationale, rootMemory.rationale);
+  const ref = { memoryId: rootMemory.memory.id, revision: rootMemory.memory.revision };
+  await active.close(); await start('');
+  assert.deepEqual(await call('inspect_rationale', ref), rootMemory.rationale);
+  const duplicate = await call('capture_memory', batches[1]); assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.rationale.reason, 'duplicate'); assert.equal(calls.length, 20);
+  const challenge = rootMemory.rationale.sources.find(source => source.memory.id !== ref.memoryId).memory;
+  await call('forget_memory', { memoryId: challenge.id, expectedRevision: challenge.revision });
+  assert.equal((await call('inspect_rationale', ref)).status, 'unassessed'); assert.equal(calls.length, 20);
+});

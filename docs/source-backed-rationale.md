@@ -2,7 +2,9 @@
 
 The shared SQLite core can retain **model-proposed** support/challenge links
 and inspect their source evidence. This is a new embedded API, not an enabled
-automatic capture stage, MCP tool, deployed service or measured quality result.
+automatic capture stage by default, deployed service or measured quality result.
+The separate [opt-in capture/MCP integration](automatic-rationale-loop.md) now
+uses these same methods; the original R1 slice did not include that integration.
 It does not replace MOC or introduce another database engine.
 
 ```js
@@ -16,10 +18,11 @@ const evidence = core.getRationale({ namespace,
 ```
 
 `reviewRationale` uses one host-injected `model.relate` method. It sends only
-local indices, source excerpts and submitted roles from 2–6 current memories.
-There is **no bundled real-provider implementation for this method yet**.
-The caller selects references; neither automatic discovery nor semantic accuracy
-is established. No model runs inside a database transaction. The usual token
+local indices, source excerpts and submitted roles from 1–6 current memories.
+The optional OpenAI adapter now implements the port; the embedded caller can also
+inject another model. Explicit review callers select references; optional capture
+uses bounded MOC discovery. Semantic accuracy is not established. No model runs
+inside a database transaction. The usual token
 counter/context-window requirements and 6000/1024 token bounds apply, with a
 30-second timeout and no retry. Repeated calls can incur repeated inference;
 identical stored proposals deduplicate, but the operation is not a replay ledger.
@@ -65,5 +68,5 @@ no copied source text in relation rows, but IDs, relation types and receipt hash
 can expose relationships to someone with file access. Logical deletion does not
 securely erase SQLite journals or backups. See [protocol](protocol.md).
 
-Next: bounded MOC discovery and capture orchestration, real adapter, MCP/installed
-consumption, then a frozen fresh semantic comparison. See [acceptance and sequence](plans/source-backed-rationale.md).
+MOC discovery, capture and MCP/installed consumption are now separately opt-in.
+A frozen fresh semantic comparison remains outstanding. See [acceptance and sequence](plans/source-backed-rationale.md).

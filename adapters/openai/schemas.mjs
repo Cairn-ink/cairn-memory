@@ -39,6 +39,19 @@ const snapshotIndices = (values, maximum) => {
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'relate') {
+    const memoryIndices = snapshotIndices(input?.memories, 6);
+    if (!memoryIndices.length) invalid();
+    const receiptIndices = input.memories.flatMap(memory => {
+      const indices = snapshotIndices(memory.receipts, 100);
+      if (!indices.length) invalid();
+      return indices;
+    });
+    // Endpoint/receipt correlation is checked by core after strict parsing.
+    return object({ edges: array(object({ from: constrained(integer, memoryIndices), to: constrained(integer, memoryIndices),
+      relation: { type: 'string', enum: ['supports-decision', 'challenges-premise'] },
+      fromReceipt: constrained(integer, receiptIndices), toReceipt: constrained(integer, receiptIndices) }), 10) });
+  }
   if (method === 'qualifyCandidates') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
     const items = Array.from(list(input.items));

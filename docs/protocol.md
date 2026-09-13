@@ -2,12 +2,24 @@
 
 ### Embedded proposed-rationale boundary
 
+The opt-in [automatic rationale loop](automatic-rationale-loop.md) adds a
+post-admission pass only for source-bound-v2 submitted capture. Generated memory
+content is used by the existing bounded MOC query policy for candidate discovery;
+the relate provider payload remains source-only as described below. Capture
+failure status is separate from already-saved memory, and replay does not repeat
+the pass. There is no background transcript reader or durable rationale job queue.
+Configured local MCP exposes keyless inspection; rationale-evidence recall sends
+bounded linked excerpts, receipt IDs, memory revisions and unverified relation
+types to ranking under the existing token caps. This widens the optional ranking
+context to linked personal evidence in the same namespace, not sharing scope or
+execution authority. Link hashes remain local. No new telemetry is added.
+
 The optional [embedded rationale API](source-backed-rationale.md) sends complete
 bounded retained excerpts and submitted roles to an injected `relate` method,
 using request-local indices. It does not send owner, client, session or event IDs,
 generated summaries or qualifications. These passages may contain personal data;
 the host must explicitly supply an appropriate model. No provider is enabled by
-default and this is not a new MCP or hosted HTTP capability.
+default. The local MCP opt-in above now uses this boundary; hosted HTTP is unchanged.
 
 Local rows store endpoint/revision links, selected receipt IDs and SHA256 source
 digests with model-proposed relation types. These are sensitive relationship

@@ -49,7 +49,7 @@ function loadConfiguration() {
 }
 
 function parseArguments(args) {
-  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification']);
+  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale']);
   const values = new Map();
   if (!args.length || args.length % 2 !== 0) fail();
   for (let index = 0; index < args.length; index += 2) {
@@ -58,6 +58,8 @@ function parseArguments(args) {
     values.set(args[index], args[index + 1]);
   }
   if (!values.has('--db') || !values.has('--owner')) fail();
+  if (values.has('--capture-rationale') && (values.get('--capture-rationale') !== 'source-bound-v1' ||
+      values.get('--capture-qualification') !== 'source-bound-v2')) fail();
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) fail();
   return {
@@ -68,6 +70,7 @@ function parseArguments(args) {
       projectId: values.get('--project') ?? null,
     },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
+    ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
   };
 }
 

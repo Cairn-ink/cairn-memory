@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — opt-in automatic rationale loop
+
+- Add explicit source-bound-v2 capture rationale configuration, bounded current
+  MOC candidate discovery and a post-classification proposed-rationale pass.
+- Add baseline OpenAI `relate` adapter and source-linked `rationale-evidence`
+  fetch/recall/MCP context under existing token bounds; configured MCP adds
+  keyless rationale inspection. No automatic decision replacement.
+- Capture reports independent rationale failures; duplicates do not retry this
+  best-effort pass. No background-job recovery, new paid capability, hosted
+  change or semantic-quality score. See `docs/automatic-rationale-loop.md`.
+
 ## Unreleased — embedded proposed rationale
 
 - Add source-bound, model-proposed decision/premise/challenge links and keyless

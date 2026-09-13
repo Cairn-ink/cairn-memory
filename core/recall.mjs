@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { fail, object, identifier, revision, denseArray } from './validation.mjs';
+import { isSourceContext } from './source-evidence.mjs';
 
 const selectPrompt = readFileSync(new URL('./prompts/recall-select.md', import.meta.url), 'utf8');
 const rankPrompt = readFileSync(new URL('./prompts/recall-rank.md', import.meta.url), 'utf8');
 const qualifiedRankPrompt = readFileSync(new URL('./prompts/recall-rank-qualified.md', import.meta.url), 'utf8');
 const sourceRankPrompt = readFileSync(new URL('./prompts/recall-rank-source-evidence.md', import.meta.url), 'utf8');
+const rationaleRankPrompt = readFileSync(new URL('./prompts/recall-rank-rationale-evidence.md', import.meta.url), 'utf8');
 const key = (ref) => JSON.stringify([ref.namespaceIndex, ref.memoryId, ref.revision]);
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
@@ -75,7 +77,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     validateFresh([...chosen.values()]);
     const request = { namespace: readSet[ref.namespaceIndex], tokenBudget: 4000,
       ...(includeQualification ? { includeQualification: true } : {}),
-      ...(contextMode === 'source-evidence' ? { contextMode } : {}),
+      ...(isSourceContext(contextMode) ? { contextMode } : {}),
       refs: [{ memoryId: ref.memoryId, revision: ref.revision }] };
     const receipts = [];
     const receiptIds = new Set();
@@ -102,7 +104,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   });
   let ranked = [];
   if (candidates.length) {
-    const prompt = contextMode === 'source-evidence' ? sourceRankPrompt : includeQualification ? qualifiedRankPrompt : rankPrompt;
+    const prompt = contextMode === 'rationale-evidence' ? rationaleRankPrompt
+      : contextMode === 'source-evidence' ? sourceRankPrompt : includeQualification ? qualifiedRankPrompt : rankPrompt;
     const rankOutput = await callModel(model, 'rank', prompt, { query, limit,
       candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },
       { validateFresh: () => validateFresh(candidates) });

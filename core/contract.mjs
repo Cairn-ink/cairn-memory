@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
+import { isSourceContext } from './source-evidence.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
@@ -125,9 +126,13 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model', 'captureQualification']);
+  object(input, ['path', 'model', 'captureQualification', 'captureRationale']);
   const captureQualification = Object.hasOwn(input, 'captureQualification') ? input.captureQualification : undefined;
   if (Object.hasOwn(input, 'captureQualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  const captureRationale = input.captureRationale;
+  if (Object.hasOwn(input, 'captureRationale') && (captureRationale !== 'source-bound-v1' || captureQualification !== 'source-bound-v2')) {
     throw new MemoryStoreError('invalid_input');
   }
   const model = input.model;
@@ -511,19 +516,20 @@ export function openMemoryCore(input) {
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
-      if ((Object.hasOwn(input, 'contextMode') && contextMode !== 'source-evidence') ||
-          (contextMode === 'source-evidence' && includeQualification)) throw new MemoryStoreError('invalid_input');
+      if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
+          (isSourceContext(contextMode) && includeQualification)) throw new MemoryStoreError('invalid_input');
       const ns = contractNamespace(input.namespace);
       const refs = memoryRefs(input.refs);
       const view = input.view === undefined ? 'current' : input.view;
       if (!['current', 'historical'].includes(view)) throw new MemoryStoreError('invalid_input');
+      if (contextMode === 'rationale-evidence' && view !== 'current') throw new MemoryStoreError('invalid_input');
       const budget = contractRevision(input.tokenBudget ?? 4000);
       if (budget > 4000) throw new MemoryStoreError('invalid_input');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,
         r: createHmac('sha256', cursorSecret).update(JSON.stringify(refs)).digest('base64url'),
         ...(view === 'historical' ? { view } : {}),
         ...(includeQualification ? { includeQualification: true } : {}),
-        ...(contextMode === 'source-evidence' ? { contextMode } : {}) };
+        ...(isSourceContext(contextMode) ? { contextMode } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
     });
@@ -536,8 +542,8 @@ export function openMemoryCore(input) {
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
-      if ((Object.hasOwn(input, 'contextMode') && contextMode !== 'source-evidence') ||
-          (contextMode === 'source-evidence' && includeQualification)) throw new MemoryStoreError('invalid_input');
+      if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
+          (isSourceContext(contextMode) && includeQualification)) throw new MemoryStoreError('invalid_input');
       let namespaces;
       try {
         denseArray(input.readSet, 1, 2);
@@ -564,7 +570,7 @@ export function openMemoryCore(input) {
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
-          ...(contextMode === 'source-evidence' ? { sourceEvidence: candidate.item } : {}),
+          ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
       }));
@@ -576,7 +582,7 @@ export function openMemoryCore(input) {
       runtime.ready();
       object(input, ['namespace', 'refs']);
       const ns = contractNamespace(input.namespace);
-      denseArray(input.refs, 2, 6);
+      denseArray(input.refs, 1, 6);
       const refs = memoryRefs(input.refs);
       const snapshot = runtime.rationaleSnapshot(ns, refs);
       const validateFresh = () => {
@@ -605,8 +611,20 @@ export function openMemoryCore(input) {
       object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
-      return success(await captureMessages({ model, captureQualification, input: { ...input, namespace },
+      return success(await captureMessages({ model, captureQualification, captureRationale, input: { ...input, namespace },
         operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
+          reviewRationale,
+          discoverRationale: ({ refs, query }) => invoke(() => {
+            runtime.rationaleSnapshot(ns, refs);
+            const page = runtime.queryCandidateRows(ns, { score: createQueryScore(query), memoryLabel: () => '' });
+            const found = [...refs]; const seen = new Set(refs.map(ref => ref.memoryId));
+            for (const { item } of page.rows) {
+              const ref = item.type === 'unfiled' ? item.ref : { memoryId: item.ref.childId, revision: item.ref.childRevision };
+              if (!seen.has(ref.memoryId)) { seen.add(ref.memoryId); found.push(ref); }
+            }
+            runtime.assertEpoch(ns, page.epoch);
+            return { refs: found.slice(0, 6), scanExhausted: page.scanExhausted, candidatesTruncated: found.length > 6 };
+          }),
           classifyPlacement, applyPlacement,
           ordered: {
             claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot)),
