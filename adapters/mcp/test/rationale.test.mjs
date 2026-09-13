@@ -37,4 +37,10 @@ test('actual SDK stdio captures proposed rationale and recalls linked evidence w
   assert.equal(result.memories.length, 1); const memory = result.memories[0];
   assert.equal(memory.rationale.status, 'reconfirmation-suggested'); assert.equal(memory.rationale.sources.length, 2);
   assert.deepEqual(await call('inspect_rationale', { memoryId: memory.memory.id, revision: memory.memory.revision }), memory.rationale);
+  const challenge = memory.rationale.sources.find(source => source.memory.id !== memory.memory.id).memory;
+  const ref = { memoryId: challenge.id, revision: challenge.revision };
+  assert.deepEqual((await call('inspect_rationale', ref)).edges, []);
+  const incident = await call('inspect_rationale', { ...ref, view: 'incident-proposals' });
+  assert.equal(incident.edges.length, 1); assert.equal(incident.edges[0].relation, 'challenges-premise');
+  assert.equal(incident.status, 'unassessed'); assert.equal(incident.coverage, 'root-incident-only');
 });

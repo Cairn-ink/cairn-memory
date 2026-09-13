@@ -59,6 +59,9 @@ test('installed adapter/core/MCP automatically retains and returns rationale, wi
   const duplicate = await call('capture_memory', batches[1]); assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.rationale.reason, 'duplicate'); assert.equal(calls.length, 20);
   const challenge = rootMemory.rationale.sources.find(source => source.memory.id !== ref.memoryId).memory;
+  const audit = await call('inspect_rationale', { memoryId: challenge.id, revision: challenge.revision, view: 'incident-proposals' });
+  assert.equal(audit.edges.length, 1); assert.equal(audit.status, 'unassessed');
+  assert.equal(audit.view, 'incident-proposals'); assert.equal(calls.length, 20);
   await call('forget_memory', { memoryId: challenge.id, expectedRevision: challenge.revision });
   assert.equal((await call('inspect_rationale', ref)).status, 'unassessed'); assert.equal(calls.length, 20);
 });

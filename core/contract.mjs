@@ -598,10 +598,13 @@ export function openMemoryCore(input) {
   function getRationale(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ['namespace', 'memoryId', 'revision']);
+      object(input, ['namespace', 'memoryId', 'revision', 'view']);
+      if (Object.hasOwn(input, 'view') && !['decision-context', 'incident-proposals'].includes(input.view)) {
+        throw new MemoryStoreError('invalid_input');
+      }
       return runtime.getRationale(contractNamespace(input.namespace), {
         memoryId: contractId(input.memoryId), revision: contractRevision(input.revision),
-      });
+      }, input.view);
     });
   }
 

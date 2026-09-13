@@ -2,6 +2,13 @@
 
 ### Embedded proposed-rationale boundary
 
+Explicit [incident-proposal inspection](rationale-inspection.md) exposes all
+directly incoming/outgoing proposals and their bounded source evidence for a
+current root in the same namespace. It is an opt-in read view, always unassessed,
+not authority or a validated decision graph. Existing source/revision checks and
+complete-result limits apply. Default inspection and automatic recall do not
+include these additional orphan proposals; no new model call is introduced.
+
 The opt-in [automatic rationale loop](automatic-rationale-loop.md) adds a
 post-admission pass only for source-bound-v2 submitted capture. Generated memory
 content is used by the existing bounded MOC query policy for candidate discovery;

@@ -104,3 +104,13 @@ _Avoid_: Source text, confirmed fact, adoption evidence
 Recorded evidence that a source committed to a proposed value within a stated
 scope, rather than merely quoted, considered or received it as advice.
 _Avoid_: Recency, suggestion, past authorization
+
+**Relationship proposal**:
+An unverified interpretation connecting particular source evidence as a reason
+or a challenge; its existence does not establish a decision or a true premise.
+_Avoid_: Proven dependency, confirmed contradiction
+
+**Decision context**:
+Source evidence organized around a recorded decision, its proposed supporting
+reasons and challenges to those reasons; it need not include every relationship proposal.
+_Avoid_: Complete relationship history, verified decision rationale

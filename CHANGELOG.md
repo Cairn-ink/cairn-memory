@@ -18,6 +18,14 @@
   and independent source-versus-output assessment follow verification and review.
   See `docs/plans/rationale-installed-pilot.md`.
 
+## Unreleased — explicit incident-proposal inspection
+
+- Add an optional keyless core/MCP inspection view for directly incoming and
+  outgoing rationale proposals, including orphan challenges. These remain
+  unassessed proposals; default decision context and recall are unchanged.
+- Preserve existing namespace, revision, receipt and complete-result bounds.
+  See `docs/rationale-inspection.md`. This is observability, not a semantic fix.
+
 ## Unreleased — bounded rationale experiment preparation
 
 - Add a separate explicit baseline rationale-pipeline experiment capability,
