@@ -25,7 +25,7 @@ def provider_factory(tmp_path, monkeypatch, request):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     managers = []
 
-    def make(name, enabled=True, initialize=True):
+    def make(name, enabled=True, initialize=True, source_context=False):
         home = tmp_path / name
         shutil.copytree(Path(__file__).parents[1] / "cairn", home / "plugins" / "cairn")
         monkeypatch.setenv("HERMES_HOME", str(home))
@@ -36,6 +36,8 @@ def provider_factory(tmp_path, monkeypatch, request):
                   "executable_path": request.config.getoption("--cairn-executable")}
         if enabled:
             config["capture_qualification"] = "source-bound-v2"
+        if source_context:
+            config["recall_context"] = "source-evidence"
         provider.save_config(config, str(home))
         manager = MemoryManager()
         manager.add_provider(provider)
@@ -59,22 +61,65 @@ def test_strict_config_and_actual_native_wizard_optional_blank(provider_factory,
     for value in [None, True, False, "", "source-bound-v1", " source-bound-v2", 2]:
         with pytest.raises(ValueError, match="cairn_invalid_configuration"):
             provider.save_config({**config, "capture_qualification": value}, str(home))
+    for value in [None, True, False, "", "qualified", " source-evidence", "source-evidence ", 2]:
+        with pytest.raises(ValueError, match="cairn_invalid_configuration"):
+            provider.save_config({**config, "recall_context": value}, str(home))
     with pytest.raises(ValueError):
         provider.save_config({**config, "timeout": 999}, str(home))
     assert json.loads((home / "cairn.json").read_text()) == config
     schema = provider.get_config_schema()
     mode = next(field for field in schema if field["key"] == "capture_qualification")
     assert not mode.get("required") and not mode.get("default") and not mode.get("choices")
-    for selected in ["", "source-bound-v2"]:
-        answers = iter([config["node_path"], config["executable_path"], selected, "synthetic-wizard-key"])
+    context = next(field for field in schema if field["key"] == "recall_context")
+    assert not context.get("required") and not context.get("default") and not context.get("choices")
+    for selected, recall_context in [("", ""), ("source-bound-v2", "source-evidence")]:
+        answers = iter([config["node_path"], config["executable_path"], selected, recall_context,
+                        "synthetic-wizard-key"])
         monkeypatch.setattr(memory_setup, "_prompt", lambda *args, **kwargs: next(answers))
         collected, secrets = {}, {}
         assert memory_setup._prompt_schema_fields("cairn", schema, collected, secrets)
         assert ("capture_qualification" in collected) == bool(selected)
+        assert ("recall_context" in collected) == bool(recall_context)
         assert secrets == {"CAIRN_MEMORY_OPENAI_API_KEY": "synthetic-wizard-key"}
         provider.save_config(collected, str(home))
         assert json.loads((home / "cairn.json").read_text()) == collected
         assert "synthetic-wizard-key" not in (home / "cairn.json").read_text()
+
+
+def test_opt_in_recall_context_supplies_only_missing_default_without_mutating_callers(provider_factory, monkeypatch):
+    _, provider, _, _ = provider_factory("source-context", source_context=True)
+    observed = []
+
+    def request(operation, database, owner, **fields):
+        observed.append((operation, fields))
+        return {"ok": True, "value": {}}
+
+    monkeypatch.setattr(provider, "_request", request)
+    calls = [
+        ("recall_memory", {"query": "default", "limit": 3},
+         {"query": "default", "limit": 3, "contextMode": "source-evidence"}),
+        ("recall_memory", {"query": "qualified", "includeQualification": False},
+         {"query": "qualified", "includeQualification": False}),
+        ("recall_memory", {"query": "qualified support", "includeQualification": True},
+         {"query": "qualified support", "includeQualification": True}),
+        ("recall_memory", {"query": "rationale", "contextMode": "rationale-evidence"},
+         {"query": "rationale", "contextMode": "rationale-evidence"}),
+        ("inspect_memory", {"limit": 2}, {"limit": 2}),
+    ]
+    for name, arguments, expected in calls:
+        original = dict(arguments)
+        assert json.loads(provider.handle_tool_call("cairn_" + name, arguments))["ok"]
+        assert arguments == original
+        assert observed[-1][0] == "call"
+        assert observed[-1][1]["name"] == name
+        assert observed[-1][1]["arguments"] == expected
+
+    _, ordinary, _, _ = provider_factory("ordinary-context", source_context=False)
+    monkeypatch.setattr(ordinary, "_request", request)
+    arguments = {"query": "ordinary"}
+    assert json.loads(ordinary.handle_tool_call("cairn_recall_memory", arguments))["ok"]
+    assert arguments == {"query": "ordinary"}
+    assert observed[-1][1]["arguments"] == arguments
 
 
 def test_discovery_uses_keyless_synthetic_db_and_matching_five_six_allowlist(provider_factory, monkeypatch):
@@ -185,7 +230,7 @@ def test_bridge_applies_operation_deadlines_and_fixed_mode_arguments(provider_fa
     monkeypatch.setattr(bridge.anyio, "fail_after", deadline)
     monkeypatch.setattr(bridge, "stdio_client", streams)
     monkeypatch.setattr(bridge, "ClientSession", Session)
-    for enabled in [False, True]:
+    for enabled, source_context in [(False, False), (False, True), (True, False), (True, True)]:
         for operation in ["list", "recall_memory", "capture_memory"]:
             observations.clear()
             request = {"node_path": config["node_path"], "executable_path": config["executable_path"],
@@ -193,6 +238,8 @@ def test_bridge_applies_operation_deadlines_and_fixed_mode_arguments(provider_fa
                        "operation": "list" if operation == "list" else "call"}
             if enabled:
                 request["capture_qualification"] = "source-bound-v2"
+            if source_context:
+                request["recall_context"] = "source-evidence"
             if operation != "list":
                 request.update(name=operation, arguments={"synthetic": True})
             anyio.run(bridge.exchange, request)

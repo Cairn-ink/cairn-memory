@@ -49,10 +49,14 @@ def test_native_qualified_capture_and_scripted_agent_dispatch(isolated_profile, 
             .map(i=>({namespaceIndex:map.namespaceIndex,...i.ref})))};break;
           case 'cairn_rank':
             for(const item of input.candidates){
-              assert.equal(item.interpretationStatus,'omitted');
-              assert.equal(item.sourceSelectionCoverage,'unassessed');
-              assert.equal('content' in item.memory,false);assert.equal('qualification' in item,false);
-              assert.equal(JSON.stringify(item).includes('WRONG_ADOPTION'),false);
+              if(item.interpretationStatus==='omitted'){
+                assert.equal(item.sourceSelectionCoverage,'unassessed');
+                assert.equal('content' in item.memory,false);assert.equal('qualification' in item,false);
+                assert.equal(JSON.stringify(item).includes('WRONG_ADOPTION'),false);
+              }else{
+                assert.ok(item.memory.content.startsWith('WRONG_ADOPTION'));
+                assert.equal(item.qualification.commitment,'adopted');
+              }
             }
             result={refs:input.candidates.map(i=>({namespaceIndex:i.namespaceIndex,memoryId:i.memory.id,revision:i.memory.revision}))};break;
           default:assert.fail('Unexpected model method');
@@ -119,42 +123,65 @@ def test_native_qualified_capture_and_scripted_agent_dispatch(isolated_profile, 
         inspected = call(first, "inspect", memoryId=memory_id, includeQualification=True)
         assert inspected["memory"]["content"].startswith("WRONG_ADOPTION")
         assert inspected["qualification"]["commitment"] == "adopted"
+        ordinary = call(first, "recall", query="What did I ask about the tram?")
+        ordinary_item = ordinary["memories"][0]
+        assert ordinary_item["memory"]["content"].startswith("WRONG_ADOPTION")
+        assert ordinary_item["qualification"]["commitment"] == "adopted"
+        assert len(requests()) == 10
         recalled = call(first, "recall", query="What did I ask about the tram?", contextMode="source-evidence")
         item = recalled["memories"][0]
         assert set(item) == {"memory", "receipts", "receiptCount", "interpretationStatus", "sourceSelectionCoverage"}
         assert sorted(({"role": r["role"], "content": r["excerpt"]} for r in item["receipts"]),
                       key=lambda r: r["role"]) == messages
-        assert len(requests()) == 10
+        assert len(requests()) == 14
         first.shutdown_all()
 
+        configured = json.loads((home / "cairn.json").read_text())
+        configured["recall_context"] = "source-evidence"
+        (home / "cairn.json").write_text(json.dumps(configured))
+
         # Only agent completions are scripted. Hermes chooses no tools naturally
-        # in this fixture: the explicit capture dispatch exercises its real loop.
+        # in this fixture: explicit dispatch exercises its real loop while the
+        # provider, not the scripted completion, supplies the recall context.
         with patch("agent.process_bootstrap.OpenAI"):
-            agent = AIAgent(api_key="synthetic-no-network", base_url="http://127.0.0.1:1/v1",
-                model="synthetic-model", platform="cli", session_id="synthetic-qualified-agent",
-                enabled_toolsets=["memory"], skip_context_files=True, skip_memory=False,
-                skip_background_review=True, quiet_mode=True, max_iterations=4)
-            agents.append(agent)
-            assert {tool["function"]["name"] for tool in agent.tools} == expected
-            agent.compression_enabled = False
-            agent.save_trajectories = False
-            agent._use_prompt_caching = False
-            agent.client = MagicMock()
-            completions = []
+            def agent_turn(session, action, arguments):
+                agent = AIAgent(api_key="synthetic-no-network", base_url="http://127.0.0.1:1/v1",
+                    model="synthetic-model", platform="cli", session_id=session,
+                    enabled_toolsets=["memory"], skip_context_files=True, skip_memory=False,
+                    skip_background_review=True, quiet_mode=True, max_iterations=4)
+                agents.append(agent)
+                assert {tool["function"]["name"] for tool in agent.tools} == expected
+                agent.compression_enabled = False
+                agent.save_trajectories = False
+                agent._use_prompt_caching = False
+                agent.client = MagicMock()
+                completions = []
 
-            def complete(**kwargs):
-                completions.append(kwargs)
-                return response("cairn_capture_memory", agent_batch) if len(completions) == 1 else response()
+                def complete(**kwargs):
+                    completions.append(kwargs)
+                    return response("cairn_" + action + "_memory", arguments) if len(completions) == 1 else response()
 
-            agent.client.chat.completions.create.side_effect = complete
-            agent.run_conversation("Explicitly capture these synthetic messages.")
-            assert len(completions) == 2
-            tools = [message for message in completions[1]["messages"] if message.get("role") == "tool"]
-            assert len(tools) == 1
-            agent_captured = value(tools[0]["content"])
+                agent.client.chat.completions.create.side_effect = complete
+                agent.run_conversation("Explicitly invoke synthetic " + action + ".")
+                assert len(completions) == 2
+                tools = [message for message in completions[1]["messages"] if message.get("role") == "tool"]
+                assert len(tools) == 1
+                result = value(tools[0]["content"])
+                agent.close()
+                return result
+
+            agent_recalled = agent_turn("synthetic-source-default-agent", "recall",
+                                        {"query": "What did I ask about the tram?"})
+            source_item = agent_recalled["memories"][0]
+            assert set(source_item) == {"memory", "receipts", "receiptCount", "interpretationStatus",
+                                        "sourceSelectionCoverage"}
+            assert sorted(({"role": r["role"], "content": r["excerpt"]} for r in source_item["receipts"]),
+                          key=lambda r: r["role"]) == messages
+            assert len(requests()) == 18
+
+            agent_captured = agent_turn("synthetic-qualified-agent", "capture", agent_batch)
             assert len(agent_captured["admission"]["memories"]) == 1
-            assert len(requests()) == 16
-            agent.close()
+            assert len(requests()) == 24
 
         forbid.touch()
         monkeypatch.delenv("CAIRN_MEMORY_OPENAI_API_KEY")
@@ -162,7 +189,7 @@ def test_native_qualified_capture_and_scripted_agent_dispatch(isolated_profile, 
         assert call(cold, "inspect", memoryId=memory_id, includeQualification=True) == inspected
         for original in (batch, agent_batch):
             assert call(cold, "capture", **original)["duplicate"] is True
-        assert len(requests()) == 16
+        assert len(requests()) == 24
     finally:
         for agent in agents:
             agent.close()
