@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "source-loop-controls-v1",
+  "provenance": "Four fresh synthetic development cases, adapted from known reliability failure categories; not blind or held-out.",
+  "cases": [
+    {"id":"rill-battery","query":"Why did I choose Rill, which reason has changed, and have I chosen a replacement?","requiredSourceIds":["rill-choice","rill-update"],"windows":[
+      [{"id":"rill-choice","role":"user","content":"I chose the Rill commuter bike because I could remove its battery and it had a rear rack."},{"id":"rill-distraction","role":"user","content":"I keep my bike gloves in a green drawer."}],
+      [{"id":"rill-update","role":"user","content":"The replacement Rill battery is now sealed into the frame. The rear rack is unchanged. I have not selected a different bike."}]
+    ]},
+    {"id":"pickup-hours","query":"Why did my pickup time change, and was the original closing time wrong when I planned it?","requiredSourceIds":["pickup-choice","pickup-update"],"windows":[
+      [{"id":"pickup-choice","role":"user","content":"I set pickup for 17:00 because the activity centre closed at 18:00."},{"id":"pickup-distraction","role":"user","content":"The activity centre has a blue sign at its entrance."}],
+      [{"id":"pickup-update","role":"user","content":"Starting next week the centre closes at 16:00, so I changed pickup to 15:00. The old 18:00 closing time was correct when I made the original plan."}]
+    ]},
+    {"id":"temporary-reading","query":"我平常在哪裡閱讀，這兩天為什麼換地方？這是永久改變嗎？","requiredSourceIds":["reading-choice","reading-update"],"windows":[
+      [{"id":"reading-choice","role":"user","content":"我平常在圖書館閱讀，因為那裡安靜。"},{"id":"reading-distraction","role":"user","content":"我把借書證放在灰色錢包裡。"}],
+      [{"id":"reading-update","role":"user","content":"圖書館裝修這兩天很吵，所以只有這兩天我選咖啡店閱讀。裝修結束後我還是回圖書館，不是永久改成咖啡店。"}]
+    ]},
+    {"id":"journal-belief","query":"Why did I choose Cobalt Journal, what did I misunderstand, and did I decide to switch to Loom?","requiredSourceIds":["journal-choice","journal-update"],"windows":[
+      [{"id":"journal-choice","role":"user","content":"I chose Cobalt Journal because I thought its default storage stayed only on my laptop."},{"id":"journal-advice","role":"assistant","content":"You could consider Loom Journal as an alternative."}],
+      [{"id":"journal-update","role":"user","content":"I checked and Cobalt has always synced to its cloud by default; my earlier belief was mistaken. I have not decided to switch to Loom or authorized anyone to move my diary."}]
+    ]}
+  ]
+}

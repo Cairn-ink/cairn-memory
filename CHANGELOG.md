@@ -1,5 +1,12 @@
 # Changelog
 
+## Evidence — installed source-loop controls
+
+- Preserve four real capture/restart/MOC-recall cases and twelve basis controls.
+  Required sources survived, but new-reason omissions and one role-contract
+  rejection remain. No answer-accuracy or general reliability claim.
+  See `docs/source-loop-results.md` for all outcomes and the downstream utility gate.
+
 ## Evaluation — capture-to-basis loss controls
 
 - Add an offline diagnostic driver for actual capture/restart/MOC recall and
