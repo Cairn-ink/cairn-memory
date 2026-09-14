@@ -1,5 +1,12 @@
 # Changelog
 
+## Evidence — source-context development ablation
+
+- Preserve all 48 real-model installed-core arms, including 25 rejected outputs.
+  Added context citations did not improve mechanical completion; semantic errors
+  remain in accepted proposals. No default promotion or reliability claim.
+  See `docs/source-context-ablation-results.md` for evidence and next design tests.
+
 ## Unreleased — opt-in source-context basis proposals
 
 - Embedded decision-basis review can attach exact receipt-bound subject,

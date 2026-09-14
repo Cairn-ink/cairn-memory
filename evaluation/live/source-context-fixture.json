@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "source-context-ablation-v1",
+  "ingestion": "manual-source-admission; development interpretation ablation; not retrieval, capture or held-out quality",
+  "cases": [
+    {"id":"backup-region", "records":[
+      {"role":"user","content":"Selected a backup service for region and recovery time.","excerpt":"I selected Harbor Backup because it stored my archive in Finland and restored it within two hours."},
+      {"role":"user","content":"Region changed but restoration speed remains.","excerpt":"Harbor moved my archive to Canada this month. My latest restore still took two hours. I have not chosen another backup service."}
+    ]},
+    {"id":"training-stage-zh", "records":[
+      {"role":"user","content":"初學階段選擇週六基礎班。","excerpt":"我在初學階段選週六基礎班，因為不需要先修課。"},
+      {"role":"user","content":"完成基礎班後選進階班，舊理由在原階段仍成立。","excerpt":"完成基礎班後，我選週三進階班，因為現在已經具備先修資格。基礎班仍然不要求先修課；我不是發現以前的報名理由有錯。"}
+    ]},
+    {"id":"device-owners", "records":[
+      {"role":"user","content":"Two owners chose different devices for different reasons.","excerpt":"Lee chose the Quartz reader because it reads aloud. I chose the Linen reader because its display is matte."},
+      {"role":"user","content":"Only one device lost the relevant feature.","excerpt":"The Quartz update removed read-aloud. Linen still has its matte display. Lee has not selected a replacement and I am keeping Linen."}
+    ]},
+    {"id":"temporary-delivery", "records":[
+      {"role":"user","content":"Usual supplier choice relies on reusable crates.","excerpt":"I normally order from Juniper Produce because it delivers reusable crates."},
+      {"role":"user","content":"A one-off event requires another supplier without changing normal orders.","excerpt":"For this Friday's event only, I chose Marigold Produce because Juniper cannot deliver that day. Juniper still delivers reusable crates and remains my regular supplier."}
+    ]},
+    {"id":"old-inspection", "records":[
+      {"role":"user","content":"After the new ramp was installed, a hall was booked for step-free access.","excerpt":"On June 18 I booked Rowan Hall because its ramp installed on June 15 provides step-free access."},
+      {"role":"user","content":"An old inaccessible report arrived after an accessibility upgrade.","excerpt":"Today I received a May 4 inspection saying Rowan Hall had stairs only. That inspection was before the June 15 ramp installation. I visited today and used the ramp."}
+    ]},
+    {"id":"consideration-zh", "records":[
+      {"role":"assistant","content":"Assistant proposes switching a notebook tool.","excerpt":"我建議改用松針筆記，因為它能離線編輯。"},
+      {"role":"user","content":"User is considering but has not adopted the recommendation.","excerpt":"我只是把松針筆記列入考慮，還沒決定換。你說的離線功能需要再查證；也沒有授權你幫我購買。"}
+    ]},
+    {"id":"winter-rating", "records":[
+      {"role":"user","content":"Selected a heater based on its low-temperature operating rating.","excerpt":"I selected the Alder heater because it operates at minus ten degrees Celsius."},
+      {"role":"user","content":"Independent testing reaffirms the exact operating condition.","excerpt":"Independent testing confirmed Alder operates at minus ten degrees Celsius. That confirms my original reason rather than changing it."}
+    ]},
+    {"id":"explicit-plan-change", "records":[
+      {"role":"user","content":"Chose a train for an early meeting.","excerpt":"I chose the 07:00 train because my meeting started at 09:00."},
+      {"role":"user","content":"Meeting time changed and user explicitly chose a later train.","excerpt":"My meeting now starts at 13:00, so I have changed my choice to the 11:00 train. The old 09:00 start was correct when I booked; it is no longer the plan."}
+    ]}
+  ]
+}
