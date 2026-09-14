@@ -83,3 +83,9 @@ test('SLC6 oracle above six refs is unavailable, never silently truncated to fav
   const oracle = result.controls.find(c => c.name === 'captured-source-oracle');
   assert.equal(oracle.refs.length, 7); assert.equal(oracle.status, 'over-ref-cap'); assert.equal(oracle.basis, null);
 });
+test('SLC7 lexical control separates adjacent Latin/Han text as documented', async () => {
+  const cases = fixtures(); cases[0].query = '日本'; cases[0].windows[0][0].content = 'VPN有日本節點。';
+  const result = (await runSourceLoopControls({ openCore: openMemoryCore, model: model(), cases })).cases[0];
+  const lexical = result.controls.find(c => c.name === 'lexical');
+  assert.equal(lexical.refs.length, 1); assert.deepEqual(lexical.coverage.present, ['required-original']);
+});

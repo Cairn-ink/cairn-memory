@@ -5,7 +5,7 @@ import { join } from 'node:path';
 const unwrap = result => { if (!result?.ok) throw new Error('source_loop_operation_failed'); return result.value; };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const ref = record => ({ memoryId: record.memory.id, revision: record.memory.revision });
-const words = text => new Set(text.toLowerCase().match(/\p{Script=Han}|[\p{L}\p{N}]+/gu) ?? []);
+const words = text => new Set(text.toLowerCase().match(/\p{Script=Han}|(?:(?!\p{Script=Han})[\p{L}\p{N}])+/gu) ?? []);
 
 function snapshot(core, namespace) {
   const result = []; let cursor;
