@@ -1,5 +1,12 @@
 # Changelog
 
+## Evaluation — installed source-to-answer delivery
+
+- Join actual cold installed MCP source recall to a bounded, injected answer
+  consumer; preserve original provenance, reject partial/wrong-context inputs,
+  and never treat completion as verified truth. Scripted installed regression
+  only, not named-host or real-model quality evidence. See `docs/installed-source-answer-delivery.md`.
+
 ## Evidence — downstream source answer utility
 
 - Preserve sixteen real-model answers: twelve useful source-supported responses
