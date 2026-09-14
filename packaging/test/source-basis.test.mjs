@@ -13,6 +13,7 @@ test('installed source-basis review loads its prompt and compiles exact source u
   const packageRoot = join(root, 'node_modules', packageName);
   const { openMemoryCore } = await import(pathToFileURL(join(packageRoot, 'core/index.mjs')).href);
   const { createOpenAIModel } = await import(pathToFileURL(join(packageRoot, 'adapters/openai/index.mjs')).href);
+  const { sourceParts } = await import(pathToFileURL(join(packageRoot, 'core/source-addresses.mjs')).href);
   const proposal = { units: [{ memory: 0, receipt: 0, role: 'decision', quote: 'I chose A' },
     { memory: 0, receipt: 0, role: 'premise', quote: 'it folds' }],
   links: [{ from: 1, to: 0, relation: 'supports-decision' }] };
@@ -28,7 +29,8 @@ test('installed source-basis review loads its prompt and compiles exact source u
   const path = join(root, 'memory.sqlite'); const core = openMemoryCore({ path, model }); t.after(() => core.close());
   const namespace = { ownerId: 'synthetic-private', scope: 'personal', projectId: null };
   const admitted = core.admit({ namespace, memory: { content: 'Misleading generated interpretation', kind: 'context' },
-    receipts: [{ client: 'synthetic', sessionId: 'synthetic', eventId: 'synthetic', role: 'user', excerpt: 'I chose A because it folds. I learned it no longer folds.' }] });
+    receipts: [{ client: 'synthetic', sessionId: 'synthetic', eventId: 'synthetic', role: 'user',
+      excerpt: 'I chose A because it folds. I learned it no longer folds. I chose B because of that loss.' }] });
   assert.equal(admitted.ok, true); const { id: memoryId, revision } = admitted.value.memory;
   const review = await core.reviewDecisionBasis({ namespace, refs: [{ memoryId, revision }] });
   assert.equal(review.ok, true); assert.equal(review.value.units.length, 2); assert.equal(review.value.persistence, 'not-stored');
@@ -54,6 +56,28 @@ test('installed source-basis review loads its prompt and compiles exact source u
   assert.ok(calls.at(-1).text.format.schema.properties.units.items.anyOf[0].properties.context);
   assert.deepEqual(core.get({ namespace, memoryId }), before);
   assert.equal(core.map({ namespace }).value.indexRevision, index);
+  const excerpt = core.get({ namespace, memoryId }).value.receipts[0].excerpt;
+  const boundaries = [0];
+  for (const part of sourceParts(excerpt)) boundaries.push(boundaries.at(-1) + part.text.length);
+  const range = quote => {
+    const start = excerpt.indexOf(quote);
+    return { startPart: boundaries.indexOf(start), endPart: boundaries.indexOf(start + quote.length) };
+  };
+  proposal.units = [['I chose A', 'decision'], ['it folds', 'premise'],
+    ['I learned it no longer folds.', 'premise-update'], ['I chose B', 'decision']]
+    .map(([quote, role]) => ({ memory: 0, receipt: 0, ...range(quote), role,
+      context: { subject: { startPart: range(quote).startPart, endPart: range(quote).startPart + 1 },
+        applies: null, scope: null, commitment: null } }));
+  proposal.links = [{ from: 1, to: 0, relation: 'supports-decision' },
+    { from: 2, to: 1, relation: 'challenges-current-basis' }, { from: 2, to: 3, relation: 'supports-decision' }];
+  const addressed = await core.reviewDecisionBasis({ namespace, refs: [{ memoryId, revision }], inputMode: 'source-addressed-v1' });
+  assert.equal(addressed.ok, true); assert.equal(addressed.value.links.length, 3);
+  assert.equal(addressed.value.units[2].role, 'premise-update');
+  assert.equal(addressed.value.units[3].context.subject.text, 'I');
+  assert.equal(addressed.value.units[3].context.subject.start, excerpt.indexOf('I chose B'));
+  assert.match(calls.at(-1).instructions, /Parts are/);
+  assert.equal(core.map({ namespace }).value.indexRevision, index);
+  assert.deepEqual(core.get({ namespace, memoryId }), before);
   core.close(); const cold = openMemoryCore({ path }); t.after(() => cold.close());
   assert.equal(cold.getRationale({ namespace, memoryId, revision }).value.edges.length, 0);
 });

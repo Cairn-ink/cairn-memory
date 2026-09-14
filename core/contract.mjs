@@ -608,7 +608,7 @@ export function openMemoryCore(input) {
     try {
       runtime.ready();
       object(input, ['namespace', 'refs', 'inputMode']);
-      if (Object.hasOwn(input, 'inputMode') && input.inputMode !== 'source-context-v1') {
+      if (Object.hasOwn(input, 'inputMode') && !['source-context-v1', 'source-addressed-v1'].includes(input.inputMode)) {
         throw new MemoryStoreError('invalid_input');
       }
       const inputMode = input.inputMode;

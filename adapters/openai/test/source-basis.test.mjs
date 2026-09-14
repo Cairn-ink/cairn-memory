@@ -9,6 +9,7 @@ import { modelProfile, DEFAULT_MODEL } from '../profiles.mjs';
 import { createExperimentBudget } from '../../../evaluation/experiment-budget/index.mjs';
 import * as guards from '../../../evaluation/experiment-budget/request-guard.mjs';
 import { experimentPolicy } from '../../../evaluation/live/session.mjs';
+import { sourceParts } from '../../../core/source-addresses.mjs';
 
 const models = [DEFAULT_MODEL, 'gpt-5.6-luna', 'gpt-5.6-sol'];
 const input = { memories: [{ index: 0, receipts: [{ index: 0, role: 'user', excerpt: 'I have not decided.' }] }] };
@@ -45,6 +46,36 @@ test('SBA3 context mode has strict nullable citation fields, unchanged routing/b
   assert.equal(calls.length, 2);
   await model.reviewBasis(request());
   assert.equal(Object.hasOwn(calls[3].body.text.format.schema.properties.units.items.anyOf[0].properties, 'context'), false);
+});
+test('SBA4 addressed schema correlates part bounds with receipts and explicitly permits dual role only in that mode', async () => {
+  const calls = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: fake(calls) });
+  const addressedInput = { inputMode: 'source-addressed-v1', memories: [{ index: 0, receipts: [
+    { index: 0, role: 'user', excerpt: 'I chose A.', parts: sourceParts('I chose A.') },
+    { index: 1, role: 'user', excerpt: '🙂我', parts: sourceParts('🙂我') },
+  ] }] };
+  await model.reviewBasis({ ...request(), input: addressedInput });
+  const variants = calls[1].body.text.format.schema.properties.units.items.anyOf;
+  assert.equal(variants.length, 2);
+  assert.deepEqual(variants[1].properties.receipt.enum, [1]);
+  assert.equal(variants[1].properties.endPart.maximum, 2);
+  assert.equal(variants[0].properties.endPart.maximum, 6);
+  assert.equal(variants[1].properties.startPart.maximum, 1);
+  assert.equal(variants[0].additionalProperties, false);
+  assert.equal(Object.hasOwn(variants[0].properties, 'quote'), false);
+  assert.ok(variants[0].properties.role.enum.includes('premise-update'));
+  assert.equal(variants[1].properties.context.properties.subject.anyOf[0].properties.endPart.maximum, 2);
+  for (const mutate of [
+    x => { x.memories[0].receipts[1].parts[1].index = 2; },
+    x => { x.memories[0].receipts[1].parts = []; },
+    x => { x.memories[0].receipts[1].parts[0].text = ''; },
+  ]) {
+    const bad = structuredClone(addressedInput); mutate(bad);
+    await assert.rejects(model.reviewBasis({ ...request(), input: bad }));
+  }
+  assert.equal(calls.length, 2);
+  await model.reviewBasis({ ...request(), input: { ...input, inputMode: 'source-context-v1' } });
+  assert.equal(calls[3].body.text.format.schema.properties.units.items.anyOf[0].properties.role.enum.includes('premise-update'), false);
 });
 test('SBA1 basis model selection is independent and exact count/generate schema remains bounded', async () => {
   for (const basisModel of models) for (const rationaleModel of models) {

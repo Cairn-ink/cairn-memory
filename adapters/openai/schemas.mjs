@@ -40,13 +40,25 @@ const snapshotIndices = (values, maximum) => {
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
   if (method === 'reviewBasis') {
-    if (input && Object.hasOwn(input, 'inputMode') && input.inputMode !== 'source-context-v1') invalid();
+    if (input && Object.hasOwn(input, 'inputMode') && !['source-context-v1', 'source-addressed-v1'].includes(input.inputMode)) invalid();
     const contextMode = input?.inputMode === 'source-context-v1';
+    const addressed = input?.inputMode === 'source-addressed-v1';
     const memoryIndices = snapshotIndices(input?.memories, 6);
     if (!memoryIndices.length) invalid();
-    const variants = input.memories.map(memory => {
+    const variants = input.memories.flatMap(memory => {
       const receipts = snapshotIndices(memory.receipts, 100);
       if (!receipts.length) invalid();
+      if (addressed) return memory.receipts.map(receipt => {
+        const parts = snapshotIndices(receipt.parts, 24000);
+        if (!parts.length || parts.some((value, index) => value !== index)
+          || receipt.parts.some(part => typeof part.text !== 'string' || !part.text.length)) invalid();
+        const range = object({ startPart: { ...integer, maximum: parts.length - 1 },
+          endPart: { ...integer, minimum: 1, maximum: parts.length } });
+        return object({ memory: constrained(integer, [memory.index]), receipt: constrained(integer, [receipt.index]),
+          ...range.properties, role: { type: 'string', enum: ['decision', 'premise', 'update', 'premise-update'] },
+          context: object(Object.fromEntries(['subject', 'applies', 'scope', 'commitment']
+            .map(field => [field, { anyOf: [range, { type: 'null' }] }]))) });
+      });
       return object({ memory: constrained(integer, [memory.index]), receipt: constrained(integer, receipts),
         quote: { type: 'string', minLength: 1, maxLength: 200 },
         role: { type: 'string', enum: ['decision', 'premise', 'update'] },
