@@ -194,8 +194,9 @@ test('L05 fixture and rubric labels reject before opening a store', async () => 
   for (const [badFixture, badRubric] of [
     [{ ...fixture, windows: [...fixture.windows, ...Array(7).fill(fixture.windows[0])] }, rubric],
     [{ ...fixture, windows: [[...fixture.windows[0], ...fixture.windows[1], fixture.windows[0][0]]] }, rubric],
-    [fixture, { queries: [{ ...rubric.queries[0], irrelevantSourceIds: ['eval-source-02'] }, rubric.queries[1]] }],
-    [fixture, { queries: [{ ...rubric.queries[0], requiredSourceIds: ['absent'] }, rubric.queries[1]] }],
+    [fixture, { ...rubric, queries: [{ ...rubric.queries[0], irrelevantSourceIds: ['eval-source-02'] }, rubric.queries[1]] }],
+    [fixture, { ...rubric, queries: [{ ...rubric.queries[0], requiredSourceIds: ['absent'] }, rubric.queries[1]] }],
+    [fixture, { ...rubric, id: 'different-fixture' }],
   ]) {
     let opened = 0;
     await assert.rejects(runLongSourceHistory({ openClient: () => { opened++; }, complete: () => {},
