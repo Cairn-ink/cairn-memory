@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { createOpenAIModel } from '../index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, EXPERIMENTAL_EXTRACTION_MODEL } from '../profiles.mjs';
 import { schemas, schemasFor } from '../schemas.mjs';
+import { openMemoryCore } from '../../../core/contract.mjs';
 
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const input = () => ({ items: [
@@ -13,9 +17,11 @@ const input = () => ({ items: [
 const output = () => ({ qualifications: input().items.map((item) => ({ itemIndex: item.itemIndex,
   ...Object.fromEntries(fields.map((field) => [field, { value: ['attribution', 'commitment'].includes(field) ? 'unknown' : null,
     evidenceIndices: field === 'value' ? [item.candidates[0].candidateIndex] : [] }])) })) });
+const wire = (value = output()) => ({ qualifications: Object.fromEntries(
+  value.qualifications.map(item => [`item_${item.itemIndex}`, item])) });
 const request = (value = input()) => ({ system: 'Select source candidates; do not calculate offsets.', input: value,
   maxOutputTokens: 1024, signal: new AbortController().signal });
-function envelope(model, result = output()) {
+function envelope(model, result = wire()) {
   return { object: 'response', model, status: 'completed', error: null, incomplete_details: null,
     output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(result) }] }],
     usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } };
@@ -44,6 +50,8 @@ test('candidate qualification uses identical count/generate baseline model frami
     for (const call of calls) {
       assert.equal(call.body.model, DEFAULT_MODEL); assert.equal(call.body.text.format.name, 'cairn_qualifyCandidates');
       assert.equal(call.body.reasoning, undefined); assert.equal(call.body.text.format.strict, true);
+      assert.ok(call.body.instructions.startsWith(request().system + '\n\nProvider wire-format override:'));
+      assert.match(call.body.instructions, /item_0=>itemIndex 0, item_1=>itemIndex 1/);
       assert.deepEqual(JSON.parse(call.body.input[0].content[0].text), input());
     }
     const { max_output_tokens, store, stream, ...count } = calls[1].body;
@@ -55,25 +63,90 @@ test('candidate qualification uses identical count/generate baseline model frami
 
 test('dynamic candidate schema requires same-item candidate indices and known-value evidence without weakening legacy schemas', () => {
   assert.equal(Object.hasOwn(schemas, 'qualifyCandidates'), false);
-  const schema = schemasFor('qualifyCandidates', input()); assert.equal(accepts(schema, output()), true);
-  const variants = schema.properties.qualifications.items.anyOf;
-  assert.deepEqual(variants[0].properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [0, 1]);
-  assert.deepEqual(variants[1].properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [2]);
+  const schema = schemasFor('qualifyCandidates', input()); assert.equal(accepts(schema, wire()), true);
+  const slots = schema.properties.qualifications.properties;
+  assert.deepEqual(slots.item_0.properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [0, 1]);
+  assert.deepEqual(slots.item_1.properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [2]);
   const visit = (node) => { if (!node || typeof node !== 'object') return;
     if (node.type === 'object') { assert.equal(node.additionalProperties, false); assert.deepEqual(node.required, Object.keys(node.properties)); }
     Object.values(node).forEach(visit);
   }; visit(schema);
   for (const mutate of [
-    (v) => { v.qualifications.pop(); }, (v) => { v.extra = true; },
-    (v) => { v.qualifications[0].subject = { value: 'Known', evidenceIndices: [] }; },
-    (v) => { v.qualifications[0].subject.evidenceIndices = [2]; },
-    (v) => { v.qualifications[0].value.evidenceIndices = [0, 0, 0, 0, 0]; },
-    (v) => { v.qualifications[0].attribution.value = 'authorized'; },
-    (v) => { v.qualifications[0].scope = { value: 'x'.repeat(121), evidenceIndices: [0] }; },
-    (v) => { v.qualifications[0].anchors = []; }, (v) => { delete v.qualifications[0].value; },
-  ]) { const value = output(); mutate(value); assert.equal(accepts(schema, value), false); }
+    (v) => { delete v.qualifications.item_1; }, (v) => { v.qualifications.item_2 = v.qualifications.item_1; },
+    (v) => { v.extra = true; },
+    (v) => { v.qualifications.item_0.subject = { value: 'Known', evidenceIndices: [] }; },
+    (v) => { v.qualifications.item_0.subject.evidenceIndices = [2]; },
+    (v) => { v.qualifications.item_0.value.evidenceIndices = [0, 0, 0, 0, 0]; },
+    (v) => { v.qualifications.item_0.attribution.value = 'authorized'; },
+    (v) => { v.qualifications.item_0.scope = { value: 'x'.repeat(121), evidenceIndices: [0] }; },
+    (v) => { v.qualifications.item_0.anchors = []; }, (v) => { delete v.qualifications.item_0.value; },
+    (v) => { v.qualifications.item_1.itemIndex = 0; },
+  ]) { const value = wire(); mutate(value); assert.equal(accepts(schema, value), false); }
   const duplicate = output(); duplicate.qualifications[1] = duplicate.qualifications[0];
-  assert.equal(accepts(schema, duplicate), true, 'Unique item coverage remains a core check');
+  assert.equal(accepts(schema, duplicate), false, 'Provider schema must require unique complete item coverage');
+});
+
+test('candidate qualification normalizes reordered named slots and rejects invalid mappings without retry', async () => {
+  const reversed = wire(); reversed.qualifications = Object.fromEntries(Object.entries(reversed.qualifications).reverse());
+  const reorderedCalls = []; const reordered = createOpenAIModel({ apiKey: 'synthetic',
+    fetchImpl: async (url, options) => { const body = JSON.parse(options.body); reorderedCalls.push(body);
+      return Response.json(url.endsWith('/input_tokens')
+        ? { object: 'response.input_tokens', input_tokens: 120 } : envelope(body.model, reversed)); } });
+  assert.deepEqual(await reordered.qualifyCandidates(request()), output()); assert.equal(reorderedCalls.length, 2);
+
+  for (const result of [output(), (() => { const value = output(); value.qualifications[1] = value.qualifications[0]; return value; })(),
+    (() => { const value = wire(); delete value.qualifications.item_1; return value; })(),
+    (() => { const value = wire(); value.qualifications.extra = value.qualifications.item_1; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_1.itemIndex = 0; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_0.subject.evidenceIndices = [2]; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_0.attribution.value = 'authorized'; return value; })(),
+    (() => { const value = wire(); delete value.qualifications.item_0.value; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_0.extra = true; return value; })()]) {
+    let calls = 0; const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: async (url, options) => {
+      calls++; const body = JSON.parse(options.body); return Response.json(url.endsWith('/input_tokens')
+        ? { object: 'response.input_tokens', input_tokens: 120 } : envelope(body.model, result)); } });
+    await assert.rejects(model.qualifyCandidates(request()), error => error.code === 'invalid_model_output');
+    assert.equal(calls, 2, 'No retry or fallback');
+  }
+});
+
+test('source-bound capture admits normalized slots and exact replay stays offline while changed replay rejects', async (t) => {
+  const calls = []; const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: async (url, options) => {
+    const body = JSON.parse(options.body); calls.push({ url, body });
+    if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+    const value = JSON.parse(body.input[0].content[0].text); let result;
+    if (body.text.format.name === 'cairn_extract') result = { items: [{ content: value.messages[0].content,
+      kind: 'preference', confidence: 0.9, sourceIndices: [0] }] };
+    else if (body.text.format.name === 'cairn_qualifyCandidates') {
+      result = { qualifications: Object.fromEntries(value.items.map(item => [`item_${item.itemIndex}`, {
+        itemIndex: item.itemIndex, ...Object.fromEntries(fields.map(field => [field, {
+          value: field === 'value' ? item.content : field === 'attribution' ? 'direct'
+            : field === 'commitment' ? 'adopted' : null,
+          evidenceIndices: ['value', 'attribution', 'commitment'].includes(field)
+            ? [item.candidates[0].candidateIndex] : [],
+        }])) }])) };
+    } else if (body.text.format.name === 'cairn_classify') {
+      result = { items: value.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
+    } else assert.fail(`Unexpected method ${body.text.format.name}`);
+    return Response.json(envelope(body.model, result));
+  } });
+  const path = join(mkdtempSync(join(tmpdir(), 'cairn-qualification-slots-')), 'memory.sqlite');
+  const core = openMemoryCore({ path, model, captureQualification: 'source-bound-v2' }); t.after(() => core.close());
+  const capture = { namespace: { ownerId: 'slot-test', scope: 'personal', projectId: null },
+    client: 'synthetic', sessionId: 'session', eventId: 'batch',
+    messages: [{ id: 'source', role: 'user', content: 'I prefer the Harbor tram.' }] };
+  const first = await core.capture(capture); assert.equal(first.ok, true, JSON.stringify(first));
+  const memoryId = first.value.admission.memories[0].id;
+  const detail = core.get({ namespace: capture.namespace, memoryId, includeQualification: true });
+  assert.equal(detail.ok, true); assert.equal(detail.value.qualification.value, capture.messages[0].content);
+  assert.deepEqual(calls.filter(call => !call.url.endsWith('/input_tokens')).map(call => call.body.text.format.name),
+    ['cairn_extract', 'cairn_qualifyCandidates', 'cairn_classify']);
+  const beforeReplay = calls.length;
+  const duplicate = await core.capture(capture); assert.equal(duplicate.ok, true); assert.equal(duplicate.value.duplicate, true);
+  const conflict = await core.capture({ ...capture,
+    messages: [{ ...capture.messages[0], content: 'I prefer the Juniper ferry.' }] });
+  assert.deepEqual(conflict, { ok: false, error: { code: 'event_payload_conflict', retryable: false } });
+  assert.equal(calls.length, beforeReplay);
 });
 
 test('malformed candidate snapshots and local bounds reject before any HTTP', async () => {

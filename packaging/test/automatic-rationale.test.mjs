@@ -26,6 +26,9 @@ test('installed adapter/core/MCP automatically retains and returns rationale, wi
     const input = JSON.parse(payload.input[0].content[0].text);
     if (method === 'rank') ranks.push(input);
     const output = await mock[method]({ input });
+    if (method === 'qualifyCandidates') {
+      output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+    }
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
       output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } });

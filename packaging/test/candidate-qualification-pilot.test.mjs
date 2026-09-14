@@ -70,6 +70,9 @@ for (const mode of ['success', 'invalid-first', 'transport']) {
         assert.equal(payload.text.format.name, 'cairn_classify');
         output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
       }
+      if (payload.text.format.name === 'cairn_qualifyCandidates') {
+        output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+      }
       return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
         incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
           content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
