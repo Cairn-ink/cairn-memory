@@ -302,3 +302,35 @@ test('L09 malformed recall memories are failed, while valid empty and partial ar
     assert.equal(moc.answer.status, 'generated-unassessed');
   }
 });
+
+test('L10 fresh everyday fixture preserves eight captures and all eight answer arms through the actual core', async () => {
+  const everydayFixture = JSON.parse(readFileSync(new URL('../everyday-source-history-fixture.json', import.meta.url)));
+  const everydayRubric = JSON.parse(readFileSync(new URL('../everyday-source-history-rubric.json', import.meta.url)));
+  assert.equal(everydayFixture.windows.length, 8);
+  assert.ok(everydayFixture.windows.every(window => window.length === 4));
+  assert.equal(new Set(everydayFixture.windows.flat().map(message => message.id)).size, 32);
+  const h = harness();
+  const report = await runLongSourceHistory({ openClient: h.openClient, complete: h.complete,
+    fixture: everydayFixture, rubric: everydayRubric });
+  assert.equal(report.status, 'observed', JSON.stringify({ captures: report.captures.map(item => ({
+    index: item.index, status: item.status, warm: item.warm?.status, cold: item.cold?.status })),
+  queries: report.queries.map(item => ({ id: item.id, status: item.status,
+    arms: item.arms.map(arm => ({ name: arm.name, status: arm.status, answer: arm.answer?.status })) })) }));
+  assert.deepEqual(report.captures.map(item => item.status), Array(8).fill('completed'));
+  assert.ok(report.captures.every(item => item.coldMatchesWarm));
+  assert.deepEqual(report.captureCoverage.missing, []);
+  assert.equal(report.queries.length, 4);
+  assert.equal(report.queries.flatMap(query => query.arms).length, 8);
+  for (const query of report.queries) for (const arm of query.arms) {
+    assert.equal(arm.status, 'observed');
+    assert.equal(arm.answer.status, 'generated-unassessed');
+  }
+  assert.equal(h.completionBodies.length, 8);
+  const modelInput = JSON.stringify(h.observations);
+  const completionInput = JSON.stringify(h.completionBodies);
+  for (const label of everydayRubric.queries.flatMap(query => [query.id,
+    ...query.requiredSourceIds, ...query.irrelevantSourceIds])) {
+    assert.equal(modelInput.includes(label), false);
+    assert.equal(completionInput.includes(label), false);
+  }
+});

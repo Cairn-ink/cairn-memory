@@ -1,0 +1,9 @@
+{
+  "id": "everyday-source-history-v1",
+  "queries": [
+    {"id":"work-room-current","requiredSourceIds":["e1m1","e8m1"],"irrelevantSourceIds":["e2m4","e5m3","e7m3"]},
+    {"id":"bakery-schedule","requiredSourceIds":["e1m3","e2m3"],"irrelevantSourceIds":["e3m1","e5m2","e6m3"]},
+    {"id":"table-actors","requiredSourceIds":["e5m1","e8m4"],"irrelevantSourceIds":["e1m3","e4m1","e6m3"]},
+    {"id":"table-change","requiredSourceIds":["e2m2","e5m1"],"irrelevantSourceIds":["e3m2","e5m4","e7m1"]}
+  ]
+}
