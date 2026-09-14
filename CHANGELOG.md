@@ -1,5 +1,12 @@
 # Changelog
 
+## Evaluation — capture-to-basis loss controls
+
+- Add an offline diagnostic driver for actual capture/restart/MOC recall and
+  basis interpretation, with lexical and all-captured-source controls. Preserve
+  missing evidence and wrong-but-accepted proposals without claiming quality.
+  See `docs/source-loop-controls.md`; paid installed validation remains pending.
+
 ## Evidence — source-addressed development ablation
 
 - Preserve all 48 real-model installed-core arms: structural completion was
