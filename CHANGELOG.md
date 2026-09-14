@@ -1,5 +1,12 @@
 # Changelog
 
+## Evaluation — longer captured source history
+
+- Add a bounded, source-first diagnostic separating capture loss, MOC versus
+  lexical receipt coverage and downstream answer outcomes over a frozen longer
+  history. Partial recall remains scored even when answer policy abstains.
+  Offline orchestration only; see `docs/long-source-history.md` for the live gate.
+
 ## Evaluation — installed source-to-answer delivery
 
 - Join actual cold installed MCP source recall to a bounded, injected answer

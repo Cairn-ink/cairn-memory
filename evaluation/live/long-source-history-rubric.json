@@ -1,0 +1,9 @@
+{
+  "id": "long-source-history-v1",
+  "queries": [
+    {"id":"flask-reasons","requiredSourceIds":["w1m1","w4m1"],"irrelevantSourceIds":["w1m2","w2m3","w4m3","w7m4"]},
+    {"id":"course-actors","requiredSourceIds":["w8m1","w8m2"],"irrelevantSourceIds":["w3m4","w5m4","w6m3"]},
+    {"id":"commute-exception","requiredSourceIds":["w2m1","w2m2"],"irrelevantSourceIds":["w2m3","w2m4","w5m3","w7m4"]},
+    {"id":"unbought-telescope","requiredSourceIds":["w8m4"],"irrelevantSourceIds":["w1m1","w1m2","w2m1","w3m1","w7m3"]}
+  ]
+}
