@@ -1,5 +1,12 @@
 # Changelog
 
+## Evidence — downstream source answer utility
+
+- Preserve sixteen real-model answers: twelve useful source-supported responses
+  and four appropriate no-memory abstentions, with detail omissions retained.
+  No demonstrated advantage from adding basis interpretations or from MOC over
+  lexical sources in these four development cases. See `docs/source-answer-utility.md`.
+
 ## Evidence — installed source-loop controls
 
 - Preserve four real capture/restart/MOC-recall cases and twelve basis controls.
