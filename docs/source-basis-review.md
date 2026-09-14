@@ -44,6 +44,37 @@ miss a valid relation; no inferred unit is trusted consent or objective truth.
 
 ## Bounds and lifecycle
 
+### Optional source context
+
+Pass `inputMode: 'source-context-v1'` to request source citations alongside each
+unit. Omit the property for the unchanged original mode; explicit null, undefined
+or other values are invalid. The result echoes the selected mode.
+
+Each unit then has `context: {subject, applies, scope, commitment}`. Values are
+null (unresolved) or compiled `{start,end,text}` anchors into that unit's same
+receipt, each selected by an exact unique quote of at most 200 UTF-16 units.
+Subject means attributed actor; applies concerns applicability/event time rather
+than arrival order; scope retains conditions and exceptions; commitment cites
+adoption or its absence. These reuse qualification terminology but are **source
+citations, not normalized qualification labels or persisted qualifications**.
+
+All four keys are required, but null is valid and does not mean universal scope,
+adoption or compatibility. Context is not borrowed from other receipts. The full
+sources remain available for cross-receipt interpretation. Incorrect semantic
+assignments can still pass exact-quote validation and remain model-proposed.
+No date resolver, applicability adjudicator, confidence score, authority or
+automatic decision replacement is introduced.
+
+The existing canonical source text plus the mode marker reaches the provider;
+no extra captured fields, private metadata or stored qualification labels are
+sent. Context output shares the unchanged 1,024-token and 24,000-unit result
+bounds: extra citations may reduce proposal coverage or cause rejection. There
+is no retry, truncation or hidden budget increase. This is an experimental
+representation change; matched-budget fresh-case evidence is still required to
+establish semantic improvement. See [acceptance](plans/source-basis-context.md).
+
+### Shared limits
+
 The view permits at most eight units, ten typed links and 200 UTF-16 units per
 quote, using existing 24,000-unit source/result bounds, 6,000 local input tokens,
 1,024 output tokens and 30-second core timeout. Duplicate units/links, bad

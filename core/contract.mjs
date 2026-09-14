@@ -607,7 +607,11 @@ export function openMemoryCore(input) {
   async function reviewDecisionBasis(input) {
     try {
       runtime.ready();
-      object(input, ['namespace', 'refs']);
+      object(input, ['namespace', 'refs', 'inputMode']);
+      if (Object.hasOwn(input, 'inputMode') && input.inputMode !== 'source-context-v1') {
+        throw new MemoryStoreError('invalid_input');
+      }
+      const inputMode = input.inputMode;
       const ns = contractNamespace(input.namespace);
       denseArray(input.refs, 1, 6);
       const refs = memoryRefs(input.refs);
@@ -617,8 +621,9 @@ export function openMemoryCore(input) {
           throw new MemoryStoreError('revision_conflict');
         }
       };
-      const proposal = await reviewSourceBasis(model, snapshot.sources, validateFresh);
+      const proposal = await reviewSourceBasis(model, snapshot.sources, validateFresh, inputMode);
       const result = { ...proposal, sources: snapshot.sources, indexRevision: snapshot.indexRevision,
+        ...(inputMode ? { inputMode } : {}),
         status: 'unassessed', interpretationStatus: 'model-proposed', persistence: 'not-stored' };
       if (JSON.stringify(result).length > 24000) throw new MemoryStoreError('context_item_too_large');
       validateFresh();

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — opt-in source-context basis proposals
+
+- Embedded decision-basis review can attach exact receipt-bound subject,
+  applicability, scope and commitment citations to each proposed unit.
+  Unknown context stays null; citations remain unverified interpretations.
+- Preserve default behavior, resource limits and read-only lifecycle. No
+  automatic state changes, new model grant, MCP tool or quality claim.
+
 ## Unreleased — decision-chain validation for source-basis challenges
 
 - Reject a current-basis challenge unless its premise also supports a decision
