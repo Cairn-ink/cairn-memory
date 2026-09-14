@@ -3,8 +3,10 @@ import { callModel } from './model-call.mjs';
 import { countTokens } from './model-budget.mjs';
 import { object, denseArray, fail } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { sourceParts, sourceAddressAnchor } from './source-addresses.mjs';
 
 const system = readFileSync(new URL('./prompts/review-decision-basis.md', import.meta.url), 'utf8');
+const addressedSystem = readFileSync(new URL('./prompts/review-addressed-basis.md', import.meta.url), 'utf8');
 const contextFields = ['subject', 'applies', 'scope', 'commitment'];
 const contextInstructions = `
 In source-context-v1 mode each unit also requires context with exactly subject,
@@ -40,17 +42,20 @@ const quoteAnchor = (text, excerpt) => {
 
 /** Compile provenance and proposed role constraints, never semantic validity. */
 export function compileDecisionBasis(output, sources, inputMode) {
-  if (inputMode !== undefined && inputMode !== 'source-context-v1') fail('invalid_input');
+  if (inputMode !== undefined && !['source-context-v1', 'source-addressed-v1'].includes(inputMode)) fail('invalid_input');
+  const addressed = inputMode === 'source-addressed-v1';
   try { output = structuredClone(output); } catch { fail('invalid_model_output'); }
   exact(output, ['units', 'links']);
   const seen = new Set();
   const units = denseArray(output.units, 0, 8).map((unit, index) => {
-    exact(unit, ['memory', 'receipt', 'quote', 'role', ...(inputMode ? ['context'] : [])]);
-    if (!['decision', 'premise', 'update'].includes(unit.role)) fail('invalid_model_output');
+    exact(unit, ['memory', 'receipt', ...(addressed ? ['startPart', 'endPart'] : ['quote']),
+      'role', ...(inputMode ? ['context'] : [])]);
+    if (!['decision', 'premise', 'update', ...(addressed ? ['premise-update'] : [])].includes(unit.role)) fail('invalid_model_output');
     const source = at(sources, unit.memory); const receipt = at(source.receipts, unit.receipt);
-    const quote = unit.quote;
-    const anchor = quoteAnchor(quote, receipt.excerpt);
-    const key = JSON.stringify([unit.memory, unit.receipt, unit.role, quote]);
+    const anchor = addressed
+      ? sourceAddressAnchor({ startPart: unit.startPart, endPart: unit.endPart }, receipt.excerpt)
+      : quoteAnchor(unit.quote, receipt.excerpt);
+    const key = JSON.stringify([unit.memory, unit.receipt, unit.role, anchor.start, anchor.end]);
     if (seen.has(key)) fail('invalid_model_output'); seen.add(key);
     let context;
     if (inputMode) {
@@ -58,7 +63,7 @@ export function compileDecisionBasis(output, sources, inputMode) {
       context = Object.fromEntries(contextFields.map(field => {
         const text = unit.context[field];
         if (text === null) return [field, null];
-        return [field, quoteAnchor(text, receipt.excerpt)];
+        return [field, addressed ? sourceAddressAnchor(text, receipt.excerpt) : quoteAnchor(text, receipt.excerpt)];
       }));
     }
     return { index, role: unit.role, memoryId: source.memory.id, revision: source.memory.revision,
@@ -70,8 +75,9 @@ export function compileDecisionBasis(output, sources, inputMode) {
     exact(link, ['from', 'to', 'relation']);
     const from = at(units, link.from); const to = at(units, link.to);
     if (from.index === to.index || !(link.relation === 'supports-decision'
-      ? from.role === 'premise' && to.role === 'decision'
-      : link.relation === 'challenges-current-basis' && from.role === 'update' && to.role === 'premise')) {
+      ? ['premise', 'premise-update'].includes(from.role) && to.role === 'decision'
+      : link.relation === 'challenges-current-basis' && ['update', 'premise-update'].includes(from.role)
+        && ['premise', 'premise-update'].includes(to.role))) {
       fail('invalid_model_output');
     }
     const key = JSON.stringify([link.from, link.to, link.relation]);
@@ -88,11 +94,14 @@ export function compileDecisionBasis(output, sources, inputMode) {
 }
 
 export async function reviewSourceBasis(model, sources, validateFresh, inputMode) {
-  if (inputMode !== undefined && inputMode !== 'source-context-v1') fail('invalid_input');
-  const output = await callModel(model, 'reviewBasis', system + (inputMode ? contextInstructions : ''), {
+  if (inputMode !== undefined && !['source-context-v1', 'source-addressed-v1'].includes(inputMode)) fail('invalid_input');
+  const addressed = inputMode === 'source-addressed-v1';
+  const prompt = addressed ? addressedSystem : system + (inputMode ? contextInstructions : '');
+  const output = await callModel(model, 'reviewBasis', prompt, {
     ...(inputMode ? { inputMode } : {}),
     memories: sources.map((source, index) => ({ index,
-      receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt })) })),
+      receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt,
+        ...(addressed ? { parts: sourceParts(excerpt) } : {}) })) })),
   }, { validateFresh, failureCode: 'rationale_failed' });
   // Adapter objects may have changing getters. Recheck the detached proposal
   // that compilation actually consumes, not an earlier serialization of it.

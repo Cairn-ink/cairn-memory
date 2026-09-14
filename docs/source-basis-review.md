@@ -47,8 +47,9 @@ miss a valid relation; no inferred unit is trusted consent or objective truth.
 ### Optional source context
 
 Pass `inputMode: 'source-context-v1'` to request source citations alongside each
-unit. Omit the property for the unchanged original mode; explicit null, undefined
-or other values are invalid. The result echoes the selected mode.
+unit, or select the addressed mode below. Omit the property for the unchanged
+original mode; explicit null, undefined or unknown values are invalid. The result
+echoes the selected mode.
 
 Each unit then has `context: {subject, applies, scope, commitment}`. Values are
 null (unresolved) or compiled `{start,end,text}` anchors into that unit's same
@@ -73,10 +74,43 @@ is no retry, truncation or hidden budget increase. This is an experimental
 representation change; matched-budget fresh-case evidence is still required to
 establish semantic improvement. See [acceptance](plans/source-basis-context.md).
 
+### Optional source-addressed mode
+
+`inputMode: 'source-addressed-v1'` retains the same full sources and four context
+fields but asks the model to select numbered source parts rather than reproduce
+quotes. Parts enumerate individual Han characters, other letter/mark/number
+runs, whitespace runs and remaining Unicode code points, preserving every
+character. They are deterministic addresses, not linguistic tokens or inferred
+facts. The provider receives each receipt's full text and `{index,text}` parts.
+
+Each proposed unit uses `memory`, `receipt`, `startPart` inclusive and `endPart`
+exclusive, `role`, and `context`. Context fields are null or same-receipt
+`{startPart,endPart}` ranges. The core—not the model—resolves the corresponding
+UTF-16 offsets and exact text. Nonblank spans must still fit 200 UTF-16 units.
+Out-of-range, reversed, empty or extra-field addresses reject without repair.
+Distinct repeated occurrences can be selected explicitly; the core never picks
+the first textual match. Returned units retain the same compiled anchor/context
+shape, receipt identity, revision and model-proposed status.
+
+This mode alone permits explicit role `premise-update`: one source statement
+may both challenge an earlier premise and serve as a reason for a recorded new
+decision. It can be either endpoint of a challenge, or support a decision; every
+challenged premise/dual-role unit must still support a decision in the proposal.
+It cannot serve as the decision endpoint. Roles are never coerced and no new
+choice is inferred. Original and source-context modes still reject the dual role.
+Duplicate addressed units are identified by source occurrence and role.
+
+The revised glossary distinguishes a source passage from its proposed roles.
+This removes a representational duplication requirement, not semantic uncertainty.
+A wrong range or role can still be mechanically valid. Extra numbered parts
+consume the unchanged input budget and may cause earlier budget rejection;
+there is no fallback or hidden budget increase. No new capture, MCP, persistence
+or paid capability is added. See [acceptance](plans/source-addressed-basis.md).
+
 ### Shared limits
 
 The view permits at most eight units, ten typed links and 200 UTF-16 units per
-quote, using existing 24,000-unit source/result bounds, 6,000 local input tokens,
+quote or addressed span, using existing 24,000-unit source/result bounds, 6,000 local input tokens,
 1,024 output tokens and 30-second core timeout. Duplicate units/links, bad
 indices, wrong role directions and selflinks fail rather than truncate.
 Each challenge must target a premise that also has a support

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — experimental source-addressed basis review
+
+- Add an opt-in mode selecting core-enumerated source ranges instead of
+  reproducing quote text; repeated occurrences keep distinct exact anchors.
+- Explicit premise-update units can both challenge an old reason and support
+  a recorded new choice. Original modes and all resource/trust bounds remain
+  unchanged. No semantic improvement, state mutation or default promotion claimed.
+
 ## Evidence — source-context development ablation
 
 - Preserve all 48 real-model installed-core arms, including 25 rejected outputs.

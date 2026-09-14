@@ -116,9 +116,14 @@ reasons and challenges to those reasons; it need not include every relationship 
 _Avoid_: Complete relationship history, verified decision rationale
 
 **Decision-basis unit**:
-A particular source passage interpreted as a decision, a supporting premise or
-an update relevant to that premise; its assigned role remains an interpretation.
+A particular source passage interpreted in one or more decision-basis roles;
+the assigned roles remain interpretations rather than properties proven by citation.
 _Avoid_: Verified atomic fact, whole conversation, execution authorization
+
+**Decision-basis role**:
+The function attributed to a passage in a decision's context, such as decision,
+supporting premise or update; the same update may also support another decision.
+_Avoid_: Mutually exclusive fact type, verified dependency
 
 **Current applicability**:
 Whether a recorded premise still applies to a particular decision's present
