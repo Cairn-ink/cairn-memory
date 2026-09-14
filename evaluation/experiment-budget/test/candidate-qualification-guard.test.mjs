@@ -29,7 +29,8 @@ const body = (generation = true) => ({ model: DEFAULT_MODEL, instructions: 'Synt
 const request = (value = body()) => ({ method: 'POST', redirect: 'error', signal: new AbortController().signal,
   headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
 const response = () => ({ object: 'response', model: DEFAULT_MODEL, status: 'completed', error: null, incomplete_details: null,
-  output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output()) }] }],
+  output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text',
+    text: JSON.stringify({ qualifications: Object.fromEntries(output().qualifications.map(item => ['item_' + item.itemIndex, item])) }) }] }],
   usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });
 const fake = (calls) => async (url, options) => { calls.push({ url, body: JSON.parse(options.body) });
   return Response.json(url === urls.count ? { object: 'response.input_tokens', input_tokens: 100 } : response()); };

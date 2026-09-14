@@ -80,6 +80,9 @@ test('I3 exact installed qualified receipt supports capture, both recall context
             memoryId: item.memory.id, revision: item.memory.revision })) }; break;
         default: assert.fail('Unexpected model method');
       }
+      if (payload.text.format.name === 'cairn_qualifyCandidates') {
+        output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+      }
       return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
         output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
         usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });

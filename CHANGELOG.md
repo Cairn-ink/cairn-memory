@@ -1,5 +1,13 @@
 # Changelog
 
+## Fix — candidate qualification transport mapping
+
+- The optional OpenAI adapter now requests one required named response field per
+  source-bound-v2 candidate item and validates it before restoring the existing
+  core array contract. Duplicate/missing item mappings are not repaired or
+  admitted. No new dependency, model call, retry or storage format. Semantic
+  support remains unassessed; the failed longer-history experiment is preserved.
+
 ## Hermes — opt-in source recall preference
 
 - Native Cairn profiles can select `recall_context: source-evidence` so query-only

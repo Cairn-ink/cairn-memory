@@ -34,7 +34,10 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
     switch (payload.text.format.name) {
       case 'cairn_extract': output = { items: [{ content: source, kind: 'context', confidence: 0.8, sourceIndices: [0] }] }; break;
       case 'cairn_qualifyCandidates':
-        assert.equal(payload.instructions, qualifierPrompt);
+        assert.equal(payload.instructions, qualifierPrompt
+          + '\n\nProvider wire-format override: return qualifications as an object, not the illustrative array above. '
+          + 'Use exactly these required transport fields: item_0=>itemIndex 0. Each field\'s value is its complete qualification entry. '
+          + 'These field names are transport mapping only, not semantic slot identifiers.');
         output = { qualifications: input.items.map(item => {
         const field = value => ({ value, evidenceIndices: [item.candidates[0].candidateIndex] });
         return { itemIndex: item.itemIndex, subject: field('welcome screen'), property: field('illustration'),
@@ -57,6 +60,9 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
         output = { refs: input.candidates.map(item => ({ namespaceIndex: item.namespaceIndex, memoryId: item.memory.id, revision: item.memory.revision })) };
         break;
       default: assert.fail('Unexpected model method');
+    }
+    if (payload.text.format.name === 'cairn_qualifyCandidates') {
+      output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
     }
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
       output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],

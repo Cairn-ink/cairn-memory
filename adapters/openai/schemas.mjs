@@ -36,6 +36,9 @@ const snapshotIndices = (values, maximum) => {
   if (indices.length > maximum || sorted(indices).length !== indices.length) invalid();
   return indices;
 };
+const qualificationSlot = itemIndex => `item_${itemIndex}`;
+const qualificationSlots = (items, variants) => object(Object.fromEntries(
+  items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
@@ -119,7 +122,7 @@ export function schemasFor(method, input) {
         commitment: categorical(['adopted', 'considered', 'rejected']),
       });
     });
-    return object({ qualifications: { ...array({ anyOf: variants }, items.length), minItems: items.length } });
+    return object({ qualifications: qualificationSlots(items, variants) });
   }
   if (method === 'qualify') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();

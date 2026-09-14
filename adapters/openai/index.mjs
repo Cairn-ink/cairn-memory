@@ -9,6 +9,49 @@ const fail = (code) => { throw new MemoryStoreError(code); };
 const providerFailure = () => { throw new Error('openai_request_failed'); };
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const count = (value) => Number.isSafeInteger(value) && value >= 0;
+const qualificationSlot = itemIndex => `item_${itemIndex}`;
+
+// The provider's strict-schema subset is small and request-scoped here. Core
+// still performs the authoritative source/semantic compilation after mapping.
+function schemaAccepts(schema, value) {
+  if (schema.anyOf) return schema.anyOf.some(child => schemaAccepts(child, value));
+  if (schema.enum && !schema.enum.includes(value)) return false;
+  if (schema.type === 'null') return value === null;
+  if (schema.type === 'object') return record(value) && schema.required.every(key => Object.hasOwn(value, key))
+    && (schema.additionalProperties !== false || Object.keys(value).every(key => Object.hasOwn(schema.properties, key)))
+    && Object.entries(schema.properties).every(([key, child]) => schemaAccepts(child, value[key]));
+  if (schema.type === 'array') return Array.isArray(value) && value.length <= schema.maxItems
+    && (schema.minItems === undefined || value.length >= schema.minItems)
+    && value.every(child => schemaAccepts(schema.items, child));
+  if (schema.type === 'integer') return Number.isSafeInteger(value)
+    && (schema.minimum === undefined || value >= schema.minimum)
+    && (schema.maximum === undefined || value <= schema.maximum);
+  if (schema.type === 'string') return typeof value === 'string'
+    && (schema.minLength === undefined || value.length >= schema.minLength)
+    && (schema.maxLength === undefined || value.length <= schema.maxLength);
+  return false;
+}
+
+function qualificationInstructions(method, system, input) {
+  if (method !== 'qualifyCandidates') return system;
+  const mapping = input.items.map(item => `${qualificationSlot(item.itemIndex)}=>itemIndex ${item.itemIndex}`).join(', ');
+  return `${system}\n\nProvider wire-format override: return qualifications as an object, not the illustrative array above. `
+    + `Use exactly these required transport fields: ${mapping}. Each field's value is its complete qualification entry. `
+    + 'These field names are transport mapping only, not semantic slot identifiers.';
+}
+
+function normalizeQualificationSlots(method, input, output, schema, diagnose) {
+  if (method !== 'qualifyCandidates') return output;
+  const reject = () => { diagnose('output_shape'); fail('invalid_model_output'); };
+  if (!schemaAccepts(schema, output)) reject();
+  const expected = input.items.map(item => qualificationSlot(item.itemIndex));
+  const qualifications = input.items.map((item, position) => {
+    const value = output.qualifications[expected[position]];
+    if (value.itemIndex !== item.itemIndex) reject();
+    return value;
+  });
+  return { qualifications };
+}
 
 function countTokens(text) {
   if (typeof text !== 'string') fail('token_count_unavailable');
@@ -126,11 +169,14 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let serializedInput;
     let localTokens;
     let schema;
+    let snapshot;
+    let instructions;
     try {
       serializedInput = JSON.stringify(input);
-      const snapshot = JSON.parse(serializedInput);
-      localTokens = countTokens(JSON.stringify({ system, input: snapshot, maxOutputTokens }));
+      snapshot = JSON.parse(serializedInput);
       schema = schemasFor(method, snapshot);
+      instructions = qualificationInstructions(method, system, snapshot);
+      localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
     } catch (error) {
       diagnose('request_invalid');
       if (error instanceof MemoryStoreError) throw error;
@@ -139,7 +185,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     if (typeof serializedInput !== 'string') { diagnose('request_invalid'); throw new Error('invalid_openai_request'); }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
     const selected = profile[method];
-    const payload = { model: selected.model, instructions: system,
+    const payload = { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
         schema } }, truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
@@ -158,7 +204,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     checkAbort(signal, diagnose);
     const response = await post('/responses', generateBody, 262144, signal, diagnose);
     checkAbort(signal, diagnose);
-    return parseOutput(response, counted.input_tokens, selected.model, diagnose);
+    return normalizeQualificationSlots(method, snapshot,
+      parseOutput(response, counted.input_tokens, selected.model, diagnose), schema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),

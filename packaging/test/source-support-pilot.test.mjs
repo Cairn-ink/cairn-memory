@@ -69,6 +69,9 @@ for (const mode of ['success', 'capture-invalid', 'recall-invalid', 'transport']
         output = mode === 'recall-invalid' && ranks === 1 ? { refs: [{ namespaceIndex: 0, memoryId: 'absent-memory', revision: 1 }] }
           : { refs: input.candidates.slice(0, input.limit).map(item => ({ namespaceIndex: item.namespaceIndex, memoryId: item.memory.id, revision: item.memory.revision })) };
       }
+      if (payload.text.format.name === 'cairn_qualifyCandidates') {
+        output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+      }
       return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
         output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
         usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });

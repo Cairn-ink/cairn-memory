@@ -252,6 +252,9 @@ test('installed v2 MCP launcher captures and cold-replays without granting a pai
       assert.equal(payload.text.format.name, 'cairn_classify');
       output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
     }
+    if (payload.text.format.name === 'cairn_qualifyCandidates') {
+      output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+    }
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
       incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
         content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
@@ -464,6 +467,7 @@ test('installed v2 core and adapter compile source selections without model offs
             scope:unknown(),applies:unknown(),value:known('calm'),attribution:known('direct'),commitment:known('adopted')};
         })};
       }else{assert.equal(method,'cairn_classify');output={items:input.memories.map(m=>({memoryId:m.id,parentIds:[]}))};}
+      if(method==='cairn_qualifyCandidates')output.qualifications=Object.fromEntries(output.qualifications.map(item=>['item_'+item.itemIndex,item]));
       return Response.json({object:'response',model:payload.model,status:'completed',error:null,incomplete_details:null,
         output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(output)}]}],
         usage:{input_tokens:120,output_tokens:100,total_tokens:220}});

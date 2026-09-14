@@ -8,12 +8,14 @@ import { createQualificationCandidateSnapshot, compileQualificationCandidates } 
 
 const system = readFileSync(new URL('../../../core/prompts/qualify-candidates.md', import.meta.url), 'utf8');
 const [input, output] = [...system.matchAll(/```json\s*([\s\S]*?)```/g)].map(match => JSON.parse(match[1]));
+const wire = { qualifications: Object.fromEntries(
+  output.qualifications.map(item => [`item_${item.itemIndex}`, item])) };
 const request = () => ({ system, input: structuredClone(input), maxOutputTokens: 1024, signal: new AbortController().signal });
 const response = () => ({ object: 'response', model: DEFAULT_MODEL, status: 'completed', error: null, incomplete_details: null,
-  output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+  output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(wire) }] }],
   usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } });
 
-test('Q5 actual adapter frames new prompt unchanged across counting/generation with baseline method/schema and exact compiler support', async () => {
+test('Q5 actual adapter preserves guidance with a count/generate wire override and exact compiler support', async () => {
   const calls = []; const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: async (url, options) => {
     calls.push({ url, body: JSON.parse(options.body) });
     return Response.json(url.endsWith('/input_tokens') ? { object: 'response.input_tokens', input_tokens: 120 } : response());
@@ -21,7 +23,8 @@ test('Q5 actual adapter frames new prompt unchanged across counting/generation w
   const result = await model.qualifyCandidates(request()); assert.deepEqual(result, output);
   assert.deepEqual(calls.map(call => call.url), ['https://api.openai.com/v1/responses/input_tokens', 'https://api.openai.com/v1/responses']);
   for (const { body } of calls) {
-    assert.equal(body.instructions, system); assert.equal(body.model, DEFAULT_MODEL);
+    assert.ok(body.instructions.startsWith(system + '\n\nProvider wire-format override:'));
+    assert.match(body.instructions, /item_0=>itemIndex 0/); assert.equal(body.model, DEFAULT_MODEL);
     assert.equal(body.text.format.name, 'cairn_qualifyCandidates'); assert.equal(body.text.format.strict, true);
     assert.deepEqual(body.text.format.schema, schemasFor('qualifyCandidates', input));
     assert.deepEqual(JSON.parse(body.input[0].content[0].text), input);
