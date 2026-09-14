@@ -59,3 +59,10 @@ array and a bare-prompt assertion); those were corrected without weakening
 semantic assertions. An overlapping local branch update also triggered the
 offline pilot's pin guard; that run was invalidated and the full Node24 suite
 rerun on stable sources. The guard was not bypassed and no paid intent was reused.
+
+CI additionally found two stale fake response serializers in MCP and request-
+guard tests that the initial local matrix had omitted. After migrating those
+serializers, both full `test:mcp` and `test:experiment-request-guard` suites passed
+on both runtimes, as did the guard demo, budget suite and budget demo. No guard
+or safety assertion was relaxed. These dependent suites are part of this
+change's final local verification, not merely delegated to CI.

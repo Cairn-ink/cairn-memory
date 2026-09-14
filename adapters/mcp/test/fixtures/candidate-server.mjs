@@ -24,6 +24,9 @@ const model = createOpenAIModel({ apiKey: 'synthetic-candidate-key', fetchImpl: 
   else {
     assert.equal(method, 'cairn_classify'); result = { items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })) };
   }
+  if (method === 'cairn_qualifyCandidates') {
+    result.qualifications = Object.fromEntries(result.qualifications.map(item => ['item_' + item.itemIndex, item]));
+  }
   return Response.json({ object: 'response', model: body.model, status: 'completed', error: null, incomplete_details: null,
     output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(result) }] }],
     usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });
