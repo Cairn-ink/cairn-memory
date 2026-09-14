@@ -1,0 +1,39 @@
+{
+  "version":1,
+  "id":"source-addressed-ablation-v1",
+  "ingestion":"manual-source-admission; development addressed-basis ablation; not retrieval, capture or held-out quality",
+  "cases":[
+    {"id":"watch-battery","records":[
+      {"role":"user","content":"Selected a watch for battery life and water resistance.","excerpt":"I selected the Laurel watch because its battery lasted seven days and it was water resistant. I use it for swimming."},
+      {"role":"user","content":"Battery life fell; water resistance remains and no replacement selected.","excerpt":"After the update, Laurel lasts two days. It remains water resistant. I have not picked a replacement. I still swim with it."}
+    ]},
+    {"id":"museum-opening","records":[
+      {"role":"user","content":"Selected the morning tour for the museum opening time.","excerpt":"I chose the morning tour because the museum opened at 09:00."},
+      {"role":"user","content":"Museum now opens later and user explicitly changed tours.","excerpt":"The museum now opens at 13:00, so I have changed my choice to the afternoon tour. I am not saying the old opening time was wrong when I booked."}
+    ]},
+    {"id":"planner-owners","records":[
+      {"role":"user","content":"Two people selected different planners for separate reasons.","excerpt":"Jo selected the Aspen planner because it has a weekly view. I selected the Hazel planner because it works offline."},
+      {"role":"user","content":"Only Hazel lost offline support.","excerpt":"Hazel now requires a connection. Aspen still has its weekly view. I have not chosen a different planner. Jo is keeping Aspen."}
+    ]},
+    {"id":"temporary-office","records":[
+      {"role":"user","content":"Normal home-work routine relies on quiet surroundings.","excerpt":"I normally work at home because it is quiet."},
+      {"role":"user","content":"One week of renovation changes the location only temporarily.","excerpt":"For renovation week only, I chose the office because home is noisy during the work. My normal quiet-home routine resumes afterward; I have not adopted permanent office work."}
+    ]},
+    {"id":"old-encryption-report","records":[
+      {"role":"user","content":"Selected service after encrypted export was added.","excerpt":"On April 20 I selected Cedar Notes because the April 18 release added encrypted exports."},
+      {"role":"user","content":"A pre-release negative report arrived after current exports were confirmed.","excerpt":"I received a March 3 report today saying Cedar Notes had no encrypted exports. It predates the April 18 release. I exported an encrypted file today and it worked."}
+    ]},
+    {"id":"unadopted-vpn-zh","records":[
+      {"role":"assistant","content":"Assistant suggests a VPN service.","excerpt":"我建議用青苔 VPN,因為它有日本節點。"},
+      {"role":"user","content":"User has not adopted the recommendation or authorized purchase.","excerpt":"我正在考慮,但還没決定。我也沒有授權購買。日本節點是你說的,還需要查證。"}
+    ]},
+    {"id":"charger-reaffirmed","records":[
+      {"role":"user","content":"Selected a charger for two simultaneous ports.","excerpt":"I chose the Linden charger because it powers two ports simultaneously."},
+      {"role":"user","content":"Independent test reaffirms the original operating reason.","excerpt":"Independent testing confirmed Linden powers two ports simultaneously. I still have the same reason for choosing it."}
+    ]},
+    {"id":"corrected-belief-zh","records":[
+      {"role":"user","content":"A notebook choice was based on a belief about PDF export.","excerpt":"我選白樺筆記,因為我以為它能匯出 PDF。"},
+      {"role":"user","content":"The premise was a mistaken belief, not an adopted replacement.","excerpt":"我查證後發現白樺一直不能匯出 PDF,以前是我誤會了。我還沒決定換哪一套,也沒有授權你替我更換。"}
+    ]}
+  ]
+}

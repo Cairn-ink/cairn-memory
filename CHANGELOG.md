@@ -1,5 +1,12 @@
 # Changelog
 
+## Evidence — source-addressed development ablation
+
+- Preserve all 48 real-model installed-core arms: structural completion was
+  16/24 original versus 18/24 addressed, not an accuracy result. Exact ranges
+  coexist with accepted semantic regressions; no default promotion.
+  See `docs/source-addressed-ablation-results.md` for all-case review and limits.
+
 ## Unreleased — experimental source-addressed basis review
 
 - Add an opt-in mode selecting core-enumerated source ranges instead of
