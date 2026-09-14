@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test:live-evidence-offline": "node --test evaluation/live/test/*.test.mjs",
-    "test": "node --test plugins/cairn-memory/test/*.test.mjs",
+    "test": "node --test plugins/cairn-memory/test/*.test.mjs evaluation/architecture/test/*.test.mjs",
+    "demo:architecture-boundaries": "node evaluation/architecture/cli.mjs",
     "test:longmemeval": "node --test evaluation/longmemeval/test/*.test.mjs",
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",
     "demo:longmemeval-ingestion": "node evaluation/longmemeval/demo.mjs",
