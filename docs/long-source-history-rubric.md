@@ -1,5 +1,8 @@
 # Longer source history: frozen semantic rubric
 
+Post-run: see the [once-only capture failure report](long-source-history-results.md).
+This link was added after the frozen rubric; the report records its pre-live hash.
+
 One authored 32-message history, eight capture windows, four later questions,
 MOC and lexical source controls, at most eight once-only host completions. This
 is newly authored synthetic development evidence, not a blind human benchmark
