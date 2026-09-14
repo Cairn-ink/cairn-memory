@@ -1,0 +1,59 @@
+{
+  "id": "long-source-history-v1",
+  "windows": [
+    [
+      {"id":"w1m1","role":"user","content":"I chose the Sable travel flask because its lid opened with one hand and it kept tea warm for six hours."},
+      {"id":"w1m2","role":"user","content":"Mara chose a Cedar flask for its wide handle. That was her choice, not mine."},
+      {"id":"w1m3","role":"user","content":"I browsed a telescope catalogue out of curiosity; I did not buy a telescope."},
+      {"id":"w1m4","role":"assistant","content":"You could compare other travel bottles before your next trip."}
+    ],
+    [
+      {"id":"w2m1","role":"user","content":"I normally walk to the Oriole studio because it is close to my apartment."},
+      {"id":"w2m2","role":"user","content":"For that one Tuesday trip to the Oriole studio I took the bus because I was carrying heavy equipment. After that trip I returned to walking."},
+      {"id":"w2m3","role":"user","content":"Mara keeps a spare water bottle in her bicycle cage."},
+      {"id":"w2m4","role":"user","content":"My bus card stays in the outside pocket of my grey backpack."}
+    ],
+    [
+      {"id":"w3m1","role":"user","content":"I am considering the Spanish course at Estuary School, but I have not decided to enroll."},
+      {"id":"w3m2","role":"assistant","content":"You might also enjoy trying a French class instead."},
+      {"id":"w3m3","role":"user","content":"Lina enrolled in the Estuary Spanish course. Her enrollment is separate from my undecided plans."},
+      {"id":"w3m4","role":"user","content":"I returned a library book about coastal birds this morning."}
+    ],
+    [
+      {"id":"w4m1","role":"user","content":"The replacement lid on my Sable flask now needs two hands to open. It still keeps tea warm for six hours. I have not selected a replacement flask."},
+      {"id":"w4m2","role":"user","content":"I keep loose tea in a yellow tin beside the kettle."},
+      {"id":"w4m3","role":"user","content":"Mara replaced her Cedar flask with a Birch bottle. I did not make that switch."},
+      {"id":"w4m4","role":"user","content":"I bookmarked a telescope shop page, but bookmarking it was not a purchase."}
+    ],
+    [
+      {"id":"w5m1","role":"user","content":"I am still undecided about Estuary School and have not registered for a language course."},
+      {"id":"w5m2","role":"user","content":"Lina's Estuary lessons are on Thursday. That is her schedule, not a class I joined."},
+      {"id":"w5m3","role":"user","content":"The Oriole studio replaced a faulty wall socket near the mixing desk."},
+      {"id":"w5m4","role":"user","content":"I made lentil soup for dinner and saved one portion for tomorrow."}
+    ],
+    [
+      {"id":"w6m1","role":"user","content":"I attended an observatory talk about telescopes. I still made no telescope purchase."},
+      {"id":"w6m2","role":"user","content":"The warranty leaflet for my Sable flask is in the kitchen drawer."},
+      {"id":"w6m3","role":"user","content":"Lina uses a red notebook for her Spanish vocabulary."},
+      {"id":"w6m4","role":"user","content":"I walked to the Oriole studio as usual today."}
+    ],
+    [
+      {"id":"w7m1","role":"user","content":"I still use Sable. Its six-hour heat retention remains useful, but opening the replacement lid with one hand is no longer possible."},
+      {"id":"w7m2","role":"user","content":"I have not chosen another flask to replace Sable."},
+      {"id":"w7m3","role":"assistant","content":"A straw-top bottle might be worth comparing if easy opening matters to you."},
+      {"id":"w7m4","role":"user","content":"Mara cycled along the canal on Sunday."}
+    ],
+    [
+      {"id":"w8m1","role":"user","content":"I decided to postpone language courses and did not enroll at Estuary School or in a French class."},
+      {"id":"w8m2","role":"user","content":"Lina remains enrolled in Estuary Spanish. That enrollment is hers, not mine."},
+      {"id":"w8m3","role":"user","content":"Walking remains my usual way to reach Oriole; the bus was only for that one Tuesday equipment trip."},
+      {"id":"w8m4","role":"user","content":"To be clear, I have neither selected nor bought a telescope."}
+    ]
+  ],
+  "queries": [
+    {"id":"flask-reasons","question":"Of the two conveniences behind choosing my Sable travel flask, which one still holds, which does not, and did I pick a replacement?"},
+    {"id":"course-actors","question":"Did I settle on a language class, and is Lina's enrollment mine?"},
+    {"id":"commute-exception","question":"How do I normally get to the Oriole studio, and why was that one Tuesday different?"},
+    {"id":"unbought-telescope","question":"What telescope have I bought, and what reason led to that purchase?"}
+  ]
+}
