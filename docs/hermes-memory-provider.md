@@ -44,6 +44,31 @@ bytecode-precompile step prints a git warning; actual tests run and return 0.
 
 ## Bounded actual-model native-provider probe
 
+### Source-context preference: offline host verification
+
+The optional native `recall_context: source-evidence` preference supplies the
+source-only mode when a recall call omits both context and qualification options.
+Explicit arguments still take precedence; absent preferences preserve existing
+generated/qualified context. See the [setup guide](../integrations/hermes/cairn/README.md).
+
+The canonical four-file matrix passed **16 tests on each of Node 22.16.0 and
+24.15.0**, using the pinned Hermes checkout above and a separately built,
+inspected, locally installed archive with SHA-256
+`9b7c3b2ef0745b7878a0e7037201cc6e864ce275ed821251fcb0a570b9967b4a`.
+The qualified lifecycle now observes 24 fake provider requests, including legacy
+query-only recall and a new AIAgent query-only source recall after provider
+restart; keyless cold inspection/replay adds zero. The fake model intentionally
+supplies incorrect adopted interpretations, which remain inspectable but are
+excluded from source context. Other tests cover explicit override preservation,
+caller dictionary immutability and invalid configuration.
+
+All profiles and data are synthetic. Agent completions and provider HTTP are
+scripted, while discovery, dispatch, subprocess transport and installed storage
+are real. This does not prove natural tool choice, truthful sources, general
+answer quality or successful long-history capture. No provider key was used.
+
+### Historical paid probe
+
 The historical real-model probe in this section covers manual memory and recall,
 not the newly opt-in capture tool. For the new mode's offline integration check,
 run the same canonical command above with all four test paths:

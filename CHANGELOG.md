@@ -1,5 +1,12 @@
 # Changelog
 
+## Hermes — opt-in source recall preference
+
+- Native Cairn profiles can select `recall_context: source-evidence` so query-only
+  recall returns original submitted receipts without generated interpretations.
+  Explicit tool arguments override the preference; existing profiles and MCP
+  defaults are unchanged. Scripted host integration is not semantic certification.
+
 ## Evaluation — longer captured source history
 
 - Add a bounded, source-first diagnostic separating capture loss, MOC versus

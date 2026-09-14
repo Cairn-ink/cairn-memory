@@ -25,6 +25,12 @@ fresh setup for the existing five tools; type that value to enable explicitly
 submitted source capture. It is saved separately from credentials. Blank input
 during reconfiguration can retain an existing value; to disable capture, remove
 the optional `capture_qualification` field from profile `cairn.json` and restart.
+The separate optional recall-context field accepts exactly `source-evidence`.
+It makes source evidence the default only when a recall call omits both
+`contextMode` and `includeQualification`; explicit tool arguments still take
+precedence. Blank input can retain an existing value. To restore the installed
+MCP's ordinary recall default, remove `recall_context` from `cairn.json` and
+restart. This profile preference does not change MCP or core defaults.
 Restart the session after setup; schemas remain stable within a session.
 
 Optional secret: `CAIRN_MEMORY_OPENAI_API_KEY`. Native setup manages it separately,
@@ -56,7 +62,10 @@ Then call `cairn_recall_memory` with
 `{"query":"What did I say about Friday travel?","contextMode":"source-evidence"}`
 to use retained passages rather than generated summaries in ranking and returned
 context. This mode is per call; the configured host otherwise defaults to
-qualified recall. Use `cairn_inspect_memory` with the returned memory ID and
+qualified recall unless its profile has the optional `recall_context` preference
+described above. That preference only supplies a missing tool argument; an
+explicit context mode or `includeQualification` value is preserved. Use
+`cairn_inspect_memory` with the returned memory ID and
 `includeQualification: true` to inspect the stored interpretation and evidence.
 See [source-only context boundaries](../../../docs/source-evidence-context.md).
 

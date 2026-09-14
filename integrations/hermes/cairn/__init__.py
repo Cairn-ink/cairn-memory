@@ -56,10 +56,13 @@ def configuration(home):
 
 
 def validate_config(value):
-    if not isinstance(value, dict) or set(value) not in (
-            {"node_path", "executable_path"}, {"node_path", "executable_path", "capture_qualification"}):
+    required = {"node_path", "executable_path"}
+    optional = {"capture_qualification", "recall_context"}
+    if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
         raise ValueError("cairn_invalid_configuration")
     if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
+        raise ValueError("cairn_invalid_configuration")
+    if "recall_context" in value and value["recall_context"] != "source-evidence":
         raise ValueError("cairn_invalid_configuration")
     for key in ("node_path", "executable_path"):
         raw = value[key]
@@ -133,6 +136,9 @@ class CairnMemoryProvider(MemoryProvider):
         return paths + [{"key": "capture_qualification",
                          "description": "Optional source-bound-v2 for explicitly submitted capture (paid). Omit on fresh setup for five tools; existing setting is retained. No passive capture.",
                          "required": False},
+                        {"key": "recall_context",
+                         "description": "Optional source-evidence default for recall calls that omit both contextMode and includeQualification. Explicit tool arguments take precedence.",
+                         "required": False},
                         {"key": "api_key", "description": "Optional Cairn capture/recall OpenAI key (paid; selected source evidence leaves this device)",
                          "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
 
@@ -182,13 +188,17 @@ class CairnMemoryProvider(MemoryProvider):
         try:
             if len(json.dumps(args)) > 60000:
                 return error("invalid_input")
+            arguments = args
+            if (name == "recall_memory" and self._config.get("recall_context") == "source-evidence"
+                    and "contextMode" not in args and "includeQualification" not in args):
+                arguments = {**args, "contextMode": "source-evidence"}
             directory = self._home / "cairn"
             directory.mkdir(mode=0o700, exist_ok=True)
             if directory.is_symlink() or (directory / "memory.sqlite").is_symlink():
                 return error("cairn_invalid_configuration")
             owner = profile_owner(directory)
             return json.dumps(self._request("call", directory / "memory.sqlite", owner,
-                                            name=name, arguments=args))
+                                            name=name, arguments=arguments))
         except (ValueError, OSError, TypeError):
             return error("cairn_transport_failed")
 
