@@ -46,6 +46,14 @@ test('installed source-basis review loads its prompt and compiles exact source u
   proposal.links.push({ from: 1, to: 0, relation: 'supports-decision' });
   const connected = await core.reviewDecisionBasis({ namespace, refs: [{ memoryId, revision }] });
   assert.equal(connected.ok, true); assert.equal(connected.value.links.length, 2);
+  for (const unit of proposal.units) unit.context = { subject: 'I chose A', applies: null, scope: null, commitment: null };
+  const contextual = await core.reviewDecisionBasis({ namespace, refs: [{ memoryId, revision }], inputMode: 'source-context-v1' });
+  assert.equal(contextual.ok, true); assert.equal(contextual.value.inputMode, 'source-context-v1');
+  assert.deepEqual(contextual.value.units[0].context.subject, { start: 0, end: 9, text: 'I chose A' });
+  assert.match(calls.at(-1).instructions, /event time is not report arrival time/);
+  assert.ok(calls.at(-1).text.format.schema.properties.units.items.anyOf[0].properties.context);
+  assert.deepEqual(core.get({ namespace, memoryId }), before);
+  assert.equal(core.map({ namespace }).value.indexRevision, index);
   core.close(); const cold = openMemoryCore({ path }); t.after(() => cold.close());
   assert.equal(cold.getRationale({ namespace, memoryId, revision }).value.edges.length, 0);
 });

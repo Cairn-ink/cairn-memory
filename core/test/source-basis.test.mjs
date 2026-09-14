@@ -19,6 +19,15 @@ const output = () => ({ units: [
   { from: 2, to: 0, relation: 'supports-decision' },
   { from: 3, to: 1, relation: 'challenges-current-basis' },
 ] });
+const contextualOutput = () => {
+  const proposal = output();
+  proposal.units = proposal.units.map(unit => ({ ...unit, context: {
+    subject: unit.memory === 0 ? 'I chose Pinevault' : null,
+    applies: null, scope: null,
+    commitment: unit.memory === 1 ? 'I have not decided to switch.' : null,
+  } }));
+  return proposal;
+};
 function fixture(t, firstExcerpt = 'I chose Pinevault because it cost $8 monthly and kept files in Japan.') {
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-source-basis-')), 'memory.sqlite');
   const requests = []; const model = { contextWindow: 8192, countTokens: () => 1,
@@ -36,6 +45,84 @@ function fixture(t, firstExcerpt = 'I chose Pinevault because it cost $8 monthly
     edges: db.prepare('SELECT * FROM rationale_edges').all(), index: ok(core.map({ namespace })).indexRevision });
   return { core, db, path, refs, model, requests, review, stored };
 }
+test('SBC1 optional context quotes compile into receipt-bound anchors, retaining unresolved fields and nonpersistence', async t => {
+  const f = fixture(t); const before = f.stored();
+  f.model.reviewBasis = request => { f.requests.push(request); return contextualOutput(); };
+  const value = ok(await f.review({ inputMode: 'source-context-v1' }));
+  assert.equal(value.inputMode, 'source-context-v1');
+  assert.equal(value.status, 'unassessed'); assert.equal(value.persistence, 'not-stored');
+  assert.equal(f.requests[0].input.inputMode, 'source-context-v1');
+  assert.match(f.requests[0].system, /event time is not report arrival time/);
+  assert.equal(f.requests[0].maxOutputTokens, 1024);
+  assert.equal(JSON.stringify(f.requests).includes('Generated interpretation'), false);
+  for (const unit of value.units) {
+    const receipt = value.sources.find(source => source.memory.id === unit.memoryId)
+      .receipts.find(receipt => receipt.id === unit.receiptId);
+    assert.equal(unit.interpretationStatus, 'model-proposed');
+    assert.equal(unit.context.applies, null); assert.equal(unit.context.scope, null);
+    for (const anchor of Object.values(unit.context).filter(Boolean)) {
+      assert.equal(receipt.excerpt.slice(anchor.start, anchor.end), anchor.text);
+    }
+  }
+  assert.deepEqual(f.stored(), before);
+  f.core.close(); const cold = openMemoryCore({ path: f.path }); t.after(() => cold.close());
+  assert.equal(ok(cold.getRationale({ namespace, ...f.refs[0] })).edges.length, 0);
+});
+test('SBC2 unknown explicit modes reject before any model call; default stays context-free', async t => {
+  const f = fixture(t);
+  for (const inputMode of [undefined, null, '', 'other', 1, {}]) {
+    assert.equal((await f.review({ inputMode })).error.code, 'invalid_input');
+  }
+  assert.equal(f.requests.length, 0);
+  const value = ok(await f.review());
+  assert.equal(Object.hasOwn(value, 'inputMode'), false);
+  assert.equal(Object.hasOwn(value.units[0], 'context'), false);
+  assert.equal(Object.hasOwn(f.requests[0].input, 'inputMode'), false);
+});
+test('SBC3 context fields reject missing, extra, malformed, fabricated and cross-receipt quotes without writes', async t => {
+  const f = fixture(t); const before = f.stored();
+  const changes = [
+    p => { delete p.units[0].context; }, p => { delete p.units[0].context.subject; },
+    p => { p.units[0].context.extra = null; }, p => { p.units[0].context = []; },
+    ...['', ' ', '\ud800', 'x'.repeat(201), 'fabricated', 'I have not decided to switch.', 7, {}]
+      .map(value => p => { p.units[0].context.subject = value; }),
+  ];
+  for (const change of changes) {
+    f.model.reviewBasis = () => { const p = contextualOutput(); change(p); return p; };
+    assert.equal((await f.review({ inputMode: 'source-context-v1' })).error.code, 'invalid_model_output');
+    assert.deepEqual(f.stored(), before);
+  }
+  f.model.reviewBasis = contextualOutput;
+  assert.equal((await f.review()).error.code, 'invalid_model_output');
+});
+test('SBC4 ambiguous context is rejected; exact UTF-16 anchors preserve source and nulls do not assert compatibility', () => {
+  const sources = [{ memory: { id: 'synthetic', revision: 1 }, receipts: [{ id: 'receipt',
+    excerpt: '🙂我今天還沒決定。repeat repeat' }] }];
+  const proposal = { units: [{ memory: 0, receipt: 0, quote: '我今天還沒決定', role: 'decision',
+    context: { subject: '🙂我', applies: '今天', scope: null, commitment: '還沒決定' } }], links: [] };
+  const compiled = compileDecisionBasis(proposal, sources, 'source-context-v1');
+  assert.deepEqual(compiled.units[0].context.subject, { start: 0, end: 3, text: '🙂我' });
+  assert.equal(compiled.units[0].interpretationStatus, 'model-proposed');
+  // Wrong proposed role is still not semantic truth, despite a valid non-adoption citation.
+  proposal.units[0].context.scope = 'repeat';
+  assert.throws(() => compileDecisionBasis(proposal, sources, 'source-context-v1'));
+});
+test('SBC5 contextual reviews retain freshness and unchanged output budget', async t => {
+  const f = fixture(t); const before = f.stored();
+  f.model.reviewBasis = contextualOutput;
+  f.model.countTokens = text => text.includes('"units"') ? 1025 : 1;
+  assert.equal((await f.review({ inputMode: 'source-context-v1' })).error.code, 'invalid_model_output');
+  assert.deepEqual(f.stored(), before);
+  f.model.countTokens = () => 1;
+  f.model.reviewBasis = () => {
+    ok(f.core.correct({ namespace, memoryId: f.refs[0].memoryId, expectedRevision: f.refs[0].revision,
+      content: 'Changed', kind: 'context', receipt: { client: 'synthetic', sessionId: 'synthetic',
+        eventId: 'changed', role: 'user', excerpt: 'Changed' } }));
+    return contextualOutput();
+  };
+  assert.equal((await f.review({ inputMode: 'source-context-v1' })).error.code, 'revision_conflict');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM rationale_edges').get().n, 0);
+});
 test('SB1 distinct source-bound premises identify one update without writing memory or asserting truth', async t => {
   const f = fixture(t); const before = f.stored(); const result = ok(await f.review());
   assert.equal(result.units.length, 4); assert.equal(result.links.length, 3);

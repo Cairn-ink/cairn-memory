@@ -40,6 +40,8 @@ const snapshotIndices = (values, maximum) => {
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
   if (method === 'reviewBasis') {
+    if (input && Object.hasOwn(input, 'inputMode') && input.inputMode !== 'source-context-v1') invalid();
+    const contextMode = input?.inputMode === 'source-context-v1';
     const memoryIndices = snapshotIndices(input?.memories, 6);
     if (!memoryIndices.length) invalid();
     const variants = input.memories.map(memory => {
@@ -47,7 +49,10 @@ export function schemasFor(method, input) {
       if (!receipts.length) invalid();
       return object({ memory: constrained(integer, [memory.index]), receipt: constrained(integer, receipts),
         quote: { type: 'string', minLength: 1, maxLength: 200 },
-        role: { type: 'string', enum: ['decision', 'premise', 'update'] } });
+        role: { type: 'string', enum: ['decision', 'premise', 'update'] },
+        ...(contextMode ? { context: object(Object.fromEntries(
+          ['subject', 'applies', 'scope', 'commitment'].map(field => [field,
+            { anyOf: [{ type: 'string', minLength: 1, maxLength: 200 }, { type: 'null' }] }]))) } : {}) });
     });
     return object({ units: array({ anyOf: variants }, 8),
       links: array(object({ from: { ...integer, maximum: 7 }, to: { ...integer, maximum: 7 },

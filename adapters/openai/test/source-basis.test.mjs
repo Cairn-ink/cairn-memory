@@ -21,6 +21,31 @@ const fake = calls => async (url, options) => {
     usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 },
   });
 };
+test('SBA3 context mode has strict nullable citation fields, unchanged routing/budget and pre-transport mode denial', async () => {
+  const calls = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: fake(calls) });
+  const contextRequest = { ...request(), input: { ...input, inputMode: 'source-context-v1' } };
+  await model.reviewBasis(contextRequest);
+  assert.equal(calls.length, 2);
+  const properties = calls[1].body.text.format.schema.properties.units.items.anyOf[0].properties;
+  assert.equal(properties.context.additionalProperties, false);
+  assert.deepEqual(properties.context.required, ['subject', 'applies', 'scope', 'commitment']);
+  for (const field of properties.context.required) {
+    assert.deepEqual(properties.context.properties[field].anyOf,
+      [{ type: 'string', minLength: 1, maxLength: 200 }, { type: 'null' }]);
+  }
+  const { max_output_tokens, store, stream, ...counted } = calls[1].body;
+  assert.deepEqual(calls[0].body, counted); assert.equal(max_output_tokens, 1024);
+  assert.equal(calls[1].body.model, DEFAULT_MODEL);
+  // The adapter validates its JSON snapshot (undefined is omitted by JSON);
+  // the embedded core separately rejects an explicitly undefined mode.
+  for (const inputMode of [null, 'other', 7]) {
+    await assert.rejects(model.reviewBasis({ ...request(), input: { ...input, inputMode } }));
+  }
+  assert.equal(calls.length, 2);
+  await model.reviewBasis(request());
+  assert.equal(Object.hasOwn(calls[3].body.text.format.schema.properties.units.items.anyOf[0].properties, 'context'), false);
+});
 test('SBA1 basis model selection is independent and exact count/generate schema remains bounded', async () => {
   for (const basisModel of models) for (const rationaleModel of models) {
     const calls = [];
