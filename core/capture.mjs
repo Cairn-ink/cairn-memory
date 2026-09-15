@@ -42,7 +42,7 @@ async function classifyAdmission(model, namespace, admission, operations) {
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations, captureQualification, captureRationale }) {
+export async function captureMessages({ model, input, operations, captureQualification, captureRationale, captureEvidence }) {
   const snapshot = captureSnapshot(input, captureQualification);
   const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
   const sourceMessages = retained?.messages ?? snapshot.messages;
@@ -52,7 +52,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
-    : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
+    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }))
+      : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
       previousOutcome: 'unavailable' } } : {}) };
@@ -65,6 +66,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
     let items;
     try { items = extractedItems(output, snapshot, retained?.messages); }
     catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
+    // Do not start another interpretation stage after explicit discard/forget.
+    // A provider request already in flight cannot be recalled by local deletion.
+    if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items) : await qualifyExtractedItems(model, items);
     if (snapshot.causal) {

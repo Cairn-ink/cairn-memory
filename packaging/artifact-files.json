@@ -1,5 +1,7 @@
 [
   "core/admission-storage.mjs",
+  "core/staged-evidence-schema.mjs",
+  "core/staged-evidence-storage.mjs",
   "core/automatic-qualification.mjs",
   "core/automatic-rationale.mjs",
   "core/capture-input.mjs",

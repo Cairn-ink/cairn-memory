@@ -41,7 +41,7 @@ test('v3→v9 retains memory, receipt IDs and authenticated S2a cursor identity'
     assert.equal(page.value.memories[0].filing.status, 'unfiled');
     const check = new DatabaseSync(path);
     try {
-      assert.equal(check.prepare('PRAGMA user_version').get().user_version, 12);
+      assert.equal(check.prepare('PRAGMA user_version').get().user_version, 13);
       assert.ok(check.prepare('SELECT currentness FROM memories').all().every((row) => row.currentness === 'current'));
       assert.deepEqual(check.prepare('SELECT * FROM store_metadata').get(), identity);
       assert.deepEqual(check.prepare('SELECT * FROM receipts ORDER BY id').all(), receipts);

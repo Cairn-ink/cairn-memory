@@ -4,14 +4,15 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11 data now upgrades it to v12 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12 data now upgrades it to v13 for
+[opt-in staged capture evidence](staged-capture-evidence.md),
 [source-backed proposed rationale](source-backed-rationale.md),
 [trusted-manual qualified transitions](qualified-transition.md),
 [manual claim qualification](claim-qualification.md),
 [ordered capture](capture.md#opt-in-source-ordered-reconciliation) and
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md) and [admission claims](admission-claims.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v12.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v13.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
@@ -133,6 +134,13 @@ blindly retry a stale correction/deletion. Storage deduplication is not an
 extraction-job lease or a promise of exactly-once model calls.
 
 ## Correction, forgetting, and retention
+
+When [staged capture evidence](staged-capture-evidence.md) exists, successful
+correction or forgetting also clears every staged source payload in that exact
+namespace and fences those old events, including pending capture. This applies
+through both facades, even after reopening without the staging option. It does
+not delete other admitted memories. The breadth is a conservative first-version
+trade-off, not precise source-lineage deletion or semantic blocking of new events.
 
 The shared core's explicit [supersession operation](supersession.md) can retain
 an earlier assertion as historical. Legacy `get`, `list` and `search` return

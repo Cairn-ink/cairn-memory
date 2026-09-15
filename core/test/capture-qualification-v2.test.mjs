@@ -42,7 +42,7 @@ test('CV2 candidate capture stores exact core-derived source span, cold-inspects
   const saved = detail(f.core, id); assert.equal(saved.qualification.anchors[0].end, source.length);
   assert.deepEqual(saved.qualification.anchors[0].fields, fields);
   assert.equal(f.db.prepare('SELECT count(*) n FROM qualified_claim_bindings').get().n, 0);
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 12);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 13);
   f.close(); const cold = openMemoryCore({ path: f.path, captureQualification: 'source-bound-v2' }); t.after(() => cold.close());
   assert.deepEqual(detail(cold, id), saved); assert.equal(ok(await cold.capture(input())).duplicate, true);
   for (const mode of [undefined, 'source-bound-v1']) {

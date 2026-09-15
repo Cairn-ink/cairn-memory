@@ -127,13 +127,17 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model', 'captureQualification', 'captureRationale']);
+  object(input, ['path', 'model', 'captureQualification', 'captureRationale', 'captureEvidence']);
   const captureQualification = Object.hasOwn(input, 'captureQualification') ? input.captureQualification : undefined;
   if (Object.hasOwn(input, 'captureQualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
     throw new MemoryStoreError('invalid_input');
   }
   const captureRationale = input.captureRationale;
   if (Object.hasOwn(input, 'captureRationale') && (captureRationale !== 'source-bound-v1' || captureQualification !== 'source-bound-v2')) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  const captureEvidence = input.captureEvidence;
+  if (Object.hasOwn(input, 'captureEvidence') && (captureEvidence !== 'staged-v1' || captureQualification !== 'source-bound-v2')) {
     throw new MemoryStoreError('invalid_input');
   }
   const model = input.model;
@@ -395,6 +399,26 @@ export function openMemoryCore(input) {
     });
   }
 
+  function inspectCaptureEvidence(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'client', 'eventId']);
+      return runtime.inspectCaptureEvidence(contractNamespace(input.namespace), {
+        client: contractId(input.client), eventId: contractId(input.eventId),
+      });
+    });
+  }
+
+  function discardCaptureEvidence(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'client', 'eventId']);
+      return runtime.discardCaptureEvidence(contractNamespace(input.namespace), {
+        client: contractId(input.client), eventId: contractId(input.eventId),
+      });
+    });
+  }
+
   function rebuildIndex(input) {
     return invoke(() => {
       runtime.ready();
@@ -650,8 +674,15 @@ export function openMemoryCore(input) {
       object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
-      return success(await captureMessages({ model, captureQualification, captureRationale, input: { ...input, namespace },
+      if (captureEvidence && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
+      return success(await captureMessages({ model, captureQualification, captureRationale, captureEvidence, input: { ...input, namespace },
         operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
+          claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
+            ...admissionKey(value), leaseMs: 125000, view: value.view,
+          })),
+          assertCaptureEvidence: value => invoke(() => runtime.assertCaptureEvidence(ns, {
+            ...admissionKey(value), token: contractId(value.token),
+          })),
           reviewRationale,
           discoverRationale: ({ refs, query }) => invoke(() => {
             runtime.rationaleSnapshot(ns, refs);
@@ -704,7 +735,7 @@ export function openMemoryCore(input) {
 
   return Object.freeze({
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
-    claimAdmission, finishAdmission, abandonAdmission,
+    claimAdmission, finishAdmission, abandonAdmission, inspectCaptureEvidence, discardCaptureEvidence,
     applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {

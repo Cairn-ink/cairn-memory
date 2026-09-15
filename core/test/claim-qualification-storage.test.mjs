@@ -49,7 +49,7 @@ test('S1/S2 explicit exact UTF-8 bindings, opt-in shape, no copied anchor text, 
   assert.deepEqual(q, { ...qualification(), boundRevision: saved.memory.revision, contentDigest: digest(content),
     anchors: [{ receiptId: detail.receipts[0].id, receiptDigest: digest(content), start: 0, end: content.length,
       text: content, fields: qualification().anchors[0].fields }] });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 12);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   assert.ok(!Object.keys(db.prepare('SELECT * FROM qualification_anchors').get()).includes('text'));
   for (const memory of ok(core.list({ namespace })).memories) assert.equal(Object.hasOwn(memory, 'qualification'), false);
