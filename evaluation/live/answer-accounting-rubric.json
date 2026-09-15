@@ -1,0 +1,107 @@
+{
+  "id": "source-answer-accounting-comparison-v1",
+  "histories": [
+    {
+      "id": "h01a",
+      "requiredSourceIds": [
+        "h01a-s1",
+        "h01a-s3",
+        "h01a-s5",
+        "h01a-s6",
+        "h01a-s7",
+        "h01a-s8"
+      ],
+      "qualifierSourceId": "h01a-s6",
+      "expectedCommitment": "provisional",
+      "reason": "Lower cost and shape retention after washing were the original reasons. The equal-required-amount price update reverses the cost advantage, while the new-lot washing test reaffirms shape retention. Losing the price reason does not establish a switch to linen or wool.",
+      "scope": "Only the user's April 18 scarf is covered; no choice for later projects is established.",
+      "actor": "The user chooses their scarf yarn. Mira independently chooses linen for her own scarf. The assistant's wool suggestion was explicitly not adopted; preserve the enclosing negation rather than treating the embedded new-choice phrase as adoption.",
+      "unknown": "In the constructed omission view, the revised price comparison is not supplied. Do not claim verified continuing cheapness or invent that a price increase caused the provisional/firm status. The complete view establishes no additional causal explanation for commitment strength."
+    },
+    {
+      "id": "h01b",
+      "requiredSourceIds": [
+        "h01b-s1",
+        "h01b-s3",
+        "h01b-s5",
+        "h01b-s6",
+        "h01b-s7",
+        "h01b-s8"
+      ],
+      "qualifierSourceId": "h01b-s6",
+      "expectedCommitment": "committed",
+      "reason": "Lower cost and shape retention after washing were the original reasons. The equal-required-amount price update reverses the cost advantage, while the new-lot washing test reaffirms shape retention. Losing the price reason does not establish a switch to linen or wool.",
+      "scope": "Only the user's April 18 scarf is covered; no choice for later projects is established.",
+      "actor": "The user chooses their scarf yarn. Mira independently chooses linen for her own scarf. The assistant's wool suggestion was explicitly not adopted; preserve the enclosing negation rather than treating the embedded new-choice phrase as adoption.",
+      "unknown": "In the constructed omission view, the revised price comparison is not supplied. Do not claim verified continuing cheapness or invent that a price increase caused the provisional/firm status. The complete view establishes no additional causal explanation for commitment strength."
+    },
+    {
+      "id": "h02a",
+      "requiredSourceIds": [
+        "h02a-s1",
+        "h02a-s2",
+        "h02a-s3",
+        "h02a-s6",
+        "h02a-s7",
+        "h02a-s8"
+      ],
+      "qualifierSourceId": "h02a-s7",
+      "expectedCommitment": "provisional",
+      "reason": "The cloth bag originally preserved crisp crust and fitted the shelf. The humid-day trial challenges crispness in that condition, not shelf fit, which is separately reaffirmed. No source tests whether the lidded box preserves crispness or fits that shelf; a plan to use it is not proof of those properties.",
+      "scope": "The lidded box is planned only for August 5–7. The return to the cloth bag is a future plan, explicitly not reported as completed. Temporary scope does not by itself imply tentative commitment.",
+      "actor": "The user controls their kitchen's plan. Tomas's crock is for his separate kitchen. The assistant's freezing suggestion is explicitly unadopted.",
+      "unknown": "The effectiveness and shelf fit of the proposed lidded box are not established in either view. The omission view also lacks the humid-day result; do not manufacture a known cause for the temporary switch or assurance that the original crispness reason still holds."
+    },
+    {
+      "id": "h02b",
+      "requiredSourceIds": [
+        "h02b-s1",
+        "h02b-s2",
+        "h02b-s3",
+        "h02b-s6",
+        "h02b-s7",
+        "h02b-s8"
+      ],
+      "qualifierSourceId": "h02b-s7",
+      "expectedCommitment": "committed",
+      "reason": "The cloth bag originally preserved crisp crust and fitted the shelf. The humid-day trial challenges crispness in that condition, not shelf fit, which is separately reaffirmed. No source tests whether the lidded box preserves crispness or fits that shelf; a plan to use it is not proof of those properties.",
+      "scope": "The lidded box is planned only for August 5–7. The return to the cloth bag is a future plan, explicitly not reported as completed. Temporary scope does not by itself imply tentative commitment.",
+      "actor": "The user controls their kitchen's plan. Tomas's crock is for his separate kitchen. The assistant's freezing suggestion is explicitly unadopted.",
+      "unknown": "The effectiveness and shelf fit of the proposed lidded box are not established in either view. The omission view also lacks the humid-day result; do not manufacture a known cause for the temporary switch or assurance that the original crispness reason still holds."
+    },
+    {
+      "id": "h03a",
+      "requiredSourceIds": [
+        "h03a-s1",
+        "h03a-s2",
+        "h03a-s3",
+        "h03a-s5",
+        "h03a-s6",
+        "h03a-s8"
+      ],
+      "qualifierSourceId": "h03a-s5",
+      "expectedCommitment": "provisional",
+      "reason": "原本理由是大字易讀與整本可放入窄抽屜。新硬殼封面使抽屜容納理由不再成立；實際試讀重新支持易讀。失去抽屜容納的理由不等於已改用平板或索引卡。",
+      "scope": "只涉及九月的家庭食譜與八月十日的選擇，不推定往後都用同一方式。",
+      "actor": "使用者整理自己的家庭食譜；若晴替她自己的食譜用索引卡，不負責使用者用品。助理的平板建議明確未被採納；不可去掉外層否定後，把用品選擇說成採購核准。",
+      "unknown": "全部來源均未指明採購核准者，也沒有證明採購已獲核准；不能推定使用者、若晴或助理核准。在省略更新的視圖中，也未提供活頁夾放不進抽屜的結果；不要把舊的容納理由當成已確認仍成立。"
+    },
+    {
+      "id": "h03b",
+      "requiredSourceIds": [
+        "h03b-s1",
+        "h03b-s2",
+        "h03b-s3",
+        "h03b-s5",
+        "h03b-s6",
+        "h03b-s8"
+      ],
+      "qualifierSourceId": "h03b-s5",
+      "expectedCommitment": "committed",
+      "reason": "原本理由是大字易讀與整本可放入窄抽屜。新硬殼封面使抽屜容納理由不再成立；實際試讀重新支持易讀。失去抽屜容納的理由不等於已改用平板或索引卡。",
+      "scope": "只涉及九月的家庭食譜與八月十日的選擇，不推定往後都用同一方式。",
+      "actor": "使用者整理自己的家庭食譜；若晴替她自己的食譜用索引卡，不負責使用者用品。助理的平板建議明確未被採納；不可去掉外層否定後，把用品選擇說成採購核准。",
+      "unknown": "全部來源均未指明採購核准者，也沒有證明採購已獲核准；不能推定使用者、若晴或助理核准。在省略更新的視圖中，也未提供活頁夾放不進抽屜的結果；不要把舊的容納理由當成已確認仍成立。"
+    }
+  ]
+}
