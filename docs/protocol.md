@@ -1,14 +1,19 @@
 # Compatibility protocol v0.1
 
-### Separate opt-in embedded staging boundary
+### Separate opt-in staging boundary
 
 The embedded constructor's `captureEvidence: 'staged-v1'` requires
 `captureQualification: 'source-bound-v2'` and rejects causal capture in this
 first version. It retains the canonical bounded submitted view before model
 interpretation, including message IDs, roles, text and truncation metadata.
 This is additional local personal-data retention, even when interpretation
-fails or the extractor omits a message. It is not enabled by default, exposed
-by MCP/HTTP or transmitted through telemetry. Provider capture inputs remain
+fails or the extractor omits a message. It is not enabled by default or exposed
+by hosted HTTP or telemetry. Local stdio MCP requires explicit
+`--capture-evidence staged-v1` with v2 capture for retention; independent
+`--capture-evidence-access staged-v1` enables management without new retention.
+Both management tools accept only the original batch ID and use the startup
+namespace and fixed MCP client. They add no authority from tool arguments.
+Provider capture inputs remain
 unchanged; no staged content joins ordinary memory recall/navigation/ranking.
 
 Explicit exact-namespace inspection requires ordinary local access authority,

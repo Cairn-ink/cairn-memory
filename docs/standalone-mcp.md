@@ -138,8 +138,9 @@ See [core-owned evidence candidates](capture.md#core-owned-evidence-candidates-v
 Submit only messages the user actually intends to save. This does not read a
 transcript, install a hook, authenticate a human speaker or establish execution
 permission. User/assistant roles and text are caller-submitted claims, not a
-verified transcript. Reuse the same batch ID and payload for retries; do not
-invent a fresh retry ID after failure. Completed replay makes no model calls;
+verified transcript. Reuse the same batch ID and payload only where replay is
+allowed; do not invent a fresh retry ID after failure. Staged failures are
+inspect/discard-only, not automatically retried. Completed live-stage replay makes no model calls;
 changing canonical content, role or order at the same batch ID conflicts.
 
 Batch IDs use the core's 200-unit opaque identifier rules. Supply 1–24 messages,
@@ -165,6 +166,46 @@ extraction uses those same retained prefixes; tail-only facts are unavailable.
 Full-text changes still conflict with an existing batch ID. This field describes
 source retention, not semantic completeness or how an older duplicate was
 originally extracted. The client cannot override the source window.
+
+### Optional staged source inspection
+
+Add `--capture-evidence staged-v1` alongside
+`--capture-qualification source-bound-v2` to retain a bounded source view
+atomically before extraction. This explicit option adds `inspect_capture_evidence`
+and `discard_capture_evidence`; it does not install hooks or change ordinary recall.
+Both tools accept only `{batchId:"your-original-batch-id"}`. Namespace and client
+are fixed by startup, never supplied by the tool caller. Staging requires v2;
+invalid combinations reject before database access. Programmatic servers use
+the equivalent `captureEvidence: 'staged-v1'` setting.
+
+To inspect or discard after restarting without enabling new retention, use
+`--capture-evidence-access staged-v1` alone (programmatic `captureEvidenceAccess`).
+No qualification option or API key is needed. This access-only configuration
+exposes seven tools, not `capture_memory`; staging implies access and exposes
+eight tools without the separate rationale option. Existing default/v1/v2
+discovery stays unchanged when neither new option is set. `--check-config`
+reports access and retention separately and remains syntax-only.
+
+The tools return the shared core's [staged evidence contract](staged-capture-evidence.md).
+Failed extraction/qualification leaves an untrusted source, not an admitted
+memory. Original IDs/roles and truncated-source metadata remain inspectable;
+assistant suggestions are not human decisions or execution authority. Retention
+is fixed at 24 hours, at most 24 normalized/redacted 800-unit message prefixes
+per event, 64 live payloads and 1 MiB of payload bytes per exact namespace.
+Expiry is observed on access, not by an idle background worker. This is not a
+complete transcript archive; content-free replay fences remain.
+
+Live identical captures report processing; admitted live stages can replay
+without model work. Failed, expired, discarded or forgotten staged events are
+closed to further interpretation, including when retention is later disabled.
+Inspect/discard instead of automatically retrying; never change a batch ID to
+bypass closure. Discard fences unfinished admission but does not forget an
+already admitted memory. Successful correction or forgetting clears **all staged
+payloads in the configured namespace**, including pending work, even when this
+connection has staging disabled. Other admitted memories and namespaces remain.
+Already sent provider requests cannot be recalled; logical deletion does not
+erase SQLite free pages, journals or backups. Stop older runtime connections
+before upgrading the database.
 
 Inspect a result with
 `inspect_memory({memoryId:"returned-id",includeQualification:true})`. This works

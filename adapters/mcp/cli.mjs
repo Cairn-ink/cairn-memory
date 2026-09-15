@@ -10,6 +10,8 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID]
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2
+  cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1
+  cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
@@ -26,6 +28,20 @@ charges; no account spending cap is enforced. Inspection (including source
 qualification), explicit remember, correction and forgetting remain keyless.
 V2 uses core-owned source candidates; v1 retains model-written source anchors.
 Neither mode proves meaning, resolves currentness or grants update authority.
+--capture-evidence staged-v1 requires --capture-qualification source-bound-v2.
+It retains bounded submitted sources locally for 24 hours, including failed capture:
+up to 24 messages of 800 UTF-16 units, 128KiB per event, 64 payloads/1MiB per namespace.
+Staging adds keyless inspect_capture_evidence and discard_capture_evidence.
+--capture-evidence-access staged-v1 adds only those management tools; it does not
+enable retention, qualification, model work or automatic capture. Both modes can
+start without a key. Inspection exposes untrusted sources, not truth or authority.
+Live identical batches report processing; admitted duplicates do not rerun models.
+Failed, expired, discarded or forgotten staged batches are closed, even after staging
+is disabled. Inspect or discard them; never use fresh batch IDs to bypass closure.
+Successful correction or forgetting clears ALL staged payloads in the exact configured
+namespace, even with staging disabled; other admitted memories remain. Discarding a
+stage does not forget an admitted memory. Retention is not an archive, a semantic
+quality guarantee or physical erasure; local journals and backups may retain copies.
 --capture-rationale source-bound-v1 requires --capture-qualification source-bound-v2.
 It attempts proposed rationale after saving/classification and adds keyless inspect_rationale.
 Check the separate rationale status; duplicate batches do not repeat this pass.
@@ -37,7 +53,8 @@ It cannot verify database permissions, credentials or model availability.
 `;
 
 export function parseConfiguration(args) {
-  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale']);
+  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
+    '--capture-evidence', '--capture-evidence-access']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -48,17 +65,24 @@ export function parseConfiguration(args) {
   if (!values.get('--db') || !values.get('--owner')) throw new Error('invalid_mcp_configuration');
   identifier(values.get('--owner'));
   if (values.has('--project')) identifier(values.get('--project'));
-  if (values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
+  if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
     throw new Error('invalid_mcp_configuration');
   }
   if (values.has('--capture-rationale') && (values.get('--capture-rationale') !== 'source-bound-v1' ||
       values.get('--capture-qualification') !== 'source-bound-v2')) throw new Error('invalid_mcp_configuration');
+  if (values.has('--capture-evidence') && (values.get('--capture-evidence') !== 'staged-v1' ||
+      values.get('--capture-qualification') !== 'source-bound-v2')) throw new Error('invalid_mcp_configuration');
+  if (values.has('--capture-evidence-access') && values.get('--capture-evidence-access') !== 'staged-v1') {
+    throw new Error('invalid_mcp_configuration');
+  }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
-    ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}) };
+    ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
+    ...(values.has('--capture-evidence') ? { captureEvidence: values.get('--capture-evidence') } : {}),
+    ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}) };
 }
 
 export async function start(args = process.argv.slice(2), env = process.env) {
@@ -81,6 +105,10 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       databaseOpened: false, providerContacted: false,
       ...(config.captureRationale ? { captureRationale: config.captureRationale,
         rationale: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
+      ...(config.captureEvidence ? { captureEvidence: config.captureEvidence } : {}),
+      ...(config.captureEvidence || config.captureEvidenceAccess ? {
+        captureEvidenceAccess: 'staged-v1', stagedRetentionEnabled: Boolean(config.captureEvidence),
+      } : {}),
       unverified: ['database-readiness', 'credential-validity', 'model-availability'],
     }, null, 2));
     return;

@@ -1,9 +1,10 @@
-# Staged capture evidence — embedded opt-in
+# Staged capture evidence — explicit opt-in
 
 `captureEvidence: 'staged-v1'` separates a bounded submitted source view from
 successful interpretation. It requires source-bound-v2 capture and is off by
-default. This is an embedded shared-core feature, not a new memory engine,
-hosted endpoint or MCP capability. Causal capture is rejected in this first
+default. This is a shared-core feature, not a new memory engine or hosted
+endpoint. Local stdio MCP offers [explicit staging and keyless access](standalone-mcp.md#optional-staged-source-inspection)
+over the same contract. Causal capture is rejected in this first
 version. No model is trained, selected or called by enabling inspection.
 
 ```js
@@ -100,6 +101,6 @@ deletion/expiry does not erase SQLite free pages, journals, snapshots or backups
 File owners can read or tamper with data; do not open untrusted SQLite files.
 
 Verification uses synthetic stores and scripted models. It demonstrates
-retention and lifecycle boundaries, not semantic quality. MCP/native host
+retention and lifecycle boundaries, not semantic quality. Native Hermes
 exposure, precise source-lineage deletion, automatic retries, promotion,
 background maintenance and general reliability claims are outside this slice.

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — explicit staged evidence over MCP
+
+- Local stdio hosts can explicitly opt into bounded source staging with
+  `--capture-evidence staged-v1` and source-bound-v2 capture. Defaults remain off.
+- Independent `--capture-evidence-access staged-v1` exposes keyless inspect and
+  discard tools without enabling new retention or model work. Tools remain
+  bound to the startup namespace; failed sources never become ordinary recall.
+- Help and tool descriptions explain event closure and namespace-wide staged
+  clearing on successful correction/forgetting, including after disabling
+  retention. This is not automatic capture, retry, promotion or secure erasure.
+
 ## Unreleased — opt-in staged capture evidence
 
 - Embedded source-bound-v2 capture can explicitly retain a bounded source view
