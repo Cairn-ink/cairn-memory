@@ -93,11 +93,21 @@ ranker still drops changed or reaffirmed reasons. Complete-source controls also
 retain obsolete reasons or strengthen tentative choices. Augmentation is not
 promoted. Next work repairs the separate bounded-usage rejection and investigates
 source-linked answer accounting using existing receipts and decision-basis
-boundaries, without another persistent graph. That semantic design is not yet
-implemented or validated by these results.
-The active US$50 campaign has US$20.696 conservatively reserved and zero unsettled
-requests; its known usage estimate is US$1.191397, not an invoice. There are845
-unknown-cost requests and US$29.304 conservative headroom. Older US$20 figures
+boundaries, without another persistent graph.
+Merged PR121 repairs independently bounded provider-usage acceptance; the older
+failed response is not rescored. PR123 adds an evaluation-only source-linked
+answer compiler and PR124 freezes a fresh same-source comparison. Its
+[once-only results](../answer-accounting-results.md) retain24 host responses,
+23 structural acceptances and one rejection, not a semantic success rate.
+Independent reviews find unsupported causality, temporal claims, approval denial
+and record/prose disagreement even with complete inputs. Structured accounting
+is not promoted. Next evaluate avoiding post-selection loss for complete small
+candidate sets, with irrelevant/none-relevant controls, unchanged budgets and
+revision safety; navigation omissions and host interpretation remain distinct.
+No such candidate-preservation policy is implemented by this checkpoint.
+The active US$50 campaign has US$21.896 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$1.211453, not an invoice. There are845
+unknown-cost requests and US$28.104 conservative headroom. Older US$20 figures
 below belong to a separate campaign and are not renewed allowance.
 
 Productization remains a separate track: source-built local preview, supported
