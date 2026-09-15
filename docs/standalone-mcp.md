@@ -14,6 +14,51 @@ separately; a protocol test does not establish relevance.
 
 ## Start from source
 
+### Keyless complete-source walkthrough
+
+After installing the two isolated adapter dependency sets shown below, configure
+your local MCP client to launch:
+
+```sh
+node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --source-snapshot current-admitted-v1
+```
+
+No API key is needed. To check syntax, place `--check-config` before `--db`;
+the check loads no tokenizer, opens no database and contacts no provider.
+Normal opted-in startup loads the existing local `o200k_base` tokenizer. Default
+keyless startup does not load it. This independent flag adds only
+`read_memory_sources`; capture, qualification and staging remain separate options.
+
+In your MCP client, explicitly call `remember_memory` with synthetic content
+such as `{"content":"I might use the blue desk for now.","kind":"preference"}`.
+Close the client session, reopen with the same database/owner/project, and call
+`read_memory_sources` with `{}`. It returns exact retained excerpts with
+`coverage: "complete-current-admitted"` and `semanticCoverage: "unassessed"`.
+Inspect the memory's revision and call `forget_memory` to remove it; a later
+snapshot excludes it. These operations make no provider requests.
+
+The read tool accepts only `limit` (1–12, default 6) and `tokenBudget` (1–4,000,
+default 4,000). It delegates to [the shared snapshot](bounded-source-snapshot.md)
+using the startup namespace. Whole-set overflow fails without partial evidence
+or fallback. The token budget measures the **core success envelope** using
+`o200k_base`; the byte ceiling is 24,000 UTF-8 bytes. Neither includes MCP framing,
+the transport trust wrapper, or the host's entire model prompt.
+
+This exposes the whole small current-admitted set, including potentially
+unrelated personal sources. It is not full conversation history, relevance,
+truth, continuing applicability or execution authority. Historical, deleted
+and staged sources are excluded. Semantic recall and capture still require
+separately configured generation methods. No answer is generated or repaired.
+
+Programmatic hosts use `createCairnServer({path,namespace,
+sourceSnapshot:'current-admitted-v1',model:{countTokens}})`. The callable counter
+is required before database opening. The optional OpenAI adapter's narrow
+`countOpenAITokens` export reuses its existing local counter without credentials
+or provider model creation. Custom counters retain the shared core's synchronous
+exact-tokenizer requirements and failure checks.
+
+### Source startup commands
+
 On Node >=22.16, from the repository root:
 
 ```sh

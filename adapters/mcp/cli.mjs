@@ -12,12 +12,21 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
+  cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
 Normal startup waits for an MCP client on stdin; stdout is protocol-only.
 Tools: remember_memory, recall_memory, inspect_memory, correct_memory, forget_memory.
 Remember saves explicit content, not automatically extracted conversations.
+--source-snapshot current-admitted-v1 adds keyless read_memory_sources using the
+local o200k_base tokenizer, with zero provider calls. It reads the whole small
+current-admitted source set, including potentially unrelated personal content.
+Default 6/max 12 memories; default/max 4000 tokens and 24000 UTF-8 bytes apply to
+the core success envelope, not MCP framing or the host's whole prompt. Oversize
+fails without partial results or fallback. Sources are not full conversation
+history, relevance, truth, current applicability or execution authority.
+Semantic recall and capture still require a separately configured model.
 --capture-qualification source-bound-v1 or source-bound-v2 adds capture_memory for explicitly
 submitted messages. No background capture or hooks are installed. Submitted
 roles/text are claims, not authenticated human intent. Qualification binds
@@ -54,7 +63,7 @@ It cannot verify database permissions, credentials or model availability.
 
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
-    '--capture-evidence', '--capture-evidence-access']);
+    '--capture-evidence', '--capture-evidence-access', '--source-snapshot']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -77,12 +86,16 @@ export function parseConfiguration(args) {
   if (values.has('--capture-evidence-access') && values.get('--capture-evidence-access') !== 'staged-v1') {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--source-snapshot') && values.get('--source-snapshot') !== 'current-admitted-v1') {
+    throw new Error('invalid_mcp_configuration');
+  }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
     ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
     ...(values.has('--capture-evidence') ? { captureEvidence: values.get('--capture-evidence') } : {}),
-    ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}) };
+    ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}),
+    ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}) };
 }
 
 export async function start(args = process.argv.slice(2), env = process.env) {
@@ -99,6 +112,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
+      ...(config.sourceSnapshot ? { sourceSnapshot: config.sourceSnapshot,
+        sourceSnapshotTokenizer: 'o200k_base' } : {}),
       ...(config.captureQualification ? { captureQualification: config.captureQualification,
         capture: key ? 'configured-not-verified' : 'model_not_configured',
         qualificationModel: key ? DEFAULT_MODEL : null } : {}),
@@ -119,6 +134,9 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   if (env.OPENAI_API_KEY) {
     const { createOpenAIModel } = await import('../openai/index.mjs');
     model = createOpenAIModel({ apiKey: env.OPENAI_API_KEY });
+  } else if (config.sourceSnapshot) {
+    const { countOpenAITokens } = await import('../openai/index.mjs');
+    model = { countTokens: countOpenAITokens };
   }
   let handle;
   let closing = false;

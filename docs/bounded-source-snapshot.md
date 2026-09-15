@@ -95,8 +95,12 @@ claims. Source completeness does not prevent an answer model from strengthening
 a tentative statement or inventing a reason.
 
 The existing local file, journal, backup, redaction and logical-deletion limits
-apply. No new database schema, telemetry, provider configuration, MCP/HTTP tool,
-or default behavior is introduced. Scripted tests establish preservation and
+apply. No new database schema, telemetry, provider configuration, HTTP tool,
+or default behavior is introduced. The local MCP adapter separately opts into
+[`read_memory_sources`](standalone-mcp.md#keyless-complete-source-walkthrough)
+using `--source-snapshot current-admitted-v1`. CLI counting uses local
+`o200k_base` on this core envelope, not MCP framing or a host's entire prompt.
+Scripted tests establish preservation and
 isolation, not measured real-model answer fidelity.
 
 ## Copied-state regression evidence
@@ -115,3 +119,13 @@ Only the private copy was opened by the new implementation. This is a known-case
 storage/read regression, not a fresh semantic evaluation, fair relevance baseline
 or rescoring of the earlier run. No answers were regenerated; its amplification
 failures remain. Larger and unrelated source sets still require separate study.
+
+The later MCP exposure was also checked with a locally installed archive
+(`87f1d8bd23c23ddc9452f47a6f236e4fb98b616dcd624b91739f6f943f8c695a`)
+and actual SDK/stdio clients against another private copy of the same closed
+store. Twelve keyless clients, each bound to its corresponding project, called
+`read_memory_sources` with default bounds and recovered all36 required source
+passages. Installed files were verified against the archive and their actual
+source paths; the original database hash above remained unchanged. Provider
+fetch was denied in each child. No answers or capture operations were rerun,
+so this is installed read-path regression evidence, not improved answer accuracy.

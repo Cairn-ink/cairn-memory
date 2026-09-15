@@ -59,6 +59,9 @@ function countTokens(text) {
   catch { fail('token_count_unavailable'); }
 }
 
+// Local tokenizer only: no credentials, transport or generation are required.
+export { countTokens as countOpenAITokens };
+
 function checkAbort(signal, diagnose) {
   if (signal.aborted) {
     diagnose?.('model_cancelled');
