@@ -1,0 +1,163 @@
+{
+  "id": "checklist-selection-comparison-v1",
+  "histories": [
+    {
+      "id": "c01a",
+      "requiredSourceIds": [
+        "c01a-w1m1",
+        "c01a-w2m1",
+        "c01a-w2m2",
+        "c01a-w2m5",
+        "c01a-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "c01a-w1m2",
+        "c01a-w1m3",
+        "c01a-w1m4",
+        "c01a-w2m3",
+        "c01a-w2m4",
+        "c01a-w3m3",
+        "c01a-w3m4",
+        "c01a-w3m5"
+      ],
+      "qualifierSourceId": "c01a-w2m5",
+      "qualifierQuote": "provisionally keeping",
+      "expectedCommitment": "provisional",
+      "actor": "The user chooses cooperative games for their own table; Sora chose competitive games for a separate table. The assistant's competitive-game suggestion is not the user's adoption.",
+      "reason": "Easy teaching is reaffirmed by the September 13 trial. Short rounds were an original reason, but the new edition takes twice as long; do not present unchanged short duration as established.",
+      "temporalLimit": "The October 9 choice remains provisional as of September 16; no final decision is stated."
+    },
+    {
+      "id": "c01b",
+      "requiredSourceIds": [
+        "c01b-w1m1",
+        "c01b-w2m1",
+        "c01b-w2m2",
+        "c01b-w2m5",
+        "c01b-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "c01b-w1m2",
+        "c01b-w1m3",
+        "c01b-w1m4",
+        "c01b-w2m3",
+        "c01b-w2m4",
+        "c01b-w3m3",
+        "c01b-w3m4",
+        "c01b-w3m5"
+      ],
+      "qualifierSourceId": "c01b-w2m5",
+      "qualifierQuote": "have firmly decided",
+      "expectedCommitment": "committed",
+      "actor": "The user chooses cooperative games for their own table; Sora chose competitive games for a separate table. The assistant's competitive-game suggestion is not the user's adoption.",
+      "reason": "Easy teaching is reaffirmed by the September 13 trial. Short rounds were an original reason, but the new edition takes twice as long; do not present unchanged short duration as established.",
+      "temporalLimit": "The October 9 choice is firmly decided as of September 16; no choice for later events is established."
+    },
+    {
+      "id": "c02a",
+      "requiredSourceIds": [
+        "c02a-w1m1",
+        "c02a-w2m1",
+        "c02a-w2m2",
+        "c02a-w2m5",
+        "c02a-w3m1",
+        "c02a-w3m2"
+      ],
+      "irrelevantSourceIds": [
+        "c02a-w1m2",
+        "c02a-w1m3",
+        "c02a-w1m4",
+        "c02a-w2m3",
+        "c02a-w2m4",
+        "c02a-w3m3",
+        "c02a-w3m4",
+        "c02a-w3m5"
+      ],
+      "qualifierSourceId": "c02a-w2m5",
+      "qualifierQuote": "tentatively chose",
+      "expectedCommitment": "provisional",
+      "actor": "The user plans their puzzle club's meetings. Rami's regular downstairs choice belongs to his separate club; the assistant's suggestion does not establish a permanent move.",
+      "reason": "Quiet and a sufficiently large table support the usual upstairs arrangement. The November 8 exhibition disrupts it; downstairs was checked for quiet and adequate table space. Upstairs is cleared November 9, before the next meeting.",
+      "temporalLimit": "Downstairs is tentative for November 8 only. The usual upstairs arrangement continues November 15; a temporary proposal is not a permanent relocation."
+    },
+    {
+      "id": "c02b",
+      "requiredSourceIds": [
+        "c02b-w1m1",
+        "c02b-w2m1",
+        "c02b-w2m2",
+        "c02b-w2m5",
+        "c02b-w3m1",
+        "c02b-w3m2"
+      ],
+      "irrelevantSourceIds": [
+        "c02b-w1m2",
+        "c02b-w1m3",
+        "c02b-w1m4",
+        "c02b-w2m3",
+        "c02b-w2m4",
+        "c02b-w3m3",
+        "c02b-w3m4",
+        "c02b-w3m5"
+      ],
+      "qualifierSourceId": "c02b-w2m5",
+      "qualifierQuote": "confirmed downstairs",
+      "expectedCommitment": "committed",
+      "actor": "The user plans their puzzle club's meetings. Rami's regular downstairs choice belongs to his separate club; the assistant's suggestion does not establish a permanent move.",
+      "reason": "Quiet and a sufficiently large table support the usual upstairs arrangement. The November 8 exhibition disrupts it; downstairs was checked for quiet and adequate table space. Upstairs is cleared November 9, before the next meeting.",
+      "temporalLimit": "Downstairs is confirmed for November 8 only. The usual upstairs arrangement continues November 15; confirmation does not make the move permanent."
+    },
+    {
+      "id": "c03a",
+      "requiredSourceIds": [
+        "c03a-w1m1",
+        "c03a-w2m1",
+        "c03a-w2m2",
+        "c03a-w2m5",
+        "c03a-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "c03a-w1m2",
+        "c03a-w1m3",
+        "c03a-w1m4",
+        "c03a-w2m3",
+        "c03a-w2m4",
+        "c03a-w3m3",
+        "c03a-w3m4",
+        "c03a-w3m5"
+      ],
+      "qualifierSourceId": "c03a-w2m5",
+      "qualifierQuote": "tentatively choosing",
+      "expectedCommitment": "provisional",
+      "actor": "The user arranges bilingual printed labels; Neri chose audio descriptions for a separate display. No source identifies anyone who approved the user's translations. Do not invent an approver or infer approval from label preparation, accessibility, or mount choice.",
+      "reason": "The original goals are access in either language and placement beside each object. Stands obscure the second language; tested adhesive mounts preserve both visible lines beside the objects. This supports physical presentation, not translation accuracy or approval.",
+      "temporalLimit": "The adhesive-mount choice for December is tentative as of November 16. No translation approval or later display arrangement is established."
+    },
+    {
+      "id": "c03b",
+      "requiredSourceIds": [
+        "c03b-w1m1",
+        "c03b-w2m1",
+        "c03b-w2m2",
+        "c03b-w2m5",
+        "c03b-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "c03b-w1m2",
+        "c03b-w1m3",
+        "c03b-w1m4",
+        "c03b-w2m3",
+        "c03b-w2m4",
+        "c03b-w3m3",
+        "c03b-w3m4",
+        "c03b-w3m5"
+      ],
+      "qualifierSourceId": "c03b-w2m5",
+      "qualifierQuote": "have decided to use",
+      "expectedCommitment": "committed",
+      "actor": "The user arranges bilingual printed labels; Neri chose audio descriptions for a separate display. No source identifies anyone who approved the user's translations. Do not invent an approver or infer approval from label preparation, accessibility, or mount choice.",
+      "reason": "The original goals are access in either language and placement beside each object. Stands obscure the second language; tested adhesive mounts preserve both visible lines beside the objects. This supports physical presentation, not translation accuracy or approval.",
+      "temporalLimit": "The adhesive-mount choice for December is decided as of November 16. No translation approval or later display arrangement is established."
+    }
+  ]
+}

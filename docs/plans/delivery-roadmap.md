@@ -73,6 +73,11 @@ now supplies the offline capability implementation, without issuing a real
 grant or increasing the budget. Frozen operator/rehearsals, real issuance,
 fresh comparative evidence and installed-MCP wiring remain unfinished;
 changed-premise answer handling is a separate gate.
+The [fresh selection comparison](../checklist-selection-comparison.md) freezes
+three new authored pairs and reuses the existing capture/inspection driver.
+One checklist arm is separately retained alongside unchanged baseline/control
+outputs on the same stores. Operator implementation/rehearsals, real issuance
+and paid results remain unfinished; this protocol spends nothing.
 The active US$50 campaign has US$17.396 conservatively reserved and zero unsettled
 requests; its known usage estimate is US$0.973737, not an invoice. There are690
 unknown-cost requests and US$32.604 conservative headroom. Older US$20 figures
