@@ -34,6 +34,9 @@ const QUALIFICATION_KIND = Object.freeze({ filename: QUALIFICATION_FILENAME, met
 const CANDIDATE_QUALIFICATION_KIND = Object.freeze({
   filename: 'experiment-candidate-qualification-extension.json', method: 'cairn_qualifyCandidates',
 });
+const CHECKLIST_SELECTION_KIND = Object.freeze({
+  filename: 'experiment-checklist-selection-extension.json', method: 'cairn_selectChecklist',
+});
 const RATIONALE_KIND = Object.freeze({
   filename: 'experiment-rationale-extension.json', method: 'cairn_relate',
 });
@@ -385,6 +388,7 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   if (typeof format.name !== 'string') fail('unsupported_request');
   const match = (modelControl ? (qualificationMethod === BASIS_MODELS_KIND.method
     ? /^cairn_(reviewBasis)$/u : /^cairn_(relate)$/u)
+    : qualificationMethod === CHECKLIST_SELECTION_KIND.method ? /^cairn_(selectChecklist)$/u
     : qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate)$/u
     : qualificationMethod === CANDIDATE_QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates)$/u
     : qualificationMethod === QUALIFICATION_KIND.method ? /^cairn_(extract|classify|select|rank|qualify)$/u
@@ -736,6 +740,11 @@ export function authorizeCandidateQualificationExtension(options) {
   return authorizeQualification(options, CANDIDATE_QUALIFICATION_KIND);
 }
 
+// Checklist-only issuance never adds baseline capture, rank or host authority.
+export function authorizeChecklistSelectionExtension(options) {
+  return authorizeQualification(options, CHECKLIST_SELECTION_KIND);
+}
+
 // Explicitly authorizes the fixed baseline automatic-rationale pipeline, not
 // arbitrary methods or an alteration of an older capability file.
 export function authorizeRationaleExtension(options) {
@@ -803,6 +812,13 @@ export function createCandidateQualificationExperimentRequestGuard(options) {
     null, null, qualification, CANDIDATE_QUALIFICATION_KIND);
 }
 
+export function createChecklistSelectionExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'checklistSelectionExtension', 'fetchImpl']);
+  const qualification = snapshotExtension(options.checklistSelectionExtension);
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    null, null, qualification, CHECKLIST_SELECTION_KIND);
+}
+
 export function createRationaleExperimentRequestGuard(options) {
   exactKeys(options, ['ledger', 'policy', 'rationaleExtension', 'fetchImpl']);
   const qualification = snapshotExtension(options.rationaleExtension);
@@ -861,7 +877,9 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
   const guardedFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
     const modelControl = qualification !== null && isModelControl(qualificationKind);
-    if (modelControl && kind === 'hostCompletion') fail('unsupported_request');
+    if ((modelControl || qualificationKind === CHECKLIST_SELECTION_KIND) && kind === 'hostCompletion') {
+      fail('unsupported_request');
+    }
     if (extension || qualification) verifyCapabilities();
     let channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);

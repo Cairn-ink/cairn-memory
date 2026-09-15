@@ -68,9 +68,11 @@ offline candidate contract only: compile question spans and visible references
 into the existing selection shape without changing production defaults or
 persisting another graph. A subsequent [bounded adapter integration](../checklist-model-integration.md)
 adds an explicit method and evaluation wrapper, not a default selector or live
-experiment capability. Guard authorization, fresh comparative evidence and
-installed-MCP wiring remain unfinished; changed-premise answer handling is a
-separate gate.
+experiment capability. A separate [selection-only guard](../checklist-experiment-capability.md)
+now supplies the offline capability implementation, without issuing a real
+grant or increasing the budget. Frozen operator/rehearsals, real issuance,
+fresh comparative evidence and installed-MCP wiring remain unfinished;
+changed-premise answer handling is a separate gate.
 The active US$50 campaign has US$17.396 conservatively reserved and zero unsettled
 requests; its known usage estimate is US$0.973737, not an invoice. There are690
 unknown-cost requests and US$32.604 conservative headroom. Older US$20 figures

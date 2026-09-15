@@ -27,10 +27,11 @@ Fake-service tests verify this orchestration, not model selection quality.
 
 ## Unfinished gates
 
-- Existing budget guards must reject `cairn_selectChecklist`. A distinct
-  immutable capability must bind the existing campaign and issuance checkpoint,
-  exact method/schema, model and request/reservation limits. Older grants must
-  remain unchanged. This package grants no new spending authority or live route.
+- Existing budget guards reject `cairn_selectChecklist`. The subsequent
+  [separate capability](checklist-experiment-capability.md) adds a closed guard
+  and parent factory; real issuance and a frozen operator remain unfinished.
+  Older grants stay unchanged, and the adapter integration alone grants no
+  new spending authority or live route.
 - Freeze a fresh matched comparison and rehearse malformed output, transport,
   guard denial and cleanup before paid calls. Count failures, required-source
   omissions, unrelated selections and actual context/cost independently.
