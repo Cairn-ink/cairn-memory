@@ -96,5 +96,6 @@ Review answer currentness separately: full-source mistakes cannot be attributed
 solely to retrieval. Passing this authored sample would still not establish
 general accuracy, production reliability, lower cost or adoption.
 
-The operator and paid result remain unfinished. See the
-[acceptance plan](plans/checklist-selection-comparison.md).
+The frozen protocol above is retained. Its once-only source-based execution and
+non-promoted outcome are now recorded in the [comparison results](checklist-selection-results.md).
+See the [acceptance plan](plans/checklist-selection-comparison.md).

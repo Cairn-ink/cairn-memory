@@ -70,17 +70,25 @@ persisting another graph. A subsequent [bounded adapter integration](../checklis
 adds an explicit method and evaluation wrapper, not a default selector or live
 experiment capability. A separate [selection-only guard](../checklist-experiment-capability.md)
 now supplies the offline capability implementation, without issuing a real
-grant or increasing the budget. Frozen operator/rehearsals, real issuance,
-fresh comparative evidence and installed-MCP wiring remain unfinished;
-changed-premise answer handling is a separate gate.
+grant or increasing the budget. Subsequent frozen operator/rehearsals, real
+issuance and comparative execution are now complete as described below;
+installed-MCP candidate wiring and changed-premise answer handling remain open.
 The [fresh selection comparison](../checklist-selection-comparison.md) freezes
 three new authored pairs and reuses the existing capture/inspection driver.
 One checklist arm is separately retained alongside unchanged baseline/control
-outputs on the same stores. Operator implementation/rehearsals, real issuance
-and paid results remain unfinished; this protocol spends nothing.
-The active US$50 campaign has US$17.396 conservatively reserved and zero unsettled
-requests; its known usage estimate is US$0.973737, not an invoice. There are690
-unknown-cost requests and US$32.604 conservative headroom. Older US$20 figures
+outputs on the same stores. The [once-only results](../checklist-selection-results.md)
+complete eighteen captures and eighteen answers:32/32 required passages admitted,
+21/32 recalled by baseline and25/32 by checklist, with no lost previously retained
+required source. All remaining losses occur at selection, below the rank cap.
+The candidate is not promoted: mechanically valid question offsets include word
+fragments, seven required passages remain missing, and complete candidate evidence
+does not prevent a tentative decision from becoming seemingly settled in an answer.
+Next work evaluates bounded candidate broadening over the existing query-aware
+map order and, separately, a source-linked answer audit without another persistent
+graph. Neither hypothesis is implemented or validated by this result package.
+The active US$50 campaign has US$19.076 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$1.080642, not an invoice. There are768
+unknown-cost requests and US$30.924 conservative headroom. Older US$20 figures
 below belong to a separate campaign and are not renewed allowance.
 
 Productization remains a separate track: source-built local preview, supported
