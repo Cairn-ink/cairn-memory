@@ -100,7 +100,7 @@ async function readJSON(response, maximum, signal, diagnose) {
   }
 }
 
-function parseOutput(response, inputTokens, model, diagnose) {
+function parseOutput(response, contextWindow, model, diagnose) {
   const reject = (reason) => { diagnose(reason); fail('invalid_model_output'); };
   if (!record(response) || response.object !== 'response' || response.model !== model ||
       response.status !== 'completed' ||
@@ -108,7 +108,7 @@ function parseOutput(response, inputTokens, model, diagnose) {
       !Array.isArray(response.output) || !response.output.length) reject('response_envelope');
   const usage = response.usage;
   if (!record(usage) || !count(usage.input_tokens) || !count(usage.output_tokens) ||
-      !count(usage.total_tokens) || usage.input_tokens !== inputTokens || usage.output_tokens > 1024 ||
+      !count(usage.total_tokens) || usage.input_tokens > 7024 || usage.input_tokens + 1024 > contextWindow || usage.output_tokens > 1024 ||
       usage.total_tokens !== usage.input_tokens + usage.output_tokens) reject('response_usage');
   let text = '';
   for (const message of response.output) {
@@ -210,7 +210,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     const response = await post('/responses', generateBody, 262144, signal, diagnose);
     checkAbort(signal, diagnose);
     return normalizeQualificationSlots(method, snapshot,
-      parseOutput(response, counted.input_tokens, selected.model, diagnose), schema, diagnose);
+      parseOutput(response, selected.contextWindow, selected.model, diagnose), schema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),

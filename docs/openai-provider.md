@@ -157,6 +157,17 @@ for retained failures and the separate frozen-evaluation gate.
 Completed response status, pinned model, assistant text, JSON object, consistent
 usage and output limits are checked. Core still validates source indices, refs,
 namespaces and revisions; schemas do not prove relevance or entailment.
+Observed input usage must independently fit 7,024 tokens and leave the full
+1,024-token output allowance in the selected context window. Observed output
+must be at most 1,024; input, output and total must be nonnegative safe integers
+with total equal to input plus output. A bounded observed input count need not
+equal preflight. The official guide describes an exact preflight count, but one
+retained synthetic response reported 2,377 input tokens after a 2,251 preflight
+for matching input-bearing fields. Its provider-side cause is unknown; this
+acceptance policy tolerates that discrepancy without enlarging either ceiling.
+Post-response validation cannot prevent provider work already performed or
+guarantee an invoice amount. Actual usage is not replaced with preflight for
+accounting; the frozen experiment retains its original rejection.
 [Official counting guide](https://developers.openai.com/api/docs/guides/token-counting),
 [Responses reference](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create).
 
@@ -174,7 +185,7 @@ One encoder is retained for the module lifetime. A pure-JS alternative was
 rejected after a maximum-length whitespace fixture blocked counting; the same
 fixture and independent encoding vectors remain regression gates.
 
-Roadmap 2a needs a real synthetic lifecycle and count/usage agreement under
+Roadmap 2a needs a real synthetic lifecycle and bounded, consistent usage under
 authorized test credentials and a paid-run ceiling. The opt-in runner below
 records that evidence; it is not run by ordinary tests or CI. Frozen
 semantic/resource evaluation remains separate 2b.
