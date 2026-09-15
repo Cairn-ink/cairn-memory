@@ -175,6 +175,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let snapshot;
     let instructions;
     try {
+      // Validate before JSON serialization can erase sparse/custom fields.
+      if (method === 'selectChecklist') schemasFor(method, input);
       serializedInput = JSON.stringify(input);
       snapshot = JSON.parse(serializedInput);
       schema = schemasFor(method, snapshot);
@@ -187,7 +189,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     }
     if (typeof serializedInput !== 'string') { diagnose('request_invalid'); throw new Error('invalid_openai_request'); }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
-    const selected = profile[method];
+    const selected = profile[method === 'selectChecklist' ? 'select' : method];
     const payload = { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
@@ -219,6 +221,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     reviewBasis: (request) => invoke('reviewBasis', request),
     classify: (request) => invoke('classify', request),
     select: (request) => invoke('select', request),
+    selectChecklist: (request) => invoke('selectChecklist', request),
     rank: (request) => invoke('rank', request),
     reconcile: (request) => invoke('reconcile', request),
   });
