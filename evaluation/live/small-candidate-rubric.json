@@ -1,0 +1,45 @@
+{
+  "id": "small-candidate-comparison-v1",
+  "cases": [
+    {
+      "id": "c01",
+      "category": "positive",
+      "requiredSourceIds": ["c01-s1", "c01-s2", "c01-s3"],
+      "irrelevantSourceIds": [],
+      "expectedFacts": [
+        "The user tentatively keeps the steel lunch container for the October 9 train trip.",
+        "Lower weight and a nonleaking lid were the original reasons. The corrected weighing reverses the weight comparison, while the repeat lid test reaffirms the leakage result.",
+        "The changed weight premise does not establish a switch to glass."
+      ],
+      "unknowns": ["No final commitment or choice for other journeys is established.", "No source explains why the user remains tentative or how they weigh the competing considerations."],
+      "prohibitedInferences": ["Do not say steel remains lighter or treat the lid test as confirming weight.", "Do not convert tentative retention into a firm commitment or invent a causal explanation for its strength."]
+    },
+    {
+      "id": "c02",
+      "category": "mixed",
+      "requiredSourceIds": ["c02-s1", "c02-s2"],
+      "irrelevantSourceIds": ["c02-s3"],
+      "expectedFacts": ["使用者已確定十月十二日排練坐第二排靠走道，理由是看譜沒有窗戶反光。", "佩珊選第一排靠窗只代表她自己的安排；她沒有替使用者安排。", "助理提出後排中央的可能選項，不是使用者已採納或改位子的紀錄。"],
+      "unknowns": ["未提供使用者採納助理建議的紀錄，也未提供後續改位子的紀錄。", "不能確認後排中央實際視線更好。"],
+      "prohibitedInferences": ["不可把佩珊或助理的選項當成使用者的位置。", "不可因為存在其他選項，就把已確定的選擇降為暫定。", "未記錄採納不等於使用者明確拒絕了建議。"]
+    },
+    {
+      "id": "c03",
+      "category": "none-relevant",
+      "requiredSourceIds": [],
+      "irrelevantSourceIds": ["c03-s1", "c03-s2"],
+      "expectedFacts": ["Neither supplied source establishes an approver or an agreed maximum temperature for the November 6 firing."],
+      "unknowns": ["Who, if anyone, approved the firing.", "Whether a maximum temperature was agreed and what it was."],
+      "prohibitedInferences": ["Do not invent an approver, permission, scheduled firing, or temperature from shared kiln vocabulary.", "Do not turn absent approval evidence into proof that approval was denied or never given.", "Do not supply general pottery firing advice as the user's recorded agreement."]
+    },
+    {
+      "id": "c04",
+      "category": "larger-set",
+      "requiredSourceIds": ["c04-s1", "c04-s2", "c04-s3"],
+      "irrelevantSourceIds": ["c04-s4"],
+      "expectedFacts": ["The user firmly keeps the canvas bag for the November 14 bicycle round.", "Comfortable strap and dry interior were the original reasons. The repeat spray test defeats the dry-interior reason, while the loaded-shoulder check reaffirms comfort.", "Leo's rigid box is for his own bicycle, not the user's bag choice."],
+      "unknowns": ["No repair, guaranteed dryness on the future round, or later change of bag is established.", "No source explains why the user keeps the bag despite the leak."],
+      "prohibitedInferences": ["Do not say the bag remains dry, assume it was repaired, or infer a switch to Leo's box.", "Do not treat the notebook cover drawing as evidence for the bag's performance or the user's reasons.", "Do not extend the firm choice beyond the named round."]
+    }
+  ]
+}
