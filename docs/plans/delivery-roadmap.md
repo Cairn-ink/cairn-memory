@@ -22,7 +22,7 @@ merge, production, release and external-publication decisions.
 
 ## Goal and baseline
 
-### Latest checkpoint (2026-09-15): retained evidence, fidelity still open
+### Latest checkpoint (2026-09-16): retained evidence, fidelity still open
 
 This checkpoint supersedes older pending-PR and budget labels below; they remain
 historical evidence. The goal is still a lightweight MCP-first memory layer
@@ -104,10 +104,17 @@ and record/prose disagreement even with complete inputs. Structured accounting
 is not promoted. Next evaluate avoiding post-selection loss for complete small
 candidate sets, with irrelevant/none-relevant controls, unchanged budgets and
 revision safety; navigation omissions and host interpretation remain distinct.
-No such candidate-preservation policy is implemented by this checkpoint.
-The active US$50 campaign has US$21.896 conservatively reserved and zero unsettled
-requests; its known usage estimate is US$1.211453, not an invoice. There are845
-unknown-cost requests and US$28.104 conservative headroom. Older US$20 figures
+Merged PR126 adds the evaluation-only small-candidate rank wrapper; PR127 freezes
+a four-case comparison. Its [once-only results](../small-candidate-results.md)
+retain18 requests and8 answers. One corrected-weight passage and faithful answer
+are recovered; three irrelevant passages are additionally exposed elsewhere.
+Three rank generations and three count calls are avoided, with more final source
+context. This remains a narrow fixed-selection observation, not default promotion.
+Next compare it end to end with ordinary MOC selection and multi-window histories,
+separating upstream omissions, post-selection loss and host interpretation.
+The active US$50 campaign has US$22.346 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$1.216239, not an invoice. There are850
+unknown-cost requests and US$27.654 conservative headroom. Older US$20 figures
 below belong to a separate campaign and are not renewed allowance.
 
 Productization remains a separate track: source-built local preview, supported
