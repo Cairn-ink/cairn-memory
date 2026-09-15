@@ -1,6 +1,7 @@
 # Retention inside ordinary MOC: fresh comparison protocol
 
-Status: not executed by this change. The
+Status: the [once-only results](retention-moc-results.md) are now recorded; no
+default was promoted. The original protocol below remains unchanged. The
 [fixed-candidate result](small-candidate-results.md) found a useful changed-premise
 improvement, but did not exercise ordinary selection or inferred capture. This
 protocol tests that remaining boundary without promoting a default.
