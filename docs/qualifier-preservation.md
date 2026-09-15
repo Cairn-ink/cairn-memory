@@ -6,6 +6,11 @@ decision. Storing a quote does not guarantee a host will preserve its meaning.
 This protocol separates three possible losses before changing the memory engine
 or tuning a prompt around a known answer.
 
+The later [first installed experiment](qualifier-preservation-results.md) is now
+recorded separately: stored source coverage survived, but retrieval omissions
+and answer amplification prevent a qualifier-fidelity claim. The original
+protocol below remains the design boundary, not a passing live result.
+
 Six fresh everyday scenarios each have two matched four-message histories.
 Only one user sentence changes between the pair: provisional/conditional versus
 explicit commitment. The decisive qualifier appears once. Source inputs and
