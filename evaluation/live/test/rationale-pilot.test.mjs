@@ -49,6 +49,8 @@ function setup(mode = 'success') {
     if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
     const method = payload.text.format.name.slice(6);
     const output = mode === 'invalid-output' && calls === 2 ? { items: 'invalid' } : await mock[method]({ input });
+    if (method === 'qualifyCandidates') output.qualifications = Object.fromEntries(
+      output.qualifications.map(item => [`item_${item.itemIndex}`, item]));
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
       output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } });
