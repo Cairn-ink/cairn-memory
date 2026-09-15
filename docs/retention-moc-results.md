@@ -65,7 +65,7 @@ qualifiers were retrieved, but the English histories omitted the premise-changin
 `w2m2`; both lantern histories and both Chinese histories also omitted the later
 reaffirmation `w3m2`. No baseline regular rank removed an already-selected
 required passage. The r01a gain and r01b loss of `w3m5` came from different
-selection inputs, not evidence of the rank policy helping or harming retention.
+selection outputs, not evidence of the rank policy helping or harming retention.
 
 Each history admitted and exposed six explicitly rubric-labelled irrelevant
 user passages; none reached either regular arm's final answer input. Other
