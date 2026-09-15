@@ -229,6 +229,27 @@ test('expiry remains purged across clock rollback and reopen without staging', a
   assert.equal(Date.parse(later.expiresAt) - Date.parse(later.createdAt), 86400000);
 });
 
+test('staged namespace watermark does not extend unrelated unstaged admission leases', async t => {
+  const originalNow = Date.now; const start = originalNow(); let now = start;
+  Date.now = () => now; t.after(() => { Date.now = originalNow; });
+  const f = fixture(t, { extract: () => ({ items: [] }) });
+  ok(await f.core.capture(input()));
+  now += 86400001;
+  assert.equal(inspect(f.core).state, 'expired');
+  now = start;
+  const cold = reopen(t, f.path);
+  const manual = eventId => ({ namespace, client: 'manual', eventId, payloadDigest: 'a'.repeat(64) });
+  const first = ok(cold.claimAdmission({ ...manual('lease'), leaseMs: 1000 }));
+  const completion = ok(cold.claimAdmission({ ...manual('complete'), leaseMs: 1000 }));
+  ok(cold.finishAdmission({ ...manual('complete'), token: completion.token, items: [] }));
+  const abandoned = ok(cold.claimAdmission({ ...manual('abandon'), leaseMs: 1000 }));
+  assert.equal(ok(cold.abandonAdmission({ ...manual('abandon'), token: abandoned.token })).abandoned, true);
+  now += 1001;
+  error(cold.finishAdmission({ ...manual('lease'), token: first.token, items: [] }), 'stale_admission');
+  assert.notEqual(ok(cold.claimAdmission({ ...manual('lease'), leaseMs: 1000 })).token, first.token);
+  assert.equal(inspect(cold).view, null);
+});
+
 test('abandoned pending lease fails closed instead of implicitly retrying', async t => {
   const originalNow = Date.now; let now = originalNow(); Date.now = () => now;
   t.after(() => { Date.now = originalNow; });

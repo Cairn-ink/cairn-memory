@@ -470,7 +470,7 @@ export function createMemoryRuntime(input) {
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     claimCaptureEvidence(ns, input) {
       ready();
-      stagedEvidence.serializeView(input.view);
+      if (input.view === undefined) fail('invalid_input');
       return admissionStorage.claimAdmission(ns, input, undefined, input.view);
     },
     inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },

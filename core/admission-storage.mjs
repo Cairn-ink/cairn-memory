@@ -17,7 +17,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
   function claimAdmission(ns, input, hooks, stagedView) {
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
     const result = transaction(db, () => {
-      const now = stagedEvidence.touch(ns, serialized !== null);
+      const now = stagedEvidence.admissionTime(ns, input, serialized !== null);
       const row = read(ns, input);
       if (row && row.payload_digest !== input.payloadDigest) return { closed: 'event_payload_conflict' };
       const closed = stagedEvidence.claimGuard(ns, input, row, now, serialized !== null);
@@ -49,7 +49,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
 
   function finishAdmission(ns, input, hooks) {
     const result = transaction(db, () => {
-      const now = stagedEvidence.touch(ns);
+      const now = stagedEvidence.admissionTime(ns, input);
       const row = read(ns, input);
       const closed = stagedEvidence.finishGuard(ns, input, row, now);
       if (closed) return { closed };
@@ -96,7 +96,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
 
   function abandonAdmission(ns, input) {
     return transaction(db, () => {
-      const now = stagedEvidence.touch(ns);
+      const now = stagedEvidence.admissionTime(ns, input);
       const row = read(ns, input);
       // The expired owner may record its failure, but cannot release a successor.
       if (row?.state !== 'pending' || row.payload_digest !== input.payloadDigest ||
@@ -111,7 +111,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
 
   function assertCaptureEvidence(ns, input) {
     const result = transaction(db, () => {
-      const now = stagedEvidence.touch(ns);
+      const now = stagedEvidence.admissionTime(ns, input);
       const row = read(ns, input);
       return stagedEvidence.finishGuard(ns, input, row, now) ||
         (!live(row, input, now) ? 'capture_evidence_closed' : null);

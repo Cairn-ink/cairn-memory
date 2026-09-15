@@ -37,10 +37,10 @@ export function createStagedEvidenceStorage({ db }) {
   const read = (ns, input) => db.prepare(`SELECT * FROM staged_capture_evidence WHERE ${eventWhere}`)
     .get(...key(ns, input));
 
-  function touch(ns, create = false) {
+  function touch(ns, create = false, wallTime = Date.now()) {
     const prior = db.prepare(`SELECT watermark FROM staged_capture_clocks WHERE ${where}`)
       .get(...boundary(ns));
-    const now = Math.max(Date.now(), prior?.watermark ?? 0);
+    const now = Math.max(wallTime, prior?.watermark ?? 0);
     if (!prior && !create) return now;
     db.prepare(`INSERT INTO staged_capture_clocks(owner_id, scope, project_id, watermark)
       VALUES (?, ?, ?, ?) ON CONFLICT(owner_id, scope, project_id)
@@ -49,6 +49,14 @@ export function createStagedEvidenceStorage({ db }) {
       payload_bytes = 0 WHERE ${where} AND payload IS NOT NULL AND expires_at <= ?`)
       .run(...boundary(ns), now);
     return now;
+  }
+
+  function admissionTime(ns, input, create = false) {
+    // Called after acquiring the admission write lock. Payload expiry always
+    // advances monotonically; unrelated admission leases retain wall-clock time.
+    const wallTime = Date.now();
+    const watermark = touch(ns, create, wallTime);
+    return create || read(ns, input) ? watermark : wallTime;
   }
 
   function claimGuard(ns, input, admission, now, staged) {
@@ -124,6 +132,6 @@ export function createStagedEvidenceStorage({ db }) {
     });
   }
 
-  return { serializeView, touch, claimGuard, finishGuard, capacityGuard, insert, mark,
+  return { serializeView, touch, admissionTime, claimGuard, finishGuard, capacityGuard, insert, mark,
     purgeNamespace, inspect, discard };
 }
