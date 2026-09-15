@@ -66,7 +66,7 @@ survive ranking, and no predefined irrelevant passage reaches a final answer.
 This candidate exposure is real work/data, not free recall. All three displaced
 original augmentation seeds are in a02b: the leaning problem, wet readability
 check and successful hanging test. Ranking returns only3–4 passages per history,
-below its cap6. Six augmentation omissions are at selection and five at ranking;
+below its cap6. Five augmentation omissions are at selection and six at ranking;
 baseline's nine omissions across completed arms are eight selection and one
 ranking. The failed arm's missing-stage attribution remains unassessed.
 
