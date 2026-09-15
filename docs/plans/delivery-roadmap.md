@@ -48,18 +48,25 @@ qualifier experiment; no answer was regenerated or semantic failure rescored.
 This operation has a twelve-memory cap and fails rather than returning a partial
 set. It does not repair large-history relevance or host interpretation.
 
-Next quality work is the separately frozen
-[multi-window fidelity diagnostic](multi-window-fidelity.md): fresh paired
-histories with distractors, measured active-memory count and separate ordinary
-recall versus canonical-control answers. It must observe actual beyond-cap
-behavior rather than assume input-message count equals stored-memory count.
-Existing source-evidence output already supplies exact quotations; no duplicate
-quotation API is needed to test answer fidelity. Neither quotation storage nor
-successful mocks establish interpretation quality. This diagnostic's installed
-paid execution and independent semantic review remain separate unfinished gates.
-The active US$50 campaign has US$16.136 conservatively reserved and zero unsettled
-requests; its known usage estimate is US$0.879166, not an invoice. Older US$20
-figures below belong to a separate campaign and are not renewed allowance.
+Merged PR112 freezes the [multi-window diagnostic](multi-window-fidelity.md).
+Its [once-only installed results](../multi-window-fidelity-results.md) now
+complete eighteen captures and twelve answers across three authored pairs.
+Every history reached fifteen active memories and correctly exceeded the
+small-set snapshot cap. All32 required sources were admitted; ordinary recall
+returned24, including all six decisive qualifiers. Seven omissions occurred at
+navigation selection and one at ranking. Two independent answer reviews are
+complete, but fidelity fails: obsolete reasons survive even in some complete
+canonical-source controls. Neither quotation presence nor mocks prove quality.
+
+Next work separates bounded evidence coverage from faithful changed-premise
+handling. Existing state/rationale mechanisms and question-conditioned evidence
+views must be evaluated before adding another representation. Raising the cap,
+removing ranking alone or rewriting already-faithful labels does not address
+all observed failures. Fresh comparisons must retain existing failed evidence.
+The active US$50 campaign has US$17.396 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$0.973737, not an invoice. There are690
+unknown-cost requests and US$32.604 conservative headroom. Older US$20 figures
+below belong to a separate campaign and are not renewed allowance.
 
 Productization remains a separate track: source-built local preview, supported
 host onboarding, owner-approved distribution and real adoption. No npm release,

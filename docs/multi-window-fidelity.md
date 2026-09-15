@@ -49,6 +49,11 @@ justify building another retrieval engine.
 
 ## Evidence status and later execution
 
+The subsequent [once-only installed results](multi-window-fidelity-results.md)
+complete execution and independent answer review, but fail the fidelity gate.
+The original offline-package scope and execution requirements below remain
+historical context; they are not a pending-run status.
+
 This package is an offline-verifiable diagnostic, not a new real-provider result,
 installed-host acceptance, semantic repair or launch-readiness claim. It changes
 no existing experiment, prompt, model default or runtime behavior.
