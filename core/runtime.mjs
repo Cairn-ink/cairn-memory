@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { openDatabase, transaction } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
+import { createStagedEvidenceStorage } from './staged-evidence-storage.mjs';
 import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
@@ -198,6 +199,7 @@ export function createMemoryRuntime(input) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
       conflictStorage.invalidateMemory(id);
@@ -223,6 +225,7 @@ export function createMemoryRuntime(input) {
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (current.revision !== expectedRevision) fail("revision_conflict");
       suppress(ns, current.fingerprint);
+      stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
@@ -441,8 +444,9 @@ export function createMemoryRuntime(input) {
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch });
+  const stagedEvidence = createStagedEvidenceStorage({ db });
   const admissionStorage = createAdmissionStorage({
-    db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage,
+    db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -464,6 +468,14 @@ export function createMemoryRuntime(input) {
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
+    claimCaptureEvidence(ns, input) {
+      ready();
+      stagedEvidence.serializeView(input.view);
+      return admissionStorage.claimAdmission(ns, input, undefined, input.view);
+    },
+    inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },
+    discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
+    assertCaptureEvidence(ns, input) { ready(); return admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
     abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
     applyPlacement(ns, proposal, guards, index) {

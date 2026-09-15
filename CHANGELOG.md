@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — opt-in staged capture evidence
+
+- Embedded source-bound-v2 capture can explicitly retain a bounded source view
+  before interpretation. Failed captures remain inspectable without becoming
+  searchable memories or automatically retrying. Defaults and MCP are unchanged.
+- Discard fences that event's unfinished admission. Successful correction or
+  forgetting conservatively clears all staged sources in the exact namespace
+  and prevents old event replays, including through the legacy facade.
+- Database v13 adds staging and clock metadata; stop older connections before
+  upgrading. Payload quotas and logical expiry do not imply secure erasure or a
+  bound on all database metadata. See `docs/staged-capture-evidence.md`.
+
 ## Fix — candidate qualification transport mapping
 
 - The optional OpenAI adapter now requests one required named response field per

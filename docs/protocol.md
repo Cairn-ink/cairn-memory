@@ -1,5 +1,32 @@
 # Compatibility protocol v0.1
 
+### Separate opt-in embedded staging boundary
+
+The embedded constructor's `captureEvidence: 'staged-v1'` requires
+`captureQualification: 'source-bound-v2'` and rejects causal capture in this
+first version. It retains the canonical bounded submitted view before model
+interpretation, including message IDs, roles, text and truncation metadata.
+This is additional local personal-data retention, even when interpretation
+fails or the extractor omits a message. It is not enabled by default, exposed
+by MCP/HTTP or transmitted through telemetry. Provider capture inputs remain
+unchanged; no staged content joins ordinary memory recall/navigation/ranking.
+
+Explicit exact-namespace inspection requires ordinary local access authority,
+not a provider key; sources and roles remain untrusted and unauthenticated.
+Discard removes the event payload and fences admission. Successful correction
+or forgetting conservatively clears all staged payloads in that namespace and
+fences those events, including in-flight ones, even through the legacy facade.
+Other namespaces and unrelated admitted memories are unchanged. Previously
+submitted provider requests and external copies cannot be recalled by deletion.
+
+Fixed24-hour logical expiry,64 live payloads/1MiB per namespace and128KiB per
+event bound payload retention, not content-free replay metadata or total file
+size. Expired/discarded/forgotten fences remain; replay does not renew retention.
+SQLite journals, backups, local-file authority, best-effort redaction and opaque
+identifier limitations still apply. Stop older runtime connections before the
+v13 migration; an already-open old process is not retroactively fenced. See
+[staged evidence](staged-capture-evidence.md) for the threat model and limits.
+
 ### Embedded proposed-rationale boundary
 
 Explicit embedded `reviewRationale` with `inputMode: 'claim-focus-v1'` additionally

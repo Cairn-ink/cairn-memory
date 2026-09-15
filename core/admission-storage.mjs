@@ -7,25 +7,29 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage }) {
+  conflictStorage, stagedEvidence }) {
   const read = (ns, input) => db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
     .get(...key(ns, input));
   const live = (row, input, now) => row?.state === "pending" &&
     row.payload_digest === input.payloadDigest && row.token === input.token &&
     row.lease_expires_at > now;
 
-  function claimAdmission(ns, input, hooks) {
-    return transaction(db, () => {
+  function claimAdmission(ns, input, hooks, stagedView) {
+    const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
+    const result = transaction(db, () => {
+      const now = stagedEvidence.touch(ns, serialized !== null);
       const row = read(ns, input);
-      if (row && row.payload_digest !== input.payloadDigest) fail("event_payload_conflict");
+      if (row && row.payload_digest !== input.payloadDigest) return { closed: 'event_payload_conflict' };
+      const closed = stagedEvidence.claimGuard(ns, input, row, now, serialized !== null);
+      if (closed) return { closed };
       if (row?.state === "completed") {
         return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
           suppressedCount: row.suppressed_count, ...hooks?.replay() };
       }
       const prepared = hooks?.prepare(row);
-      // Read trusted time only once the write lock has been acquired.
-      const now = Date.now();
       if (row && row.lease_expires_at > now) return { processing: true };
+      const capacity = serialized && stagedEvidence.capacityGuard(ns, serialized);
+      if (capacity) return { closed: capacity };
       const token = randomUUID();
       if (row) {
         db.prepare(`UPDATE admission_claims SET token = ?, lease_expires_at = ? WHERE ${where}`)
@@ -36,13 +40,20 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
           .run(...key(ns, input), input.payloadDigest, token, now + input.leaseMs);
       }
+      if (serialized) stagedEvidence.insert(ns, input, serialized, now);
       return { token, ...prepared };
     });
+    if (result.closed) fail(result.closed);
+    return result;
   }
 
   function finishAdmission(ns, input, hooks) {
-    return transaction(db, () => {
-      if (!live(read(ns, input), input, Date.now())) fail("stale_admission");
+    const result = transaction(db, () => {
+      const now = stagedEvidence.touch(ns);
+      const row = read(ns, input);
+      const closed = stagedEvidence.finishGuard(ns, input, row, now);
+      if (closed) return { closed };
+      if (!live(row, input, now)) fail("stale_admission");
       // The public manual finish cannot bypass ordered capture's private proof.
       if (!hooks && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
         .get(...key(ns, input))) fail('stale_admission');
@@ -76,18 +87,38 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${where}`)
         .run(JSON.stringify(memoryIds), suppressedCount, ...key(ns, input));
       hooks?.complete();
+      stagedEvidence.mark(ns, input, 'admitted');
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
     });
+    if (result.closed) fail(result.closed);
+    return result;
   }
 
   function abandonAdmission(ns, input) {
     return transaction(db, () => {
-      if (!live(read(ns, input), input, Date.now())) return { abandoned: false };
+      const now = stagedEvidence.touch(ns);
+      const row = read(ns, input);
+      // The expired owner may record its failure, but cannot release a successor.
+      if (row?.state !== 'pending' || row.payload_digest !== input.payloadDigest ||
+        row.token !== input.token) return { abandoned: false };
+      stagedEvidence.mark(ns, input, 'failed');
+      if (!live(row, input, now)) return { abandoned: false };
       db.prepare(`UPDATE admission_claims SET lease_expires_at = 0 WHERE ${where}`)
         .run(...key(ns, input));
       return { abandoned: true };
     });
   }
 
-  return { claimAdmission, finishAdmission, abandonAdmission };
+  function assertCaptureEvidence(ns, input) {
+    const result = transaction(db, () => {
+      const now = stagedEvidence.touch(ns);
+      const row = read(ns, input);
+      return stagedEvidence.finishGuard(ns, input, row, now) ||
+        (!live(row, input, now) ? 'capture_evidence_closed' : null);
+    });
+    if (result) fail(result);
+    return null;
+  }
+
+  return { claimAdmission, finishAdmission, abandonAdmission, assertCaptureEvidence };
 }

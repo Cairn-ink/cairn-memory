@@ -32,6 +32,11 @@ Source text and speaker roles supplied by a memory client as claims about a
 conversation, not an authenticated transcript or execution permission.
 _Avoid_: Verified human statement, authenticated consent
 
+**Staged evidence**:
+Submitted evidence retained separately while its interpretation is incomplete or
+unsuccessful; it is not an admitted assertion, authenticated record or permission.
+_Avoid_: Trusted memory, complete archive, verified source
+
 **Historical assertion**:
 A claim retained as evidence of an earlier state, not presented as current.
 _Avoid_: Forgotten memory
