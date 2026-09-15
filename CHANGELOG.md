@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — bounded complete admitted-source snapshot
+
+- Embedded `sourceSnapshot` can explicitly return all current admitted sources
+  in a small authorized read set without relevance filtering or generation calls.
+  A local exact token counter is required; defaults remain unchanged.
+- Whole-response memory, token and byte limits fail without partial content or
+  fallback. A final atomic reread rejects concurrent memory or source changes.
+- Sources may be unrelated to the task; complete admitted coverage does not
+  establish truth, current applicability or downstream answer fidelity. No MCP
+  tool, new storage schema, provider request or telemetry is introduced.
+
 ## Unreleased — explicit staged evidence over MCP
 
 - Local stdio hosts can explicitly opt into bounded source staging with

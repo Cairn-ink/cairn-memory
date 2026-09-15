@@ -41,6 +41,10 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
 - `list`: metadata only, including unfiled memories, bounded keyset pages beyond
   any recent-40 window. No content or receipt excerpts are returned here.
 - `get`: content with separately paginated receipts at a consistent revision.
+- Explicit synchronous [sourceSnapshot](bounded-source-snapshot.md): complete
+  current admitted sources across an authorized small read set, with no relevance
+  filtering or generation calls. Requires a local exact token counter and fails
+  without partial content when count, aggregate token, or byte limits are exceeded.
 - Optional manual [claim qualification](claim-qualification.md) on admission,
   with immutable source bindings and opt-in `get.includeQualification` inspection.
 - Trusted-manual [qualified transitions](qualified-transition.md) bind single

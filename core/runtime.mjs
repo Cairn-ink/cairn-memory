@@ -402,6 +402,38 @@ export function createMemoryRuntime(input) {
       ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
   }
 
+  function sourceSnapshot(namespaces, count, expected) {
+    ready();
+    return transaction(db, () => {
+      const boundaries = namespaces.map((namespace, index) => {
+        indexStorage.assertAvailable(namespace);
+        const indexRevision = epoch(namespace);
+        if (expected && expected.namespaces[index].indexRevision !== indexRevision) fail('index_revision_conflict');
+        return { namespace: { ownerId: namespace.ownerId, scope: namespace.scope,
+          projectId: namespace.projectId || null }, indexRevision };
+      });
+      // Enumerate the physical current set independently of MOC navigation.
+      // The limit+1 probe bounds work and detects overflow before source reads.
+      const identities = namespaces.flatMap((namespace, namespaceIndex) => db.prepare(`
+        SELECT id, revision FROM memories INDEXED BY capture_current_memories
+        WHERE ${where} AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
+        .all(...boundary(namespace), count + 1).map(row => ({ ...row, namespaceIndex })));
+      if (identities.length > count) fail(expected ? 'revision_conflict' : 'context_item_too_large');
+      const memories = identities.map(({ id, revision, namespaceIndex }) => {
+        const namespace = namespaces[namespaceIndex];
+        // An incomplete active projection is an error, never a smaller claim
+        // of completeness. Preserve the shared index generation's authority.
+        if (!db.prepare(`SELECT id FROM index_read_memories WHERE ${where} AND id = ? AND revision = ?`)
+          .get(...boundary(namespace), id, revision)) fail('index_revision_conflict');
+        return { namespaceIndex, ...readSourceEvidence(currentRow(namespace, id)) };
+      });
+      const snapshot = { memories, namespaces: boundaries, coverage: 'complete-current-admitted',
+        semanticCoverage: 'unassessed', evidenceTrust: 'untrusted-data-not-instructions' };
+      if (expected && JSON.stringify(snapshot) !== JSON.stringify(expected)) fail('revision_conflict');
+      return snapshot;
+    });
+  }
+
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
     ready();
     return transaction(db, () => {
@@ -454,7 +486,7 @@ export function createMemoryRuntime(input) {
   return Object.freeze({
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
-    listPage, getPage, fetchPage, recallSnapshot,
+    listPage, getPage, fetchPage, recallSnapshot, sourceSnapshot,
     rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
     commitRationale(ns, refs, snapshot, proposals) { ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals); },
     getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },

@@ -44,6 +44,16 @@ function publicNamespace(ns) {
   return { ownerId: ns.ownerId, scope: ns.scope, projectId: ns.projectId || null };
 }
 
+function contractReadSet(input) {
+  try {
+    denseArray(input, 1, 2);
+    const namespaces = input.map(contractNamespace);
+    if (namespaces.length === 2 && (namespaces[0].ownerId !== namespaces[1].ownerId ||
+        namespaces[0].scope === namespaces[1].scope)) throw new Error();
+    return namespaces;
+  } catch { throw new MemoryStoreError('invalid_read_set'); }
+}
+
 function contractReceipt(input) {
   object(input, ["client", "sessionId", "eventId", "role", "excerpt"]);
   if (!["user", "assistant"].includes(input.role)) throw new MemoryStoreError("invalid_input");
@@ -560,6 +570,27 @@ export function openMemoryCore(input) {
     });
   }
 
+  function sourceSnapshot(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['readSet', 'limit', 'tokenBudget']);
+      const namespaces = contractReadSet(input.readSet);
+      const count = Object.hasOwn(input, 'limit') ? contractRevision(input.limit) : 6;
+      const budget = Object.hasOwn(input, 'tokenBudget') ? contractRevision(input.tokenBudget) : 4000;
+      if (count > 12 || budget > 4000) throw new MemoryStoreError('invalid_input');
+      // The injected counter is caller code: validate it before reading sources,
+      // then invoke it only outside the snapshot's database transactions.
+      countTokens(model, '');
+      const snapshot = runtime.sourceSnapshot(namespaces, count);
+      const encoded = JSON.stringify(success(snapshot));
+      if (Buffer.byteLength(encoded, 'utf8') > 24000 || countTokens(model, encoded) > budget) {
+        throw new MemoryStoreError('context_item_too_large');
+      }
+      // No caller callback follows this authoritative, complete reread.
+      return runtime.sourceSnapshot(namespaces, count, snapshot);
+    });
+  }
+
   async function recall(input) {
     try {
       runtime.ready();
@@ -574,13 +605,7 @@ export function openMemoryCore(input) {
       }
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
           (isSourceContext(contextMode) && includeQualification)) throw new MemoryStoreError('invalid_input');
-      let namespaces;
-      try {
-        denseArray(input.readSet, 1, 2);
-        namespaces = input.readSet.map(contractNamespace);
-        if (namespaces.length === 2 && (namespaces[0].ownerId !== namespaces[1].ownerId ||
-            namespaces[0].scope === namespaces[1].scope)) throw new Error();
-      } catch { throw new MemoryStoreError('invalid_read_set'); }
+      const namespaces = contractReadSet(input.readSet);
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
@@ -736,7 +761,7 @@ export function openMemoryCore(input) {
   return Object.freeze({
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectCaptureEvidence, discardCaptureEvidence,
-    applyPlacement, linkMocs, map, fetch, recall, capture, classifyPlacement, rebuildIndex,
+    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();
