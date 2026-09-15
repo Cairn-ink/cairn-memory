@@ -1,0 +1,77 @@
+{
+  "id": "qualifier-preservation-v1",
+  "histories": [
+    {"id":"p01a","pairId":"p01","messages":[
+      {"id":"p01a-m1","role":"user","content":"I originally chose the ridge path for my evening sketch walk because it had a clear view and little wind."},
+      {"id":"p01a-m2","role":"user","content":"The ridge is windy this week, but the view is still clear. I value the view more than shelter for this sketch."},
+      {"id":"p01a-m3","role":"assistant","content":"You could try the orchard path for more shelter."},
+      {"id":"p01a-m4","role":"user","content":"I will keep using the ridge path for now."}
+    ],"question":"What have I decided about my sketch-walk route, and how do the original reasons compare with the current ones?"},
+    {"id":"p01b","pairId":"p01","messages":[
+      {"id":"p01b-m1","role":"user","content":"I originally chose the ridge path for my evening sketch walk because it had a clear view and little wind."},
+      {"id":"p01b-m2","role":"user","content":"The ridge is windy this week, but the view is still clear. I value the view more than shelter for this sketch."},
+      {"id":"p01b-m3","role":"assistant","content":"You could try the orchard path for more shelter."},
+      {"id":"p01b-m4","role":"user","content":"I have made a firm decision to keep using the ridge path."}
+    ],"question":"What have I decided about my sketch-walk route, and how do the original reasons compare with the current ones?"},
+    {"id":"p02a","pairId":"p02","messages":[
+      {"id":"p02a-m1","role":"user","content":"Mira chose amber glaze for her bowl. My unfinished mug is a separate project."},
+      {"id":"p02a-m2","role":"user","content":"I like blue glaze for my mug because it makes the carved leaf pattern easier to see."},
+      {"id":"p02a-m3","role":"assistant","content":"A white glaze could also highlight the carving."},
+      {"id":"p02a-m4","role":"user","content":"I will use blue glaze on my mug only if the sample tile dries evenly."}
+    ],"question":"What is my glaze choice for the mug, why do I like it, and how does it differ from Mira's choice?"},
+    {"id":"p02b","pairId":"p02","messages":[
+      {"id":"p02b-m1","role":"user","content":"Mira chose amber glaze for her bowl. My unfinished mug is a separate project."},
+      {"id":"p02b-m2","role":"user","content":"I like blue glaze for my mug because it makes the carved leaf pattern easier to see."},
+      {"id":"p02b-m3","role":"assistant","content":"A white glaze could also highlight the carving."},
+      {"id":"p02b-m4","role":"user","content":"I have decided to use blue glaze on my mug regardless of how the sample tile dries."}
+    ],"question":"What is my glaze choice for the mug, why do I like it, and how does it differ from Mira's choice?"},
+    {"id":"p03a","pairId":"p03","messages":[
+      {"id":"p03a-m1","role":"user","content":"I used prose notes for my reading-circle introduction last month."},
+      {"id":"p03a-m2","role":"user","content":"A character map appeals to me because this month's story has several narrators. Tomas is making a timeline for his own introduction."},
+      {"id":"p03a-m3","role":"assistant","content":"You could read a short passage aloud instead."},
+      {"id":"p03a-m4","role":"user","content":"I am still considering replacing my prose notes with a character map for this month's introduction."}
+    ],"question":"How has my introduction format changed since last month, what motivates the change, and is it decided?"},
+    {"id":"p03b","pairId":"p03","messages":[
+      {"id":"p03b-m1","role":"user","content":"I used prose notes for my reading-circle introduction last month."},
+      {"id":"p03b-m2","role":"user","content":"A character map appeals to me because this month's story has several narrators. Tomas is making a timeline for his own introduction."},
+      {"id":"p03b-m3","role":"assistant","content":"You could read a short passage aloud instead."},
+      {"id":"p03b-m4","role":"user","content":"I have decided to replace my prose notes with a character map for this month's introduction."}
+    ],"question":"How has my introduction format changed since last month, what motivates the change, and is it decided?"},
+    {"id":"p04a","pairId":"p04","messages":[
+      {"id":"p04a-m1","role":"user","content":"I usually photograph miniature models against a gray backdrop."},
+      {"id":"p04a-m2","role":"user","content":"The gray fabric is being cleaned. The cream backdrop makes the shadows easier to distinguish."},
+      {"id":"p04a-m3","role":"assistant","content":"You could try a blue backdrop for a stronger contrast."},
+      {"id":"p04a-m4","role":"user","content":"I will use the cream backdrop only until the gray fabric returns from cleaning."}
+    ],"question":"Which backdrop am I using for miniature photos, why, and what limit have I put on that choice?"},
+    {"id":"p04b","pairId":"p04","messages":[
+      {"id":"p04b-m1","role":"user","content":"I usually photograph miniature models against a gray backdrop."},
+      {"id":"p04b-m2","role":"user","content":"The gray fabric is being cleaned. The cream backdrop makes the shadows easier to distinguish."},
+      {"id":"p04b-m3","role":"assistant","content":"You could try a blue backdrop for a stronger contrast."},
+      {"id":"p04b-m4","role":"user","content":"I have decided to keep using the cream backdrop even after the gray fabric returns from cleaning."}
+    ],"question":"Which backdrop am I using for miniature photos, why, and what limit have I put on that choice?"},
+    {"id":"p05a","pairId":"p05","messages":[
+      {"id":"p05a-m1","role":"user","content":"Leah moved her fern to a tall stand. My mosaic pot is separate from her fern."},
+      {"id":"p05a-m2","role":"user","content":"I had displayed my mosaic pot by the window for its light, but the glare now hides the tile colors. The side shelf has softer light."},
+      {"id":"p05a-m3","role":"assistant","content":"You could put the mosaic pot on the mantel."},
+      {"id":"p05a-m4","role":"user","content":"I am trying the side shelf for my mosaic pot this weekend before deciding where it will stay."}
+    ],"question":"Where does my mosaic pot stand in my plans, why did I move away from the window, and what did Leah move?"},
+    {"id":"p05b","pairId":"p05","messages":[
+      {"id":"p05b-m1","role":"user","content":"Leah moved her fern to a tall stand. My mosaic pot is separate from her fern."},
+      {"id":"p05b-m2","role":"user","content":"I had displayed my mosaic pot by the window for its light, but the glare now hides the tile colors. The side shelf has softer light."},
+      {"id":"p05b-m3","role":"assistant","content":"You could put the mosaic pot on the mantel."},
+      {"id":"p05b-m4","role":"user","content":"I have decided that the side shelf is where my mosaic pot will stay, starting this weekend."}
+    ],"question":"Where does my mosaic pot stand in my plans, why did I move away from the window, and what did Leah move?"},
+    {"id":"p06a","pairId":"p06","messages":[
+      {"id":"p06a-m1","role":"user","content":"I used a spoken introduction for my last puppet performance. Niko uses a painted title card for his separate show."},
+      {"id":"p06a-m2","role":"user","content":"An instrumental opening appeals to me because it lets the audience see the puppets before hearing dialogue."},
+      {"id":"p06a-m3","role":"assistant","content":"A short drum roll could introduce the first puppet."},
+      {"id":"p06a-m4","role":"user","content":"I might replace my spoken introduction with an instrumental opening for the next performance."}
+    ],"question":"What opening do I plan for my next puppet performance, why, and is Niko's approach also mine?"},
+    {"id":"p06b","pairId":"p06","messages":[
+      {"id":"p06b-m1","role":"user","content":"I used a spoken introduction for my last puppet performance. Niko uses a painted title card for his separate show."},
+      {"id":"p06b-m2","role":"user","content":"An instrumental opening appeals to me because it lets the audience see the puppets before hearing dialogue."},
+      {"id":"p06b-m3","role":"assistant","content":"A short drum roll could introduce the first puppet."},
+      {"id":"p06b-m4","role":"user","content":"I have decided to replace my spoken introduction with an instrumental opening for the next performance."}
+    ],"question":"What opening do I plan for my next puppet performance, why, and is Niko's approach also mine?"}
+  ]
+}
