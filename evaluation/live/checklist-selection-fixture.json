@@ -1,0 +1,623 @@
+{
+  "id": "checklist-selection-comparison-v1",
+  "histories": [
+    {
+      "id": "c01a",
+      "pairId": "c01",
+      "windows": [
+        [
+          {
+            "id": "c01a-w1m1",
+            "role": "user",
+            "content": "On September 2, I chose cooperative games for my October 9 community table because the rules were easy to teach and the rounds were short."
+          },
+          {
+            "id": "c01a-w1m2",
+            "role": "user",
+            "content": "On September 3, I sorted the wooden score markers into a striped pouch."
+          },
+          {
+            "id": "c01a-w1m3",
+            "role": "user",
+            "content": "On September 4, I put a blue sticker on the box of spare pencils."
+          },
+          {
+            "id": "c01a-w1m4",
+            "role": "user",
+            "content": "On September 5, I numbered the table signs with black ink."
+          },
+          {
+            "id": "c01a-w1m5",
+            "role": "user",
+            "content": "On September 6, I repaired a split corner of the card tray."
+          },
+          {
+            "id": "c01a-w1m6",
+            "role": "assistant",
+            "content": "You could use competitive games for the October evening."
+          }
+        ],
+        [
+          {
+            "id": "c01a-w2m1",
+            "role": "user",
+            "content": "On September 12, I tried the new edition of the cooperative game, and its rounds took twice as long as the old edition."
+          },
+          {
+            "id": "c01a-w2m2",
+            "role": "user",
+            "content": "On September 13, new players still learned the cooperative game's rules quickly in my teaching trial."
+          },
+          {
+            "id": "c01a-w2m3",
+            "role": "user",
+            "content": "On September 14, I replaced a missing red counter with a wooden cube."
+          },
+          {
+            "id": "c01a-w2m4",
+            "role": "user",
+            "content": "On September 15, I clipped the printed scoring sheets together."
+          },
+          {
+            "id": "c01a-w2m5",
+            "role": "user",
+            "content": "On September 16, I am provisionally keeping cooperative games for my October 9 table while I consider the longer rounds."
+          },
+          {
+            "id": "c01a-w2m6",
+            "role": "assistant",
+            "content": "You could arrange the chairs in a semicircle."
+          }
+        ],
+        [
+          {
+            "id": "c01a-w3m1",
+            "role": "user",
+            "content": "On September 20, Sora chose competitive games for her separate October 9 table; she is not choosing games for mine."
+          },
+          {
+            "id": "c01a-w3m2",
+            "role": "user",
+            "content": "On September 21, I counted eleven spare card sleeves."
+          },
+          {
+            "id": "c01a-w3m3",
+            "role": "user",
+            "content": "On September 22, I packed the table signs in a flat envelope."
+          },
+          {
+            "id": "c01a-w3m4",
+            "role": "user",
+            "content": "On September 23, I cleaned pencil marks from the counter tray."
+          },
+          {
+            "id": "c01a-w3m5",
+            "role": "user",
+            "content": "On September 24, I added felt circles beneath the storage box."
+          },
+          {
+            "id": "c01a-w3m6",
+            "role": "assistant",
+            "content": "You could put a small paper flag beside the game boxes."
+          }
+        ]
+      ],
+      "question": "For my October 9 community game table, what format have I chosen and how settled is it, which original reasons still hold, and how does it differ from Sora's table?"
+    },
+    {
+      "id": "c01b",
+      "pairId": "c01",
+      "windows": [
+        [
+          {
+            "id": "c01b-w1m1",
+            "role": "user",
+            "content": "On September 2, I chose cooperative games for my October 9 community table because the rules were easy to teach and the rounds were short."
+          },
+          {
+            "id": "c01b-w1m2",
+            "role": "user",
+            "content": "On September 3, I sorted the wooden score markers into a striped pouch."
+          },
+          {
+            "id": "c01b-w1m3",
+            "role": "user",
+            "content": "On September 4, I put a blue sticker on the box of spare pencils."
+          },
+          {
+            "id": "c01b-w1m4",
+            "role": "user",
+            "content": "On September 5, I numbered the table signs with black ink."
+          },
+          {
+            "id": "c01b-w1m5",
+            "role": "user",
+            "content": "On September 6, I repaired a split corner of the card tray."
+          },
+          {
+            "id": "c01b-w1m6",
+            "role": "assistant",
+            "content": "You could use competitive games for the October evening."
+          }
+        ],
+        [
+          {
+            "id": "c01b-w2m1",
+            "role": "user",
+            "content": "On September 12, I tried the new edition of the cooperative game, and its rounds took twice as long as the old edition."
+          },
+          {
+            "id": "c01b-w2m2",
+            "role": "user",
+            "content": "On September 13, new players still learned the cooperative game's rules quickly in my teaching trial."
+          },
+          {
+            "id": "c01b-w2m3",
+            "role": "user",
+            "content": "On September 14, I replaced a missing red counter with a wooden cube."
+          },
+          {
+            "id": "c01b-w2m4",
+            "role": "user",
+            "content": "On September 15, I clipped the printed scoring sheets together."
+          },
+          {
+            "id": "c01b-w2m5",
+            "role": "user",
+            "content": "On September 16, I have firmly decided to keep cooperative games for my October 9 table despite the longer rounds."
+          },
+          {
+            "id": "c01b-w2m6",
+            "role": "assistant",
+            "content": "You could arrange the chairs in a semicircle."
+          }
+        ],
+        [
+          {
+            "id": "c01b-w3m1",
+            "role": "user",
+            "content": "On September 20, Sora chose competitive games for her separate October 9 table; she is not choosing games for mine."
+          },
+          {
+            "id": "c01b-w3m2",
+            "role": "user",
+            "content": "On September 21, I counted eleven spare card sleeves."
+          },
+          {
+            "id": "c01b-w3m3",
+            "role": "user",
+            "content": "On September 22, I packed the table signs in a flat envelope."
+          },
+          {
+            "id": "c01b-w3m4",
+            "role": "user",
+            "content": "On September 23, I cleaned pencil marks from the counter tray."
+          },
+          {
+            "id": "c01b-w3m5",
+            "role": "user",
+            "content": "On September 24, I added felt circles beneath the storage box."
+          },
+          {
+            "id": "c01b-w3m6",
+            "role": "assistant",
+            "content": "You could put a small paper flag beside the game boxes."
+          }
+        ]
+      ],
+      "question": "For my October 9 community game table, what format have I chosen and how settled is it, which original reasons still hold, and how does it differ from Sora's table?"
+    },
+    {
+      "id": "c02a",
+      "pairId": "c02",
+      "windows": [
+        [
+          {
+            "id": "c02a-w1m1",
+            "role": "user",
+            "content": "On October 2, our puzzle club normally met upstairs because the room was quiet and its large table held our puzzle boards; our next meetings are November 8 and November 15."
+          },
+          {
+            "id": "c02a-w1m2",
+            "role": "user",
+            "content": "On October 3, I put the edge pieces of the harbor puzzle in a square tin."
+          },
+          {
+            "id": "c02a-w1m3",
+            "role": "user",
+            "content": "On October 4, I numbered the club's six puzzle-board covers."
+          },
+          {
+            "id": "c02a-w1m4",
+            "role": "user",
+            "content": "On October 5, I replaced a torn label on the cupboard."
+          },
+          {
+            "id": "c02a-w1m5",
+            "role": "user",
+            "content": "On October 6, I stored the spare pencils in a fabric roll."
+          },
+          {
+            "id": "c02a-w1m6",
+            "role": "assistant",
+            "content": "You could move all the club's meetings downstairs."
+          }
+        ],
+        [
+          {
+            "id": "c02a-w2m1",
+            "role": "user",
+            "content": "On October 12, I learned that a noisy exhibition would occupy the upstairs room on November 8."
+          },
+          {
+            "id": "c02a-w2m2",
+            "role": "user",
+            "content": "On October 13, I checked that the downstairs room would be quiet on November 8 and its table could hold all our puzzle boards."
+          },
+          {
+            "id": "c02a-w2m3",
+            "role": "user",
+            "content": "On October 14, I taped the corner of the harbor puzzle's box."
+          },
+          {
+            "id": "c02a-w2m4",
+            "role": "user",
+            "content": "On October 15, I placed a spare magnifying sheet in a green folder."
+          },
+          {
+            "id": "c02a-w2m5",
+            "role": "user",
+            "content": "On October 16, I tentatively chose downstairs for our November 8 meeting only, with our usual upstairs arrangement continuing on November 15."
+          },
+          {
+            "id": "c02a-w2m6",
+            "role": "assistant",
+            "content": "You could divide the puzzle boards between two smaller tables."
+          }
+        ],
+        [
+          {
+            "id": "c02a-w3m1",
+            "role": "user",
+            "content": "On October 20, Rami chose downstairs for his separate club's regular meetings; his club does not share our schedule."
+          },
+          {
+            "id": "c02a-w3m2",
+            "role": "user",
+            "content": "On October 21, the exhibition organizer confirmed that upstairs would be cleared on November 9, before our November 15 meeting."
+          },
+          {
+            "id": "c02a-w3m3",
+            "role": "user",
+            "content": "On October 22, I counted four spare sorting trays."
+          },
+          {
+            "id": "c02a-w3m4",
+            "role": "user",
+            "content": "On October 23, I attached a paper moon to the cupboard door."
+          },
+          {
+            "id": "c02a-w3m5",
+            "role": "user",
+            "content": "On October 24, I stacked the empty puzzle boxes by size."
+          },
+          {
+            "id": "c02a-w3m6",
+            "role": "assistant",
+            "content": "You could add a small sign to the sorting-tray shelf."
+          }
+        ]
+      ],
+      "question": "Which room is planned for our November 8 puzzle-club meeting and how firm is that choice, why is it different from our usual arrangement for November 15, and does Rami's group's room choice apply to us?"
+    },
+    {
+      "id": "c02b",
+      "pairId": "c02",
+      "windows": [
+        [
+          {
+            "id": "c02b-w1m1",
+            "role": "user",
+            "content": "On October 2, our puzzle club normally met upstairs because the room was quiet and its large table held our puzzle boards; our next meetings are November 8 and November 15."
+          },
+          {
+            "id": "c02b-w1m2",
+            "role": "user",
+            "content": "On October 3, I put the edge pieces of the harbor puzzle in a square tin."
+          },
+          {
+            "id": "c02b-w1m3",
+            "role": "user",
+            "content": "On October 4, I numbered the club's six puzzle-board covers."
+          },
+          {
+            "id": "c02b-w1m4",
+            "role": "user",
+            "content": "On October 5, I replaced a torn label on the cupboard."
+          },
+          {
+            "id": "c02b-w1m5",
+            "role": "user",
+            "content": "On October 6, I stored the spare pencils in a fabric roll."
+          },
+          {
+            "id": "c02b-w1m6",
+            "role": "assistant",
+            "content": "You could move all the club's meetings downstairs."
+          }
+        ],
+        [
+          {
+            "id": "c02b-w2m1",
+            "role": "user",
+            "content": "On October 12, I learned that a noisy exhibition would occupy the upstairs room on November 8."
+          },
+          {
+            "id": "c02b-w2m2",
+            "role": "user",
+            "content": "On October 13, I checked that the downstairs room would be quiet on November 8 and its table could hold all our puzzle boards."
+          },
+          {
+            "id": "c02b-w2m3",
+            "role": "user",
+            "content": "On October 14, I taped the corner of the harbor puzzle's box."
+          },
+          {
+            "id": "c02b-w2m4",
+            "role": "user",
+            "content": "On October 15, I placed a spare magnifying sheet in a green folder."
+          },
+          {
+            "id": "c02b-w2m5",
+            "role": "user",
+            "content": "On October 16, I confirmed downstairs for our November 8 meeting only, with our usual upstairs arrangement continuing on November 15."
+          },
+          {
+            "id": "c02b-w2m6",
+            "role": "assistant",
+            "content": "You could divide the puzzle boards between two smaller tables."
+          }
+        ],
+        [
+          {
+            "id": "c02b-w3m1",
+            "role": "user",
+            "content": "On October 20, Rami chose downstairs for his separate club's regular meetings; his club does not share our schedule."
+          },
+          {
+            "id": "c02b-w3m2",
+            "role": "user",
+            "content": "On October 21, the exhibition organizer confirmed that upstairs would be cleared on November 9, before our November 15 meeting."
+          },
+          {
+            "id": "c02b-w3m3",
+            "role": "user",
+            "content": "On October 22, I counted four spare sorting trays."
+          },
+          {
+            "id": "c02b-w3m4",
+            "role": "user",
+            "content": "On October 23, I attached a paper moon to the cupboard door."
+          },
+          {
+            "id": "c02b-w3m5",
+            "role": "user",
+            "content": "On October 24, I stacked the empty puzzle boxes by size."
+          },
+          {
+            "id": "c02b-w3m6",
+            "role": "assistant",
+            "content": "You could add a small sign to the sorting-tray shelf."
+          }
+        ]
+      ],
+      "question": "Which room is planned for our November 8 puzzle-club meeting and how firm is that choice, why is it different from our usual arrangement for November 15, and does Rami's group's room choice apply to us?"
+    },
+    {
+      "id": "c03a",
+      "pairId": "c03",
+      "windows": [
+        [
+          {
+            "id": "c03a-w1m1",
+            "role": "user",
+            "content": "On November 2, I chose bilingual printed labels for my December local-history display so visitors could read either language and I could place a label beside each object."
+          },
+          {
+            "id": "c03a-w1m2",
+            "role": "user",
+            "content": "On November 3, I numbered the empty display sleeves in pencil."
+          },
+          {
+            "id": "c03a-w1m3",
+            "role": "user",
+            "content": "On November 4, I placed the spare backing cards in a brown folder."
+          },
+          {
+            "id": "c03a-w1m4",
+            "role": "user",
+            "content": "On November 5, I cleaned dust from the model shopfront's base."
+          },
+          {
+            "id": "c03a-w1m5",
+            "role": "user",
+            "content": "On November 6, I cut six gray paper borders for the display."
+          },
+          {
+            "id": "c03a-w1m6",
+            "role": "assistant",
+            "content": "You could use audio descriptions instead of printed labels."
+          }
+        ],
+        [
+          {
+            "id": "c03a-w2m1",
+            "role": "user",
+            "content": "On November 12, I found that the available stands covered the lower line of each bilingual label, hiding the second language."
+          },
+          {
+            "id": "c03a-w2m2",
+            "role": "user",
+            "content": "On November 13, I tested adhesive mounts that kept both printed lines visible beside each object without the stands."
+          },
+          {
+            "id": "c03a-w2m3",
+            "role": "user",
+            "content": "On November 14, I replaced a bent corner protector on the display board."
+          },
+          {
+            "id": "c03a-w2m4",
+            "role": "user",
+            "content": "On November 15, I counted nine spare mounting squares."
+          },
+          {
+            "id": "c03a-w2m5",
+            "role": "user",
+            "content": "On November 16, I am tentatively choosing the adhesive mounts for my bilingual labels in the December display."
+          },
+          {
+            "id": "c03a-w2m6",
+            "role": "assistant",
+            "content": "You could put decorative arrows between neighboring objects."
+          }
+        ],
+        [
+          {
+            "id": "c03a-w3m1",
+            "role": "user",
+            "content": "On November 20, Neri chose audio descriptions for her separate local-history display; she is not arranging my labels."
+          },
+          {
+            "id": "c03a-w3m2",
+            "role": "user",
+            "content": "On November 21, I wrapped the miniature doorway in plain tissue."
+          },
+          {
+            "id": "c03a-w3m3",
+            "role": "user",
+            "content": "On November 22, I drew a small diamond on the storage carton."
+          },
+          {
+            "id": "c03a-w3m4",
+            "role": "user",
+            "content": "On November 23, I moved the unused borders into a narrow envelope."
+          },
+          {
+            "id": "c03a-w3m5",
+            "role": "user",
+            "content": "On November 24, I checked that the backing cards were the same height."
+          },
+          {
+            "id": "c03a-w3m6",
+            "role": "assistant",
+            "content": "You could use a patterned cloth beneath the display."
+          }
+        ]
+      ],
+      "question": "For my December local-history display, what label arrangement have I chosen and how settled is it, how does it address the original accessibility and placement reasons, how is Neri's display different, and who approved my translations?"
+    },
+    {
+      "id": "c03b",
+      "pairId": "c03",
+      "windows": [
+        [
+          {
+            "id": "c03b-w1m1",
+            "role": "user",
+            "content": "On November 2, I chose bilingual printed labels for my December local-history display so visitors could read either language and I could place a label beside each object."
+          },
+          {
+            "id": "c03b-w1m2",
+            "role": "user",
+            "content": "On November 3, I numbered the empty display sleeves in pencil."
+          },
+          {
+            "id": "c03b-w1m3",
+            "role": "user",
+            "content": "On November 4, I placed the spare backing cards in a brown folder."
+          },
+          {
+            "id": "c03b-w1m4",
+            "role": "user",
+            "content": "On November 5, I cleaned dust from the model shopfront's base."
+          },
+          {
+            "id": "c03b-w1m5",
+            "role": "user",
+            "content": "On November 6, I cut six gray paper borders for the display."
+          },
+          {
+            "id": "c03b-w1m6",
+            "role": "assistant",
+            "content": "You could use audio descriptions instead of printed labels."
+          }
+        ],
+        [
+          {
+            "id": "c03b-w2m1",
+            "role": "user",
+            "content": "On November 12, I found that the available stands covered the lower line of each bilingual label, hiding the second language."
+          },
+          {
+            "id": "c03b-w2m2",
+            "role": "user",
+            "content": "On November 13, I tested adhesive mounts that kept both printed lines visible beside each object without the stands."
+          },
+          {
+            "id": "c03b-w2m3",
+            "role": "user",
+            "content": "On November 14, I replaced a bent corner protector on the display board."
+          },
+          {
+            "id": "c03b-w2m4",
+            "role": "user",
+            "content": "On November 15, I counted nine spare mounting squares."
+          },
+          {
+            "id": "c03b-w2m5",
+            "role": "user",
+            "content": "On November 16, I have decided to use the adhesive mounts for my bilingual labels in the December display."
+          },
+          {
+            "id": "c03b-w2m6",
+            "role": "assistant",
+            "content": "You could put decorative arrows between neighboring objects."
+          }
+        ],
+        [
+          {
+            "id": "c03b-w3m1",
+            "role": "user",
+            "content": "On November 20, Neri chose audio descriptions for her separate local-history display; she is not arranging my labels."
+          },
+          {
+            "id": "c03b-w3m2",
+            "role": "user",
+            "content": "On November 21, I wrapped the miniature doorway in plain tissue."
+          },
+          {
+            "id": "c03b-w3m3",
+            "role": "user",
+            "content": "On November 22, I drew a small diamond on the storage carton."
+          },
+          {
+            "id": "c03b-w3m4",
+            "role": "user",
+            "content": "On November 23, I moved the unused borders into a narrow envelope."
+          },
+          {
+            "id": "c03b-w3m5",
+            "role": "user",
+            "content": "On November 24, I checked that the backing cards were the same height."
+          },
+          {
+            "id": "c03b-w3m6",
+            "role": "assistant",
+            "content": "You could use a patterned cloth beneath the display."
+          }
+        ]
+      ],
+      "question": "For my December local-history display, what label arrangement have I chosen and how settled is it, how does it address the original accessibility and placement reasons, how is Neri's display different, and who approved my translations?"
+    }
+  ]
+}
