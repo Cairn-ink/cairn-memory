@@ -91,3 +91,7 @@ would still need broader unseen histories and installed/natural-host validation.
 This package freezes a protocol only. It changes no production default, real
 grant or ledger, publishes no package and performs no deployment. Acceptance:
 [comparison plan](plans/augmentation-comparison.md).
+
+Subsequent [once-only results](augmentation-results.md) retain the failed baseline
+arm and candidate regressions. The candidate is not promoted; this link does not
+change the frozen protocol used for execution.
