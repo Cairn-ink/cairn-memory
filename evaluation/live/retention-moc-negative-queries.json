@@ -1,0 +1,23 @@
+{
+  "id": "retention-moc-comparison-v1",
+  "queries": [
+    {
+      "id": "n01",
+      "historyId": "r01a",
+      "question": "Who approved the electrical hookup for my May 17 campsite reading corner, and what maximum wattage did that approval permit?",
+      "expectedUnknowns": [
+        "No electrical-hookup approval or approver is recorded.",
+        "No approved maximum wattage is supplied; absence of this evidence is not proof that approval was denied."
+      ]
+    },
+    {
+      "id": "n02",
+      "historyId": "r03a",
+      "question": "七月十九日織紋示範的展示用品採購,場地方由誰核准,核准的金額上限是多少?",
+      "expectedUnknowns": [
+        "未提供場地採購核准者或核准紀錄。",
+        "未提供核准金額上限;不能把沒有紀錄推論成已拒絕核准。"
+      ]
+    }
+  ]
+}
