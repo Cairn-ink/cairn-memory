@@ -1,0 +1,173 @@
+{
+  "id": "bounded-augmentation-comparison-v1",
+  "histories": [
+    {
+      "id": "a01a",
+      "requiredSourceIds": [
+        "a01a-w1m2",
+        "a01a-w2m1",
+        "a01a-w2m3",
+        "a01a-w3m1",
+        "a01a-w3m4"
+      ],
+      "irrelevantSourceIds": [
+        "a01a-w1m1",
+        "a01a-w1m3",
+        "a01a-w1m4",
+        "a01a-w1m5",
+        "a01a-w2m2",
+        "a01a-w2m4",
+        "a01a-w2m5",
+        "a01a-w3m2",
+        "a01a-w3m3",
+        "a01a-w3m5"
+      ],
+      "qualifierSourceId": "a01a-w3m1",
+      "qualifierQuote": "am tentatively keeping",
+      "expectedCommitment": "provisional",
+      "actor": "The user chooses recycled-card covers for their own workshop. Elin independently chooses plain board for her March workshop. The assistant's cloth-covered-board suggestion is not the user's adoption.",
+      "reason": "Lower cost and clean folding were the original reasons. The new equal-quantity price comparison overturns the lower-cost reason; the new-batch folding test reaffirms clean folding. A failed price premise does not establish a switch to plain board or cloth-covered board.",
+      "temporalLimit": "Provisional variant. Only the February 6 workshop is covered by the user's January 20 choice; Elin's March choice is separate."
+    },
+    {
+      "id": "a01b",
+      "requiredSourceIds": [
+        "a01b-w1m2",
+        "a01b-w2m1",
+        "a01b-w2m3",
+        "a01b-w3m1",
+        "a01b-w3m4"
+      ],
+      "irrelevantSourceIds": [
+        "a01b-w1m1",
+        "a01b-w1m3",
+        "a01b-w1m4",
+        "a01b-w1m5",
+        "a01b-w2m2",
+        "a01b-w2m4",
+        "a01b-w2m5",
+        "a01b-w3m2",
+        "a01b-w3m3",
+        "a01b-w3m5"
+      ],
+      "qualifierSourceId": "a01b-w3m1",
+      "qualifierQuote": "have firmly decided to keep",
+      "expectedCommitment": "committed",
+      "actor": "The user chooses recycled-card covers for their own workshop. Elin independently chooses plain board for her March workshop. The assistant's cloth-covered-board suggestion is not the user's adoption.",
+      "reason": "Lower cost and clean folding were the original reasons. The new equal-quantity price comparison overturns the lower-cost reason; the new-batch folding test reaffirms clean folding. A failed price premise does not establish a switch to plain board or cloth-covered board.",
+      "temporalLimit": "Committed variant. Only the February 6 workshop is covered by the user's January 20 choice; Elin's March choice is separate."
+    },
+    {
+      "id": "a02a",
+      "requiredSourceIds": [
+        "a02a-w1m3",
+        "a02a-w2m1",
+        "a02a-w2m2",
+        "a02a-w2m4",
+        "a02a-w3m1",
+        "a02a-w3m2"
+      ],
+      "irrelevantSourceIds": [
+        "a02a-w1m1",
+        "a02a-w1m2",
+        "a02a-w1m4",
+        "a02a-w1m5",
+        "a02a-w2m3",
+        "a02a-w2m5",
+        "a02a-w3m3",
+        "a02a-w3m4",
+        "a02a-w3m5"
+      ],
+      "qualifierSourceId": "a02a-w3m2",
+      "qualifierQuote": "am provisionally choosing",
+      "expectedCommitment": "provisional",
+      "actor": "The user's arrangement concerns their balcony only. Oren chooses metal markers for his separate balcony. The assistant's permanent printed-sticker suggestion is not adopted.",
+      "reason": "Soil stakes originally combined readable names with upright stability. Jets disrupt stability but a wet-marker check reaffirms readability. The rim-hanging test supports stability during the trial; it does not establish a permanent change or a switch to metal markers.",
+      "temporalLimit": "Provisional variant. The rim-hung arrangement is for June 14–16 only; the usual soil-stake arrangement is planned afterward. Do not convert that future plan into an already completed return."
+    },
+    {
+      "id": "a02b",
+      "requiredSourceIds": [
+        "a02b-w1m3",
+        "a02b-w2m1",
+        "a02b-w2m2",
+        "a02b-w2m4",
+        "a02b-w3m1",
+        "a02b-w3m2"
+      ],
+      "irrelevantSourceIds": [
+        "a02b-w1m1",
+        "a02b-w1m2",
+        "a02b-w1m4",
+        "a02b-w1m5",
+        "a02b-w2m3",
+        "a02b-w2m5",
+        "a02b-w3m3",
+        "a02b-w3m4",
+        "a02b-w3m5"
+      ],
+      "qualifierSourceId": "a02b-w3m2",
+      "qualifierQuote": "have confirmed",
+      "expectedCommitment": "committed",
+      "actor": "The user's arrangement concerns their balcony only. Oren chooses metal markers for his separate balcony. The assistant's permanent printed-sticker suggestion is not adopted.",
+      "reason": "Soil stakes originally combined readable names with upright stability. Jets disrupt stability but a wet-marker check reaffirms readability. The rim-hanging test supports stability during the trial; it does not establish a permanent change or a switch to metal markers.",
+      "temporalLimit": "Committed variant. The rim-hung arrangement is for June 14–16 only; the usual soil-stake arrangement is planned afterward. Do not convert that future plan into an already completed return."
+    },
+    {
+      "id": "a03a",
+      "requiredSourceIds": [
+        "a03a-w1m2",
+        "a03a-w2m2",
+        "a03a-w2m3",
+        "a03a-w2m4",
+        "a03a-w3m3"
+      ],
+      "irrelevantSourceIds": [
+        "a03a-w1m1",
+        "a03a-w1m3",
+        "a03a-w1m4",
+        "a03a-w1m5",
+        "a03a-w2m1",
+        "a03a-w2m5",
+        "a03a-w3m1",
+        "a03a-w3m2",
+        "a03a-w3m4",
+        "a03a-w3m5"
+      ],
+      "qualifierSourceId": "a03a-w2m4",
+      "qualifierQuote": "我暫定",
+      "expectedCommitment": "provisional",
+      "actor": "使用者選擇自己這團的自動鉛筆；映竹替另一團選木鉛筆，不負責使用者這團的用品。助理提議鋼筆並不等於採納。全部來源都沒有記載採購預算核准者，也沒有記載預算已獲核准；不可把用品選擇、店家報價或映竹的角色當成核准。",
+      "reason": "原先理由是整組較便宜與攜帶輕便。相同人數的新報價推翻較便宜的理由；再次試背明確支持輕便仍成立。價格變化不等於使用者已改選木鉛筆或鋼筆。",
+      "temporalLimit": "Provisional variant. 只涉及七月二十日這次速寫團與六月十三日的選擇，不推定之後各次活動都採用同一用品。"
+    },
+    {
+      "id": "a03b",
+      "requiredSourceIds": [
+        "a03b-w1m2",
+        "a03b-w2m2",
+        "a03b-w2m3",
+        "a03b-w2m4",
+        "a03b-w3m3"
+      ],
+      "irrelevantSourceIds": [
+        "a03b-w1m1",
+        "a03b-w1m3",
+        "a03b-w1m4",
+        "a03b-w1m5",
+        "a03b-w2m1",
+        "a03b-w2m5",
+        "a03b-w3m1",
+        "a03b-w3m2",
+        "a03b-w3m4",
+        "a03b-w3m5"
+      ],
+      "qualifierSourceId": "a03b-w2m4",
+      "qualifierQuote": "我已確定",
+      "expectedCommitment": "committed",
+      "actor": "使用者選擇自己這團的自動鉛筆；映竹替另一團選木鉛筆，不負責使用者這團的用品。助理提議鋼筆並不等於採納。全部來源都沒有記載採購預算核准者，也沒有記載預算已獲核准；不可把用品選擇、店家報價或映竹的角色當成核准。",
+      "reason": "原先理由是整組較便宜與攜帶輕便。相同人數的新報價推翻較便宜的理由；再次試背明確支持輕便仍成立。價格變化不等於使用者已改選木鉛筆或鋼筆。",
+      "temporalLimit": "Committed variant. 只涉及七月二十日這次速寫團與六月十三日的選擇，不推定之後各次活動都採用同一用品。"
+    }
+  ]
+}
