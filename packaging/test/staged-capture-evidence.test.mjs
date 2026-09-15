@@ -18,7 +18,7 @@ test('installed staged evidence survives failed qualification and cold inspectio
     command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
       artifact.artifactPath], root, artifact.userconfig);
     const packageRoot = join(root, 'node_modules', packageName);
-    for (const file of ['core/contract.mjs', 'core/capture.mjs', 'core/staged-evidence-schema.mjs',
+    for (const file of ['core/contract.mjs', 'core/runtime.mjs', 'core/capture.mjs', 'core/staged-evidence-schema.mjs',
       'core/staged-evidence-storage.mjs']) {
       assert.ok(artifact.files.includes(file));
       assert.equal(createHash('sha256').update(readFileSync(join(packageRoot, file))).digest('hex'), artifact.sourceHashes[file]);
@@ -69,6 +69,26 @@ test('installed staged evidence survives failed qualification and cold inspectio
     assert.equal(recallInputs.length, 2);
     assert.equal(JSON.stringify({ recalled, recallInputs }).includes('STAGED_SOURCE_ONLY'), false);
     assert.deepEqual(ok(cold.list({ namespace })).memories.map(memory => memory.id), [admitted.id]);
+
+    // The installed embedded snapshot reads the complete small admitted set
+    // using only a local token counter; it never promotes staged source.
+    let counterCalls = 0;
+    const snapshotCore = openMemoryCore({ path, model: { countTokens: () => { counterCalls++; return 1; },
+      select: () => assert.fail('Snapshot must not select'), rank: () => assert.fail('Snapshot must not rank'),
+      extract: () => assert.fail('Snapshot must not extract') } });
+    t.after(() => snapshotCore.close());
+    const sourceSnapshot = snapshotCore.sourceSnapshot({ readSet: [namespace] });
+    assert.equal(sourceSnapshot instanceof Promise, false);
+    const complete = ok(sourceSnapshot);
+    assert.deepEqual(complete.memories.map(item => item.memory.id), [admitted.id]);
+    assert.deepEqual(complete.memories[0].receipts.map(receipt => receipt.excerpt), ['Unrelated admitted synthetic memory']);
+    assert.equal(complete.memories[0].namespaceIndex, 0);
+    assert.equal(complete.memories[0].interpretationStatus, 'omitted');
+    assert.equal(complete.coverage, 'complete-current-admitted'); assert.equal(complete.semanticCoverage, 'unassessed');
+    assert.equal(complete.evidenceTrust, 'untrusted-data-not-instructions'); assert.ok(counterCalls > 0);
+    assert.equal(JSON.stringify(complete).includes('STAGED_SOURCE_ONLY'), false);
+    assert.equal(Object.hasOwn(complete.memories[0].memory, 'content'), false);
+    assert.equal(cold.sourceSnapshot({ readSet: [namespace] }).error.code, 'token_count_unavailable');
 
     assert.deepEqual(ok(cold.discardCaptureEvidence(key)), { discarded: true });
     assert.deepEqual(ok(cold.discardCaptureEvidence(key)), { discarded: false });

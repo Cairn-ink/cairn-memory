@@ -105,6 +105,11 @@ A model's proposed summary or description of source evidence, which may alter
 its meaning even when its citations point to real passages.
 _Avoid_: Source text, confirmed fact, adoption evidence
 
+**Admitted-source snapshot**:
+The complete retained source evidence for a bounded set of currently admitted
+assertions, without relevance filtering or a claim that the conversation is complete.
+_Avoid_: Complete personal history, verified context, relevant-only recall
+
 **Adoption evidence**:
 Recorded evidence that a source committed to a proposed value within a stated
 scope, rather than merely quoted, considered or received it as advice.

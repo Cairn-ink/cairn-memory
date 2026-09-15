@@ -24,6 +24,15 @@ explicit operations; none of these alone adds passive host capture. The released
 plugin still uses its configured service. No Cairn account is needed for this
 library; no telemetry, network client, or cloud fallback exists in its runtime.
 
+The embedded [bounded source snapshot](bounded-source-snapshot.md) explicitly
+returns every current admitted memory's complete retained sources when the whole
+authorized read set fits its limits: default 6/max 12 memories total, 4,000 tokens,
+and 24,000 UTF-8 bytes for the entire success response. A local exact token counter
+is required; no provider key or generation calls are needed. It includes potentially
+unrelated sources, excludes staged/history/deleted data and interpretations, and
+fails without partial evidence or fallback. Storage-current does not mean true or
+still applicable today. Existing recall and MCP defaults are unchanged.
+
 ## Run the synthetic example
 
 Use Node >=22.16 (tested in CI on 22.16 and 24). The existing plugin still

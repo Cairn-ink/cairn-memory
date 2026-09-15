@@ -1,5 +1,23 @@
 # Compatibility protocol v0.1
 
+### Explicit embedded complete-source snapshot
+
+The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the
+whole current admitted source set for an explicitly authorized small read set,
+without query filtering, selection or ranking. It requires an injected local
+exact token counter; the entire success response is limited to 4,000 tokens and
+24,000 UTF-8 bytes, with at most 12 memories total and complete bounded receipts.
+It fails rather than returning partial evidence or falling back to a provider.
+
+This exposes potentially unrelated personal sources to the caller and its token
+counter. No generated interpretations, staged payloads, history, deleted rows,
+or receipt client/session/event metadata enter the returned projection. Complete
+current-admitted coverage is not complete conversation history, truth, adoption,
+continuing applicability, or faithful downstream interpretation. Sources and
+submitted roles remain untrusted data. Exact namespace boundaries and a final
+atomic reread fence mutations during token counting. No schema, telemetry,
+provider request, hosted wire format or MCP tool is added.
+
 ### Separate opt-in staging boundary
 
 The embedded constructor's `captureEvidence: 'staged-v1'` requires
