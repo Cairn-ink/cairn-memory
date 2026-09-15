@@ -83,12 +83,21 @@ required source. All remaining losses occur at selection, below the rank cap.
 The candidate is not promoted: mechanically valid question offsets include word
 fragments, seven required passages remain missing, and complete candidate evidence
 does not prevent a tentative decision from becoming seemingly settled in an answer.
-Next work evaluates bounded candidate broadening over the existing query-aware
-map order and, separately, a source-linked answer audit without another persistent
-graph. Neither hypothesis is implemented or validated by this result package.
-The active US$50 campaign has US$19.076 conservatively reserved and zero unsettled
-requests; its known usage estimate is US$1.080642, not an invoice. There are768
-unknown-cost requests and US$30.924 conservative headroom. Older US$20 figures
+Merged PR119 implements evaluation-only bounded map-order augmentation, and
+PR120 freezes a fresh comparison. Its [once-only results](../augmentation-results.md)
+complete18 captures and17 of18 answer slots. A baseline usage mismatch remains
+a failure, not a retried success. On five jointly completed histories, baseline
+retains18/27 required passages versus augmentation17/27; two previously retained
+passages are lost. Candidate padding exposes more evidence to ranking, but the
+ranker still drops changed or reaffirmed reasons. Complete-source controls also
+retain obsolete reasons or strengthen tentative choices. Augmentation is not
+promoted. Next work repairs the separate bounded-usage rejection and investigates
+source-linked answer accounting using existing receipts and decision-basis
+boundaries, without another persistent graph. That semantic design is not yet
+implemented or validated by these results.
+The active US$50 campaign has US$20.696 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$1.191397, not an invoice. There are845
+unknown-cost requests and US$29.304 conservative headroom. Older US$20 figures
 below belong to a separate campaign and are not renewed allowance.
 
 Productization remains a separate track: source-built local preview, supported
