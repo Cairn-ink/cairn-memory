@@ -40,9 +40,23 @@ now records twelve completed histories and twenty-four answers, but does not
 pass qualifier fidelity. Three required passages disappeared in navigation or
 ranking; complete-source answers also strengthened conditional/possible choices.
 
-Next quality work separates a bounded complete admitted-source snapshot from
-faithful answer delivery, then tests fresh multi-window histories and distractors.
-Neither quotation storage nor successful mocks establish interpretation quality.
+Merged PR110 adds the shared engine's bounded complete current-admitted source
+snapshot. Merged PR111 exposes it as an opt-in keyless MCP tool. Both passed
+dual-runtime verification, independent Standards/Spec review and all17 CI checks.
+Offline copied-state checks returned all36 required passages from the earlier
+qualifier experiment; no answer was regenerated or semantic failure rescored.
+This operation has a twelve-memory cap and fails rather than returning a partial
+set. It does not repair large-history relevance or host interpretation.
+
+Next quality work is the separately frozen
+[multi-window fidelity diagnostic](multi-window-fidelity.md): fresh paired
+histories with distractors, measured active-memory count and separate ordinary
+recall versus canonical-control answers. It must observe actual beyond-cap
+behavior rather than assume input-message count equals stored-memory count.
+Existing source-evidence output already supplies exact quotations; no duplicate
+quotation API is needed to test answer fidelity. Neither quotation storage nor
+successful mocks establish interpretation quality. This diagnostic's installed
+paid execution and independent semantic review remain separate unfinished gates.
 The active US$50 campaign has US$16.136 conservatively reserved and zero unsettled
 requests; its known usage estimate is US$0.879166, not an invoice. Older US$20
 figures below belong to a separate campaign and are not renewed allowance.

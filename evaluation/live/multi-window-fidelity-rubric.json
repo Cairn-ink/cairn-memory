@@ -1,0 +1,145 @@
+{
+  "id": "multi-window-fidelity-v1",
+  "histories": [
+    {
+      "id": "s01a",
+      "requiredSourceIds": [
+        "s01a-w1m1",
+        "s01a-w2m1",
+        "s01a-w2m2",
+        "s01a-w2m5",
+        "s01a-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "s01a-w1m2",
+        "s01a-w1m3",
+        "s01a-w2m3",
+        "s01a-w3m2",
+        "s01a-w3m4"
+      ],
+      "qualifierSourceId": "s01a-w2m5",
+      "qualifierQuote": "for now",
+      "expectedCommitment": "provisional",
+      "actor": "The user owns the June display; Elin independently chose a figure eight for her mountain diorama. The assistant's suggestions are not user choices.",
+      "reason": "The original ease of assembly remains supported by the May 13 comparison. The narrow-bridge constraint ended on May 12 because the replacement accommodates either layout.",
+      "temporalLimit": "Provisional as of May 16 while preparing the June display; no final choice is stated."
+    },
+    {
+      "id": "s01b",
+      "requiredSourceIds": [
+        "s01b-w1m1",
+        "s01b-w2m1",
+        "s01b-w2m2",
+        "s01b-w2m5",
+        "s01b-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "s01b-w1m2",
+        "s01b-w1m3",
+        "s01b-w2m3",
+        "s01b-w3m2",
+        "s01b-w3m4"
+      ],
+      "qualifierSourceId": "s01b-w2m5",
+      "qualifierQuote": "have firmly decided",
+      "expectedCommitment": "committed",
+      "actor": "The user owns the June display; Elin independently chose a figure eight for her mountain diorama. The assistant's suggestions are not user choices.",
+      "reason": "The original ease of assembly remains supported by the May 13 comparison. The narrow-bridge constraint ended on May 12 because the replacement accommodates either layout.",
+      "temporalLimit": "Firm choice for the June display as of May 16; no choice for later displays is stated."
+    },
+    {
+      "id": "s02a",
+      "requiredSourceIds": [
+        "s02a-w1m1",
+        "s02a-w2m1",
+        "s02a-w2m2",
+        "s02a-w2m5",
+        "s02a-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "s02a-w1m2",
+        "s02a-w1m4",
+        "s02a-w2m3",
+        "s02a-w3m2",
+        "s02a-w3m5"
+      ],
+      "qualifierSourceId": "s02a-w2m5",
+      "qualifierQuote": "only if their noise is acceptable at the July 28 dress rehearsal",
+      "expectedCommitment": "provisional",
+      "actor": "The user chooses the costume fastening. Oren's buttons attach letters to his separate banner; the assistant's button suggestion does not establish the user's adoption.",
+      "reason": "Quick costume changes remain a reason on July 11. The July 10 ripping sound invalidates the original quietness reason.",
+      "temporalLimit": "The August-costume choice depends on the July 28 dress rehearsal; its noise outcome is not supplied."
+    },
+    {
+      "id": "s02b",
+      "requiredSourceIds": [
+        "s02b-w1m1",
+        "s02b-w2m1",
+        "s02b-w2m2",
+        "s02b-w2m5",
+        "s02b-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "s02b-w1m2",
+        "s02b-w1m4",
+        "s02b-w2m3",
+        "s02b-w3m2",
+        "s02b-w3m5"
+      ],
+      "qualifierSourceId": "s02b-w2m5",
+      "qualifierQuote": "regardless of their noise at the July 28 dress rehearsal",
+      "expectedCommitment": "committed",
+      "actor": "The user chooses the costume fastening. Oren's buttons attach letters to his separate banner; the assistant's button suggestion does not establish the user's adoption.",
+      "reason": "Quick costume changes remain a reason on July 11. The July 10 ripping sound invalidates the original quietness reason.",
+      "temporalLimit": "The August-costume choice is decided regardless of the July 28 noise outcome; no later costume choice is supplied."
+    },
+    {
+      "id": "s03a",
+      "requiredSourceIds": [
+        "s03a-w1m1",
+        "s03a-w2m1",
+        "s03a-w2m2",
+        "s03a-w2m3",
+        "s03a-w2m5",
+        "s03a-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "s03a-w1m2",
+        "s03a-w1m4",
+        "s03a-w2m4",
+        "s03a-w3m2",
+        "s03a-w3m3"
+      ],
+      "qualifierSourceId": "s03a-w2m5",
+      "qualifierQuote": "only through the August 30 rehearsal before deciding",
+      "expectedCommitment": "provisional",
+      "actor": "The user chooses their own set's format. Dena's three-part arrangement is for her separate trio; neither that arrangement nor the assistant's suggestion establishes the user's choice.",
+      "reason": "Quick learning remains supported on August 13. The original piano cue became unavailable on August 12; the user began supplying the starting note with a pitch pipe on August 14.",
+      "temporalLimit": "Unison is chosen only through the August 30 rehearsal; the festival-performance format remains undecided."
+    },
+    {
+      "id": "s03b",
+      "requiredSourceIds": [
+        "s03b-w1m1",
+        "s03b-w2m1",
+        "s03b-w2m2",
+        "s03b-w2m3",
+        "s03b-w2m5",
+        "s03b-w3m1"
+      ],
+      "irrelevantSourceIds": [
+        "s03b-w1m2",
+        "s03b-w1m4",
+        "s03b-w2m4",
+        "s03b-w3m2",
+        "s03b-w3m3"
+      ],
+      "qualifierSourceId": "s03b-w2m5",
+      "qualifierQuote": "have decided to use unison singing through the August 30 rehearsal and for the festival performance",
+      "expectedCommitment": "committed",
+      "actor": "The user chooses their own set's format. Dena's three-part arrangement is for her separate trio; neither that arrangement nor the assistant's suggestion establishes the user's choice.",
+      "reason": "Quick learning remains supported on August 13. The original piano cue became unavailable on August 12; the user began supplying the starting note with a pitch pipe on August 14.",
+      "temporalLimit": "Unison is chosen through the August 30 rehearsal and for the September festival performance; no later engagement is specified."
+    }
+  ]
+}
