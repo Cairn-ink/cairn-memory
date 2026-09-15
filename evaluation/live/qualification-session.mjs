@@ -2,10 +2,17 @@ import { createQualificationExperimentRequestGuard,
   createCandidateQualificationExperimentRequestGuard,
   createRationaleExperimentRequestGuard,
   createRationaleModelsExperimentRequestGuard,
-  createBasisModelsExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
+  createBasisModelsExperimentRequestGuard,
+  createChecklistSelectionExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { experimentPolicy, MODEL_ID } from './session.mjs';
 
 const fail = code => { throw new Error(code); };
+
+// A separate closed selection-only capability; no capture or host permissions.
+export function createChecklistSelectionLiveSession(options) {
+  return createSession(options, 'checklistSelectionExtension', ['cairn_selectChecklist'],
+    createChecklistSelectionExperimentRequestGuard, 'checklist_selection');
+}
 
 // A parent-only provider boundary for explicitly authorized capture experiments.
 // It never creates a ledger or implies the later operator's smaller per-run cap.
