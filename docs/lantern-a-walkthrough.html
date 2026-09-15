@@ -146,7 +146,10 @@ const cards=[...document.querySelectorAll('.memory')],buttons=[...document.query
 function applyFilter(){let count=0;cards.forEach(card=>{card.hidden=filter!=='all'&&card.dataset[filter]!=='true';if(!card.hidden)count++;});document.querySelector('#visible-count').textContent='顯示 '+count+' / 15 筆';buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));}
 buttons.forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.filter;applyFilter();}));
 document.querySelector('#sort').addEventListener('change',e=>{const field=e.target.value;cards.slice().sort((a,b)=>Number(a.dataset[field])-Number(b.dataset[field])).forEach(c=>document.querySelector('#cards').append(c));});
-document.querySelector('#details-toggle').addEventListener('click',e=>{const open=e.currentTarget.getAttribute('aria-expanded')!=='true';cards.forEach(c=>c.querySelector('details').open=open);e.currentTarget.setAttribute('aria-expanded',String(open));e.currentTarget.textContent=open?'收合所有完整內容':'展開所有完整內容';});
+const detailsButton=document.querySelector('#details-toggle');
+function syncDetailsButton(){const allOpen=cards.every(c=>c.querySelector('details').open);detailsButton.setAttribute('aria-expanded',String(allOpen));detailsButton.textContent=allOpen?'收合所有完整內容':'展開所有完整內容';}
+detailsButton.addEventListener('click',()=>{const open=!cards.every(c=>c.querySelector('details').open);cards.forEach(c=>c.querySelector('details').open=open);syncDetailsButton();});
+cards.forEach(c=>c.querySelector('details').addEventListener('toggle',syncDetailsButton));
 document.querySelectorAll('.jump').forEach(a=>a.addEventListener('click',()=>{filter='all';applyFilter();}));
 window.addEventListener('beforeprint',()=>{cards.forEach(c=>{c.dataset.printOpen=String(c.querySelector('details').open);c.querySelector('details').open=true;});});
 window.addEventListener('afterprint',()=>{cards.forEach(c=>{c.querySelector('details').open=c.dataset.printOpen==='true';});});
