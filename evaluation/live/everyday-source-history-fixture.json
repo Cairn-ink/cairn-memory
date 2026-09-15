@@ -1,0 +1,59 @@
+{
+  "id": "everyday-source-history-v1",
+  "windows": [
+    [
+      {"id":"e1m1","role":"user","content":"I chose the downstairs room for work because its wired connection is reliable and the heavy door blocks street noise."},
+      {"id":"e1m2","role":"user","content":"Priya lent me two green chairs for a board-game evening; the chairs still belong to her."},
+      {"id":"e1m3","role":"user","content":"I normally collect my bread from Juniper Bakery on Fridays because it stays open late that evening."},
+      {"id":"e1m4","role":"assistant","content":"You could also try the upstairs desk if you want more daylight."}
+    ],
+    [
+      {"id":"e2m1","role":"user","content":"Jon asked whether he could borrow my folding table for a community sale."},
+      {"id":"e2m2","role":"user","content":"I am considering lending the folding table to Jon. If I agree, he may collect it on Saturday after work, but I have not decided."},
+      {"id":"e2m3","role":"user","content":"Once I collected bread on Thursday because Juniper Bakery was closing for repainting on Friday. I planned to return to Friday collection the next week."},
+      {"id":"e2m4","role":"user","content":"The basil pot on my kitchen sill has three new leaves."}
+    ],
+    [
+      {"id":"e3m1","role":"user","content":"The downstairs wired connection stayed steady through a long video meeting today."},
+      {"id":"e3m2","role":"user","content":"With the downstairs door shut, a delivery truck outside did not interrupt my call."},
+      {"id":"e3m3","role":"user","content":"Priya's green chairs are waiting in my hall for me to return them. They are not part of Jon's table request."},
+      {"id":"e3m4","role":"assistant","content":"A small rug might make the downstairs room feel warmer."}
+    ],
+    [
+      {"id":"e4m1","role":"user","content":"The latch on the downstairs door broke, so the door no longer closes and no longer blocks the street noise. The wired connection still works reliably."},
+      {"id":"e4m2","role":"user","content":"For now I will keep working downstairs while the wired connection remains dependable, but I will reconsider if the noise starts disrupting meetings."},
+      {"id":"e4m3","role":"user","content":"Jon works at Harbor Print Shop. He had proposed collecting the table after his Saturday shift only if I approved the loan."},
+      {"id":"e4m4","role":"user","content":"That Thursday bakery visit was a one-time exception caused by the Friday repainting closure."}
+    ],
+    [
+      {"id":"e5m1","role":"user","content":"I decided not to lend my folding table to Jon, and I told him not to collect it."},
+      {"id":"e5m2","role":"user","content":"Jon acknowledged that the table is staying with me."},
+      {"id":"e5m3","role":"user","content":"Priya collected her two green chairs from my hall. Her chairs were separate from my folding table."},
+      {"id":"e5m4","role":"user","content":"I collected my Juniper Bakery order on Friday as usual this week."}
+    ],
+    [
+      {"id":"e6m1","role":"user","content":"During an upstairs router problem, the wired connection in the downstairs room continued working. The broken door is still waiting for repair."},
+      {"id":"e6m2","role":"user","content":"I am still using the downstairs room conditionally because connection reliability matters more for my current work than the door problem."},
+      {"id":"e6m3","role":"user","content":"I put a spare umbrella beside the front steps."},
+      {"id":"e6m4","role":"assistant","content":"A noise machine could mask the street sounds while the latch is broken."}
+    ],
+    [
+      {"id":"e7m1","role":"user","content":"Friday remains my regular Juniper Bakery collection day because the bakery is open until nine."},
+      {"id":"e7m2","role":"user","content":"The earlier Thursday collection happened only because the bakery was unavailable on that Friday during repainting."},
+      {"id":"e7m3","role":"user","content":"Jon repaired a poster cutter at Harbor Print Shop this morning."},
+      {"id":"e7m4","role":"user","content":"Priya owns the green chairs; their return did not change my decision about the folding table."}
+    ],
+    [
+      {"id":"e8m1","role":"user","content":"My current plan is to stay in the downstairs work room while its wired connection remains reliable, even though the broken door no longer blocks noise. I may move upstairs if the noise interferes with work."},
+      {"id":"e8m2","role":"user","content":"My table decision is final for now: I refused the loan, so Jon does not have permission to collect the folding table."},
+      {"id":"e8m3","role":"user","content":"I still collect from Juniper Bakery on Fridays for the late hours; the single Thursday trip was only the repainting exception."},
+      {"id":"e8m4","role":"user","content":"Jon was the prospective table borrower and collector. Priya was involved only through her separate green chairs."}
+    ]
+  ],
+  "queries": [
+    {"id":"work-room-current","question":"Why did I originally choose the downstairs work room, what changed, and am I still using it?"},
+    {"id":"bakery-schedule","question":"When do I usually collect from Juniper Bakery, why that day, and what caused the exceptional Thursday trip?"},
+    {"id":"table-actors","question":"Does anyone currently have permission to collect my folding table, who was the prospective collector, and what did Priya have to do with it?"},
+    {"id":"table-change","question":"How did my plan for lending the folding table change from the earlier consideration to my current decision?"}
+  ]
+}
