@@ -1,0 +1,623 @@
+{
+  "id": "retention-moc-comparison-v1",
+  "histories": [
+    {
+      "id": "r01a",
+      "pairId": "r01",
+      "windows": [
+        [
+          {
+            "id": "r01a-w1m1",
+            "role": "user",
+            "content": "On April 1, I chose the folding metal lantern stand for the May 17 campsite reading corner because it packed shorter than the wooden stand and stayed steady on the flat test board."
+          },
+          {
+            "id": "r01a-w1m2",
+            "role": "user",
+            "content": "On April 3, I put a blank campsite sketch inside a transparent sleeve."
+          },
+          {
+            "id": "r01a-w1m3",
+            "role": "user",
+            "content": "On April 5, I counted the clips in the lantern accessory tin."
+          },
+          {
+            "id": "r01a-w1m4",
+            "role": "user",
+            "content": "On April 7, Owen said he was arranging lighting for his own tent."
+          },
+          {
+            "id": "r01a-w1m5",
+            "role": "user",
+            "content": "On April 9, I labelled the empty stand carton with the campsite date."
+          },
+          {
+            "id": "r01a-w1m6",
+            "role": "assistant",
+            "content": "You could hang the lantern from a tree instead of using a stand."
+          }
+        ],
+        [
+          {
+            "id": "r01a-w2m1",
+            "role": "user",
+            "content": "On April 11, I spread the campsite sketch on the dining table."
+          },
+          {
+            "id": "r01a-w2m2",
+            "role": "user",
+            "content": "On April 12, I measured both packed stands with their required fittings. The metal stand's package was longer than the wooden one's."
+          },
+          {
+            "id": "r01a-w2m3",
+            "role": "user",
+            "content": "On April 13, I moved a spare lantern hook to the top drawer."
+          },
+          {
+            "id": "r01a-w2m4",
+            "role": "user",
+            "content": "On April 14, I copied the reading-corner title onto a notebook cover."
+          },
+          {
+            "id": "r01a-w2m5",
+            "role": "user",
+            "content": "On April 16, I am provisionally keeping the folding metal stand for the May 17 reading corner."
+          },
+          {
+            "id": "r01a-w2m6",
+            "role": "assistant",
+            "content": "A taller stand could give the reading corner a different appearance."
+          }
+        ],
+        [
+          {
+            "id": "r01a-w3m1",
+            "role": "user",
+            "content": "On April 20, I put the lantern instruction leaflet in its envelope."
+          },
+          {
+            "id": "r01a-w3m2",
+            "role": "user",
+            "content": "On April 21, I tested the metal stand again on the same flat board; it remained steady."
+          },
+          {
+            "id": "r01a-w3m3",
+            "role": "user",
+            "content": "On April 22, Owen chose a low wooden stand for his own tent and did not choose a stand for my reading corner."
+          },
+          {
+            "id": "r01a-w3m4",
+            "role": "user",
+            "content": "On April 23, I counted blank labels for the campsite boxes."
+          },
+          {
+            "id": "r01a-w3m5",
+            "role": "user",
+            "content": "On April 24, I have not adopted the suggestion to hang my lantern from a tree. I am not reporting a change of stand."
+          },
+          {
+            "id": "r01a-w3m6",
+            "role": "assistant",
+            "content": "You could decorate the stand carton with a campsite drawing."
+          }
+        ]
+      ],
+      "question": "For the May 17 campsite reading corner, which lantern stand am I keeping and how settled is that choice, which original reasons still apply, and does Owen's arrangement decide mine?"
+    },
+    {
+      "id": "r01b",
+      "pairId": "r01",
+      "windows": [
+        [
+          {
+            "id": "r01b-w1m1",
+            "role": "user",
+            "content": "On April 1, I chose the folding metal lantern stand for the May 17 campsite reading corner because it packed shorter than the wooden stand and stayed steady on the flat test board."
+          },
+          {
+            "id": "r01b-w1m2",
+            "role": "user",
+            "content": "On April 3, I put a blank campsite sketch inside a transparent sleeve."
+          },
+          {
+            "id": "r01b-w1m3",
+            "role": "user",
+            "content": "On April 5, I counted the clips in the lantern accessory tin."
+          },
+          {
+            "id": "r01b-w1m4",
+            "role": "user",
+            "content": "On April 7, Owen said he was arranging lighting for his own tent."
+          },
+          {
+            "id": "r01b-w1m5",
+            "role": "user",
+            "content": "On April 9, I labelled the empty stand carton with the campsite date."
+          },
+          {
+            "id": "r01b-w1m6",
+            "role": "assistant",
+            "content": "You could hang the lantern from a tree instead of using a stand."
+          }
+        ],
+        [
+          {
+            "id": "r01b-w2m1",
+            "role": "user",
+            "content": "On April 11, I spread the campsite sketch on the dining table."
+          },
+          {
+            "id": "r01b-w2m2",
+            "role": "user",
+            "content": "On April 12, I measured both packed stands with their required fittings. The metal stand's package was longer than the wooden one's."
+          },
+          {
+            "id": "r01b-w2m3",
+            "role": "user",
+            "content": "On April 13, I moved a spare lantern hook to the top drawer."
+          },
+          {
+            "id": "r01b-w2m4",
+            "role": "user",
+            "content": "On April 14, I copied the reading-corner title onto a notebook cover."
+          },
+          {
+            "id": "r01b-w2m5",
+            "role": "user",
+            "content": "On April 16, I have firmly decided to keep the folding metal stand for the May 17 reading corner."
+          },
+          {
+            "id": "r01b-w2m6",
+            "role": "assistant",
+            "content": "A taller stand could give the reading corner a different appearance."
+          }
+        ],
+        [
+          {
+            "id": "r01b-w3m1",
+            "role": "user",
+            "content": "On April 20, I put the lantern instruction leaflet in its envelope."
+          },
+          {
+            "id": "r01b-w3m2",
+            "role": "user",
+            "content": "On April 21, I tested the metal stand again on the same flat board; it remained steady."
+          },
+          {
+            "id": "r01b-w3m3",
+            "role": "user",
+            "content": "On April 22, Owen chose a low wooden stand for his own tent and did not choose a stand for my reading corner."
+          },
+          {
+            "id": "r01b-w3m4",
+            "role": "user",
+            "content": "On April 23, I counted blank labels for the campsite boxes."
+          },
+          {
+            "id": "r01b-w3m5",
+            "role": "user",
+            "content": "On April 24, I have not adopted the suggestion to hang my lantern from a tree. I am not reporting a change of stand."
+          },
+          {
+            "id": "r01b-w3m6",
+            "role": "assistant",
+            "content": "You could decorate the stand carton with a campsite drawing."
+          }
+        ]
+      ],
+      "question": "For the May 17 campsite reading corner, which lantern stand am I keeping and how settled is that choice, which original reasons still apply, and does Owen's arrangement decide mine?"
+    },
+    {
+      "id": "r02a",
+      "pairId": "r02",
+      "windows": [
+        [
+          {
+            "id": "r02a-w1m1",
+            "role": "user",
+            "content": "On May 1, I chose perforated order-ticket sheets for the June 8 bakery collection desk because each ticket detached cleanly and the packet fitted the shallow desk tray."
+          },
+          {
+            "id": "r02a-w1m2",
+            "role": "user",
+            "content": "On May 3, I put a drawing of a pastry on the order-book cover."
+          },
+          {
+            "id": "r02a-w1m3",
+            "role": "user",
+            "content": "On May 5, I counted empty ticket envelopes."
+          },
+          {
+            "id": "r02a-w1m4",
+            "role": "user",
+            "content": "On May 7, Hana was preparing a separate desk for her own stall."
+          },
+          {
+            "id": "r02a-w1m5",
+            "role": "user",
+            "content": "On May 9, I wrote the collection date on an unused cardboard divider."
+          },
+          {
+            "id": "r02a-w1m6",
+            "role": "assistant",
+            "content": "You could replace the paper tickets with a tablet list."
+          }
+        ],
+        [
+          {
+            "id": "r02a-w2m1",
+            "role": "user",
+            "content": "On May 11, I moved the empty ticket envelope box to a shelf."
+          },
+          {
+            "id": "r02a-w2m2",
+            "role": "user",
+            "content": "On May 12, the new backing board made the perforated-sheet packet too thick for the shallow desk tray."
+          },
+          {
+            "id": "r02a-w2m3",
+            "role": "user",
+            "content": "On May 13, I put an unused bakery desk sign beside the order book."
+          },
+          {
+            "id": "r02a-w2m4",
+            "role": "user",
+            "content": "On May 14, I sharpened the pencil used for drawing the desk layout."
+          },
+          {
+            "id": "r02a-w2m5",
+            "role": "user",
+            "content": "On May 16, I am tentatively keeping the perforated sheets for the June 8 collection desk."
+          },
+          {
+            "id": "r02a-w2m6",
+            "role": "assistant",
+            "content": "Loose cards could be another ticket format."
+          }
+        ],
+        [
+          {
+            "id": "r02a-w3m1",
+            "role": "user",
+            "content": "On May 20, I folded a spare paper sleeve for the order book."
+          },
+          {
+            "id": "r02a-w3m2",
+            "role": "user",
+            "content": "On May 21, I detached tickets from the new perforated-sheet packet; the edges still separated cleanly."
+          },
+          {
+            "id": "r02a-w3m3",
+            "role": "user",
+            "content": "On May 22, Hana chose a roll of tickets for her own stall, not the tickets for my collection desk."
+          },
+          {
+            "id": "r02a-w3m4",
+            "role": "user",
+            "content": "On May 23, I counted unused pastry drawings in the desk folder."
+          },
+          {
+            "id": "r02a-w3m5",
+            "role": "user",
+            "content": "On May 24, I have not adopted the tablet-list suggestion. My paper-format choice is not a report that any equipment purchase was approved."
+          },
+          {
+            "id": "r02a-w3m6",
+            "role": "assistant",
+            "content": "You could print a bakery logo on the spare sleeve."
+          }
+        ]
+      ],
+      "question": "For the June 8 bakery collection desk, what order-ticket format am I keeping and how firmly, what changed in the original reasons, and does Hana's ticket choice apply to my desk?"
+    },
+    {
+      "id": "r02b",
+      "pairId": "r02",
+      "windows": [
+        [
+          {
+            "id": "r02b-w1m1",
+            "role": "user",
+            "content": "On May 1, I chose perforated order-ticket sheets for the June 8 bakery collection desk because each ticket detached cleanly and the packet fitted the shallow desk tray."
+          },
+          {
+            "id": "r02b-w1m2",
+            "role": "user",
+            "content": "On May 3, I put a drawing of a pastry on the order-book cover."
+          },
+          {
+            "id": "r02b-w1m3",
+            "role": "user",
+            "content": "On May 5, I counted empty ticket envelopes."
+          },
+          {
+            "id": "r02b-w1m4",
+            "role": "user",
+            "content": "On May 7, Hana was preparing a separate desk for her own stall."
+          },
+          {
+            "id": "r02b-w1m5",
+            "role": "user",
+            "content": "On May 9, I wrote the collection date on an unused cardboard divider."
+          },
+          {
+            "id": "r02b-w1m6",
+            "role": "assistant",
+            "content": "You could replace the paper tickets with a tablet list."
+          }
+        ],
+        [
+          {
+            "id": "r02b-w2m1",
+            "role": "user",
+            "content": "On May 11, I moved the empty ticket envelope box to a shelf."
+          },
+          {
+            "id": "r02b-w2m2",
+            "role": "user",
+            "content": "On May 12, the new backing board made the perforated-sheet packet too thick for the shallow desk tray."
+          },
+          {
+            "id": "r02b-w2m3",
+            "role": "user",
+            "content": "On May 13, I put an unused bakery desk sign beside the order book."
+          },
+          {
+            "id": "r02b-w2m4",
+            "role": "user",
+            "content": "On May 14, I sharpened the pencil used for drawing the desk layout."
+          },
+          {
+            "id": "r02b-w2m5",
+            "role": "user",
+            "content": "On May 16, I have confirmed my choice to keep the perforated sheets for the June 8 collection desk."
+          },
+          {
+            "id": "r02b-w2m6",
+            "role": "assistant",
+            "content": "Loose cards could be another ticket format."
+          }
+        ],
+        [
+          {
+            "id": "r02b-w3m1",
+            "role": "user",
+            "content": "On May 20, I folded a spare paper sleeve for the order book."
+          },
+          {
+            "id": "r02b-w3m2",
+            "role": "user",
+            "content": "On May 21, I detached tickets from the new perforated-sheet packet; the edges still separated cleanly."
+          },
+          {
+            "id": "r02b-w3m3",
+            "role": "user",
+            "content": "On May 22, Hana chose a roll of tickets for her own stall, not the tickets for my collection desk."
+          },
+          {
+            "id": "r02b-w3m4",
+            "role": "user",
+            "content": "On May 23, I counted unused pastry drawings in the desk folder."
+          },
+          {
+            "id": "r02b-w3m5",
+            "role": "user",
+            "content": "On May 24, I have not adopted the tablet-list suggestion. My paper-format choice is not a report that any equipment purchase was approved."
+          },
+          {
+            "id": "r02b-w3m6",
+            "role": "assistant",
+            "content": "You could print a bakery logo on the spare sleeve."
+          }
+        ]
+      ],
+      "question": "For the June 8 bakery collection desk, what order-ticket format am I keeping and how firmly, what changed in the original reasons, and does Hana's ticket choice apply to my desk?"
+    },
+    {
+      "id": "r03a",
+      "pairId": "r03",
+      "windows": [
+        [
+          {
+            "id": "r03a-w1m1",
+            "role": "user",
+            "content": "六月一日,我選用磁性展示板放七月十九日織紋示範的圖樣,因為圖紙固定後不滑動,而且整塊板能放進我的布提袋。"
+          },
+          {
+            "id": "r03a-w1m2",
+            "role": "user",
+            "content": "六月三日,我把一張空白織紋練習紙放進紙套。"
+          },
+          {
+            "id": "r03a-w1m3",
+            "role": "user",
+            "content": "六月五日,我數了展示板盒裡未使用的標籤。"
+          },
+          {
+            "id": "r03a-w1m4",
+            "role": "user",
+            "content": "六月七日,宜蓁正在安排她自己的織紋示範桌。"
+          },
+          {
+            "id": "r03a-w1m5",
+            "role": "user",
+            "content": "六月九日,我在空紙盒上寫了示範日期。"
+          },
+          {
+            "id": "r03a-w1m6",
+            "role": "assistant",
+            "content": "也可以考慮用投影機顯示圖樣。"
+          }
+        ],
+        [
+          {
+            "id": "r03a-w2m1",
+            "role": "user",
+            "content": "六月十一日,我把示範桌的鉛筆草圖放在書架上。"
+          },
+          {
+            "id": "r03a-w2m2",
+            "role": "user",
+            "content": "六月十二日,加上新的保護邊框後,磁性展示板已經放不進原來的布提袋。"
+          },
+          {
+            "id": "r03a-w2m3",
+            "role": "user",
+            "content": "六月十三日,我將空白標籤移到抽屜裡。"
+          },
+          {
+            "id": "r03a-w2m4",
+            "role": "user",
+            "content": "六月十四日,我把圖樣紙套上的舊貼紙揭下來。"
+          },
+          {
+            "id": "r03a-w2m5",
+            "role": "user",
+            "content": "六月十六日,我暫定七月十九日的示範仍用磁性展示板放圖樣。"
+          },
+          {
+            "id": "r03a-w2m6",
+            "role": "assistant",
+            "content": "也許可以把圖樣直接夾在桌邊。"
+          }
+        ],
+        [
+          {
+            "id": "r03a-w3m1",
+            "role": "user",
+            "content": "六月二十日,我把未使用的圖樣封面收進盒子。"
+          },
+          {
+            "id": "r03a-w3m2",
+            "role": "user",
+            "content": "六月二十一日,我再次把同一張圖紙固定在磁性展示板上,移動板子後圖紙仍沒有滑動。"
+          },
+          {
+            "id": "r03a-w3m3",
+            "role": "user",
+            "content": "六月二十二日,宜蓁為她自己的示範桌選了木製夾板,她沒有替我選放圖樣的工具。"
+          },
+          {
+            "id": "r03a-w3m4",
+            "role": "user",
+            "content": "六月二十三日,我數了紙套裡剩下的空白練習紙。"
+          },
+          {
+            "id": "r03a-w3m5",
+            "role": "user",
+            "content": "六月二十四日,我沒有採納使用投影機的建議,也不是在說選了展示板就代表場地方已核准採購。"
+          },
+          {
+            "id": "r03a-w3m6",
+            "role": "assistant",
+            "content": "可以在空紙盒上畫一個織紋圖案。"
+          }
+        ]
+      ],
+      "question": "七月十九日的織紋示範,我要用哪種方式放圖樣,選擇有多確定?原本的理由哪些還成立,跟宜蓁的安排有何不同?"
+    },
+    {
+      "id": "r03b",
+      "pairId": "r03",
+      "windows": [
+        [
+          {
+            "id": "r03b-w1m1",
+            "role": "user",
+            "content": "六月一日,我選用磁性展示板放七月十九日織紋示範的圖樣,因為圖紙固定後不滑動,而且整塊板能放進我的布提袋。"
+          },
+          {
+            "id": "r03b-w1m2",
+            "role": "user",
+            "content": "六月三日,我把一張空白織紋練習紙放進紙套。"
+          },
+          {
+            "id": "r03b-w1m3",
+            "role": "user",
+            "content": "六月五日,我數了展示板盒裡未使用的標籤。"
+          },
+          {
+            "id": "r03b-w1m4",
+            "role": "user",
+            "content": "六月七日,宜蓁正在安排她自己的織紋示範桌。"
+          },
+          {
+            "id": "r03b-w1m5",
+            "role": "user",
+            "content": "六月九日,我在空紙盒上寫了示範日期。"
+          },
+          {
+            "id": "r03b-w1m6",
+            "role": "assistant",
+            "content": "也可以考慮用投影機顯示圖樣。"
+          }
+        ],
+        [
+          {
+            "id": "r03b-w2m1",
+            "role": "user",
+            "content": "六月十一日,我把示範桌的鉛筆草圖放在書架上。"
+          },
+          {
+            "id": "r03b-w2m2",
+            "role": "user",
+            "content": "六月十二日,加上新的保護邊框後,磁性展示板已經放不進原來的布提袋。"
+          },
+          {
+            "id": "r03b-w2m3",
+            "role": "user",
+            "content": "六月十三日,我將空白標籤移到抽屜裡。"
+          },
+          {
+            "id": "r03b-w2m4",
+            "role": "user",
+            "content": "六月十四日,我把圖樣紙套上的舊貼紙揭下來。"
+          },
+          {
+            "id": "r03b-w2m5",
+            "role": "user",
+            "content": "六月十六日,我已確定七月十九日的示範仍用磁性展示板放圖樣。"
+          },
+          {
+            "id": "r03b-w2m6",
+            "role": "assistant",
+            "content": "也許可以把圖樣直接夾在桌邊。"
+          }
+        ],
+        [
+          {
+            "id": "r03b-w3m1",
+            "role": "user",
+            "content": "六月二十日,我把未使用的圖樣封面收進盒子。"
+          },
+          {
+            "id": "r03b-w3m2",
+            "role": "user",
+            "content": "六月二十一日,我再次把同一張圖紙固定在磁性展示板上,移動板子後圖紙仍沒有滑動。"
+          },
+          {
+            "id": "r03b-w3m3",
+            "role": "user",
+            "content": "六月二十二日,宜蓁為她自己的示範桌選了木製夾板,她沒有替我選放圖樣的工具。"
+          },
+          {
+            "id": "r03b-w3m4",
+            "role": "user",
+            "content": "六月二十三日,我數了紙套裡剩下的空白練習紙。"
+          },
+          {
+            "id": "r03b-w3m5",
+            "role": "user",
+            "content": "六月二十四日,我沒有採納使用投影機的建議,也不是在說選了展示板就代表場地方已核准採購。"
+          },
+          {
+            "id": "r03b-w3m6",
+            "role": "assistant",
+            "content": "可以在空紙盒上畫一個織紋圖案。"
+          }
+        ]
+      ],
+      "question": "七月十九日的織紋示範,我要用哪種方式放圖樣,選擇有多確定?原本的理由哪些還成立,跟宜蓁的安排有何不同?"
+    }
+  ]
+}

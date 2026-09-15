@@ -1,0 +1,161 @@
+{
+  "id": "retention-moc-comparison-v1",
+  "histories": [
+    {
+      "id": "r01a",
+      "requiredSourceIds": [
+        "r01a-w1m1",
+        "r01a-w2m2",
+        "r01a-w2m5",
+        "r01a-w3m2",
+        "r01a-w3m3",
+        "r01a-w3m5"
+      ],
+      "irrelevantSourceIds": [
+        "r01a-w1m2",
+        "r01a-w1m3",
+        "r01a-w2m1",
+        "r01a-w2m3",
+        "r01a-w3m1",
+        "r01a-w3m4",
+        "r01a-w3m6"
+      ],
+      "qualifierSourceId": "r01a-w2m5",
+      "qualifierQuote": "I am provisionally keeping",
+      "expectedCommitment": "provisional",
+      "actor": "The user chooses the reading-corner stand. Owen chooses his own tent stand; assistant suggestions do not establish adoption. Nonadoption of tree hanging is explicit.",
+      "reason": "Shorter packed length and steadiness were original reasons. Including required fittings reverses the length comparison; a later repeat test reaffirms steadiness on the flat board. The lost length reason does not establish a switch.",
+      "temporalLimit": "Only the May 17 reading corner and the stated flat-board tests are covered. No steadiness on uneven ground, approval, or permanent choice is established."
+    },
+    {
+      "id": "r01b",
+      "requiredSourceIds": [
+        "r01b-w1m1",
+        "r01b-w2m2",
+        "r01b-w2m5",
+        "r01b-w3m2",
+        "r01b-w3m3",
+        "r01b-w3m5"
+      ],
+      "irrelevantSourceIds": [
+        "r01b-w1m2",
+        "r01b-w1m3",
+        "r01b-w2m1",
+        "r01b-w2m3",
+        "r01b-w3m1",
+        "r01b-w3m4",
+        "r01b-w3m6"
+      ],
+      "qualifierSourceId": "r01b-w2m5",
+      "qualifierQuote": "I have firmly decided to keep",
+      "expectedCommitment": "committed",
+      "actor": "The user chooses the reading-corner stand. Owen chooses his own tent stand; assistant suggestions do not establish adoption. Nonadoption of tree hanging is explicit.",
+      "reason": "Shorter packed length and steadiness were original reasons. Including required fittings reverses the length comparison; a later repeat test reaffirms steadiness on the flat board. The lost length reason does not establish a switch.",
+      "temporalLimit": "Only the May 17 reading corner and the stated flat-board tests are covered. No steadiness on uneven ground, approval, or permanent choice is established."
+    },
+    {
+      "id": "r02a",
+      "requiredSourceIds": [
+        "r02a-w1m1",
+        "r02a-w2m2",
+        "r02a-w2m5",
+        "r02a-w3m2",
+        "r02a-w3m3",
+        "r02a-w3m5"
+      ],
+      "irrelevantSourceIds": [
+        "r02a-w1m2",
+        "r02a-w1m3",
+        "r02a-w2m1",
+        "r02a-w2m3",
+        "r02a-w3m1",
+        "r02a-w3m4",
+        "r02a-w3m6"
+      ],
+      "qualifierSourceId": "r02a-w2m5",
+      "qualifierQuote": "I am tentatively keeping",
+      "expectedCommitment": "provisional",
+      "actor": "Hana's ticket roll belongs to her own stall. The user retains their own format. Tablet advice is explicitly unadopted; loose-card advice has no recorded adoption.",
+      "reason": "Clean detachment and shallow-tray fit were the original reasons. Added backing defeats tray fit; the later tear test reaffirms clean separation. Keeping the format does not prove tray fit was restored.",
+      "temporalLimit": "The choice concerns the June 8 collection desk only. No equipment-purchase approval, approver, repair to the tray, or later-format decision is established."
+    },
+    {
+      "id": "r02b",
+      "requiredSourceIds": [
+        "r02b-w1m1",
+        "r02b-w2m2",
+        "r02b-w2m5",
+        "r02b-w3m2",
+        "r02b-w3m3",
+        "r02b-w3m5"
+      ],
+      "irrelevantSourceIds": [
+        "r02b-w1m2",
+        "r02b-w1m3",
+        "r02b-w2m1",
+        "r02b-w2m3",
+        "r02b-w3m1",
+        "r02b-w3m4",
+        "r02b-w3m6"
+      ],
+      "qualifierSourceId": "r02b-w2m5",
+      "qualifierQuote": "I have confirmed my choice",
+      "expectedCommitment": "committed",
+      "actor": "Hana's ticket roll belongs to her own stall. The user retains their own format. Tablet advice is explicitly unadopted; loose-card advice has no recorded adoption.",
+      "reason": "Clean detachment and shallow-tray fit were the original reasons. Added backing defeats tray fit; the later tear test reaffirms clean separation. Keeping the format does not prove tray fit was restored.",
+      "temporalLimit": "The choice concerns the June 8 collection desk only. No equipment-purchase approval, approver, repair to the tray, or later-format decision is established."
+    },
+    {
+      "id": "r03a",
+      "requiredSourceIds": [
+        "r03a-w1m1",
+        "r03a-w2m2",
+        "r03a-w2m5",
+        "r03a-w3m2",
+        "r03a-w3m3",
+        "r03a-w3m5"
+      ],
+      "irrelevantSourceIds": [
+        "r03a-w1m2",
+        "r03a-w1m3",
+        "r03a-w2m1",
+        "r03a-w2m3",
+        "r03a-w3m1",
+        "r03a-w3m4",
+        "r03a-w3m6"
+      ],
+      "qualifierSourceId": "r03a-w2m5",
+      "qualifierQuote": "我暫定",
+      "expectedCommitment": "provisional",
+      "actor": "使用者選自己的展示工具;宜蓁選她自己的木製夾板,沒有替使用者選。投影建議明確未採納;其他助理建議不構成使用者決定。",
+      "reason": "原本理由是圖紙固定不滑動與整板可放進布提袋。新增邊框使提袋容納理由失效;後續移動測試重新支持圖紙不滑動。失去容納理由不代表已換成木夾板或投影。",
+      "temporalLimit": "只涵蓋七月十九日的織紋示範及已記錄的測試,不推定往後永久使用。沒有記錄場地採購核准或核准者。"
+    },
+    {
+      "id": "r03b",
+      "requiredSourceIds": [
+        "r03b-w1m1",
+        "r03b-w2m2",
+        "r03b-w2m5",
+        "r03b-w3m2",
+        "r03b-w3m3",
+        "r03b-w3m5"
+      ],
+      "irrelevantSourceIds": [
+        "r03b-w1m2",
+        "r03b-w1m3",
+        "r03b-w2m1",
+        "r03b-w2m3",
+        "r03b-w3m1",
+        "r03b-w3m4",
+        "r03b-w3m6"
+      ],
+      "qualifierSourceId": "r03b-w2m5",
+      "qualifierQuote": "我已確定",
+      "expectedCommitment": "committed",
+      "actor": "使用者選自己的展示工具;宜蓁選她自己的木製夾板,沒有替使用者選。投影建議明確未採納;其他助理建議不構成使用者決定。",
+      "reason": "原本理由是圖紙固定不滑動與整板可放進布提袋。新增邊框使提袋容納理由失效;後續移動測試重新支持圖紙不滑動。失去容納理由不代表已換成木夾板或投影。",
+      "temporalLimit": "只涵蓋七月十九日的織紋示範及已記錄的測試,不推定往後永久使用。沒有記錄場地採購核准或核准者。"
+    }
+  ]
+}
