@@ -19,6 +19,9 @@ Separate that question from navigation, extraction and long-term lifecycle.
    user/assistant submitted role and <=800-character complete content; question
    <=4000 characters. At least one Traditional Chinese case. No prior fixture
    reuse, hidden planted instructions, credentials or real conversations.
+   Source content must already be NFKC-stable before freezing, matching the
+   current admission contract. Assert this in fixture tests; reject any further
+   stored-text mismatch at execution. This is not a normalization-fidelity test.
 2. Keep evaluative labels out of the fixture. The rubric separately defines
    required and irrelevant source IDs and source-supported facts, unknowns and
    prohibited inferences. The positive case contains an original choice with two

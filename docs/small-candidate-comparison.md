@@ -16,6 +16,13 @@ Every case requests three results. The cases cover three-source positive and
 mixed sets, a two-source entirely irrelevant set, and a four-source larger set.
 Questions and complete submitted source text are identical between arms.
 
+Before any scored calls, preflight found the original Chinese fixture's
+fullwidth punctuation would change under admission's existing NFKC normalization.
+The fixture is therefore frozen with NFKC-stable source punctuation, with a test
+enforcing that boundary. The operator must still reject any stored-text mismatch;
+it cannot repair the source silently. This fixed-input diagnostic does not
+establish fidelity for arbitrary normalization-sensitive user text.
+
 Seed one temporary synthetic store per case through trusted `core.admit`, with
 one receipt per source and exact original submitted role/content. Reopen the same
 unchanged store for each arm. Fix the selector to all of that case's predeclared

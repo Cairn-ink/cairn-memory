@@ -27,6 +27,7 @@ test('four frozen cases have bounded complete sources, safe identities and no or
       keys(source, ['id', 'role', 'content']);
       safeId(source.id); assert.ok(!ids.has(source.id)); ids.add(source.id);
       assert.ok(['user', 'assistant'].includes(source.role)); text(source.content, 800);
+      assert.equal(source.content, source.content.normalize('NFKC'), 'Trusted admission must preserve the exact frozen source text.');
     }
   }
   assert.equal(ids.size, 12);
