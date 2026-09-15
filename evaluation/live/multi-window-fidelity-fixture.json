@@ -1,0 +1,623 @@
+{
+  "id": "multi-window-fidelity-v1",
+  "histories": [
+    {
+      "id": "s01a",
+      "pairId": "s01",
+      "windows": [
+        [
+          {
+            "id": "s01a-w1m1",
+            "role": "user",
+            "content": "On May 2, I chose a single loop for my June model railway display because it was easy to assemble and fitted under the narrow bridge."
+          },
+          {
+            "id": "s01a-w1m2",
+            "role": "user",
+            "content": "On May 3, I numbered the freight wagons with white stickers."
+          },
+          {
+            "id": "s01a-w1m3",
+            "role": "user",
+            "content": "On May 4, I attached felt pads beneath the station platform."
+          },
+          {
+            "id": "s01a-w1m4",
+            "role": "user",
+            "content": "On May 5, Elin began a separate mountain railway diorama."
+          },
+          {
+            "id": "s01a-w1m5",
+            "role": "user",
+            "content": "On May 6, I painted the water tower dark red."
+          },
+          {
+            "id": "s01a-w1m6",
+            "role": "assistant",
+            "content": "You could try a figure-eight track arrangement for the June display."
+          }
+        ],
+        [
+          {
+            "id": "s01a-w2m1",
+            "role": "user",
+            "content": "On May 12, I replaced the narrow bridge with a wider bridge that accommodates either a single loop or a figure-eight layout."
+          },
+          {
+            "id": "s01a-w2m2",
+            "role": "user",
+            "content": "On May 13, assembling a single loop still took me less time than assembling a figure eight."
+          },
+          {
+            "id": "s01a-w2m3",
+            "role": "user",
+            "content": "On May 14, I put brass nameplates on the two passenger coaches."
+          },
+          {
+            "id": "s01a-w2m4",
+            "role": "user",
+            "content": "On May 15, I repaired the station clock by replacing its paper face."
+          },
+          {
+            "id": "s01a-w2m5",
+            "role": "user",
+            "content": "On May 16, I will keep the single loop for now while preparing my June display."
+          },
+          {
+            "id": "s01a-w2m6",
+            "role": "assistant",
+            "content": "You could hide a section of track inside a cardboard tunnel."
+          }
+        ],
+        [
+          {
+            "id": "s01a-w3m1",
+            "role": "user",
+            "content": "On May 20, Elin selected a figure-eight layout for her mountain diorama; her track is separate from mine."
+          },
+          {
+            "id": "s01a-w3m2",
+            "role": "user",
+            "content": "On May 21, I packed the station signs in a striped envelope."
+          },
+          {
+            "id": "s01a-w3m3",
+            "role": "user",
+            "content": "On May 22, I photographed the locomotive beside a ruler."
+          },
+          {
+            "id": "s01a-w3m4",
+            "role": "user",
+            "content": "On May 23, I glued a bench outside the model waiting room."
+          },
+          {
+            "id": "s01a-w3m5",
+            "role": "user",
+            "content": "On May 24, I labeled the display's power-switch drawing with a square symbol."
+          },
+          {
+            "id": "s01a-w3m6",
+            "role": "assistant",
+            "content": "You could add a paper pond beside the station."
+          }
+        ]
+      ],
+      "question": "For the June model railway display, what layout have I chosen, how firm is that choice, and which original reasons still apply to my layout rather than Elin's project?"
+    },
+    {
+      "id": "s01b",
+      "pairId": "s01",
+      "windows": [
+        [
+          {
+            "id": "s01b-w1m1",
+            "role": "user",
+            "content": "On May 2, I chose a single loop for my June model railway display because it was easy to assemble and fitted under the narrow bridge."
+          },
+          {
+            "id": "s01b-w1m2",
+            "role": "user",
+            "content": "On May 3, I numbered the freight wagons with white stickers."
+          },
+          {
+            "id": "s01b-w1m3",
+            "role": "user",
+            "content": "On May 4, I attached felt pads beneath the station platform."
+          },
+          {
+            "id": "s01b-w1m4",
+            "role": "user",
+            "content": "On May 5, Elin began a separate mountain railway diorama."
+          },
+          {
+            "id": "s01b-w1m5",
+            "role": "user",
+            "content": "On May 6, I painted the water tower dark red."
+          },
+          {
+            "id": "s01b-w1m6",
+            "role": "assistant",
+            "content": "You could try a figure-eight track arrangement for the June display."
+          }
+        ],
+        [
+          {
+            "id": "s01b-w2m1",
+            "role": "user",
+            "content": "On May 12, I replaced the narrow bridge with a wider bridge that accommodates either a single loop or a figure-eight layout."
+          },
+          {
+            "id": "s01b-w2m2",
+            "role": "user",
+            "content": "On May 13, assembling a single loop still took me less time than assembling a figure eight."
+          },
+          {
+            "id": "s01b-w2m3",
+            "role": "user",
+            "content": "On May 14, I put brass nameplates on the two passenger coaches."
+          },
+          {
+            "id": "s01b-w2m4",
+            "role": "user",
+            "content": "On May 15, I repaired the station clock by replacing its paper face."
+          },
+          {
+            "id": "s01b-w2m5",
+            "role": "user",
+            "content": "On May 16, I have firmly decided to keep the single loop for my June display."
+          },
+          {
+            "id": "s01b-w2m6",
+            "role": "assistant",
+            "content": "You could hide a section of track inside a cardboard tunnel."
+          }
+        ],
+        [
+          {
+            "id": "s01b-w3m1",
+            "role": "user",
+            "content": "On May 20, Elin selected a figure-eight layout for her mountain diorama; her track is separate from mine."
+          },
+          {
+            "id": "s01b-w3m2",
+            "role": "user",
+            "content": "On May 21, I packed the station signs in a striped envelope."
+          },
+          {
+            "id": "s01b-w3m3",
+            "role": "user",
+            "content": "On May 22, I photographed the locomotive beside a ruler."
+          },
+          {
+            "id": "s01b-w3m4",
+            "role": "user",
+            "content": "On May 23, I glued a bench outside the model waiting room."
+          },
+          {
+            "id": "s01b-w3m5",
+            "role": "user",
+            "content": "On May 24, I labeled the display's power-switch drawing with a square symbol."
+          },
+          {
+            "id": "s01b-w3m6",
+            "role": "assistant",
+            "content": "You could add a paper pond beside the station."
+          }
+        ]
+      ],
+      "question": "For the June model railway display, what layout have I chosen, how firm is that choice, and which original reasons still apply to my layout rather than Elin's project?"
+    },
+    {
+      "id": "s02a",
+      "pairId": "s02",
+      "windows": [
+        [
+          {
+            "id": "s02a-w1m1",
+            "role": "user",
+            "content": "On July 1, I chose hook-and-loop strips for my August costume because quick changes were easy and the strips seemed quiet."
+          },
+          {
+            "id": "s02a-w1m2",
+            "role": "user",
+            "content": "On July 2, I cut twelve silver stars for the costume hem."
+          },
+          {
+            "id": "s02a-w1m3",
+            "role": "user",
+            "content": "On July 3, Oren began making a separate fabric banner for the August event."
+          },
+          {
+            "id": "s02a-w1m4",
+            "role": "user",
+            "content": "On July 4, I stitched a green lining into the hat."
+          },
+          {
+            "id": "s02a-w1m5",
+            "role": "user",
+            "content": "On July 5, I marked the left cuff with a small triangle."
+          },
+          {
+            "id": "s02a-w1m6",
+            "role": "assistant",
+            "content": "You could replace the costume fastening with large buttons."
+          }
+        ],
+        [
+          {
+            "id": "s02a-w2m1",
+            "role": "user",
+            "content": "On July 10, the costume strips made a noticeable ripping sound in the rehearsal hall, so my earlier quietness reason no longer held."
+          },
+          {
+            "id": "s02a-w2m2",
+            "role": "user",
+            "content": "On July 11, the strips still let me change the costume faster than the buttons I tested."
+          },
+          {
+            "id": "s02a-w2m3",
+            "role": "user",
+            "content": "On July 12, I shortened the decorative ribbon by four centimeters."
+          },
+          {
+            "id": "s02a-w2m4",
+            "role": "user",
+            "content": "On July 13, I put the spare hat feather in a round tin."
+          },
+          {
+            "id": "s02a-w2m5",
+            "role": "user",
+            "content": "On July 14, I will use the strips for the August costume only if their noise is acceptable at the July 28 dress rehearsal."
+          },
+          {
+            "id": "s02a-w2m6",
+            "role": "assistant",
+            "content": "You could cover the fastening with a decorative flap."
+          }
+        ],
+        [
+          {
+            "id": "s02a-w3m1",
+            "role": "user",
+            "content": "On July 20, Oren used buttons to attach letters to his banner; those buttons are not part of my costume."
+          },
+          {
+            "id": "s02a-w3m2",
+            "role": "user",
+            "content": "On July 21, I placed the paper costume pattern in a yellow folder."
+          },
+          {
+            "id": "s02a-w3m3",
+            "role": "user",
+            "content": "On July 22, I added a tiny crescent beside one silver star."
+          },
+          {
+            "id": "s02a-w3m4",
+            "role": "user",
+            "content": "On July 23, I photographed the hat against a plain wall."
+          },
+          {
+            "id": "s02a-w3m5",
+            "role": "user",
+            "content": "On July 24, I counted eight decorative beads on the right sleeve."
+          },
+          {
+            "id": "s02a-w3m6",
+            "role": "assistant",
+            "content": "You could sew a matching ribbon along the hat brim."
+          }
+        ]
+      ],
+      "question": "What fastening am I planning for my August costume, what condition or commitment applies, and how have the reasons changed without confusing my costume with Oren's banner?"
+    },
+    {
+      "id": "s02b",
+      "pairId": "s02",
+      "windows": [
+        [
+          {
+            "id": "s02b-w1m1",
+            "role": "user",
+            "content": "On July 1, I chose hook-and-loop strips for my August costume because quick changes were easy and the strips seemed quiet."
+          },
+          {
+            "id": "s02b-w1m2",
+            "role": "user",
+            "content": "On July 2, I cut twelve silver stars for the costume hem."
+          },
+          {
+            "id": "s02b-w1m3",
+            "role": "user",
+            "content": "On July 3, Oren began making a separate fabric banner for the August event."
+          },
+          {
+            "id": "s02b-w1m4",
+            "role": "user",
+            "content": "On July 4, I stitched a green lining into the hat."
+          },
+          {
+            "id": "s02b-w1m5",
+            "role": "user",
+            "content": "On July 5, I marked the left cuff with a small triangle."
+          },
+          {
+            "id": "s02b-w1m6",
+            "role": "assistant",
+            "content": "You could replace the costume fastening with large buttons."
+          }
+        ],
+        [
+          {
+            "id": "s02b-w2m1",
+            "role": "user",
+            "content": "On July 10, the costume strips made a noticeable ripping sound in the rehearsal hall, so my earlier quietness reason no longer held."
+          },
+          {
+            "id": "s02b-w2m2",
+            "role": "user",
+            "content": "On July 11, the strips still let me change the costume faster than the buttons I tested."
+          },
+          {
+            "id": "s02b-w2m3",
+            "role": "user",
+            "content": "On July 12, I shortened the decorative ribbon by four centimeters."
+          },
+          {
+            "id": "s02b-w2m4",
+            "role": "user",
+            "content": "On July 13, I put the spare hat feather in a round tin."
+          },
+          {
+            "id": "s02b-w2m5",
+            "role": "user",
+            "content": "On July 14, I have decided to use the strips for the August costume regardless of their noise at the July 28 dress rehearsal."
+          },
+          {
+            "id": "s02b-w2m6",
+            "role": "assistant",
+            "content": "You could cover the fastening with a decorative flap."
+          }
+        ],
+        [
+          {
+            "id": "s02b-w3m1",
+            "role": "user",
+            "content": "On July 20, Oren used buttons to attach letters to his banner; those buttons are not part of my costume."
+          },
+          {
+            "id": "s02b-w3m2",
+            "role": "user",
+            "content": "On July 21, I placed the paper costume pattern in a yellow folder."
+          },
+          {
+            "id": "s02b-w3m3",
+            "role": "user",
+            "content": "On July 22, I added a tiny crescent beside one silver star."
+          },
+          {
+            "id": "s02b-w3m4",
+            "role": "user",
+            "content": "On July 23, I photographed the hat against a plain wall."
+          },
+          {
+            "id": "s02b-w3m5",
+            "role": "user",
+            "content": "On July 24, I counted eight decorative beads on the right sleeve."
+          },
+          {
+            "id": "s02b-w3m6",
+            "role": "assistant",
+            "content": "You could sew a matching ribbon along the hat brim."
+          }
+        ]
+      ],
+      "question": "What fastening am I planning for my August costume, what condition or commitment applies, and how have the reasons changed without confusing my costume with Oren's banner?"
+    },
+    {
+      "id": "s03a",
+      "pairId": "s03",
+      "windows": [
+        [
+          {
+            "id": "s03a-w1m1",
+            "role": "user",
+            "content": "On August 2, I chose unison singing for my September festival set because it was quick to learn and the rehearsal piano supplied a clear starting note."
+          },
+          {
+            "id": "s03a-w1m2",
+            "role": "user",
+            "content": "On August 3, I printed the lyrics on cream paper."
+          },
+          {
+            "id": "s03a-w1m3",
+            "role": "user",
+            "content": "On August 4, Dena began arranging a separate festival set for her own trio."
+          },
+          {
+            "id": "s03a-w1m4",
+            "role": "user",
+            "content": "On August 5, I drew a small bird beside the second song title."
+          },
+          {
+            "id": "s03a-w1m5",
+            "role": "user",
+            "content": "On August 6, I placed the lyric sheets in a blue binder."
+          },
+          {
+            "id": "s03a-w1m6",
+            "role": "assistant",
+            "content": "You could arrange your set in three separate vocal parts."
+          }
+        ],
+        [
+          {
+            "id": "s03a-w2m1",
+            "role": "user",
+            "content": "On August 12, the rehearsal piano became unavailable for the rest of August, so it no longer supplied our starting note."
+          },
+          {
+            "id": "s03a-w2m2",
+            "role": "user",
+            "content": "On August 13, the unison version still took less rehearsal time to learn than the three-part version we tried."
+          },
+          {
+            "id": "s03a-w2m3",
+            "role": "user",
+            "content": "On August 14, I began using a pitch pipe to give the starting note during rehearsal."
+          },
+          {
+            "id": "s03a-w2m4",
+            "role": "user",
+            "content": "On August 15, I corrected a misspelled word on the second lyric sheet."
+          },
+          {
+            "id": "s03a-w2m5",
+            "role": "user",
+            "content": "On August 16, I will use unison singing only through the August 30 rehearsal before deciding the format for the festival performance."
+          },
+          {
+            "id": "s03a-w2m6",
+            "role": "assistant",
+            "content": "You could use a recorded accompaniment for rehearsal."
+          }
+        ],
+        [
+          {
+            "id": "s03a-w3m1",
+            "role": "user",
+            "content": "On August 20, Dena chose three-part singing for her trio's separate set; she is not arranging my set."
+          },
+          {
+            "id": "s03a-w3m2",
+            "role": "user",
+            "content": "On August 21, I drew a border around the last song title."
+          },
+          {
+            "id": "s03a-w3m3",
+            "role": "user",
+            "content": "On August 22, I put two spare binder clips in the lyric folder."
+          },
+          {
+            "id": "s03a-w3m4",
+            "role": "user",
+            "content": "On August 23, I counted six pages in the printed set."
+          },
+          {
+            "id": "s03a-w3m5",
+            "role": "user",
+            "content": "On August 24, I replaced the binder's broken label holder."
+          },
+          {
+            "id": "s03a-w3m6",
+            "role": "assistant",
+            "content": "You could decorate the binder with a festival badge."
+          }
+        ]
+      ],
+      "question": "What singing format have I chosen for my September festival set, for how long, which reasons still hold after the rehearsal arrangement changed, and how does my choice differ from Dena's separate set?"
+    },
+    {
+      "id": "s03b",
+      "pairId": "s03",
+      "windows": [
+        [
+          {
+            "id": "s03b-w1m1",
+            "role": "user",
+            "content": "On August 2, I chose unison singing for my September festival set because it was quick to learn and the rehearsal piano supplied a clear starting note."
+          },
+          {
+            "id": "s03b-w1m2",
+            "role": "user",
+            "content": "On August 3, I printed the lyrics on cream paper."
+          },
+          {
+            "id": "s03b-w1m3",
+            "role": "user",
+            "content": "On August 4, Dena began arranging a separate festival set for her own trio."
+          },
+          {
+            "id": "s03b-w1m4",
+            "role": "user",
+            "content": "On August 5, I drew a small bird beside the second song title."
+          },
+          {
+            "id": "s03b-w1m5",
+            "role": "user",
+            "content": "On August 6, I placed the lyric sheets in a blue binder."
+          },
+          {
+            "id": "s03b-w1m6",
+            "role": "assistant",
+            "content": "You could arrange your set in three separate vocal parts."
+          }
+        ],
+        [
+          {
+            "id": "s03b-w2m1",
+            "role": "user",
+            "content": "On August 12, the rehearsal piano became unavailable for the rest of August, so it no longer supplied our starting note."
+          },
+          {
+            "id": "s03b-w2m2",
+            "role": "user",
+            "content": "On August 13, the unison version still took less rehearsal time to learn than the three-part version we tried."
+          },
+          {
+            "id": "s03b-w2m3",
+            "role": "user",
+            "content": "On August 14, I began using a pitch pipe to give the starting note during rehearsal."
+          },
+          {
+            "id": "s03b-w2m4",
+            "role": "user",
+            "content": "On August 15, I corrected a misspelled word on the second lyric sheet."
+          },
+          {
+            "id": "s03b-w2m5",
+            "role": "user",
+            "content": "On August 16, I have decided to use unison singing through the August 30 rehearsal and for the festival performance."
+          },
+          {
+            "id": "s03b-w2m6",
+            "role": "assistant",
+            "content": "You could use a recorded accompaniment for rehearsal."
+          }
+        ],
+        [
+          {
+            "id": "s03b-w3m1",
+            "role": "user",
+            "content": "On August 20, Dena chose three-part singing for her trio's separate set; she is not arranging my set."
+          },
+          {
+            "id": "s03b-w3m2",
+            "role": "user",
+            "content": "On August 21, I drew a border around the last song title."
+          },
+          {
+            "id": "s03b-w3m3",
+            "role": "user",
+            "content": "On August 22, I put two spare binder clips in the lyric folder."
+          },
+          {
+            "id": "s03b-w3m4",
+            "role": "user",
+            "content": "On August 23, I counted six pages in the printed set."
+          },
+          {
+            "id": "s03b-w3m5",
+            "role": "user",
+            "content": "On August 24, I replaced the binder's broken label holder."
+          },
+          {
+            "id": "s03b-w3m6",
+            "role": "assistant",
+            "content": "You could decorate the binder with a festival badge."
+          }
+        ]
+      ],
+      "question": "What singing format have I chosen for my September festival set, for how long, which reasons still hold after the rehearsal arrangement changed, and how does my choice differ from Dena's separate set?"
+    }
+  ]
+}
