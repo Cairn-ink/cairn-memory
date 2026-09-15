@@ -112,9 +112,20 @@ Three rank generations and three count calls are avoided, with more final source
 context. This remains a narrow fixed-selection observation, not default promotion.
 Next compare it end to end with ordinary MOC selection and multi-window histories,
 separating upstream omissions, post-selection loss and host interpretation.
-The active US$50 campaign has US$22.346 conservatively reserved and zero unsettled
-requests; its known usage estimate is US$1.216239, not an invoice. There are850
-unknown-cost requests and US$27.654 conservative headroom. Older US$20 figures
+PR129 froze the ordinary-MOC comparison. Its [once-only results](../retention-moc-results.md)
+now retain178 provider requests and22 completed answer slots. All36 required
+passages were admitted and their references visible, but both arms retrieved23.
+All13 missing required passages per arm were absent before ranking; no selected
+required passage was dropped by regular ranking. Candidate retention avoided
+eight rank/count pairs but did not establish a fidelity gain. Complete-source
+answers still amplified tentative choices or mishandled changed reasons. All
+four negative answers left authorization details unknown; this is not general
+safety proof. Do not promote the candidate. Next distinguish bounded navigation
+label information loss from answer-host interpretation with fresh diagnostics,
+rather than adding another wrapper around the same unresolved failures.
+The active US$50 campaign has US$24.226 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$1.328611, not an invoice. There are928
+unknown-cost requests and US$25.774 conservative headroom. Older US$20 figures
 below belong to a separate campaign and are not renewed allowance.
 
 Productization remains a separate track: source-built local preview, supported
