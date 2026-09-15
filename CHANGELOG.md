@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — experimental checklist selection adapter capability
+
+- The optional OpenAI adapter adds an explicit `selectChecklist` method using
+  the existing selection model profile and bounded count/generation transport.
+  Ordinary selection, core defaults, storage and MCP behavior remain unchanged.
+- An evaluation-only wrapper compiles bounded question-linked proposals into
+  the existing reference selection shape after checking raw output tokens.
+  This is an integration capability, not evidence of better recall or answers.
+- Existing experiment guards do not authorize this new method. A separately
+  scoped immutable capability and frozen comparison are still required before
+  paid evaluation; no package release or deployment is included.
+
 ## Unreleased — explicit keyless source snapshot over MCP
 
 - Local stdio `--source-snapshot current-admitted-v1` adds `read_memory_sources`,

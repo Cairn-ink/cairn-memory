@@ -1,3 +1,5 @@
+import { denseArray, identifier, revision } from '../../core/validation.mjs';
+
 const string = { type: 'string' };
 const integer = { type: 'integer', minimum: 0 };
 const array = (items, maxItems) => ({ type: 'array', items, maxItems });
@@ -9,7 +11,7 @@ const refs = object({ refs: array(object({ namespaceIndex: integer,
   memoryId: string, revision: { type: 'integer', minimum: 1 } }), 24) });
 
 // This export is also the existing live guard's method allowlist. Reconcile
-// and qualification methods remain dynamic-only until a separately authorized guard extension exists.
+// qualification and checklist methods remain dynamic-only until a separately authorized guard extension exists.
 export const schemas = {
   extract: object({ items: array(object({ content: { type: 'string', maxLength: 600 },
     kind: { type: 'string', enum: ['fact', 'preference', 'decision', 'instruction', 'context'] },
@@ -40,8 +42,81 @@ const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const qualificationSlots = (items, variants) => object(Object.fromEntries(
   items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
+function checklistRecord(value, fields) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
+      Reflect.ownKeys(value).length !== fields.length) invalid();
+  for (const field of fields) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+  }
+}
+
+function checklistSchema(input) {
+  checklistRecord(input, ['query', 'maps', 'maxRefs']);
+  if (typeof input.query !== 'string' || !input.query.trim() || !input.query.isWellFormed() ||
+      input.query.length > 4000 || index(input.maxRefs) > 24) invalid();
+  const rows = (value, maximum) => {
+    denseArray(value, 0, maximum);
+    if (Reflect.ownKeys(value).length !== value.length + 1) invalid();
+    for (let i = 0; i < value.length; i++) {
+      if (!Object.hasOwn(Object.getOwnPropertyDescriptor(value, String(i)), 'value')) invalid();
+    }
+    return value;
+  };
+  rows(input.maps, 2);
+  const namespaces = [], memoryIds = [], revisions = [], seen = new Map();
+  const label = (value, nullable = false) => {
+    if (nullable && value === null) return;
+    if (typeof value !== 'string' || !value.isWellFormed()) invalid();
+  };
+  for (const map of input.maps) {
+    checklistRecord(map, ['namespaceIndex', 'items', 'exhausted']);
+    if (![0, 1].includes(map.namespaceIndex) || namespaces.includes(map.namespaceIndex) ||
+        typeof map.exhausted !== 'boolean') invalid();
+    namespaces.push(map.namespaceIndex);
+    rows(map.items, 24000);
+    for (const item of map.items) {
+      let memoryId, memoryRevision;
+      if (item?.type === 'moc') {
+        checklistRecord(item, ['type', 'moc']);
+        checklistRecord(item.moc, ['id', 'level', 'title', 'revision']);
+        identifier(item.moc.id); revision(item.moc.revision); label(item.moc.title, true);
+        if (!['L1', 'L2'].includes(item.moc.level)) invalid();
+        continue;
+      }
+      checklistRecord(item, ['type', 'ref', 'label']);
+      label(item.label, item.type === 'ref');
+      if (item.type === 'unfiled') {
+        checklistRecord(item.ref, ['memoryId', 'revision']);
+        memoryId = identifier(item.ref.memoryId); memoryRevision = revision(item.ref.revision);
+      } else if (item.type === 'ref') {
+        checklistRecord(item.ref, ['parentId', 'parentRevision', 'childType', 'childId', 'childRevision', 'relation']);
+        identifier(item.ref.parentId); revision(item.ref.parentRevision);
+        identifier(item.ref.childId); revision(item.ref.childRevision);
+        if (!['memory', 'moc'].includes(item.ref.childType) || item.ref.relation !== 'contains') invalid();
+        if (item.ref.childType === 'moc') continue;
+        memoryId = item.ref.childId; memoryRevision = item.ref.childRevision;
+      } else invalid();
+      const key = JSON.stringify([map.namespaceIndex, memoryId]);
+      if (seen.has(key) && seen.get(key) !== memoryRevision) invalid();
+      seen.set(key, memoryRevision);
+      memoryIds.push(memoryId); revisions.push(memoryRevision);
+    }
+  }
+  if (Buffer.byteLength(JSON.stringify(input), 'utf8') > 24000) invalid();
+  return object({ requests: array(object({ start: { ...integer, maximum: input.query.length - 1 },
+    end: { ...integer, minimum: 1, maximum: input.query.length },
+    refs: array(object({ namespaceIndex: constrained(integer, namespaces), memoryId: constrained(string, memoryIds),
+      revision: constrained({ type: 'integer', minimum: 1 }, revisions) }), Math.min(input.maxRefs, seen.size)),
+  }), 4) });
+}
+
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'selectChecklist') {
+    try { return checklistSchema(input); } catch { invalid(); }
+  }
   if (method === 'reviewBasis') {
     if (input && Object.hasOwn(input, 'inputMode') && !['source-context-v1', 'source-addressed-v1'].includes(input.inputMode)) invalid();
     const contextMode = input?.inputMode === 'source-context-v1';

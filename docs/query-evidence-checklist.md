@@ -48,10 +48,11 @@ comparison must judge those separately, not count filled checklist rows.
 
 ## What remains before a useful result
 
-1. Add explicitly scoped model/schema and guarded transport integration, with
-   the existing token/time/output bounds. The current production adapter does
-   not accept this proposal shape. Do not silently send it through a permissive
-   path or introduce a repair/retry loop.
+1. The subsequent [model integration](checklist-model-integration.md) adds a
+   narrow adapter method and evaluation wrapper with existing token/time/output
+   bounds. Ordinary production selection still uses its original shape.
+   An immutable experiment-guard capability remains unfinished; do not send
+   proposals through a permissive path or introduce a repair/retry loop.
 2. Freeze a fresh paired comparison with matched model, call count, navigation
    rounds and context budgets. Measure selection, rank and final receipt
    coverage independently, alongside irrelevant exposure, latency, cost,
