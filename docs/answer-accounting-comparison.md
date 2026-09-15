@@ -92,3 +92,7 @@ need larger unseen histories and end-to-end installed/natural-host evidence.
 This package adds fixtures, tests and a protocol only. No production default,
 persistent graph, package release, deployment or private integration is changed.
 See [acceptance and frozen shape](plans/answer-accounting-comparison.md).
+
+Execution update: the [once-only retained results](answer-accounting-results.md)
+include24 responses, one structural rejection and independently reviewed semantic
+failures. The record is not promoted; the source-facing protocol above is unchanged.
