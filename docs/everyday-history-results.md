@@ -88,6 +88,37 @@ and privacy contract question, not permission to admit invalid qualifications.
 No automatic promotion, retry, new retention behavior or runtime default is
 introduced by this report.
 
+### Next architectural gate: failed-capture evidence retention
+
+The next proposed slice is opt-in capture integration that commits a bounded
+submitted-evidence record together with the admission claim, before model work.
+It is not an admitted memory and must remain excluded from ordinary recall,
+navigation and ranking. A separate host-owned outbox would leave each host to
+coordinate two writes and deletion; that does not establish shared-engine
+retention. This is a proposed contract, not shipped behavior.
+
+Before implementation can be called reliable, synthetic tests must establish:
+
+- Qualification failure admits no memory, while explicit inspection can still
+  show the bounded submitted view without a provider key or new model call.
+- A crash after the claim/evidence transaction leaves inspectable state without
+  triggering background inference. Stale workers cannot finalize newer claims.
+- Changed-payload replay conflicts; identical replay never extends retention or
+  recreates evidence that was discarded. Discard fences in-flight admission.
+- Forget removes associated staged evidence and prevents an in-flight or later
+  replay from reconstructing a paraphrase. Existing memory-fingerprint
+  suppression alone does not provide this source-level protection.
+- Explicit byte/count quotas reject before model invocation; expiry does not
+  revive after restart or clock rollback. Logical expiry/deletion must not be
+  advertised as erasure from SQLite journals or backups.
+
+Persist only the canonical bounded extraction view and explicit truncation
+metadata, not a silently expanded conversation archive. Source-lineage and
+forget semantics must be resolved before adding retention; neither a new table
+alone nor bypassing qualification validation satisfies this gate. No automatic
+retry, promotion, default retention or additional paid experiment is authorized
+by this report.
+
 ## Cost and delivery boundary
 
 The run used 72 HTTP requests: 32 source input-count requests, 32 source
