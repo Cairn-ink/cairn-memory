@@ -63,6 +63,11 @@ handling. Existing state/rationale mechanisms and question-conditioned evidence
 views must be evaluated before adding another representation. Raising the cap,
 removing ranking alone or rewriting already-faithful labels does not address
 all observed failures. Fresh comparisons must retain existing failed evidence.
+The next [question-conditioned checklist](../query-evidence-checklist.md) is an
+offline candidate contract only: compile question spans and visible references
+into the existing selection shape without changing production defaults or
+persisting another graph. Real-model integration and fresh comparative evidence
+remain unfinished; changed-premise answer handling is a separate gate.
 The active US$50 campaign has US$17.396 conservatively reserved and zero unsettled
 requests; its known usage estimate is US$0.973737, not an invoice. There are690
 unknown-cost requests and US$32.604 conservative headroom. Older US$20 figures
