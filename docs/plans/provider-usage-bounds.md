@@ -46,6 +46,13 @@ drift is safe.
    changing the frozen result. Run full OpenAI offline suite/demo plus generic,
    JSON and strict plugin gates on22.16/24. Independently reviewed exact candidate
    and all required CI precede merge. Preserve Node20 generic compatibility.
+   CI exposed a second obsolete equality-based mock in the installed diagnostic.
+   Preserve that failed check, replace its invalid-usage fixture with actual
+   observed overflow, and add a separate installed bounded-drift success mode.
+   The existing transport guard intercepts overflow before the adapter receives
+   it; assert the actual halted/transport-failure layer, not response_usage.
+   Install both isolated adapter sets, prepare the documented metadata cache,
+   and run full artifact plus MCP gates on both core runtimes before delivery.
 6. Update current provider documentation and Unreleased changelog. Historical
    frozen runs and plans retain their original count-equality rules/results.
    No selector promotion, model change, new paid test, release or deployment.
