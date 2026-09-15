@@ -1,0 +1,293 @@
+{
+  "id": "source-answer-accounting-comparison-v1",
+  "histories": [
+    {
+      "id": "h01a",
+      "pairId": "h01",
+      "question": "For my April 18 knitting-circle scarf, which yarn have I chosen and how settled is that choice, which original reasons still hold, and does Mira's yarn choice apply to my scarf?",
+      "sources": [
+        {
+          "id": "h01a-s1",
+          "role": "user",
+          "content": "On March 1, I chose cotton yarn for my April 18 knitting-circle scarf because the required amount cost less than linen yarn and the sample kept its shape after washing."
+        },
+        {
+          "id": "h01a-s2",
+          "role": "user",
+          "content": "On March 3, I put the empty scarf-pattern sleeve beside the knitting basket."
+        },
+        {
+          "id": "h01a-s3",
+          "role": "user",
+          "content": "On March 6, the shop's revised prices made the cotton yarn for that scarf cost more than the same required amount of linen yarn."
+        },
+        {
+          "id": "h01a-s4",
+          "role": "assistant",
+          "content": "You could change the scarf to wool yarn."
+        },
+        {
+          "id": "h01a-s5",
+          "role": "user",
+          "content": "On March 8, I washed a swatch from the new cotton yarn lot and it still kept its shape."
+        },
+        {
+          "id": "h01a-s6",
+          "role": "user",
+          "content": "On March 10, I am provisionally keeping cotton yarn for my April 18 scarf."
+        },
+        {
+          "id": "h01a-s7",
+          "role": "user",
+          "content": "On March 12, Mira chose linen yarn for her own scarf and is not choosing yarn for mine."
+        },
+        {
+          "id": "h01a-s8",
+          "role": "user",
+          "content": "On March 14, I did not adopt the assistant's wool-yarn suggestion; I am not saying that its suggestion establishes a new choice for my scarf."
+        }
+      ],
+      "omittedSourceId": "h01a-s3"
+    },
+    {
+      "id": "h01b",
+      "pairId": "h01",
+      "question": "For my April 18 knitting-circle scarf, which yarn have I chosen and how settled is that choice, which original reasons still hold, and does Mira's yarn choice apply to my scarf?",
+      "sources": [
+        {
+          "id": "h01b-s1",
+          "role": "user",
+          "content": "On March 1, I chose cotton yarn for my April 18 knitting-circle scarf because the required amount cost less than linen yarn and the sample kept its shape after washing."
+        },
+        {
+          "id": "h01b-s2",
+          "role": "user",
+          "content": "On March 3, I put the empty scarf-pattern sleeve beside the knitting basket."
+        },
+        {
+          "id": "h01b-s3",
+          "role": "user",
+          "content": "On March 6, the shop's revised prices made the cotton yarn for that scarf cost more than the same required amount of linen yarn."
+        },
+        {
+          "id": "h01b-s4",
+          "role": "assistant",
+          "content": "You could change the scarf to wool yarn."
+        },
+        {
+          "id": "h01b-s5",
+          "role": "user",
+          "content": "On March 8, I washed a swatch from the new cotton yarn lot and it still kept its shape."
+        },
+        {
+          "id": "h01b-s6",
+          "role": "user",
+          "content": "On March 10, I have firmly decided to keep cotton yarn for my April 18 scarf."
+        },
+        {
+          "id": "h01b-s7",
+          "role": "user",
+          "content": "On March 12, Mira chose linen yarn for her own scarf and is not choosing yarn for mine."
+        },
+        {
+          "id": "h01b-s8",
+          "role": "user",
+          "content": "On March 14, I did not adopt the assistant's wool-yarn suggestion; I am not saying that its suggestion establishes a new choice for my scarf."
+        }
+      ],
+      "omittedSourceId": "h01b-s3"
+    },
+    {
+      "id": "h02a",
+      "pairId": "h02",
+      "question": "During the August 5–7 humid spell, how am I planning to store my homemade bread and how firm is that plan, what happened to the reasons for my usual method, what is planned afterward, and does Tomas's method determine mine?",
+      "sources": [
+        {
+          "id": "h02a-s1",
+          "role": "user",
+          "content": "On July 1, I normally stored homemade bread in a cloth bag because the crust stayed crisp and the bag fitted the narrow counter shelf."
+        },
+        {
+          "id": "h02a-s2",
+          "role": "user",
+          "content": "On July 4, a trial on a humid day left bread in that cloth bag with a soft rather than crisp crust."
+        },
+        {
+          "id": "h02a-s3",
+          "role": "user",
+          "content": "On July 6, I checked the cloth bag on the same narrow counter shelf and it still fitted."
+        },
+        {
+          "id": "h02a-s4",
+          "role": "user",
+          "content": "On July 8, I cleaned the outside of the spare bread tin."
+        },
+        {
+          "id": "h02a-s5",
+          "role": "assistant",
+          "content": "You could freeze every loaf instead of using a bread bag."
+        },
+        {
+          "id": "h02a-s6",
+          "role": "user",
+          "content": "On July 12, Tomas chose a ceramic crock for bread in his own kitchen; he does not choose storage for mine."
+        },
+        {
+          "id": "h02a-s7",
+          "role": "user",
+          "content": "On July 14, I tentatively plan to use a lidded box for the August 5–7 humid spell only, then return to my usual cloth bag afterward."
+        },
+        {
+          "id": "h02a-s8",
+          "role": "user",
+          "content": "On July 16, I have not adopted the assistant's freezing suggestion, and I am not reporting that I have already returned to the cloth bag."
+        }
+      ],
+      "omittedSourceId": "h02a-s2"
+    },
+    {
+      "id": "h02b",
+      "pairId": "h02",
+      "question": "During the August 5–7 humid spell, how am I planning to store my homemade bread and how firm is that plan, what happened to the reasons for my usual method, what is planned afterward, and does Tomas's method determine mine?",
+      "sources": [
+        {
+          "id": "h02b-s1",
+          "role": "user",
+          "content": "On July 1, I normally stored homemade bread in a cloth bag because the crust stayed crisp and the bag fitted the narrow counter shelf."
+        },
+        {
+          "id": "h02b-s2",
+          "role": "user",
+          "content": "On July 4, a trial on a humid day left bread in that cloth bag with a soft rather than crisp crust."
+        },
+        {
+          "id": "h02b-s3",
+          "role": "user",
+          "content": "On July 6, I checked the cloth bag on the same narrow counter shelf and it still fitted."
+        },
+        {
+          "id": "h02b-s4",
+          "role": "user",
+          "content": "On July 8, I cleaned the outside of the spare bread tin."
+        },
+        {
+          "id": "h02b-s5",
+          "role": "assistant",
+          "content": "You could freeze every loaf instead of using a bread bag."
+        },
+        {
+          "id": "h02b-s6",
+          "role": "user",
+          "content": "On July 12, Tomas chose a ceramic crock for bread in his own kitchen; he does not choose storage for mine."
+        },
+        {
+          "id": "h02b-s7",
+          "role": "user",
+          "content": "On July 14, I have confirmed a plan to use a lidded box for the August 5–7 humid spell only, then return to my usual cloth bag afterward."
+        },
+        {
+          "id": "h02b-s8",
+          "role": "user",
+          "content": "On July 16, I have not adopted the assistant's freezing suggestion, and I am not reporting that I have already returned to the cloth bag."
+        }
+      ],
+      "omittedSourceId": "h02b-s2"
+    },
+    {
+      "id": "h03a",
+      "pairId": "h03",
+      "question": "九月的家庭食譜我要用什麼方式整理，這個選擇有多確定？原本的理由哪些還成立，跟若晴的做法有何不同，又是誰核准了整理用品的採購？",
+      "sources": [
+        {
+          "id": "h03a-s1",
+          "role": "user",
+          "content": "八月一日，我選了活頁夾整理九月的家庭食譜，因為大字列印容易閱讀，而且整本能放進餐櫃的窄抽屜。"
+        },
+        {
+          "id": "h03a-s2",
+          "role": "user",
+          "content": "八月四日，加上新買的硬殼封面後，那本食譜活頁夾已放不進原來的窄抽屜。"
+        },
+        {
+          "id": "h03a-s3",
+          "role": "user",
+          "content": "八月六日，我把裝好新封面的食譜攤開試讀，大字仍然容易閱讀。"
+        },
+        {
+          "id": "h03a-s4",
+          "role": "assistant",
+          "content": "你可以改用平板電腦存食譜。"
+        },
+        {
+          "id": "h03a-s5",
+          "role": "user",
+          "content": "八月十日，我暫定九月的家庭食譜仍用這本活頁夾整理。"
+        },
+        {
+          "id": "h03a-s6",
+          "role": "user",
+          "content": "八月十二日，若晴把她自己的食譜寫在索引卡上，她不負責我的整理用品。"
+        },
+        {
+          "id": "h03a-s7",
+          "role": "user",
+          "content": "八月十四日，我把食譜用的空白分隔頁收進紙袋。"
+        },
+        {
+          "id": "h03a-s8",
+          "role": "user",
+          "content": "八月十六日，我沒有採納助理改用平板的建議，也不是在說我的用品選擇就代表採購已獲核准。"
+        }
+      ],
+      "omittedSourceId": "h03a-s2"
+    },
+    {
+      "id": "h03b",
+      "pairId": "h03",
+      "question": "九月的家庭食譜我要用什麼方式整理，這個選擇有多確定？原本的理由哪些還成立，跟若晴的做法有何不同，又是誰核准了整理用品的採購？",
+      "sources": [
+        {
+          "id": "h03b-s1",
+          "role": "user",
+          "content": "八月一日，我選了活頁夾整理九月的家庭食譜，因為大字列印容易閱讀，而且整本能放進餐櫃的窄抽屜。"
+        },
+        {
+          "id": "h03b-s2",
+          "role": "user",
+          "content": "八月四日，加上新買的硬殼封面後，那本食譜活頁夾已放不進原來的窄抽屜。"
+        },
+        {
+          "id": "h03b-s3",
+          "role": "user",
+          "content": "八月六日，我把裝好新封面的食譜攤開試讀，大字仍然容易閱讀。"
+        },
+        {
+          "id": "h03b-s4",
+          "role": "assistant",
+          "content": "你可以改用平板電腦存食譜。"
+        },
+        {
+          "id": "h03b-s5",
+          "role": "user",
+          "content": "八月十日，我已確定九月的家庭食譜仍用這本活頁夾整理。"
+        },
+        {
+          "id": "h03b-s6",
+          "role": "user",
+          "content": "八月十二日，若晴把她自己的食譜寫在索引卡上，她不負責我的整理用品。"
+        },
+        {
+          "id": "h03b-s7",
+          "role": "user",
+          "content": "八月十四日，我把食譜用的空白分隔頁收進紙袋。"
+        },
+        {
+          "id": "h03b-s8",
+          "role": "user",
+          "content": "八月十六日，我沒有採納助理改用平板的建議，也不是在說我的用品選擇就代表採購已獲核准。"
+        }
+      ],
+      "omittedSourceId": "h03b-s2"
+    }
+  ]
+}
