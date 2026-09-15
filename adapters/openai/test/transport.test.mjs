@@ -256,7 +256,7 @@ test('A03: completed assistant-only output, refusal, object JSON, usage and outp
     (v) => { v.output[0].content[0].text = '{"refs":[]}' + ' '.repeat(40001 - '{"refs":[]}'.length); },
     (v) => { v.output[0].content[0].text = JSON.stringify({ refs: [], excess: ' x'.repeat(1100) }); },
     (v) => { delete v.usage; },
-    (v) => { v.usage.input_tokens++; v.usage.total_tokens++; },
+    (v) => { v.usage.input_tokens = 7025; v.usage.total_tokens = 7025 + v.usage.output_tokens; },
     (v) => { v.usage.total_tokens++; },
     (v) => { v.usage.output_tokens = 1025; v.usage.total_tokens = 1125; },
     ...['input_tokens', 'output_tokens', 'total_tokens'].flatMap((field) => [-1, 0.5, '4', null, Number.MAX_SAFE_INTEGER + 1]

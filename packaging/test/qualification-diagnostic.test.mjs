@@ -62,7 +62,8 @@ function upstream(f, mode, calls) {
       usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } };
     if (payload.text.format.name === 'cairn_qualify') {
       if (mode === 'envelope') response.status = 'incomplete';
-      if (mode === 'usage') response.usage = { input_tokens: 119, output_tokens: 100, total_tokens: 219 };
+      if (mode === 'usage-overflow') response.usage = { input_tokens: 7025, output_tokens: 100, total_tokens: 7125 };
+      if (mode === 'bounded-drift') response.usage = { input_tokens: 119, output_tokens: 100, total_tokens: 219 };
       if (mode === 'token-bounds') response.output[0].content[0].text = JSON.stringify({ payload: ' word'.repeat(1800) });
       if (mode === 'json') response.output[0].content[0].text = '{malformed-json';
     }
@@ -81,26 +82,31 @@ function privateFiles(directory, key) {
   }
 }
 
-for (const [mode, reason, layer] of [['success', null, null], ['envelope', 'response_envelope', 'adapter'],
-  ['usage', 'response_usage', 'adapter'], ['token-bounds', 'output_bounds', 'adapter'],
+for (const [mode, reason, layer] of [['success', null, null], ['bounded-drift', null, null], ['envelope', 'response_envelope', 'adapter'],
+  ['usage-overflow', 'transport_failure', 'adapter'], ['token-bounds', 'output_bounds', 'adapter'],
   ['json', 'output_json', 'adapter'], ['anchor', 'invalid_qualification', 'core_validation'], ['transport', 'transport_failure', 'adapter']]) {
   test(`installed diagnostic preserves ${mode} and exact actual collector layer without retry`, { timeout: 120000 }, async () => {
     const f = fixture(); const calls = [];
     const capabilityPath = join(f.ledger.directory, 'experiment-qualification-extension.json');
     const capability = readFileSync(capabilityPath);
     const report = await runQualificationDiagnostic({ ...f.options, fetchImpl: upstream(f, mode, calls) });
-    const expected = mode === 'success' ? 6 : mode === 'transport' ? 1 : 4;
+    const succeeds = mode === 'success' || mode === 'bounded-drift';
+    const halted = mode === 'transport' || mode === 'usage-overflow';
+    const expected = succeeds ? 6 : mode === 'transport' ? 1 : 4;
     assert.equal(calls.length, expected, JSON.stringify(report));
-    assert.equal(report.status, mode === 'success' ? 'completed' : mode === 'transport' ? 'halted' : 'failed', JSON.stringify(report));
+    assert.equal(report.status, succeeds ? 'completed' : halted ? 'halted' : 'failed', JSON.stringify(report));
     assert.equal(report.budgetBefore.requestCount, 0); assert.equal(report.budgetAfter.requestCount, expected);
     assert.equal(report.budgetAfter.reservedMicroUsd, expected * 5000);
     assert.equal(report.budgetAfter.unknownCostRequests, mode === 'transport' ? 1 : expected / 2);
     if (mode === 'transport') assert.equal(report.budgetAfter.knownUsageMicroUsd, 0);
     else assert.ok(report.budgetAfter.knownUsageMicroUsd > 0);
     assert.equal(report.attempt.requests, expected); assert.equal(report.attempt.reservedMicroUsd, expected * 5000);
+    // The unchanged request guard rejects observed overflow before the adapter
+    // can inspect its body. Do not mislabel this as adapter response_usage.
+    if (mode === 'usage-overflow') assert.equal(report.attempt.halted, 'guard_pin_or_persistence_failed');
     assert.deepEqual(readFileSync(capabilityPath), capability, 'Diagnostic must not reauthorize or rewrite capability');
-    assert.equal(report.capture.ok, mode === 'success');
-    if (mode === 'success') {
+    assert.equal(report.capture.ok, succeeds);
+    if (succeeds) {
       assert.equal(report.inspections.length, 1);
       const record = report.inspections[0].value;
       assert.equal(record.qualification.anchors[0].text, source); assert.equal(record.memory.state, 'active');
@@ -122,7 +128,7 @@ for (const [mode, reason, layer] of [['success', null, null], ['envelope', 'resp
       assert.equal(Object.hasOwn(trace, 'headers'), false);
       assert.equal(Object.hasOwn(trace, 'requestHeaders'), false);
       assert.ok(Buffer.byteLength(JSON.stringify(trace.requestBody)) <= 131072);
-      assert.equal(trace.responseAvailable, mode !== 'transport');
+      assert.equal(trace.responseAvailable, mode !== 'transport' && !(mode === 'usage-overflow' && trace.sequence === 4));
       if (trace.responseAvailable) assert.ok(Buffer.byteLength(JSON.stringify(trace.providerResponse)) <= 262144);
       else assert.equal(trace.providerResponse, null);
     }

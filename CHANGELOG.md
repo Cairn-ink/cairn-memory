@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — independent provider usage bounds
+
+- The optional OpenAI adapter accepts bounded observed input usage that differs
+  from preflight, checking both against the unchanged provider-input and context
+  limits. Output ceilings, usage consistency, source checks and no-retry behavior
+  remain intact; this does not widen experiment budgets.
+- A retained synthetic discrepancy is reproducible through offline HTTP replay.
+  Its provider-side cause is unknown. The historical failed run stays failed;
+  this transport repair is not evidence of better memory or answer quality.
+
 ## Unreleased — experimental checklist selection adapter capability
 
 - The optional OpenAI adapter adds an explicit `selectChecklist` method using
