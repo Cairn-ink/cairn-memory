@@ -1,0 +1,623 @@
+{
+  "id": "bounded-augmentation-comparison-v1",
+  "histories": [
+    {
+      "id": "a01a",
+      "pairId": "a01",
+      "windows": [
+        [
+          {
+            "id": "a01a-w1m1",
+            "role": "user",
+            "content": "On January 3, I washed the bookbinding workshop's glue brushes and left them bristles-up."
+          },
+          {
+            "id": "a01a-w1m2",
+            "role": "user",
+            "content": "On January 4, I chose recycled card for the covers at my February 6 bookbinding workshop because it cost less than plain board and folded cleanly at the spine."
+          },
+          {
+            "id": "a01a-w1m3",
+            "role": "user",
+            "content": "On January 5, I put the bookbinding cover offcuts in a shallow basket."
+          },
+          {
+            "id": "a01a-w1m4",
+            "role": "user",
+            "content": "On January 6, I labelled the drawer holding the workshop's spare awls."
+          },
+          {
+            "id": "a01a-w1m5",
+            "role": "user",
+            "content": "On January 7, I counted the empty jars used for mixing paste."
+          },
+          {
+            "id": "a01a-w1m6",
+            "role": "assistant",
+            "content": "You could replace the recycled-card covers with cloth-covered board."
+          }
+        ],
+        [
+          {
+            "id": "a01a-w2m1",
+            "role": "user",
+            "content": "On January 12, the supplier's new price list put the recycled card above plain board in cost for the same number of workshop covers."
+          },
+          {
+            "id": "a01a-w2m2",
+            "role": "user",
+            "content": "On January 13, I wiped dried paste from the bookbinding bench."
+          },
+          {
+            "id": "a01a-w2m3",
+            "role": "user",
+            "content": "On January 14, a folding test with the new recycled-card batch still produced a clean spine fold."
+          },
+          {
+            "id": "a01a-w2m4",
+            "role": "user",
+            "content": "On January 15, I hung the apron beside the bookbinding cover press."
+          },
+          {
+            "id": "a01a-w2m5",
+            "role": "user",
+            "content": "On January 16, I sharpened the short pencil used to mark the cutting mat."
+          },
+          {
+            "id": "a01a-w2m6",
+            "role": "assistant",
+            "content": "You could add ribbons to the finished notebooks."
+          }
+        ],
+        [
+          {
+            "id": "a01a-w3m1",
+            "role": "user",
+            "content": "On January 20, I am tentatively keeping recycled card for the covers at my February 6 bookbinding workshop."
+          },
+          {
+            "id": "a01a-w3m2",
+            "role": "user",
+            "content": "On January 21, I placed a cork pad under the paste jar."
+          },
+          {
+            "id": "a01a-w3m3",
+            "role": "user",
+            "content": "On January 22, I tied the spare bookbinding cords into a loose bundle."
+          },
+          {
+            "id": "a01a-w3m4",
+            "role": "user",
+            "content": "On January 23, Elin chose plain board for the covers at her own March bookbinding workshop; she is not choosing materials for mine."
+          },
+          {
+            "id": "a01a-w3m5",
+            "role": "user",
+            "content": "On January 24, I moved the empty cover boxes away from the doorway."
+          },
+          {
+            "id": "a01a-w3m6",
+            "role": "assistant",
+            "content": "You could draw a border on the workshop handout."
+          }
+        ]
+      ],
+      "question": "For my February 6 bookbinding workshop, which cover material am I keeping and how firm is that choice, which of my original reasons remain supported, and is Elin making the same choice for her workshop?"
+    },
+    {
+      "id": "a01b",
+      "pairId": "a01",
+      "windows": [
+        [
+          {
+            "id": "a01b-w1m1",
+            "role": "user",
+            "content": "On January 3, I washed the bookbinding workshop's glue brushes and left them bristles-up."
+          },
+          {
+            "id": "a01b-w1m2",
+            "role": "user",
+            "content": "On January 4, I chose recycled card for the covers at my February 6 bookbinding workshop because it cost less than plain board and folded cleanly at the spine."
+          },
+          {
+            "id": "a01b-w1m3",
+            "role": "user",
+            "content": "On January 5, I put the bookbinding cover offcuts in a shallow basket."
+          },
+          {
+            "id": "a01b-w1m4",
+            "role": "user",
+            "content": "On January 6, I labelled the drawer holding the workshop's spare awls."
+          },
+          {
+            "id": "a01b-w1m5",
+            "role": "user",
+            "content": "On January 7, I counted the empty jars used for mixing paste."
+          },
+          {
+            "id": "a01b-w1m6",
+            "role": "assistant",
+            "content": "You could replace the recycled-card covers with cloth-covered board."
+          }
+        ],
+        [
+          {
+            "id": "a01b-w2m1",
+            "role": "user",
+            "content": "On January 12, the supplier's new price list put the recycled card above plain board in cost for the same number of workshop covers."
+          },
+          {
+            "id": "a01b-w2m2",
+            "role": "user",
+            "content": "On January 13, I wiped dried paste from the bookbinding bench."
+          },
+          {
+            "id": "a01b-w2m3",
+            "role": "user",
+            "content": "On January 14, a folding test with the new recycled-card batch still produced a clean spine fold."
+          },
+          {
+            "id": "a01b-w2m4",
+            "role": "user",
+            "content": "On January 15, I hung the apron beside the bookbinding cover press."
+          },
+          {
+            "id": "a01b-w2m5",
+            "role": "user",
+            "content": "On January 16, I sharpened the short pencil used to mark the cutting mat."
+          },
+          {
+            "id": "a01b-w2m6",
+            "role": "assistant",
+            "content": "You could add ribbons to the finished notebooks."
+          }
+        ],
+        [
+          {
+            "id": "a01b-w3m1",
+            "role": "user",
+            "content": "On January 20, I have firmly decided to keep recycled card for the covers at my February 6 bookbinding workshop."
+          },
+          {
+            "id": "a01b-w3m2",
+            "role": "user",
+            "content": "On January 21, I placed a cork pad under the paste jar."
+          },
+          {
+            "id": "a01b-w3m3",
+            "role": "user",
+            "content": "On January 22, I tied the spare bookbinding cords into a loose bundle."
+          },
+          {
+            "id": "a01b-w3m4",
+            "role": "user",
+            "content": "On January 23, Elin chose plain board for the covers at her own March bookbinding workshop; she is not choosing materials for mine."
+          },
+          {
+            "id": "a01b-w3m5",
+            "role": "user",
+            "content": "On January 24, I moved the empty cover boxes away from the doorway."
+          },
+          {
+            "id": "a01b-w3m6",
+            "role": "assistant",
+            "content": "You could draw a border on the workshop handout."
+          }
+        ]
+      ],
+      "question": "For my February 6 bookbinding workshop, which cover material am I keeping and how firm is that choice, which of my original reasons remain supported, and is Elin making the same choice for her workshop?"
+    },
+    {
+      "id": "a02a",
+      "pairId": "a02",
+      "windows": [
+        [
+          {
+            "id": "a02a-w1m1",
+            "role": "user",
+            "content": "On May 2, I stored the spare balcony plant-marker ties in a yellow tin."
+          },
+          {
+            "id": "a02a-w1m2",
+            "role": "user",
+            "content": "On May 3, I swept the shelf underneath the balcony pots."
+          },
+          {
+            "id": "a02a-w1m3",
+            "role": "user",
+            "content": "On May 4, my usual balcony plant markers were engraved bamboo stakes in the soil because the names were readable and the stakes stayed upright."
+          },
+          {
+            "id": "a02a-w1m4",
+            "role": "user",
+            "content": "On May 5, I counted the blank plant-marker envelopes in the desk."
+          },
+          {
+            "id": "a02a-w1m5",
+            "role": "user",
+            "content": "On May 6, I folded the cloth used to wipe the watering jug."
+          },
+          {
+            "id": "a02a-w1m6",
+            "role": "assistant",
+            "content": "You could replace every plant marker with a printed sticker permanently."
+          }
+        ],
+        [
+          {
+            "id": "a02a-w2m1",
+            "role": "user",
+            "content": "On May 10, the new watering jets loosened the soil around the bamboo stakes and left them leaning."
+          },
+          {
+            "id": "a02a-w2m2",
+            "role": "user",
+            "content": "On May 11, the engraved names on those wet bamboo markers remained readable."
+          },
+          {
+            "id": "a02a-w2m3",
+            "role": "user",
+            "content": "On May 12, I placed the unused plant-marker string on a hook."
+          },
+          {
+            "id": "a02a-w2m4",
+            "role": "user",
+            "content": "On May 13, I tested hanging those bamboo markers from the pot rims, where the watering jets did not dislodge them."
+          },
+          {
+            "id": "a02a-w2m5",
+            "role": "user",
+            "content": "On May 14, I moved the balcony broom behind the empty watering can."
+          },
+          {
+            "id": "a02a-w2m6",
+            "role": "assistant",
+            "content": "You could paint pictures of the plants on the pots."
+          }
+        ],
+        [
+          {
+            "id": "a02a-w3m1",
+            "role": "user",
+            "content": "On May 18, Oren chose metal markers for his own balcony and is not selecting markers for mine."
+          },
+          {
+            "id": "a02a-w3m2",
+            "role": "user",
+            "content": "On May 19, I am provisionally choosing rim-hung bamboo markers for the June 14–16 watering trial only, with my usual soil-stake arrangement planned again afterward."
+          },
+          {
+            "id": "a02a-w3m3",
+            "role": "user",
+            "content": "On May 20, I put the plant-marker cleaning cloth in a mesh bag."
+          },
+          {
+            "id": "a02a-w3m4",
+            "role": "user",
+            "content": "On May 21, I stacked the unused saucers by diameter."
+          },
+          {
+            "id": "a02a-w3m5",
+            "role": "user",
+            "content": "On May 22, I brushed grit from the spare balcony tray."
+          },
+          {
+            "id": "a02a-w3m6",
+            "role": "assistant",
+            "content": "You could add a small bell near the watering jug."
+          }
+        ]
+      ],
+      "question": "For the June 14–16 balcony watering trial, what plant-marker arrangement am I planning and how settled is it, how does it compare with my usual arrangement and its reasons, and does Oren's choice determine mine?"
+    },
+    {
+      "id": "a02b",
+      "pairId": "a02",
+      "windows": [
+        [
+          {
+            "id": "a02b-w1m1",
+            "role": "user",
+            "content": "On May 2, I stored the spare balcony plant-marker ties in a yellow tin."
+          },
+          {
+            "id": "a02b-w1m2",
+            "role": "user",
+            "content": "On May 3, I swept the shelf underneath the balcony pots."
+          },
+          {
+            "id": "a02b-w1m3",
+            "role": "user",
+            "content": "On May 4, my usual balcony plant markers were engraved bamboo stakes in the soil because the names were readable and the stakes stayed upright."
+          },
+          {
+            "id": "a02b-w1m4",
+            "role": "user",
+            "content": "On May 5, I counted the blank plant-marker envelopes in the desk."
+          },
+          {
+            "id": "a02b-w1m5",
+            "role": "user",
+            "content": "On May 6, I folded the cloth used to wipe the watering jug."
+          },
+          {
+            "id": "a02b-w1m6",
+            "role": "assistant",
+            "content": "You could replace every plant marker with a printed sticker permanently."
+          }
+        ],
+        [
+          {
+            "id": "a02b-w2m1",
+            "role": "user",
+            "content": "On May 10, the new watering jets loosened the soil around the bamboo stakes and left them leaning."
+          },
+          {
+            "id": "a02b-w2m2",
+            "role": "user",
+            "content": "On May 11, the engraved names on those wet bamboo markers remained readable."
+          },
+          {
+            "id": "a02b-w2m3",
+            "role": "user",
+            "content": "On May 12, I placed the unused plant-marker string on a hook."
+          },
+          {
+            "id": "a02b-w2m4",
+            "role": "user",
+            "content": "On May 13, I tested hanging those bamboo markers from the pot rims, where the watering jets did not dislodge them."
+          },
+          {
+            "id": "a02b-w2m5",
+            "role": "user",
+            "content": "On May 14, I moved the balcony broom behind the empty watering can."
+          },
+          {
+            "id": "a02b-w2m6",
+            "role": "assistant",
+            "content": "You could paint pictures of the plants on the pots."
+          }
+        ],
+        [
+          {
+            "id": "a02b-w3m1",
+            "role": "user",
+            "content": "On May 18, Oren chose metal markers for his own balcony and is not selecting markers for mine."
+          },
+          {
+            "id": "a02b-w3m2",
+            "role": "user",
+            "content": "On May 19, I have confirmed rim-hung bamboo markers for the June 14–16 watering trial only, with my usual soil-stake arrangement planned again afterward."
+          },
+          {
+            "id": "a02b-w3m3",
+            "role": "user",
+            "content": "On May 20, I put the plant-marker cleaning cloth in a mesh bag."
+          },
+          {
+            "id": "a02b-w3m4",
+            "role": "user",
+            "content": "On May 21, I stacked the unused saucers by diameter."
+          },
+          {
+            "id": "a02b-w3m5",
+            "role": "user",
+            "content": "On May 22, I brushed grit from the spare balcony tray."
+          },
+          {
+            "id": "a02b-w3m6",
+            "role": "assistant",
+            "content": "You could add a small bell near the watering jug."
+          }
+        ]
+      ],
+      "question": "For the June 14–16 balcony watering trial, what plant-marker arrangement am I planning and how settled is it, how does it compare with my usual arrangement and its reasons, and does Oren's choice determine mine?"
+    },
+    {
+      "id": "a03a",
+      "pairId": "a03",
+      "windows": [
+        [
+          {
+            "id": "a03a-w1m1",
+            "role": "user",
+            "content": "六月二日,我把速寫團的空筆盒貼上圓形貼紙。"
+          },
+          {
+            "id": "a03a-w1m2",
+            "role": "user",
+            "content": "六月三日,我替七月二十日的速寫團選了自動鉛筆,因為整組比木鉛筆便宜,而且放進隨身包很輕。"
+          },
+          {
+            "id": "a03a-w1m3",
+            "role": "user",
+            "content": "六月四日,我把速寫團的畫筆清潔布摺成長條。"
+          },
+          {
+            "id": "a03a-w1m4",
+            "role": "user",
+            "content": "六月五日,我將備用紙夾收進抽屜。"
+          },
+          {
+            "id": "a03a-w1m5",
+            "role": "user",
+            "content": "六月六日,我擦掉收納架側面的粉筆字。"
+          },
+          {
+            "id": "a03a-w1m6",
+            "role": "assistant",
+            "content": "你們可以改帶鋼筆,順便練習墨線。"
+          }
+        ],
+        [
+          {
+            "id": "a03a-w2m1",
+            "role": "user",
+            "content": "六月十日,我量了速寫團舊筆盒的長度,記在收納清單上。"
+          },
+          {
+            "id": "a03a-w2m2",
+            "role": "user",
+            "content": "六月十一日,店家的新報價顯示,同樣人數用的自動鉛筆整組已比木鉛筆貴。"
+          },
+          {
+            "id": "a03a-w2m3",
+            "role": "user",
+            "content": "六月十二日,我把那組自動鉛筆裝進隨身包再試背,仍覺得很輕。"
+          },
+          {
+            "id": "a03a-w2m4",
+            "role": "user",
+            "content": "六月十三日,我暫定七月二十日這次速寫團仍帶自動鉛筆。"
+          },
+          {
+            "id": "a03a-w2m5",
+            "role": "user",
+            "content": "六月十四日,我把速寫團的空畫筆包掛在門邊。"
+          },
+          {
+            "id": "a03a-w2m6",
+            "role": "assistant",
+            "content": "你們可以在速寫本封面加上日期章。"
+          }
+        ],
+        [
+          {
+            "id": "a03a-w3m1",
+            "role": "user",
+            "content": "六月十八日,我替收納箱換了一條提繩。"
+          },
+          {
+            "id": "a03a-w3m2",
+            "role": "user",
+            "content": "六月十九日,我數了工具櫃裡的空紙筒。"
+          },
+          {
+            "id": "a03a-w3m3",
+            "role": "user",
+            "content": "六月二十日,映竹為她自己帶的另一團選了木鉛筆,她不負責我們這團的用品。"
+          },
+          {
+            "id": "a03a-w3m4",
+            "role": "user",
+            "content": "六月二十一日,我清理了速寫團畫筆架底部的灰塵。"
+          },
+          {
+            "id": "a03a-w3m5",
+            "role": "user",
+            "content": "六月二十二日,我把沒用到的包裝紙捲好。"
+          },
+          {
+            "id": "a03a-w3m6",
+            "role": "assistant",
+            "content": "你們可以用不同顏色的橡皮圈整理紙張。"
+          }
+        ]
+      ],
+      "question": "我們七月二十日速寫團要帶哪種畫筆，這個選擇有多確定？原本考量哪些仍成立，跟映竹那一團有何不同，又是誰核准了我們的採購預算？"
+    },
+    {
+      "id": "a03b",
+      "pairId": "a03",
+      "windows": [
+        [
+          {
+            "id": "a03b-w1m1",
+            "role": "user",
+            "content": "六月二日,我把速寫團的空筆盒貼上圓形貼紙。"
+          },
+          {
+            "id": "a03b-w1m2",
+            "role": "user",
+            "content": "六月三日,我替七月二十日的速寫團選了自動鉛筆,因為整組比木鉛筆便宜,而且放進隨身包很輕。"
+          },
+          {
+            "id": "a03b-w1m3",
+            "role": "user",
+            "content": "六月四日,我把速寫團的畫筆清潔布摺成長條。"
+          },
+          {
+            "id": "a03b-w1m4",
+            "role": "user",
+            "content": "六月五日,我將備用紙夾收進抽屜。"
+          },
+          {
+            "id": "a03b-w1m5",
+            "role": "user",
+            "content": "六月六日,我擦掉收納架側面的粉筆字。"
+          },
+          {
+            "id": "a03b-w1m6",
+            "role": "assistant",
+            "content": "你們可以改帶鋼筆,順便練習墨線。"
+          }
+        ],
+        [
+          {
+            "id": "a03b-w2m1",
+            "role": "user",
+            "content": "六月十日,我量了速寫團舊筆盒的長度,記在收納清單上。"
+          },
+          {
+            "id": "a03b-w2m2",
+            "role": "user",
+            "content": "六月十一日,店家的新報價顯示,同樣人數用的自動鉛筆整組已比木鉛筆貴。"
+          },
+          {
+            "id": "a03b-w2m3",
+            "role": "user",
+            "content": "六月十二日,我把那組自動鉛筆裝進隨身包再試背,仍覺得很輕。"
+          },
+          {
+            "id": "a03b-w2m4",
+            "role": "user",
+            "content": "六月十三日,我已確定七月二十日這次速寫團仍帶自動鉛筆。"
+          },
+          {
+            "id": "a03b-w2m5",
+            "role": "user",
+            "content": "六月十四日,我把速寫團的空畫筆包掛在門邊。"
+          },
+          {
+            "id": "a03b-w2m6",
+            "role": "assistant",
+            "content": "你們可以在速寫本封面加上日期章。"
+          }
+        ],
+        [
+          {
+            "id": "a03b-w3m1",
+            "role": "user",
+            "content": "六月十八日,我替收納箱換了一條提繩。"
+          },
+          {
+            "id": "a03b-w3m2",
+            "role": "user",
+            "content": "六月十九日,我數了工具櫃裡的空紙筒。"
+          },
+          {
+            "id": "a03b-w3m3",
+            "role": "user",
+            "content": "六月二十日,映竹為她自己帶的另一團選了木鉛筆,她不負責我們這團的用品。"
+          },
+          {
+            "id": "a03b-w3m4",
+            "role": "user",
+            "content": "六月二十一日,我清理了速寫團畫筆架底部的灰塵。"
+          },
+          {
+            "id": "a03b-w3m5",
+            "role": "user",
+            "content": "六月二十二日,我把沒用到的包裝紙捲好。"
+          },
+          {
+            "id": "a03b-w3m6",
+            "role": "assistant",
+            "content": "你們可以用不同顏色的橡皮圈整理紙張。"
+          }
+        ]
+      ],
+      "question": "我們七月二十日速寫團要帶哪種畫筆，這個選擇有多確定？原本考量哪些仍成立，跟映竹那一團有何不同，又是誰核准了我們的採購預算？"
+    }
+  ]
+}
