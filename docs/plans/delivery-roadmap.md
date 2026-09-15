@@ -22,6 +22,36 @@ merge, production, release and external-publication decisions.
 
 ## Goal and baseline
 
+### Latest checkpoint (2026-09-15): retained evidence, fidelity still open
+
+This checkpoint supersedes older pending-PR and budget labels below; they remain
+historical evidence. The goal is still a lightweight MCP-first memory layer
+using one public engine, with inspectable sources, correction/forget controls,
+and faithful handling of changing decisions. The owner's later delegation permits
+the DRI to merge scoped work after verification, independent review and successful
+required CI; it does not turn this plan into release or deployment authority.
+
+Merged PR106 adds opt-in bounded staged evidence before interpretation. Failed
+capture can remain inspectable without being admitted into ordinary recall.
+Merged PR107 exposes separate local MCP retention and keyless management options.
+Defaults and hosted behavior remain unchanged. Merged PR108 freezes the paired
+qualifier diagnostic; its [once-only installed experiment](../qualifier-preservation-results.md)
+now records twelve completed histories and twenty-four answers, but does not
+pass qualifier fidelity. Three required passages disappeared in navigation or
+ranking; complete-source answers also strengthened conditional/possible choices.
+
+Next quality work separates a bounded complete admitted-source snapshot from
+faithful answer delivery, then tests fresh multi-window histories and distractors.
+Neither quotation storage nor successful mocks establish interpretation quality.
+The active US$50 campaign has US$16.136 conservatively reserved and zero unsettled
+requests; its known usage estimate is US$0.879166, not an invoice. Older US$20
+figures below belong to a separate campaign and are not renewed allowance.
+
+Productization remains a separate track: source-built local preview, supported
+host onboarding, owner-approved distribution and real adoption. No npm release,
+upstream listing, promotion, human-use study or private-service migration is
+completed by this checkpoint. Private integration remains separately owned.
+
 ### Latest cross-window work — live currentness gate still fails
 
 PRs [52](https://github.com/Cairn-ink/cairn-memory/pull/52),
