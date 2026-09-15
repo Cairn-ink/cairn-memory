@@ -16,7 +16,17 @@ current-admitted coverage is not complete conversation history, truth, adoption,
 continuing applicability, or faithful downstream interpretation. Sources and
 submitted roles remain untrusted data. Exact namespace boundaries and a final
 atomic reread fence mutations during token counting. No schema, telemetry,
-provider request, hosted wire format or MCP tool is added.
+provider request or hosted wire format is added.
+
+Local stdio MCP exposes this same read only with explicit
+`--source-snapshot current-admitted-v1`. `read_memory_sources` accepts optional
+memory/token limits and always uses the startup namespace; tool arguments cannot
+choose another owner/project, query, source ID or cursor. Keyless CLI startup
+uses the existing local `o200k_base` counter without fetch or generation. The
+core envelope budget excludes MCP framing and the host's whole prompt. This
+widens explicit local read exposure to potentially unrelated sources, not
+authority, semantic correctness, default discovery or automatic capture. See the
+[keyless walkthrough](standalone-mcp.md#keyless-complete-source-walkthrough).
 
 ### Separate opt-in staging boundary
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — explicit keyless source snapshot over MCP
+
+- Local stdio `--source-snapshot current-admitted-v1` adds `read_memory_sources`,
+  bound to the startup namespace and delegated to the unchanged shared core.
+- Keyless opted-in startup uses the optional adapter's existing local tokenizer
+  through `countOpenAITokens`; default keyless startup and syntax checks do not
+  load it. No provider calls, fake keys, relevance fallback or generation.
+- Reads expose the entire bounded current-admitted source set, potentially
+  including unrelated content. Core envelope budgets exclude MCP framing and
+  host prompts; semantic fidelity and previous answer failures are unchanged.
+
 ## Unreleased — bounded complete admitted-source snapshot
 
 - Embedded `sourceSnapshot` can explicitly return all current admitted sources
