@@ -1,6 +1,7 @@
 # Source-linked answer accounting — offline candidate
 
-Dependent base: `3ae57a3e75b09e21321777a79b6bf8687758d685` (provider usage repair).
+Dependent base: `2181922e75802fa7fd6ecf42b4ce8ddedd6e025b` (provider usage repair,
+including its installed bounded-drift/overflow regression update).
 No production selection, retrieval, storage, provider transport or host default
 changes. This package prepares and validates one model-proposed answer record;
 it does not execute a model or claim the record is semantically correct.
