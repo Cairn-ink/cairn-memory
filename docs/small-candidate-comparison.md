@@ -84,3 +84,7 @@ accuracy benchmark. Preserve negative evidence and do not promote a new default
 without a broader end-to-end comparison.
 
 Acceptance and delivery gates: [plan](plans/small-candidate-comparison.md).
+
+Execution update: the [once-only results](small-candidate-results.md) retain all
+eight answers, one concrete source/answer improvement and added irrelevant
+exposure. The frozen protocol above is unchanged; the policy is not promoted.
