@@ -64,6 +64,12 @@ For optional OpenAI adapter changes, run `npm ci --prefix adapters/openai`, then
 `npm run test:openai` and `npm run demo:openai-offline` on both core runtimes.
 These use fake HTTP and need no key. Real-provider tests require explicitly
 approved credential scope and budget.
+For qualification wire-format changes, also run the opt-in installed rationale
+gate on both core runtimes after installing both adapter dependency sets and
+running `node packaging/prepare-cache.mjs`:
+`CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node --test evaluation/live/test/rationale-pilot.test.mjs`.
+This is synthetic HTTP only. The ordinary offline evidence suite skips these
+installed cases, so its success does not substitute for this CI gate.
 The opt-in `npm run test:openai-live -- --live --budget-usd 0.25` uses synthetic
 temporary data and paid requests; it is never a CI gate. Its budget and CLI
 safety tests run within the ordinary offline adapter suite. See
