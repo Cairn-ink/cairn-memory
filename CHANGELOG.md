@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — explicit disposition adapter transport
+
+- The optional OpenAI adapter now exposes `reviewRationaleDispositions` only
+  through an explicit embedded call, reusing the selected rationale model and
+  bounded count/generate transport. Its dynamic strict schema is scoped to
+  indexed sources and old unverified proposals; core still validates the
+  complete projected graph.
+- Installed-artifact fake-HTTP checks cover the new transport and unchanged
+  cold stored graph. Existing static paid grants, defaults, MCP, automatic
+  capture and stored relationship behavior are unchanged; no provider-quality
+  or paid-run result is claimed.
+
 ## Unreleased — experimental read-only relationship dispositions
 
 - Embedded `reviewRationaleDispositions` snapshots exact current sources and

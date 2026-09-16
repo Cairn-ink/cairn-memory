@@ -1,6 +1,7 @@
 # Experimental relation-model control
 
-Embedded callers may configure only the existing `relate` port:
+Embedded callers may configure the rationale profile for the explicit `relate`
+and `reviewRationaleDispositions` ports:
 
 ```js
 const model = createOpenAIModel({
@@ -9,7 +10,9 @@ const model = createOpenAIModel({
 });
 ```
 
-The default remains `gpt-4.1-mini-2025-04-14`. This parameter is independent of
+The default remains `gpt-4.1-mini-2025-04-14`. The disposition port is an
+opt-in, read-only review and is never called by automatic capture. This
+parameter is independent of
 `extractionModel`; qualification, classification, select, rank and reconciliation
 stay on their existing baseline. Sol is not a new extraction option. Unknown
 names, invented snapshots and null reject before HTTP. No CLI/MCP default changes.

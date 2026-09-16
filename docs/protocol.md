@@ -70,7 +70,11 @@ namespace, persistent IDs, receipt metadata, stored summaries/qualifications or
 source truth flags. Complete `keep`/`withdraw`/`unknown` assessments produce only an
 ephemeral, unassessed graph; `unknown` is retained unresolved, not confirmed.
 The stored graph, default read traversal, MCP and hosted wire stay unchanged.
-No existing paid capability allows the new method.
+The optional OpenAI adapter can now serve this explicit port using its
+existing rationale model profile and bounded count/generate transport; it
+does not invoke it automatically. Its dynamic schema constrains local
+indices, while core remains authoritative for complete coverage and
+correlated citations. No existing paid capability allows the new method.
 
 Explicit embedded `reviewRationale` with `inputMode: 'claim-focus-v1'` additionally
 sends each current memory's stored content as an unverified focus alongside its

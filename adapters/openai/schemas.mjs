@@ -52,6 +52,65 @@ function checklistRecord(value, fields) {
   }
 }
 
+function dispositionRows(value, minimum, maximum) {
+  denseArray(value, minimum, maximum);
+  if (Object.getPrototypeOf(value) !== Array.prototype ||
+      Reflect.ownKeys(value).length !== value.length + 1) invalid();
+  for (let i = 0; i < value.length; i++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+  }
+  return value;
+}
+
+function dispositionSchema(input) {
+  checklistRecord(input, ['memories', 'oldEdges']);
+  const memories = dispositionRows(input.memories, 1, 6);
+  const receiptIndices = memories.map((memory, memoryIndex) => {
+    checklistRecord(memory, ['index', 'receipts']);
+    if (memory.index !== memoryIndex) invalid();
+    return dispositionRows(memory.receipts, 1, 100).map((receipt, receiptIndex) => {
+      checklistRecord(receipt, ['index', 'role', 'excerpt']);
+      if (receipt.index !== receiptIndex || !['user', 'assistant'].includes(receipt.role) ||
+          typeof receipt.excerpt !== 'string' || !receipt.excerpt.length ||
+          receipt.excerpt.length > 800 || !receipt.excerpt.isWellFormed()) invalid();
+      return receiptIndex;
+    });
+  });
+  const oldEdges = dispositionRows(input.oldEdges, 0, 10);
+  const tuples = new Set();
+  oldEdges.forEach((edge, edgeIndex) => {
+    checklistRecord(edge, ['index', 'from', 'to', 'relation', 'fromReceipt', 'toReceipt', 'interpretationStatus']);
+    if (edge.index !== edgeIndex || !Number.isSafeInteger(edge.from) || !Number.isSafeInteger(edge.to) ||
+        edge.from < 0 || edge.to < 0 || edge.from >= memories.length || edge.to >= memories.length ||
+        !['supports-decision', 'challenges-premise'].includes(edge.relation) ||
+        (edge.from === edge.to && edge.relation !== 'supports-decision') ||
+        edge.interpretationStatus !== 'unverified' ||
+        !receiptIndices[edge.from].includes(edge.fromReceipt) ||
+        !receiptIndices[edge.to].includes(edge.toReceipt)) invalid();
+    const tuple = JSON.stringify([edge.from, edge.to, edge.relation, edge.fromReceipt, edge.toReceipt]);
+    if (tuples.has(tuple)) invalid();
+    tuples.add(tuple);
+  });
+  const citation = { anyOf: receiptIndices.map((receipts, memory) => object({
+    memory: constrained(integer, [memory]), receipt: constrained(integer, receipts),
+  })) };
+  const memoryIndices = memories.map(memory => memory.index);
+  const allReceiptIndices = sorted(receiptIndices.flat());
+  return object({ dispositions: { ...array(object({
+    edge: constrained(integer, oldEdges.map(edge => edge.index)),
+    action: { type: 'string', enum: ['keep', 'withdraw', 'unknown'] },
+    evidence: array(citation, receiptIndices.reduce((sum, receipts) => sum + receipts.length, 0)),
+  }), oldEdges.length), minItems: oldEdges.length },
+  // Keep provider schema size bounded; core checks endpoint/receipt pairing,
+  // self-challenges, duplicate tuples and overlap after parsing.
+  additions: array(object({ from: constrained(integer, memoryIndices),
+    to: constrained(integer, memoryIndices),
+    relation: { type: 'string', enum: ['supports-decision', 'challenges-premise'] },
+    fromReceipt: constrained(integer, allReceiptIndices),
+    toReceipt: constrained(integer, allReceiptIndices) }), 10) });
+}
+
 function checklistSchema(input) {
   checklistRecord(input, ['query', 'maps', 'maxRefs']);
   if (typeof input.query !== 'string' || !input.query.trim() || !input.query.isWellFormed() ||
@@ -114,6 +173,9 @@ function checklistSchema(input) {
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'reviewRationaleDispositions') {
+    try { return dispositionSchema(input); } catch { invalid(); }
+  }
   if (method === 'selectChecklist') {
     try { return checklistSchema(input); } catch { invalid(); }
   }

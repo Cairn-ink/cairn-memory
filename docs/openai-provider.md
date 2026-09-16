@@ -1,15 +1,44 @@
 # Optional OpenAI adapter — source preview
 
 The embedded adapter can separately select an experimental
-[rationale model](rationale-model-controls.md). This changes only an explicitly
-configured relate port, not other methods or MCP defaults, and grants no paid
-experiment route or quality claim.
+[rationale model](rationale-model-controls.md). This controls the explicit
+`relate` and `reviewRationaleDispositions` ports, not extraction, other methods
+or MCP defaults, and grants no paid experiment route or quality claim.
 
 This source adapter connects the same core's extract/reconcile/classify/select/rank ports
 to pinned `gpt-4.1-mini-2025-04-14`. One synthetic real-provider lifecycle has
 passed; see the [run evidence](plans/live-provider.md). Neither that smoke test
 nor offline fixtures establish general semantic quality, client support or launch readiness.
 The hosted plugin is unchanged; core gains no provider dependency.
+
+## Explicit relationship-disposition transport
+
+The optional adapter implements `reviewRationaleDispositions` only when the
+embedded caller explicitly invokes that separate core view. It uses the
+configured `rationaleModel` (baseline by default), the same pinned host,
+count-then-generate framing, 6,000 local-input/7,024 provider-input and 1,024
+output-token limits, 30-second core cancellation and no retries. It does not
+change `relate`, ordinary capture, MCP or recall request bytes.
+
+Before serialization, the adapter rejects extra or inherited input fields,
+getters, sparse arrays, nonsequential indices and old edges without a valid
+source/receipt association or the `unverified` marker. Its dynamic strict
+schema bounds the returned `{ dispositions, additions }` to this request's
+local indices. The compact addition schema permits independent endpoint and
+receipt index sets; the core checks their pairing, complete disposition
+coverage, citations, overlap and graph/result limits. Structured output and
+source citation are not semantic proof. No output repair or model fallback is
+attempted. The maximum input shape is checked against the
+[official Structured Outputs schema limits](https://developers.openai.com/api/docs/guides/structured-outputs)
+for enum count, object properties and nesting; the unchanged input-token
+preflight may still reject a large request. The [feature boundary](rationale-disposition-review.md) explains
+the ephemeral graph and unchanged stored state.
+
+This method is deliberately absent from exported static `schemas` and every
+existing paid experiment guard. The installed-artifact test uses synthetic
+records and injected fake HTTP only. A separately reviewed authorization and
+experiment would be required before sending source/old-graph context to a
+provider; no such run is part of this slice.
 
 ## Experimental extraction-only profile
 

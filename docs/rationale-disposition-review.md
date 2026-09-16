@@ -3,8 +3,10 @@
 The embedded core now has an explicit, read-only
 `reviewRationaleDispositions({ namespace, refs })` view. Supply one to six exact
 current refs in one namespace and inject a model with a separate
-`reviewRationaleDispositions` method and exact token counter. It is not part of
-the OpenAI adapter, local MCP, automatic capture or a default review path.
+`reviewRationaleDispositions` method and exact token counter. The optional
+OpenAI adapter now implements that separate method through its existing
+`rationaleModel` profile and two-phase count/generate transport. It remains
+absent from local MCP, automatic capture and default review paths.
 There is no commit endpoint. A real injected provider would receive the
 selected retained source excerpts and the existing relationship proposals;
 this is extra potentially personal context and requires a caller's explicit
@@ -45,3 +47,13 @@ decision was adopted, a premise remains applicable, a challenge points in the
 right direction or a separate reason was captured. In particular, this view
 does not repair the archived-case direction reversal or the old-decision
 default-read visibility gap found in the [paired chronology diagnostic](rationale-temporal-comparison.md).
+
+The adapter accepts only the core's indexed source-and-old-edge input shape:
+no namespace, persistent IDs or receipt metadata. It validates complete,
+sequential, distinct old-edge tuples and their receipt indices before either
+HTTP phase. A request-scoped strict schema bounds disposition, citation and
+addition indices; the core still rejects missing/duplicate dispositions,
+wrong endpoint–receipt pairings, invalid citations and oversize projections.
+The adapter does not repair malformed output or classify source truth. The
+existing static paid-schema allowlist excludes this method, so fake-HTTP
+integration is not authorization for a real provider call.
