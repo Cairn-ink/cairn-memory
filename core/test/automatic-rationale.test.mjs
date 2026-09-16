@@ -47,6 +47,41 @@ test('A1 capture discovers prior decision without IDs, after classification, the
   assert.equal(ok(cold.getRationale({ namespace, memoryId: root.memory.id, revision: root.memory.revision })).status, 'unassessed');
 });
 
+test('DC3 ordinary capture retains direct-only challenge through cold inspection and rationale recall', async t => {
+  const f = fixture(t);
+  f.model.relate = ({ input: { memories } }) => {
+    const root = memories.find(memory => memory.receipts.some(receipt =>
+      receipt.excerpt.startsWith('I chose A because')));
+    const later = memories.find(memory => memory.receipts.some(receipt =>
+      receipt.excerpt.startsWith('I checked: A cannot work offline')));
+    return { edges: root && later ? [{ from: later.index, to: root.index,
+      relation: 'challenges-premise', fromReceipt: 0, toReceipt: 0 }] : [] };
+  };
+  const first = ok(await f.core.capture(decision));
+  const memoryId = first.admission.memories[0].id;
+  const ref = { memoryId, revision: ok(f.core.get({ namespace, memoryId })).memory.revision };
+  const sourceBefore = ok(f.core.fetch({ namespace, refs: [ref], contextMode: 'source-evidence' })).items[0];
+  assert.deepEqual(ok(f.core.getRationale({ namespace, ...ref })).edges, []);
+  const second = ok(await f.core.capture(challenge));
+  assert.equal(second.rationale.status, 'reviewed'); assert.equal(second.rationale.inserted, 1);
+  const sourceAfter = ok(f.core.fetch({ namespace, refs: [ref], contextMode: 'source-evidence' })).items[0];
+  assert.deepEqual(sourceAfter, sourceBefore);
+  const warm = ok(f.core.getRationale({ namespace, ...ref }));
+  assert.equal(warm.edges.length, 1); assert.equal(warm.edges[0].relation, 'challenges-premise');
+  assert.equal(warm.status, 'reconfirmation-suggested');
+  assert.ok(warm.sources.some(source => source.receipts.some(receipt =>
+    receipt.excerpt === challenge.messages[0].content)));
+  const incident = ok(f.core.getRationale({ namespace, ...ref, view: 'incident-proposals' }));
+  assert.equal(incident.edges.length, 1); assert.equal(incident.status, 'unassessed');
+  f.core.close(); const cold = openMemoryCore({ path: f.path, model: f.model }); t.after(() => cold.close());
+  assert.deepEqual(ok(cold.getRationale({ namespace, ...ref })), warm);
+  const recalled = ok(await cold.recall({ readSet: [namespace], query: 'Why did I choose A?',
+    contextMode: 'rationale-evidence' }));
+  const root = recalled.memories.find(item => item.memory.id === memoryId);
+  assert.ok(root); assert.deepEqual(root.rationale, warm);
+  assert.equal(root.memory.currentness, 'current');
+});
+
 test('A2 rationale failure reports saved admission, duplicate never retries; empty capture skips', async t => {
   const f = fixture(t); let attempted = 0;
   f.model.relate = () => { attempted++; throw new Error('sensitive upstream error'); };

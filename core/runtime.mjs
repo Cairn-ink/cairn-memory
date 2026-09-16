@@ -471,7 +471,8 @@ export function createMemoryRuntime(input) {
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
-    invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable });
+    invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable,
+    rationaleStorage });
   const supersessionStorage = createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,

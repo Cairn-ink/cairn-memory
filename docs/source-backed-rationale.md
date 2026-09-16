@@ -53,10 +53,11 @@ Support may point within one memory/receipt when it records both the decision
 and its reason; challenges require distinct memories. These are memory-level
 proposals, not independently validated claim slots or a general causal graph.
 
-`getRationale` needs no model or key. It returns the root, incoming supports and
-their incoming challenges, sources and edges. It excludes generated summaries
+`getRationale` needs no model or key. Its decision-context view returns the
+root, direct incoming challenges, incoming supports and challenges to those
+support sources, with their retained evidence. It excludes generated summaries
 and qualifications, but **edge types themselves are unverified interpretations**.
-A support/challenge path yields `reconfirmation-suggested`; otherwise it yields
+Any included challenge yields `reconfirmation-suggested`; otherwise it yields
 `unassessed`, not confirmed. It never changes the decision or chooses a substitute.
 For “A was chosen for offline support; A may not support offline”, the returned
 sources allow a host to explain the challenge without claiming adoption of B.
@@ -72,9 +73,12 @@ remain a separate gate before using this keyless inspection payload in a prompt.
 Both endpoints bind to current revisions and actual receipts. The entire read
 set is revalidated after callbacks and atomically before writes, including
 unselected inputs. At most 10 incident edges per memory are allowed. Corrections,
-forgetting, receipt changes, retirement and filing revision changes invalidate
-incident links, including legacy writes. Conservative invalidation may require
-another review even when the underlying wording has not changed.
+forgetting, receipt changes, retirement and arbitrary revision changes invalidate
+incident links, including legacy writes. Filing-only revisions through MOC
+placement preserve valid incident links by rebinding their revision guards in
+the same transaction, after checking unchanged memory content and full retained
+receipts. Old refs still fail and the index epoch still advances. This preserves
+proposed evidence, not the semantic validity of a link or a decision's currentness.
 
 Schema 12 adds the relation table, index and invalidation triggers. Older supported
 databases migrate atomically; old binaries do not support schema 12. Use backups

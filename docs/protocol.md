@@ -75,7 +75,10 @@ directly incoming/outgoing proposals and their bounded source evidence for a
 current root in the same namespace. It is an opt-in read view, always unassessed,
 not authority or a validated decision graph. Existing source/revision checks and
 complete-result limits apply. Default inspection and automatic recall do not
-include these additional orphan proposals; no new model call is introduced.
+include outgoing-only incident proposals; they do include direct incoming
+challenges to the root even without a support edge. No new model call is
+introduced. A direct challenge remains an unverified suggestion, not proof of
+premise failure or decision change.
 
 The opt-in [automatic rationale loop](automatic-rationale-loop.md) adds a
 post-admission pass only for source-bound-v2 submitted capture. Generated memory
@@ -115,8 +118,13 @@ Local rows store endpoint/revision links, selected receipt IDs and SHA256 source
 digests with model-proposed relation types. These are sensitive relationship
 metadata, not anonymization, semantic proof, authenticated roles or permissions.
 Source text is not duplicated in relation rows. Exact namespace and current
-revision guards apply on inference and inspection; mutations clear affected
-links. Logical forgetting has the same journal/backup/secure-erasure limitations
+revision guards apply on inference and inspection. Corrections, receipt changes,
+retirement, forgetting and arbitrary revision changes clear affected links. MOC
+placement alone can rebind valid existing receipt-bound proposals across a
+filing-only revision when content and complete retained receipts are unchanged;
+old revision references still fail. The global invalidation trigger is unchanged,
+and this adds no public wire or schema fields. Logical forgetting has the same
+journal/backup/secure-erasure limitations
 as the existing store. No telemetry, automatic execution, implicit supersession,
 data-sharing scope or user consent is introduced by a rationale proposal.
 

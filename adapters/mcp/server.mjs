@@ -116,7 +116,7 @@ export function createCairnServer(options = {}) {
       ({ batchId }) => core.discardCaptureEvidence({ namespace: binding, client: 'cairn-local-mcp', eventId: batchId }), false, true);
   }
   if (rationaleConfigured || reviewConfigured) tool('inspect_rationale',
-    'Read bounded source-linked model-proposed rationale at the inspected current revision. Keyless. Default decision-context follows proposed supports and their challenges, not every edge. Explicit incident-proposals shows directly incoming/outgoing proposals, including orphan challenges, and is always unassessed. Neither view confirms truth or adoption; a challenge does not change a decision or grant authority.',
+    'Read bounded source-linked model-proposed rationale at the inspected current revision. Keyless. Default decision-context includes direct incoming challenges to the root, proposed supports and challenges to those supports, not every edge. Explicit incident-proposals shows all directly incoming/outgoing proposals and is always unassessed. Neither view confirms truth or adoption; a challenge does not change a decision or grant authority.',
     z.strictObject({ memoryId: id, revision, view: z.enum(['decision-context', 'incident-proposals']).optional() }),
     ({ memoryId, revision, view }) => core.getRationale({ namespace: binding, memoryId, revision, ...(view ? { view } : {}) }), true);
   if (reviewConfigured) tool('review_rationale',

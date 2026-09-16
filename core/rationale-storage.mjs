@@ -32,6 +32,64 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('revision_conflict');
   }
 
+  // Placement alone may revise a memory without changing its source. Keep this
+  // strictly inside the placement transaction; the global revision trigger
+  // still invalidates every other kind of memory update.
+  function snapshotFilingEdges(ns, changedIds) {
+    const edges = new Map();
+    const endpoints = new Map();
+    const select = db.prepare('SELECT * FROM rationale_edges WHERE from_id = ? OR to_id = ?');
+    for (const id of changedIds) for (const edge of select.all(id, id)) {
+      edges.set(JSON.stringify([edge.from_id, edge.to_id, edge.relation,
+        edge.from_receipt, edge.to_receipt]), edge);
+    }
+    for (const edge of edges.values()) for (const side of ['from', 'to']) {
+      const id = edge[`${side}_id`];
+      let endpoint = endpoints.get(id);
+      if (!endpoint) {
+        const row = currentRow(ns, id);
+        if (!row) fail('revision_conflict');
+        endpoint = { row: { ...row }, receipts: readSourceEvidence(row).receipts,
+          rawReceipts: db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id').all(id) };
+        endpoints.set(id, endpoint);
+      }
+      if (endpoint.row.revision !== edge[`${side}_revision`]) fail('revision_conflict');
+      const cited = endpoint.receipts.find(receipt => receipt.id === edge[`${side}_receipt`]);
+      if (!cited || digest(cited) !== edge[`${side}_digest`]) fail('revision_conflict');
+    }
+    return { edges: [...edges.values()], endpoints };
+  }
+
+  function restoreFilingEdges(ns, snapshot, nextRevisions) {
+    for (const [id, before] of snapshot.endpoints) {
+      const after = currentRow(ns, id);
+      if (!after || after.revision !== (nextRevisions.get(id) ?? before.row.revision)) fail('revision_conflict');
+      for (const key of Object.keys(before.row)) {
+        if (['revision', 'filing_status', 'updated_at'].includes(key)) continue;
+        if (after[key] !== before.row[key]) fail('revision_conflict');
+      }
+      if (nextRevisions.has(id)) {
+        if (after.revision !== before.row.revision + 1 || after.filing_status === before.row.filing_status) {
+          fail('revision_conflict');
+        }
+      } else if (after.filing_status !== before.row.filing_status || after.updated_at !== before.row.updated_at) {
+        fail('revision_conflict');
+      }
+      const rawReceipts = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id').all(id);
+      if (JSON.stringify(rawReceipts) !== JSON.stringify(before.rawReceipts)) fail('revision_conflict');
+      if (JSON.stringify(readSourceEvidence(after).receipts) !== JSON.stringify(before.receipts)) {
+        fail('revision_conflict');
+      }
+    }
+    const insert = db.prepare(`INSERT INTO rationale_edges
+      (from_id, from_revision, to_id, to_revision, relation, from_receipt, to_receipt, from_digest, to_digest)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (const edge of snapshot.edges) insert.run(edge.from_id,
+      nextRevisions.get(edge.from_id) ?? edge.from_revision, edge.to_id,
+      nextRevisions.get(edge.to_id) ?? edge.to_revision, edge.relation,
+      edge.from_receipt, edge.to_receipt, edge.from_digest, edge.to_digest);
+  }
+
   function commit(ns, refs, expected, proposals, writeMode) {
     return transaction(db, () => {
       assertSnapshot(ns, refs, expected);
@@ -115,10 +173,15 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
         WHERE to_id = ? AND relation = ? ORDER BY from_id, from_receipt, to_receipt LIMIT 11`).all(id, relation);
       const supports = incident ? [] : incoming(ref.memoryId, 'supports-decision');
       const rows = incident ? db.prepare(`SELECT * FROM rationale_edges WHERE from_id = ? OR to_id = ?
-        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(ref.memoryId, ref.memoryId) : [...supports];
+        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(ref.memoryId, ref.memoryId)
+        : [...supports, ...incoming(ref.memoryId, 'challenges-premise')];
       if (!incident) for (const id of new Set(supports.map(row => row.from_id))) rows.push(...incoming(id, 'challenges-premise'));
-      if (rows.length > 10) fail('rationale_limit');
-      for (const row of rows) {
+      // A self-support makes the root both a direct challenge target and a
+      // support source. Count and return that same stored proposal only once.
+      const uniqueRows = new Map(rows.map(row => [JSON.stringify([row.from_id, row.to_id,
+        row.relation, row.from_receipt, row.to_receipt]), row]));
+      if (uniqueRows.size > 10) fail('rationale_limit');
+      for (const row of uniqueRows.values()) {
         for (const side of ['from', 'to']) {
           const id = row[`${side}_id`];
           if (!sources.has(id)) {
@@ -139,5 +202,6 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
         ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) });
   }
 
-  return { snapshot, commit, inspectInside, inspect: (ns, ref, view) => transaction(db, () => inspectInside(ns, ref, view)) };
+  return { snapshot, commit, snapshotFilingEdges, restoreFilingEdges,
+    inspectInside, inspect: (ns, ref, view) => transaction(db, () => inspectInside(ns, ref, view)) };
 }

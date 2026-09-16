@@ -1,0 +1,106 @@
+{
+  "version": "decision-evolution-fixture-v1",
+  "cases": [
+    {
+      "id": "dev-vendor-transition-en",
+      "split": "dev",
+      "language": "en",
+      "events": [
+        {"id": "d1", "occurredAt": "2026-01-05", "ingestedAt": "2026-01-05", "actor": "Maya", "text": "For the team survey, I choose vendor A. It costs less and its quality is good enough."},
+        {"id": "d2", "occurredAt": "2026-01-12", "ingestedAt": "2026-01-12", "actor": "Maya", "text": "I am considering vendor B for the team survey, but I have not changed my choice yet."},
+        {"id": "d3", "occurredAt": "2026-01-19", "ingestedAt": "2026-01-19", "actor": "Maya", "text": "B is my tentative preference after its quality trial; we still need approval. A remains our approved choice for now."},
+        {"id": "d4", "occurredAt": "2026-01-26", "ingestedAt": "2026-01-26", "actor": "Maya", "text": "Approval is complete. We adopt B for the team survey instead of A because the trial showed better quality."}
+      ],
+      "questions": [
+        {"id": "q1", "actor": "Maya", "text": "Which vendor is adopted for Maya's team survey now, what changed, and why?"}
+      ]
+    },
+    {
+      "id": "dev-tentative-zh",
+      "split": "dev",
+      "language": "zh-TW",
+      "events": [
+        {"id": "d5", "occurredAt": "2026-02-03", "ingestedAt": "2026-02-03", "actor": "怡君", "text": "社區課程的錄影平台先決定用 A，因為價格較低，畫質也夠用。"},
+        {"id": "d6", "occurredAt": "2026-02-10", "ingestedAt": "2026-02-10", "actor": "怡君", "text": "看過 B 的畫質後，我暫時比較想選 B，但還沒正式改決定；目前仍用 A。"}
+      ],
+      "questions": [
+        {"id": "q2", "actor": "怡君", "text": "社區課程目前正式選定哪個平台？B 的狀態是什麼？"}
+      ]
+    },
+    {
+      "id": "dev-premise-failure-en",
+      "split": "dev",
+      "language": "en",
+      "events": [
+        {"id": "d7", "occurredAt": "2026-03-02", "ingestedAt": "2026-03-02", "actor": "Leo", "text": "For field notes, I choose A because it works fully offline."},
+        {"id": "d8", "occurredAt": "2026-03-09", "ingestedAt": "2026-03-09", "actor": "Leo", "text": "I tested A: it requires a connection at startup. My offline assumption was wrong. I have not selected a replacement."}
+      ],
+      "questions": [
+        {"id": "q3", "actor": "Leo", "text": "What did Leo choose for field notes, and is its reason still reliable?"}
+      ]
+    },
+    {
+      "id": "dev-other-actor-zh",
+      "split": "dev",
+      "language": "zh-TW",
+      "events": [
+        {"id": "d9", "occurredAt": "2026-04-01", "ingestedAt": "2026-04-01", "actor": "小敏", "text": "我的展覽印刷選 A，因為價格較低。"},
+        {"id": "d10", "occurredAt": "2026-04-08", "ingestedAt": "2026-04-08", "actor": "阿哲", "text": "我的展覽印刷也決定用 A，但理由是它的色彩品質比較好。這是我自己的專案，與小敏的決定無關。"}
+      ],
+      "questions": [
+        {"id": "q4", "actor": "小敏", "text": "小敏的展覽印刷目前選哪家？阿哲的選擇有改變她的決定嗎？"}
+      ]
+    },
+    {
+      "id": "heldout-late-older-en",
+      "split": "heldout",
+      "language": "en",
+      "events": [
+        {"id": "h1", "occurredAt": "2026-05-01", "ingestedAt": "2026-05-01", "actor": "Nora", "text": "For our archive scanner, I choose A because the purchase price is lower."},
+        {"id": "h2", "occurredAt": "2026-05-20", "ingestedAt": "2026-05-20", "actor": "Nora", "text": "We now adopt B for the archive scanner instead of A; B's scan quality passed the preservation test."},
+        {"id": "h3", "occurredAt": "2026-05-10", "ingestedAt": "2026-05-25", "actor": "Nora", "text": "Minutes from May 10: we were considering B, but A was still the adopted scanner then."}
+      ],
+      "questions": [
+        {"id": "q5", "actor": "Nora", "text": "After all minutes were filed, which archive scanner is adopted now?"}
+      ]
+    },
+    {
+      "id": "heldout-partial-reason-zh",
+      "split": "heldout",
+      "language": "zh-TW",
+      "events": [
+        {"id": "h4", "occurredAt": "2026-06-02", "ingestedAt": "2026-06-02", "actor": "建宏", "text": "這次社區導覽採用 B，因為它支援離線地圖，而且志工已熟悉操作。"},
+        {"id": "h5", "occurredAt": "2026-06-16", "ingestedAt": "2026-06-16", "actor": "建宏", "text": "B 的離線地圖其實不能用；這個理由作廢。但志工熟悉 B，導覽仍維持選 B，沒有改平台。"}
+      ],
+      "questions": [
+        {"id": "q6", "actor": "建宏", "text": "導覽現在用哪個平台？哪些原本理由還成立？"}
+      ]
+    },
+    {
+      "id": "heldout-distinct-actors-en",
+      "split": "heldout",
+      "language": "en",
+      "events": [
+        {"id": "h6", "occurredAt": "2026-07-04", "ingestedAt": "2026-07-04", "actor": "Rae", "text": "I select A for my clinic scheduling pilot because the support contract is cheaper."},
+        {"id": "h7", "occurredAt": "2026-07-11", "ingestedAt": "2026-07-11", "actor": "Ivo", "text": "For my separate clinic pilot, I have adopted B for its better uptime."},
+        {"id": "h8", "occurredAt": "2026-07-18", "ingestedAt": "2026-07-18", "actor": "Rae", "text": "I looked at B too, but I am keeping A for my scheduling pilot."}
+      ],
+      "questions": [
+        {"id": "q7", "actor": "Rae", "text": "Has Rae switched her scheduling pilot to B?"}
+      ]
+    },
+    {
+      "id": "heldout-explicit-switch-zh",
+      "split": "heldout",
+      "language": "zh-TW",
+      "events": [
+        {"id": "h9", "occurredAt": "2026-08-06", "ingestedAt": "2026-08-06", "actor": "婉如", "text": "店內庫存系統決定用 A，價格划算、掃碼品質也夠。"},
+        {"id": "h10", "occurredAt": "2026-08-13", "ingestedAt": "2026-08-13", "actor": "婉如", "text": "B 的掃碼測試結果更好，先列為候選；我還沒有改決定。"},
+        {"id": "h11", "occurredAt": "2026-08-20", "ingestedAt": "2026-08-20", "actor": "婉如", "text": "現在正式把店內庫存系統從 A 改成 B，因為 B 在實測中漏掃較少。"}
+      ],
+      "questions": [
+        {"id": "q8", "actor": "婉如", "text": "店內庫存系統現在正式採用哪個？改變的依據是什麼？"}
+      ]
+    }
+  ]
+}

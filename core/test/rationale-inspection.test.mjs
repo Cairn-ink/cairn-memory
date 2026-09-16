@@ -26,14 +26,27 @@ function fixture(t) {
   return { path, core, refs, inspect, propose };
 }
 
-test('RI1 explicit incident view exposes orphan challenges without claiming a decision or changing default context', async t => {
+test('DC1 direct incoming challenge appears in decision context without a support edge', async t => {
   const f = fixture(t); assert.equal((await f.propose([[1, 0, 'challenges-premise']])).inserted, 1);
-  const before = ok(f.inspect()); assert.deepEqual(before.edges, []);
+  const context = ok(f.inspect()); assert.equal(context.edges.length, 1);
+  assert.equal(context.edges[0].relation, 'challenges-premise');
+  assert.equal(context.status, 'reconfirmation-suggested');
+  assert.equal(context.sources.length, 2);
   const audit = ok(f.inspect(0, { view: 'incident-proposals' }));
   assert.equal(audit.edges.length, 1); assert.equal(audit.edges[0].relation, 'challenges-premise');
   assert.equal(audit.status, 'unassessed'); assert.equal(audit.view, 'incident-proposals');
   assert.equal(audit.coverage, 'root-incident-only'); assert.equal(audit.sources.length, 2);
-  assert.deepEqual(ok(f.inspect()), before); assert.deepEqual(ok(f.inspect(0, { view: 'decision-context' })), before);
+  assert.deepEqual(ok(f.inspect()), context); assert.deepEqual(ok(f.inspect(0, { view: 'decision-context' })), context);
+});
+
+test('DC1 self-support does not duplicate a direct incoming challenge', async t => {
+  const f = fixture(t); await f.propose([[0, 0, 'supports-decision'], [1, 0, 'challenges-premise']]);
+  const context = ok(f.inspect());
+  assert.equal(context.edges.length, 2);
+  assert.deepEqual(context.edges.map(edge => edge.relation), ['supports-decision', 'challenges-premise']);
+  assert.equal(context.sources.length, 2);
+  assert.equal(context.status, 'reconfirmation-suggested');
+  assert.equal(ok(f.inspect(0, { view: 'incident-proposals' })).edges.length, 2);
 });
 
 test('RI2 incident root stays one-hop, includes outgoing/self edges once and retains stable order', async t => {
@@ -58,6 +71,7 @@ test('RI3 closed modes, namespace/revision guards and cold keyless forget preser
   assert.deepEqual(ok(cold.getRationale({ namespace, ...f.refs[0], view: 'incident-proposals' })), warm);
   ok(cold.forget({ namespace, memoryId: f.refs[1].memoryId, expectedRevision: f.refs[1].revision }));
   assert.deepEqual(ok(cold.getRationale({ namespace, ...f.refs[0], view: 'incident-proposals' })).edges, []);
+  assert.deepEqual(ok(cold.getRationale({ namespace, ...f.refs[0] })).edges, []);
 });
 
 test('RI4 incident sources still fail at six-memory bound without partial graph', async t => {
@@ -83,4 +97,48 @@ test('RI5 changing a receipt invalidates incident proposals without a model call
   db.prepare('UPDATE receipts SET excerpt = ? WHERE memory_id = ?')
     .run('The reading was corrected by the source.', f.refs[1].memoryId);
   assert.deepEqual(ok(f.inspect(0, { view: 'incident-proposals' })).edges, []);
+  assert.deepEqual(ok(f.inspect()).edges, []);
+});
+
+test('DC2 correcting a direct challenge clears default context without changing the root', async t => {
+  const f = fixture(t); await f.propose([[1, 0, 'challenges-premise']]);
+  assert.equal(ok(f.inspect()).edges.length, 1);
+  ok(f.core.correct({ namespace, memoryId: f.refs[1].memoryId, expectedRevision: f.refs[1].revision,
+    content: 'The earlier reading was mistaken.', kind: 'context', receipt: {
+      client: 'synthetic', sessionId: 'synthetic', eventId: 'correction', role: 'user',
+      excerpt: 'The earlier reading was mistaken.',
+    } }));
+  assert.deepEqual(ok(f.inspect()).edges, []);
+  assert.equal(ok(f.inspect()).status, 'unassessed');
+});
+
+test('DC2 direct challenges fail at six-source bound and combined paths fail at ten-edge bound', async t => {
+  const f = fixture(t);
+  const extras = Array.from({ length: 3 }, (_, index) => {
+    const content = `Another bounded source ${index}.`;
+    const memory = ok(f.core.admit({ namespace, memory: { content, kind: 'context' }, receipts: [{
+      client: 'synthetic', sessionId: 'synthetic', eventId: `direct-${index}`, role: 'user', excerpt: content,
+    }] })).memory;
+    return { memoryId: memory.id, revision: memory.revision };
+  });
+  const neighbors = [...f.refs.slice(1), ...extras];
+  for (const ref of neighbors.slice(0, 5)) await f.propose([[1, 0, 'challenges-premise']], [f.refs[0], ref]);
+  assert.equal(ok(f.inspect()).sources.length, 6);
+  await f.propose([[1, 0, 'challenges-premise']], [f.refs[0], neighbors[5]]);
+  assert.equal(f.inspect().error.code, 'rationale_limit');
+
+  const g = fixture(t);
+  const more = Array.from({ length: 2 }, (_, index) => {
+    const content = `Extra edge source ${index}.`;
+    const memory = ok(g.core.admit({ namespace, memory: { content, kind: 'context' }, receipts: [{
+      client: 'synthetic', sessionId: 'synthetic', eventId: `edge-${index}`, role: 'user', excerpt: content,
+    }] })).memory;
+    return { memoryId: memory.id, revision: memory.revision };
+  });
+  const linked = [...g.refs.slice(1), ...more];
+  for (const ref of linked) await g.propose([[1, 0, 'supports-decision'],
+    [1, 0, 'challenges-premise']], [g.refs[0], ref]);
+  assert.equal(ok(g.inspect()).edges.length, 10);
+  await g.propose([[1, 0, 'challenges-premise']], [linked[0], linked[1]]);
+  assert.equal(g.inspect().error.code, 'rationale_limit');
 });

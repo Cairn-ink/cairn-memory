@@ -20,6 +20,27 @@
   response shape. Model interpretations remain unverified; a mistaken replacement
   can remove a correct link. No schema, provider port, MCP or hosted change.
 
+## Unreleased — direct premise challenges in decision context
+
+- The local rationale decision-context read now includes a stored direct
+  incoming `challenges-premise` proposal even without a separate support edge.
+  Self-support paths deduplicate the same challenge before existing limits.
+- Keyless inspection and opt-in rationale-evidence recall expose the same
+  source-bound challenge after cold restart. Source-only recall, incident
+  inspection, storage and default capture remain unchanged. This is a
+  model-proposed reconfirmation suggestion, not verified premise failure,
+  decision cancellation or adoption of another choice.
+
+## Unreleased — rationale survives filing-only revisions
+
+- MOC placement now preserves valid receipt-bound proposed rationale links when
+  filing alone revises a memory, including links between two changed memories.
+  The rebind is atomic and checks unchanged content, complete receipts and
+  endpoint scope; old revision refs and stale reads still fail.
+- Corrections, receipt changes, retirement, forgetting and arbitrary revision
+  changes continue to invalidate links. This does not confirm a model-proposed
+  reason, make a tentative choice final or change a decision.
+
 ## Unreleased — independent provider usage bounds
 
 - The optional OpenAI adapter accepts bounded observed input usage that differs
