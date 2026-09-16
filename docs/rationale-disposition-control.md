@@ -24,7 +24,9 @@ provider request, counts that actual request under the unchanged 6,000-input
 and 1,024-output core limits, and requires the later send to match the counted
 bytes. The one-shot request is not sendable until the expanded count returns
 valid and in budget; a reentrant count or send poisons the attempt. It captures
-the provider and counter callbacks before either can mutate
+the caller request only while send authority is suspended, so proxy traps and
+signal getters cannot reenter a second send during validation or abort checks.
+It captures the provider and counter callbacks before either can mutate
 the caller setup, forwards one core AbortSignal and checks it before and after
 the provider call. The installed-artifact regression observes the two fake
 HTTP phases through the real installed adapter and installed core proposal
