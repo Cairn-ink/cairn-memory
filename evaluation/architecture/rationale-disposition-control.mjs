@@ -62,7 +62,8 @@ export function createRationaleDispositionControl(model, oldEdges) {
   const boundRelate = relate.bind(model), boundCounter = counter.bind(model);
   let prepared = null, phase = 'idle';
   const countTokens = text => {
-    if (phase === 'counting' || phase === 'counting-output' || phase === 'sending' || phase === 'invalid') {
+    if (phase === 'counting' || phase === 'counting-output' || phase === 'validating' ||
+        phase === 'sending' || phase === 'invalid') {
       phase = 'invalid'; invalid();
     }
     if (typeof text !== 'string') throw new Error('token_count_unavailable');
@@ -103,22 +104,32 @@ export function createRationaleDispositionControl(model, oldEdges) {
   };
   const review = async request => {
     if (phase !== 'prepared') { phase = 'invalid'; invalid(); }
+    // Caller-owned request objects can run code from Proxy traps and getters.
+    // Remove send authority before inspecting any of them.
+    const expected = prepared;
+    prepared = null;
+    phase = 'validating';
     let input, signal;
     try {
       exactRecord(request, ['system', 'input', 'maxOutputTokens', 'signal']);
       if (request.system !== sourceOnlySystem || request.maxOutputTokens !== 1024 ||
           !(request.signal instanceof AbortSignal)) invalid();
       input = expanded(request.input, setup);
-      if (JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 }) !== prepared) invalid();
+      if (JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 }) !== expected) invalid();
       signal = request.signal;
+      if (phase !== 'validating') invalid();
     } catch (error) { phase = 'invalid'; throw error; }
-    phase = 'sending'; prepared = null;
+    phase = 'sending';
     try {
-      if (signal.aborted) throw new DOMException('Control request cancelled', 'AbortError');
+      const abortedBefore = signal.aborted;
+      if (phase !== 'sending') invalid();
+      if (abortedBefore) throw new DOMException('Control request cancelled', 'AbortError');
       const result = await boundRelate(Object.freeze({ system: controlSystem, input,
         maxOutputTokens: 1024, signal }));
       if (phase !== 'sending') invalid();
-      if (signal.aborted) throw new DOMException('Control request cancelled', 'AbortError');
+      const abortedAfter = signal.aborted;
+      if (phase !== 'sending') invalid();
+      if (abortedAfter) throw new DOMException('Control request cancelled', 'AbortError');
       return result;
     } finally { phase = 'done'; }
   };

@@ -116,3 +116,27 @@ application code or dependency changes.
   its earlier full artifact 70/70 and JSON/strict-plugin results above belong
   to the pre-correction candidate. No paid call, shared ledger access or
   semantic result was involved.
+
+## Second review correction
+
+- Independent Standards review found a second one-shot gap in `fb96cb3`:
+  `relate` still left phase `prepared` while inspecting caller-owned request
+  properties. A Proxy signal getter on its second read reentered `relate`, so
+  both calls reached the bound provider. The worker reproduced the exact
+  deterministic red symptom with a focused test: two sends instead of zero.
+  Separate descriptor and prototype traps, and a signal `aborted` getter,
+  also exposed a send before denial. These are synthetic callbacks, not HTTP.
+- The facade now clears its prepared request and enters `validating` before
+  inspecting caller data. Any nested count/send poisons the attempt; validation
+  checks that state immediately before entering `sending`. Abort checks both
+  before and after the provider call recheck state, so a callback cannot turn
+  an invalid attempt into a successful result. Four new tests cover the
+  second-read, descriptor/prototype, pre-send and post-provider paths. The
+  original red reproductions are now green; a post-provider reentry rejects
+  after exactly its already-started first send, without a second send.
+- Worker gates on this correction passed pure facade 13/13, generic 134/134
+  and installed real-adapter fake transport 1/1 on both Node 22.16 and 24.15;
+  JSON validation also passed on both.
+  Primary independent reruns/review and exact-head CI remain pending. The
+  frozen control prompt remains byte-identical. No provider key, real HTTP,
+  paid call, shared ledger or scored fixture was used.

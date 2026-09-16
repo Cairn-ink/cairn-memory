@@ -223,6 +223,79 @@ test('DC3 an unrelated/output count callback cannot reentrantly prepare provider
   assert.equal(sends, 0);
 });
 
+test('DC3 caller signal second read cannot reenter and send twice', async () => {
+  let control, sends = 0, reads = 0, nested;
+  const signal = new AbortController().signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    relate: () => { sends++; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  control.countTokens(JSON.stringify(oldRequest()));
+  const valid = { ...oldRequest(), signal };
+  const request = new Proxy(valid, { get(target, key, receiver) {
+    if (key === 'signal' && ++reads === 2) nested = control.relate(valid);
+    return Reflect.get(target, key, receiver);
+  } });
+  await assert.rejects(control.relate(request), /invalid_disposition_control_request/);
+  if (nested) await Promise.allSettled([nested]);
+  assert.equal(sends, 0);
+});
+
+test('DC3 caller descriptor and prototype traps cannot reenter before validation', async () => {
+  for (const trap of ['getOwnPropertyDescriptor', 'getPrototypeOf']) {
+    let control, sends = 0;
+    const nested = [];
+    const signal = new AbortController().signal;
+    const model = { contextWindow: 8192, countTokens: () => 1,
+      relate: () => { sends++; return { edges: [] }; } };
+    control = createRationaleDispositionControl(model, oldEdges());
+    control.countTokens(JSON.stringify(oldRequest()));
+    const valid = { ...oldRequest(), signal };
+    const request = new Proxy(valid, { [trap](target, ...args) {
+      nested.push(control.relate(valid));
+      return Reflect[trap](target, ...args);
+    } });
+    await assert.rejects(control.relate(request), /invalid_disposition_control_request/);
+    await Promise.allSettled(nested);
+    assert.equal(sends, 0, trap);
+  }
+});
+
+test('DC3 signal aborted getter cannot reenter immediately before provider send', async () => {
+  let control, sends = 0, nested;
+  const signal = new AbortController().signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    relate: () => { sends++; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  control.countTokens(JSON.stringify(oldRequest()));
+  Object.defineProperty(signal, 'aborted', { get() {
+    nested = control.relate({ ...oldRequest(), signal: new AbortController().signal });
+    return false;
+  } });
+  await assert.rejects(control.relate({ ...oldRequest(), signal }),
+    /invalid_disposition_control_request/);
+  if (nested) await Promise.allSettled([nested]);
+  assert.equal(sends, 0);
+});
+
+test('DC3 post-provider abort getter cannot hide reentrant denial', async () => {
+  let control, sends = 0, reads = 0, nested;
+  const signal = new AbortController().signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    relate: () => { sends++; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  control.countTokens(JSON.stringify(oldRequest()));
+  Object.defineProperty(signal, 'aborted', { get() {
+    if (++reads === 2) nested = control.relate({ ...oldRequest(),
+      signal: new AbortController().signal });
+    return false;
+  } });
+  await assert.rejects(control.relate({ ...oldRequest(), signal }),
+    /invalid_disposition_control_request/);
+  if (nested) await Promise.allSettled([nested]);
+  assert.equal(reads, 2);
+  assert.equal(sends, 1);
+});
+
 test('DC4 raw malformed and empty provider outputs are neither repaired nor translated by facade', async () => {
   for (const raw of [{ edges: [] }, { edges: [{ extra: true }] }, { other: true }, null]) {
     const model = { contextWindow: 8192, countTokens: () => 1, relate: () => raw };
