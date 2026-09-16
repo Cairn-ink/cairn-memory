@@ -9,6 +9,8 @@ export const RATIONALE_LIMITS = Object.freeze({ requests: 384, microUsd: 1920000
 export const SOURCE_SCAN_LIMITS = Object.freeze({ requests: 64, microUsd: 320000,
   reservationMicroUsd: 5000 });
 export const RATIONALE_MODEL_LIMITS = Object.freeze({ requests: 96, microUsd: 2048000 });
+export const RATIONALE_CORRECTION_LIMITS = Object.freeze({ requests: 6, microUsd: 30000,
+  reservationMicroUsd: 5000 });
 const RATIONALE_MODEL_RESERVATIONS = Object.freeze({
   'gpt-4.1-mini-2025-04-14': 5000, 'gpt-5.6-luna': 3000, 'gpt-5.6-sol': 56000,
 });
@@ -47,6 +49,12 @@ export function createRationaleModelAttempt(options) {
 export function createBasisComparisonAttempt(options) {
   return createAttempt(options, RATIONALE_MODEL_LIMITS,
     ['cairn_relate', 'cairn_reviewBasis'], RATIONALE_MODEL_RESERVATIONS);
+}
+
+// A separate closed cap for one three-case source-only correction diagnostic.
+// The caller still supplies the existing durable campaign guard as send.
+export function createRationaleCorrectionAttempt(options) {
+  return createAttempt(options, RATIONALE_CORRECTION_LIMITS, ['cairn_relate']);
 }
 
 function createAttempt(options, limits, methods, modelReservations = null) {
