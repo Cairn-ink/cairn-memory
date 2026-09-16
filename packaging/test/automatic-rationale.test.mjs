@@ -13,12 +13,20 @@ const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
 const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
 
-test('installed adapter/core/MCP cold rationale recall preserves linked evidence and observes forgetting', { timeout: 60000 }, async t => {
+for (const directOnly of [false, true]) test(`installed adapter/core/MCP retains ${directOnly ? 'direct-only challenge' : 'support-chain'} rationale through cold replay`, { timeout: 60000 }, async t => {
   const artifact = buildArtifact(); const root = mkdtempSync(join(tmpdir(), 'cairn-installed-rationale-'));
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-rationale', private: true, version: '0.0.0' }), { flag: 'wx' });
   command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], root, artifact.userconfig);
   const packageRoot = join(root, 'node_modules', packageName); const path = join(root, 'memory.sqlite');
   const mock = rationaleModel(); const calls = []; let ranks = [];
+  if (directOnly) mock.relate = ({ input: { memories } }) => {
+    const root = memories.find(memory => memory.receipts.some(receipt =>
+      receipt.excerpt.startsWith('I chose A because')));
+    const later = memories.find(memory => memory.receipts.some(receipt =>
+      receipt.excerpt.startsWith('I checked: A cannot work offline')));
+    return { edges: root && later ? [{ from: later.index, to: root.index,
+      relation: 'challenges-premise', fromReceipt: 0, toReceipt: 0 }] : [] };
+  };
   const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
     const payload = JSON.parse(body); calls.push({ route, method: payload.text.format.name });
     if (route.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
@@ -59,13 +67,18 @@ test('installed adapter/core/MCP cold rationale recall preserves linked evidence
   await start(proxy.token); assert.equal((await active.listTools()).tools.length, 7);
   const batches = [['one', 'I chose A because it supports offline work.'], ['two', 'I checked: A cannot work offline.']]
     .map(([batchId, content]) => ({ batchId, messages: [{ role: 'user', content }] }));
-  for (const batch of batches) assert.equal((await call('capture_memory', batch)).rationale.status, 'reviewed');
+  const first = await call('capture_memory', batches[0]);
+  assert.equal(first.rationale.status, 'reviewed'); assert.equal(first.rationale.inserted, directOnly ? 0 : 1);
+  const second = await call('capture_memory', batches[1]);
+  assert.equal(second.rationale.status, 'reviewed'); assert.equal(second.rationale.inserted, 1);
   assert.equal(calls.length, 16);
   const recalled = await call('recall_memory', query);
   assert.equal(calls.length, 20); const rootMemory = recalled.memories[0];
   assert.equal(rootMemory.rationale.status, 'reconfirmation-suggested'); assert.equal(rootMemory.rationale.sources.length, 2);
   assert.deepEqual(retainedReceipts(rootMemory.rationale), batches.map(batch => ({ role: 'user', excerpt: batch.messages[0].content }))
     .sort((a, b) => a.excerpt.localeCompare(b.excerpt)));
+  assert.equal(rootMemory.rationale.edges.length, directOnly ? 1 : 2);
+  assert.equal(rootMemory.rationale.edges.filter(edge => edge.relation === 'challenges-premise').length, 1);
   assert.deepEqual(ranks[0].candidates[0].rationale, rootMemory.rationale);
   recallTrace(16);
   const ref = { memoryId: rootMemory.memory.id, revision: rootMemory.memory.revision };

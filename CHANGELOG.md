@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — direct premise challenges in decision context
+
+- The local rationale decision-context read now includes a stored direct
+  incoming `challenges-premise` proposal even without a separate support edge.
+  Self-support paths deduplicate the same challenge before existing limits.
+- Keyless inspection and opt-in rationale-evidence recall expose the same
+  source-bound challenge after cold restart. Source-only recall, incident
+  inspection, storage and default capture remain unchanged. This is a
+  model-proposed reconfirmation suggestion, not verified premise failure,
+  decision cancellation or adoption of another choice.
+
 ## Unreleased — rationale survives filing-only revisions
 
 - MOC placement now preserves valid receipt-bound proposed rationale links when

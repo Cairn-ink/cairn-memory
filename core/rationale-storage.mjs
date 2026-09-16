@@ -122,10 +122,15 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
         WHERE to_id = ? AND relation = ? ORDER BY from_id, from_receipt, to_receipt LIMIT 11`).all(id, relation);
       const supports = incident ? [] : incoming(ref.memoryId, 'supports-decision');
       const rows = incident ? db.prepare(`SELECT * FROM rationale_edges WHERE from_id = ? OR to_id = ?
-        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(ref.memoryId, ref.memoryId) : [...supports];
+        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(ref.memoryId, ref.memoryId)
+        : [...supports, ...incoming(ref.memoryId, 'challenges-premise')];
       if (!incident) for (const id of new Set(supports.map(row => row.from_id))) rows.push(...incoming(id, 'challenges-premise'));
-      if (rows.length > 10) fail('rationale_limit');
-      for (const row of rows) {
+      // A self-support makes the root both a direct challenge target and a
+      // support source. Count and return that same stored proposal only once.
+      const uniqueRows = new Map(rows.map(row => [JSON.stringify([row.from_id, row.to_id,
+        row.relation, row.from_receipt, row.to_receipt]), row]));
+      if (uniqueRows.size > 10) fail('rationale_limit');
+      for (const row of uniqueRows.values()) {
         for (const side of ['from', 'to']) {
           const id = row[`${side}_id`];
           if (!sources.has(id)) {
