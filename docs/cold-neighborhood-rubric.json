@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "evaluationOnly": true,
+  "cases": [
+    {
+      "id": "cart-basis-change",
+      "distractorMessageIds": ["cart-m04", "cart-m05", "cart-m08", "cart-m09", "cart-m10", "cart-m13", "cart-m14", "cart-m15"],
+      "obligations": [
+        {
+          "id": "cart-choice",
+          "claim": "Alder remains the market team's recorded choice, not a newly adopted replacement.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "cart-m01", "passage": "we selected the Alder folding cart" },
+            { "messageId": "cart-m07", "passage": "Alder remains our recorded cart choice" }
+          ]
+        },
+        {
+          "id": "cart-historical-battery",
+          "claim": "Onsite battery swapping was an explicit historical reason for the Alder selection and worked at the February demonstration.",
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "cart-m01", "passage": "because its battery can be swapped onsite" },
+            { "messageId": "cart-m02", "passage": "replacing its battery in under a minute" }
+          ]
+        },
+        {
+          "id": "cart-battery-now",
+          "claim": "The same cart no longer permits onsite battery swaps, so that reason needs reconfirmation now without erasing its history.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "cart-m06", "passage": "we can no longer swap its battery onsite" },
+            { "messageId": "cart-m07", "passage": "the lost battery-swap reason needs review" }
+          ]
+        },
+        {
+          "id": "cart-canopy-now",
+          "claim": "The detachable canopy is a separate original reason and remains applicable.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "cart-m01", "passage": "its canopy detaches for storage" },
+            { "messageId": "cart-m11", "passage": "it still detaches without tools" }
+          ]
+        },
+        {
+          "id": "cart-no-replacement",
+          "claim": "No successor cart has been approved.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [{ "messageId": "cart-m12", "passage": "We have not approved a successor cart" }]
+        }
+      ],
+      "forbiddenInferences": [
+        { "id": "cart-historical-false", "claim": "The February battery demonstration was false because the March retrofit removed swapping.", "sourceMessageIds": ["cart-m02", "cart-m06"] },
+        { "id": "cart-auto-replacement", "claim": "The bakery team's different cart became the market team's replacement.", "sourceMessageIds": ["cart-m08", "cart-m12"] },
+        { "id": "cart-canopy-lost", "claim": "The sealed battery compartment also removed the detachable canopy reason.", "sourceMessageIds": ["cart-m06", "cart-m11"] }
+      ]
+    },
+    {
+      "id": "newsletter-adoption",
+      "distractorMessageIds": ["news-m04", "news-m05", "news-m09", "news-m10", "news-m13", "news-m14", "news-m15"],
+      "obligations": [
+        {
+          "id": "news-old-choice",
+          "claim": "Lantern was the council's earlier adopted newsletter platform, for bilingual templates.",
+          "required": false,
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "news-m01", "passage": "we approved Lantern for our newsletter because its bilingual templates met our launch requirement" },
+            { "messageId": "news-m08", "passage": "Lantern remains the council's adopted newsletter platform as of February 18" }
+          ]
+        },
+        {
+          "id": "news-quartz-not-adopted",
+          "claim": "Quartz was considered as a proposal but never adopted by the council.",
+          "state": "proposed",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "news-m06", "passage": "Quartz is only a proposed replacement for Lantern; no switch has been approved" },
+            { "messageId": "news-m12", "passage": "Quartz was never selected" }
+          ]
+        },
+        {
+          "id": "news-new-choice",
+          "claim": "The council later adopted Spruce as its current newsletter platform in place of Lantern.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "news-m11", "passage": "we replaced Lantern with Spruce for the council newsletter" },
+            { "messageId": "news-m12", "passage": "The council's Spruce adoption is effective now" }
+          ]
+        },
+        {
+          "id": "news-accessible-reason",
+          "claim": "Screen-reader-ready templates are one stated reason for Spruce adoption.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [{ "messageId": "news-m11", "passage": "because Spruce provides screen-reader-ready templates" }]
+        },
+        {
+          "id": "news-offline-reason",
+          "claim": "Offline draft export is another stated reason for Spruce adoption.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [{ "messageId": "news-m11", "passage": "offline draft export" }]
+        }
+      ],
+      "forbiddenInferences": [
+        { "id": "news-quartz-selected", "claim": "The council adopted Quartz when it received a discount.", "sourceMessageIds": ["news-m06", "news-m07", "news-m12"] },
+        { "id": "news-other-actor", "claim": "The archives team's separate Quartz use is the council's newsletter choice.", "sourceMessageIds": ["news-m09", "news-m13"] },
+        { "id": "news-lantern-current", "claim": "Lantern remains the current council platform after the Spruce vote.", "sourceMessageIds": ["news-m08", "news-m11"] }
+      ]
+    },
+    {
+      "id": "greenhouse-late-import",
+      "distractorMessageIds": ["green-m03", "green-m04", "green-m05", "green-m09", "green-m10", "green-m13", "green-m14", "green-m15"],
+      "obligations": [
+        {
+          "id": "green-old-east",
+          "claim": "East's 06:45 schedule was the historical March schedule, not the current start.",
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [{ "messageId": "green-m01", "passage": "our irrigation starts at 06:45 each day" }]
+        },
+        {
+          "id": "green-current-east",
+          "claim": "East's effective irrigation start is 07:30 after the May update, notwithstanding the later import of an older value.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "green-m06", "passage": "effective today, irrigation starts at 07:30 instead of 06:45" },
+            { "messageId": "green-m11", "passage": "the older document's value, not a new measurement or schedule change" }
+          ]
+        },
+        {
+          "id": "green-import-is-old",
+          "claim": "The June import repeated the older March 06:45 source and did not reverse the May update.",
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "green-m11", "passage": "the original East greenhouse note dated 2026-03-03, which said irrigation starts at 06:45" },
+            { "messageId": "green-m12", "passage": "without issuing a new operations notice" }
+          ]
+        },
+        {
+          "id": "green-west-scope",
+          "claim": "West's 05:30 schedule belongs to a separate greenhouse and does not set East's start.",
+          "state": "current",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "green-m02", "passage": "its separate irrigation starts at 05:30" },
+            { "messageId": "green-m08", "passage": "East's update did not change West" }
+          ]
+        }
+      ],
+      "forbiddenInferences": [
+        { "id": "green-import-wins", "claim": "The June import made East's March 06:45 schedule current again.", "sourceMessageIds": ["green-m06", "green-m11", "green-m12"] },
+        { "id": "green-west-sets-east", "claim": "West's 05:30 start supersedes East's 07:30 start.", "sourceMessageIds": ["green-m02", "green-m08"] },
+        { "id": "green-march-never-true", "claim": "East never had a 06:45 schedule because the May update exists.", "sourceMessageIds": ["green-m01", "green-m06"] }
+      ]
+    },
+    {
+      "id": "workshop-exception-unknown",
+      "distractorMessageIds": ["shop-m03", "shop-m04", "shop-m05", "shop-m08", "shop-m09", "shop-m10", "shop-m13", "shop-m14", "shop-m15"],
+      "obligations": [
+        {
+          "id": "shop-historical-usual",
+          "claim": "The usual Saturday pickup hour was 10:00 through April; this does not establish July's hour.",
+          "required": false,
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [{ "messageId": "shop-m01", "passage": "the usual Saturday pickup hour is 10:00 through April" }]
+        },
+        {
+          "id": "shop-temporary-time",
+          "claim": "The one-day May 9 street-closure pickup time was 12:30.",
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [{ "messageId": "shop-m06", "passage": "pickup moves to 12:30 on Saturday May 9 only" }]
+        },
+        {
+          "id": "shop-exception-ended",
+          "claim": "The May 9 exception ended that day and is not a permanent or July schedule.",
+          "state": "historical",
+          "supportLevel": "full",
+          "sources": [
+            { "messageId": "shop-m07", "passage": "does not permanently change the workshop's usual schedule" },
+            { "messageId": "shop-m12", "passage": "it is not a July pickup schedule" }
+          ]
+        },
+        {
+          "id": "shop-july-unknown",
+          "claim": "No confirmed July Saturday pickup hour is available; give the known history but abstain on the requested current hour.",
+          "state": "unknown",
+          "supportLevel": "partial",
+          "sources": [{ "messageId": "shop-m11", "passage": "July Saturday pickup hours are still under review; no July hour has been confirmed" }]
+        }
+      ],
+      "forbiddenInferences": [
+        { "id": "shop-may-becomes-july", "claim": "The May 9 exception establishes a July pickup hour of 12:30.", "sourceMessageIds": ["shop-m06", "shop-m12"] },
+        { "id": "shop-april-becomes-july", "claim": "The through-April usual hour confirms July pickup at 10:00.", "sourceMessageIds": ["shop-m01", "shop-m11"] },
+        { "id": "shop-refuse-all", "claim": "Nothing can be said about the known May 9 time or historical usual schedule.", "sourceMessageIds": ["shop-m01", "shop-m06"] }
+      ]
+    }
+  ]
+}

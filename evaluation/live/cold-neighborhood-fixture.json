@@ -1,0 +1,160 @@
+{
+  "cases": [
+    {
+      "id": "cart-basis-change",
+      "batches": [
+        {
+          "id": "cart-b1",
+          "capturedOn": "2026-02-04",
+          "messages": [
+            { "id": "cart-m01", "role": "user", "content": "2026-02-03, market team: we selected the Alder folding cart because its battery can be swapped onsite and its canopy detaches for storage." },
+            { "id": "cart-m02", "role": "user", "content": "The Alder demonstration on February 3 showed our crew replacing its battery in under a minute." },
+            { "id": "cart-m03", "role": "user", "content": "The vendor confirmed our Alder cart's canopy can be detached without tools." },
+            { "id": "cart-m04", "role": "assistant", "content": "I can draft a chalkboard menu for the opening stall." },
+            { "id": "cart-m05", "role": "user", "content": "The gallery next door is moving its opening reception to Friday." }
+          ]
+        },
+        {
+          "id": "cart-b2",
+          "capturedOn": "2026-03-13",
+          "messages": [
+            { "id": "cart-m06", "role": "user", "content": "2026-03-12, market team: the retrofit sealed the battery compartment on our same Alder cart; we can no longer swap its battery onsite." },
+            { "id": "cart-m07", "role": "user", "content": "Alder remains our recorded cart choice; the lost battery-swap reason needs review, and the detachable canopy reason is unchanged." },
+            { "id": "cart-m08", "role": "user", "content": "The bakery team bought a different folding cart for its own stall." },
+            { "id": "cart-m09", "role": "assistant", "content": "I can compare paper bag suppliers for the market stall." },
+            { "id": "cart-m10", "role": "user", "content": "The public garden closes at 18:00 during March." }
+          ]
+        },
+        {
+          "id": "cart-b3",
+          "capturedOn": "2026-04-02",
+          "messages": [
+            { "id": "cart-m11", "role": "user", "content": "2026-04-01, market team: we checked the same Alder canopy again; it still detaches without tools." },
+            { "id": "cart-m12", "role": "user", "content": "We have not approved a successor cart for the market team." },
+            { "id": "cart-m13", "role": "user", "content": "The ceramics booth changed its price tags to blue." },
+            { "id": "cart-m14", "role": "assistant", "content": "I can organize the volunteer sign-up sheet by shift." },
+            { "id": "cart-m15", "role": "user", "content": "The nearby theater is printing a new seating map." }
+          ]
+        }
+      ],
+      "question": { "id": "cart-q", "role": "user", "content": "Which cart did the market team select, which original reasons remain or need reconfirmation now, and has it chosen a replacement?" }
+    },
+    {
+      "id": "newsletter-adoption",
+      "batches": [
+        {
+          "id": "news-b1",
+          "capturedOn": "2026-01-11",
+          "messages": [
+            { "id": "news-m01", "role": "user", "content": "2026-01-10, arts council: we approved Lantern for our newsletter because its bilingual templates met our launch requirement." },
+            { "id": "news-m02", "role": "user", "content": "Our Lantern contract includes the bilingual template library for the council newsletter." },
+            { "id": "news-m03", "role": "user", "content": "The first Lantern newsletter was sent on January 10." },
+            { "id": "news-m04", "role": "assistant", "content": "I can proofread the exhibition captions." },
+            { "id": "news-m05", "role": "user", "content": "The rehearsal room is booked for a dance workshop." }
+          ]
+        },
+        {
+          "id": "news-b2",
+          "capturedOn": "2026-02-19",
+          "messages": [
+            { "id": "news-m06", "role": "user", "content": "2026-02-18, arts council: Quartz is only a proposed replacement for Lantern; no switch has been approved." },
+            { "id": "news-m07", "role": "user", "content": "Quartz offered the council a discount, but the offer does not change our current newsletter platform." },
+            { "id": "news-m08", "role": "user", "content": "Lantern remains the council's adopted newsletter platform as of February 18." },
+            { "id": "news-m09", "role": "user", "content": "The archives team uses Quartz for a separate internal mailing list." },
+            { "id": "news-m10", "role": "assistant", "content": "I can make a color key for the spring exhibition map." }
+          ]
+        },
+        {
+          "id": "news-b3",
+          "capturedOn": "2026-03-22",
+          "messages": [
+            { "id": "news-m11", "role": "user", "content": "2026-03-21, arts council vote: we replaced Lantern with Spruce for the council newsletter because Spruce provides screen-reader-ready templates and offline draft export." },
+            { "id": "news-m12", "role": "user", "content": "The council's Spruce adoption is effective now; Quartz was never selected." },
+            { "id": "news-m13", "role": "user", "content": "The archives team's Quartz mailing list is unaffected by the council vote." },
+            { "id": "news-m14", "role": "assistant", "content": "I can alphabetize the donor thank-you list." },
+            { "id": "news-m15", "role": "user", "content": "The outdoor concert uses a different ticketing service." }
+          ]
+        }
+      ],
+      "question": { "id": "news-q", "role": "user", "content": "What is the arts council's adopted newsletter platform now, why did it choose it, and was Quartz ever adopted?" }
+    },
+    {
+      "id": "greenhouse-late-import",
+      "batches": [
+        {
+          "id": "green-b1",
+          "capturedOn": "2026-03-04",
+          "messages": [
+            { "id": "green-m01", "role": "user", "content": "East greenhouse operations note dated 2026-03-03: our irrigation starts at 06:45 each day." },
+            { "id": "green-m02", "role": "user", "content": "West greenhouse operations note dated 2026-03-03: its separate irrigation starts at 05:30." },
+            { "id": "green-m03", "role": "user", "content": "The East greenhouse seed trays are labeled by crop rather than shelf." },
+            { "id": "green-m04", "role": "assistant", "content": "I can sort the seed inventory by supplier." },
+            { "id": "green-m05", "role": "user", "content": "The visitor center opens its café at 09:00." }
+          ]
+        },
+        {
+          "id": "green-b2",
+          "capturedOn": "2026-05-03",
+          "messages": [
+            { "id": "green-m06", "role": "user", "content": "East greenhouse operations update dated 2026-05-02: effective today, irrigation starts at 07:30 instead of 06:45." },
+            { "id": "green-m07", "role": "user", "content": "East greenhouse manager confirmed on May 2 that the 07:30 start applies to East only." },
+            { "id": "green-m08", "role": "user", "content": "West greenhouse still starts irrigation at 05:30; East's update did not change West." },
+            { "id": "green-m09", "role": "assistant", "content": "I can format the compost delivery sheet." },
+            { "id": "green-m10", "role": "user", "content": "The weather station received a new rain gauge." }
+          ]
+        },
+        {
+          "id": "green-b3",
+          "capturedOn": "2026-06-15",
+          "messages": [
+            { "id": "green-m11", "role": "user", "content": "Import note dated 2026-06-14: today we re-imported the original East greenhouse note dated 2026-03-03, which said irrigation starts at 06:45. That is the older document's value, not a new measurement or schedule change." },
+            { "id": "green-m12", "role": "user", "content": "The import clerk filed the March document in the East greenhouse archive on June 14 without issuing a new operations notice." },
+            { "id": "green-m13", "role": "user", "content": "The West greenhouse is replacing a walkway tile." },
+            { "id": "green-m14", "role": "assistant", "content": "I can archive the visitor center's monthly attendance sheet." },
+            { "id": "green-m15", "role": "user", "content": "The tool shed is due for a paint inspection." }
+          ]
+        }
+      ],
+      "question": { "id": "green-q", "role": "user", "content": "What is the East greenhouse irrigation start now, what did the late import mean, and does the West schedule change that answer?" }
+    },
+    {
+      "id": "workshop-exception-unknown",
+      "batches": [
+        {
+          "id": "shop-b1",
+          "capturedOn": "2026-04-05",
+          "messages": [
+            { "id": "shop-m01", "role": "user", "content": "Workshop pickup desk notice dated 2026-04-04: the usual Saturday pickup hour is 10:00 through April." },
+            { "id": "shop-m02", "role": "user", "content": "The pickup desk uses a paper ticket for each repaired bicycle." },
+            { "id": "shop-m03", "role": "user", "content": "The workshop paint shelf is being reorganized." },
+            { "id": "shop-m04", "role": "assistant", "content": "I can draft a checklist for returning borrowed tools." },
+            { "id": "shop-m05", "role": "user", "content": "The cycling club meets at the park on Wednesdays." }
+          ]
+        },
+        {
+          "id": "shop-b2",
+          "capturedOn": "2026-05-10",
+          "messages": [
+            { "id": "shop-m06", "role": "user", "content": "Workshop pickup notice dated 2026-05-08: because of a street closure, pickup moves to 12:30 on Saturday May 9 only." },
+            { "id": "shop-m07", "role": "user", "content": "The May 9 pickup exception does not permanently change the workshop's usual schedule." },
+            { "id": "shop-m08", "role": "user", "content": "The repair bench now has a new torque wrench." },
+            { "id": "shop-m09", "role": "assistant", "content": "I can print numbered claim tickets for the next repair fair." },
+            { "id": "shop-m10", "role": "user", "content": "The street market across town opens at 08:00." }
+          ]
+        },
+        {
+          "id": "shop-b3",
+          "capturedOn": "2026-06-16",
+          "messages": [
+            { "id": "shop-m11", "role": "user", "content": "Workshop notice dated 2026-06-15: July Saturday pickup hours are still under review; no July hour has been confirmed." },
+            { "id": "shop-m12", "role": "user", "content": "The May 9 closure exception ended that day; it is not a July pickup schedule." },
+            { "id": "shop-m13", "role": "user", "content": "The workshop's wheel truing class is moving rooms." },
+            { "id": "shop-m14", "role": "assistant", "content": "I can prepare a parts-order spreadsheet." },
+            { "id": "shop-m15", "role": "user", "content": "The park kiosk sells cold drinks on Sundays." }
+          ]
+        }
+      ],
+      "question": { "id": "shop-q", "role": "user", "content": "What time was workshop pickup on May 9, and can I rely on a confirmed pickup hour for a Saturday in July?" }
+    }
+  ]
+}
