@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "id": "rationale-temporal-fresh-v1",
+  "candidateGuidanceSha256BeforeAuthorship": "96b820313b6617895b6a792b798b34d7289f032c3e67e3f325c441b9018d8cda",
+  "description": "Six fresh synthetic source histories authored after the instruction candidate was frozen; not a blind benchmark or real-user study. Listed order is arrival order, never inferred event order.",
+  "cases": [
+    {
+      "id": "late-archival-batch-en",
+      "events": [
+        { "id": "choice", "role": "user", "text": "On 2033-01-02 I chose AlderScan for our field inventory because it can produce batch PDFs without a connection. I have not selected another scanner." },
+        { "id": "loss", "role": "user", "text": "On 2033-01-08 I tested the installed AlderScan update. Batch PDF export now requires a connection; it no longer works offline. Our scanner choice has not been changed." },
+        { "id": "archive", "role": "user", "text": "Archived test from 2033-01-02: AlderScan successfully produced batch PDFs offline. I imported this old observation on January 10. It is not a new test of the January 8 version." }
+      ]
+    },
+    {
+      "id": "retest-arrives-before-report-zh",
+      "events": [
+        { "id": "choice", "role": "user", "text": "2033年2月1日，我選了澄野錄音筆，因為它能在離線時匯出逐字稿。我還沒有改選產品。" },
+        { "id": "retest", "role": "user", "text": "2033年2月7日重新測試後，我確認澄野仍可離線匯出逐字稿。2月5日說功能壞掉的報告是我接錯線造成的誤報，不是產品失去功能；原本的選擇不變。" },
+        { "id": "oldReport", "role": "user", "text": "這是2033年2月5日的舊報告，2月9日才補進紀錄：我當時回報澄野無法離線匯出逐字稿。這不是2月9日的新測試。" }
+      ]
+    },
+    {
+      "id": "other-owner-edition-en",
+      "events": [
+        { "id": "choice", "role": "user", "text": "On 2033-03-01 I, Mira, chose BirchSlate Local Edition because it saves sketches offline on my own device." },
+        { "id": "test", "role": "user", "text": "On March 1 I tested my BirchSlate Local Edition: sketch saving worked without a connection." },
+        { "id": "otherOwner", "role": "user", "text": "On March 6 Tomas reported that his BirchSlate Cloud Edition requires a connection to save sketches. He uses a different edition and device; he did not test mine." },
+        { "id": "confirmation", "role": "user", "text": "On March 7 I retested my Local Edition and offline sketch saving still worked. I have not changed my choice." }
+      ]
+    },
+    {
+      "id": "two-venue-reasons-zh",
+      "events": [
+        { "id": "choice", "role": "user", "text": "2033年4月1日，團隊選定杉溪展館，原因是公車可直達且入口沒有階梯。我們尚未改選別的場地。" },
+        { "id": "busTest", "role": "user", "text": "4月1日實地確認，公車站就在杉溪展館門口，可以搭公車直達。" },
+        { "id": "busReport", "role": "user", "text": "4月3日我回報展館的公車站停用了，當時只看了一張沒有查證的路線圖。" },
+        { "id": "busRetraction", "role": "user", "text": "4月5日到現場後確認，原公車站仍在正常運作。4月3日的停用報告是我看錯路線；公車直達這個條件沒有改變。" },
+        { "id": "entryLoss", "role": "user", "text": "4月5日也確認，整修已封閉杉溪展館原本沒有階梯的入口，目前唯一開放入口有階梯。我們尚未選定替代場地。" },
+        { "id": "entryArchive", "role": "user", "text": "補登4月1日的勘查：當時杉溪展館入口沒有階梯。這份舊觀察在4月8日匯入，並不是4月5日整修後的新勘查。" }
+      ]
+    },
+    {
+      "id": "one-friday-exception-en",
+      "events": [
+        { "id": "usualChoice", "role": "user", "text": "On 2033-05-02 I chose LarchPrint for our usual Monday poster deliveries because it opens on Mondays. This decision concerns Monday orders only." },
+        { "id": "usualTest", "role": "user", "text": "LarchPrint confirmed on May 2 that its Monday opening hours have not changed and it can handle our usual Monday deliveries." },
+        { "id": "exceptionChoice", "role": "user", "text": "For the one urgent Friday order on May 6, I chose WillowPress because LarchPrint is normally closed on Fridays. Our usual Monday supplier remains LarchPrint." },
+        { "id": "fridayHours", "role": "user", "text": "On May 6 I verified LarchPrint's normal Friday closure and WillowPress's Friday opening. This says nothing has changed about LarchPrint's Monday service." }
+      ]
+    },
+    {
+      "id": "unknown-time-and-future-zh",
+      "events": [
+        { "id": "choice", "role": "user", "text": "2033年6月1日，我選星岸協作室來辦6月20日活動，因為來賓可匯出筆記。這個選擇只針對6月20日的活動。" },
+        { "id": "test", "role": "user", "text": "6月1日實測，星岸協作室的來賓帳號可以匯出筆記。" },
+        { "id": "uncertainMemo", "role": "user", "text": "6月10日收到一份未查證便箋，說來賓匯出功能可能停用了，但沒寫測試或生效日期。我不知道這份便箋描述哪一天，也還沒有確認。" },
+        { "id": "futurePlan", "role": "user", "text": "6月11日廠商通知：計畫從7月1日起停用來賓匯出，這項計畫尚未實施。我尚未更改6月20日的活動安排；仍需要確認未查證便箋的意思。" }
+      ]
+    }
+  ]
+}
