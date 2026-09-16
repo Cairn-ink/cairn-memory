@@ -32,9 +32,60 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('revision_conflict');
   }
 
-  function commit(ns, refs, expected, proposals) {
+  function commit(ns, refs, expected, proposals, writeMode) {
     return transaction(db, () => {
       assertSnapshot(ns, refs, expected);
+      if (writeMode === 'replace-reviewed') {
+        const ids = expected.sources.map(source => source.memory.id);
+        const placeholders = ids.map(() => '?').join(', ');
+        const existing = db.prepare(`SELECT * FROM rationale_edges
+          WHERE from_id IN (${placeholders}) AND to_id IN (${placeholders}) LIMIT 61`).all(...ids, ...ids);
+        if (existing.length > 60) fail('rationale_limit');
+        const sourcesById = new Map(expected.sources.map(source => [source.memory.id, source]));
+        for (const row of existing) {
+          for (const side of ['from', 'to']) {
+            const source = sourcesById.get(row[`${side}_id`]);
+            const receipt = source.receipts.find(item => item.id === row[`${side}_receipt`]);
+            if (source.memory.revision !== row[`${side}_revision`] || !receipt ||
+                digest(receipt) !== row[`${side}_digest`]) fail('revision_conflict');
+          }
+        }
+        const key = row => JSON.stringify([row.from_id, row.to_id, row.relation, row.from_receipt, row.to_receipt]);
+        const proposed = proposals.map(proposal => {
+          const from = expected.sources[proposal.from]; const to = expected.sources[proposal.to];
+          const fromReceipt = from.receipts[proposal.fromReceipt]; const toReceipt = to.receipts[proposal.toReceipt];
+          return { from, to, fromReceipt, toReceipt, relation: proposal.relation,
+            from_id: from.memory.id, to_id: to.memory.id,
+            from_receipt: fromReceipt.id, to_receipt: toReceipt.id };
+        });
+        const existingKeys = new Set(existing.map(key));
+        const proposedKeys = new Set(proposed.map(key));
+        let removed = 0;
+        const remove = db.prepare(`DELETE FROM rationale_edges WHERE from_id = ? AND to_id = ?
+          AND relation = ? AND from_receipt = ? AND to_receipt = ?`);
+        for (const row of existing) {
+          if (!proposedKeys.has(key(row))) {
+            removed += remove.run(row.from_id, row.to_id, row.relation, row.from_receipt, row.to_receipt).changes;
+          }
+        }
+        let inserted = 0;
+        const insert = db.prepare(`INSERT INTO rationale_edges
+          (from_id, from_revision, to_id, to_revision, relation, from_receipt, to_receipt, from_digest, to_digest)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        for (const row of proposed) {
+          if (existingKeys.has(key(row))) continue;
+          inserted += insert.run(row.from_id, row.from.memory.revision, row.to_id, row.to.memory.revision,
+            row.relation, row.from_receipt, row.to_receipt, digest(row.fromReceipt), digest(row.toReceipt)).changes;
+          for (const id of [row.from_id, row.to_id]) {
+            if (db.prepare('SELECT count(*) n FROM rationale_edges WHERE from_id = ? OR to_id = ?').get(id, id).n > 10) {
+              fail('rationale_limit');
+            }
+          }
+        }
+        if (removed || inserted) advanceEpoch(ns);
+        return { writeMode, proposed: proposals.length, inserted, removed,
+          interpretationStatus: 'model-proposed', indexRevision: epoch(ns) };
+      }
       let inserted = 0;
       for (const proposal of proposals) {
         const from = expected.sources[proposal.from]; const to = expected.sources[proposal.to];

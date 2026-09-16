@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — explicit bounded rationale replacement
+
+- Embedded `reviewRationale` accepts opt-in `writeMode: 'replace-reviewed'` to
+  transactionally retract and insert proposed links only between its guarded
+  current refs. Empty output clears that bounded set; unchanged output does not
+  advance the namespace epoch. Crossing and unrelated links remain.
+- Default and automatic-capture reviews stay append-only, with their original
+  response shape. Model interpretations remain unverified; a mistaken replacement
+  can remove a correct link. No schema, provider port, MCP or hosted change.
+
 ## Unreleased — independent provider usage bounds
 
 - The optional OpenAI adapter accepts bounded observed input usage that differs

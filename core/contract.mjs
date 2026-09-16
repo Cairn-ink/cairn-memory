@@ -635,9 +635,11 @@ export function openMemoryCore(input) {
   async function reviewRationale(input) {
     try {
       runtime.ready();
-      object(input, ['namespace', 'refs', 'inputMode']);
+      object(input, ['namespace', 'refs', 'inputMode', 'writeMode']);
       const inputMode = input.inputMode;
       if (Object.hasOwn(input, 'inputMode') && inputMode !== 'claim-focus-v1') throw new MemoryStoreError('invalid_input');
+      const writeMode = Object.hasOwn(input, 'writeMode') ? input.writeMode : undefined;
+      if (Object.hasOwn(input, 'writeMode') && writeMode !== 'replace-reviewed') throw new MemoryStoreError('invalid_input');
       const ns = contractNamespace(input.namespace);
       denseArray(input.refs, 1, 6);
       const refs = memoryRefs(input.refs);
@@ -648,7 +650,7 @@ export function openMemoryCore(input) {
         }
       };
       const proposals = await proposeRationale(model, snapshot.sources, validateFresh);
-      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals),
+      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals, writeMode),
         ...(inputMode ? { inputMode } : {}) });
     } catch (error) { return failure(error); }
   }

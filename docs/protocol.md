@@ -97,6 +97,16 @@ is selected. These passages may contain personal data;
 the host must explicitly supply an appropriate model. No provider is enabled by
 default. The local MCP opt-in above now uses this boundary; hosted HTTP is unchanged.
 
+Embedded callers may explicitly choose `writeMode: 'replace-reviewed'` for a
+bounded correction of proposed links. Only edges with both endpoints in the
+current, exact-namespace guarded reference set can be replaced; crossing and
+unrelated edges remain. The default and automatic-capture modes stay append-only,
+and neither MCP nor hosted HTTP accepts this new input in this slice. An empty
+replacement withdraws in-scope proposals, not source evidence or the underlying
+memory. It does not confirm a decision. A mistaken new model output can also
+withdraw a correct proposal; relation metadata is not semantic truth or
+execution authority.
+
 Local rows store endpoint/revision links, selected receipt IDs and SHA256 source
 digests with model-proposed relation types. These are sensitive relationship
 metadata, not anonymization, semantic proof, authenticated roles or permissions.

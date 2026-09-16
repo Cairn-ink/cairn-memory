@@ -73,8 +73,12 @@ The capture response includes a separate `rationale` status:
 This stage is best-effort **after** admission. A crash can leave saved memory
 without rationale; there is no pending-job recovery queue yet. An explicit
 embedded `reviewRationale` can be used by a trusted host to re-evaluate current
-refs, but it may incur another model call. Empty output does not retract prior
-links. Correcting or forgetting source evidence invalidates related links.
+refs, but it may incur another model call. Its default append-only mode does not
+retract prior links on empty output. Trusted embedded callers may explicitly pass
+`writeMode: 'replace-reviewed'` to replace only links with both endpoints in
+their guarded reference set; this is not used by automatic capture or MCP in
+this slice. A mistaken new proposal can remove a correct old link. Correcting
+or forgetting source evidence invalidates related links.
 Classification/other revision changes also conservatively invalidate links.
 
 ## Read limits and compatibility

@@ -34,8 +34,18 @@ with request-local indices and at most 10 edges. Relations are
 `supports-decision` (premise → decision) and `challenges-premise` (new evidence →
 premise). The core resolves receipt identity and hashes; source attachment does
 not prove entailment, adoption, temporal ordering or subject/scope matching.
-An empty proposal does not withdraw an existing proposal. This preview has no
-edge adjudication/resolution API; correction or forgetting invalidates links.
+An empty proposal in the default append-only mode does not withdraw an existing
+proposal. An explicit embedded `writeMode: 'replace-reviewed'` instead treats the
+new proposal as the complete proposed edge set **only among the supplied 1–6
+revision-guarded refs**. It removes old links whose two endpoints are in that
+set but were not proposed, preserves crossing and unrelated links, and inserts
+new proposals atomically. A valid empty output clears only those in-scope links.
+The response adds `writeMode` and `removed` to the existing counters only in
+this mode; identical re-review leaves the namespace index revision unchanged.
+The default response and automatic capture remain append-only. No replay ledger
+or historical edge record is created. This is model-proposal correction, not
+edge adjudication or source correction; correction or forgetting of actual
+source evidence still invalidates links.
 Support may point within one memory/receipt when it records both the decision
 and its reason; challenges require distinct memories. These are memory-level
 proposals, not independently validated claim slots or a general causal graph.
