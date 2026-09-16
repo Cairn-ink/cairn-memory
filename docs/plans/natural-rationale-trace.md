@@ -13,7 +13,11 @@ capture path. It measures observable plumbing and lifecycle, not model accuracy.
 - NR2. Each opted-in event reports capture, classification and rationale status,
   and every actual `relate` request in that event reports its bounded local
   receipt excerpts, observed candidate window and proposed edges. The observer
-  forwards the original call, return or rejection without changing them.
+  forwards the original call, return or rejection without changing them. For
+  native promises it returns the exact adapter promise and observes settlement
+  separately; it never assimilates a custom thenable merely to trace it. Such
+  opaque returns are explicitly `trace-unavailable`, and late settlement cannot
+  mutate an already projected report.
   Only actual retained receipts with matching event ID and canonical excerpt
   can map a model-visible passage to a source event. Missing, identical or
   clipped passages are marked unmatched, ambiguous or truncated; no model input

@@ -12,30 +12,44 @@ const run = (source, makeModel = () => rationaleModel(), options = {}) => runDec
 });
 
 test('observer keeps frozen-model binding, invalid return and rejection identity; projected reports detach', async () => {
-  const calls = []; const problem = new Error('private');
+  const calls = []; const problem = new Error('private'); let rejected;
   const invalid = { edges: [{ unsafe: () => {} }] };
   const model = Object.freeze({ marker: 'original', relate(request) {
     assert.equal(this, model);
-    if (request.fail) return Promise.reject(problem);
+    if (request.fail) { rejected = Promise.reject(problem); return rejected; }
     return invalid;
   } });
   const wrapped = observeRelate(model, calls);
   assert.equal(wrapped.relate({ input: { memories: [] } }), invalid);
   assert.equal(calls[0].status, 'returned');
   assert.equal(calls[0].proposedEdges, null);
-  await assert.rejects(wrapped.relate({ input: { memories: [] }, fail: true }), error => error === problem);
+  const rejection = wrapped.relate({ input: { memories: [] }, fail: true });
+  assert.equal(rejection, rejected);
+  await assert.rejects(rejection, error => error === problem);
   assert.equal(calls[1].status, 'rejected');
   const snapshot = projectRelateCalls(calls, [], []);
   calls[0].status = 'changed-later';
   assert.equal(snapshot[0].status, 'returned');
   let finish;
-  const delayed = observeRelate({ relate: () => new Promise(resolve => { finish = resolve; }) }, calls);
+  const original = new Promise(resolve => { finish = resolve; });
+  const delayed = observeRelate({ relate: () => original }, calls);
   const pending = delayed.relate({ input: { memories: [] } });
+  assert.equal(pending, original);
   const before = projectRelateCalls(calls.slice(-1), [], []);
   assert.equal(before[0].status, 'called');
   finish({ edges: [] }); await pending;
   assert.equal(before[0].status, 'called');
   assert.deepEqual(before[0].proposedEdges, null);
+  assert.equal(calls.at(-1).status, 'returned');
+  let thenCalls = 0;
+  const thenable = { then(resolve) { thenCalls++; resolve({ edges: [] }); } };
+  const odd = observeRelate({ relate: () => thenable }, calls);
+  assert.equal(odd.relate({ input: { memories: [] } }), thenable);
+  assert.equal(thenCalls, 0);
+  assert.equal(calls.at(-1).status, 'trace-unavailable');
+  const nullOutput = observeRelate({ relate: () => null }, calls);
+  assert.equal(nullOutput.relate({ input: { memories: [] } }), null);
+  assert.equal(calls.at(-1).status, 'trace-unavailable');
 });
 
 test('raw observation states do not silently equate source, candidate, proposal and storage', async () => {
@@ -116,6 +130,21 @@ test('malformed null proposal stays a core rationale failure, not a runner excep
   assert.deepEqual(capture.naturalRationale.relateCalls[0].proposedEdges, [null]);
   assert.equal(capture.naturalRationale.observation, 'candidate-seen-no-proposal');
   assert.equal(capture.naturalRationale.afterCapture.edges.length, 0);
+});
+
+test('opaque invalid edge values never enter cold-reopen captures or JSON report', async () => {
+  const source = only('dev-vendor-transition-en');
+  source.cases[0].events = source.cases[0].events.slice(0, 1);
+  for (const edge of [() => {}, 1n, Symbol('invalid')]) {
+    const report = await run(source, () => ({ ...rationaleModel(), relate: () => ({ edges: [edge] }) }),
+      { coldReopen: true, beforeColdReopen({ captures }) { assert.doesNotThrow(() => JSON.stringify(captures)); } });
+    const capture = report.cases[0].captures[0];
+    assert.equal(capture.status, 'ok');
+    assert.equal(capture.naturalRationale.captureRationale.status, 'failed');
+    assert.equal(capture.naturalRationale.relateCalls[0].status, 'returned');
+    assert.equal(capture.naturalRationale.relateCalls[0].proposedEdges, null);
+    assert.doesNotThrow(() => JSON.stringify(report));
+  }
 });
 
 test('NR4 identical retained excerpts are ambiguous, not assigned an event identity', async () => {

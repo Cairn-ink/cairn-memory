@@ -1,5 +1,29 @@
 // Read-only observer for the opt-in automatic rationale path. Model data remains
 // source-only; provenance is attached only after stored receipts are inspected.
+const jsonScalar = value => value === null || typeof value === 'string' ||
+  typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
+
+function snapshotEdges(value) {
+  const property = Object.getOwnPropertyDescriptor(value, 'edges');
+  if (!property || !('value' in property) || !Array.isArray(property.value)) return null;
+  const edges = property.value;
+  const copied = [];
+  for (let index = 0; index < Math.min(edges.length, 11); index++) {
+    const entry = Object.getOwnPropertyDescriptor(edges, String(index));
+    if (!entry || !('value' in entry)) return null;
+    const edge = entry.value;
+    if (edge === null || typeof edge !== 'object') {
+      if (!jsonScalar(edge)) return null;
+      copied.push(edge); continue;
+    }
+    if (Object.getPrototypeOf(edge) !== Object.prototype) return null;
+    const fields = Object.getOwnPropertyDescriptors(edge);
+    if (Object.values(fields).some(field => !('value' in field) || !jsonScalar(field.value))) return null;
+    copied.push(Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, field.value])));
+  }
+  return copied;
+}
+
 export function observeRelate(model, calls) {
   // An empty proxy target avoids invariants on a frozen adapter's own method.
   // Bind every method to the original adapter, as it would be when core calls it.
@@ -12,14 +36,31 @@ export function observeRelate(model, calls) {
       try { call.input = structuredClone(args[0]?.input); }
       catch { call.input = null; }
       calls.push(call);
-      const success = value => { call.status = 'returned';
-        try { call.proposedEdges = Array.isArray(value?.edges) ? structuredClone(value.edges.slice(0, 11)) : null; }
-        catch { call.proposedEdges = null; }
-        return value; };
-      const failure = error => { call.status = 'rejected'; throw error; };
+      const observeValue = value => {
+        try {
+          // Do not inspect or assimilate unknown return types, including thenables.
+          if (value === null || typeof value !== 'object' ||
+              Object.getPrototypeOf(value) !== Object.prototype || Reflect.has(value, 'then')) {
+            call.status = 'trace-unavailable'; return;
+          }
+          call.status = 'returned';
+          call.proposedEdges = snapshotEdges(value);
+        } catch { call.status = 'trace-unavailable'; call.proposedEdges = null; }
+      };
       try {
         const returned = Reflect.apply(method, model, args);
-        return returned?.then ? returned.then(success, failure) : success(returned);
+        let nativePromise;
+        try { nativePromise = returned !== null && typeof returned === 'object' &&
+          Object.getPrototypeOf(returned) === Promise.prototype; }
+        catch { call.status = 'trace-unavailable'; return returned; }
+        if (nativePromise) {
+          try {
+            // This detached observer never substitutes a chained Promise for the
+            // adapter's own return. Both handlers fulfill so no child rejects.
+            Promise.prototype.then.call(returned, observeValue, () => { call.status = 'rejected'; });
+          } catch { call.status = 'trace-unavailable'; }
+        } else observeValue(returned);
+        return returned;
       } catch (error) { call.status = 'threw'; throw error; }
     };
   } });
@@ -77,6 +118,7 @@ export function sourceObservation(sourceId, admission, sourceReceipts, relateCal
   if (relateCalls.some(call => ['rejected', 'threw', 'called'].includes(call.status))) {
     return 'candidate-seen-callback-failed-or-pending';
   }
+  if (relateCalls.some(call => call.status === 'trace-unavailable')) return 'candidate-seen-trace-unavailable';
   const proposals = relateCalls.flatMap(call => (call.proposedEdges ?? []).filter(edge =>
     edge && typeof edge === 'object').map(edge => {
     const from = call.candidates[edge.from]?.receipts[edge.fromReceipt];
