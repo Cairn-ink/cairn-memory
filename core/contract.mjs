@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
-import { isSourceContext } from './source-evidence.mjs';
+import { isSourceContext, isRationaleContext } from './source-evidence.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
@@ -558,7 +558,7 @@ export function openMemoryCore(input) {
       const refs = memoryRefs(input.refs);
       const view = input.view === undefined ? 'current' : input.view;
       if (!['current', 'historical'].includes(view)) throw new MemoryStoreError('invalid_input');
-      if (contextMode === 'rationale-evidence' && view !== 'current') throw new MemoryStoreError('invalid_input');
+      if (isRationaleContext(contextMode) && view !== 'current') throw new MemoryStoreError('invalid_input');
       const budget = contractRevision(input.tokenBudget ?? 4000);
       if (budget > 4000) throw new MemoryStoreError('invalid_input');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'fetch', b: budget,

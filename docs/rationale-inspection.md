@@ -26,6 +26,28 @@ their presence `reconfirmation-suggested`, not verified premise failure or a
 change of choice. This exposes incorrect model-proposed challenges too; it does
 not filter them for semantic validity.
 
+Embedded `fetch` and `recall`, and local MCP `recall_memory`, can explicitly
+request `contextMode: 'rationale-neighborhood-evidence'`. This read-only mode
+unions the ordinary decision context with the selected root's directly incoming
+and outgoing proposals. It therefore retains challenges to separate supporting
+memories while also showing a root proposal pointing to a later decision. It
+deduplicates exact source/receipt/relation tuples and labels its result
+`coverage: 'bounded-root-neighborhood'`, `status: 'unassessed'` and each edge
+`interpretationStatus: 'model-proposed'`. This is neither a public inspect view
+nor a complete graph walk. It does not establish that a later decision was
+adopted or a challenged premise is false. The ranker sees the same bounded
+sources and edges returned by the final source reread, but selecting the right
+root and interpreting those excerpts remain separate tasks.
+The status stays unassessed even with challenge links: an outgoing challenge
+may concern a different decision, so a root-level reconfirmation label would
+attribute it to the wrong choice.
+
+The new mode is current-only and conflicts with `includeQualification: true`.
+Like existing source modes it binds fetch cursors to the exact mode, preserves
+complete receipts and source revisions, and rejects overflow or stale evidence
+instead of returning partial trusted context. Defaults and existing modes do
+not change; explicit selection can expose additional personal source excerpts.
+
 Both views enforce the existing current-revision, source-digest and namespace
 checks and complete-result limits: six memories, ten edges and 24000 UTF-16
 units. Overflow fails instead of returning a silently truncated graph. Changing

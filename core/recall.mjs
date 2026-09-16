@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { fail, object, identifier, revision, denseArray } from './validation.mjs';
-import { isSourceContext } from './source-evidence.mjs';
+import { isSourceContext, isRationaleContext } from './source-evidence.mjs';
 
 const selectPrompt = readFileSync(new URL('./prompts/recall-select.md', import.meta.url), 'utf8');
 const rankPrompt = readFileSync(new URL('./prompts/recall-rank.md', import.meta.url), 'utf8');
@@ -112,7 +112,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   });
   let ranked = [];
   if (candidates.length) {
-    const prompt = contextMode === 'rationale-evidence' ? rationaleRankPrompt
+    const prompt = isRationaleContext(contextMode) ? rationaleRankPrompt
       : contextMode === 'source-evidence' ? sourceRankPrompt : includeQualification ? qualifiedRankPrompt : rankPrompt;
     const rankOutput = await callModel(model, 'rank', prompt, { query, limit,
       candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },

@@ -8,7 +8,7 @@ import { createIndexStorage } from "./index-storage.mjs";
 import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
-import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
+import { sourceEvidence, isSourceContext, isRationaleContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
@@ -398,8 +398,9 @@ export function createMemoryRuntime(input) {
   }
 
   function readUsageEvidence(ns, row, mode) {
-    return { ...readSourceEvidence(row), ...(mode === 'rationale-evidence'
-      ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
+    return { ...readSourceEvidence(row), ...(isRationaleContext(mode)
+      ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision },
+        mode === 'rationale-neighborhood-evidence' ? 'root-neighborhood' : 'decision-context') } : {}) };
   }
 
   function sourceSnapshot(namespaces, count, expected) {

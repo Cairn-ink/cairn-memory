@@ -190,17 +190,19 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
   }
 
   function inspectInside(ns, ref, view = 'decision-context') {
-      if (!['decision-context', 'incident-proposals'].includes(view)) fail('invalid_input');
+      if (!['decision-context', 'incident-proposals', 'root-neighborhood'].includes(view)) fail('invalid_input');
       const incident = view === 'incident-proposals';
+      const neighborhood = view === 'root-neighborhood';
       const sources = new Map([[ref.memoryId, source(ns, ref)]]);
       const edges = [];
       const incoming = (id, relation) => db.prepare(`SELECT * FROM rationale_edges
         WHERE to_id = ? AND relation = ? ORDER BY from_id, from_receipt, to_receipt LIMIT 11`).all(id, relation);
       const supports = incident ? [] : incoming(ref.memoryId, 'supports-decision');
-      const rows = incident ? db.prepare(`SELECT * FROM rationale_edges WHERE from_id = ? OR to_id = ?
-        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(ref.memoryId, ref.memoryId)
-        : [...supports, ...incoming(ref.memoryId, 'challenges-premise')];
+      const incidentRows = () => db.prepare(`SELECT * FROM rationale_edges WHERE from_id = ? OR to_id = ?
+        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(ref.memoryId, ref.memoryId);
+      const rows = incident ? incidentRows() : [...supports, ...incoming(ref.memoryId, 'challenges-premise')];
       if (!incident) for (const id of new Set(supports.map(row => row.from_id))) rows.push(...incoming(id, 'challenges-premise'));
+      if (neighborhood) rows.push(...incidentRows());
       // A self-support makes the root both a direct challenge target and a
       // support source. Count and return that same stored proposal only once.
       const uniqueRows = new Map(rows.map(row => [JSON.stringify([row.from_id, row.to_id,
@@ -222,8 +224,10 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
           fromReceipt: row.from_receipt, toReceipt: row.to_receipt, interpretationStatus: 'model-proposed' });
       }
       return bounded({ root: { memoryId: ref.memoryId, revision: ref.revision },
-        status: !incident && edges.some(edge => edge.relation === 'challenges-premise') ? 'reconfirmation-suggested' : 'unassessed',
-        sources: [...sources.values()], edges, coverage: incident ? 'root-incident-only' : 'linked-evidence-only',
+        status: !incident && !neighborhood && edges.some(edge => edge.relation === 'challenges-premise')
+          ? 'reconfirmation-suggested' : 'unassessed',
+        sources: [...sources.values()], edges, coverage: incident ? 'root-incident-only'
+          : neighborhood ? 'bounded-root-neighborhood' : 'linked-evidence-only',
         ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) });
   }
 

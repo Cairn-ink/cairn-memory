@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — opt-in rationale neighborhood context
+
+- Embedded fetch/recall and local MCP recall can explicitly return a bounded
+  union of decision-context and root-incident model-proposed evidence. The
+  old selected decision can now carry both challenges to a separate supporting
+  memory and its outgoing links to later memories into ranking and final JSON.
+  Existing modes, defaults, storage and prompts remain unchanged. This is not
+  complete retrieval, verified rationale or automatic decision change.
+
 ## Unreleased — explicit disposition task semantics
 
 - The opt-in read-only disposition review now uses a versioned prompt with
