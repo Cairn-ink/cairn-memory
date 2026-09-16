@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { openMemoryCore } from '../../core/contract.mjs';
 import { boundedText } from '../../core/validation.mjs';
 import { validateFixture } from './contract.mjs';
+import { observeRelate, projectRelateCalls, inspectRationaleLifecycle, sourceObservation } from './natural-rationale-trace.mjs';
 
 const arms = ['source-evidence', 'sourceSnapshot'];
 const errorCode = error => error?.error?.code ?? 'runner_error';
@@ -47,10 +48,12 @@ function resultTrace(result, stage) {
 
 /** Runs a source-only fixture against actual local capture and read surfaces. No rubric is accepted. */
 export async function runDecisionEvolutionCore({ fixture, modelFactory, includeRationale = false,
-  coldReopen = false, beforeRead } = {}) {
+  coldReopen = false, beforeRead, beforeColdReopen, naturalRationaleTrace = false } = {}) {
   validateFixture(fixture);
   if (typeof modelFactory !== 'function' || typeof includeRationale !== 'boolean' ||
-      typeof coldReopen !== 'boolean' || (beforeRead !== undefined && typeof beforeRead !== 'function')) {
+      typeof coldReopen !== 'boolean' || typeof naturalRationaleTrace !== 'boolean' ||
+      (beforeRead !== undefined && typeof beforeRead !== 'function') ||
+      (beforeColdReopen !== undefined && (typeof beforeColdReopen !== 'function' || !coldReopen))) {
     throw new TypeError('invalid runner options');
   }
   // Reject unsupported source sizes/characters before any case can write a database.
@@ -64,18 +67,24 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
   }));
   const cases = [];
   for (const [caseIndex, item] of fixture.cases.entries()) {
-    const model = await modelFactory({ caseId: item.id, language: item.language });
+    const injectedModel = await modelFactory({ caseId: item.id, language: item.language });
+    const observedCalls = [];
+    const model = naturalRationaleTrace ? observeRelate(injectedModel, observedCalls) : injectedModel;
     const path = join(mkdtempSync(join(tmpdir(), 'cairn-dei-')), 'memory.sqlite');
     const namespace = { ownerId: `dei-${item.id}`, scope: 'personal', projectId: null };
     const sourceByEventId = new Map(prepared[caseIndex].map(event => [event.id, event.retained]));
     const receiptSources = new Map();
     const truncatedSourceIds = prepared[caseIndex].filter(event => event.truncated).map(event => event.id);
-    let core = openMemoryCore({ path, model });
+    let core = openMemoryCore({ path, model, ...(naturalRationaleTrace ? {
+      captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' } : {}) });
     const captures = [];
     const sourceReceipts = [];
     const trace = [];
     try {
       for (const event of item.events) {
+        const callOffset = observedCalls.length;
+        const beforeCapture = naturalRationaleTrace
+          ? inspectRationaleLifecycle(core, namespace, sourceReceipts, receiptSources) : undefined;
         const result = await core.capture({ namespace, client: 'dei-offline', sessionId: item.id,
           eventId: event.id, messages: [{ id: event.id, role: 'user', content: encodeDecisionEvent(event) }] });
         trace.push(resultTrace(result, `capture:${event.id}`));
@@ -84,7 +93,13 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
             admission: result.value.admission, classification: result.value.classification,
           } : { error: errorCode(result) }) };
         captures.push(entry);
-        if (!result.ok) continue;
+        if (!result.ok) {
+          if (naturalRationaleTrace) entry.naturalRationale = {
+            observation: 'capture-failed', relateCalls: projectRelateCalls(observedCalls.slice(callOffset),
+              sourceReceipts, truncatedSourceIds), beforeCapture,
+            afterCapture: inspectRationaleLifecycle(core, namespace, sourceReceipts, receiptSources) };
+          continue;
+        }
         trace.push({ stage: `classification:${event.id}`, status: entry.classification.status,
           ...(entry.classification.error ? { error: entry.classification.error.code } : {}) });
         for (const admitted of result.value.admission.memories) {
@@ -101,7 +116,8 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
               const sourceId = sourceByEventId.get(receipt.eventId) === receipt.excerpt ? receipt.eventId : null;
               receiptSources.set(identity, sourceId);
               sourceReceipts.push({ sourceId, memoryId: admitted.id, receiptId: receipt.id,
-                eventId: receipt.eventId, excerpt: receipt.excerpt });
+                eventId: receipt.eventId, excerpt: receipt.excerpt,
+                ...(naturalRationaleTrace ? { role: receipt.role } : {}) });
             }
             if (detail.value.exhausted) break;
             const next = detail.value.nextReceiptCursor;
@@ -115,10 +131,25 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
             cursor = next;
           }
         }
+        if (naturalRationaleTrace) {
+          const relateCalls = projectRelateCalls(observedCalls.slice(callOffset), sourceReceipts, truncatedSourceIds);
+          const afterCapture = inspectRationaleLifecycle(core, namespace, sourceReceipts, receiptSources);
+          entry.naturalRationale = { captureRationale: result.value.rationale,
+            observation: entry.receiptError ? 'source-inspection-incomplete'
+              : sourceObservation(event.id, result.value.admission, sourceReceipts, relateCalls, afterCapture),
+            relateCalls, beforeCapture, afterCapture };
+        }
       }
       if (coldReopen) {
-        core.close(); core = openMemoryCore({ path, model });
+        if (beforeColdReopen) await beforeColdReopen({ core, namespace, captures: structuredClone(captures),
+          sourceReceipts: structuredClone(sourceReceipts) });
+        core.close(); core = openMemoryCore({ path, model, ...(naturalRationaleTrace ? {
+          captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' } : {}) });
         trace.push({ stage: 'cold-reopen', status: 'ok' });
+        if (naturalRationaleTrace) {
+          const afterColdReopen = inspectRationaleLifecycle(core, namespace, sourceReceipts, receiptSources);
+          for (const entry of captures) entry.naturalRationale.afterColdReopen = afterColdReopen;
+        }
       }
       if (beforeRead) await beforeRead({ core, namespace, captures: structuredClone(captures),
         sourceReceipts: structuredClone(sourceReceipts) });
@@ -142,7 +173,8 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
             sourceCoverage: { expectedEvents: item.events.length, capturedEvents: capturedSourceIds.length,
               returnedEvents: mapped.sourceIds.length,
               unreturnedSourceIds: capturedSourceIds.filter(id => !mapped.sourceIds.includes(id)) },
-            ...(arm === 'rationale-evidence' ? { relationshipGeneration: 'not-configured' } : {}) };
+            ...(arm === 'rationale-evidence' ? { relationshipGeneration: naturalRationaleTrace
+              ? 'automatic-source-bound-v1' : 'not-configured' } : {}) };
         }
         questions.push({ questionId: question.id, actor: question.actor, arms: questionArms });
       }
