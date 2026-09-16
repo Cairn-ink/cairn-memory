@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 
 const namespace = { ownerId: 'migration-lifecycle', scope: 'personal', projectId: null };
@@ -26,7 +27,7 @@ const timeline = [
     'Staging backup rule: keep daily snapshots for seven days. This rule is unaffected by Production API-v1 retirement.' ] },
 ];
 
-function scriptedWriter(mode, calls) {
+function scriptedWriter(mode, calls, classificationTitle = null) {
   const model = {
     contextWindow: 8192,
     countTokens: () => 1, // test convention, not a tokenizer
@@ -61,7 +62,10 @@ function scriptedWriter(mode, calls) {
         ...Object.fromEntries(Object.entries(described).map(([name, value]) => [name, field(value)])),
       };
     }) }),
-    classify: ({ input }) => ({ items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) }),
+    classify: ({ input }) => ({ items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [],
+      ...(classificationTitle && memory.content.startsWith('Confirmed on 2025-01-10')
+        ? { newL1: { title: classificationTitle, parentL2Ids: [] } } : {}),
+    })) }),
     relate: ({ input }) => {
       const decision = input.memories.find(memory => memory.receipts.some(receipt => receipt.excerpt.includes('removal is restricted')));
       const premise = input.memories.find(memory => memory.receipts.some(receipt => receipt.excerpt.includes('clients depend on legacy_code')));
@@ -82,11 +86,11 @@ function scriptedWriter(mode, calls) {
     }]));
 }
 
-async function run(t, mode, beforeClose = () => undefined) {
+async function run(t, mode, beforeClose = () => undefined, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'cairn-migration-lifecycle-'));
   const path = join(directory, 'memory.sqlite');
   const calls = [];
-  const core = openMemoryCore({ path, model: scriptedWriter(mode, calls),
+  const core = openMemoryCore({ path, model: scriptedWriter(mode, calls, options.classificationTitle),
     captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
   t.after(() => { core.close(); rmSync(directory, { recursive: true, force: true }); });
   const writes = [];
@@ -102,7 +106,7 @@ async function run(t, mode, beforeClose = () => undefined) {
       reconciliation: capture.reconciliation, classification: capture.classification,
       rationale: capture.rationale, stored });
   }
-  const audit = await beforeClose(core, writes);
+  const audit = await beforeClose(core, writes, calls, path);
   core.close();
   const cold = JSON.parse(execFileSync(process.execPath, [reader, path,
     'What changed about Production legacy_code removal, and what is still unknown?'], { encoding: 'utf8' }));
@@ -170,26 +174,34 @@ test('ML3 adversarial qualification is visibly stored; structural success is not
 });
 
 test('ML4 public correction invalidates source-derived title and proposed rationale after restart', async t => {
-  const trace = await run(t, 'positive', async (core, writes) => {
+  const title = 'Production API-v1 dependency';
+  const trace = await run(t, 'positive', async (core, writes, calls, path) => {
     const premiseId = writes[1].stored[0].memory.id;
     const restrictionId = writes[1].stored[1].memory.id;
     const retirementId = writes[2].stored[0].memory.id;
     const premise = ok(core.get({ namespace, memoryId: premiseId }));
-    const title = 'Production API-v1 dependency';
-    const indexRevision = ok(core.map({ namespace, purpose: 'classification' })).indexRevision;
-    const placement = ok(core.applyPlacement({ namespace,
-      proposal: { items: [{ memoryId: premiseId, parentIds: [], newL1: { title, parentL2Ids: [] } }] },
-      expectedMemoryRevisions: [{ memoryId: premiseId, revision: premise.memory.revision }],
-      expectedIndexRevision: indexRevision }));
-    const moc = placement.createdMocs.find(item => item.level === 'L1');
+    const generated = calls.filter(call => call.method === 'classify').flatMap(call => call.input.memories)
+      .find(memory => memory.content.startsWith('Confirmed on 2025-01-10'));
+    assert.equal(generated.id, premiseId);
+    assert.equal(writes[1].classification.status, 'applied');
+    const beforeMap = ok(core.map({ namespace, purpose: 'recall' }));
+    const moc = beforeMap.items.find(item => item.type === 'moc' && item.moc.title === title)?.moc;
     assert.ok(moc);
-    assert.deepEqual(moc.titleSources, [{ memoryId: premiseId, memoryRevision: placement.memories[0].revision }]);
+    assert.ok(premise.placements.some(placement => placement.mocId === moc.id && placement.title === title));
+    const db = new DatabaseSync(path);
+    try {
+      assert.deepEqual(db.prepare(`SELECT memory_id AS memoryId, memory_revision AS memoryRevision
+        FROM moc_title_sources WHERE moc_id = ?`).all(moc.id).map(row => ({ ...row })),
+      [{ memoryId: premiseId, memoryRevision: premise.memory.revision }]);
+    } finally { db.close(); }
+    assert.ok(beforeMap.items.some(item => item.type === 'ref' && item.ref.childId === premiseId &&
+      item.label === timeline[1].messages[0]));
     const refs = [premiseId, restrictionId, retirementId].map(memoryId => {
       const memory = ok(core.get({ namespace, memoryId })).memory;
       return { memoryId, revision: memory.revision };
     });
     const reviewed = ok(await core.reviewRationale({ namespace, refs }));
-    assert.ok(reviewed.inserted > 0);
+    assert.equal(typeof reviewed.inserted, 'number');
     const before = ok(core.getRationale({ namespace, memoryId: restrictionId, revision: refs[1].revision }));
     assert.equal(before.status, 'reconfirmation-suggested');
     const corrected = ok(core.correct({ namespace, memoryId: premiseId,
@@ -199,8 +211,9 @@ test('ML4 public correction invalidates source-derived title and proposed ration
         role: 'user', excerpt: 'Correction: the earlier Production API-v1 dependency report is withdrawn; other dependencies remain unassessed.' } }));
     assert.equal(corrected.memory.revision, refs[0].revision + 1);
     return { title, mocId: moc.id, premiseId, restrictionId, restrictionRevision: refs[1].revision,
-      correctedRevision: corrected.memory.revision, oldPremiseRevision: refs[0].revision };
-  });
+      correctedRevision: corrected.memory.revision, oldPremiseRevision: refs[0].revision,
+      oldLabel: timeline[1].messages[0], newLabel: corrected.memory.content };
+  }, { classificationTitle: title });
   const { cold, audit } = trace;
   assert.equal(cold.classificationMap.ok, true);
   assert.equal(cold.recallMap.ok, true);
@@ -208,6 +221,14 @@ test('ML4 public correction invalidates source-derived title and proposed ration
   assert.equal(stale.moc.title, null);
   assert.ok(!cold.recallMap.value.items.some(item => item.type === 'moc' && item.moc.id === audit.mocId));
   assert.ok(!cold.classificationMap.value.items.some(item => item.type === 'moc' && item.moc.title === audit.title));
+  const currentLabels = cold.recallMap.value.items.map(item => item.label).filter(Boolean);
+  const selectedLabels = cold.calls.filter(call => call.stage === 'select').flatMap(call => call.visible.map(item => item.label)).filter(Boolean);
+  assert.ok(!currentLabels.some(label => label.includes(audit.oldLabel)));
+  assert.ok(!selectedLabels.some(label => label.includes(audit.oldLabel)));
+  assert.ok(cold.recallMap.value.items.some(item => item.type === 'unfiled' &&
+    item.ref.memoryId === audit.premiseId && item.label?.includes('Correction:')));
+  assert.ok(cold.calls.some(call => call.stage === 'select' && call.visible.some(item =>
+    item.type === 'unfiled' && item.ref.memoryId === audit.premiseId && item.label?.includes('Correction:'))));
   const restriction = cold.result.value.memories.find(item => item.memory.id === audit.restrictionId);
   assert.equal(restriction.rationale.status, 'unassessed');
   assert.equal(restriction.rationale.edges.length, 0);

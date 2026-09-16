@@ -46,12 +46,16 @@ do not generate an answer or call a scripted answer observed agent behavior.
 the reader separately uses `list/get(includeQualification:true)` to inspect
 those fields. This explicit mode should not be mistaken for the MCP default.
 
-The separate ML4 case uses public placement to create a title sourced to the
-confirmed premise's exact revision. It then re-runs public rationale review at
+The separate ML4 case uses the capture path's injected public classifier to
+generate and apply a MOC title sourced to the confirmed premise's exact revision.
+It checks the stored source binding with a read-only SQLite query and verifies
+the old full premise label in the public map. It then re-runs public rationale review at
 the post-placement revisions, verifies the proposed support/challenge path,
 and corrects that premise through public `correct`. A new process sees the old
 MOC's classification title as `null`, no visible recall MOC for it, and the
 conditional restriction's rationale as `unassessed` with no incident edges.
+The old premise label is absent from both the public recall map and model select
+input, while the corrected premise's new label is visible in both.
 The corrected source has a new revision/receipt; the Staging rule's revision and
 qualification are unchanged. Correction is distinct from merely capturing a
 new conflicting report. This checks invalidation, not whether the correction

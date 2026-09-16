@@ -69,6 +69,13 @@ evidence is not source-version correction; structurally valid model mistakes
 remain possible; and rationale context is an explicit recall mode, not the MCP
 default. A passing scripted test does not close those product gaps.
 
+Initial independent Standards review passed; Spec review found ML4 incomplete:
+direct placement did not exercise classifier-generated titles or assert stale
+label removal. The same worker was assigned the correction: generate the MOC
+through capture's classification stage, prove the original label exists, and
+assert both cold map and selection input no longer expose it after correction.
+Both review axes must rerun against the corrected fixed candidate before push.
+
 Next: evaluate a bounded source-supported current-state interpretation without
 deleting historical evidence or upgrading a challenged premise into execution
 permission. Freeze positive, uncertain and adversarial cases before any model
