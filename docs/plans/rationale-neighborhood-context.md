@@ -52,6 +52,8 @@ links; do not use it to claim the model inferred those links correctly.
   Allowed scope: core source-evidence mode classification, rationale read
   storage, runtime/fetch/recall/contract wiring as necessary; MCP recall schema;
   focused core/MCP/installed tests; one feature doc, this plan and changelog.
+  A post-review documentation-only correction may also update
+  `docs/bounded-source-selection.md` to list the newly valid explicit mode.
   Do not alter model/provider profiles, prompts, DB schema, write paths,
   experiment guards/budgets/operators, fixtures, public plugin hooks, private
   product, deployment or publication. A public inspect view is not needed for
@@ -84,7 +86,8 @@ reconfirmation label would misattribute it.
 
 Affected callers/check owners: new core test covers fetch/recall, cursor,
 current-only and qualification validation, source/edge/byte/token limits,
-callback mutation, outgoing-only challenge status and old-mode compatibility. New installed-artifact test
+callback mutation, outgoing-only challenge status and old-mode compatibility.
+The new installed-artifact test
 covers real MCP stdio, forced old-root selection/ranking, final JSON, prompt
 reuse and keyless cold graph equality. Existing core, MCP, adapter, artifact,
 generic and store/recall/adapter demos are regression owners. The ordinary
@@ -103,3 +106,13 @@ those suites. These tests use
 synthetic data, installed local artifacts and fake HTTP only; no provider key,
 shared campaign ledger or paid call was used. They establish propagation and
 boundaries, not semantic correctness or answer quality.
+
+The independent review of `f48ba6364618208ca3749531fcd34278352b8492`
+passed both axes but found one stale adjacent compatibility sentence in
+`docs/bounded-source-selection.md`. The follow-up changes only that mode list
+and preserves the document's source-selection and semantic nonclaims. No
+runtime, test, prompt or fixture changes are part of this correction. On both
+Node 22.16 and 24.15, `npm test` passed 139/139, `npm run validate` passed,
+and `npm run validate --prefix tools/plugin-validation` passed both marketplace
+and strict plugin validation. `git diff --check` passed before the scoped
+follow-up commit.

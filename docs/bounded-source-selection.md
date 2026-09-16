@@ -2,7 +2,10 @@
 
 The optional recall setting `selectionMode: 'bounded-source-scan'` avoids an
 extra model prefilter when the complete visible MOC fits the existing candidate
-bounds. It requires an explicit `source-evidence` or `rationale-evidence` context.
+bounds. It requires an explicit `source-evidence`, `rationale-evidence`, or
+`rationale-neighborhood-evidence` context. The last mode includes only a bounded,
+unverified root neighborhood; scanning visible roots does not make its links
+complete or correct.
 
 ```json
 {
