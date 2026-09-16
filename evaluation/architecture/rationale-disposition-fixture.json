@@ -1,0 +1,84 @@
+{
+  "cases": [
+    {
+      "id": "scenario-01",
+      "events": [
+        { "id": "s1-e1", "role": "user", "text": "2026-07-01: The printshop test of press K confirmed offline job queuing. We will treat offline availability as an operational premise when selecting this press, until that capability changes." },
+        { "id": "s1-e2", "role": "user", "text": "2026-07-02: Our supplier confirmed a six-year parts contract for press K." },
+        { "id": "s1-e3", "role": "user", "text": "2026-07-03: We selected press K because offline job queuing and the six-year parts contract both meet our requirements." },
+        { "id": "s1-e4", "role": "user", "text": "2026-07-10: Firmware 8 disabled offline job queuing on our same press K, so offline availability is no longer an applicable operational premise. This does not deny what worked on July 1. The six-year parts contract is unchanged." }
+      ],
+      "oldEdges": [
+        { "from": 0, "to": 2, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 1, "to": 2, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 0, "to": 3, "relation": "challenges-premise", "fromReceipt": 0, "toReceipt": 0 }
+      ]
+    },
+    {
+      "id": "scenario-02",
+      "events": [
+        { "id": "s2-e1", "role": "user", "text": "Report dated June 4, 2026: our logger N currently runs firmware 1 and cannot export CSV. This is the operational constraint for our export workflow until the same device gains CSV export." },
+        { "id": "s2-e2", "role": "user", "text": "Meeting dated June 6, 2026: we chose manual export because logger N lacks CSV export." },
+        { "id": "s2-e3", "role": "user", "text": "Release test dated August 2, 2026: our same logger N was updated to firmware 2 and now exports CSV. This removes the operational constraint from June 4; it does not deny that firmware 1 lacked CSV at the time." },
+        { "id": "s2-e4", "role": "user", "text": "Import note dated September 1, 2026: today we re-imported the original report dated June 4, 2026 about our then-installed firmware 1. September 1 is the import date, not a new test date." }
+      ],
+      "oldEdges": [
+        { "from": 0, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 0, "to": 2, "relation": "challenges-premise", "fromReceipt": 0, "toReceipt": 0 }
+      ]
+    },
+    {
+      "id": "scenario-03",
+      "events": [
+        { "id": "s3-e1", "role": "user", "text": "Design department, annual plan R: supplier contract includes unlimited image exports." },
+        { "id": "s3-e2", "role": "user", "text": "Design department: we selected annual plan R because unlimited image exports are necessary." },
+        { "id": "s3-e3", "role": "user", "text": "Finance department, monthly plan R: image exports are limited to 20. This statement is only about our monthly plan." },
+        { "id": "s3-e4", "role": "user", "text": "Design department update: the supplier corrected our annual plan contract; it allows 100 image exports, not unlimited." }
+      ],
+      "oldEdges": [
+        { "from": 0, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 2, "to": 0, "relation": "challenges-premise", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 3, "to": 0, "relation": "challenges-premise", "fromReceipt": 0, "toReceipt": 0 }
+      ]
+    },
+    {
+      "id": "scenario-04",
+      "events": [
+        { "id": "s4-e1", "role": "user", "text": "Studio team: provider P can offer a sponsored license." },
+        { "id": "s4-e2", "role": "user", "text": "Studio team: we are considering provider P because of that sponsored license, but no switch is approved. Our recorded choice remains provider Q." },
+        { "id": "s4-e3", "role": "user", "text": "Studio team: provider Q was chosen last month because its local rendering worked." },
+        { "id": "s4-e4", "role": "user", "text": "Studio retest: provider Q local rendering now fails after its update; this removes our original reason. We still have not chosen provider P." }
+      ],
+      "oldEdges": [
+        { "from": 0, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 2, "to": 2, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 }
+      ]
+    },
+    {
+      "id": "scenario-05",
+      "events": [
+        { "id": "s5-e1", "role": "user", "text": "Courier quote: courier V costs 20 units per parcel." },
+        { "id": "s5-e2", "role": "user", "text": "Team decision: we chose courier V because it includes cargo insurance; price was not a reason for our choice." },
+        { "id": "s5-e3", "role": "assistant", "text": "I guess the team chose courier V because the parcel price was low." },
+        { "id": "s5-e4", "role": "user", "text": "Team correction: that guess about our motive is wrong. Cargo insurance was our reason, not the parcel price." },
+        { "id": "s5-e5", "role": "user", "text": "Contract record: courier V includes cargo insurance." }
+      ],
+      "oldEdges": [
+        { "from": 0, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 4, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 },
+        { "from": 2, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 }
+      ]
+    },
+    {
+      "id": "scenario-06",
+      "events": [
+        { "id": "s6-e1", "role": "user", "text": "Project coordinator: the supplier supports encrypted archives." },
+        { "id": "s6-e2", "role": "user", "text": "Meeting fragment: we agreed to go with that because of the thing we discussed earlier." },
+        { "id": "s6-e3", "role": "user", "text": "Project coordinator: I no longer have notes from before that fragment." }
+      ],
+      "oldEdges": [
+        { "from": 0, "to": 1, "relation": "supports-decision", "fromReceipt": 0, "toReceipt": 0 }
+      ]
+    }
+  ]
+}
