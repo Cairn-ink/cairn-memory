@@ -44,9 +44,12 @@ This is a mechanical contract for inspecting an explicit proposed update, not
 a semantic detector. Old proposals may themselves be wrong. The source
 citations and complete coverage of old edges do not establish whether a
 decision was adopted, a premise remains applicable, a challenge points in the
-right direction or a separate reason was captured. In particular, this view
-does not repair the archived-case direction reversal or the old-decision
-default-read visibility gap found in the [paired chronology diagnostic](rationale-temporal-comparison.md).
+right direction or a separate reason was captured. It also does not guarantee
+that every relevant reason or later update reaches a recall result. An earlier
+[development trace](evidence/natural-rationale-development.md) observed a
+pre-fix read omission; the subsequent fix was verified offline, and that paid
+pilot was not rerun. The [paired chronology comparison](rationale-temporal-comparison.md)
+is preparation, not evidence of this view's accuracy or a current failure.
 
 The adapter accepts only the core's indexed source-and-old-edge input shape:
 no namespace, persistent IDs or receipt metadata. It validates complete,
