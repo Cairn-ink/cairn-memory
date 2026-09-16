@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "relation-definition-lite-v1-rubric",
+  "scoring": "Exact edge tuples are source-memory/receipt-local. Required omissions and unsupported extras are counted separately; allowed edges do not count as extras. A malformed or failed slot is not empty and is not a complete case.",
+  "cases": [
+    {"id":"quiet-pump-en","required":[[0,0,"supports-decision",0,0]],"allowed":[],"note":"Explicit reason supports adopted choice within one receipt."},
+    {"id":"quiet-pump-zh","required":[[0,0,"supports-decision",0,0],[1,0,"challenges-premise",0,0]],"allowed":[],"note":"Changed noise premise does not replace pump."},
+    {"id":"two-reasons-en","required":[[0,0,"supports-decision",0,0],[1,0,"challenges-premise",0,0]],"allowed":[],"note":"Only price is challenged; endpoint granularity cannot represent the independent key-location reason."},
+    {"id":"considering-zh","required":[],"allowed":[],"note":"Consideration is not adoption; shared calendar topic is insufficient."},
+    {"id":"tentative-en","required":[],"allowed":[],"note":"Tentative leaning and ambiguous referent do not establish a decision or challenge."},
+    {"id":"replacement-zh","required":[[0,0,"supports-decision",0,0],[1,1,"supports-decision",0,0]],"allowed":[],"note":"Explicit new decision has its own reason; neither premise is challenged, and replacement has no wire type."},
+    {"id":"elaboration-en","required":[[0,0,"supports-decision",0,0]],"allowed":[],"note":"Blue color elaborates, not challenges, seat-height reason."},
+    {"id":"reaffirmation-zh","required":[],"requiredAny":[[[0,0,"supports-decision",0,0],[0,1,"supports-decision",0,0]]],"allowed":[[0,0,"supports-decision",0,0],[0,1,"supports-decision",0,0]],"note":"Either original self-support or original reason supporting reaffirmed same choice covers the decision; reaffirmation alone states no new reason."},
+    {"id":"different-actors-en","required":[[0,0,"supports-decision",0,0],[1,1,"supports-decision",0,0],[2,0,"challenges-premise",0,0]],"allowed":[],"note":"Only Mina/Juniper premise is challenged. Hazel belongs to another actor and has no challenged premise."},
+    {"id":"history-advice-zh","required":[[0,0,"supports-decision",0,0]],"allowed":[],"note":"Historical lunch choice was adopted then, not a current decision; assistant advice and thanks do not adopt a new cafe. Same-memory move cannot be represented as a challenge to that same memory."}
+  ]
+}

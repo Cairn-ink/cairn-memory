@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "relation-definition-lite-v1",
+  "cases": [
+    {"id":"quiet-pump-en","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"I chose the Alder pump for my bedroom because its advertised noise is below 20 dB."}]}]},
+    {"id":"quiet-pump-zh","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"我選了青石幫浦放臥室，因為標示噪音低於 20 分貝。"}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"我實測青石幫浦是 48 分貝，不是低於 20 分貝；目前還沒換幫浦。"}]}]},
+    {"id":"two-reasons-en","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"I selected Harbor storage because it costs $4 a month and keeps encryption keys on my device."}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"Harbor now costs $12 a month."}]}]},
+    {"id":"considering-zh","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"我正在考慮改用松林行事曆，但還沒有選定任何行事曆。"}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"松林行事曆可以共享提醒；我還在比較，尚未做決定。"}]}]},
+    {"id":"tentative-en","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"I lean toward the Rowan translator, but I have not chosen or bought either Rowan or Maple."}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"The seller said one translator needs a network, but I forgot which one; I still have not chosen."}]}]},
+    {"id":"replacement-zh","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"我原本選白樺筆記來寫日記，因為它能離線使用。"}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"我今天明確改選杉木筆記，因為它可以匯出純文字；我並沒有取得白樺筆記功能改變的新資訊。"}]}]},
+    {"id":"elaboration-en","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"I bought the Elm chair because its seat height adjusts."}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"My Elm chair arrived in blue."}]}]},
+    {"id":"reaffirmation-zh","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"我選了月台咖啡館作為週一午餐地點，因為它離辦公室近。"}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"週一我仍選月台咖啡館。"}]}]},
+    {"id":"different-actors-en","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"Mina chose Juniper chat because it works without a phone number."}]},{"index":1,"receipts":[{"index":0,"role":"user","excerpt":"I chose Hazel chat because I can export my chats."}]},{"index":2,"receipts":[{"index":0,"role":"user","excerpt":"Mina learned Juniper requires a phone number."}]}]},
+    {"id":"history-advice-zh","memories":[{"index":0,"receipts":[{"index":0,"role":"user","excerpt":"去年我因為舊辦公室旁邊有榆樹咖啡館，當時選它吃午餐；今年我搬走了，還沒決定新的午餐地點。"}]},{"index":1,"receipts":[{"index":0,"role":"assistant","excerpt":"你可以考慮杉木咖啡館，它靠近新辦公室；這只是建議。"}]},{"index":2,"receipts":[{"index":0,"role":"user","excerpt":"謝謝建議，我還沒有選新的午餐地點。"}]}]}
+  ]
+}
