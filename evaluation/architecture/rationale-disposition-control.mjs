@@ -112,11 +112,11 @@ export function createRationaleDispositionControl(model, oldEdges) {
     let input, signal;
     try {
       exactRecord(request, ['system', 'input', 'maxOutputTokens', 'signal']);
+      signal = request.signal;
       if (request.system !== sourceOnlySystem || request.maxOutputTokens !== 1024 ||
-          !(request.signal instanceof AbortSignal)) invalid();
+          !(signal instanceof AbortSignal)) invalid();
       input = expanded(request.input, setup);
       if (JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 }) !== expected) invalid();
-      signal = request.signal;
       if (phase !== 'validating') invalid();
     } catch (error) { phase = 'invalid'; throw error; }
     phase = 'sending';
