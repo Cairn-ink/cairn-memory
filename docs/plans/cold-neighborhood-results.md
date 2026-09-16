@@ -14,7 +14,9 @@ it does not dispatch or authorize another request.
 - CNRE2: Retain the six exact answer texts and, per arm, the original source
   passages actually delivered to the answer model. Map retained receipts back
   to fixture message IDs and distinguish selected-root from linked-neighborhood
-  delivery. Record submitted, retained, selected, expanded and delivered
+  delivery. Record per-batch submitted IDs and separate ordered raw-recall
+  selected-root, expanded-neighborhood and final delivered inventories;
+  interrupted/unrun stages are null, not empty evidence. Record each stage's
   evidence separately, including exact-anchor coverage and missing anchors.
   Preserve capture-stage statuses and warnings.
 - CNRE3: Describe the global halt at request 122, including the aborted
@@ -81,3 +83,24 @@ strict-plugin validation. `git diff --check` passed. These are publication
 consistency gates, not a model rerun or a semantic accuracy test. The final
 candidate still requires primary acceptance and independent fixed-diff review
 before push/PR; no merge or provider call is part of this packet.
+
+Independent Spec review of the first candidate found that the public packet
+identified delivered root/linked groups but lacked the separate submitted,
+selected-root and pre-projection expanded stage inventories required by CNRE2.
+The bounded correction adds each batch's actual submitted fixture IDs and
+ordered `selectedRootSources`/`expandedSources` derived from the retained raw
+recall result. The already published delivered groups, exact answer strings,
+qualitative judgments and frozen inputs are unchanged. The corrected test
+checks source-stage separation and keeps unavailable post-capture inventories
+null. Read-only request inspection also confirmed the same pinned model in all
+122 requests, a 1,024-token output cap on generation/answer calls, the same
+source-only answer instruction in all six host calls, and no explicit sampling
+temperature. The public metadata now pins the model and instruction hash
+without inventing an absent sampling value. Read-only comparison checked all
+60 per-batch submitted fixture IDs, 17 selected-root groups and 22 expanded
+source entries against the retained fixture/report. The corrected focused test
+passed 2/2; `npm test` passed 143/143, repository JSON validation passed, and
+marketplace plus strict-plugin validation passed on both Node 22.16.0 and
+24.15.0. The six answer hashes and delivered passage/catalog checks stayed
+unchanged. The corrected candidate still needs primary acceptance and renewed
+independent Standards/Spec review before push or PR.

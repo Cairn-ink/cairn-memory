@@ -11,6 +11,12 @@
     "installedTreeSha256": "daf992d3b9892b868f21adb4f1f03c5b962abf445658cf1e62445eddcd47a5b9",
     "retainedPrivateReportSha256": "9c72e31c227b75893881f4e3016406f597d3a0b00d38c859def6d17b8c7453b9"
   },
+  "modelSnapshot": {
+    "coreAndHostModel": "gpt-4.1-mini-2025-04-14",
+    "answerMaxCompletionTokens": 1024,
+    "answerInstructionSource": "evaluation/live/installed-source-answer-delivery.mjs:SOURCE_ANSWER_INSTRUCTION",
+    "answerInstructionSha256": "31862ad2c35cf2c535a8e0a959a17696896f3979dc33df3d3f75a180e272c361"
+  },
   "accounting": {
     "attemptedRequests": 122,
     "coreRequests": 116,
@@ -49,9 +55,9 @@
       "id": "cart-basis-change",
       "status": "completed-unassessed",
       "captures": [
-        { "batchId": "cart-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "cart-b2", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "cart-b3", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
+        { "batchId": "cart-b1", "submittedFixtureIds": ["cart-m01", "cart-m02", "cart-m03", "cart-m04", "cart-m05"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "cart-b2", "submittedFixtureIds": ["cart-m06", "cart-m07", "cart-m08", "cart-m09", "cart-m10"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "cart-b3", "submittedFixtureIds": ["cart-m11", "cart-m12", "cart-m13", "cart-m14", "cart-m15"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
       ],
       "retention": {
         "status": "measured", "receiptCount": 12,
@@ -68,6 +74,16 @@
         {
           "mode": "source-evidence", "status": "generated-unassessed", "selectedRoots": 3,
           "beforeAfterMatchColdBaseline": true,
+          "selectedRootSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["cart-m01"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["cart-m07"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["cart-m12"] }
+          ],
+          "expandedSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["cart-m01"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["cart-m07"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["cart-m12"] }
+          ],
           "deliveredSources": [
             { "origin": "selected-root", "fixtureMessageIds": ["cart-m01"] },
             { "origin": "selected-root", "fixtureMessageIds": ["cart-m07"] },
@@ -85,6 +101,19 @@
         {
           "mode": "rationale-neighborhood-evidence", "status": "generated-unassessed", "selectedRoots": 3,
           "beforeAfterMatchColdBaseline": true,
+          "selectedRootSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["cart-m01"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["cart-m07"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["cart-m12"] }
+          ],
+          "expandedSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["cart-m01"] },
+            { "rootIndex": 0, "fixtureMessageIds": ["cart-m11"] },
+            { "rootIndex": 0, "fixtureMessageIds": ["cart-m06"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["cart-m07"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["cart-m06"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["cart-m12"] }
+          ],
           "deliveredSources": [
             { "origin": "selected-root", "fixtureMessageIds": ["cart-m01"] },
             { "origin": "linked-neighborhood", "fixtureMessageIds": ["cart-m11"] },
@@ -107,9 +136,9 @@
       "id": "newsletter-adoption",
       "status": "completed-unassessed",
       "captures": [
-        { "batchId": "news-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "news-b2", "status": "completed", "admitted": 3, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "news-b3", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
+        { "batchId": "news-b1", "submittedFixtureIds": ["news-m01", "news-m02", "news-m03", "news-m04", "news-m05"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "news-b2", "submittedFixtureIds": ["news-m06", "news-m07", "news-m08", "news-m09", "news-m10"], "status": "completed", "admitted": 3, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "news-b3", "submittedFixtureIds": ["news-m11", "news-m12", "news-m13", "news-m14", "news-m15"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
       ],
       "retention": {
         "status": "measured", "receiptCount": 14,
@@ -124,6 +153,14 @@
         {
           "mode": "source-evidence", "status": "generated-unassessed", "selectedRoots": 2,
           "beforeAfterMatchColdBaseline": true,
+          "selectedRootSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["news-m11", "news-m12"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["news-m11"] }
+          ],
+          "expandedSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["news-m11", "news-m12"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["news-m11"] }
+          ],
           "deliveredSources": [
             { "origin": "selected-root", "fixtureMessageIds": ["news-m11", "news-m12"] },
             { "origin": "selected-root", "fixtureMessageIds": ["news-m11"] }
@@ -140,6 +177,14 @@
         {
           "mode": "rationale-neighborhood-evidence", "status": "generated-unassessed", "selectedRoots": 2,
           "beforeAfterMatchColdBaseline": true,
+          "selectedRootSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["news-m11", "news-m12"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["news-m07"] }
+          ],
+          "expandedSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["news-m11", "news-m12"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["news-m07"] }
+          ],
           "deliveredSources": [
             { "origin": "selected-root", "fixtureMessageIds": ["news-m11", "news-m12"] },
             { "origin": "selected-root", "fixtureMessageIds": ["news-m07"] }
@@ -159,9 +204,9 @@
       "id": "greenhouse-late-import",
       "status": "completed-unassessed",
       "captures": [
-        { "batchId": "green-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "green-b2", "status": "completed", "admitted": 3, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "green-b3", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
+        { "batchId": "green-b1", "submittedFixtureIds": ["green-m01", "green-m02", "green-m03", "green-m04", "green-m05"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "green-b2", "submittedFixtureIds": ["green-m06", "green-m07", "green-m08", "green-m09", "green-m10"], "status": "completed", "admitted": 3, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "green-b3", "submittedFixtureIds": ["green-m11", "green-m12", "green-m13", "green-m14", "green-m15"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
       ],
       "retention": {
         "status": "measured", "receiptCount": 12,
@@ -179,6 +224,16 @@
         {
           "mode": "source-evidence", "status": "generated-unassessed", "selectedRoots": 3,
           "beforeAfterMatchColdBaseline": true,
+          "selectedRootSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["green-m06", "green-m07"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["green-m11"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["green-m08"] }
+          ],
+          "expandedSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["green-m06", "green-m07"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["green-m11"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["green-m08"] }
+          ],
           "deliveredSources": [
             { "origin": "selected-root", "fixtureMessageIds": ["green-m06", "green-m07"] },
             { "origin": "selected-root", "fixtureMessageIds": ["green-m11"] },
@@ -195,6 +250,20 @@
         {
           "mode": "rationale-neighborhood-evidence", "status": "generated-unassessed", "selectedRoots": 4,
           "beforeAfterMatchColdBaseline": true,
+          "selectedRootSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["green-m06", "green-m07"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["green-m11"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["green-m08"] },
+            { "rootIndex": 3, "fixtureMessageIds": ["green-m12"] }
+          ],
+          "expandedSources": [
+            { "rootIndex": 0, "fixtureMessageIds": ["green-m06", "green-m07"] },
+            { "rootIndex": 0, "fixtureMessageIds": ["green-m06"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["green-m11"] },
+            { "rootIndex": 1, "fixtureMessageIds": ["green-m01"] },
+            { "rootIndex": 2, "fixtureMessageIds": ["green-m08"] },
+            { "rootIndex": 3, "fixtureMessageIds": ["green-m12"] }
+          ],
           "deliveredSources": [
             { "origin": "selected-root", "fixtureMessageIds": ["green-m06", "green-m07"] },
             { "origin": "linked-neighborhood", "fixtureMessageIds": ["green-m06"] },
@@ -223,15 +292,15 @@
       "id": "workshop-exception-unknown",
       "status": "interrupted",
       "captures": [
-        { "batchId": "shop-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "shop-b2", "status": "completed", "admitted": 2, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
-        { "batchId": "shop-b3", "status": "started-aborted-before-operator-record", "operatorSlot": "not_run", "admitted": null, "suppressed": null, "classification": null, "rationale": null, "coverageWarning": null }
+        { "batchId": "shop-b1", "submittedFixtureIds": ["shop-m01", "shop-m02", "shop-m03", "shop-m04", "shop-m05"], "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "shop-b2", "submittedFixtureIds": ["shop-m06", "shop-m07", "shop-m08", "shop-m09", "shop-m10"], "status": "completed", "admitted": 2, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "shop-b3", "submittedFixtureIds": ["shop-m11", "shop-m12", "shop-m13", "shop-m14", "shop-m15"], "status": "started-aborted-before-operator-record", "operatorSlot": "not_run", "admitted": null, "suppressed": null, "classification": null, "rationale": null, "coverageWarning": null }
       ],
       "retention": { "status": "not-measured-after-interruption", "receiptCount": null, "fixtureMessageIds": null },
       "deliveredSourceCatalog": [],
       "arms": [
-        { "mode": "source-evidence", "status": "not_run", "selectedRoots": null, "beforeAfterMatchColdBaseline": null, "deliveredSources": null, "answerText": null, "obligations": null },
-        { "mode": "rationale-neighborhood-evidence", "status": "not_run", "selectedRoots": null, "beforeAfterMatchColdBaseline": null, "deliveredSources": null, "answerText": null, "obligations": null }
+        { "mode": "source-evidence", "status": "not_run", "selectedRoots": null, "selectedRootSources": null, "expandedSources": null, "beforeAfterMatchColdBaseline": null, "deliveredSources": null, "answerText": null, "obligations": null },
+        { "mode": "rationale-neighborhood-evidence", "status": "not_run", "selectedRoots": null, "selectedRootSources": null, "expandedSources": null, "beforeAfterMatchColdBaseline": null, "deliveredSources": null, "answerText": null, "obligations": null }
       ]
     }
   ]

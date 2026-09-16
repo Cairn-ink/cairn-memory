@@ -8,8 +8,14 @@ Six `generated-unassessed` statuses describe valid completion envelopes, not
 six correct answers. This was a selected, nonblind synthetic development run,
 not a reliability estimate or a real-user result.
 
-The record gives each delivered original excerpt once in a case-local catalog,
-then lists answer-request source groups in their actual order. A group is marked
+Each capture entry records the fixture message IDs submitted to MCP, including
+the interrupted third workshop batch. For a completed arm,
+`selectedRootSources` lists the ordered roots from raw recall;
+`expandedSources` lists each root's source-only neighborhood inventory in raw
+order, including repeated appearances. The ordinary source mode has no linked
+expansion, so its expanded inventory equals its selected roots. The record
+then gives each delivered original excerpt once in a case-local catalog and
+lists the separate answer-request source groups in their actual order. A group is marked
 `selected-root` or `linked-neighborhood`; repeated fixture IDs represent
 distinct retained receipt/source appearances, not extra original messages.
 The six `answerText` values are the exact generated texts. Four UUID citations
@@ -19,6 +25,11 @@ namespace, account, private path, campaign run ID, provider request ID, key or
 ledger row is published. The retained private report is bound by its SHA-256
 pin, as are the frozen source fixture, evaluator rubric, operator, reader and
 installed artifact.
+All 122 request bodies named the pinned `gpt-4.1-mini-2025-04-14` model;
+generation and host answer requests used a 1,024-output-token cap. All six
+host answers used the same unchanged source-only instruction, identified by
+the `answerInstructionSha256` and source pointer in the JSON. No request body
+set a temperature, so this record does not invent a sampling value.
 
 ## Evidence and answer review
 
@@ -54,7 +65,8 @@ historical claim would still require support. The fourth case's known May 9
 time and unknown July schedule were never tested in an answer, so universal
 refusal cannot be credited as abstention. Source submission, retention, root
 selection, linked-source expansion, delivered evidence and answer judgment
-remain separate stages in the record.
+remain separate stages in the record. The last case's post-capture inventories
+are `null`, not empty evidence.
 
 ## Halt, accounting and limits
 

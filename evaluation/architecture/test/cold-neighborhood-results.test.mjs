@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { SOURCE_ANSWER_INSTRUCTION, SOURCE_ANSWER_MODEL } from '../../live/installed-source-answer-delivery.mjs';
 
 const read = relative => readFileSync(new URL(relative, import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -26,6 +27,11 @@ test('CNRE1–2/5–6 publication keeps eight slots, exact answers and independe
   assert.equal(evidence.pins.rubricSha256, digest(read('../../../docs/cold-neighborhood-rubric.json')));
   assert.equal(evidence.pins.retainedPrivateReportSha256,
     '9c72e31c227b75893881f4e3016406f597d3a0b00d38c859def6d17b8c7453b9');
+  assert.equal(evidence.modelSnapshot.coreAndHostModel, SOURCE_ANSWER_MODEL);
+  assert.equal(evidence.modelSnapshot.answerMaxCompletionTokens, 1024);
+  assert.equal(evidence.modelSnapshot.answerInstructionSource,
+    'evaluation/live/installed-source-answer-delivery.mjs:SOURCE_ANSWER_INSTRUCTION');
+  assert.equal(evidence.modelSnapshot.answerInstructionSha256, digest(SOURCE_ANSWER_INSTRUCTION));
   assert.deepEqual(evidence.cases.map(item => item.id), fixture.cases.map(item => item.id));
   assert.equal(evidence.cases.length, 4);
   let answered = 0;
@@ -33,6 +39,10 @@ test('CNRE1–2/5–6 publication keeps eight slots, exact answers and independe
     const source = fixture.cases[caseIndex], gold = rubric.cases[caseIndex];
     const fixtureMessages = new Map(source.batches.flatMap(batch => batch.messages.map(message => [message.id, message])));
     assert.deepEqual(item.captures.map(entry => entry.batchId), source.batches.map(batch => batch.id));
+    for (const [batchIndex, capture] of item.captures.entries()) {
+      assert.deepEqual(capture.submittedFixtureIds,
+        source.batches[batchIndex].messages.map(message => message.id));
+    }
     assert.deepEqual(item.arms.map(arm => arm.mode), modes);
     const catalog = new Map();
     for (const passage of item.deliveredSourceCatalog) {
@@ -52,6 +62,7 @@ test('CNRE1–2/5–6 publication keeps eight slots, exact answers and independe
       assert.deepEqual(item.arms.map(arm => arm.status), ['not_run', 'not_run']);
       for (const arm of item.arms) {
         assert.equal(arm.answerText, null); assert.equal(arm.obligations, null);
+        assert.equal(arm.selectedRootSources, null); assert.equal(arm.expandedSources, null);
         assert.equal(arm.deliveredSources, null); assert.equal(arm.beforeAfterMatchColdBaseline, null);
       }
       continue;
@@ -68,6 +79,20 @@ test('CNRE1–2/5–6 publication keeps eight slots, exact answers and independe
       assert.equal(digest(arm.answerText), answerHashes[caseIndex][armIndex]);
       answered++;
       assert.ok(arm.deliveredSources.length <= 6);
+      assert.equal(arm.selectedRootSources.length, arm.selectedRoots);
+      assert.deepEqual(arm.selectedRootSources.map(group => group.rootIndex),
+        Array.from({ length: arm.selectedRoots }, (_, index) => index));
+      for (const group of [...arm.selectedRootSources, ...arm.expandedSources]) {
+        assert.ok(Number.isInteger(group.rootIndex) && group.rootIndex >= 0 && group.rootIndex < arm.selectedRoots);
+        assert.ok(Array.isArray(group.fixtureMessageIds) && group.fixtureMessageIds.length > 0);
+        for (const id of group.fixtureMessageIds) assert.ok(item.retention.fixtureMessageIds.includes(id));
+      }
+      for (const root of arm.selectedRootSources) assert.ok(arm.expandedSources.some(group =>
+        group.rootIndex === root.rootIndex &&
+        JSON.stringify(group.fixtureMessageIds) === JSON.stringify(root.fixtureMessageIds)));
+      if (arm.mode === 'source-evidence') assert.deepEqual(arm.expandedSources, arm.selectedRootSources);
+      assert.deepEqual(arm.deliveredSources.filter(group => group.origin === 'selected-root')
+        .map(group => group.fixtureMessageIds), arm.selectedRootSources.map(group => group.fixtureMessageIds));
       assert.equal(arm.selectedRoots,
         arm.deliveredSources.filter(group => group.origin === 'selected-root').length);
       const delivered = new Map();
@@ -80,6 +105,8 @@ test('CNRE1–2/5–6 publication keeps eight slots, exact answers and independe
           assert.ok(item.retention.fixtureMessageIds.includes(id));
           delivered.set(id, catalog.get(id).excerpt);
         }
+        assert.ok(arm.expandedSources.some(expanded =>
+          JSON.stringify(expanded.fixtureMessageIds) === JSON.stringify(group.fixtureMessageIds)));
       }
       assert.deepEqual(arm.obligations.map(obligation => obligation.id), gold.obligations.map(obligation => obligation.id));
       for (const [index, obligation] of arm.obligations.entries()) {
