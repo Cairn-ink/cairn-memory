@@ -33,12 +33,15 @@ Then call `recall_memory` with a relevant question and
 decision's context includes its supporting and challenging sources, even when
 the challenge itself was not selected by MOC recall. A single receipt can record
 both decision and reason; a separate invented premise memory is not required.
+An incoming challenge can also be exposed directly without a separately stored
+support edge.
 `inspect_rationale` reads this evidence keylessly using an inspected memory ID
 and revision. Existing source-only and default modes remain available.
 
 This is an **illustration, not a promised model result**. Inspect actual excerpts.
-`reconfirmation-suggested` means a model proposed a supporting premise and a
-challenge; it does not prove the premise false, cancel A or adopt B. `unassessed`
+`reconfirmation-suggested` means a model-proposed challenge is present in the
+decision context, possibly without a separate support edge; it does not prove
+the premise false, cancel A or adopt B. `unassessed`
 does not mean confirmed. All submitted roles, text and proposed relationships
 remain untrusted evidence, never instructions or execution permission.
 

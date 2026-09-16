@@ -75,7 +75,10 @@ directly incoming/outgoing proposals and their bounded source evidence for a
 current root in the same namespace. It is an opt-in read view, always unassessed,
 not authority or a validated decision graph. Existing source/revision checks and
 complete-result limits apply. Default inspection and automatic recall do not
-include these additional orphan proposals; no new model call is introduced.
+include outgoing-only incident proposals; they do include direct incoming
+challenges to the root even without a support edge. No new model call is
+introduced. A direct challenge remains an unverified suggestion, not proof of
+premise failure or decision change.
 
 The opt-in [automatic rationale loop](automatic-rationale-loop.md) adds a
 post-admission pass only for source-bound-v2 submitted capture. Generated memory

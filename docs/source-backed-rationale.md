@@ -40,10 +40,11 @@ Support may point within one memory/receipt when it records both the decision
 and its reason; challenges require distinct memories. These are memory-level
 proposals, not independently validated claim slots or a general causal graph.
 
-`getRationale` needs no model or key. It returns the root, incoming supports and
-their incoming challenges, sources and edges. It excludes generated summaries
+`getRationale` needs no model or key. Its decision-context view returns the
+root, direct incoming challenges, incoming supports and challenges to those
+support sources, with their retained evidence. It excludes generated summaries
 and qualifications, but **edge types themselves are unverified interpretations**.
-A support/challenge path yields `reconfirmation-suggested`; otherwise it yields
+Any included challenge yields `reconfirmation-suggested`; otherwise it yields
 `unassessed`, not confirmed. It never changes the decision or chooses a substitute.
 For “A was chosen for offline support; A may not support offline”, the returned
 sources allow a host to explain the challenge without claiming adoption of B.
