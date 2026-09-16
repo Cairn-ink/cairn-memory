@@ -60,46 +60,67 @@ export function createRationaleDispositionControl(model, oldEdges) {
   if (typeof relate !== 'function' || typeof counter !== 'function' ||
       !Number.isSafeInteger(contextWindow) || contextWindow < 8192) invalid();
   const boundRelate = relate.bind(model), boundCounter = counter.bind(model);
-  let prepared = null, consumed = false;
+  let prepared = null, phase = 'idle';
   const countTokens = text => {
+    if (phase === 'counting' || phase === 'counting-output' || phase === 'sending' || phase === 'invalid') {
+      phase = 'invalid'; invalid();
+    }
     if (typeof text !== 'string') throw new Error('token_count_unavailable');
     let parsed;
     try { parsed = JSON.parse(text); } catch { parsed = null; }
     if (parsed && typeof parsed === 'object' &&
         ['system', 'input', 'maxOutputTokens'].some(key => Object.hasOwn(parsed, key))) {
-      if (consumed || prepared !== null) invalid();
+      if (phase !== 'idle') { phase = 'invalid'; invalid(); }
       exactRecord(parsed, ['system', 'input', 'maxOutputTokens']);
       if (parsed.system !== sourceOnlySystem || parsed.maxOutputTokens !== 1024) invalid();
       const input = expanded(parsed.input, setup);
-      prepared = JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 });
+      const candidate = JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 });
+      phase = 'counting';
       let tokens;
-      try { tokens = boundCounter(prepared); } catch (error) { prepared = null; throw error; }
+      try { tokens = boundCounter(candidate); } catch (error) { phase = 'invalid'; throw error; }
+      if (phase !== 'counting') { phase = 'invalid'; invalid(); }
       if (!Number.isSafeInteger(tokens) || tokens < 0) {
-        prepared = null;
+        phase = 'invalid';
         throw new Error('token_count_unavailable');
       }
       // Core rejects this count; also prevent a direct relate call from
       // bypassing that core-side limit after a caller counted an oversize input.
-      if (tokens > 6000) prepared = null;
+      if (tokens > 6000) phase = 'invalid';
+      else { prepared = candidate; phase = 'prepared'; }
       return tokens;
     }
-    const tokens = boundCounter(text);
-    if (!Number.isSafeInteger(tokens) || tokens < 0) throw new Error('token_count_unavailable');
+    if (phase === 'prepared') { phase = 'invalid'; invalid(); }
+    const prior = phase;
+    phase = 'counting-output';
+    let tokens;
+    try { tokens = boundCounter(text); } catch (error) { phase = 'invalid'; throw error; }
+    if (phase !== 'counting-output') { phase = 'invalid'; invalid(); }
+    if (!Number.isSafeInteger(tokens) || tokens < 0) {
+      phase = 'invalid'; throw new Error('token_count_unavailable');
+    }
+    phase = prior;
     return tokens;
   };
   const review = async request => {
-    exactRecord(request, ['system', 'input', 'maxOutputTokens', 'signal']);
-    if (request.system !== sourceOnlySystem || request.maxOutputTokens !== 1024 ||
-        !(request.signal instanceof AbortSignal) || consumed || prepared === null) invalid();
-    const input = expanded(request.input, setup);
-    if (JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 }) !== prepared) invalid();
-    consumed = true; prepared = null;
-    const signal = request.signal;
-    if (signal.aborted) throw new DOMException('Control request cancelled', 'AbortError');
-    const result = await boundRelate(Object.freeze({ system: controlSystem, input,
-      maxOutputTokens: 1024, signal }));
-    if (signal.aborted) throw new DOMException('Control request cancelled', 'AbortError');
-    return result;
+    if (phase !== 'prepared') { phase = 'invalid'; invalid(); }
+    let input, signal;
+    try {
+      exactRecord(request, ['system', 'input', 'maxOutputTokens', 'signal']);
+      if (request.system !== sourceOnlySystem || request.maxOutputTokens !== 1024 ||
+          !(request.signal instanceof AbortSignal)) invalid();
+      input = expanded(request.input, setup);
+      if (JSON.stringify({ system: controlSystem, input, maxOutputTokens: 1024 }) !== prepared) invalid();
+      signal = request.signal;
+    } catch (error) { phase = 'invalid'; throw error; }
+    phase = 'sending'; prepared = null;
+    try {
+      if (signal.aborted) throw new DOMException('Control request cancelled', 'AbortError');
+      const result = await boundRelate(Object.freeze({ system: controlSystem, input,
+        maxOutputTokens: 1024, signal }));
+      if (phase !== 'sending') invalid();
+      if (signal.aborted) throw new DOMException('Control request cancelled', 'AbortError');
+      return result;
+    } finally { phase = 'done'; }
   };
   return Object.freeze({ contextWindow, countTokens, relate: review });
 }

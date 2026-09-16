@@ -165,6 +165,64 @@ test('DC3/4 expanded input limit, one-shot send, cancellation and provider failu
   await assert.rejects(after.relate({ ...oldRequest(), signal: controller2.signal }), { name: 'AbortError' });
 });
 
+test('DC3 reentrant counter cannot send or arm a request before oversize count returns', async () => {
+  let sends = 0, control;
+  const nested = [];
+  const model = { contextWindow: 8192,
+    countTokens: () => {
+      nested.push(control.relate({ ...oldRequest(), signal: new AbortController().signal }));
+      return 6001;
+    },
+    relate: () => { sends++; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  assert.throws(() => control.countTokens(JSON.stringify(oldRequest())),
+    /invalid_disposition_control_request/);
+  assert.deepEqual((await Promise.allSettled(nested)).map(item => item.status), ['rejected']);
+  await assert.rejects(control.relate({ ...oldRequest(), signal: new AbortController().signal }),
+    /invalid_disposition_control_request/);
+  assert.equal(sends, 0);
+});
+
+test('DC3 nested count and throwing or invalid counters poison one-shot setup', async () => {
+  for (const behavior of ['nested-input', 'nested-output', 'throws', 'nan']) {
+    let control, sends = 0;
+    const model = { contextWindow: 8192,
+      countTokens: () => {
+        if (behavior === 'nested-input' || behavior === 'nested-output') {
+          assert.throws(() => control.countTokens(behavior === 'nested-input'
+            ? JSON.stringify(oldRequest()) : '{"edges":[]}'),
+          /invalid_disposition_control_request/);
+          return 1;
+        }
+        if (behavior === 'throws') throw new Error('synthetic counter failure');
+        return NaN;
+      },
+      relate: () => { sends++; return { edges: [] }; } };
+    control = createRationaleDispositionControl(model, oldEdges());
+    assert.throws(() => control.countTokens(JSON.stringify(oldRequest())));
+    await assert.rejects(control.relate({ ...oldRequest(), signal: new AbortController().signal }),
+      /invalid_disposition_control_request/);
+    assert.equal(sends, 0, behavior);
+  }
+});
+
+test('DC3 an unrelated/output count callback cannot reentrantly prepare provider authority', async () => {
+  let control, sends = 0;
+  const model = { contextWindow: 8192,
+    countTokens: () => {
+      assert.throws(() => control.countTokens(JSON.stringify(oldRequest())),
+        /invalid_disposition_control_request/);
+      return 1;
+    },
+    relate: () => { sends++; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  assert.throws(() => control.countTokens('{"edges":[]}'),
+    /invalid_disposition_control_request/);
+  await assert.rejects(control.relate({ ...oldRequest(), signal: new AbortController().signal }),
+    /invalid_disposition_control_request/);
+  assert.equal(sends, 0);
+});
+
 test('DC4 raw malformed and empty provider outputs are neither repaired nor translated by facade', async () => {
   for (const raw of [{ edges: [] }, { edges: [{ extra: true }] }, { other: true }, null]) {
     const model = { contextWindow: 8192, countTokens: () => 1, relate: () => raw };

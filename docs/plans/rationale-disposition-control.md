@@ -93,3 +93,26 @@ application code or dependency changes.
   No fresh scored fixture, rubric, semantic judgment or paid result exists in
   this slice. Fixed-candidate independent reviews, exact-head CI and PR remain
   primary-owned delivery gates.
+
+## First review correction
+
+- Independent Spec review found that the initial facade armed `relate` before
+  its arbitrary token counter returned. The primary reproduced a deterministic
+  red trace against frozen `36477f8`: a reentrant counter called `relate`, then
+  returned 6,001 tokens; the result was `counted=6001, sends=1`. This could
+  bypass the expanded input limit even though ordinary core use rejected the
+  count. No prompt, core or provider adapter change was needed.
+- The facade now keeps the candidate request local while counting. Only a
+  successful in-budget count arms the one-shot send; nested counting/sending,
+  counter throw or invalid result permanently denies it. Output counting is
+  separately fenced so a callback cannot use that path to arm a request.
+  The primary's same minimized probe on the corrected code returned
+  `invalid_disposition_control_request`, `sends=0` (green). Three synthetic
+  tests cover reentrant send, nested input/output count and throwing/NaN
+  counters. The frozen control prompt hash above is unchanged.
+- Corrected worker gates passed pure facade 9/9, generic 130/130 and the
+  installed real-adapter fake-transport test 1/1 on both Node 22.16 and 24.15.
+  The primary will rerun affected gates against the committed correction;
+  its earlier full artifact 70/70 and JSON/strict-plugin results above belong
+  to the pre-correction candidate. No paid call, shared ledger access or
+  semantic result was involved.
