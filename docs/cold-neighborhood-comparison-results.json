@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "scope": "One nonblind synthetic cold-session read-path comparison; no mode promotion",
+  "pins": {
+    "sourceCommit": "964e4e5879956adb816c4920f2cda7a01015a6e3",
+    "fixtureSha256": "fc28ec650a12b725397788d485c547566c63b050289dbdd834890bcb5fddc472",
+    "rubricSha256": "80b02491e0558f5068f5c208cf3d691663284e970b8e8b3feb43723e0860b1e9",
+    "operatorSha256": "b2d4d7d1e1a276c8286450b19eb95d26051241b8085dfc1534878e0673fba459",
+    "coldReaderSha256": "506fb035594d0149dd7be4e5315114ad0a369643e2c2c498bc9038d7d914d794",
+    "installedArchiveSha256": "5a91916957a0d8b1831a5a882b45d46dd60f5c26774f779878bccb99b75f7aa7",
+    "installedTreeSha256": "daf992d3b9892b868f21adb4f1f03c5b962abf445658cf1e62445eddcd47a5b9",
+    "retainedPrivateReportSha256": "9c72e31c227b75893881f4e3016406f597d3a0b00d38c859def6d17b8c7453b9"
+  },
+  "accounting": {
+    "attemptedRequests": 122,
+    "coreRequests": 116,
+    "hostAnswers": 6,
+    "runReservedMicroUsd": 880000,
+    "checkpointBefore": { "requestCount": 2273, "reservedMicroUsd": 25442000 },
+    "checkpointAfter": { "requestCount": 2395, "reservedMicroUsd": 26322000 },
+    "unsettledReservationsAfter": 0,
+    "knownUsageEstimateIncreaseMicroUsd": 55808,
+    "unknownCostRequests": 59,
+    "reservationIsNotActualSpend": true
+  },
+  "halt": {
+    "globalStatus": "halted",
+    "lastSuccessfulHttpResponseRequest": 121,
+    "lastAttemptedRequest": 122,
+    "request122LedgerOutcome": "unknown",
+    "method": "cairn_qualifyCandidates",
+    "observedReason": "request_aborted",
+    "request122HasProviderResponse": false,
+    "caseId": "workshop-exception-unknown",
+    "startedBatchId": "shop-b3",
+    "operatorBatchSlot": "not_run",
+    "unrunAnswerSlots": 2,
+    "remoteCauseEstablished": false
+  },
+  "review": {
+    "method": "Separate primary and independent AI-agent qualitative review of frozen rubric and delivered evidence",
+    "agreement": true,
+    "paidJudgeCall": false,
+    "definiteForbiddenInferenceInSixAnswers": false,
+    "generalAccuracyClaim": false
+  },
+  "cases": [
+    {
+      "id": "cart-basis-change",
+      "status": "completed-unassessed",
+      "captures": [
+        { "batchId": "cart-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "cart-b2", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "cart-b3", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
+      ],
+      "retention": {
+        "status": "measured", "receiptCount": 12,
+        "fixtureMessageIds": ["cart-m01", "cart-m02", "cart-m03", "cart-m05", "cart-m06", "cart-m07", "cart-m08", "cart-m10", "cart-m11", "cart-m12", "cart-m13", "cart-m15"]
+      },
+      "deliveredSourceCatalog": [
+        { "fixtureMessageId": "cart-m01", "role": "user", "excerpt": "2026-02-03, market team: we selected the Alder folding cart because its battery can be swapped onsite and its canopy detaches for storage." },
+        { "fixtureMessageId": "cart-m06", "role": "user", "excerpt": "2026-03-12, market team: the retrofit sealed the battery compartment on our same Alder cart; we can no longer swap its battery onsite." },
+        { "fixtureMessageId": "cart-m07", "role": "user", "excerpt": "Alder remains our recorded cart choice; the lost battery-swap reason needs review, and the detachable canopy reason is unchanged." },
+        { "fixtureMessageId": "cart-m11", "role": "user", "excerpt": "2026-04-01, market team: we checked the same Alder canopy again; it still detaches without tools." },
+        { "fixtureMessageId": "cart-m12", "role": "user", "excerpt": "We have not approved a successor cart for the market team." }
+      ],
+      "arms": [
+        {
+          "mode": "source-evidence", "status": "generated-unassessed", "selectedRoots": 3,
+          "beforeAfterMatchColdBaseline": true,
+          "deliveredSources": [
+            { "origin": "selected-root", "fixtureMessageIds": ["cart-m01"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["cart-m07"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["cart-m12"] }
+          ],
+          "answerText": "The market team selected the Alder folding cart because its battery could be swapped onsite and its canopy detaches for storage. Currently, the Alder cart remains the recorded choice; however, the original reason about the battery swap needs review, while the reason about the detachable canopy remains unchanged. No replacement cart has been approved for the market team yet.",
+          "obligations": [
+            { "id": "cart-choice", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "cart-historical-battery", "missingExactAnchorIds": ["cart-m02"], "sourceSufficiency": "partial", "answerSupport": "supported-within-delivered-evidence" },
+            { "id": "cart-battery-now", "missingExactAnchorIds": ["cart-m06"], "sourceSufficiency": "partial", "answerSupport": "supported-within-delivered-evidence" },
+            { "id": "cart-canopy-now", "missingExactAnchorIds": ["cart-m11"], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "cart-no-replacement", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" }
+          ]
+        },
+        {
+          "mode": "rationale-neighborhood-evidence", "status": "generated-unassessed", "selectedRoots": 3,
+          "beforeAfterMatchColdBaseline": true,
+          "deliveredSources": [
+            { "origin": "selected-root", "fixtureMessageIds": ["cart-m01"] },
+            { "origin": "linked-neighborhood", "fixtureMessageIds": ["cart-m11"] },
+            { "origin": "linked-neighborhood", "fixtureMessageIds": ["cart-m06"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["cart-m07"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["cart-m12"] }
+          ],
+          "answerText": "The market team selected the Alder folding cart. Originally, the reasons included its battery being swappable onsite and its canopy detaching for storage. However, after a retrofit sealed the battery compartment, the battery can no longer be swapped onsite, so that reason needs reconfirmation, but the detachable canopy reason remains unchanged. The team has not chosen a replacement cart.",
+          "obligations": [
+            { "id": "cart-choice", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "cart-historical-battery", "missingExactAnchorIds": ["cart-m02"], "sourceSufficiency": "partial", "answerSupport": "supported-within-delivered-evidence" },
+            { "id": "cart-battery-now", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "cart-canopy-now", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "cart-no-replacement", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "newsletter-adoption",
+      "status": "completed-unassessed",
+      "captures": [
+        { "batchId": "news-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "news-b2", "status": "completed", "admitted": 3, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "news-b3", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
+      ],
+      "retention": {
+        "status": "measured", "receiptCount": 14,
+        "fixtureMessageIds": ["news-m01", "news-m02", "news-m03", "news-m05", "news-m06", "news-m07", "news-m08", "news-m09", "news-m11", "news-m12", "news-m13", "news-m15"]
+      },
+      "deliveredSourceCatalog": [
+        { "fixtureMessageId": "news-m07", "role": "user", "excerpt": "Quartz offered the council a discount, but the offer does not change our current newsletter platform." },
+        { "fixtureMessageId": "news-m11", "role": "user", "excerpt": "2026-03-21, arts council vote: we replaced Lantern with Spruce for the council newsletter because Spruce provides screen-reader-ready templates and offline draft export." },
+        { "fixtureMessageId": "news-m12", "role": "user", "excerpt": "The council's Spruce adoption is effective now; Quartz was never selected." }
+      ],
+      "arms": [
+        {
+          "mode": "source-evidence", "status": "generated-unassessed", "selectedRoots": 2,
+          "beforeAfterMatchColdBaseline": true,
+          "deliveredSources": [
+            { "origin": "selected-root", "fixtureMessageIds": ["news-m11", "news-m12"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["news-m11"] }
+          ],
+          "answerText": "The arts council's adopted newsletter platform is now Spruce. It chose Spruce because it provides screen-reader-ready templates and offline draft export. Quartz was never adopted.",
+          "obligations": [
+            { "id": "news-old-choice", "missingExactAnchorIds": ["news-m01", "news-m08"], "sourceSufficiency": "partial", "answerSupport": "optional-historical-detail-omitted" },
+            { "id": "news-quartz-not-adopted", "missingExactAnchorIds": ["news-m06"], "sourceSufficiency": "partial", "answerSupport": "supported-within-delivered-evidence" },
+            { "id": "news-new-choice", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "news-accessible-reason", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "news-offline-reason", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" }
+          ]
+        },
+        {
+          "mode": "rationale-neighborhood-evidence", "status": "generated-unassessed", "selectedRoots": 2,
+          "beforeAfterMatchColdBaseline": true,
+          "deliveredSources": [
+            { "origin": "selected-root", "fixtureMessageIds": ["news-m11", "news-m12"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["news-m07"] }
+          ],
+          "answerText": "The arts council has adopted Spruce as its newsletter platform, replacing Lantern because Spruce provides screen-reader-ready templates and offline draft export. Quartz was never adopted, despite offering a discount, which did not affect the council's choice.",
+          "obligations": [
+            { "id": "news-old-choice", "missingExactAnchorIds": ["news-m01", "news-m08"], "sourceSufficiency": "partial", "answerSupport": "historical-choice-mentioned-optional-reason-omitted" },
+            { "id": "news-quartz-not-adopted", "missingExactAnchorIds": ["news-m06"], "sourceSufficiency": "partial", "answerSupport": "supported-within-delivered-evidence" },
+            { "id": "news-new-choice", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "news-accessible-reason", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "news-offline-reason", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "greenhouse-late-import",
+      "status": "completed-unassessed",
+      "captures": [
+        { "batchId": "green-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "green-b2", "status": "completed", "admitted": 3, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "green-b3", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null }
+      ],
+      "retention": {
+        "status": "measured", "receiptCount": 12,
+        "fixtureMessageIds": ["green-m01", "green-m02", "green-m03", "green-m05", "green-m06", "green-m07", "green-m08", "green-m11", "green-m12", "green-m13", "green-m15"]
+      },
+      "deliveredSourceCatalog": [
+        { "fixtureMessageId": "green-m01", "role": "user", "excerpt": "East greenhouse operations note dated 2026-03-03: our irrigation starts at 06:45 each day." },
+        { "fixtureMessageId": "green-m06", "role": "user", "excerpt": "East greenhouse operations update dated 2026-05-02: effective today, irrigation starts at 07:30 instead of 06:45." },
+        { "fixtureMessageId": "green-m07", "role": "user", "excerpt": "East greenhouse manager confirmed on May 2 that the 07:30 start applies to East only." },
+        { "fixtureMessageId": "green-m08", "role": "user", "excerpt": "West greenhouse still starts irrigation at 05:30; East's update did not change West." },
+        { "fixtureMessageId": "green-m11", "role": "user", "excerpt": "Import note dated 2026-06-14: today we re-imported the original East greenhouse note dated 2026-03-03, which said irrigation starts at 06:45. That is the older document's value, not a new measurement or schedule change." },
+        { "fixtureMessageId": "green-m12", "role": "user", "excerpt": "The import clerk filed the March document in the East greenhouse archive on June 14 without issuing a new operations notice." }
+      ],
+      "arms": [
+        {
+          "mode": "source-evidence", "status": "generated-unassessed", "selectedRoots": 3,
+          "beforeAfterMatchColdBaseline": true,
+          "deliveredSources": [
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m06", "green-m07"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m11"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m08"] }
+          ],
+          "answerText": "The East greenhouse irrigation currently starts at 07:30, effective from 2026-05-02 (instead of the previous 06:45). The late import on 2026-06-14 re-imported an older East greenhouse note from 2026-03-03 stating the 06:45 start time, but this was just a document re-import, not a new schedule change. The West greenhouse irrigation schedule remains unchanged, still starting at 05:30, so the West schedule does not affect the East schedule.",
+          "obligations": [
+            { "id": "green-old-east", "missingExactAnchorIds": ["green-m01"], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "green-current-east", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "green-import-is-old", "missingExactAnchorIds": ["green-m12"], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "green-west-scope", "missingExactAnchorIds": ["green-m02"], "sourceSufficiency": "full", "answerSupport": "supported" }
+          ]
+        },
+        {
+          "mode": "rationale-neighborhood-evidence", "status": "generated-unassessed", "selectedRoots": 4,
+          "beforeAfterMatchColdBaseline": true,
+          "deliveredSources": [
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m06", "green-m07"] },
+            { "origin": "linked-neighborhood", "fixtureMessageIds": ["green-m06"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m11"] },
+            { "origin": "linked-neighborhood", "fixtureMessageIds": ["green-m01"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m08"] },
+            { "origin": "selected-root", "fixtureMessageIds": ["green-m12"] }
+          ],
+          "answerText": "The East greenhouse irrigation now starts at 07:30, effective from 2026-05-02 (source 03d11118-e125-4529-85cd-83808ff26529). The late import on 2026-06-14 brought in the older March 3 document stating a 06:45 irrigation start, but it does not represent a new schedule change or measurement (source da2b3e82-94d6-40c2-a8b1-b9f517d4ad30 and 4950c1f1-3e43-432c-8c1e-30c6ffbdd5cf). The West greenhouse irrigation schedule remains unchanged at 05:30, and the East update does not affect it (source 80bf7554-5c90-4739-b723-f7ee9c3de1e1).",
+          "citationReceiptToFixture": {
+            "03d11118-e125-4529-85cd-83808ff26529": "green-m06",
+            "da2b3e82-94d6-40c2-a8b1-b9f517d4ad30": "green-m11",
+            "4950c1f1-3e43-432c-8c1e-30c6ffbdd5cf": "green-m12",
+            "80bf7554-5c90-4739-b723-f7ee9c3de1e1": "green-m08"
+          },
+          "obligations": [
+            { "id": "green-old-east", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "green-current-east", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "green-import-is-old", "missingExactAnchorIds": [], "sourceSufficiency": "full", "answerSupport": "supported" },
+            { "id": "green-west-scope", "missingExactAnchorIds": ["green-m02"], "sourceSufficiency": "full", "answerSupport": "supported" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workshop-exception-unknown",
+      "status": "interrupted",
+      "captures": [
+        { "batchId": "shop-b1", "status": "completed", "admitted": 4, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "shop-b2", "status": "completed", "admitted": 2, "suppressed": 0, "classification": "applied", "rationale": "reviewed", "coverageWarning": null },
+        { "batchId": "shop-b3", "status": "started-aborted-before-operator-record", "operatorSlot": "not_run", "admitted": null, "suppressed": null, "classification": null, "rationale": null, "coverageWarning": null }
+      ],
+      "retention": { "status": "not-measured-after-interruption", "receiptCount": null, "fixtureMessageIds": null },
+      "deliveredSourceCatalog": [],
+      "arms": [
+        { "mode": "source-evidence", "status": "not_run", "selectedRoots": null, "beforeAfterMatchColdBaseline": null, "deliveredSources": null, "answerText": null, "obligations": null },
+        { "mode": "rationale-neighborhood-evidence", "status": "not_run", "selectedRoots": null, "beforeAfterMatchColdBaseline": null, "deliveredSources": null, "answerText": null, "obligations": null }
+      ]
+    }
+  ]
+}
