@@ -13,6 +13,8 @@ export const RATIONALE_CORRECTION_LIMITS = Object.freeze({ requests: 6, microUsd
   reservationMicroUsd: 5000 });
 export const TEMPORAL_COMPARISON_LIMITS = Object.freeze({ requests: 24, microUsd: 120000,
   reservationMicroUsd: 5000 });
+export const DISPOSITION_COMPARISON_LIMITS = Object.freeze({ requests: 24, microUsd: 120000,
+  reservationMicroUsd: 5000 });
 const RATIONALE_MODEL_RESERVATIONS = Object.freeze({
   'gpt-4.1-mini-2025-04-14': 5000, 'gpt-5.6-luna': 3000, 'gpt-5.6-sol': 56000,
 });
@@ -62,6 +64,12 @@ export function createRationaleCorrectionAttempt(options) {
 // Distinct, one-shot six-pair chronology comparison; no authority from an old intent.
 export function createTemporalComparisonAttempt(options) {
   return createAttempt(options, TEMPORAL_COMPARISON_LIMITS, ['cairn_relate']);
+}
+
+// This local cap grants no provider authority and creates no persistent intent.
+export function createDispositionComparisonAttempt(options) {
+  return createAttempt(options, DISPOSITION_COMPARISON_LIMITS,
+    ['cairn_relate', 'cairn_reviewRationaleDispositions']);
 }
 
 function createAttempt(options, limits, methods, modelReservations = null) {

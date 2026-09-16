@@ -57,3 +57,8 @@ wrong endpoint–receipt pairings, invalid citations and oversize projections.
 The adapter does not repair malformed output or classify source truth. The
 existing static paid-schema allowlist excludes this method, so fake-HTTP
 integration is not authorization for a real provider call.
+
+A separate [offline disposition-comparison capability](experiment-request-guard.md#closed-disposition-comparison-preparation)
+can constrain a future baseline-model comparison to this method and an
+old-graph-aware `relate` control. It does not enable automatic use, persist a
+projection, create a live-run intent or establish semantic correctness.

@@ -46,7 +46,12 @@ const RATIONALE_MODELS_KIND = Object.freeze({
 const BASIS_MODELS_KIND = Object.freeze({
   filename: 'experiment-basis-models-extension.json', method: 'cairn_reviewBasis',
 });
+const DISPOSITION_COMPARISON_KIND = Object.freeze({
+  filename: 'experiment-disposition-comparison-extension.json',
+  methods: Object.freeze(['cairn_relate', 'cairn_reviewRationaleDispositions']),
+});
 const isModelControl = kind => kind === RATIONALE_MODELS_KIND || kind === BASIS_MODELS_KIND;
+const isDispositionComparison = kind => kind === DISPOSITION_COMPARISON_KIND;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -362,7 +367,7 @@ function validateHostBody(body, channel, byteLength) {
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
 function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
-  modelControl = false) {
+  modelControl = false, dispositionComparison = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -386,7 +391,8 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   const format = body.text.format;
   exactKeys(format, ['name', 'schema', 'strict', 'type'], 'unsupported_request');
   if (typeof format.name !== 'string') fail('unsupported_request');
-  const match = (modelControl ? (qualificationMethod === BASIS_MODELS_KIND.method
+  const match = (dispositionComparison ? /^cairn_(relate|reviewRationaleDispositions)$/u
+    : modelControl ? (qualificationMethod === BASIS_MODELS_KIND.method
     ? /^cairn_(reviewBasis)$/u : /^cairn_(relate)$/u)
     : qualificationMethod === CHECKLIST_SELECTION_KIND.method ? /^cairn_(selectChecklist)$/u
     : qualificationMethod === RATIONALE_KIND.method ? /^cairn_(extract|classify|select|rank|qualifyCandidates|relate)$/u
@@ -399,7 +405,10 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   let expectedSchema;
-  try { expectedSchema = match ? schemasFor(match[1], input) : null; }
+  try {
+    if (dispositionComparison) schemasFor('reviewRationaleDispositions', input);
+    expectedSchema = match ? schemasFor(match[1], input) : null;
+  }
   catch { fail('unsupported_request'); }
   if (!match || format.type !== 'json_schema' || format.strict !== true
     || !deepEqual(format.schema, expectedSchema)) fail('unsupported_request');
@@ -698,6 +707,9 @@ export function createExperimentRequestGuard(options) { return constructGuard(op
 function qualificationConfiguration(options, kind) {
   // Reuse exact baseline policy validation without granting any extraction models.
   const { version, authorizationId, ledger, policy } = extensionConfiguration(options);
+  if (isDispositionComparison(kind)) {
+    return { version, authorizationId, ledger, policy, methods: kind.methods, model: DEFAULT_MODEL };
+  }
   if (isModelControl(kind)) {
     const models = {};
     for (const [model, input, output, reservation] of [
@@ -718,7 +730,8 @@ function qualificationConfiguration(options, kind) {
 
 function verifyQualificationExtension(qualification, ledger, policy, kind) {
   exactKeys(qualification, ['version', 'authorizationId', 'ledger', 'policy',
-    'method', isModelControl(kind) ? 'models' : 'model', 'checkpoint'], 'invalid_extension');
+    ...(isDispositionComparison(kind) ? ['methods', 'model'] :
+      ['method', isModelControl(kind) ? 'models' : 'model']), 'checkpoint'], 'invalid_extension');
   const expected = qualificationConfiguration({ ledger, policy, authorizationId: qualification.authorizationId }, kind);
   exactKeys(qualification.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
   if (!safeInteger(qualification.checkpoint.requestCount) || !safeInteger(qualification.checkpoint.reservedMicroUsd)
@@ -758,6 +771,11 @@ export function authorizeRationaleModelsExtension(options) {
 
 export function authorizeBasisModelsExtension(options) {
   return authorizeQualification(options, BASIS_MODELS_KIND);
+}
+
+// A new two-method comparison grant; no previous grant or default is widened.
+export function authorizeDispositionComparisonExtension(options) {
+  return authorizeQualification(options, DISPOSITION_COMPARISON_KIND);
 }
 
 function authorizeQualification(options, kind) {
@@ -840,6 +858,13 @@ export function createBasisModelsExperimentRequestGuard(options) {
     null, null, qualification, BASIS_MODELS_KIND);
 }
 
+export function createDispositionComparisonExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'dispositionComparisonExtension', 'fetchImpl']);
+  const qualification = snapshotExtension(options.dispositionComparisonExtension);
+  return constructGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    null, null, qualification, DISPOSITION_COMPARISON_KIND);
+}
+
 function constructGuard(options, extension = null, reconciliation = null, qualification = null,
   qualificationKind = QUALIFICATION_KIND) {
   const policy = validateConstructor(options);
@@ -877,7 +902,9 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
   const guardedFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
     const modelControl = qualification !== null && isModelControl(qualificationKind);
-    if ((modelControl || qualificationKind === CHECKLIST_SELECTION_KIND) && kind === 'hostCompletion') {
+    const dispositionComparison = qualification !== null && isDispositionComparison(qualificationKind);
+    if ((modelControl || dispositionComparison || qualificationKind === CHECKLIST_SELECTION_KIND)
+      && kind === 'hostCompletion') {
       fail('unsupported_request');
     }
     if (extension || qualification) verifyCapabilities();
@@ -895,7 +922,7 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
     const requestBytes = encoder.encode(snapshot.bodyText).byteLength;
     if (kind === 'hostCompletion') validateHostBody(snapshot.body, channel, requestBytes);
     else validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', reconciliation !== null,
-      qualification === null ? null : qualificationKind.method, modelControl);
+      qualification === null ? null : qualificationKind.method, modelControl, dispositionComparison);
 
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the new capability after those callbacks, before any reservation.

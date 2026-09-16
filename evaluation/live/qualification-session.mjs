@@ -3,6 +3,7 @@ import { createQualificationExperimentRequestGuard,
   createRationaleExperimentRequestGuard,
   createRationaleModelsExperimentRequestGuard,
   createBasisModelsExperimentRequestGuard,
+  createDispositionComparisonExperimentRequestGuard,
   createChecklistSelectionExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { experimentPolicy, MODEL_ID } from './session.mjs';
 
@@ -48,6 +49,12 @@ export function createBasisModelLiveSession(options) {
   return createSession(options, 'basisModelsExtension', ['cairn_reviewBasis'],
     createBasisModelsExperimentRequestGuard, 'basis_models',
     [MODEL_ID, 'gpt-5.6-luna', 'gpt-5.6-sol']);
+}
+
+export function createDispositionComparisonLiveSession(options) {
+  return createSession(options, 'dispositionComparisonExtension',
+    ['cairn_relate', 'cairn_reviewRationaleDispositions'],
+    createDispositionComparisonExperimentRequestGuard, 'disposition_comparison');
 }
 
 // Only the named public factories select these closed capabilities. Caller
