@@ -19,6 +19,11 @@ globalThis.fetch = async (url, request = {}) => {
   if (typeof mock[method] !== 'function') throw new Error('synthetic_unexpected_method');
   const input = JSON.parse(body.input[0].content[0].text);
   let output = await mock[method]({ input });
+  if (method === 'classify') {
+    output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [],
+      newL1: { title: memory.content.startsWith('I chose A') ? 'Synthetic offline choice' : 'Synthetic report',
+        parentL2Ids: [] } })) };
+  }
   if (method === 'qualifyCandidates') {
     output.qualifications = Object.fromEntries(output.qualifications.map(item => [`item_${item.itemIndex}`, item]));
   }

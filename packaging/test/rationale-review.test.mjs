@@ -59,13 +59,23 @@ test('installed CLI corrects a scripted mistaken proposed challenge and cold key
     for (const batch of batches) {
       const result = ok(await call(first, 'capture_memory', batch));
       assert.equal(result.rationale.status, 'reviewed');
+      assert.equal(result.classification.status, 'applied');
       captured.push(result);
     }
-    const decision = captured[0].admission.memories[0];
-    const report = captured[1].admission.memories[0];
+    const original = ok(await call(first, 'inspect_memory', {
+      memoryId: captured[0].admission.memories[0].id, includeQualification: true }));
+    const reportOriginal = ok(await call(first, 'inspect_memory', {
+      memoryId: captured[1].admission.memories[0].id, includeQualification: true }));
+    for (const detail of [original, reportOriginal]) {
+      assert.ok(detail.qualification);
+      assert.ok(detail.qualification.anchors.length > 0);
+      assert.equal(detail.memory.filing.status, 'filed');
+      assert.ok(detail.placements.length > 0);
+    }
+    const decision = original.memory;
+    const report = reportOriginal.memory;
     const ref = memory => ({ memoryId: memory.id, revision: memory.revision });
     const refs = [ref(decision), ref(report)];
-    const original = ok(await call(first, 'inspect_memory', { memoryId: decision.id }));
     const wrong = ok(await call(first, 'inspect_rationale', ref(decision)));
     assert.equal(wrong.status, 'reconfirmation-suggested'); assert.equal(wrong.edges.length, 2);
     assert.ok(wrong.sources.some(source => source.receipts.some(receipt =>
@@ -74,7 +84,10 @@ test('installed CLI corrects a scripted mistaken proposed challenge and cold key
     const corrected = ok(await call(first, 'review_rationale', { refs }));
     assert.equal(corrected.writeMode, 'replace-reviewed');
     assert.equal(corrected.proposed, 1); assert.equal(corrected.inserted, 0); assert.equal(corrected.removed, 1);
-    assert.deepEqual(ok(await call(first, 'inspect_memory', { memoryId: decision.id })), original);
+    assert.deepEqual(ok(await call(first, 'inspect_memory', { memoryId: decision.id,
+      includeQualification: true })), original);
+    assert.deepEqual(ok(await call(first, 'inspect_memory', { memoryId: report.id,
+      includeQualification: true })), reportOriginal);
     assert.equal(ok(await call(first, 'inspect_rationale', ref(decision))).status, 'unassessed');
     await first.close(); active = null;
     const calls = first.stderr().match(/synthetic_review_fetch:[^\n]+/g) ?? [];
@@ -88,7 +101,10 @@ test('installed CLI corrects a scripted mistaken proposed challenge and cold key
     const cold = await start([], '');
     const persisted = ok(await call(cold, 'inspect_rationale', ref(decision)));
     assert.equal(persisted.status, 'unassessed'); assert.equal(persisted.edges.length, 1);
-    assert.deepEqual(ok(await call(cold, 'inspect_memory', { memoryId: decision.id })), original);
+    assert.deepEqual(ok(await call(cold, 'inspect_memory', { memoryId: decision.id,
+      includeQualification: true })), original);
+    assert.deepEqual(ok(await call(cold, 'inspect_memory', { memoryId: report.id,
+      includeQualification: true })), reportOriginal);
     const withoutModel = await call(cold, 'review_rationale', { refs });
     assert.equal(withoutModel.ok, false); assert.equal(withoutModel.error.code, 'model_not_configured');
     await cold.close(); active = null;
