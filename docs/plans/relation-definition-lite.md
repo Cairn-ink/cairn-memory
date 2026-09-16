@@ -52,8 +52,8 @@ branch does not require PR136 to merge. No merge, release or deployment.
 
 The provider-facing fixture, separate rubric, and short guide were frozen before
 any provider call. Their SHA256 digests are, respectively,
-`599db6b7b2f438b9b2e6389e20b7b40d6244e09ccbe7d69cfcf3e14804aa2049`,
-`ba4204e28d326fd625df06c072e697da12d92aebb96a34347f6c40ddb3327602`,
+`95137a94a7702085889aa68df70d2b899488fde4b7aef9915d9610d749fb650f`,
+`048786044462967a3bafe7fc4b8fcef6076319a46295133662188e9035d2a436`,
 and `6622d642c652e0d70c9151b2d8cae012e973f16d8239a48b8622812327cadff4`.
 The fixture contains only source memories and receipts. The rubric is never
 loaded into model input. The ten cases span adopted support, changed premise,
@@ -62,6 +62,16 @@ elaboration, reaffirmation, different actors, and historical choice plus
 unadopted advice. The wire cannot express replacement, continuation or
 tentative relationships; those distinctions require abstention rather than
 pretending no conceptual relation exists.
+
+Before any paid outcomes, independent Spec pre-review found that the
+reaffirmation case's second receipt did not state its reason, making one allowed
+support edge ambiguous. The fixture now explicitly repeats the same choice
+*because of* the same reason, and its rubric accepts any of the four directed
+supports as coverage. Multiple valid supports are allowed: this case checks
+relation type and scope, not minimal edge precision. A later corroborating
+source supporting the earlier decision does not claim that the later message
+caused the past choice. This is a pre-outcome fixture clarification, not
+post-result tuning; the changed hashes above are the new freeze.
 
 | Entry point / affected check | RD mapping | Owner and evidence |
 | --- | --- | --- |
@@ -102,3 +112,7 @@ all seven new files; no core, schema, default, packaging or host changes.
 Implementation owner: `relation_definition_impl`, Sol/high; primary supervised
 fixture disambiguation, safety checks and denominator reporting. No routing
 fallback was needed; agent token/cost measurements were not exposed.
+After the pre-live Spec clarification, primary reran the complete
+`npm run test:live-evidence-offline` suite on both runtimes:246 pass,30 skips,
+zero failures each. Only fixture/rubric, their pins, focused assertions and this
+record changed; generic/plugin/runtime code was unchanged.

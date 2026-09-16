@@ -18,8 +18,8 @@ const FIXTURE = 'evaluation/live/relation-definition-fixture.json';
 const RUBRIC = 'evaluation/live/relation-definition-rubric.json';
 const GUIDE = 'docs/relation-definition-lite-guide.md';
 const FROZEN = Object.freeze({
-  [FIXTURE]: '599db6b7b2f438b9b2e6389e20b7b40d6244e09ccbe7d69cfcf3e14804aa2049',
-  [RUBRIC]: 'ba4204e28d326fd625df06c072e697da12d92aebb96a34347f6c40ddb3327602',
+  [FIXTURE]: '95137a94a7702085889aa68df70d2b899488fde4b7aef9915d9610d749fb650f',
+  [RUBRIC]: '048786044462967a3bafe7fc4b8fcef6076319a46295133662188e9035d2a436',
   [GUIDE]: '6622d642c652e0d70c9151b2d8cae012e973f16d8239a48b8622812327cadff4',
 });
 const PIN_FILES = Object.freeze([FIXTURE, RUBRIC, GUIDE,

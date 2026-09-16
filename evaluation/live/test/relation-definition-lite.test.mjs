@@ -171,6 +171,21 @@ test('RD scorer preserves all denominators, malformed and allowed alternative su
   assert.equal(result.arms.baseline.requiredScored < result.arms.baseline.required, true);
   const reaffirmed = result.slots.find(slot => slot.caseId === 'reaffirmation-zh' && slot.arm === 'guide');
   assert.equal(reaffirmed.complete, true); assert.equal(reaffirmed.omitted, 0); assert.equal(reaffirmed.unsupported, 0);
+  for (const [from, to] of [[0, 0], [1, 1], [0, 1], [1, 0]]) {
+    const alternative = structuredClone(slots);
+    alternative.find(slot => slot.caseId === 'reaffirmation-zh' && slot.arm === 'guide').proposal.edges = [
+      { from, to, relation: 'supports-decision', fromReceipt: 0, toReceipt: 0 }];
+    const item = scoreRelationDefinition({ id: 'relation-definition-lite-v1', slots: alternative }, rubric).slots
+      .find(slot => slot.caseId === 'reaffirmation-zh' && slot.arm === 'guide');
+    assert.equal(item.complete, true, `${from}->${to}`);
+    assert.equal(item.omitted, 0); assert.equal(item.unsupported, 0);
+  }
+  const challenged = structuredClone(slots);
+  challenged.find(slot => slot.caseId === 'reaffirmation-zh' && slot.arm === 'guide').proposal.edges = [
+    { from: 1, to: 0, relation: 'challenges-premise', fromReceipt: 0, toReceipt: 0 }];
+  const challengeResult = scoreRelationDefinition({ id: 'relation-definition-lite-v1', slots: challenged }, rubric).slots
+    .find(slot => slot.caseId === 'reaffirmation-zh' && slot.arm === 'guide');
+  assert.equal(challengeResult.complete, false); assert.equal(challengeResult.unsupported, 1);
   assert.throws(() => scoreRelationDefinition({ id: 'relation-definition-lite-v1',
     slots: [...slots.slice(0, 19), slots[0]] }, rubric));
 });
