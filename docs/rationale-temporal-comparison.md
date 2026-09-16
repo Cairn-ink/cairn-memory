@@ -34,3 +34,6 @@ accuracy, natural capture/recall, MCP-host integration, user benefit or a basis
 to change defaults. A semantic assessment must retain defensible alternative
 links, temporal/scope errors, missed genuine challenges, absent distinct
 supports, abstentions and failures for all twelve arms.
+
+The once-only run has since completed. See the [source-reviewed results](rationale-temporal-results.md)
+and [complete synthetic projection](../evaluations/results/rationale-temporal-v1.json).
