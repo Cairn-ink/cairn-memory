@@ -1,0 +1,14 @@
+{
+  "version": "decision-evolution-rubric-v1",
+  "fixtureVersion": "decision-evolution-fixture-v1",
+  "expectations": [
+    {"caseId":"dev-vendor-transition-en","questionId":"q1","state":{"actor":"Maya","choice":"B","commitment":"adopted","basis":"supported"},"evidence":["d1","d2","d3","d4"],"nonFinal":[{"choice":"B","stage":"considering","evidence":["d2"]},{"choice":"B","stage":"tentative","evidence":["d3"]}],"reasons":[{"label":"quality","status":"active","evidence":["d4"]}],"updates":[{"from":"d4","to":"d1","type":"supersedes"}]},
+    {"caseId":"dev-tentative-zh","questionId":"q2","state":{"actor":"怡君","choice":"A","commitment":"adopted","basis":"supported"},"evidence":["d5","d6"],"nonFinal":[{"choice":"B","stage":"tentative","evidence":["d6"]}],"reasons":[{"label":"price","status":"active","evidence":["d5"]},{"label":"adequate-quality","status":"active","evidence":["d5"]}],"updates":[]},
+    {"caseId":"dev-premise-failure-en","questionId":"q3","state":{"actor":"Leo","choice":"A","commitment":"adopted","basis":"needs_reconfirmation"},"evidence":["d7","d8"],"nonFinal":[],"reasons":[{"label":"offline","status":"challenged","evidence":["d7","d8"]}],"updates":[]},
+    {"caseId":"dev-other-actor-zh","questionId":"q4","state":{"actor":"小敏","choice":"A","commitment":"adopted","basis":"supported"},"evidence":["d9","d10"],"nonFinal":[],"reasons":[{"label":"price","status":"active","evidence":["d9"]}],"updates":[]},
+    {"caseId":"heldout-late-older-en","questionId":"q5","state":{"actor":"Nora","choice":"B","commitment":"adopted","basis":"supported"},"evidence":["h1","h2","h3"],"nonFinal":[{"choice":"B","stage":"considering","evidence":["h3"]}],"reasons":[{"label":"quality","status":"active","evidence":["h2"]}],"updates":[{"from":"h2","to":"h1","type":"supersedes"}]},
+    {"caseId":"heldout-partial-reason-zh","questionId":"q6","state":{"actor":"建宏","choice":"B","commitment":"adopted","basis":"partially_challenged"},"evidence":["h4","h5"],"nonFinal":[],"reasons":[{"label":"offline","status":"challenged","evidence":["h4","h5"]},{"label":"volunteer-familiarity","status":"active","evidence":["h4","h5"]}],"updates":[]},
+    {"caseId":"heldout-distinct-actors-en","questionId":"q7","state":{"actor":"Rae","choice":"A","commitment":"adopted","basis":"supported"},"evidence":["h6","h7","h8"],"nonFinal":[{"choice":"B","stage":"considering","evidence":["h8"]}],"reasons":[{"label":"support-price","status":"active","evidence":["h6"]}],"updates":[]},
+    {"caseId":"heldout-explicit-switch-zh","questionId":"q8","state":{"actor":"婉如","choice":"B","commitment":"adopted","basis":"supported"},"evidence":["h9","h10","h11"],"nonFinal":[{"choice":"B","stage":"considering","evidence":["h10"]}],"reasons":[{"label":"scan-quality","status":"active","evidence":["h11"]}],"updates":[{"from":"h11","to":"h9","type":"supersedes"}]}
+  ]
+}

@@ -23,6 +23,11 @@ _Avoid_: Automatic replacement
 A suggested or hypothetical change that has not been adopted by its source.
 _Avoid_: Decision, current assertion
 
+**Tentative choice**:
+A source's provisional preference for an option, short of adopting it as the
+applicable decision. It does not supersede an existing adopted choice.
+_Avoid_: Final decision, adopted replacement
+
 **Source receipt**:
 Attributable evidence tying a remembered assertion to captured source text.
 A receipt proves provenance, not the truth or continuing applicability of a claim.
@@ -49,6 +54,11 @@ _Avoid_: Supersession
 **Recorded rationale**:
 A source-attributed reason explicitly associated with a decision or conclusion.
 _Avoid_: Reconstructed motive, proof of causation
+
+**Decision evolution**:
+The source-attributed history of a choice, its commitment, and recorded rationale
+within its subject and scope, including replacements and unchanged choices with revised reasons.
+_Avoid_: Newest mention wins, automatic supersession
 
 **Needs reconfirmation**:
 A decision whose recorded supporting premise no longer holds, without evidence
