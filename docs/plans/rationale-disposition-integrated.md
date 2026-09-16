@@ -72,3 +72,14 @@ Node24 checks, private operator rehearsal and independent integrated review
 are still pending; they must be recorded before delivery, not inferred from
 these partial results. No real comparison request or new campaign grant has
 been made during this integration preparation.
+
+Follow-up primary verification completed successfully: Node24 live-offline265
+(30 intentional skips), explicit installed rationale4, generic139, JSON and
+strict-plugin checks all passed. Thus both runtimes passed the full combined
+command above without a failed integrated gate. The first private Node22
+rehearsal exposed a zero-HTTP missing-counter error in its map snapshot; the
+operator worker supplied the same local counter-only reader for warm/cold
+inspection, then all seven installed fake-HTTP rehearsals passed. This is an
+operator correction, not a product-model quality improvement. Source pinning
+must be refreshed after the independently requested documentation corrections;
+both runtime rehearsals and final reviews remain preconditions for paid work.
