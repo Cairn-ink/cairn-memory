@@ -57,3 +57,12 @@ wrong endpoint–receipt pairings, invalid citations and oversize projections.
 The adapter does not repair malformed output or classify source truth. The
 existing static paid-schema allowlist excludes this method, so fake-HTTP
 integration is not authorization for a real provider call.
+
+The explicit port now uses a versioned v2 task prompt. It carries the ordinary
+relation prompt's source-trust warning and verbatim definitions of both relation
+directions, while retaining the disposition-specific output contract and the
+combined ten-edge projection cap. The original disposition prompt remains
+unchanged as development history. This closes an instruction gap before any
+fresh scored comparison; it is not evidence of improved semantic judgments.
+Matching relation definitions across future arms still compares their complete
+output protocols, not an isolated causal effect of the disposition fields.

@@ -40,6 +40,7 @@
   "core/prompts/review-addressed-basis.md",
   "core/prompts/relate-rationale.md",
   "core/prompts/review-rationale-dispositions.md",
+  "core/prompts/review-rationale-dispositions-v2.md",
   "core/prompts/relate-claim-focus.md",
   "core/recall.mjs",
   "core/runtime.mjs",

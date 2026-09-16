@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,6 +21,8 @@ const oldKey = value => JSON.stringify([value.from, value.to, value.relation, va
 const all = (input, action = 'keep') => ({ dispositions: input.oldEdges.map(item =>
   ({ edge: item.index, action, evidence: action === 'withdraw' ? [{ memory: 0, receipt: 0 }] : [] })),
 additions: [] });
+const prompt = name => readFileSync(new URL(`../prompts/${name}`, import.meta.url), 'utf8');
+const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 function fixture(t, withPort = true) {
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-disposition-')), 'store.sqlite');
@@ -59,6 +62,41 @@ function fixture(t, withPort = true) {
     get core() { return core; }, close() { core.close(); core = null; },
     get calls() { return calls; }, get counts() { return counts; } };
 }
+
+test('DS1–3 explicit disposition uses pinned v2 semantics while ordinary relate request stays unchanged', async t => {
+  const original = prompt('review-rationale-dispositions.md');
+  const v2 = prompt('review-rationale-dispositions-v2.md');
+  const relate = prompt('relate-rationale.md');
+  assert.equal(sha256(original), 'f413ad401dccc7a7e109d0fedd8df74cfcaa6cb5887821adaae204dfe7ef8c7e');
+  assert.equal(sha256(v2), '676b4a2181c32b6fdff0cc528f6720349afc34cd8198f759201ce7f72d674241');
+  assert.equal(sha256(relate), 'b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615');
+  const trustWarning = relate.split('\n').slice(1, 4).join('\n');
+  const definitions = relate.slice(relate.indexOf('supports-decision:'), relate.indexOf('\n\nSelect'));
+  assert.ok(v2.includes(trustWarning));
+  assert.ok(v2.includes(definitions));
+  assert.match(v2, /kept plus unknown old edges plus additions cannot exceed ten/);
+  const f = fixture(t);
+  let relateRequest, dispositionRequest;
+  f.model.relate = request => {
+    relateRequest = request;
+    return { edges: [edge(1, 0)] };
+  };
+  f.model.reviewRationaleDispositions = request => {
+    dispositionRequest = request;
+    return all(request.input);
+  };
+  ok(await f.core.reviewRationale({ namespace, refs: f.refs }));
+  const before = f.rows();
+  const reviewed = ok(await f.review());
+  assert.equal(relateRequest.system, relate);
+  assert.equal(dispositionRequest.system, v2);
+  assert.equal(relateRequest.maxOutputTokens, 1024);
+  assert.equal(dispositionRequest.maxOutputTokens, 1024);
+  assert.deepEqual(dispositionRequest.input.memories, relateRequest.input.memories);
+  assert.equal(dispositionRequest.input.oldEdges.length, 1);
+  assert.equal(reviewed.projectedEdges[0].disposition, 'keep');
+  assert.deepEqual(f.rows(), before);
+});
 
 test('DR1–5 complete dispositions project keep/withdraw/add without changing stored evidence or epoch', async t => {
   const f = fixture(t);

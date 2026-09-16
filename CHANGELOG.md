@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — explicit disposition task semantics
+
+- The opt-in read-only disposition review now uses a versioned prompt with
+  the ordinary relation definitions and untrusted-source warning, plus its
+  existing keep/withdraw/unknown contract and combined ten-edge cap. The
+  original prompt is preserved; no default, stored graph or paid route changes.
+
 ## Unreleased — explicit disposition adapter transport
 
 - The optional OpenAI adapter now exposes `reviewRationaleDispositions` only

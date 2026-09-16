@@ -4,7 +4,7 @@ import { countTokens } from './model-budget.mjs';
 import { compileRationaleEdges } from './rationale.mjs';
 import { denseArray, fail, object } from './validation.mjs';
 
-const system = readFileSync(new URL('./prompts/review-rationale-dispositions.md', import.meta.url), 'utf8');
+const system = readFileSync(new URL('./prompts/review-rationale-dispositions-v2.md', import.meta.url), 'utf8');
 const exact = (value, keys) => {
   object(value, keys);
   if (keys.some(key => !Object.hasOwn(value, key))) fail('invalid_model_output');
