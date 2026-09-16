@@ -62,3 +62,13 @@ This includes the facade/cold-core integration tests. Worker additionally ran
 the unchanged full core suite (687/687 on each version). A formerly empty-only
 cold test was strengthened to preserve a nonempty graph after malformed output.
 No provider request, paid runner, new schema or product default change.
+
+## Node 20 generic CI correction
+
+The first PR CI run found that the test file imported the SQLite-backed core at
+module load, which made the entire generic suite fail on Node 20 before its
+pure facade tests could run. The integration test now follows adjacent
+architecture tests: it imports core dynamically only inside a Node >=22.16
+test, with an explicit skip on older runtimes. The facade, frozen guidance and
+fresh scored fixture are unchanged. This correction requires a new exact-head
+CI run; an earlier green run does not apply to the corrected commit.

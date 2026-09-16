@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { openMemoryCore } from '../../../core/contract.mjs';
 import { createTemporalRationaleModel } from '../rationale-temporal-model.mjs';
 
 const baseline = readFileSync(new URL('../../../core/prompts/relate-rationale.md', import.meta.url), 'utf8');
@@ -106,7 +105,12 @@ test('TC2 pre-count, post-count and post-provider cancellation reject without re
   assert.equal(calls, 2);
 });
 
-test('TC4 real core replacement retains source guards and cold persistence with scripted relation', async t => {
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+test('TC4 real core replacement retains source guards and cold persistence with scripted relation', {
+  skip: nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 16)
+    ? 'SQLite integration requires Node >=22.16; pure facade tests remain enabled.' : false,
+}, async t => {
+  const { openMemoryCore } = await import('../../../core/contract.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'cairn-temporal-model-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, 'synthetic.sqlite');
