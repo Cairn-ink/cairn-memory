@@ -1,0 +1,301 @@
+{
+  "version": "decision-transition-fixture-v1",
+  "cases": [
+    {
+      "id": "export-review",
+      "pair": "export-decision",
+      "batches": [
+        {
+          "id": "export-review-b1",
+          "capturedOn": "2026-01-13",
+          "messages": [
+            {
+              "id": "export-review-m01",
+              "role": "user",
+              "content": "展務組/怡君(2026-01-12):我們決定用流光製作展品說明牌的匯出檔,原因分別是它可在斷網時批次匯出 PDF,以及每次匯出都有可追溯的簽核紀錄。"
+            },
+            {
+              "id": "export-review-m02",
+              "role": "user",
+              "content": "展務組/阿睿:昨天在展場斷網測試,流光確實一次匯出了整批說明牌 PDF。"
+            },
+            {
+              "id": "export-review-m03",
+              "role": "assistant",
+              "content": "我可以整理說明牌版型和本季預估印量,供採購會議參考。"
+            }
+          ]
+        },
+        {
+          "id": "export-review-b2",
+          "capturedOn": "2026-02-21",
+          "messages": [
+            {
+              "id": "export-review-m04",
+              "role": "user",
+              "content": "展務組/阿睿(2026-02-20):流光升級後停止支援斷網批次匯出 PDF,現在必須連網才能匯出;這是同一套流光的新狀態。"
+            },
+            {
+              "id": "export-review-m05",
+              "role": "user",
+              "content": "展務組/怡君:我剛核對過,流光的每次匯出簽核紀錄仍可查,這項原有理由沒有失效。"
+            },
+            {
+              "id": "export-review-m06",
+              "role": "assistant",
+              "content": "下週維護會議預留了二十分鐘;我可以準備匯出測試清單。"
+            }
+          ]
+        },
+        {
+          "id": "export-review-b3",
+          "capturedOn": "2026-03-07",
+          "messages": [
+            {
+              "id": "export-review-m07",
+              "role": "user",
+              "content": "展務組/怡君(2026-03-06):我們目前仍採用流光,沒有核准換軟體;斷網匯出理由失效後需要重新審查選用依據。"
+            },
+            {
+              "id": "export-review-m08",
+              "role": "user",
+              "content": "展務組/阿睿:簽核紀錄這個理由目前仍成立,但它不能替代已失去的斷網匯出能力。"
+            },
+            {
+              "id": "export-review-m09",
+              "role": "assistant",
+              "content": "我可以把下次展務會議的議程寄給組員。"
+            }
+          ]
+        }
+      ],
+      "question": {
+        "id": "export-review-q",
+        "role": "user",
+        "content": "展務組目前採用哪套說明牌匯出軟體?最初選流光的兩個獨立理由是什麼?後來哪項能力失效,流光哪項原有能力仍可用?是否已核准換用;若有,換成什麼、理由是什麼?若未換用,還有什麼選用依據需要重新審查?"
+      }
+    },
+    {
+      "id": "export-replaced",
+      "pair": "export-decision",
+      "batches": [
+        {
+          "id": "export-replaced-b1",
+          "capturedOn": "2026-01-13",
+          "messages": [
+            {
+              "id": "export-replaced-m01",
+              "role": "user",
+              "content": "展務組/怡君(2026-01-12):我們決定用流光製作展品說明牌的匯出檔,原因分別是它可在斷網時批次匯出 PDF,以及每次匯出都有可追溯的簽核紀錄。"
+            },
+            {
+              "id": "export-replaced-m02",
+              "role": "user",
+              "content": "展務組/阿睿:昨天在展場斷網測試,流光確實一次匯出了整批說明牌 PDF。"
+            },
+            {
+              "id": "export-replaced-m03",
+              "role": "assistant",
+              "content": "我可以整理說明牌版型和本季預估印量,供採購會議參考。"
+            }
+          ]
+        },
+        {
+          "id": "export-replaced-b2",
+          "capturedOn": "2026-02-21",
+          "messages": [
+            {
+              "id": "export-replaced-m04",
+              "role": "user",
+              "content": "展務組/阿睿(2026-02-20):流光升級後停止支援斷網批次匯出 PDF,現在必須連網才能匯出;這是同一套流光的新狀態。"
+            },
+            {
+              "id": "export-replaced-m05",
+              "role": "user",
+              "content": "展務組/怡君:我剛核對過,流光的每次匯出簽核紀錄仍可查,這項原有理由沒有失效。"
+            },
+            {
+              "id": "export-replaced-m06",
+              "role": "assistant",
+              "content": "下週維護會議預留了二十分鐘;我可以準備匯出測試清單。"
+            }
+          ]
+        },
+        {
+          "id": "export-replaced-b3",
+          "capturedOn": "2026-03-07",
+          "messages": [
+            {
+              "id": "export-replaced-m07",
+              "role": "user",
+              "content": "展務組/怡君(2026-03-06):展務組已正式決議以霧杉取代流光,今天起說明牌匯出改用霧杉;理由是霧杉在我們的斷網驗收中能批次匯出 PDF。"
+            },
+            {
+              "id": "export-replaced-m08",
+              "role": "user",
+              "content": "展務組/阿睿:流光當初的簽核紀錄理由沒有被推翻,但流光已不是目前採用的匯出軟體。"
+            },
+            {
+              "id": "export-replaced-m09",
+              "role": "assistant",
+              "content": "我可以把下次展務會議的議程寄給組員。"
+            }
+          ]
+        }
+      ],
+      "question": {
+        "id": "export-replaced-q",
+        "role": "user",
+        "content": "展務組目前採用哪套說明牌匯出軟體?最初選流光的兩個獨立理由是什麼?後來哪項能力失效,流光哪項原有能力仍可用?是否已核准換用;若有,換成什麼、理由是什麼?若未換用,還有什麼選用依據需要重新審查?"
+      }
+    },
+    {
+      "id": "field-unknown",
+      "pair": "database-dependency",
+      "batches": [
+        {
+          "id": "field-unknown-b1",
+          "capturedOn": "2026-04-04",
+          "messages": [
+            {
+              "id": "field-unknown-m01",
+              "role": "user",
+              "content": "客服資料組/敏華(2026-04-03):資料庫的 pickup_zone 欄位暫時不得刪除,因每週分區結案報表及合作商的 GET /zones API 都還會讀它;兩項依賴須各自確認解除,之後仍要走資料庫變更核准。"
+            },
+            {
+              "id": "field-unknown-m02",
+              "role": "user",
+              "content": "報表負責人/志豪:每週分區結案報表的排程目前從 pickup_zone 取值。"
+            },
+            {
+              "id": "field-unknown-m03",
+              "role": "assistant",
+              "content": "我可以安排報表維運和 API 窗口一起開會。"
+            }
+          ]
+        },
+        {
+          "id": "field-unknown-b2",
+          "capturedOn": "2026-05-16",
+          "messages": [
+            {
+              "id": "field-unknown-m04",
+              "role": "user",
+              "content": "報表負責人/志豪(2026-05-15):每週分區結案報表已正式退役,排程停止,現在不再讀 pickup_zone。"
+            },
+            {
+              "id": "field-unknown-m05",
+              "role": "user",
+              "content": "客服資料組/敏華:2026-05-16 匯入一份日期為 2026-02-10 的舊相依性報告;它寫報表與 GET /zones API 當時都讀 pickup_zone,只記錄舊狀態,不是重新啟用報表。"
+            },
+            {
+              "id": "field-unknown-m06",
+              "role": "assistant",
+              "content": "我可以把那份報告附在下次維運會議資料後面。"
+            }
+          ]
+        },
+        {
+          "id": "field-unknown-b3",
+          "capturedOn": "2026-06-03",
+          "messages": [
+            {
+              "id": "field-unknown-m07",
+              "role": "user",
+              "content": "API 負責人/若庭(2026-06-02):GET /zones API 是否仍讀 pickup_zone 尚未完成查核;目前不能把它標為已解除,也不能斷言它仍在使用。"
+            },
+            {
+              "id": "field-unknown-m08",
+              "role": "user",
+              "content": "客服資料組/敏華:因 API 依賴尚未確認解除,pickup_zone 的不得刪除限制仍在;沒有核准刪欄位或執行遷移。"
+            },
+            {
+              "id": "field-unknown-m09",
+              "role": "assistant",
+              "content": "我可以替下週的 API 測試預約會議室。"
+            }
+          ]
+        }
+      ],
+      "question": {
+        "id": "field-unknown-q",
+        "role": "user",
+        "content": "pickup_zone 欄位目前是否仍受刪除限制?最初是哪兩項依賴造成限制?哪項已退役、5月16日匯入的舊報告代表什麼、另一項依賴目前已確認到什麼程度?現在可否直接刪欄位或執行遷移?"
+      }
+    },
+    {
+      "id": "field-active",
+      "pair": "database-dependency",
+      "batches": [
+        {
+          "id": "field-active-b1",
+          "capturedOn": "2026-04-04",
+          "messages": [
+            {
+              "id": "field-active-m01",
+              "role": "user",
+              "content": "客服資料組/敏華(2026-04-03):資料庫的 pickup_zone 欄位暫時不得刪除,因每週分區結案報表及合作商的 GET /zones API 都還會讀它;兩項依賴須各自確認解除,之後仍要走資料庫變更核准。"
+            },
+            {
+              "id": "field-active-m02",
+              "role": "user",
+              "content": "報表負責人/志豪:每週分區結案報表的排程目前從 pickup_zone 取值。"
+            },
+            {
+              "id": "field-active-m03",
+              "role": "assistant",
+              "content": "我可以安排報表維運和 API 窗口一起開會。"
+            }
+          ]
+        },
+        {
+          "id": "field-active-b2",
+          "capturedOn": "2026-05-16",
+          "messages": [
+            {
+              "id": "field-active-m04",
+              "role": "user",
+              "content": "報表負責人/志豪(2026-05-15):每週分區結案報表已正式退役,排程停止,現在不再讀 pickup_zone。"
+            },
+            {
+              "id": "field-active-m05",
+              "role": "user",
+              "content": "客服資料組/敏華:2026-05-16 匯入一份日期為 2026-02-10 的舊相依性報告;它寫報表與 GET /zones API 當時都讀 pickup_zone,只記錄舊狀態,不是重新啟用報表。"
+            },
+            {
+              "id": "field-active-m06",
+              "role": "assistant",
+              "content": "我可以把那份報告附在下次維運會議資料後面。"
+            }
+          ]
+        },
+        {
+          "id": "field-active-b3",
+          "capturedOn": "2026-06-03",
+          "messages": [
+            {
+              "id": "field-active-m07",
+              "role": "user",
+              "content": "API 負責人/若庭(2026-06-02):今天對合作商端點做了讀取追蹤,確認 GET /zones API 仍會讀 pickup_zone;這項依賴沒有解除。"
+            },
+            {
+              "id": "field-active-m08",
+              "role": "user",
+              "content": "客服資料組/敏華:因 API 依賴仍在,pickup_zone 的不得刪除限制仍在;沒有核准刪欄位或執行遷移。"
+            },
+            {
+              "id": "field-active-m09",
+              "role": "assistant",
+              "content": "我可以替下週的 API 測試預約會議室。"
+            }
+          ]
+        }
+      ],
+      "question": {
+        "id": "field-active-q",
+        "role": "user",
+        "content": "pickup_zone 欄位目前是否仍受刪除限制?最初是哪兩項依賴造成限制?哪項已退役、5月16日匯入的舊報告代表什麼、另一項依賴目前已確認到什麼程度?現在可否直接刪欄位或執行遷移?"
+      }
+    }
+  ]
+}

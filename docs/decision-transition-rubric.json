@@ -1,0 +1,445 @@
+{
+  "version": "decision-transition-rubric-v1",
+  "use": "Evaluator only. Never include this file, its claims, or its anchors in capture, recall, or answer-model requests.",
+  "boundary": {
+    "sourceStatus": "Messages are synthetic submitted assertions, not authenticated truth or execution permission.",
+    "judgment": "Score whether an answer is supported by the source text and respects time, scope, adoption, and uncertainty. Finding a literal quoted anchor is a provenance check, not proof that the answer interpreted it correctly.",
+    "alternativeSupport": "Listed passages are sufficient examples, not an exclusive tuple oracle. Accept any semantically sufficient combination of original messages in the same case; do not award an unsupported correct guess.",
+    "optionalHistory": "Additional accurate history may be noted but is not a hidden required criterion. Do not penalize omission of details absent from requiredClaims.",
+    "failureAccounting": "Keep source-submission, retention, recall selection, delivered evidence, answer availability, and answer correctness separate. Missing evidence or unavailable arms are not correct abstentions."
+  },
+  "commonForbiddenConclusions": [
+    "Treat a lost reason as automatic adoption of another software product.",
+    "Rewrite an earlier recorded choice or dependency as never having existed merely because its present applicability changed.",
+    "Treat one retired dependency or a late-imported old report as proof that every database dependency is cleared or that deletion/migration is authorized.",
+    "Refuse to state any known, source-supported fact just because another requested status is unknown."
+  ],
+  "cases": [
+    {
+      "id": "export-review",
+      "requiredClaims": [
+        {
+          "id": "historical-choice",
+          "claim": "The team originally adopted 流光 for exhibit-label export.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "export-review-m01",
+              "quote": "我們決定用流光製作展品說明牌的匯出檔"
+            }
+          ]
+        },
+        {
+          "id": "historical-offline-reason",
+          "claim": "Offline batch PDF export was one independent original reason.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "export-review-m01",
+              "quote": "它可在斷網時批次匯出 PDF"
+            },
+            {
+              "messageId": "export-review-m02",
+              "quote": "流光確實一次匯出了整批說明牌 PDF"
+            }
+          ]
+        },
+        {
+          "id": "historical-audit-reason",
+          "claim": "Traceable sign-off records were the other independent original reason.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "export-review-m01",
+              "quote": "每次匯出都有可追溯的簽核紀錄"
+            }
+          ]
+        },
+        {
+          "id": "offline-reason-lost",
+          "claim": "The same product no longer supports offline batch PDF export after its update.",
+          "status": "changed",
+          "anchors": [
+            {
+              "messageId": "export-review-m04",
+              "quote": "流光升級後停止支援斷網批次匯出 PDF,現在必須連網才能匯出"
+            }
+          ]
+        },
+        {
+          "id": "audit-reason-still-valid",
+          "claim": "The traceable sign-off capability remains available as the other original reason.",
+          "status": "still-valid",
+          "anchors": [
+            {
+              "messageId": "export-review-m05",
+              "quote": "流光的每次匯出簽核紀錄仍可查,這項原有理由沒有失效"
+            },
+            {
+              "messageId": "export-review-m08",
+              "quote": "簽核紀錄這個理由目前仍成立,但它不能替代已失去的斷網匯出能力"
+            }
+          ]
+        },
+        {
+          "id": "current-choice",
+          "claim": "流光 remains the team's current software; no replacement has been approved.",
+          "status": "current",
+          "anchors": [
+            {
+              "messageId": "export-review-m07",
+              "quote": "我們目前仍採用流光,沒有核准換軟體"
+            }
+          ]
+        },
+        {
+          "id": "review-needed",
+          "claim": "The lost offline reason requires review of the choice's basis, not an automatic switch.",
+          "status": "needs-review",
+          "anchors": [
+            {
+              "messageId": "export-review-m07",
+              "quote": "斷網匯出理由失效後需要重新審查選用依據"
+            }
+          ]
+        }
+      ],
+      "optionalHistory": [
+        "Exact calendar dates of the software tests and updates are not required if the ordering and current state are correct."
+      ],
+      "forbiddenConclusions": [
+        "霧杉 or another software was adopted in this branch.",
+        "The sign-off reason also failed."
+      ]
+    },
+    {
+      "id": "export-replaced",
+      "requiredClaims": [
+        {
+          "id": "historical-choice",
+          "claim": "The team originally adopted 流光 for exhibit-label export; that choice is now historical.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m01",
+              "quote": "我們決定用流光製作展品說明牌的匯出檔"
+            },
+            {
+              "messageId": "export-replaced-m08",
+              "quote": "流光已不是目前採用的匯出軟體"
+            }
+          ]
+        },
+        {
+          "id": "historical-offline-reason",
+          "claim": "Offline batch PDF export was one independent original reason for 流光.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m01",
+              "quote": "它可在斷網時批次匯出 PDF"
+            },
+            {
+              "messageId": "export-replaced-m02",
+              "quote": "流光確實一次匯出了整批說明牌 PDF"
+            }
+          ]
+        },
+        {
+          "id": "historical-audit-reason",
+          "claim": "Traceable sign-off records were the other independent original reason for 流光.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m01",
+              "quote": "每次匯出都有可追溯的簽核紀錄"
+            }
+          ]
+        },
+        {
+          "id": "offline-reason-lost",
+          "claim": "流光 lost its offline batch PDF export capability after its update.",
+          "status": "changed",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m04",
+              "quote": "流光升級後停止支援斷網批次匯出 PDF,現在必須連網才能匯出"
+            }
+          ]
+        },
+        {
+          "id": "audit-reason-not-rewritten",
+          "claim": "流光's traceable sign-off capability did not fail, even though the team later replaced the product.",
+          "status": "still-valid-historical",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m05",
+              "quote": "流光的每次匯出簽核紀錄仍可查,這項原有理由沒有失效"
+            },
+            {
+              "messageId": "export-replaced-m08",
+              "quote": "流光當初的簽核紀錄理由沒有被推翻"
+            }
+          ]
+        },
+        {
+          "id": "replacement-adopted",
+          "claim": "The team later explicitly adopted 霧杉 to replace 流光; 霧杉 is current.",
+          "status": "adopted-current",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m07",
+              "quote": "展務組已正式決議以霧杉取代流光,今天起說明牌匯出改用霧杉"
+            }
+          ]
+        },
+        {
+          "id": "replacement-reason",
+          "claim": "The stated reason for adopting 霧杉 was its tested offline batch PDF export.",
+          "status": "current-reason",
+          "anchors": [
+            {
+              "messageId": "export-replaced-m07",
+              "quote": "理由是霧杉在我們的斷網驗收中能批次匯出 PDF"
+            }
+          ]
+        }
+      ],
+      "optionalHistory": [
+        "The exact March adoption date is not required if the explicit later replacement and current choice are correct."
+      ],
+      "forbiddenConclusions": [
+        "霧杉 was adopted at the February update rather than the March decision.",
+        "流光 never had the two recorded original reasons."
+      ]
+    },
+    {
+      "id": "field-unknown",
+      "requiredClaims": [
+        {
+          "id": "historical-restriction",
+          "claim": "The team initially restricted deletion of pickup_zone pending separate dependency checks and later change approval.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m01",
+              "quote": "pickup_zone 欄位暫時不得刪除"
+            },
+            {
+              "messageId": "field-unknown-m01",
+              "quote": "兩項依賴須各自確認解除,之後仍要走資料庫變更核准"
+            }
+          ]
+        },
+        {
+          "id": "historical-report-dependency",
+          "claim": "The weekly regional closure report was one original reader of the field.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m01",
+              "quote": "每週分區結案報表及合作商的 GET /zones API 都還會讀它"
+            },
+            {
+              "messageId": "field-unknown-m02",
+              "quote": "每週分區結案報表的排程目前從 pickup_zone 取值"
+            }
+          ]
+        },
+        {
+          "id": "historical-api-dependency",
+          "claim": "The partner GET /zones API was the other original reader of the field.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m01",
+              "quote": "每週分區結案報表及合作商的 GET /zones API 都還會讀它"
+            }
+          ]
+        },
+        {
+          "id": "report-retired",
+          "claim": "The weekly report was later retired and no longer reads pickup_zone.",
+          "status": "changed",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m04",
+              "quote": "每週分區結案報表已正式退役,排程停止,現在不再讀 pickup_zone"
+            }
+          ]
+        },
+        {
+          "id": "older-import",
+          "claim": "The later import contained an older historical report, not a new activation or current-state override.",
+          "status": "historical-import",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m05",
+              "quote": "2026-05-16 匯入一份日期為 2026-02-10 的舊相依性報告"
+            },
+            {
+              "messageId": "field-unknown-m05",
+              "quote": "只記錄舊狀態,不是重新啟用報表"
+            }
+          ]
+        },
+        {
+          "id": "api-unknown",
+          "claim": "The API's current field-read status has not been checked; neither active nor cleared is established.",
+          "status": "unknown",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m07",
+              "quote": "GET /zones API 是否仍讀 pickup_zone 尚未完成查核"
+            },
+            {
+              "messageId": "field-unknown-m07",
+              "quote": "不能把它標為已解除,也不能斷言它仍在使用"
+            }
+          ]
+        },
+        {
+          "id": "restriction-remains",
+          "claim": "The no-delete restriction still applies because the API dependency is not confirmed cleared.",
+          "status": "current",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m08",
+              "quote": "因 API 依賴尚未確認解除,pickup_zone 的不得刪除限制仍在"
+            }
+          ]
+        },
+        {
+          "id": "not-authorized",
+          "claim": "There is no approval to delete the field or execute migration now.",
+          "status": "not-authorized",
+          "anchors": [
+            {
+              "messageId": "field-unknown-m08",
+              "quote": "沒有核准刪欄位或執行遷移"
+            }
+          ]
+        }
+      ],
+      "optionalHistory": [
+        "Exact report and import calendar dates are optional if their older-event/later-import ordering is correct."
+      ],
+      "forbiddenConclusions": [
+        "The unverified API is certainly active or certainly cleared.",
+        "The imported older report reactivated the retired weekly report."
+      ]
+    },
+    {
+      "id": "field-active",
+      "requiredClaims": [
+        {
+          "id": "historical-restriction",
+          "claim": "The team initially restricted deletion of pickup_zone pending separate dependency checks and later change approval.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "field-active-m01",
+              "quote": "pickup_zone 欄位暫時不得刪除"
+            },
+            {
+              "messageId": "field-active-m01",
+              "quote": "兩項依賴須各自確認解除,之後仍要走資料庫變更核准"
+            }
+          ]
+        },
+        {
+          "id": "historical-report-dependency",
+          "claim": "The weekly regional closure report was one original reader of the field.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "field-active-m01",
+              "quote": "每週分區結案報表及合作商的 GET /zones API 都還會讀它"
+            },
+            {
+              "messageId": "field-active-m02",
+              "quote": "每週分區結案報表的排程目前從 pickup_zone 取值"
+            }
+          ]
+        },
+        {
+          "id": "historical-api-dependency",
+          "claim": "The partner GET /zones API was the other original reader of the field.",
+          "status": "historical",
+          "anchors": [
+            {
+              "messageId": "field-active-m01",
+              "quote": "每週分區結案報表及合作商的 GET /zones API 都還會讀它"
+            }
+          ]
+        },
+        {
+          "id": "report-retired",
+          "claim": "The weekly report was later retired and no longer reads pickup_zone.",
+          "status": "changed",
+          "anchors": [
+            {
+              "messageId": "field-active-m04",
+              "quote": "每週分區結案報表已正式退役,排程停止,現在不再讀 pickup_zone"
+            }
+          ]
+        },
+        {
+          "id": "older-import",
+          "claim": "The later import contained an older historical report, not a new activation or current-state override.",
+          "status": "historical-import",
+          "anchors": [
+            {
+              "messageId": "field-active-m05",
+              "quote": "2026-05-16 匯入一份日期為 2026-02-10 的舊相依性報告"
+            },
+            {
+              "messageId": "field-active-m05",
+              "quote": "只記錄舊狀態,不是重新啟用報表"
+            }
+          ]
+        },
+        {
+          "id": "api-active",
+          "claim": "A later check confirms the API still reads pickup_zone; this dependency remains active.",
+          "status": "still-active",
+          "anchors": [
+            {
+              "messageId": "field-active-m07",
+              "quote": "確認 GET /zones API 仍會讀 pickup_zone;這項依賴沒有解除"
+            }
+          ]
+        },
+        {
+          "id": "restriction-remains",
+          "claim": "The no-delete restriction still applies because the API dependency remains.",
+          "status": "current",
+          "anchors": [
+            {
+              "messageId": "field-active-m08",
+              "quote": "因 API 依賴仍在,pickup_zone 的不得刪除限制仍在"
+            }
+          ]
+        },
+        {
+          "id": "not-authorized",
+          "claim": "There is no approval to delete the field or execute migration now.",
+          "status": "not-authorized",
+          "anchors": [
+            {
+              "messageId": "field-active-m08",
+              "quote": "沒有核准刪欄位或執行遷移"
+            }
+          ]
+        }
+      ],
+      "optionalHistory": [
+        "Exact report and import calendar dates and the API check method are optional if their ordering and status are correct."
+      ],
+      "forbiddenConclusions": [
+        "The report retirement cleared every field dependency.",
+        "The imported older report reactivated the retired weekly report."
+      ]
+    }
+  ]
+}
