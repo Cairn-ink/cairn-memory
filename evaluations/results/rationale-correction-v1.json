@@ -1,0 +1,4032 @@
+{
+  "version": 1,
+  "diagnosticOnly": true,
+  "sourceHead": "0c7c40bdb738c1144d12f3a21084619e4b084f96",
+  "pins": {
+    "fixtureSha256": "94618f4b471db220e460891914945e524978e6bd581e955486d3317e9bfac267",
+    "rubricSha256": "e1bea2aca147988fc6965319edbbe395b2099774160c31c18ef6bcb60e09be8b",
+    "operatorSha256": "084081a82f01aab7bc9450672db25ac62ef1f47c13ab82e9b03287898202eea0",
+    "preloadSha256": "d714c6f493af9dc159df4e3ecf7b645b64292054e491b2cfbc4468fd20a5d442",
+    "archiveSha256": "c6e88423ee4764fcf8ebfbd4359b66d89aa7a076b3315db302e3e80f049fe59c"
+  },
+  "model": "gpt-4.1-mini-2025-04-14",
+  "transport": [
+    {
+      "caseId": "retracted-offline-report",
+      "phase": "count",
+      "status": "succeeded",
+      "reservationMicroUsd": 5000,
+      "cost": {
+        "status": "unknown"
+      }
+    },
+    {
+      "caseId": "retracted-offline-report",
+      "phase": "generation",
+      "status": "succeeded",
+      "reservationMicroUsd": 5000,
+      "cost": {
+        "status": "known",
+        "microUsd": 415
+      }
+    },
+    {
+      "caseId": "verified-export-loss-zh",
+      "phase": "count",
+      "status": "succeeded",
+      "reservationMicroUsd": 5000,
+      "cost": {
+        "status": "unknown"
+      }
+    },
+    {
+      "caseId": "verified-export-loss-zh",
+      "phase": "generation",
+      "status": "succeeded",
+      "reservationMicroUsd": 5000,
+      "cost": {
+        "status": "known",
+        "microUsd": 367
+      }
+    },
+    {
+      "caseId": "mixed-distinct-premises",
+      "phase": "count",
+      "status": "succeeded",
+      "reservationMicroUsd": 5000,
+      "cost": {
+        "status": "unknown"
+      }
+    },
+    {
+      "caseId": "mixed-distinct-premises",
+      "phase": "generation",
+      "status": "succeeded",
+      "reservationMicroUsd": 5000,
+      "cost": {
+        "status": "known",
+        "microUsd": 461
+      }
+    }
+  ],
+  "accounting": {
+    "before": {
+      "requestCount": 2219,
+      "reservedMicroUsd": 25172000
+    },
+    "after": {
+      "requestCount": 2225,
+      "reservedMicroUsd": 25202000
+    },
+    "attemptRequests": 6,
+    "reservedMicroUsd": 30000,
+    "knownUsageMicroUsd": 1243,
+    "unknownCostRequests": 3,
+    "unsettledRequests": 0,
+    "cumulativeLimitMicroUsd": 50000000,
+    "cumulativeRequestCap": 5000
+  },
+  "cases": [
+    {
+      "caseId": "retracted-offline-report",
+      "status": "completed",
+      "sourceIds": [
+        "decision",
+        "premise",
+        "mistakenReport",
+        "retraction"
+      ],
+      "seed": {
+        "proposed": 2,
+        "inserted": 2,
+        "indexRevision": 6
+      },
+      "before": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "premise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "mistakenReport",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "retraction",
+            "sourceIndex": 3,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "mistakenReport",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "mistakenReport",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "mistakenReport",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "mistakenReport",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ]
+      },
+      "after": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "premise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "mistakenReport",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "retraction",
+            "sourceIndex": 3,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "cold": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "premise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "mistakenReport",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "retraction",
+            "sourceIndex": 3,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 7,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "succeeded",
+        "writeMode": "replace-reviewed",
+        "proposed": 4,
+        "inserted": 3,
+        "removed": 1,
+        "indexRevision": 7
+      },
+      "rawProposal": {
+        "status": "parsed",
+        "edges": [
+          {
+            "from": "decision",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "premise",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "retraction",
+            "to": "mistakenReport",
+            "relation": "challenges-premise",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "retraction",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          }
+        ]
+      },
+      "sourcesUnchanged": true,
+      "coldMatches": true
+    },
+    {
+      "caseId": "verified-export-loss-zh",
+      "status": "completed",
+      "sourceIds": [
+        "decision",
+        "premise",
+        "verifiedLoss"
+      ],
+      "seed": {
+        "proposed": 2,
+        "inserted": 2,
+        "indexRevision": 5
+      },
+      "before": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "premise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "verifiedLoss",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 5,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 5,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 5,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 5,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 5,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 5,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "premise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "premise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "verifiedLoss",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "decision",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "decision",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "decision",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "cold": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "premise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "verifiedLoss",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "decision",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "decision",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "premise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "premise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "premise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 6,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "decision",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "succeeded",
+        "writeMode": "replace-reviewed",
+        "proposed": 3,
+        "inserted": 2,
+        "removed": 1,
+        "indexRevision": 6
+      },
+      "rawProposal": {
+        "status": "parsed",
+        "edges": [
+          {
+            "from": "decision",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "premise",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "verifiedLoss",
+            "to": "decision",
+            "relation": "challenges-premise",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          }
+        ]
+      },
+      "sourcesUnchanged": true,
+      "coldMatches": true
+    },
+    {
+      "caseId": "mixed-distinct-premises",
+      "status": "completed",
+      "sourceIds": [
+        "decision",
+        "localPremise",
+        "mistakenReport",
+        "retraction",
+        "verifiedLoss",
+        "encryptionPremise"
+      ],
+      "seed": {
+        "proposed": 4,
+        "inserted": 4,
+        "indexRevision": 8
+      },
+      "before": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "localPremise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "mistakenReport",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "retraction",
+            "sourceIndex": 3,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "verifiedLoss",
+            "sourceIndex": 4,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "encryptionPremise",
+            "sourceIndex": 5,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "encryptionPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "mistakenReport",
+                "to": "localPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "verifiedLoss",
+                "to": "encryptionPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "localPremise",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "mistakenReport",
+                "to": "localPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "encryptionPremise",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "encryptionPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "encryptionPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "localPremise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "mistakenReport",
+                "to": "localPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "mistakenReport",
+                "to": "localPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "encryptionPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "encryptionPremise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 8,
+            "sources": [
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "verifiedLoss",
+                "to": "encryptionPremise",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "encryptionPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "localPremise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "mistakenReport",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "retraction",
+            "sourceIndex": 3,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "verifiedLoss",
+            "sourceIndex": 4,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "encryptionPremise",
+            "sourceIndex": 5,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "localPremise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "encryptionPremise",
+                "to": "verifiedLoss",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "encryptionPremise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "localPremise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "encryptionPremise",
+                "to": "verifiedLoss",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "encryptionPremise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "encryptionPremise",
+                "to": "verifiedLoss",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "cold": {
+        "records": [
+          {
+            "sourceId": "decision",
+            "sourceIndex": 0,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "localPremise",
+            "sourceIndex": 1,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "mistakenReport",
+            "sourceIndex": 2,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "retraction",
+            "sourceIndex": 3,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "verifiedLoss",
+            "sourceIndex": 4,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          },
+          {
+            "sourceId": "encryptionPremise",
+            "sourceIndex": 5,
+            "revision": 1,
+            "state": "active",
+            "filingStatus": "unfiled",
+            "receiptCount": 1
+          }
+        ],
+        "defaultGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "localPremise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "decision-context",
+            "status": "reconfirmation-suggested",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "encryptionPremise",
+                "to": "verifiedLoss",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "encryptionPremise",
+            "view": "decision-context",
+            "status": "unassessed",
+            "coverage": "linked-evidence-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": []
+          }
+        ],
+        "incidentGraphs": [
+          {
+            "rootSourceId": "decision",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": "decision",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "localPremise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "localPremise",
+                "sourceIndex": 1,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "decision",
+                "sourceIndex": 0,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "localPremise",
+                "to": "decision",
+                "relation": "supports-decision",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "mistakenReport",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "retraction",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "retraction",
+                "sourceIndex": 3,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "mistakenReport",
+                "sourceIndex": 2,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "retraction",
+                "to": "mistakenReport",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "verifiedLoss",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "encryptionPremise",
+                "to": "verifiedLoss",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          },
+          {
+            "rootSourceId": "encryptionPremise",
+            "view": "incident-proposals",
+            "status": "unassessed",
+            "coverage": "root-incident-only",
+            "indexRevision": 9,
+            "sources": [
+              {
+                "sourceId": "encryptionPremise",
+                "sourceIndex": 5,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              },
+              {
+                "sourceId": "verifiedLoss",
+                "sourceIndex": 4,
+                "revision": 1,
+                "currentness": "current",
+                "receiptIndices": [
+                  0
+                ],
+                "receiptCount": 1,
+                "interpretationStatus": "omitted",
+                "sourceSelectionCoverage": "unassessed"
+              }
+            ],
+            "edges": [
+              {
+                "from": "encryptionPremise",
+                "to": "verifiedLoss",
+                "relation": "challenges-premise",
+                "fromReceiptIndex": 0,
+                "toReceiptIndex": 0,
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "succeeded",
+        "writeMode": "replace-reviewed",
+        "proposed": 4,
+        "inserted": 3,
+        "removed": 3,
+        "indexRevision": 9
+      },
+      "rawProposal": {
+        "status": "parsed",
+        "edges": [
+          {
+            "from": "decision",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "encryptionPremise",
+            "to": "verifiedLoss",
+            "relation": "challenges-premise",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "localPremise",
+            "to": "decision",
+            "relation": "supports-decision",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          },
+          {
+            "from": "retraction",
+            "to": "mistakenReport",
+            "relation": "challenges-premise",
+            "fromReceiptIndex": 0,
+            "toReceiptIndex": 0
+          }
+        ]
+      },
+      "sourcesUnchanged": true,
+      "coldMatches": true
+    }
+  ],
+  "semanticAssessment": "separate-nonblind-source-review-required"
+}

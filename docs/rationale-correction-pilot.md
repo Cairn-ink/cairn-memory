@@ -1,6 +1,7 @@
 # Selective rationale correction pilot preparation
 
-This is a prepared, not yet dispatched, once-only synthetic diagnostic. The
+This preparation was used for one completed once-only synthetic diagnostic;
+see the [results and limitations](rationale-correction-results.md). The
 three frozen cases and their separate scripted rubric are in
 `evaluation/architecture/rationale-correction-{fixture,rubric}.json`. The
 installed local CLI is intended to receive one explicit source-only
