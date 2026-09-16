@@ -1,0 +1,1158 @@
+{
+  "version": 1,
+  "id": "natural-rationale-dev-v1",
+  "status": "completed",
+  "diagnosticOnly": true,
+  "semanticReview": "nonblind-development-source-review-separate",
+  "provenance": {
+    "candidateSha": "f2a79f9e6bf0be638945606e84a31f659917496c",
+    "fixtureSha256": "b26960db6151733d6c0b5b2e45803d3d444b25c6a3dc2dd7c06d9570f5d5056c",
+    "pins": {
+      "evaluation/decision-evolution/fixture.json": "67117f6f0feb273ded64cbcffd98f4b00dde50d37fdfa85ba47fba6511e6f739",
+      "evaluation/decision-evolution/contract.mjs": "db6d63541ed6e8c34c5bebe111ed78e6964aefb3b77721e31f8fec76d69111d7",
+      "evaluation/decision-evolution/core-runner.mjs": "fcb85624b5f2b4119c85b121eac7f933dd6b83ee15a0f32e02d49be2b92bf48e",
+      "evaluation/decision-evolution/natural-rationale-trace.mjs": "c1af16ff2f843ff32eaa13ab265fdb730f24f29f27f05781f46f471680d5b624",
+      "evaluation/live/natural-rationale-pilot.mjs": "01515493de280a66afb6dec5276a4c29f86a0c8c98d366d88618bc9cf5693202",
+      "adapters/openai/index.mjs": "8077cf6b829d23867ff4afdebd53f7bf4a503da35e532506a639424a76078c44",
+      "adapters/openai/schemas.mjs": "31e29e617a04cc386f2208645cf1a07aef80e38853a459c821a4c5ea5eddd67c",
+      "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
+      "evaluation/experiment-budget/request-guard.mjs": "c20d2cf8a52aa3ebaf52d376133843f8210c95f7184d21440080d220c37a2bb1"
+    }
+  },
+  "budgetBefore": {
+    "requestCount": 2005,
+    "reservedMicroUsd": 24226000,
+    "knownUsageMicroUsd": 1328611,
+    "unknownCostRequests": 928,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "budgetAfter": {
+    "requestCount": 2117,
+    "reservedMicroUsd": 24786000,
+    "knownUsageMicroUsd": 1354582,
+    "unknownCostRequests": 984,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "budgetDelta": {
+    "requests": 112,
+    "reservedMicroUsd": 560000,
+    "knownUsageMicroUsd": 25971,
+    "unknownCostRequests": 56
+  },
+  "attempt": {
+    "requests": 112,
+    "reservedMicroUsd": 560000,
+    "halted": null,
+    "readOnly": false
+  },
+  "cleanup": {
+    "drain": "completed",
+    "sessionClose": "completed",
+    "ledgerClose": "completed"
+  },
+  "denominators": {
+    "cases": 4,
+    "events": 10,
+    "questions": 4,
+    "readArmSlots": 12,
+    "completedCases": 4,
+    "completedWithFailuresCases": 0,
+    "failedCases": 0,
+    "notRunCases": 0,
+    "failedCaptures": 0,
+    "unavailableCaptureSlots": 0,
+    "unavailableQuestionSlots": 0,
+    "failedReadArms": 0,
+    "notRunReadArms": 0,
+    "unavailableReadArmSlots": 0,
+    "relateCalls": 10,
+    "proposedEdges": 5
+  },
+  "cases": [
+    {
+      "caseId": "dev-vendor-transition-en",
+      "status": "completed",
+      "result": {
+        "sourceCount": 4,
+        "capturedSourceIds": [
+          "d1",
+          "d2",
+          "d3",
+          "d4"
+        ],
+        "absentSourceIds": [],
+        "truncatedSourceIds": [],
+        "incompleteCapture": false,
+        "captures": [
+          {
+            "sourceId": "d1",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 0,
+              "inserted": 0,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "candidate-seen-no-proposal",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": []
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d4",
+                  "toSourceId": "d4"
+                }
+              ],
+              "failureCount": 0
+            }
+          },
+          {
+            "sourceId": "d2",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 1,
+              "inserted": 1,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "stored-model-proposed",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d2"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": [
+                  {
+                    "from": 1,
+                    "to": 0,
+                    "fromReceipt": 0,
+                    "toReceipt": 0,
+                    "relation": "challenges-premise"
+                  }
+                ]
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d4",
+                  "toSourceId": "d4"
+                }
+              ],
+              "failureCount": 0
+            }
+          },
+          {
+            "sourceId": "d3",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 1,
+              "inserted": 1,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "stored-model-proposed",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d3"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d2"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 2,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": [
+                  {
+                    "from": 0,
+                    "to": 0,
+                    "fromReceipt": 0,
+                    "toReceipt": 0,
+                    "relation": "supports-decision"
+                  }
+                ]
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d4",
+                  "toSourceId": "d4"
+                }
+              ],
+              "failureCount": 0
+            }
+          },
+          {
+            "sourceId": "d4",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 1,
+              "inserted": 1,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "stored-model-proposed",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d4"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 2,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d2"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 3,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d3"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": [
+                  {
+                    "from": 0,
+                    "to": 0,
+                    "fromReceipt": 0,
+                    "toReceipt": 0,
+                    "relation": "supports-decision"
+                  }
+                ]
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d4",
+                  "toSourceId": "d4"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d1",
+                  "toSourceId": "d2"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d3",
+                  "toSourceId": "d3"
+                },
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d4",
+                  "toSourceId": "d4"
+                }
+              ],
+              "failureCount": 0
+            }
+          }
+        ],
+        "questions": [
+          {
+            "questionId": "q1",
+            "arms": {
+              "source-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d4"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 4,
+                  "capturedEvents": 4,
+                  "returnedEvents": 1,
+                  "unreturnedSourceIds": [
+                    "d1",
+                    "d2",
+                    "d3"
+                  ]
+                }
+              },
+              "rationale-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d4"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 4,
+                  "capturedEvents": 4,
+                  "returnedEvents": 1,
+                  "unreturnedSourceIds": [
+                    "d1",
+                    "d2",
+                    "d3"
+                  ]
+                },
+                "selectedSourceIds": [
+                  "d4"
+                ],
+                "relationshipStatus": "model-proposed",
+                "relationshipGeneration": "automatic-source-bound-v1"
+              },
+              "sourceSnapshot": {
+                "status": "ok",
+                "sourceIds": [
+                  "d2",
+                  "d3",
+                  "d1",
+                  "d4"
+                ],
+                "coverage": "complete-current-admitted",
+                "sourceCoverage": {
+                  "expectedEvents": 4,
+                  "capturedEvents": 4,
+                  "returnedEvents": 4,
+                  "unreturnedSourceIds": []
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "dev-tentative-zh",
+      "status": "completed",
+      "result": {
+        "sourceCount": 2,
+        "capturedSourceIds": [
+          "d5",
+          "d6"
+        ],
+        "absentSourceIds": [],
+        "truncatedSourceIds": [],
+        "incompleteCapture": false,
+        "captures": [
+          {
+            "sourceId": "d5",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 0,
+              "inserted": 0,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "candidate-seen-no-proposal",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d5"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": []
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d5",
+                  "toSourceId": "d6"
+                }
+              ],
+              "failureCount": 0
+            }
+          },
+          {
+            "sourceId": "d6",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 1,
+              "inserted": 1,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "stored-model-proposed",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d6"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d5"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": [
+                  {
+                    "from": 1,
+                    "to": 0,
+                    "fromReceipt": 0,
+                    "toReceipt": 0,
+                    "relation": "supports-decision"
+                  }
+                ]
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d5",
+                  "toSourceId": "d6"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "supports-decision",
+                  "fromSourceId": "d5",
+                  "toSourceId": "d6"
+                }
+              ],
+              "failureCount": 0
+            }
+          }
+        ],
+        "questions": [
+          {
+            "questionId": "q2",
+            "arms": {
+              "source-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d5",
+                  "d6"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                }
+              },
+              "rationale-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d6",
+                  "d5"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                },
+                "selectedSourceIds": [
+                  "d6"
+                ],
+                "relationshipStatus": "model-proposed",
+                "relationshipGeneration": "automatic-source-bound-v1"
+              },
+              "sourceSnapshot": {
+                "status": "ok",
+                "sourceIds": [
+                  "d5",
+                  "d6"
+                ],
+                "coverage": "complete-current-admitted",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "dev-premise-failure-en",
+      "status": "completed",
+      "result": {
+        "sourceCount": 2,
+        "capturedSourceIds": [
+          "d7",
+          "d8"
+        ],
+        "absentSourceIds": [],
+        "truncatedSourceIds": [],
+        "incompleteCapture": false,
+        "captures": [
+          {
+            "sourceId": "d7",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 0,
+              "inserted": 0,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "candidate-seen-no-proposal",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d7"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": []
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d8",
+                  "toSourceId": "d7"
+                }
+              ],
+              "failureCount": 0
+            }
+          },
+          {
+            "sourceId": "d8",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 1,
+              "inserted": 1,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "stored-model-proposed",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d8"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d7"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": [
+                  {
+                    "from": 0,
+                    "to": 1,
+                    "fromReceipt": 0,
+                    "toReceipt": 0,
+                    "relation": "challenges-premise"
+                  }
+                ]
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d8",
+                  "toSourceId": "d7"
+                }
+              ],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [
+                {
+                  "relation": "challenges-premise",
+                  "fromSourceId": "d8",
+                  "toSourceId": "d7"
+                }
+              ],
+              "failureCount": 0
+            }
+          }
+        ],
+        "questions": [
+          {
+            "questionId": "q3",
+            "arms": {
+              "source-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d7",
+                  "d8"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                }
+              },
+              "rationale-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d8",
+                  "d7"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                },
+                "selectedSourceIds": [
+                  "d8",
+                  "d7"
+                ],
+                "relationshipStatus": "unassessed-not-linked",
+                "relationshipGeneration": "automatic-source-bound-v1"
+              },
+              "sourceSnapshot": {
+                "status": "ok",
+                "sourceIds": [
+                  "d8",
+                  "d7"
+                ],
+                "coverage": "complete-current-admitted",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "dev-other-actor-zh",
+      "status": "completed",
+      "result": {
+        "sourceCount": 2,
+        "capturedSourceIds": [
+          "d9",
+          "d10"
+        ],
+        "absentSourceIds": [],
+        "truncatedSourceIds": [],
+        "incompleteCapture": false,
+        "captures": [
+          {
+            "sourceId": "d9",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 0,
+              "inserted": 0,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "candidate-seen-no-proposal",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d9"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": []
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            }
+          },
+          {
+            "sourceId": "d10",
+            "status": "ok",
+            "classificationStatus": "applied",
+            "rationale": {
+              "status": "reviewed",
+              "proposed": 0,
+              "inserted": 0,
+              "interpretationStatus": "model-proposed"
+            },
+            "observation": "candidate-seen-no-proposal",
+            "relateCalls": [
+              {
+                "status": "returned",
+                "candidates": [
+                  {
+                    "index": 0,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d10"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "receipts": [
+                      {
+                        "index": 0,
+                        "role": "user",
+                        "provenance": {
+                          "status": "matched",
+                          "sourceId": "d9"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "proposedEdges": []
+              }
+            ],
+            "beforeCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterCapture": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            },
+            "afterColdReopen": {
+              "status": "ok",
+              "edges": [],
+              "failureCount": 0
+            }
+          }
+        ],
+        "questions": [
+          {
+            "questionId": "q4",
+            "arms": {
+              "source-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d9",
+                  "d10"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                }
+              },
+              "rationale-evidence": {
+                "status": "ok",
+                "sourceIds": [
+                  "d9",
+                  "d10"
+                ],
+                "coverage": "complete",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                },
+                "selectedSourceIds": [
+                  "d9",
+                  "d10"
+                ],
+                "relationshipStatus": "unassessed-not-linked",
+                "relationshipGeneration": "automatic-source-bound-v1"
+              },
+              "sourceSnapshot": {
+                "status": "ok",
+                "sourceIds": [
+                  "d10",
+                  "d9"
+                ],
+                "coverage": "complete-current-admitted",
+                "sourceCoverage": {
+                  "expectedEvents": 2,
+                  "capturedEvents": 2,
+                  "returnedEvents": 2,
+                  "unreturnedSourceIds": []
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
