@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "fixtureId": "rationale-correction-cases-v1",
+  "interpretation": "Scripted control expectations only; source reviewers must assess legitimate alternative model edges independently.",
+  "cases": [
+    {
+      "id": "retracted-offline-report",
+      "decision": "decision",
+      "seedEdges": [
+        { "from": "premise", "to": "decision", "relation": "supports-decision" },
+        { "from": "mistakenReport", "to": "premise", "relation": "challenges-premise" }
+      ],
+      "expectedEdges": [
+        { "from": "premise", "to": "decision", "relation": "supports-decision" }
+      ],
+      "expectedDecisionStatus": "unassessed",
+      "reason": "The later retest explicitly retracts the mistaken report, not the original decision or its still-working offline premise."
+    },
+    {
+      "id": "verified-export-loss-zh",
+      "decision": "decision",
+      "seedEdges": [
+        { "from": "premise", "to": "decision", "relation": "supports-decision" },
+        { "from": "verifiedLoss", "to": "premise", "relation": "challenges-premise" }
+      ],
+      "expectedEdges": [
+        { "from": "premise", "to": "decision", "relation": "supports-decision" },
+        { "from": "verifiedLoss", "to": "premise", "relation": "challenges-premise" }
+      ],
+      "expectedDecisionStatus": "reconfirmation-suggested",
+      "reason": "The dated later retest reports a genuine loss of offline export, but no new product choice."
+    },
+    {
+      "id": "mixed-distinct-premises",
+      "decision": "decision",
+      "seedEdges": [
+        { "from": "localPremise", "to": "decision", "relation": "supports-decision" },
+        { "from": "encryptionPremise", "to": "decision", "relation": "supports-decision" },
+        { "from": "mistakenReport", "to": "localPremise", "relation": "challenges-premise" },
+        { "from": "verifiedLoss", "to": "encryptionPremise", "relation": "challenges-premise" }
+      ],
+      "expectedEdges": [
+        { "from": "localPremise", "to": "decision", "relation": "supports-decision" },
+        { "from": "encryptionPremise", "to": "decision", "relation": "supports-decision" },
+        { "from": "verifiedLoss", "to": "encryptionPremise", "relation": "challenges-premise" }
+      ],
+      "expectedDecisionStatus": "reconfirmation-suggested",
+      "reason": "The local-draft report was withdrawn while the independently verified encryption loss still challenges its own distinct premise."
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "rationale-correction-cases-v1",
+  "ingestion": "manual synthetic source-bound admission in listed arrival order",
+  "cases": [
+    {
+      "id": "retracted-offline-report",
+      "events": [
+        { "id": "decision", "eventDate": "2031-04-01", "arrivalIndex": 0, "role": "user", "text": "On 2031-04-01, I chose HarborSketch because I can edit drafts offline. I have not chosen another app." },
+        { "id": "premise", "eventDate": "2031-04-01", "arrivalIndex": 1, "role": "user", "text": "On 2031-04-01, I tested HarborSketch without a connection and could edit a draft offline." },
+        { "id": "mistakenReport", "eventDate": "2031-04-03", "arrivalIndex": 2, "role": "user", "text": "On 2031-04-03, I reported that HarborSketch could not edit drafts offline after one interrupted test." },
+        { "id": "retraction", "eventDate": "2031-04-04", "arrivalIndex": 3, "role": "user", "text": "On 2031-04-04, I repeated the test: my device caused the interruption. HarborSketch still edits drafts offline. My April 3 report was mistaken; my app choice has not changed." }
+      ]
+    },
+    {
+      "id": "verified-export-loss-zh",
+      "events": [
+        { "id": "decision", "eventDate": "2031-05-01", "arrivalIndex": 0, "role": "user", "text": "2031年5月1日，我選擇青嵐繪圖板，因為它可以離線匯出PNG。我還沒有改選其他產品。" },
+        { "id": "premise", "eventDate": "2031-05-01", "arrivalIndex": 1, "role": "user", "text": "2031年5月1日，我在沒有網路的情況下，成功用青嵐繪圖板匯出PNG。" },
+        { "id": "verifiedLoss", "eventDate": "2031-05-04", "arrivalIndex": 2, "role": "user", "text": "2031年5月4日，更新後我再次測試：青嵐繪圖板現在不能離線匯出PNG；我尚未決定換產品。" }
+      ]
+    },
+    {
+      "id": "mixed-distinct-premises",
+      "events": [
+        { "id": "decision", "eventDate": "2031-06-01", "arrivalIndex": 0, "role": "user", "text": "On 2031-06-01, I chose CedarBoard because it keeps drafts locally and encrypts exported files. I have not changed my choice." },
+        { "id": "localPremise", "eventDate": "2031-06-01", "arrivalIndex": 1, "role": "user", "text": "On 2031-06-01, I tested CedarBoard: drafts remained editable locally without a connection." },
+        { "id": "mistakenReport", "eventDate": "2031-06-03", "arrivalIndex": 2, "role": "user", "text": "On 2031-06-03, I reported that CedarBoard had lost local draft editing after an interrupted test." },
+        { "id": "retraction", "eventDate": "2031-06-04", "arrivalIndex": 3, "role": "user", "text": "On 2031-06-04, I repeated the local-draft test. The June 3 report was mistaken: local draft editing still works." },
+        { "id": "verifiedLoss", "eventDate": "2031-06-04", "arrivalIndex": 4, "role": "user", "text": "On 2031-06-04, I verified that CedarBoard no longer encrypts exported files. I have not selected a replacement board." },
+        { "id": "encryptionPremise", "eventDate": "2031-06-01", "arrivalIndex": 5, "role": "user", "text": "On 2031-06-01, I tested CedarBoard: exported files were encrypted. This is my original June 1 observation, imported on June 5 after the June 4 update." }
+      ]
+    }
+  ]
+}
