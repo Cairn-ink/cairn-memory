@@ -66,9 +66,11 @@
     "failedCases": 0,
     "notRunCases": 0,
     "failedCaptures": 0,
+    "provenanceIncompleteCaptures": 0,
     "unavailableCaptureSlots": 0,
     "unavailableQuestionSlots": 0,
     "failedReadArms": 0,
+    "provenanceIncompleteReadArms": 0,
     "notRunReadArms": 0,
     "unavailableReadArmSlots": 0,
     "relateCalls": 10,
@@ -93,6 +95,7 @@
           {
             "sourceId": "d1",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -157,6 +160,7 @@
           {
             "sourceId": "d2",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -248,6 +252,7 @@
           {
             "sourceId": "d3",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -363,6 +368,7 @@
           {
             "sourceId": "d4",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -509,6 +515,7 @@
                   "d4"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 4,
                   "capturedEvents": 4,
@@ -526,6 +533,7 @@
                   "d4"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 4,
                   "capturedEvents": 4,
@@ -551,6 +559,7 @@
                   "d4"
                 ],
                 "coverage": "complete-current-admitted",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 4,
                   "capturedEvents": 4,
@@ -579,6 +588,7 @@
           {
             "sourceId": "d5",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -633,6 +643,7 @@
           {
             "sourceId": "d6",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -723,6 +734,7 @@
                   "d6"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -737,6 +749,7 @@
                   "d5"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -756,6 +769,7 @@
                   "d6"
                 ],
                 "coverage": "complete-current-admitted",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -784,6 +798,7 @@
           {
             "sourceId": "d7",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -838,6 +853,7 @@
           {
             "sourceId": "d8",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -928,6 +944,7 @@
                   "d8"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -942,6 +959,7 @@
                   "d7"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -962,6 +980,7 @@
                   "d7"
                 ],
                 "coverage": "complete-current-admitted",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -990,6 +1009,7 @@
           {
             "sourceId": "d9",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -1038,6 +1058,7 @@
           {
             "sourceId": "d10",
             "status": "ok",
+            "receiptInspectionIncomplete": false,
             "classificationStatus": "applied",
             "rationale": {
               "status": "reviewed",
@@ -1108,6 +1129,7 @@
                   "d10"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -1122,6 +1144,7 @@
                   "d10"
                 ],
                 "coverage": "complete",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,
@@ -1142,6 +1165,7 @@
                   "d9"
                 ],
                 "coverage": "complete-current-admitted",
+                "absentReceiptCount": 0,
                 "sourceCoverage": {
                   "expectedEvents": 2,
                   "capturedEvents": 2,

@@ -18,7 +18,7 @@ function sample() {
 }
 function caseResult(ids, questionId) {
   const view = () => ({ status: 'ok', edges: [], failures: [] });
-  const arm = (coverage = 'complete') => ({ status: 'ok', sourceIds: [...ids], coverage,
+  const arm = (coverage = 'complete') => ({ status: 'ok', sourceIds: [...ids], coverage, absentReceipts: [],
     sourceCoverage: { expectedEvents: ids.length, capturedEvents: ids.length,
       returnedEvents: ids.length, unreturnedSourceIds: [] } });
   return { caseId: schedule[0][0], split: 'dev', sourceCount: ids.length,
@@ -33,12 +33,14 @@ function caseResult(ids, questionId) {
 }
 
 test('NRE1 fixed public artifact preserves the full denominator, proposals and accounting', () => {
-  assert.equal(createHash('sha256').update(artifactBytes).digest('hex'), '0c590e97f69fc6976f95ee30f73ddb3a5f227fc92a765dedee57bffb17a0bd78');
+  assert.equal(createHash('sha256').update(artifactBytes).digest('hex'), '0af2a277d995b6546ff60e252d183190faf9336ea43196cbc8d9dcdbad3ea7f6');
   assert.deepEqual(artifact.cases.map(item => item.caseId), schedule.map(item => item[0]));
   assert.deepEqual(artifact.denominators, { cases: 4, events: 10, questions: 4, readArmSlots: 12,
     completedCases: 4, completedWithFailuresCases: 0, failedCases: 0, notRunCases: 0,
-    failedCaptures: 0, unavailableCaptureSlots: 0, unavailableQuestionSlots: 0,
-    failedReadArms: 0, notRunReadArms: 0, unavailableReadArmSlots: 0,
+    failedCaptures: 0, provenanceIncompleteCaptures: 0,
+    unavailableCaptureSlots: 0, unavailableQuestionSlots: 0,
+    failedReadArms: 0, provenanceIncompleteReadArms: 0,
+    notRunReadArms: 0, unavailableReadArmSlots: 0,
     relateCalls: 10, proposedEdges: 5 });
   assert.deepEqual(artifact.budgetDelta, { requests: 112, reservedMicroUsd: 560000,
     knownUsageMicroUsd: 25971, unknownCostRequests: 56 });
@@ -104,4 +106,22 @@ test('NRE5 failed rationale and unavailable trace keep null counts and null prop
     { status: 'failed', proposed: null, inserted: null, interpretationStatus: null });
   assert.deepEqual(output.cases[0].result.captures[0].relateCalls[0],
     { status: 'trace-unavailable', candidates: [], proposedEdges: null });
+});
+
+test('NRE6 successful but incomplete provenance stays visible without receipt IDs or raw errors', () => {
+  const raw = sample(); raw.cases[0].status = 'completed_with_failures';
+  raw.cases[0].result = caseResult(schedule[0][1], 'q1');
+  raw.cases[0].result.captures[0].receiptError = 'private-receipt-inspection-error';
+  raw.cases[0].result.questions[0].arms['rationale-evidence'].absentReceipts = [{
+    receiptId: 'private-receipt-id', memoryId: 'private-memory-id', reason: 'unindexed-receipt',
+  }];
+  const output = exportNaturalRationaleEvidence(raw);
+  const projected = output.cases[0].result;
+  assert.equal(projected.captures[0].status, 'ok');
+  assert.equal(projected.captures[0].receiptInspectionIncomplete, true);
+  assert.equal(projected.questions[0].arms['rationale-evidence'].status, 'ok');
+  assert.equal(projected.questions[0].arms['rationale-evidence'].absentReceiptCount, 1);
+  assert.equal(output.denominators.provenanceIncompleteCaptures, 1);
+  assert.equal(output.denominators.provenanceIncompleteReadArms, 1);
+  assert.equal(JSON.stringify(output).includes('private-'), false);
 });

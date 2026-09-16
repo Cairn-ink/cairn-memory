@@ -73,8 +73,13 @@ function arm(value, ids) {
     'unavailable', 'selection-unassessed']);
   const counts = value.sourceCoverage;
   if (!object(counts)) fail();
+  const absentReceipts = list(value.absentReceipts);
+  if (absentReceipts.some(item => !object(item) || item.reason !== 'unindexed-receipt'
+    || typeof item.receiptId !== 'string' || !item.receiptId
+    || typeof item.memoryId !== 'string' || !item.memoryId)) fail();
+  const absentReceiptCount = absentReceipts.length;
   return { status: oneOf(value.status, ['ok', 'failed', 'not_run']),
-    sourceIds: sourceIds(value.sourceIds, ids), coverage,
+    sourceIds: sourceIds(value.sourceIds, ids), coverage, absentReceiptCount,
     sourceCoverage: { expectedEvents: requiredInteger(counts.expectedEvents),
       capturedEvents: requiredInteger(counts.capturedEvents), returnedEvents: requiredInteger(counts.returnedEvents),
       unreturnedSourceIds: sourceIds(counts.unreturnedSourceIds, ids) },
@@ -96,6 +101,7 @@ function projectCase(slot, [caseId, ids, questionId]) {
     || list(result.captures).length !== ids.length || list(result.questions).length !== 1) fail();
   const captures = result.captures.map((item, index) => {
     if (item.sourceId !== ids[index]) fail();
+    if (item.receiptError !== undefined && (typeof item.receiptError !== 'string' || !item.receiptError)) fail();
     const natural = item.naturalRationale;
     if (!object(natural)) fail();
     const rawRationale = natural.captureRationale;
@@ -108,6 +114,7 @@ function projectCase(slot, [caseId, ids, questionId]) {
     if (rationale?.status === 'reviewed' && (rationale.proposed === null || rationale.inserted === null
       || rationale.interpretationStatus === null)) fail();
     return { sourceId: item.sourceId, status: oneOf(item.status, ['ok', 'failed']),
+      receiptInspectionIncomplete: item.receiptError !== undefined,
       classificationStatus: item.classification ? oneOf(item.classification.status,
         ['applied', 'failed', 'not-run', 'skipped']) : null, rationale,
       observation: oneOf(natural.observation, ['capture-failed', 'admission-absent', 'source-absent',
@@ -167,9 +174,11 @@ export function exportNaturalRationaleEvidence(report) {
       failedCases: cases.filter(item => item.status === 'failed').length,
       notRunCases: cases.filter(item => item.status === 'not_run').length,
       failedCaptures: captures.filter(item => item.status === 'failed').length,
+      provenanceIncompleteCaptures: captures.filter(item => item.receiptInspectionIncomplete).length,
       unavailableCaptureSlots: 10 - captures.length,
       unavailableQuestionSlots: 4 - questions.length,
       failedReadArms: readArms.filter(item => item.status === 'failed').length,
+      provenanceIncompleteReadArms: readArms.filter(item => item.absentReceiptCount > 0).length,
       notRunReadArms: readArms.filter(item => item.status === 'not_run').length,
       unavailableReadArmSlots: 12 - readArms.length,
       relateCalls: relateCalls.length,

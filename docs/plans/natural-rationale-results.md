@@ -16,8 +16,9 @@ calls, ledger writes, credential reads, reruns, or changed pilot inputs.
    before/after and attempt delta: request count, conservative reservations,
    known usage and unknown-cost attempts. Keep reservations distinct from an
    invoice or measured semantic quality. Reject mismatched schedule, arithmetic,
-   missing arms, malformed proposals or incomplete provenance rather than
-   silently dropping observations.
+   missing arms and malformed proposal/provenance mappings. Retain reported
+   provenance gaps as safe counts/flags on otherwise successful captures and
+   read arms rather than silently dropping or rejecting them.
 3. The public projection is an allowlist of synthetic fields. Drop unselected
    raw metadata and reject unsafe values in retained fields: private paths,
    credentials, authorization headers, client/session IDs, memory UUIDs and
