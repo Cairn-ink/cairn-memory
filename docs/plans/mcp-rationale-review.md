@@ -79,3 +79,12 @@ Node22.16 and24. Primary combined gates, fixed-candidate independent reviews and
 latest-head CI are recorded in the delivery PR. No credentials or paid provider
 requests were used in this slice. The parent core change is PR140; merge that
 before this dependent host slice. No merge is performed by this delivery.
+
+Initial independent Spec review found host-level preservation assertions were
+vacuous for qualification/filing: default inspection omitted qualification and
+the scripted classifier left memories unfiled. The correction makes the test
+classifier create real L1 placement, asserts nonempty anchored qualification
+and placements for both captured memories, and compares complete qualified
+inspection before/after review and cold restart. Runtime behavior is unchanged;
+the same 18 synthetic HTTP callbacks remain the transport denominator. Both
+review axes rerun on the corrected candidate.
