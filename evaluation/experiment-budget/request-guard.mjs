@@ -406,7 +406,11 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   let expectedSchema;
   try {
-    if (dispositionComparison) schemasFor('reviewRationaleDispositions', input);
+    if (dispositionComparison) {
+      // Parsed validation must cover exactly the bytes subsequently forwarded.
+      if (body.input[0].content[0].text !== JSON.stringify(input)) fail('unsupported_request');
+      schemasFor('reviewRationaleDispositions', input);
+    }
     expectedSchema = match ? schemasFor(match[1], input) : null;
   }
   catch { fail('unsupported_request'); }
@@ -910,6 +914,14 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
     if (extension || qualification) verifyCapabilities();
     let channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);
+    if (dispositionComparison) {
+      try {
+        if (snapshot.bodyText !== JSON.stringify(snapshot.body)) fail('unsupported_request');
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('unsupported_request');
+      }
+    }
     if (modelControl) {
       if (!own(qualification.models, snapshot.body.model)) fail('unsupported_request');
       channel = qualification.models[snapshot.body.model][kind];
