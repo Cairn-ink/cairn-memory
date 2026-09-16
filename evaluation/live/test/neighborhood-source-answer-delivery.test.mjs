@@ -82,6 +82,9 @@ test('NC1–2 wrong mode, incomplete or malformed RN envelopes and conflicting c
     const result = await deliverNeighborhoodSourceAnswer({ ...options(value), complete: () => { calls++; } });
     assert.equal(result.status, 'invalid-source'); assert.equal(result.completionCalls, 0);
   }
+  const malformedForPrepare = envelope([root(old, later)]);
+  malformedForPrepare.value.memories[0].rationale.root.revision = 2;
+  assert.throws(() => prepareNeighborhoodSourceAnswer(options(malformedForPrepare)), /invalid_neighborhood_source/);
   for (const patch of [{ requestedContextMode: 'source-evidence' }, { requestedContextMode: null },
     { toolResult: { isError: true, content: [] } },
     { toolResult: { isError: false, content: [{ type: 'text', text: 'not json' }] } }]) {

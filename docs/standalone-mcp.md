@@ -5,6 +5,10 @@ complete retained sources instead of generated summaries and qualification
 labels. In this mode, omit includeQualification or set it false; explicit true
 conflicts. Existing defaults are unchanged without contextMode. See
 [source evidence context](source-evidence-context.md) for limits and examples.
+An explicit `rationale-neighborhood-evidence` recall may also request
+`sourceProjection: "neighborhood-sources-v1"` to return only its complete
+bounded original source union. The ranker still sees unverified links; see
+[the projection contract](neighborhood-source-projection.md).
 
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run

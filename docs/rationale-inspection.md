@@ -53,3 +53,10 @@ checks and complete-result limits: six memories, ten edges and 24000 UTF-16
 units. Overflow fails instead of returning a silently truncated graph. Changing
 source evidence invalidates its proposals. Forgetting removes their logical
 records; it is not a promise of secure physical erasure or backup deletion.
+
+For callers that need the original sources but not returned relationship
+interpretations, `core.recall` and MCP `recall_memory` accept an explicit
+`sourceProjection: 'neighborhood-sources-v1'` alongside this RN context mode.
+Selection and ranking still see unverified links; only the final complete
+result is projected. See [source-only neighborhood projection](neighborhood-source-projection.md)
+for the bounded output and failure contract.

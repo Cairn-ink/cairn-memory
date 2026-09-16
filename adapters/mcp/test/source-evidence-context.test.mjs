@@ -111,6 +111,10 @@ for (const mode of [undefined, 'source-bound-v1', 'source-bound-v2']) {
 test('S6 SDK source-mode enum and authority overrides are strict; query remains redacted', options, async t => {
   const { path, details } = seed(); const hosted = await host(t, path, 'source-bound-v2');
   for (const patch of [...[null, false, {}, [], 'sources', 'SOURCE-EVIDENCE'].map(contextMode => ({ contextMode })),
+    { contextMode: 'source-evidence', sourceProjection: 'neighborhood-sources-v1' },
+    { contextMode: 'rationale-neighborhood-evidence', sourceProjection: 'unknown' },
+    { contextMode: 'rationale-neighborhood-evidence', sourceProjection: 'neighborhood-sources-v1', includeQualification: true },
+    { contextMode: 'rationale-neighborhood-evidence', sourceProjection: 'neighborhood-sources-v1', selectionMode: 'bounded-source-scan' },
     { contextMode: 'source-evidence', namespace: { ownerId: 'foreign' } },
     { contextMode: 'source-evidence', ownerId: 'foreign' }]) {
     try {

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — opt-in neighborhood source projection
+
+- Embedded and local MCP RN recall can explicitly return a complete bounded
+  union of original retained sources without graph interpretations in the
+  result. Existing RN selection/ranking still sees unverified proposals;
+  defaults, prompts, storage and provider calls do not change. This is not
+  verified rationale or demonstrated answer-quality improvement.
+
 ## Unreleased — opt-in rationale neighborhood context
 
 - Embedded fetch/recall and local MCP recall can explicitly return a bounded

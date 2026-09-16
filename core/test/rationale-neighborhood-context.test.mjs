@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
+import { projectNeighborhoodSources } from '../neighborhood-source-projection.mjs';
 
 const namespace = { ownerId: 'synthetic-neighborhood', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -59,8 +60,117 @@ test('RN1–4 one selected old root carries decision context plus outgoing later
   assert.equal(recalled.memories.length, 1);
   assert.deepEqual(recalled.memories[0], expanded);
   assert.deepEqual(f.calls.at(-1).input.candidates[0].rationale, expanded.rationale);
+  const originalRank = structuredClone(f.calls.at(-1).input);
+  const projected = ok(await f.recall(undefined, { sourceProjection: 'neighborhood-sources-v1' }));
+  assert.deepEqual(f.calls.at(-1).input, originalRank);
+  assert.equal(projected.sourceProjection, 'neighborhood-sources-v1');
+  assert.deepEqual(projected.memories, expanded.rationale.sources);
+  assert.equal(projected.coverage, 'complete');
+  assert.equal(JSON.stringify(projected.memories).includes('rationale'), false);
+  assert.equal(JSON.stringify(projected.memories).includes('supports-decision'), false);
   assert.equal(ok(f.core.getRationale({ namespace, ...ref(old) })).edges.length, 2);
   fails(f.core.getRationale({ namespace, ...ref(old), view: 'root-neighborhood' }), 'invalid_input');
+});
+
+test('NSP1 invalid projection combinations reject before select or rank; complete empty has explicit marker', async t => {
+  const f = fixture(t); let calls = 0;
+  f.model.select = () => { calls++; return { refs: [] }; };
+  f.model.rank = () => { calls++; return { refs: [] }; };
+  const request = patch => f.recall(undefined, { sourceProjection: 'neighborhood-sources-v1', ...patch });
+  const ordinaryReadSet = [namespace, { ...namespace, scope: 'project', projectId: 'synthetic-project' }];
+  assert.equal(ok(await f.recall(undefined, { readSet: ordinaryReadSet })).coverage, 'complete');
+  assert.ok(calls > 0); calls = 0;
+  for (const patch of [
+    { sourceProjection: 'unknown' }, { contextMode: 'source-evidence' },
+    { includeQualification: true }, { selectionMode: 'bounded-source-scan' },
+    { readSet: ordinaryReadSet },
+  ]) fails(await request(patch), 'invalid_input');
+  assert.equal(calls, 0);
+  const empty = ok(await request({}));
+  assert.deepEqual(empty.memories, []);
+  assert.equal(empty.sourceProjection, 'neighborhood-sources-v1');
+  assert.equal(empty.coverage, 'complete');
+});
+
+test('NSP2 malformed citation differs from stale revision and conflicting source copy', () => {
+  const source = id => ({ memory: { id, revision: 1, currentness: 'current' },
+    receipts: [{ id: `${id}-receipt`, role: 'user', excerpt: `Original ${id}.` }], receiptCount: 1,
+    interpretationStatus: 'omitted', sourceSelectionCoverage: 'unassessed' });
+  const root = source('root'), linked = source('linked');
+  const item = { ...root, rationale: { root: { memoryId: 'root', revision: 1 },
+    status: 'unassessed', sources: [structuredClone(root), linked], edges: [{ from: 'linked', to: 'root',
+      relation: 'supports-decision', fromReceipt: 'linked-receipt', toReceipt: 'root-receipt',
+      interpretationStatus: 'model-proposed' }], coverage: 'bounded-root-neighborhood', indexRevision: 1 } };
+  assert.deepEqual(projectNeighborhoodSources([item]), [root, linked]);
+  const literal = structuredClone(item);
+  const sourceWords = 'The source literally says rationale, supports-decision, and qualification.';
+  literal.receipts[0].excerpt = sourceWords;
+  literal.rationale.sources[0].receipts[0].excerpt = sourceWords;
+  assert.equal(projectNeighborhoodSources([literal])[0].receipts[0].excerpt, sourceWords);
+  const stale = structuredClone(item); stale.rationale.root.revision = 2;
+  assert.throws(() => projectNeighborhoodSources([stale]), { code: 'revision_conflict' });
+  const malformed = structuredClone(item); malformed.rationale.edges[0].toReceipt = 'absent';
+  assert.throws(() => projectNeighborhoodSources([malformed]), { code: 'storage_error' });
+  const conflicting = structuredClone(item); conflicting.rationale.sources[1].receipts[0].excerpt = 'Changed.';
+  assert.throws(() => projectNeighborhoodSources([item, conflicting]), { code: 'revision_conflict' });
+});
+
+test('NSP2/3 whole selected-root union and serialized value overflow fail without truncation', async t => {
+  const chooseTwo = (fixtureValue, roots) => {
+    fixtureValue.model.select = ({ input }) => ({ refs: input.maps.flatMap(map => map.items
+      .filter(item => item.type === 'unfiled' && roots.some(root => root.id === item.ref.memoryId))
+      .map(item => ({ namespaceIndex: map.namespaceIndex, ...item.ref }))) });
+    fixtureValue.model.rank = ({ input }) => ({ refs: input.candidates.map(item => ({ namespaceIndex: item.namespaceIndex,
+      memoryId: item.memory.id, revision: item.memory.revision })) });
+  };
+  const many = fixture(t), first = many.admit('First selected root.', 'first'),
+    second = many.admit('Second selected root.', 'second');
+  chooseTwo(many, [first, second]);
+  for (let i = 0; i < 5; i++) {
+    const neighbor = many.admit(`Separate linked source ${i}.`, `n-${i}`);
+    await many.link([ref(neighbor), ref(i < 3 ? first : second)], [[0, 1, 'supports-decision']]);
+  }
+  const original = ok(await many.recall());
+  assert.equal(original.memories.length, 2);
+  fails(await many.recall(undefined, { sourceProjection: 'neighborhood-sources-v1' }), 'context_item_too_large');
+
+  const wide = fixture(t), heavy = '\\'.repeat(780);
+  const admitHeavy = id => ok(wide.core.admit({ namespace, memory: { content: `Wide ${id}.`, kind: 'context' },
+    receipts: Array.from({ length: 4 }, (_, index) => ({ client: 'synthetic', sessionId: 'synthetic',
+      eventId: `wide-${id}-${index}`, role: 'user', excerpt: heavy })) })).memory;
+  const roots = [admitHeavy('root-a'), admitHeavy('root-b')];
+  chooseTwo(wide, roots);
+  for (let i = 0; i < 4; i++) {
+    const linked = admitHeavy(`linked-${i}`);
+    await wide.link([ref(linked), ref(roots[i < 2 ? 0 : 1])], [[0, 1, 'supports-decision']]);
+  }
+  assert.equal(ok(await wide.recall()).memories.length, 2);
+  fails(await wide.recall(undefined, { sourceProjection: 'neighborhood-sources-v1' }), 'context_item_too_large');
+});
+
+test('NSP3 incomplete map traversal and source mutation fail closed', async t => {
+  const f = fixture(t);
+  for (let i = 0; i < 3; i++) f.admit(`Separate candidate ${i}.`, `candidate-${i}`);
+  f.model.countTokens = text => {
+    try { return JSON.parse(text).value?.items?.length > 1 ? 4001 : 1; }
+    catch { return 1; }
+  };
+  f.model.select = () => ({ refs: [] });
+  assert.equal(ok(await f.recall()).coverage, 'budget_exhausted');
+  fails(await f.recall(undefined, { sourceProjection: 'neighborhood-sources-v1' }), 'context_budget_exceeded');
+
+  const g = fixture(t), root = g.admit('Selected old source.', 'old'),
+    linked = g.admit('A separate supporting source.', 'linked');
+  await g.link([ref(linked), ref(root)], [[0, 1, 'supports-decision']]);
+  g.select(root);
+  g.model.rank = ({ input }) => {
+    ok(g.core.forget({ namespace, memoryId: linked.id, expectedRevision: linked.revision }));
+    return { refs: input.candidates.map(item => ({ namespaceIndex: item.namespaceIndex,
+      memoryId: item.memory.id, revision: item.memory.revision })) };
+  };
+  const result = await g.recall(undefined, { sourceProjection: 'neighborhood-sources-v1' });
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.ok(['revision_conflict', 'index_revision_conflict'].includes(result.error.code));
 });
 
 test('RN2 shared self-support is deduplicated and empty root returns bounded unassessed evidence', async t => {

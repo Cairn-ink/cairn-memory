@@ -55,6 +55,7 @@
   "core/prompts/recall-rank.md",
   "core/prompts/recall-rank-qualified.md",
   "core/source-evidence.mjs",
+  "core/neighborhood-source-projection.mjs",
   "core/prompts/recall-rank-source-evidence.md",
   "core/prompts/recall-rank-rationale-evidence.md",
   "core/prompts/recall-select.md",

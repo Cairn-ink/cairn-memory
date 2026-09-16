@@ -6,6 +6,7 @@ import { isSourceContext, isRationaleContext } from './source-evidence.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
+import { projectNeighborhoodSources } from './neighborhood-source-projection.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
@@ -595,7 +596,7 @@ export function openMemoryCore(input) {
   async function recall(input) {
     try {
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode', 'sourceProjection']);
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
@@ -606,7 +607,16 @@ export function openMemoryCore(input) {
       }
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
           (isSourceContext(contextMode) && includeQualification)) throw new MemoryStoreError('invalid_input');
+      const projected = Object.hasOwn(input, 'sourceProjection');
+      if (projected && (!Array.isArray(input.readSet) || input.readSet.length !== 1)) {
+        throw new MemoryStoreError('invalid_input');
+      }
       const namespaces = contractReadSet(input.readSet);
+      if (projected && (input.sourceProjection !== 'neighborhood-sources-v1'
+        || contextMode !== 'rationale-neighborhood-evidence' || includeQualification
+        || Object.hasOwn(input, 'selectionMode') || namespaces.length !== 1)) {
+        throw new MemoryStoreError('invalid_input');
+      }
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
@@ -620,7 +630,7 @@ export function openMemoryCore(input) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch }] : [];
       }));
-      return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
+      const recalled = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
@@ -629,7 +639,14 @@ export function openMemoryCore(input) {
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
-      }));
+      });
+      if (!projected) return success(recalled);
+      if (recalled.coverage !== 'complete' || recalled.namespaces.some(item =>
+        item.mapExhausted !== true || item.fetchExhausted !== true)) throw new MemoryStoreError('context_budget_exceeded');
+      const value = { ...recalled, memories: projectNeighborhoodSources(recalled.memories),
+        sourceProjection: 'neighborhood-sources-v1' };
+      if (JSON.stringify(value).length > 24_000) throw new MemoryStoreError('context_item_too_large');
+      return success(value);
     } catch (error) { return failure(error); }
   }
 

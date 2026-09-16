@@ -327,3 +327,9 @@ expansion, dropped conditions or inferred authority is allowed. Inspection can
 still expose the original model interpretation. File-access, journals, backups
 and logical forgetting retain their existing limitations. See
 [source evidence context](source-evidence-context.md).
+
+An explicit single-namespace RN recall can additionally request
+`sourceProjection: 'neighborhood-sources-v1'` to return a complete bounded
+union of original sources without graph interpretations in the result. RN
+selection and ranking still see unverified links; no default or hosted wire
+schema changes. See [the projection contract](neighborhood-source-projection.md).

@@ -26,6 +26,7 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
       artifact.artifactPath], root, artifact.userconfig);
     const packageRoot = join(root, 'node_modules', packageName), path = join(root, 'memory.sqlite');
     for (const file of ['core/contract.mjs', 'core/rationale-storage.mjs', 'core/runtime.mjs',
+      'core/neighborhood-source-projection.mjs',
       'adapters/mcp/server.mjs']) assert.equal(readFileSync(join(packageRoot, file), 'utf8'),
       readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8'));
     const { openMemoryCore } = await import(pathToFileURL(join(packageRoot, 'core/index.mjs')).href);
@@ -103,6 +104,7 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
     await active.close(); active = undefined;
     await start(proxy.token); // New installed stdio process, not a warm in-process projection.
     const requestMode = 'rationale-neighborhood-evidence';
+    const beforeRn = sends;
     const raw = await active.callTool({ name: 'recall_memory', arguments: { query, contextMode: requestMode } });
     const envelope = JSON.parse(raw.content[0].text);
     assert.equal(raw.isError, false); assert.equal(envelope.ok, true, JSON.stringify(envelope));
@@ -123,6 +125,20 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
     assert.equal(rankInputs.at(-1).instructions,
       readFileSync(join(packageRoot, 'core/prompts/recall-rank-rationale-evidence.md'), 'utf8'));
     assert.equal(JSON.stringify(item).includes('synthetic-neighborhood-installed'), false);
+    const originalRank = structuredClone(rankInputs.at(-1));
+    const ordinaryCalls = sends - beforeRn;
+    await active.close(); active = undefined;
+    await start(proxy.token); // Projection is requested through a fresh installed cold process.
+    const beforeProjected = sends;
+    const projected = await call('recall_memory', { query, contextMode: requestMode,
+      sourceProjection: 'neighborhood-sources-v1' });
+    assert.equal(sends - beforeProjected, ordinaryCalls);
+    assert.deepEqual(rankInputs.at(-1), originalRank);
+    assert.equal(projected.sourceProjection, 'neighborhood-sources-v1');
+    assert.equal(projected.coverage, 'complete');
+    assert.deepEqual(projected.memories, item.rationale.sources);
+    for (const forbidden of ['rationale', 'bounded-root-neighborhood', 'supports-decision',
+      'challenges-premise', 'qualification']) assert.equal(JSON.stringify(projected.memories).includes(forbidden), false);
     const beforeAnswer = sends;
     let answerCalls = 0;
     const delivered = await deliverNeighborhoodSourceAnswer({ question: query, toolResult: raw,
