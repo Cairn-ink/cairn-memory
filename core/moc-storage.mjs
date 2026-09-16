@@ -15,7 +15,8 @@ const titleKey = (title) => title.normalize("NFKC").toLocaleLowerCase("und");
 const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
-export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts, assertIndexAvailable }) {
+export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts,
+  assertIndexAvailable, rationaleStorage }) {
   // Read authority is generation-owned; writes below continue targeting declarations.
   // Title validity deliberately consults every original source binding.
   function projectPrepare(sql) {
@@ -219,6 +220,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         return { memories: resultMemories, createdMocs: [], refs, indexRevision: expectedIndex };
       }
 
+      const filingRevisions = new Map([...nextRevision].filter(([id, revision]) =>
+        revision !== memories.get(id).revision));
+      const filingEdges = rationaleStorage.snapshotFilingEdges(ns, filingRevisions.keys());
+
       const now = new Date().toISOString();
       for (const l1 of newL1.values()) {
         db.prepare(`INSERT INTO mocs (id, owner_id, scope, project_id, level, title,
@@ -251,6 +256,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         memory.filing_status = filed;
         if (revision !== expected.get(item.memoryId)) memory.updated_at = now;
       }
+      rationaleStorage.restoreFilingEdges(ns, filingEdges, filingRevisions);
 
       const insertSource = db.prepare(`INSERT INTO moc_title_sources
         (moc_id, memory_id, memory_revision) VALUES (?, ?, ?)`);
