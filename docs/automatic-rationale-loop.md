@@ -75,7 +75,9 @@ without rationale; there is no pending-job recovery queue yet. An explicit
 embedded `reviewRationale` can be used by a trusted host to re-evaluate current
 refs, but it may incur another model call. Empty output does not retract prior
 links. Correcting or forgetting source evidence invalidates related links.
-Classification/other revision changes also conservatively invalidate links.
+MOC placement now preserves valid proposed links across filing-only revisions
+with unchanged content and complete retained receipts; other revision changes
+still invalidate them. This does not validate the proposals' meaning.
 
 ## Read limits and compatibility
 

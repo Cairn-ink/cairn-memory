@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — rationale survives filing-only revisions
+
+- MOC placement now preserves valid receipt-bound proposed rationale links when
+  filing alone revises a memory, including links between two changed memories.
+  The rebind is atomic and checks unchanged content, complete receipts and
+  endpoint scope; old revision refs and stale reads still fail.
+- Corrections, receipt changes, retirement, forgetting and arbitrary revision
+  changes continue to invalidate links. This does not confirm a model-proposed
+  reason, make a tentative choice final or change a decision.
+
 ## Unreleased — independent provider usage bounds
 
 - The optional OpenAI adapter accepts bounded observed input usage that differs
