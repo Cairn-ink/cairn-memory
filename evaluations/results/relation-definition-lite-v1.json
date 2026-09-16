@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "id": "relation-definition-lite-v1",
+  "diagnosticOnly": true,
+  "sourceCommit": "bc17cf10561c3e9efc4a47be3d04be44463bc020",
+  "requestedModel": "gpt-4.1-mini-2025-04-14",
+  "fixtureSha256": "95137a94a7702085889aa68df70d2b899488fde4b7aef9915d9610d749fb650f",
+  "rubricSha256": "048786044462967a3bafe7fc4b8fcef6076319a46295133662188e9035d2a436",
+  "guideSha256": "6622d642c652e0d70c9151b2d8cae012e973f16d8239a48b8622812327cadff4",
+  "operatorSha256": "52802762cd6a410857bb07b137ce135d3958138856ca7a548e51e708f54831dd",
+  "scorerSha256": "b9c8f1d5bb50c0f39e6c1842da3f5365274db1e8cbd9d95302c675eb9729c673",
+  "privateReportSha256": "6604016100512caefd1c8a8e683115b0e0867a71272c75a8ba800aa64ee89312",
+  "status": "completed",
+  "limits": {
+    "requests": 64,
+    "microUsd": 320000,
+    "reservationMicroUsd": 5000,
+    "expectedRequests": 40,
+    "slots": 20
+  },
+  "budget": {
+    "requests": 40,
+    "reservedMicroUsd": 200000,
+    "knownUsageMicroUsd": 6691,
+    "unknownCostRequests": 20,
+    "unsettledAfter": 0
+  },
+  "cleanup": {
+    "drain": "completed",
+    "sessionClose": "completed",
+    "ledgerClose": "completed"
+  },
+  "arms": {
+    "baseline": {
+      "slots": 10,
+      "scored": 10,
+      "failedOrMalformed": 0,
+      "notRun": 0,
+      "failed": 0,
+      "malformed": 0,
+      "required": 13,
+      "requiredScored": 13,
+      "proposed": 6,
+      "omitted": 10,
+      "unsupported": 3,
+      "complete": 4
+    },
+    "guide": {
+      "slots": 10,
+      "scored": 10,
+      "failedOrMalformed": 0,
+      "notRun": 0,
+      "failed": 0,
+      "malformed": 0,
+      "required": 13,
+      "requiredScored": 13,
+      "proposed": 6,
+      "omitted": 7,
+      "unsupported": 0,
+      "complete": 4
+    }
+  },
+  "latency": {
+    "baseline": {
+      "totalMs": 20169,
+      "medianMs": 1793,
+      "minMs": 1395,
+      "maxMs": 3191
+    },
+    "guide": {
+      "totalMs": 22512,
+      "medianMs": 1926,
+      "minMs": 1413,
+      "maxMs": 5270
+    }
+  },
+  "slots": [
+    {
+      "caseId": "quiet-pump-en",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 2969
+    },
+    {
+      "caseId": "quiet-pump-en",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 1950
+    },
+    {
+      "caseId": "quiet-pump-zh",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          1,
+          0,
+          "challenges-premise",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 5270
+    },
+    {
+      "caseId": "quiet-pump-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          1,
+          0,
+          "challenges-premise",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 3191
+    },
+    {
+      "caseId": "two-reasons-en",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 1395
+    },
+    {
+      "caseId": "two-reasons-en",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          1,
+          0,
+          "challenges-premise",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 2689
+    },
+    {
+      "caseId": "considering-zh",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 1413
+    },
+    {
+      "caseId": "considering-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 2184
+    },
+    {
+      "caseId": "tentative-en",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 1824
+    },
+    {
+      "caseId": "tentative-en",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 1697
+    },
+    {
+      "caseId": "replacement-zh",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          1,
+          1,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 2134
+    },
+    {
+      "caseId": "replacement-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          1,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 2119
+    },
+    {
+      "caseId": "elaboration-en",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          0,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 1549
+    },
+    {
+      "caseId": "elaboration-en",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          0,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 2274
+    },
+    {
+      "caseId": "reaffirmation-zh",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          1,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 1902
+    },
+    {
+      "caseId": "reaffirmation-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          1,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 1616
+    },
+    {
+      "caseId": "different-actors-en",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          2,
+          "challenges-premise",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 1560
+    },
+    {
+      "caseId": "different-actors-en",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          0,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 1617
+    },
+    {
+      "caseId": "history-advice-zh",
+      "arm": "guide",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [],
+      "durationMs": 1566
+    },
+    {
+      "caseId": "history-advice-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "returnedModel": "gpt-4.1-mini-2025-04-14",
+      "edges": [
+        [
+          0,
+          2,
+          "supports-decision",
+          0,
+          0
+        ]
+      ],
+      "durationMs": 1762
+    }
+  ]
+}

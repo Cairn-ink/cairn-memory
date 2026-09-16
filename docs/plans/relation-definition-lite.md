@@ -91,11 +91,10 @@ durable campaign transport; the local serialized cap further limits this run.
 Any transport, pin, persistence, accounting or cap failure halts later slots.
 Invalid model output is retained as malformed, not scored as empty or retried.
 
-No paid result or default-promotion claim is recorded here. Primary acceptance
-will bind any later result to the frozen candidate and report actual request,
-known/unknown cost, latency, unsupported/omitted/complete denominators and
-independent source-semantic uncertainty. No rerun is authorized by a negative
-outcome.
+The [paid outcome](../relation-definition-lite-results.md) is now recorded with
+source binding, request/cost uncertainty, latency, all denominators and
+independent source-semantic inspection. No default promotion or retry follows
+from this partial improvement.
 
 An early primary Node24 focused run overlapped a live edit of the self-pinned
 operator and halted on `pin_or_binding_changed`. This is expected pin-fence
@@ -116,3 +115,29 @@ After the pre-live Spec clarification, primary reran the complete
 `npm run test:live-evidence-offline` suite on both runtimes:246 pass,30 skips,
 zero failures each. Only fixture/rubric, their pins, focused assertions and this
 record changed; generic/plugin/runtime code was unchanged.
+
+## Execution and handoff evidence
+
+Both independent reviewers (Sol/high, not implementers) passed the pre-live
+candidate `bc17cf10561c3e9efc4a47be3d04be44463bc020` against the fixed base.
+Standards found no hard violation (one non-blocking duplicated-safety-helper
+heuristic); Spec's first-pass reaffirmation ambiguity was resolved before the
+second review. Primary then executed exactly one guarded comparison: 40 HTTP,
+USD0.20 reserved, USD0.006691 known-usage estimate, 20 unknown-cost count requests,
+zero unsettled attempts and completed cleanup. Primary plus independent Spec
+agent source inspection agree with all frozen scores; no post-outcome tuning.
+
+Shared campaign checkpoint after the run: 2157 requests, USD24.986 conservatively
+reserved, USD1.361273 known-usage estimates and 1004 unknown-cost requests. The
+USD50 limit is unchanged; reservation headroom is USD25.014, not an invoice balance.
+
+Primary owns the closed synthetic projection and outcome analysis; the bounded
+implementation worker owns its offline frozen-result regression test. No source
+engine/default/schema changed. The experiment answers the lightweight-definition
+question with partial improvement, not attainment of general memory reliability.
+After adding the frozen result regression, primary reran the full offline
+evidence suite on Node22.16.0 and24.15.0:247 passed,30 intentional skips,
+zero failures each. Primary also compared all twenty public edge lists directly
+with the private run and checked the publication files for the injected key;
+the projection matches and contains no key. The paid execution files and their
+source hashes remain unchanged.
