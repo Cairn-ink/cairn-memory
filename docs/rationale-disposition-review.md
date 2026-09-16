@@ -10,7 +10,9 @@ absent from local MCP, automatic capture and default review paths.
 There is no commit endpoint. A real injected provider would receive the
 selected retained source excerpts and the existing relationship proposals;
 this is extra potentially personal context and requires a caller's explicit
-choice. No paid guard authorizes the new method.
+choice. Pre-existing/default paid grants do not authorize this method. A
+separate [explicit comparison capability](experiment-request-guard.md#closed-disposition-comparison-preparation)
+can bound opted-in transport; this core or adapter port alone does not grant it.
 
 The core atomically snapshots all current source receipts, the namespace epoch
 and every stored proposal whose two endpoints are in the supplied refs (at

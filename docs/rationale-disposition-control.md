@@ -37,9 +37,11 @@ helper; the facade itself is not packaged.
 This control is a whole prompt/output-protocol comparison, not an isolated
 causal test of graph awareness. The ordinary relation prompt already includes
 detailed relation definitions and a trust warning; the initial disposition
-prompt v1 did not inline those definitions. A separate v2 prompt-alignment
-correction is planned and must be pinned explicitly by any later comparison;
-no such alignment or semantic result is claimed here. Later operator gates
+prompt v1 did not inline those definitions. In the integrated core, the
+explicit disposition port now uses a separate versioned v2 alignment while
+this control instruction and v1 remain frozen. A later comparison must pin
+the actual control and v2 bytes; matching definitions does not establish an
+isolated causal effect or a semantic result. Later operator gates
 must establish equal provider-visible source/old-edge inputs and unchanged
 cold stored graphs, then score fresh frozen cases independently. No fixture,
 rubric, paid call or quality claim is included in this slice.
