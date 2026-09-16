@@ -140,3 +140,18 @@ application code or dependency changes.
   Primary independent reruns/review and exact-head CI remain pending. The
   frozen control prompt remains byte-identical. No provider key, real HTTP,
   paid call, shared ledger or scored fixture was used.
+
+## Final signal snapshot correction
+
+- Primary integration audit found that `b9c5a6f` read `request.signal` twice:
+  a Proxy could supply a valid `AbortSignal` for `instanceof`, then a different
+  value for the forwarded request without reentering or changing phase. A
+  focused synthetic test went red on that commit (`reads=2`, expected one).
+  The facade now captures the signal once during guarded validation and uses
+  that exact value for type check, pre/post abort checks and provider forwarding.
+  Reentry on that sole read still poisons the attempt before transport; a
+  second-read trap is never invoked. No prompt or product code changed.
+- Corrected worker gates passed pure facade 15/15, generic 136/136 and the
+  installed fake-transport regression 1/1 on both Node 22.16 and 24.15.
+  Primary independent confirmation and latest-head CI remain pending. No real
+  provider call, credential or shared ledger was used.

@@ -223,7 +223,7 @@ test('DC3 an unrelated/output count callback cannot reentrantly prepare provider
   assert.equal(sends, 0);
 });
 
-test('DC3 caller signal second read cannot reenter and send twice', async () => {
+test('DC3 caller signal is read once, so a second-read trap cannot reenter', async () => {
   let control, sends = 0, reads = 0, nested;
   const signal = new AbortController().signal;
   const model = { contextWindow: 8192, countTokens: () => 1,
@@ -235,9 +235,47 @@ test('DC3 caller signal second read cannot reenter and send twice', async () => 
     if (key === 'signal' && ++reads === 2) nested = control.relate(valid);
     return Reflect.get(target, key, receiver);
   } });
+  assert.deepEqual(await control.relate(request), { edges: [] });
+  if (nested) await Promise.allSettled([nested]);
+  assert.equal(reads, 1);
+  assert.equal(nested, undefined);
+  assert.equal(sends, 1);
+});
+
+test('DC3 caller signal first-read reentry poisons validation before transport', async () => {
+  let control, sends = 0, reads = 0, nested;
+  const signal = new AbortController().signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    relate: () => { sends++; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  control.countTokens(JSON.stringify(oldRequest()));
+  const valid = { ...oldRequest(), signal };
+  const request = new Proxy(valid, { get(target, key, receiver) {
+    if (key === 'signal' && ++reads === 1) nested = control.relate(valid);
+    return Reflect.get(target, key, receiver);
+  } });
   await assert.rejects(control.relate(request), /invalid_disposition_control_request/);
   if (nested) await Promise.allSettled([nested]);
+  assert.equal(reads, 1);
   assert.equal(sends, 0);
+});
+
+test('DC3 request forwards exactly the signal that passed validation', async () => {
+  let control, sent, reads = 0;
+  const validSignal = new AbortController().signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    relate: request => { sent = request; return { edges: [] }; } };
+  control = createRationaleDispositionControl(model, oldEdges());
+  control.countTokens(JSON.stringify(oldRequest()));
+  const request = new Proxy({ ...oldRequest(), signal: validSignal }, {
+    get(target, key, receiver) {
+      if (key === 'signal') return ++reads === 1 ? validSignal : { aborted: false };
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  assert.deepEqual(await control.relate(request), { edges: [] });
+  assert.equal(reads, 1);
+  assert.equal(sent.signal, validSignal);
 });
 
 test('DC3 caller descriptor and prototype traps cannot reenter before validation', async () => {
