@@ -276,6 +276,40 @@ The following installed runner must freeze cases, rubric and hashes, refuse a
 previous intent, retain failed/not-run cases, and pass independent review before
 execution. See [acceptance and sequence](plans/rationale-experiment.md).
 
+### Closed disposition-comparison preparation
+
+`authorizeDispositionComparisonExtension({ledger,policy,authorizationId})`
+is a separate operator action that writes an immutable mode-0600
+`experiment-disposition-comparison-extension.json` binding at a settled campaign
+checkpoint. It does not alter earlier grants or replenish the shared ledger.
+`createDispositionComparisonExperimentRequestGuard({ledger,policy,
+dispositionComparisonExtension,fetchImpl})` accepts only the pinned baseline
+model, Responses input-count/generation routes, and `cairn_relate` or
+`cairn_reviewRationaleDispositions`. Both methods must carry the same exact
+source-and-unverified-old-edge input shape; each method's output schema must
+match its own request-scoped schema. Host completion, other models, methods,
+unbound ledgers and cross-kind tokens fail before reservation. The capability
+file and checkpoint are rechecked after request accessors and before spend.
+
+The separately named `createDispositionComparisonLiveSession` exposes only
+those two routes and methods. `createDispositionComparisonAttempt` adds a
+serial, fail-latched ceiling of 24 HTTP requests and 120,000 microUSD in
+5,000-microUSD reservations, subject to an exact settled cumulative checkpoint
+and full up-front headroom under the existing US$50 campaign. Unknown/failed
+requests are not refunded. This factory is not a persistent once-only intent:
+the later operator must freeze instructions, sources, old graph, fixtures,
+pins and a unique run intent before any paid call. This offline preparation
+uses only synthetic ledgers and fake HTTP; no grant for a real run was issued.
+The initial disposition-review prompt and existing `relate` prompt are not
+instruction-identical: the initial review prompt names the relation types
+without inlining the `relate` prompt's detailed definitions. A later paired
+study must pin the exact candidate prompt/control versions and disclose that
+asymmetry; this transport boundary does not resolve it or imply a permanent
+prompt choice.
+
+The [comparison plan](plans/rationale-disposition-comparison.md) keeps the
+control instruction and semantic evaluation outside this slice.
+
 The supported request subset is deliberately narrow: nonstreaming Chat
 Completions text/function-tool messages for the host, and the existing Cairn
 adapter's Responses count/generation payloads. Wrong endpoints, models, shapes,

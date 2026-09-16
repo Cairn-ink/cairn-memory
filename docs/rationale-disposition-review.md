@@ -66,3 +66,8 @@ unchanged as development history. This closes an instruction gap before any
 fresh scored comparison; it is not evidence of improved semantic judgments.
 Matching relation definitions across future arms still compares their complete
 output protocols, not an isolated causal effect of the disposition fields.
+
+A separate [offline disposition-comparison capability](experiment-request-guard.md#closed-disposition-comparison-preparation)
+can constrain a future baseline-model comparison to this method and an
+old-graph-aware `relate` control. It does not enable automatic use, persist a
+projection, create a live-run intent or establish semantic correctness.
