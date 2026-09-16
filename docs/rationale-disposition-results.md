@@ -44,10 +44,11 @@ that the recorded decisions changed.
 
 ## Execution and limits
 
-One approved, once-only run made 24 HTTP requests: a count and generation
-request for each of 12 arms. All 12 arms completed; each persisted graph and
-cold read matched its pre-review state, and sources were unchanged. The global
-reservation was $0.12. Known usage estimates sum to $0.005847, while 12
+One approved, once-only run made 24 HTTP requests to the pinned
+`gpt-4.1-mini-2025-04-14` model: a count and generation request for each of
+12 arms. All 12 arms completed; each persisted graph and cold read matched its
+pre-review state, and sources were unchanged. The reservation delta for this
+run was $0.12. Known usage estimates sum to $0.005847, while 12
 requests have unknown cost; the reservation is **not** measured actual spend.
 All 24 request attempts settled. The retained private final report has SHA-256
 `b24012df3033438bec2f77468c9b77de3b9ab51f6ae0171f1dc3400070b6927f`.
