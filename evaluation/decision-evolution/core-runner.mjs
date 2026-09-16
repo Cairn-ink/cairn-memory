@@ -13,7 +13,7 @@ export function encodeDecisionEvent(event) {
   return `[Event ${event.id} | actor: ${event.actor} | occurred: ${event.occurredAt} | ingested: ${event.ingestedAt}] ${event.text}`;
 }
 
-export function mapDecisionReceipts(items, sourceByText) {
+export function mapDecisionReceipts(items, receiptSources) {
   const evidence = [];
   const absentReceipts = [];
   const seen = new Set();
@@ -22,20 +22,20 @@ export function mapDecisionReceipts(items, sourceByText) {
       const identity = `${item.memory.id}:${receipt.id}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
-      const sourceId = sourceByText.get(receipt.excerpt);
+      const sourceId = receiptSources.get(identity);
       if (sourceId) evidence.push({ sourceId, receiptId: receipt.id, memoryId: item.memory.id });
-      else absentReceipts.push({ receiptId: receipt.id, memoryId: item.memory.id, reason: 'unmapped-source-text' });
+      else absentReceipts.push({ receiptId: receipt.id, memoryId: item.memory.id, reason: 'unindexed-receipt' });
     }
   }
   return { evidence, absentReceipts, sourceIds: [...new Set(evidence.map(row => row.sourceId))] };
 }
 
 /** Pure DTO projection; useful for testing linked-source plumbing without creating graph edges. */
-export function mapDecisionArmEvidence(memories, arm, sourceByText) {
-  const selected = mapDecisionReceipts(memories, sourceByText);
+export function mapDecisionArmEvidence(memories, arm, receiptSources) {
+  const selected = mapDecisionReceipts(memories, receiptSources);
   if (arm !== 'rationale-evidence') return selected;
   return { ...mapDecisionReceipts(memories.flatMap(memory =>
-    [memory, ...(memory.rationale?.sources ?? [])]), sourceByText),
+    [memory, ...(memory.rationale?.sources ?? [])]), receiptSources),
   selectedSourceIds: selected.sourceIds,
   relationshipStatus: memories.some(memory => (memory.rationale?.edges?.length ?? 0) > 0)
     ? 'model-proposed' : 'unassessed-not-linked' };
@@ -67,7 +67,8 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
     const model = await modelFactory({ caseId: item.id, language: item.language });
     const path = join(mkdtempSync(join(tmpdir(), 'cairn-dei-')), 'memory.sqlite');
     const namespace = { ownerId: `dei-${item.id}`, scope: 'personal', projectId: null };
-    const sourceByText = new Map(prepared[caseIndex].map(event => [event.retained, event.id]));
+    const sourceByEventId = new Map(prepared[caseIndex].map(event => [event.id, event.retained]));
+    const receiptSources = new Map();
     const truncatedSourceIds = prepared[caseIndex].filter(event => event.truncated).map(event => event.id);
     let core = openMemoryCore({ path, model });
     const captures = [];
@@ -87,13 +88,31 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
         trace.push({ stage: `classification:${event.id}`, status: entry.classification.status,
           ...(entry.classification.error ? { error: entry.classification.error.code } : {}) });
         for (const admitted of result.value.admission.memories) {
-          const detail = core.get({ namespace, memoryId: admitted.id, receiptLimit: 100 });
-          trace.push(resultTrace(detail, `receipt:${event.id}:${admitted.id}`));
-          if (!detail.ok) { entry.receiptError = errorCode(detail); continue; }
-          for (const receipt of detail.value.receipts) {
-            const sourceId = sourceByText.get(receipt.excerpt);
-            sourceReceipts.push({ sourceId: sourceId ?? null, memoryId: admitted.id, receiptId: receipt.id,
-              eventId: event.id, excerpt: receipt.excerpt });
+          let cursor;
+          const visitedCursors = new Set();
+          for (let page = 0; ; page++) {
+            const detail = core.get({ namespace, memoryId: admitted.id, receiptLimit: 100,
+              ...(cursor ? { receiptCursor: cursor } : {}) });
+            trace.push(resultTrace(detail, `receipt:${event.id}:${admitted.id}:${page}`));
+            if (!detail.ok) { entry.receiptError = errorCode(detail); break; }
+            for (const receipt of detail.value.receipts) {
+              const identity = `${admitted.id}:${receipt.id}`;
+              if (receiptSources.has(identity)) continue;
+              const sourceId = sourceByEventId.get(receipt.eventId) === receipt.excerpt ? receipt.eventId : null;
+              receiptSources.set(identity, sourceId);
+              sourceReceipts.push({ sourceId, memoryId: admitted.id, receiptId: receipt.id,
+                eventId: receipt.eventId, excerpt: receipt.excerpt });
+            }
+            if (detail.value.exhausted) break;
+            const next = detail.value.nextReceiptCursor;
+            if (!next || visitedCursors.has(next)) {
+              entry.receiptError = 'incomplete_receipt_pagination';
+              trace.push({ stage: `receipt:${event.id}:${admitted.id}:${page + 1}`,
+                status: 'failed', error: entry.receiptError });
+              break;
+            }
+            visitedCursors.add(next);
+            cursor = next;
           }
         }
       }
@@ -117,7 +136,7 @@ export async function runDecisionEvolutionCore({ fixture, modelFactory, includeR
             sourceCoverage: { expectedEvents: item.events.length, capturedEvents: capturedSourceIds.length,
               returnedEvents: 0, unreturnedSourceIds: [...capturedSourceIds] } }; continue; }
           const value = result.value;
-          const mapped = mapDecisionArmEvidence(value.memories, arm, sourceByText);
+          const mapped = mapDecisionArmEvidence(value.memories, arm, receiptSources);
           questionArms[arm] = { status: 'ok', ...mapped,
             coverage: value.coverage ?? value.namespaces ?? 'selection-unassessed',
             sourceCoverage: { expectedEvents: item.events.length, capturedEvents: capturedSourceIds.length,

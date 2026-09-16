@@ -9,11 +9,11 @@ const refs = input => input.maps.flatMap(map => map.items.filter(item => item.ty
   (item.type === 'ref' && item.ref.childType === 'memory')).map(item => ({ namespaceIndex: map.namespaceIndex,
   ...(item.type === 'unfiled' ? item.ref : { memoryId: item.ref.childId, revision: item.ref.childRevision }),
   label: item.label })));
-function model({ selectedMemoryId = null, failText = null, calls = [] } = {}) {
+function model({ selectedMemoryId = null, failText = null, sharedSummary = false, calls = [] } = {}) {
   return { contextWindow: 8192, countTokens: () => 1,
     extract({ input }) { calls.push({ stage: 'extract', input: structuredClone(input) });
       if (failText && input.messages[0].content.includes(failText)) throw new Error('scripted failure');
-      return { items: input.messages.map(message => ({ content: message.content.slice(0, 200), kind: 'decision',
+      return { items: input.messages.map(message => ({ content: sharedSummary ? 'Shared synthetic summary' : message.content.slice(0, 200), kind: 'decision',
         confidence: 0.8, sourceIndices: [message.index] })) }; },
     classify({ input }) { calls.push({ stage: 'classify', input: structuredClone(input) });
       return { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [],
@@ -71,12 +71,16 @@ test('scripted nested rationale DTO maps linked receipts but does not infer sema
   const root = { memory: { id: 'root' }, receipts: [{ id: 'r1', excerpt: 'old' }] };
   const linked = { memory: { id: 'linked' }, receipts: [{ id: 'r2', excerpt: 'update' }] };
   root.rationale = { sources: [root, linked], edges: [{ from: 'linked', to: 'root', relation: 'supports-decision' }] };
-  const mapped = mapDecisionArmEvidence([root], 'rationale-evidence', new Map([['old', 'd1'], ['update', 'd4']]));
+  const mapped = mapDecisionArmEvidence([root], 'rationale-evidence', new Map([['root:r1', 'd1'], ['linked:r2', 'd4']]));
   assert.deepEqual(mapped.sourceIds, ['d1', 'd4']);
   assert.deepEqual(mapped.selectedSourceIds, ['d1']);
   assert.equal(mapped.relationshipStatus, 'model-proposed');
   assert.equal(mapped.evidence.length, 2);
   assert.deepEqual(mapped.absentReceipts, []);
+  const sameTextUnknownReceipt = { memory: { id: 'linked' }, receipts: [{ id: 'unknown', excerpt: 'update' }] };
+  assert.deepEqual(mapDecisionArmEvidence([sameTextUnknownReceipt], 'source-evidence',
+    new Map([['linked:r2', 'd4']])).absentReceipts,
+  [{ receiptId: 'unknown', memoryId: 'linked', reason: 'unindexed-receipt' }]);
 });
 
 test('capture carries event chronology as untrusted source text and tentative wording survives receipt', async () => {
@@ -102,6 +106,33 @@ test('failed capture remains counted, does not retry, and exposes missing source
   assert.equal(item.incompleteCapture, true);
   assert.equal(calls.filter(call => call.stage === 'extract' && call.input.messages[0].content.includes('Approval is complete')).length, 1);
   assert.equal(item.questions[0].arms.sourceSnapshot.sourceIds.includes('d4'), false);
+});
+
+test('deduplicated capture indexes stored receipt provenance once per actual event', async () => {
+  const source = only('dev-tentative-zh');
+  const item = (await run(source, { sharedSummary: true })).cases[0];
+  assert.equal(item.captures[0].admission.memories[0].id, item.captures[1].admission.memories[0].id);
+  assert.deepEqual(item.sourceReceipts.map(receipt => receipt.eventId).sort(), ['d5', 'd6']);
+  assert.deepEqual(item.sourceReceipts.map(receipt => receipt.sourceId).sort(), ['d5', 'd6']);
+  assert.equal(item.sourceReceipts.length, 2);
+  assert.deepEqual(new Set(item.questions[0].arms.sourceSnapshot.sourceIds), new Set(['d5', 'd6']));
+});
+
+test('101 ordinary captures page actual receipts without duplicates or latest-event relabeling', async () => {
+  const source = only('dev-tentative-zh');
+  source.cases[0].events = Array.from({ length: 101 }, (_, index) => ({ id: `p${index}`,
+    occurredAt: '2026-02-03', ingestedAt: '2026-02-03', actor: '怡君', text: `Source minute ${index}` }));
+  const item = (await run(source, { sharedSummary: true })).cases[0];
+  assert.equal(item.captures.length, 101);
+  assert.equal(item.sourceReceipts.length, 101);
+  assert.equal(new Set(item.sourceReceipts.map(receipt => receipt.receiptId)).size, 101);
+  assert.deepEqual(new Set(item.sourceReceipts.map(receipt => receipt.eventId)),
+    new Set(source.cases[0].events.map(event => event.id)));
+  assert.deepEqual(new Set(item.capturedSourceIds), new Set(source.cases[0].events.map(event => event.id)));
+  assert.equal(item.incompleteCapture, false);
+  assert.ok(item.trace.some(entry => entry.stage.includes('receipt:p100:') && entry.stage.endsWith(':1')));
+  assert.equal(item.questions[0].arms.sourceSnapshot.status, 'failed');
+  assert.equal(item.questions[0].arms.sourceSnapshot.error, 'context_item_too_large');
 });
 
 test('mapped but clipped receipt is explicitly incomplete, never full-source coverage', async () => {
