@@ -139,6 +139,7 @@ async function execute(options) {
   const report = { version: 1, id: ID, status: 'not_run', diagnosticOnly: true,
     limits: RATIONALE_LIMITS, fixtureSha256: FROZEN_DEV_SHA, pins, capabilitySha256: hash(capabilityBytes),
     budgetBefore: null, budgetAfter: null, attempt: null,
+    cleanup: { drain: 'not-opened', sessionClose: 'not-opened', ledgerClose: 'not-opened' },
     cases: fixture.cases.map(item => ({ caseId: item.id, status: 'not_run', result: null })) };
   const ledger = reopenExperimentBudget(ledgerConfig);
   let session, attempt;
@@ -153,11 +154,31 @@ async function execute(options) {
       checkPins: verifyBoundaries, persist: evidence,
       send: async (route, body, requestOptions) => {
         const sequence = attempt.getState().requests;
-        evidence(`http-${sequence}-request`, { route, body: JSON.parse(body) });
-        const response = await session.request(route, body, requestOptions);
-        const responseBody = JSON.parse(await response.clone().text());
-        evidence(`http-${sequence}-response`, { status: response.status, body: responseBody });
-        return response;
+        let stage = 'request-evidence', responseAvailable = false, responseStatus = null, beforeCount = null;
+        try {
+          evidence(`http-${sequence}-request`, { route, body: JSON.parse(body) });
+          stage = 'accounting-snapshot';
+          beforeCount = ledger.getState().requestCount;
+          stage = 'guarded-transport';
+          const response = await session.request(route, body, requestOptions);
+          responseAvailable = true; responseStatus = response.status;
+          stage = 'response-copy';
+          const responseBody = JSON.parse(await response.clone().text());
+          stage = 'response-evidence';
+          evidence(`http-${sequence}-response`, { status: responseStatus, body: responseBody });
+          return response;
+        } catch (error) {
+          let costStatus = 'unavailable';
+          try {
+            const state = ledger.getState();
+            if (beforeCount !== null && state.requestCount === beforeCount + 1) {
+              costStatus = state.attempts.at(-1).actualMicroUsd === null ? 'unknown' : 'known';
+            }
+          } catch { /* Never mask the original request failure. */ }
+          try { evidence(`http-${sequence}-failure`, { stage, responseAvailable, responseStatus, costStatus }); }
+          catch { /* Existing request-N-halted evidence remains the fallback. */ }
+          throw error;
+        }
       } });
     verifyBoundaries();
     writeQualifiedEvidence(ledgerConfig.directory, `${ID}-intent`, { version: 1, id: ID,
@@ -192,11 +213,18 @@ async function execute(options) {
     report.status = 'halted'; report.error = 'pilot_failed';
     if (attempt) attempt.stop();
   } finally {
-    if (attempt) await attempt.drain();
+    if (attempt) {
+      try { await attempt.drain(); report.cleanup.drain = 'completed'; }
+      catch { report.cleanup.drain = 'failed'; report.status = 'halted'; report.cleanupError = 'drain_failed'; }
+    }
     try { report.budgetAfter = summary(ledger.getState()); } catch { report.status = 'halted'; report.accountingError = 'accounting_failed'; }
     if (attempt) report.attempt = attempt.getState();
-    try { session?.close(); } catch { report.status = 'halted'; report.cleanupError = 'session_close_failed'; }
-    try { ledger.close(); } catch { report.status = 'halted'; report.cleanupError = 'ledger_close_failed'; }
+    if (session) {
+      try { session.close(); report.cleanup.sessionClose = 'completed'; }
+      catch { report.cleanup.sessionClose = 'failed'; report.status = 'halted'; report.cleanupError = 'session_close_failed'; }
+    }
+    try { ledger.close(); report.cleanup.ledgerClose = 'completed'; }
+    catch { report.cleanup.ledgerClose = 'failed'; report.status = 'halted'; report.cleanupError = 'ledger_close_failed'; }
     try { evidence('final-report', report); } catch { report.status = 'halted'; report.persistenceError = 'final_report_failed'; }
   }
   return redact(report);

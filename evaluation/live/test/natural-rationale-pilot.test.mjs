@@ -25,6 +25,9 @@ function setup(mode = 'success') {
   const fetchImpl = async (url, requestOptions) => {
     calls++;
     if (mode === 'transport') throw new Error(KEY);
+    if (mode === 'guard-invalid-json') return new Response('not-json', {
+      status: 200, headers: { 'content-type': 'application/json' },
+    });
     if (mode === 'tamper-capability') {
       const file = join(ledger.directory, 'experiment-rationale-extension.json');
       writeFileSync(file, `${readFileSync(file, 'utf8')} `);
@@ -79,6 +82,8 @@ test('NP1–3 actual core runs only four frozen dev cases through guarded fake H
   assert.ok(report.pins['evaluation/decision-evolution/natural-rationale-trace.mjs']);
   assert.ok(report.pins['core/prompts/relate-rationale.md']);
   assert.ok(readdirSync(fixture.ledger.directory).includes('natural-rationale-dev-v1-intent.json'));
+  assert.deepEqual(report.cleanup, { drain: 'completed', sessionClose: 'completed', ledgerClose: 'completed' });
+  assert.deepEqual(JSON.parse(readFileSync(join(fixture.directory, 'final-report.json'))).cleanup, report.cleanup);
 });
 
 test('NP3 malformed provider output remains a failed capture without repair', { timeout: 180000 }, async () => {
@@ -130,6 +135,25 @@ test('NP3 transport failure permanently halts and retains unknown reservation', 
   assert.equal(report.budgetAfter.unknownCostRequests, 1);
   assert.equal(report.budgetAfter.unsettled, 0);
   assert.equal(JSON.stringify(report).includes(KEY), false);
+  assert.deepEqual(report.cleanup, { drain: 'completed', sessionClose: 'completed', ledgerClose: 'completed' });
+  assert.deepEqual(JSON.parse(readFileSync(join(fixture.directory, 'http-1-failure.json'))), {
+    stage: 'guarded-transport', responseAvailable: false, responseStatus: null, costStatus: 'unknown',
+  });
+  assert.equal(readdirSync(fixture.directory).filter(name => name.startsWith('http-')).length, 2);
+});
+
+test('NP3 malformed guarded response writes a sanitized unknown-cost failure marker once', { timeout: 30000 }, async () => {
+  const fixture = setup('guard-invalid-json');
+  const report = await runNaturalRationalePilot(fixture.options);
+  assert.equal(report.status, 'halted');
+  assert.equal(fixture.calls(), 1);
+  assert.equal(report.budgetAfter.unknownCostRequests, 1);
+  assert.equal(report.budgetAfter.unsettled, 0);
+  assert.deepEqual(JSON.parse(readFileSync(join(fixture.directory, 'http-1-failure.json'))), {
+    stage: 'guarded-transport', responseAvailable: false, responseStatus: null, costStatus: 'unknown',
+  });
+  assert.deepEqual(JSON.parse(readFileSync(join(fixture.directory, 'final-report.json'))).cleanup,
+    { drain: 'completed', sessionClose: 'completed', ledgerClose: 'completed' });
 });
 
 test('NP2 old intent and changed pins prevent another HTTP call', { timeout: 180000 }, async () => {
@@ -157,6 +181,7 @@ test('NP2 mismatched checkpoint fails before transport', async () => {
   assert.equal(report.status, 'halted');
   assert.equal(fixture.calls(), 0);
   assert.equal(readdirSync(fixture.ledger.directory).includes('natural-rationale-dev-v1-intent.json'), false);
+  assert.deepEqual(report.cleanup, { drain: 'not-opened', sessionClose: 'not-opened', ledgerClose: 'completed' });
 });
 
 test('NP2 capability mutation during fake HTTP halts before a second request', { timeout: 30000 }, async () => {

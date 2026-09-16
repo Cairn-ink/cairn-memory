@@ -24,14 +24,19 @@ capability provisioning, credential discovery, production data, or retry occurs.
    capability bytes and checkpoint before dispatch and after caller-controlled
    boundaries. No unsupported host route or alternate model is allowed.
 3. Write private append-only evidence: frozen inputs, intent, every reserved
-   request, guarded response or unknown failure, all four case slots including
+   request, guarded response or a sanitized `http-N-failure` marker recording
+   only the fixed failure stage, response availability/status and known/unknown/
+   unavailable cost state. Marker persistence is best effort and must not mask
+   the original fail-stop error. Retain all four case slots including
    not-run/failed, budget before/after, known-versus-unknown actual cost and
-   cleanup status. Preserve source/model output as data, scrub the injected key
+   explicit drain/session-close/ledger-close statuses (`completed`, `failed`,
+   `not-opened`) in the final report. Preserve source/model output as data, scrub the injected key
    recursively (including malicious echoes), never emit raw errors or key in
    logs/return values. A failed HTTP, pin, persistence or accounting check halts
    permanently; drain queued calls and close session/ledger in all cases.
-4. Fake-HTTP tests cover a normal actual-core run, malformed output,
-   transport failure/permanent halt, existing intent, changed pin, mismatched
+4. Fake-HTTP tests cover a normal actual-core run, malformed output and guarded
+   response, transport failure/permanent halt, failure marker, cleanup status,
+   existing intent, changed pin, mismatched
    checkpoint, and provider key echoed in response. Tests use fresh synthetic
    ledgers and no real credential, real phase ledger or paid request. Run focused
    tests, generic validation and both Node 22.16/24 offline live-evidence gates.
