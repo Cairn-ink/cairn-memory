@@ -76,8 +76,10 @@ embedded `reviewRationale` can be used by a trusted host to re-evaluate current
 refs, but it may incur another model call. Its default append-only mode does not
 retract prior links on empty output. Trusted embedded callers may explicitly pass
 `writeMode: 'replace-reviewed'` to replace only links with both endpoints in
-their guarded reference set; this is not used by automatic capture or MCP in
-this slice. A mistaken new proposal can remove a correct old link. Correcting
+their guarded reference set. The separate local MCP
+`--rationale-review replace-reviewed-v1` opt-in exposes this same correction
+through `review_rationale`; automatic capture still never uses it. A mistaken
+new proposal can remove a correct old link. Correcting
 or forgetting source evidence invalidates related links.
 Classification/other revision changes also conservatively invalidate links.
 
@@ -90,7 +92,8 @@ fails explicitly rather than silently dropping reasons or challenges. Cursors
 bind the selected mode. The final atomic read verifies all candidate graphs
 after the last callback, including unselected roots and linked sources.
 
-The extra MCP inspection tool appears only with explicit rationale configuration;
+The extra MCP inspection tool appears only with explicit rationale configuration
+or the independent correction opt-in;
 existing five/six-tool modes are unchanged. No installer receipt flag or Hermes
 profile option is added in this slice: configure the local MCP command explicitly.
 Do not silently enable it in a Hermes configuration with the older timeout.

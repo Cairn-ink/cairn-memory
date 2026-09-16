@@ -94,6 +94,8 @@ someone who can edit your process configuration or read your database file.
 | recall_memory | query, optional limit (1–12), includeQualification | Same bounded model-driven core recall; source qualification defaults on with qualified capture |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
+| review_rationale (independent opt-in only) | refs of 1–6 distinct current memoryId/revision pairs | Explicit model re-review; atomically replaces proposed links only between supplied refs |
+| inspect_rationale (rationale opt-in only) | memoryId/revision, optional view | Keyless inspection of bounded linked sources and unverified proposals |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
@@ -106,6 +108,35 @@ Tool results carry the core success/error envelope as JSON text. Memory content
 and receipts are explicitly untrusted data, not instructions for the client.
 Tool receipt text is the supplied assertion, not proof that the assertion is true
 or an authenticated transcript of what a human said.
+
+### Explicit rationale correction
+
+Start with `--rationale-review replace-reviewed-v1` to expose `review_rationale`
+and keyless `inspect_rationale` independently of submitted capture. The flag
+does not enable capture, staged retention or automatic re-review. It can be
+combined with `--capture-rationale source-bound-v1`; inspection appears once,
+and the capture pass remains append-only. Without a model key, inspection still
+works but review returns `model_not_configured`. `--check-config` validates the
+flag without opening a database or contacting a provider; it cannot verify the
+model or credentials.
+
+After inspecting current IDs and revisions, call `review_rationale` only on
+explicit user intent with `{"refs":[{"memoryId":"...","revision":1}]}`. The
+strict tool accepts 1–6 distinct refs in the startup namespace; callers cannot
+choose a namespace, model mode, deletion scope or proposed verdict. It sends
+their complete bounded retained source excerpts and submitted roles to the
+configured model, so each call may incur cost; this host has no spending cap or
+automatic retry. An invalid, stale or foreign ref fails without a model call.
+
+The result reports `proposed`, `inserted`, `removed`, `writeMode` and
+`indexRevision`. A valid empty model output removes only proposals whose two
+endpoints are among the guarded refs. Crossing and unrelated links, original
+sources, qualifications and placement remain. A mistaken new interpretation
+can remove a correct old proposal; no source or relation type proves semantic
+truth. `unassessed` after a challenge disappears is not confirmation, changed
+decision, consent or execution permission. The review tool is writable,
+destructive and open-world; inspection is read-only and keyless. Neither hosted
+HTTP nor default local tool discovery changes.
 
 If a trusted local caller uses [core supersession](supersession.md), inspection
 also includes labeled historical memories. List pages remain metadata-only;

@@ -100,8 +100,12 @@ default. The local MCP opt-in above now uses this boundary; hosted HTTP is uncha
 Embedded callers may explicitly choose `writeMode: 'replace-reviewed'` for a
 bounded correction of proposed links. Only edges with both endpoints in the
 current, exact-namespace guarded reference set can be replaced; crossing and
-unrelated edges remain. The default and automatic-capture modes stay append-only,
-and neither MCP nor hosted HTTP accepts this new input in this slice. An empty
+unrelated edges remain. The default and automatic-capture modes stay append-only.
+Local stdio MCP exposes this mode only with separate
+`--rationale-review replace-reviewed-v1`, binding strict refs to the fixed
+startup namespace and sending source-only evidence to the configured model.
+It also exposes keyless inspection, without enabling capture or source staging.
+Hosted HTTP remains unchanged. An empty
 replacement withdraws in-scope proposals, not source evidence or the underlying
 memory. It does not confirm a decision. A mistaken new model output can also
 withdraw a correct proposal; relation metadata is not semantic truth or

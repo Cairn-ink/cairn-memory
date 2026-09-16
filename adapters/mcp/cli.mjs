@@ -13,6 +13,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
+  cairn-memory --db PATH --owner ID [--project ID] --rationale-review replace-reviewed-v1
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
@@ -56,13 +57,21 @@ It attempts proposed rationale after saving/classification and adds keyless insp
 Check the separate rationale status; duplicate batches do not repeat this pass.
 Allow at least 180 seconds for opted-in capture (four bounded model stages).
 recall_memory contextMode rationale-evidence includes linked unverified evidence.
+--rationale-review replace-reviewed-v1 independently adds review_rationale and
+keyless inspect_rationale; it enables no capture or staged retention. Review only
+on explicit user intent after inspecting current IDs/revisions. It sends retained
+source excerpts and submitted roles to the configured model and may incur cost per
+call; this host has no spending cap or retry. Empty valid output withdraws only
+links between reviewed refs, not source evidence. A mistaken model output can
+remove correct links. Unassessed is not confirmation or execution permission.
+Without a model key, inspection works but review returns model_not_configured.
 Save only on actual user intent. Remembered consent is not execution authority.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
 `;
 
 export function parseConfiguration(args) {
-  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
+  const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale', '--rationale-review',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
@@ -81,6 +90,9 @@ export function parseConfiguration(args) {
   }
   if (values.has('--capture-rationale') && (values.get('--capture-rationale') !== 'source-bound-v1' ||
       values.get('--capture-qualification') !== 'source-bound-v2')) throw new Error('invalid_mcp_configuration');
+  if (values.has('--rationale-review') && values.get('--rationale-review') !== 'replace-reviewed-v1') {
+    throw new Error('invalid_mcp_configuration');
+  }
   if (values.has('--capture-evidence') && (values.get('--capture-evidence') !== 'staged-v1' ||
       values.get('--capture-qualification') !== 'source-bound-v2')) throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-evidence-access') && values.get('--capture-evidence-access') !== 'staged-v1') {
@@ -93,6 +105,7 @@ export function parseConfiguration(args) {
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
     ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
+    ...(values.has('--rationale-review') ? { rationaleReview: values.get('--rationale-review') } : {}),
     ...(values.has('--capture-evidence') ? { captureEvidence: values.get('--capture-evidence') } : {}),
     ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}),
     ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}) };
@@ -120,6 +133,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       databaseOpened: false, providerContacted: false,
       ...(config.captureRationale ? { captureRationale: config.captureRationale,
         rationale: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
+      ...(config.rationaleReview ? { rationaleReview: config.rationaleReview,
+        reviewRationale: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
       ...(config.captureEvidence ? { captureEvidence: config.captureEvidence } : {}),
       ...(config.captureEvidence || config.captureEvidenceAccess ? {
         captureEvidenceAccess: 'staged-v1', stagedRetentionEnabled: Boolean(config.captureEvidence),

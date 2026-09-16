@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — explicit local MCP rationale re-review
+
+- Independent `--rationale-review replace-reviewed-v1` exposes a strict,
+  startup-namespace-bound `review_rationale` tool and keyless inspection. It
+  uses the embedded bounded replacement mode, not a second engine or model port.
+- Automatic capture stays append-only, default tool sets stay unchanged, and
+  no capture retention, hosted wire field or provider spending grant is added.
+  Proposed links remain unverified; empty or mistaken re-review can withdraw
+  in-scope links without changing source records.
+
 ## Unreleased — explicit bounded rationale replacement
 
 - Embedded `reviewRationale` accepts opt-in `writeMode: 'replace-reviewed'` to

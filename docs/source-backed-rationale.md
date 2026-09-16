@@ -42,7 +42,10 @@ set but were not proposed, preserves crossing and unrelated links, and inserts
 new proposals atomically. A valid empty output clears only those in-scope links.
 The response adds `writeMode` and `removed` to the existing counters only in
 this mode; identical re-review leaves the namespace index revision unchanged.
-The default response and automatic capture remain append-only. No replay ledger
+The local stdio host separately exposes this mode only with explicit
+`--rationale-review replace-reviewed-v1` and a strict current-ref tool. It
+does not enable capture; keyless inspection is available alongside it. The
+default response and automatic capture remain append-only. No replay ledger
 or historical edge record is created. This is model-proposal correction, not
 edge adjudication or source correction; correction or forgetting of actual
 source evidence still invalidates links.
