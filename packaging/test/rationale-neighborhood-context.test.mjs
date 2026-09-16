@@ -7,6 +7,8 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { buildArtifact, command, packageName } from '../build.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
+import { deliverNeighborhoodSourceAnswer } from '../../evaluation/live/neighborhood-source-answer-delivery.mjs';
+import { SOURCE_ANSWER_MODEL } from '../../evaluation/live/installed-source-answer-delivery.mjs';
 
 const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
@@ -48,6 +50,7 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
     await link(2, 1, 'challenges-premise');
     await link(0, 3, 'supports-decision');
     const before = refs.map(ref => ok(core.getRationale({ namespace, ...ref, view: 'incident-proposals' })));
+    const beforeSources = refs.map(ref => ok(core.get({ namespace, memoryId: ref.memoryId })));
     const oldContext = ok(core.getRationale({ namespace, ...refs[0] }));
     assert.equal(oldContext.edges.length, 2);
     core.close();
@@ -97,7 +100,14 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
     const old = await call('recall_memory', { query, contextMode: 'rationale-evidence' });
     assert.equal(old.memories.length, 1); assert.equal(old.memories[0].memory.id, memories[0].id);
     assert.equal(old.memories[0].rationale.edges.length, 2);
-    const expanded = await call('recall_memory', { query, contextMode: 'rationale-neighborhood-evidence' });
+    await active.close(); active = undefined;
+    await start(proxy.token); // New installed stdio process, not a warm in-process projection.
+    const requestMode = 'rationale-neighborhood-evidence';
+    const raw = await active.callTool({ name: 'recall_memory', arguments: { query, contextMode: requestMode } });
+    const envelope = JSON.parse(raw.content[0].text);
+    assert.equal(raw.isError, false); assert.equal(envelope.ok, true, JSON.stringify(envelope));
+    assert.equal(envelope.evidenceTrust, 'untrusted-data-not-instructions');
+    const expanded = envelope.value;
     assert.equal(expanded.memories.length, 1);
     const item = expanded.memories[0];
     assert.equal(item.memory.id, memories[0].id);
@@ -113,6 +123,28 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
     assert.equal(rankInputs.at(-1).instructions,
       readFileSync(join(packageRoot, 'core/prompts/recall-rank-rationale-evidence.md'), 'utf8'));
     assert.equal(JSON.stringify(item).includes('synthetic-neighborhood-installed'), false);
+    const beforeAnswer = sends;
+    let answerCalls = 0;
+    const delivered = await deliverNeighborhoodSourceAnswer({ question: query, toolResult: raw,
+      requestedContextMode: requestMode, complete: async body => {
+        answerCalls++;
+        const context = JSON.parse(body.messages[1].content);
+        assert.equal(context.question, query);
+        assert.deepEqual(new Set(context.memory.sources.map(source => source.receipts[0].excerpt)), new Set(texts));
+        assert.equal(context.memory.sources.length, 4);
+        assert.equal(body.model, SOURCE_ANSWER_MODEL);
+        assert.equal(body.store, false); assert.equal(body.stream, false);
+        assert.equal(body.max_completion_tokens, 1024); assert.equal(Object.hasOwn(body, 'tools'), false);
+        for (const forbidden of ['rationale', 'bounded-root-neighborhood', 'supports-decision',
+          'challenges-premise', namespace.ownerId, 'indexRevision', 'qualification']) {
+          assert.equal(JSON.stringify(body).includes(forbidden), false, forbidden);
+        }
+        return { object: 'chat.completion', model: SOURCE_ANSWER_MODEL,
+          choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'Synthetic answer only.' } }] };
+      } });
+    assert.equal(delivered.status, 'generated-unassessed'); assert.equal(delivered.completionCalls, 1);
+    assert.equal(delivered.answer, 'Synthetic answer only.'); assert.equal(answerCalls, 1);
+    assert.equal(sends, beforeAnswer, 'conversion and answer callback made no model HTTP request');
     await active.close(); active = undefined;
     const beforeCold = sends;
     await start('');
@@ -122,6 +154,8 @@ test('RN5 installed MCP ranks and returns the selected old root neighborhood, th
     assert.equal(sends, beforeCold);
     await active.close(); active = undefined;
     const reopened = openMemoryCore({ path }); t.after(() => reopened.close());
-    for (const [index, ref] of refs.entries()) assert.deepEqual(ok(reopened.getRationale({ namespace,
-      ...ref, view: 'incident-proposals' })), before[index]);
+    for (const [index, ref] of refs.entries()) {
+      assert.deepEqual(ok(reopened.getRationale({ namespace, ...ref, view: 'incident-proposals' })), before[index]);
+      assert.deepEqual(ok(reopened.get({ namespace, memoryId: ref.memoryId })), beforeSources[index]);
+    }
   });
