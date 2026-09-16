@@ -95,3 +95,23 @@ The initial disposition prompt and existing `relate` prompt differ in their
 inline relation definitions. This transport slice neither changes either
 prompt nor makes a fairness claim; a later comparison must pin and disclose
 the exact instruction versions before fresh scored cases or paid requests.
+
+## Pre-freeze request-byte correction
+
+Independent Standards review identified a gap between parsed JSON validation
+and the unchanged bytes forwarded by the new comparison guard. A synthetic
+temporary-ledger regression reproduced that the prior candidate accepted a
+non-round-tripping request before this correction. The guard now rejects, for
+the disposition-comparison kind only, outer request and nested input text that
+do not exactly round-trip through JSON parsing and serialization. It never
+normalizes or rewrites provider bytes; older grant code paths are unchanged.
+The regression checks both methods and both phases, including hidden duplicate
+fields and noncanonical whitespace/escaping/numbers, with zero HTTP and zero
+reservation. The valid real-adapter fake transport still passes unchanged.
+
+Corrected candidate verification on both Node 22.16 and 24.15: focused DP
+11/11, combined experiment-budget/guard 113/113, ordinary live-offline 265
+passed with 30 intentional skips. `git diff --check` passed. The prior installed
+rationale wire, generic, JSON and demo evidence pertains to the preceding
+candidate; primary separately owns any final combined gates and fixed-diff
+reviews. No real key, shared ledger or provider request was used.

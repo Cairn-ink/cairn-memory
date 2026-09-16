@@ -290,6 +290,11 @@ source-and-unverified-old-edge input shape; each method's output schema must
 match its own request-scoped schema. Host completion, other models, methods,
 unbound ledgers and cross-kind tokens fail before reservation. The capability
 file and checkpoint are rechecked after request accessors and before spend.
+For this grant only, the outer request and nested `input_text` must also equal
+their parsed JSON reserialization byte-for-byte. Duplicate keys, alternate
+whitespace/escaping and lossy numeric forms fail closed before reservation;
+the guard does not rewrite and forward a different request. Existing grants
+retain their prior behavior.
 
 The separately named `createDispositionComparisonLiveSession` exposes only
 those two routes and methods. `createDispositionComparisonAttempt` adds a

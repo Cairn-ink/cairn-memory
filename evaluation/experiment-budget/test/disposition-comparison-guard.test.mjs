@@ -108,6 +108,33 @@ test('DP2 both methods accept the same valid empty-old-edge input without requir
   assert.ok(calls.every(call => JSON.parse(call.parsed.input[0].content[0].text).oldEdges.length === 0));
 });
 
+test('DP2 raw request and nested input must round-trip without hidden keys or lossy JSON', async t => {
+  const calls = [], f = fixture(t, fake(calls));
+  const guard = createDispositionComparisonExperimentRequestGuard(f.config); t.after(() => guard.close());
+  const duplicate = (key, first, serialized) =>
+    `{${JSON.stringify(key)}:${JSON.stringify(first)},${serialized.slice(1)}`;
+  for (const method of ['relate', 'reviewRationaleDispositions']) for (const generation of [false, true]) {
+    const valid = body(method, generation), canonical = JSON.stringify(valid);
+    const nested = JSON.stringify(input());
+    const rawCases = [
+      duplicate('input', [{ role: 'user', content: [{ type: 'input_text', text: 'hidden private input' }] }], canonical),
+      duplicate('instructions', 'hidden private instructions', canonical),
+      duplicate('text', { format: { name: 'cairn_extract' } }, canonical),
+      JSON.stringify({ ...valid, input: [{ ...valid.input[0], content: [{ ...valid.input[0].content[0],
+        text: duplicate('memories', 'hidden private memories', nested) }] }] }),
+      ` ${canonical}`,
+      canonical.replace('"model"', '"\\u006dodel"'),
+      ...(generation ? [canonical.replace('"max_output_tokens":1024', '"max_output_tokens":1024.0')] : []),
+    ];
+    for (const raw of rawCases) {
+      assert.notEqual(raw, canonical);
+      await assert.rejects(guard.cairnFetch(route(generation), { ...request(valid), body: raw }));
+      assert.equal(guard.getState().requestCount, 0);
+      assert.equal(calls.length, 0);
+    }
+  }
+});
+
 test('DP1–3 old grants deny disposition; new grant denies host, model, method, shape and schema before spend', async t => {
   const f = fixture(t), guard = createDispositionComparisonExperimentRequestGuard(f.config);
   t.after(() => guard.close());
