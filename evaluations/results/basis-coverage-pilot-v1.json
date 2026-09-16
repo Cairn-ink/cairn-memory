@@ -1,0 +1,3265 @@
+{
+  "version": 1,
+  "id": "basis-coverage-pilot-v1",
+  "status": "completed_with_failures",
+  "sourceHead": "28a403f1fbd91064cc168c6d20e1f66fe9ad69bc",
+  "rawReportSha256": "eea44bd6ce56c58779e1442eba953b35ab612e91b749408e8524a8914ccc08b9",
+  "semanticReview": "required-not-inferred",
+  "comparison": "workflow-cost-quality; not equal-compute or held-out",
+  "model": "gpt-5.6-luna",
+  "reasoning": "none",
+  "fixtureSha256": "f930f4e6f15cc0c6c6ab8935aeb069a91c862d56fa372b7f6383c5f43ac654fa",
+  "rubricSha256": "6ecdd2fdb881d22e6293f3ce2335f09f9843da7fcfd662e7f5808df9e7184fca",
+  "sourcePins": {
+    "evaluation/live/qualification-pilot-fixture.json": "2f9859d309b145253bb6b37060a0723111045a0f9ad50ad42e095343ba40fec5",
+    "evaluation/live/qualification-pilot.mjs": "b3f0b1b0a4617a8a08b32134128070071d6d3754909877581d738c5006880489",
+    "evaluation/live/qualification-pilot-attempt.mjs": "019cb40443f7cd160789be29af9f4d4de67a67a2ad1018308615ce0253cdefcc",
+    "evaluation/live/qualification-session.mjs": "9ace7773e3e4d3df36d0abcb4630a4c41df6091ef6860f459f8dcf9a44e49c72",
+    "evaluation/live/session.mjs": "0b6b92905ba26bc5206eec6044714a76b6e36b8f51b2a37b88ec8948ba8248cf",
+    "evaluation/live/proxy.mjs": "7000b7a050303c70e9b68da235e1bfb553479f18eca7492458ad61933e3c4584",
+    "evaluation/live/cairn-launcher.mjs": "bf8314d0015393b07aacee49d39db12e0dc0b1f8bc4aadf8337f1ba65eb3280b",
+    "evaluation/live/installed-capture-support.mjs": "5c3ecb193ef04712c02693dc1406dd1c0be74b56ef54db22cee64ceac15590ad",
+    "evaluation/live/qualified-attempt.mjs": "b76cffdb438aa067f4ebe3c3e9a2389b345c46d4ebc5012888f80bd477261872",
+    "evaluation/experiment-budget/request-guard.mjs": "c20d2cf8a52aa3ebaf52d376133843f8210c95f7184d21440080d220c37a2bb1",
+    "evaluation/experiment-budget/index.mjs": "b3b8670607e9b433d3d11e09293541019f9d6b5b46752d30b621a3687df33f14",
+    "adapters/openai/index.mjs": "8077cf6b829d23867ff4afdebd53f7bf4a503da35e532506a639424a76078c44",
+    "adapters/openai/profiles.mjs": "1f06b7bcb09854d0ab54178d35cfbbeeaa1b6efd2894aba0b4a0ed3f1a737df7",
+    "adapters/openai/schemas.mjs": "31e29e617a04cc386f2208645cf1a07aef80e38853a459c821a4c5ea5eddd67c",
+    "adapters/openai/package.json": "ebc48d443e15987cd85e729e884d191378602cadf1f9e2577606f7e027cda85a",
+    "adapters/openai/package-lock.json": "48ce434b6e14e07f22412d7cec7b96054b10f69e3d14a5158af7ba5865ea2b69",
+    "adapters/mcp/package.json": "99d9909daec5472997edfce265d18eea75e67024d88da673c59ab60c37773906",
+    "adapters/mcp/package-lock.json": "92163766358ffc4c8c746982dc73b6e36850f96024126922fa63a37a82cb899a",
+    "core/validation.mjs": "24dd753b3005c6f7136e9bc1204aeae37f03a4a11bba8b6a713433d8127622d2",
+    "core/model-diagnostics.mjs": "b23d4de8e61b4b44049f46bd0b800eed4368b418082863cb61df019a982e9b47",
+    "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
+    "evaluation/live/basis-coverage-fixture.json": "f930f4e6f15cc0c6c6ab8935aeb069a91c862d56fa372b7f6383c5f43ac654fa",
+    "evaluation/live/basis-coverage-rubric.json": "6ecdd2fdb881d22e6293f3ce2335f09f9843da7fcfd662e7f5808df9e7184fca",
+    "docs/basis-coverage-pilot.md": "7aaa47d59c2c2275e87c6a1ca45e50c7c244c4a7261bd03c7edcb77092828fdf",
+    "evaluation/live/basis-coverage-pilot.mjs": "4c9b81c8dfb2fd5858d380b0c000ec7ca75e9fed4393a650775f51bb940f7fa7",
+    "evaluation/live/basis-coverage-attempt.mjs": "4fe2be128023611ef5f255a3362a6bc5582867d1c22a4f1f4b9efe4f5975e6c4",
+    "core/source-basis.mjs": "68333712ae1ddb5bc469f7c9bc5884500120a233c09587e0bb61842e12907311",
+    "core/source-addresses.mjs": "c7563f6dabb27600c087614a7a9da9e753e1ff46e3f1424df3406b8d05b70562",
+    "core/model-call.mjs": "c1508f8671ca1da1e418f34f32507ea3f447ea15ff737e003fb6744a05d1e34b",
+    "core/model-budget.mjs": "ab1eb8ca87bf6937e8ba9039518786668dc9337bb3b9062eed4477809dec1e8a",
+    "core/prompts/review-decision-basis.md": "f093fcf3f5623023dadef6a04a63f725ad178dbb7ffbbb55237bcda1dcb6f44e",
+    "core/prompts/review-addressed-basis.md": "68805f6ef62ff086bd7be0fb1f18a622c914bf0029e8e303148d2738a2666670"
+  },
+  "limits": {
+    "requests": 80,
+    "microUsd": 240000,
+    "reservationMicroUsd": 3000,
+    "expectedRequests": 64,
+    "slots": 16
+  },
+  "budgetBefore": {
+    "requestCount": 2157,
+    "reservedMicroUsd": 24986000,
+    "knownUsageMicroUsd": 1361273,
+    "unknownCostRequests": 1004,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "budgetAfter": {
+    "requestCount": 2219,
+    "reservedMicroUsd": 25172000,
+    "knownUsageMicroUsd": 1371370,
+    "unknownCostRequests": 1035,
+    "unsettled": 0,
+    "limitMicroUsd": 50000000,
+    "requestCap": 5000,
+    "state": "open"
+  },
+  "attempt": {
+    "requests": 62,
+    "reservedMicroUsd": 186000,
+    "halted": false
+  },
+  "wire": {
+    "countRequests": 31,
+    "generationRequests": 31,
+    "pricedGenerations": 31,
+    "inputTokens": 23960,
+    "outputTokens": 3404,
+    "estimatedGenerationMicroUsd": 10074.8,
+    "countRequestCost": "unknown_without_usage"
+  },
+  "slots": [
+    {
+      "caseId": "battery-stylus-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 6742,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 791,
+        "outputTokens": 160,
+        "estimatedGenerationMicroUsd": 389.75,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 6732,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 791,
+            "outputTokens": 160,
+            "estimatedGenerationMicroUsd": 389.75,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "我選了青岚平板",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "電池可以用十二小時",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "支援手寫筆",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "現在青岚平板的電池只能用五小時",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 1,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 7,
+                  "text": "我選了青岚平板"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 10,
+                  "end": 19,
+                  "text": "電池可以用十二小時"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 22,
+                  "end": 27,
+                  "text": "支援手寫筆"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 0,
+                  "end": 15,
+                  "text": "現在青岚平板的電池只能用五小時"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 1,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "battery-stylus-zh",
+      "arm": "coverage",
+      "status": "completed",
+      "durationMs": 9051,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2328,
+        "outputTokens": 301,
+        "estimatedGenerationMicroUsd": 943.2,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled",
+          "durationMs": 4120,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 687,
+            "outputTokens": 119,
+            "estimatedGenerationMicroUsd": 314.54999999999995,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "我選了青岚平板",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為電池可以用十二小時",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "而且支援手寫筆",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 7,
+                  "text": "我選了青岚平板"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 8,
+                  "end": 19,
+                  "text": "因為電池可以用十二小時"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 20,
+                  "end": 27,
+                  "text": "而且支援手寫筆"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled_empty",
+          "durationMs": 2056,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 693,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 194.85,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        },
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 2856,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 948,
+            "outputTokens": 164,
+            "estimatedGenerationMicroUsd": 433.79999999999995,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "我選了青岚平板",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為電池可以用十二小時",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "而且支援手寫筆",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "現在青岚平板的電池只能用五小時",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 1,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 7,
+                  "text": "我選了青岚平板"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 8,
+                  "end": 19,
+                  "text": "因為電池可以用十二小時"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 20,
+                  "end": 27,
+                  "text": "而且支援手寫筆"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 0,
+                  "end": 15,
+                  "text": "現在青岚平板的電池只能用五小時"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 1,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "different-actors",
+      "arm": "coverage",
+      "status": "completed",
+      "durationMs": 9021,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2347,
+        "outputTokens": 389,
+        "estimatedGenerationMicroUsd": 1053.55,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled",
+          "durationMs": 2629,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 683,
+            "outputTokens": 136,
+            "estimatedGenerationMicroUsd": 333.95,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Lin chose the bay ferry because it carries bicycles.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it carries bicycles",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "I chose the hill bus because it runs after midnight.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it runs after midnight",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 52,
+                  "text": "Lin chose the bay ferry because it carries bicycles."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 32,
+                  "end": 51,
+                  "text": "it carries bicycles"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 53,
+                  "end": 105,
+                  "text": "I chose the hill bus because it runs after midnight."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 82,
+                  "end": 104,
+                  "text": "it runs after midnight"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled",
+          "durationMs": 2028,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 687,
+            "outputTokens": 42,
+            "estimatedGenerationMicroUsd": 222.15,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Neither of us has chosen a replacement.",
+                "role": "premise"
+              }
+            ],
+            "links": []
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 84,
+                  "end": 123,
+                  "text": "Neither of us has chosen a replacement."
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": []
+          }
+        },
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 4343,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 977,
+            "outputTokens": 211,
+            "estimatedGenerationMicroUsd": 497.45,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Lin chose the bay ferry",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it carries bicycles",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "I chose the hill bus",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it runs after midnight",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "The hill bus no longer runs after midnight.",
+                "role": "update"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "Lin's bay ferry still carries bicycles.",
+                "role": "update"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "Neither of us has chosen a replacement.",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 4,
+                "to": 3,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 23,
+                  "text": "Lin chose the bay ferry"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 32,
+                  "end": 51,
+                  "text": "it carries bicycles"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 53,
+                  "end": 73,
+                  "text": "I chose the hill bus"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 82,
+                  "end": 104,
+                  "text": "it runs after midnight"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 4,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 0,
+                  "end": 43,
+                  "text": "The hill bus no longer runs after midnight."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 5,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 44,
+                  "end": 83,
+                  "text": "Lin's bay ferry still carries bicycles."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 6,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 84,
+                  "end": 123,
+                  "text": "Neither of us has chosen a replacement."
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 4,
+                "to": 3,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "different-actors",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 4255,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 780,
+        "outputTokens": 175,
+        "estimatedGenerationMicroUsd": 405,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 4245,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 780,
+            "outputTokens": 175,
+            "estimatedGenerationMicroUsd": 405,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "I chose the hill bus because it runs after midnight.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it runs after midnight",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "The hill bus no longer runs after midnight.",
+                "role": "update"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Lin chose the bay ferry because it carries bicycles.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it carries bicycles",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 1,
+                "relation": "challenges-current-basis"
+              },
+              {
+                "from": 4,
+                "to": 3,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 53,
+                  "end": 105,
+                  "text": "I chose the hill bus because it runs after midnight."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 82,
+                  "end": 104,
+                  "text": "it runs after midnight"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 0,
+                  "end": 43,
+                  "text": "The hill bus no longer runs after midnight."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 52,
+                  "text": "Lin chose the bay ferry because it carries bicycles."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 4,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 32,
+                  "end": 51,
+                  "text": "it carries bicycles"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 1,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 4,
+                "to": 3,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "considering-career-zh",
+      "arm": "baseline",
+      "status": "failed",
+      "durationMs": 3307,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 786,
+        "outputTokens": 118,
+        "estimatedGenerationMicroUsd": 338.1,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "raw_invalid",
+          "durationMs": 3297,
+          "error": "invalid_model_output",
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 786,
+            "outputTokens": 118,
+            "estimatedGenerationMicroUsd": 338.1,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "今天帶新人很累，我正在考慮改做個人貢獻者，但還沒有決定。",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "睡了一晚後帶新人沒那麼累；我仍在考慮，沒有作出轉職決定。",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": null
+        }
+      ]
+    },
+    {
+      "caseId": "considering-career-zh",
+      "arm": "coverage",
+      "status": "failed",
+      "durationMs": 7492,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2245,
+        "outputTokens": 154,
+        "estimatedGenerationMicroUsd": 746.05,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled_empty",
+          "durationMs": 1658,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 687,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 193.35,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled_empty",
+          "durationMs": 3550,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 688,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 193.6,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        },
+        {
+          "name": "global",
+          "status": "raw_invalid",
+          "durationMs": 2265,
+          "error": "invalid_model_output",
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 870,
+            "outputTokens": 118,
+            "estimatedGenerationMicroUsd": 359.1,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "今天帶新人很累，我正在考慮改做個人貢獻者，但還沒有決定。",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "睡了一晚後帶新人沒那麼累；我仍在考慮，沒有作出轉職決定。",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": null
+        }
+      ]
+    },
+    {
+      "caseId": "unadopted-advice",
+      "arm": "coverage",
+      "status": "completed",
+      "durationMs": 5875,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2216,
+        "outputTokens": 54,
+        "estimatedGenerationMicroUsd": 618.8,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled_empty",
+          "durationMs": 1466,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 682,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 192.1,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled_empty",
+          "durationMs": 1495,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 679,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 191.35,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        },
+        {
+          "name": "global",
+          "status": "compiled_empty",
+          "durationMs": 2896,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 855,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 235.35,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "unadopted-advice",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 1728,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 771,
+        "outputTokens": 18,
+        "estimatedGenerationMicroUsd": 214.35,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled_empty",
+          "durationMs": 1718,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 771,
+            "outputTokens": 18,
+            "estimatedGenerationMicroUsd": 214.35,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [],
+            "links": []
+          },
+          "compiled": {
+            "units": [],
+            "links": []
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "stale-report-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 2681,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 812,
+        "outputTokens": 117,
+        "estimatedGenerationMicroUsd": 343.4,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 2672,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 812,
+            "outputTokens": 117,
+            "estimatedGenerationMicroUsd": 343.4,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "九月十二日我選了山泉印表機",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為九月十日更新後已能雙面列印",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "我今天再次確認它仍能雙面列印",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 13,
+                  "text": "九月十二日我選了山泉印表機"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 14,
+                  "end": 29,
+                  "text": "因為九月十日更新後已能雙面列印"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 43,
+                  "end": 57,
+                  "text": "我今天再次確認它仍能雙面列印"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "stale-report-zh",
+      "arm": "coverage",
+      "status": "completed",
+      "durationMs": 7385,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2421,
+        "outputTokens": 361,
+        "estimatedGenerationMicroUsd": 1038.45,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled",
+          "durationMs": 2198,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 690,
+            "outputTokens": 91,
+            "estimatedGenerationMicroUsd": 281.7,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "九月十二日我選了山泉印表機",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為九月十日更新後已能雙面列印",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 13,
+                  "text": "九月十二日我選了山泉印表機"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 14,
+                  "end": 29,
+                  "text": "因為九月十日更新後已能雙面列印"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled",
+          "durationMs": 2187,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 711,
+            "outputTokens": 84,
+            "estimatedGenerationMicroUsd": 278.55,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "山泉印表機當時不能雙面列印；那是在九月十日更新以前。",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "我今天再次確認它仍能雙面列印。",
+                "role": "update"
+              }
+            ],
+            "links": []
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 17,
+                  "end": 43,
+                  "text": "山泉印表機當時不能雙面列印；那是在九月十日更新以前。"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 43,
+                  "end": 58,
+                  "text": "我今天再次確認它仍能雙面列印。"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": []
+          }
+        },
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 2982,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 1020,
+            "outputTokens": 186,
+            "estimatedGenerationMicroUsd": 478.2,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "九月十二日我選了山泉印表機",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為九月十日更新後已能雙面列印",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "山泉印表機當時不能雙面列印；那是在九月十日更新以前。",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "我今天再次確認它仍能雙面列印。",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 13,
+                  "text": "九月十二日我選了山泉印表機"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 14,
+                  "end": 29,
+                  "text": "因為九月十日更新後已能雙面列印"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 17,
+                  "end": 43,
+                  "text": "山泉印表機當時不能雙面列印；那是在九月十日更新以前。"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 43,
+                  "end": 58,
+                  "text": "我今天再次確認它仍能雙面列印。"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "explicit-replacement",
+      "arm": "coverage",
+      "status": "failed",
+      "durationMs": 5030,
+      "wire": {
+        "countRequests": 2,
+        "generationRequests": 2,
+        "pricedGenerations": 2,
+        "inputTokens": 1397,
+        "outputTokens": 316,
+        "estimatedGenerationMicroUsd": 728.45,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled",
+          "durationMs": 2172,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 681,
+            "outputTokens": 112,
+            "estimatedGenerationMicroUsd": 304.65,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Our team chose vendor A",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "because its price was $80 monthly",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "its quality passed our tests",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 23,
+                  "text": "Our team chose vendor A"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 24,
+                  "end": 57,
+                  "text": "because its price was $80 monthly"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 62,
+                  "end": 90,
+                  "text": "its quality passed our tests"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "raw_invalid",
+          "durationMs": 2844,
+          "error": "invalid_model_output",
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 716,
+            "outputTokens": 204,
+            "estimatedGenerationMicroUsd": 423.79999999999995,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Our sponsor explicitly approved replacing A with vendor B because B costs $85 monthly and passed our tests. B is our adopted vendor now.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "A raised its price to $130",
+                "role": "update"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "its quality now fails our tests",
+                "role": "update"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "B costs $85 monthly",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "passed our tests",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "challenges-current-basis"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "challenges-current-basis"
+              },
+              {
+                "from": 3,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 4,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": null
+        },
+        {
+          "name": "global",
+          "status": "not_run",
+          "durationMs": null,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 0,
+          "wire": {
+            "countRequests": 0,
+            "generationRequests": 0,
+            "pricedGenerations": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "estimatedGenerationMicroUsd": 0,
+            "countRequestCost": "none"
+          },
+          "proposal": {
+            "state": "not_generated"
+          },
+          "compiled": null
+        }
+      ]
+    },
+    {
+      "caseId": "explicit-replacement",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 3574,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 807,
+        "outputTokens": 262,
+        "estimatedGenerationMicroUsd": 516.15,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 3565,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 807,
+            "outputTokens": 262,
+            "estimatedGenerationMicroUsd": 516.15,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Our team chose vendor A because its price was $80 monthly and its quality passed our tests.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "its price was $80 monthly",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "its quality passed our tests",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "A raised its price to $130",
+                "role": "update"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "its quality now fails our tests",
+                "role": "update"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "Our sponsor explicitly approved replacing A with vendor B",
+                "role": "decision"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "B costs $85 monthly and passed our tests",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 1,
+                "relation": "challenges-current-basis"
+              },
+              {
+                "from": 4,
+                "to": 2,
+                "relation": "challenges-current-basis"
+              },
+              {
+                "from": 6,
+                "to": 5,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 91,
+                  "text": "Our team chose vendor A because its price was $80 monthly and its quality passed our tests."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 32,
+                  "end": 57,
+                  "text": "its price was $80 monthly"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 62,
+                  "end": 90,
+                  "text": "its quality passed our tests"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 32,
+                  "end": 58,
+                  "text": "A raised its price to $130"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 4,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 63,
+                  "end": 94,
+                  "text": "its quality now fails our tests"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 5,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 130,
+                  "end": 187,
+                  "text": "Our sponsor explicitly approved replacing A with vendor B"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 6,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 196,
+                  "end": 236,
+                  "text": "B costs $85 monthly and passed our tests"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 2,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 1,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 4,
+                "to": 2,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 6,
+                "to": 5,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "temporary-scope-zh",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 3450,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 788,
+        "outputTokens": 193,
+        "estimatedGenerationMicroUsd": 428.6,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 3441,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 788,
+            "outputTokens": 193,
+            "estimatedGenerationMicroUsd": 428.6,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "平常星期二我選圖書館工作，因為那裡安靜。",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為那裡安靜",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "只有這個星期二圖書館因積雪關閉，所以我選在家工作。",
+                "role": "decision"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "圖書館因積雪關閉",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "平常星期二的圖書館安排沒有改變",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 20,
+                  "text": "平常星期二我選圖書館工作，因為那裡安靜。"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 13,
+                  "end": 19,
+                  "text": "因為那裡安靜"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 25,
+                  "text": "只有這個星期二圖書館因積雪關閉，所以我選在家工作。"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 7,
+                  "end": 15,
+                  "text": "圖書館因積雪關閉"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 4,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 25,
+                  "end": 40,
+                  "text": "平常星期二的圖書館安排沒有改變"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "temporary-scope-zh",
+      "arm": "coverage",
+      "status": "completed",
+      "durationMs": 7898,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2387,
+        "outputTokens": 404,
+        "estimatedGenerationMicroUsd": 1081.55,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled",
+          "durationMs": 2018,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 682,
+            "outputTokens": 83,
+            "estimatedGenerationMicroUsd": 270.1,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "平常星期二我選圖書館工作",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為那裡安靜",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 12,
+                  "text": "平常星期二我選圖書館工作"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 13,
+                  "end": 19,
+                  "text": "因為那裡安靜"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled",
+          "durationMs": 2517,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 695,
+            "outputTokens": 121,
+            "estimatedGenerationMicroUsd": 318.95,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "只有這個星期二圖書館因積雪關閉，所以我選在家工作。",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "圖書館因積雪關閉",
+                "role": "premise"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "平常星期二的圖書館安排沒有改變。",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 25,
+                  "text": "只有這個星期二圖書館因積雪關閉，所以我選在家工作。"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 7,
+                  "end": 15,
+                  "text": "圖書館因積雪關閉"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 25,
+                  "end": 41,
+                  "text": "平常星期二的圖書館安排沒有改變。"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 3345,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 1010,
+            "outputTokens": 200,
+            "estimatedGenerationMicroUsd": 492.5,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "平常星期二我選圖書館工作",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "因為那裡安靜",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "只有這個星期二圖書館因積雪關閉，所以我選在家工作。",
+                "role": "decision"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "圖書館因積雪關閉",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "平常星期二的圖書館安排沒有改變。",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision"
+              },
+              {
+                "from": 4,
+                "to": 3,
+                "relation": "challenges-current-basis"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 12,
+                  "text": "平常星期二我選圖書館工作"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 13,
+                  "end": 19,
+                  "text": "因為那裡安靜"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 25,
+                  "text": "只有這個星期二圖書館因積雪關閉，所以我選在家工作。"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 3,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 7,
+                  "end": 15,
+                  "text": "圖書館因積雪關閉"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 4,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 25,
+                  "end": 41,
+                  "text": "平常星期二的圖書館安排沒有改變。"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 3,
+                "to": 2,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "from": 4,
+                "to": 3,
+                "relation": "challenges-current-basis",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "explicit-confirmation",
+      "arm": "coverage",
+      "status": "completed",
+      "durationMs": 7471,
+      "wire": {
+        "countRequests": 3,
+        "generationRequests": 3,
+        "pricedGenerations": 3,
+        "inputTokens": 2315,
+        "outputTokens": 276,
+        "estimatedGenerationMicroUsd": 909.95,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "local-0",
+          "status": "compiled",
+          "durationMs": 2124,
+          "error": null,
+          "requestSourceIndices": [
+            0
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 676,
+            "outputTokens": 85,
+            "estimatedGenerationMicroUsd": 271,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "I chose the Harbor carrier because it supports a 20 kg load.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it supports a 20 kg load",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 60,
+                  "text": "I chose the Harbor carrier because it supports a 20 kg load."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 35,
+                  "end": 59,
+                  "text": "it supports a 20 kg load"
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "local-1",
+          "status": "compiled",
+          "durationMs": 2053,
+          "error": null,
+          "requestSourceIndices": [
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 683,
+            "outputTokens": 84,
+            "estimatedGenerationMicroUsd": 271.55,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "My carrier choice is unchanged.",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "Today's independent test confirmed the Harbor carrier still supports a 20 kg load.",
+                "role": "premise"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 83,
+                  "end": 114,
+                  "text": "My carrier choice is unchanged."
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 1,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 0,
+                  "end": 82,
+                  "text": "Today's independent test confirmed the Harbor carrier still supports a 20 kg load."
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 3274,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 956,
+            "outputTokens": 107,
+            "estimatedGenerationMicroUsd": 367.4,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "I chose the Harbor carrier",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "because it supports a 20 kg load",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "Today's independent test confirmed the Harbor carrier still supports a 20 kg load.",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 26,
+                  "text": "I chose the Harbor carrier"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 27,
+                  "end": 59,
+                  "text": "because it supports a 20 kg load"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 0,
+                  "end": 82,
+                  "text": "Today's independent test confirmed the Harbor carrier still supports a 20 kg load."
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "explicit-confirmation",
+      "arm": "baseline",
+      "status": "completed",
+      "durationMs": 2777,
+      "wire": {
+        "countRequests": 1,
+        "generationRequests": 1,
+        "pricedGenerations": 1,
+        "inputTokens": 769,
+        "outputTokens": 106,
+        "estimatedGenerationMicroUsd": 319.45,
+        "countRequestCost": "unknown_without_usage"
+      },
+      "stages": [
+        {
+          "name": "global",
+          "status": "compiled",
+          "durationMs": 2767,
+          "error": null,
+          "requestSourceIndices": [
+            0,
+            1
+          ],
+          "requestCount": 2,
+          "wire": {
+            "countRequests": 1,
+            "generationRequests": 1,
+            "pricedGenerations": 1,
+            "inputTokens": 769,
+            "outputTokens": 106,
+            "estimatedGenerationMicroUsd": 319.45,
+            "countRequestCost": "unknown_without_usage"
+          },
+          "proposal": {
+            "state": "parsed",
+            "units": [
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "I chose the Harbor carrier",
+                "role": "decision"
+              },
+              {
+                "memory": 0,
+                "receipt": 0,
+                "quote": "it supports a 20 kg load",
+                "role": "premise"
+              },
+              {
+                "memory": 1,
+                "receipt": 0,
+                "quote": "Today's independent test confirmed the Harbor carrier still supports a 20 kg load.",
+                "role": "update"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision"
+              }
+            ]
+          },
+          "compiled": {
+            "units": [
+              {
+                "index": 0,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "decision",
+                "anchor": {
+                  "start": 0,
+                  "end": 26,
+                  "text": "I chose the Harbor carrier"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 1,
+                "source": 0,
+                "requestMemory": 0,
+                "receipt": 0,
+                "role": "premise",
+                "anchor": {
+                  "start": 35,
+                  "end": 59,
+                  "text": "it supports a 20 kg load"
+                },
+                "interpretationStatus": "model-proposed"
+              },
+              {
+                "index": 2,
+                "source": 1,
+                "requestMemory": 1,
+                "receipt": 0,
+                "role": "update",
+                "anchor": {
+                  "start": 0,
+                  "end": 82,
+                  "text": "Today's independent test confirmed the Harbor carrier still supports a 20 kg load."
+                },
+                "interpretationStatus": "model-proposed"
+              }
+            ],
+            "links": [
+              {
+                "from": 1,
+                "to": 0,
+                "relation": "supports-decision",
+                "interpretationStatus": "model-proposed"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

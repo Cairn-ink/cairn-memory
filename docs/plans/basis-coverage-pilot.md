@@ -83,5 +83,37 @@ unknown. An alias is not immutable model weights. No model migration is implied.
   strict marketplace/plugin validation passed on both. Installed gates remain CI.
 - No typecheck gate exists in this JavaScript repository. Runtime changes are
   confined to evaluation; unchanged core, adapter, host and production behavior.
-- Independent Standards/Spec review and the single paid run are still pending.
-  Exact reviewed candidate and final CI evidence will be recorded in the PR.
+- Independent Sol/high Standards and Spec review passed pre-live candidate
+  `28a403f1fbd91064cc168c6d20e1f66fe9ad69bc`. Standards noted only a
+  non-blocking duplicated-helper heuristic; older frozen operators were not
+  refactored. Spec found no actionable pre-live gap.
+
+## One-shot outcome and delivery gate
+
+- Primary ran exactly once against that unchanged source: 62 HTTP /31
+  generations, USD0.186 reservations, USD0.010097 rounded known-usage estimate,
+  31 additional unknown-cost count requests, zero unsettled. No retry, new
+  grant, ledger reset, model/default change, merge, release or deployment.
+- All sixteen arms and32 scheduled stages survive in the closed projection.
+  Thirteen arms completed, three failed. Coverage replacement's global stage
+  is unrun after invalid local output. No rejected output counts as abstention.
+- Primary and independent Sol/high semantic review inspected all raw local
+  and global proposals against the frozen rubric. Coverage has three accepted
+  unsupported links and no demonstrated gain; baseline still has an invalid
+  consideration proposal and bundles B's distinct reasons. See the detailed
+  [results](../basis-coverage-results.md); no general reliability promotion.
+- DRI decision: do not adopt this workflow. Local role suggestions can carry
+  mistaken temporal/scope associations into the full-source pass. The next
+  design target is source-bound decision/role/time/scope association and
+  separately addressable reasons, not simply extra calls or larger caps.
+  This pilot does not isolate the causal effect of hints from sampling or
+  prove a MOC framework ceiling. Any next experiment needs a fresh pre-outcome
+  spec, unchanged safety gates and its own bounded once-only intent.
+- Publication adds only a closed synthetic exporter, outcome/regression files
+  and this record. Final affected tests and fixed-diff independent reviews
+  must pass before PR delivery; exact final SHA and CI belong in the PR.
+- Primary final rerun on Node22.16/24.15: generic106 passed; JSON and strict
+  plugin validation passed; complete live-evidence offline253 passed with30
+  intentional installed-only skips each. Public projection independently
+  re-exported byte-identically (97,938 UTF-8 bytes); its SHA and provenance
+  are frozen in the result regression. The live source pins remain unchanged.
