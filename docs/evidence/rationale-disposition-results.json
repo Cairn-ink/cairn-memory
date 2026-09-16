@@ -1,0 +1,365 @@
+{
+  "schemaVersion": 1,
+  "scope": "Once-only synthetic six-case paired disposition diagnostic; no write-path promotion",
+  "pins": {
+    "sourceCommit": "35f2c56f0df725b8959e7b088cbd8c247f6c3c8a",
+    "fixtureSha256": "606e35acfd7bd6a9276f1a7bd89248cc1608051de90eb270725b595b27947d7a",
+    "rubricSha256": "7fb2f1c023a4d1b4f5b6ac1a42546a71ef468172eae0ae8ea96f36a945b32831",
+    "controlPromptSha256": "7b19f4deb938e192dcf6b386384ecb76aeb226f6524100fe8899b74bab5174ee",
+    "candidatePromptSha256": "676b4a2181c32b6fdff0cc528f6720349afc34cd8198f759201ce7f72d674241",
+    "installedArtifactSha256": "546d16d5458dc2b6997a3d3f6d3d1bb3dce3503542f8ba79bb8a7ce76681cdd9",
+    "retainedPrivateReportSha256": "b24012df3033438bec2f77468c9b77de3b9ab51f6ae0171f1dc3400070b6927f"
+  },
+  "accounting": {
+    "httpRequests": 24,
+    "reservedMicroUsd": 120000,
+    "knownUsageEstimateMicroUsd": 5847,
+    "unknownCostRequests": 12,
+    "unsettledReservations": 0
+  },
+  "gates": {
+    "completedArms": 12,
+    "arms": 12,
+    "coldMatches": 12,
+    "sourcesUnchanged": 12,
+    "historicalSupportsRetained": {
+      "control": 6,
+      "candidate": 6,
+      "obligations": 6
+    },
+    "falseWithdrawals": {
+      "control": 0,
+      "candidate": 0
+    },
+    "genuineChallengeCoverage": {
+      "control": 2,
+      "candidate": 1,
+      "obligations": 5
+    },
+    "controlPromotion": "fail",
+    "candidatePromotion": "fail"
+  },
+  "cases": [
+    {
+      "id": "scenario-01",
+      "oldEdges": [
+        {
+          "index": 0,
+          "from": 0,
+          "to": 3,
+          "relation": "challenges-premise",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 1,
+          "from": 0,
+          "to": 2,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 2,
+          "from": 1,
+          "to": 2,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        }
+      ],
+      "expectedOldActions": [
+        "withdraw",
+        "keep",
+        "keep"
+      ],
+      "arms": {
+        "control": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"edges\":[{\"from\":0,\"to\":2,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0},{\"from\":1,\"to\":2,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0},{\"from\":3,\"to\":0,\"relation\":\"challenges-premise\",\"fromReceipt\":0,\"toReceipt\":0}]}"
+        },
+        "candidate": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"dispositions\":[{\"edge\":0,\"action\":\"keep\",\"evidence\":[{\"memory\":3,\"receipt\":0}]},{\"edge\":1,\"action\":\"keep\",\"evidence\":[{\"memory\":0,\"receipt\":0},{\"memory\":2,\"receipt\":0}]},{\"edge\":2,\"action\":\"keep\",\"evidence\":[{\"memory\":1,\"receipt\":0},{\"memory\":2,\"receipt\":0}]}],\"additions\":[]}"
+        }
+      },
+      "review": {
+        "challenge": "3→0",
+        "controlCovered": true,
+        "candidateCovered": false,
+        "controlIssues": [],
+        "candidateIssues": [
+          "wrong keep: old reversed challenge 0→3"
+        ]
+      }
+    },
+    {
+      "id": "scenario-02",
+      "oldEdges": [
+        {
+          "index": 0,
+          "from": 0,
+          "to": 2,
+          "relation": "challenges-premise",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 1,
+          "from": 0,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        }
+      ],
+      "expectedOldActions": [
+        "withdraw",
+        "keep"
+      ],
+      "arms": {
+        "control": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"edges\":[{\"from\":0,\"to\":1,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0}]}"
+        },
+        "candidate": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"dispositions\":[{\"edge\":0,\"action\":\"withdraw\",\"evidence\":[{\"memory\":2,\"receipt\":0}]},{\"edge\":1,\"action\":\"keep\",\"evidence\":[{\"memory\":0,\"receipt\":0},{\"memory\":1,\"receipt\":0}]}],\"additions\":[]}"
+        }
+      },
+      "review": {
+        "challenge": "2→0",
+        "controlCovered": false,
+        "candidateCovered": false,
+        "controlIssues": [],
+        "candidateIssues": []
+      }
+    },
+    {
+      "id": "scenario-03",
+      "oldEdges": [
+        {
+          "index": 0,
+          "from": 3,
+          "to": 0,
+          "relation": "challenges-premise",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 1,
+          "from": 2,
+          "to": 0,
+          "relation": "challenges-premise",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 2,
+          "from": 0,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        }
+      ],
+      "expectedOldActions": [
+        "keep",
+        "withdraw",
+        "keep"
+      ],
+      "arms": {
+        "control": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"edges\":[{\"from\":0,\"to\":1,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0},{\"from\":3,\"to\":0,\"relation\":\"challenges-premise\",\"fromReceipt\":0,\"toReceipt\":0}]}"
+        },
+        "candidate": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"dispositions\":[{\"edge\":0,\"action\":\"keep\",\"evidence\":[{\"memory\":3,\"receipt\":0}]},{\"edge\":1,\"action\":\"unknown\",\"evidence\":[]},{\"edge\":2,\"action\":\"keep\",\"evidence\":[{\"memory\":0,\"receipt\":0},{\"memory\":1,\"receipt\":0}]}],\"additions\":[]}"
+        }
+      },
+      "review": {
+        "challenge": "3→0",
+        "controlCovered": true,
+        "candidateCovered": true,
+        "controlIssues": [],
+        "candidateIssues": [
+          "wrong unknown: cross-scope old challenge 2→0 remains unresolved in projection"
+        ]
+      }
+    },
+    {
+      "id": "scenario-04",
+      "oldEdges": [
+        {
+          "index": 0,
+          "from": 0,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 1,
+          "from": 2,
+          "to": 2,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        }
+      ],
+      "expectedOldActions": [
+        "withdraw",
+        "keep"
+      ],
+      "arms": {
+        "control": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"edges\":[{\"from\":0,\"to\":1,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0},{\"from\":2,\"to\":2,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0}]}"
+        },
+        "candidate": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"dispositions\":[{\"edge\":0,\"action\":\"keep\",\"evidence\":[{\"memory\":0,\"receipt\":0},{\"memory\":1,\"receipt\":0}]},{\"edge\":1,\"action\":\"keep\",\"evidence\":[{\"memory\":2,\"receipt\":0}]}],\"additions\":[]}"
+        }
+      },
+      "review": {
+        "challenge": "3→2",
+        "controlCovered": false,
+        "candidateCovered": false,
+        "controlIssues": [
+          "wrong retained old support 0→1: consideration was not adoption"
+        ],
+        "candidateIssues": [
+          "wrong keep: old support 0→1 despite explicit non-adoption"
+        ]
+      }
+    },
+    {
+      "id": "scenario-05",
+      "oldEdges": [
+        {
+          "index": 0,
+          "from": 0,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 1,
+          "from": 2,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        },
+        {
+          "index": 2,
+          "from": 4,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        }
+      ],
+      "expectedOldActions": [
+        "withdraw",
+        "withdraw",
+        "keep"
+      ],
+      "arms": {
+        "control": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"edges\":[{\"from\":0,\"to\":1,\"relation\":\"challenges-premise\",\"fromReceipt\":0,\"toReceipt\":0},{\"from\":4,\"to\":1,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0}]}"
+        },
+        "candidate": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"dispositions\":[{\"edge\":0,\"action\":\"withdraw\",\"evidence\":[{\"memory\":1,\"receipt\":0}]},{\"edge\":1,\"action\":\"withdraw\",\"evidence\":[{\"memory\":3,\"receipt\":0}]},{\"edge\":2,\"action\":\"keep\",\"evidence\":[{\"memory\":4,\"receipt\":0}]}],\"additions\":[]}"
+        }
+      },
+      "review": {
+        "challenge": "3→2",
+        "controlCovered": false,
+        "candidateCovered": false,
+        "controlIssues": [
+          "unsupported new challenge 0→1: price quote does not challenge stated non-price motive"
+        ],
+        "candidateIssues": []
+      }
+    },
+    {
+      "id": "scenario-06",
+      "oldEdges": [
+        {
+          "index": 0,
+          "from": 0,
+          "to": 1,
+          "relation": "supports-decision",
+          "fromReceipt": 0,
+          "toReceipt": 0,
+          "interpretationStatus": "unverified"
+        }
+      ],
+      "expectedOldActions": [
+        "unknown"
+      ],
+      "arms": {
+        "control": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"edges\":[{\"from\":0,\"to\":1,\"relation\":\"supports-decision\",\"fromReceipt\":0,\"toReceipt\":0}]}"
+        },
+        "candidate": {
+          "completed": true,
+          "coldMatches": true,
+          "sourcesUnchanged": true,
+          "rawModelOutputText": "{\"dispositions\":[{\"edge\":0,\"action\":\"unknown\",\"evidence\":[{\"memory\":0,\"receipt\":0},{\"memory\":1,\"receipt\":0}]}],\"additions\":[]}"
+        }
+      },
+      "review": {
+        "challenge": null,
+        "controlCovered": null,
+        "candidateCovered": null,
+        "controlIssues": [
+          "unjustified confident keep of missing-antecedent old support 0→1"
+        ],
+        "candidateIssues": [],
+        "candidateUnresolvedTreatment": "unknown is defensible; it retains an unresolved proposal without confirming it"
+      }
+    }
+  ]
+}
