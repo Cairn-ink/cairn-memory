@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — experimental read-only relationship dispositions
+
+- Embedded `reviewRationaleDispositions` snapshots exact current sources and
+  in-scope proposed edges, then requires an explicit keep, withdraw or unknown
+  assessment for each old edge before projecting an ephemeral graph. Unknown
+  remains unresolved; cited withdrawal never deletes source or stored links.
+- This opt-in injected model port exposes old unverified proposals alongside
+  selected source text. It adds no adapter, MCP tool, paid capability, storage
+  schema, automatic commit, default traversal or semantic correctness claim.
+
 ## Unreleased — explicit local MCP rationale re-review
 
 - Independent `--rationale-review replace-reviewed-v1` exposes a strict,

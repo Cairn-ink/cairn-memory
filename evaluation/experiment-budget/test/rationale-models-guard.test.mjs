@@ -67,6 +67,7 @@ test('RMG2 closed method/model/reasoning/schema/route validation denies before r
     for (const mutate of [
       b => { b.model = 'gpt-5.6'; }, b => { b.reasoning.effort = 'high'; },
       b => { delete b.reasoning; }, b => { b.text.format.name = 'cairn_extract'; },
+      b => { b.text.format.name = 'cairn_reviewRationaleDispositions'; },
       b => { b.text.format.schema = {}; }, b => { b.store = true; },
     ]) {
       const body = JSON.parse(captured.options.body); mutate(body);

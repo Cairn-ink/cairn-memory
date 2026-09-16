@@ -12,6 +12,7 @@ import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { proposeRationale } from './rationale.mjs';
+import { reviewRationaleDispositions as proposeRationaleDispositions } from './rationale-dispositions.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
@@ -682,6 +683,23 @@ export function openMemoryCore(input) {
     } catch (error) { return failure(error); }
   }
 
+  async function reviewRationaleDispositions(input) {
+    try {
+      runtime.ready();
+      object(input, ['namespace', 'refs']);
+      const ns = contractNamespace(input.namespace);
+      denseArray(input.refs, 1, 6);
+      const refs = memoryRefs(input.refs);
+      const snapshot = runtime.rationaleDispositionSnapshot(ns, refs);
+      const validateFresh = () => {
+        if (JSON.stringify(runtime.rationaleDispositionSnapshot(ns, refs)) !== JSON.stringify(snapshot)) {
+          throw new MemoryStoreError('revision_conflict');
+        }
+      };
+      return success(await proposeRationaleDispositions(model, snapshot, validateFresh));
+    } catch (error) { return failure(error); }
+  }
+
   function getRationale(input) {
     return invoke(() => {
       runtime.ready();
@@ -764,7 +782,7 @@ export function openMemoryCore(input) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectCaptureEvidence, discardCaptureEvidence,
     applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture, classifyPlacement, rebuildIndex,
-    reviewRationale, getRationale, reviewDecisionBasis,
+    reviewRationale, getRationale, reviewDecisionBasis, reviewRationaleDispositions,
     close() {
       runtime.close();
       return success(null);

@@ -489,6 +489,7 @@ export function createMemoryRuntime(input) {
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot, sourceSnapshot,
     rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
+    rationaleDispositionSnapshot(ns, refs) { ready(); return rationaleStorage.dispositionSnapshot(ns, refs); },
     commitRationale(ns, refs, snapshot, proposals, writeMode) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, writeMode);
     },

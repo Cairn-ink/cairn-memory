@@ -27,6 +27,31 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     return transaction(db, () => snapshotInside(ns, refs, inputMode));
   }
 
+  function dispositionSnapshot(ns, refs) {
+    return transaction(db, () => {
+      const { sources, indexRevision } = snapshotInside(ns, refs);
+      const ids = sources.map(item => item.memory.id);
+      const placeholders = ids.map(() => '?').join(', ');
+      const rows = db.prepare(`SELECT * FROM rationale_edges
+        WHERE from_id IN (${placeholders}) AND to_id IN (${placeholders})
+        ORDER BY from_id, to_id, relation, from_receipt, to_receipt LIMIT 11`).all(...ids, ...ids);
+      if (rows.length > 10) fail('rationale_limit');
+      const byId = new Map(sources.map((source, index) => [source.memory.id, { source, index }]));
+      const edges = rows.map(row => {
+        const from = byId.get(row.from_id), to = byId.get(row.to_id);
+        const fromReceipt = from.source.receipts.findIndex(item => item.id === row.from_receipt);
+        const toReceipt = to.source.receipts.findIndex(item => item.id === row.to_receipt);
+        if (from.source.memory.revision !== row.from_revision ||
+            to.source.memory.revision !== row.to_revision || fromReceipt < 0 || toReceipt < 0 ||
+            digest(from.source.receipts[fromReceipt]) !== row.from_digest ||
+            digest(to.source.receipts[toReceipt]) !== row.to_digest) fail('revision_conflict');
+        return { from: from.index, to: to.index, relation: row.relation,
+          fromReceipt, toReceipt, interpretationStatus: 'model-proposed' };
+      });
+      return bounded({ sources, edges, indexRevision });
+    });
+  }
+
   function assertSnapshot(ns, refs, expected) {
     const actual = snapshotInside(ns, refs, expected.inputMode);
     if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('revision_conflict');
@@ -202,6 +227,6 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
         ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) });
   }
 
-  return { snapshot, commit, snapshotFilingEdges, restoreFilingEdges,
+  return { snapshot, dispositionSnapshot, commit, snapshotFilingEdges, restoreFilingEdges,
     inspectInside, inspect: (ns, ref, view) => transaction(db, () => inspectInside(ns, ref, view)) };
 }

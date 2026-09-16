@@ -62,6 +62,16 @@ v13 migration; an already-open old process is not retroactively fenced. See
 
 ### Embedded proposed-rationale boundary
 
+Explicit embedded [relationship-disposition review](rationale-disposition-review.md)
+adds a separate, read-only model port. It sends bounded current source excerpts
+and request-local indices for every existing in-scope edge, each labelled
+unverified. This expands provider-visible relationship context, but sends no
+namespace, persistent IDs, receipt metadata, stored summaries/qualifications or
+source truth flags. Complete `keep`/`withdraw`/`unknown` assessments produce only an
+ephemeral, unassessed graph; `unknown` is retained unresolved, not confirmed.
+The stored graph, default read traversal, MCP and hosted wire stay unchanged.
+No existing paid capability allows the new method.
+
 Explicit embedded `reviewRationale` with `inputMode: 'claim-focus-v1'` additionally
 sends each current memory's stored content as an unverified focus alongside its
 complete indexed receipts. This expands provider-visible personal text, not

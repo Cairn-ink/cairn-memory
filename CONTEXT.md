@@ -130,6 +130,17 @@ An unverified interpretation connecting particular source evidence as a reason
 or a challenge; its existence does not establish a decision or a true premise.
 _Avoid_: Proven dependency, confirmed contradiction
 
+**Relationship disposition**:
+A proposed assessment to retain, withdraw or leave unresolved an existing
+relationship proposal. Withdrawal concerns the interpretation, not its source
+history or the truth of either source.
+_Avoid_: Source deletion, verified correction
+
+**Unresolved relationship**:
+An existing relationship proposal for which available evidence does not justify
+a keep-or-withdraw assessment. Preserving it does not confirm its interpretation.
+_Avoid_: Confirmed relationship, silent retention
+
 **Decision context**:
 Source evidence organized around a recorded decision, its proposed supporting
 reasons and challenges to those reasons; it need not include every relationship proposal.
