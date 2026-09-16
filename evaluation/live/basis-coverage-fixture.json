@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "id": "basis-coverage-pilot-v1",
+  "ingestion": "manual synthetic source snapshots; interpretation-only; no capture, retrieval or persistence",
+  "cases": [
+    {"id":"battery-stylus-zh","memories":[
+      {"role":"user","excerpt":"我選了青岚平板，因為電池可以用十二小時，而且支援手寫筆。"},
+      {"role":"user","excerpt":"現在青岚平板的電池只能用五小時；手寫筆仍然可用。我還沒決定換平板。"}]},
+    {"id":"different-actors","memories":[
+      {"role":"user","excerpt":"Lin chose the bay ferry because it carries bicycles. I chose the hill bus because it runs after midnight."},
+      {"role":"user","excerpt":"The hill bus no longer runs after midnight. Lin's bay ferry still carries bicycles. Neither of us has chosen a replacement."}]},
+    {"id":"considering-career-zh","memories":[
+      {"role":"user","excerpt":"今天帶新人很累，我正在考慮改做個人貢獻者，但還沒有決定。"},
+      {"role":"user","excerpt":"睡了一晚後帶新人沒那麼累；我仍在考慮，沒有作出轉職決定。"}]},
+    {"id":"unadopted-advice","memories":[
+      {"role":"assistant","excerpt":"You could choose Stone Archive because it supports CSV export. This is my suggestion, not your decision."},
+      {"role":"user","excerpt":"I have not chosen Stone Archive or authorized a purchase. Please leave that as advice."}]},
+    {"id":"stale-report-zh","memories":[
+      {"role":"user","excerpt":"九月十二日我選了山泉印表機，因為九月十日更新後已能雙面列印。"},
+      {"role":"user","excerpt":"今天才收到一份八月二日的舊報告，說山泉印表機當時不能雙面列印；那是在九月十日更新以前。我今天再次確認它仍能雙面列印。"}]},
+    {"id":"explicit-replacement","memories":[
+      {"role":"user","excerpt":"Our team chose vendor A because its price was $80 monthly and its quality passed our tests."},
+      {"role":"user","excerpt":"In today's vendor conversation, A raised its price to $130 and its quality now fails our tests; both old reasons no longer apply. Our sponsor explicitly approved replacing A with vendor B because B costs $85 monthly and passed our tests. B is our adopted vendor now."}]},
+    {"id":"temporary-scope-zh","memories":[
+      {"role":"user","excerpt":"平常星期二我選圖書館工作，因為那裡安靜。"},
+      {"role":"user","excerpt":"只有這個星期二圖書館因積雪關閉，所以我選在家工作。平常星期二的圖書館安排沒有改變。"}]},
+    {"id":"explicit-confirmation","memories":[
+      {"role":"user","excerpt":"I chose the Harbor carrier because it supports a 20 kg load."},
+      {"role":"user","excerpt":"Today's independent test confirmed the Harbor carrier still supports a 20 kg load. My carrier choice is unchanged."}]}
+  ]
+}
