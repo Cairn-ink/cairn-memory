@@ -8,45 +8,34 @@
   <a href="https://cairn.ink"><img alt="Hosted by Cairn.ink" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
 </p>
 
-Cairn Memory is an open-source memory layer for agents: keep memories in a local
-SQLite file, retrieve them across sessions, and inspect the Source Receipts that
-explain where they came from. Correct a memory at its current revision or forget
-it without letting a later automatic capture silently restore it.
+<p align="center">
+  <a href="#try-the-local-memory-layer">Quickstart</a> ·
+  <a href="docs/local-memory-demo.md">Walkthrough</a> ·
+  <a href="docs/limitations.md">Known limitations</a> ·
+  <a href="docs/privacy.md">Privacy</a> ·
+  <a href="https://cairn.ink">Hosted service</a>
+</p>
 
-The local developer preview runs without a Cairn account. Its thin MCP server
-uses the same public core as the JavaScript API: no separate memory engine per
-client. MOC organization, bounded model-guided recall and capture orchestration
-are in the core; the five MCP tools provide explicit memory operations, not
-automatic transcript capture.
+Every memory Cairn keeps comes with a receipt: the exact source text it was
+learned from. Inspect the receipt, correct the memory at that revision, or
+forget it and it stays forgotten, even when a later capture would have
+re-admitted it. Memories live in a local SQLite file. No account is needed.
 
-**Preview, not a quality guarantee.** An installed subprocess has passed a real
-model-backed remember → restart → sourced recall → forget loop. The frozen
-semantic evaluation still fails source support: an extractor sometimes turns
-“uses a language” into “is implemented using it.” [All retained results](https://github.com/Cairn-ink/cairn-memory/pull/23)
-remain visible. This is synthetic evidence, not a competitor benchmark or a
-claim that real users save a measured amount of time.
+Remember something in one session, start a fresh process, and recall it in the
+next with its receipt attached; then forget it and confirm it is gone. The
+[cross-session walkthrough](docs/local-memory-demo.md) reproduces that loop with
+synthetic data. Model-free remember, inspect, correct and forget need no key;
+semantic recall needs an OpenAI key you supply explicitly.
 
-An explicitly selected [experimental extraction profile](docs/plans/extraction-model-profile.md)
-passed the frozen synthetic gate after independent agent review. The default
-model's failure remains; MCP does not automatically enable the experimental
-profile, which is a programmatic adapter option. MCP `remember_memory` saves
-explicit content directly; it does not run that extractor. Those extraction
-scores therefore do not certify the MCP recall experience.
+<!-- A 30-second demo GIF of that loop lands here (distribution plan item D1). -->
 
-The [paired update-reliability experiment](docs/evidence/qualified-comparison.md)
-also remains failed: the experimental source-ordered capture path can retire an
-unchanged fact or another person's still-valid preference. A source receipt and
-model-declared update labels are not a truth guarantee. This is separate from
-the MCP tools' explicit remember/correct operations; no automatic transcript
-capture or new quality certification is implied.
+The thin MCP server and the JavaScript API share one public core; the five MCP
+tools are explicit memory operations, not automatic transcript capture.
 
-The latest [eight-case source-support pilot](evaluations/results/source-support-v1.json)
-stored and recalled all ten records but still showed false adoption and lost
-uncertainty. Optional [source-only context](docs/source-evidence-context.md)
-separates retained passages from generated interpretations; it does not certify
-source completeness or downstream answers. The
-[integration inventory](docs/source-reliability-integration.md) distinguishes
-shipped security work, developer-preview changes and unfinished reliability goals.
+**Status: developer preview.** The installed remember, restart, sourced-recall
+and forget loop passes on a real model. Extraction quality does not yet meet our
+own bar: the frozen evaluation and every retained failure are collected in
+[Known limitations](docs/limitations.md). Read it before relying on recall.
 
 ## Try the local memory layer
 
@@ -254,7 +243,7 @@ The Cairn.ink hosted extraction service, user database, auth, billing, abuse con
 The released hosted plugin and local developer preview have different readiness
 levels. The local install lifecycle is verified, but source-support quality still
 fails; broad promotion is not yet cleared. No first-ten-user result or star
-target is presented as achieved. See [ROADMAP.md](ROADMAP.md) and the
+target is presented as achieved. See [Known limitations](docs/limitations.md), [ROADMAP.md](ROADMAP.md) and the
 [proposed adoption experiment](docs/plans/local-memory-plg.md).
 
 ## Development
