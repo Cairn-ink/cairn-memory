@@ -1,5 +1,15 @@
 # Compatibility protocol v0.1
 
+### Pure embedded source-context compilation
+
+The core exports explicit, provider-independent
+[`prepareSourceContextUnits` and `compileSourceContextUnits`](source-context-units.md)
+for bounded source-only structural interpretation. They add no hosted wire,
+MCP tool, capture field, stored schema, model request or automatic enablement.
+Compiled field/state/context roles remain model-proposed and unverified; exact
+original passage anchors are not semantic proof, authenticated identity or
+permission. Context passages are not parsed dates or reporter identities.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the

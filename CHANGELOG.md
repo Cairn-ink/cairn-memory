@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — pure source-context unit compiler
+
+- The embedded core exports explicit source-only preparation and structural
+  compilation for bounded factual and decision-context units. Exact original
+  passage anchors remain separate from model-proposed interpretations. This
+  opt-in building block adds no model transport, persistence, automatic capture,
+  MCP/HTTP capability or semantic accuracy claim.
+
 ## Unreleased — independent provider usage bounds
 
 - The optional OpenAI adapter accepts bounded observed input usage that differs

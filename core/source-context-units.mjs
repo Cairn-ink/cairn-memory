@@ -1,0 +1,240 @@
+import { qualificationInput } from './claim-qualification-input.mjs';
+import { partitionSourcePassages } from './source-passages.mjs';
+import { fail } from './validation.mjs';
+import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
+
+const FIELDS = Object.freeze(['subject', 'property', 'scope', 'applies', 'value',
+  'attribution', 'polarity', 'quantifier']);
+const QUALIFICATION_FIELDS = Object.freeze(['subject', 'property', 'scope', 'applies',
+  'value', 'attribution', 'commitment']);
+const STATES = Object.freeze(['considered', 'adopted', 'rejected', 'not_approved',
+  'not_withdrawn', 'pending_reconfirmation', 'unknown']);
+const ATTRIBUTIONS = Object.freeze(['direct', 'reported', 'quoted', 'proposed', 'unknown']);
+const POLARITIES = Object.freeze(['affirmed', 'negated', 'unknown']);
+const QUANTIFIERS = Object.freeze(['universal', 'existential', 'zero', 'unspecified', 'unknown']);
+const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120,
+  applies: 120, value: 160 });
+const RAW_LIMIT = 6_000;
+const PREPARED_LIMIT = 6_000;
+const OUTPUT_LIMIT = 24_000;
+const isRecord = value => value !== null && typeof value === 'object'
+  && Object.getPrototypeOf(value) === Object.prototype;
+const exact = (value, fields) => isRecord(value) && Reflect.ownKeys(value).length === fields.length
+  && fields.every(field => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    return descriptor?.enumerable && Object.hasOwn(descriptor, 'value');
+  });
+const dense = (value, minimum, maximum) => Array.isArray(value)
+  && Object.getPrototypeOf(value) === Array.prototype
+  && value.length >= minimum && value.length <= maximum
+  && Reflect.ownKeys(value).length === value.length + 1
+  && Array.from({ length: value.length }, (_, index) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    return descriptor?.enumerable && Object.hasOwn(descriptor, 'value');
+  }).every(Boolean);
+const index = value => Number.isSafeInteger(value) && value >= 0;
+function jsonTree(value, active = new Set(), count = { nodes: 0 }, depth = 0) {
+  if (++count.nodes > 12_000 || depth > 18) return false;
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'object' || active.has(value)) return false;
+  active.add(value);
+  let valid;
+  if (Array.isArray(value)) valid = dense(value, 0, 12_000)
+    && value.every(item => jsonTree(item, active, count, depth + 1));
+  else if (!isRecord(value)) valid = false;
+  else valid = Reflect.ownKeys(value).length <= 1_000
+    && Reflect.ownKeys(value).every(key => {
+      if (typeof key !== 'string') return false;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return descriptor?.enumerable && Object.hasOwn(descriptor, 'value')
+        && jsonTree(descriptor.value, active, count, depth + 1);
+    });
+  active.delete(value);
+  return valid;
+}
+function freeze(value, seen = new Set()) {
+  if (value && typeof value === 'object' && !seen.has(value)) {
+    seen.add(value);
+    for (const child of Object.values(value)) freeze(child, seen);
+    Object.freeze(value);
+  }
+  return value;
+}
+const objectSchema = properties => ({ type: 'object', additionalProperties: false,
+  properties, required: Object.keys(properties) });
+const integerSchema = values => ({ type: 'integer', minimum: 0, enum: values });
+const arraySchema = (items, minimum, maximum) => ({ type: 'array', items,
+  minItems: minimum, maxItems: maximum });
+function schemaFor(sources) {
+  const sourceIds = sources.map(source => source.index);
+  const receiptIds = [...new Set(sources.flatMap(source => source.receipts.map(receipt => receipt.index)))];
+  const passageIds = [...new Set(sources.flatMap(source => source.receipts.flatMap(receipt =>
+    receipt.passages.map(passage => passage.index))))];
+  const refs = () => arraySchema(integerSchema(passageIds), 0, 4);
+  const field = value => objectSchema({ value, evidence: refs() });
+  const fields = { source: integerSchema(sourceIds), receipt: integerSchema(receiptIds) };
+  for (const name of FIELDS) {
+    const value = name in LABEL_LIMITS ? { type: ['string', 'null'] }
+      : { type: 'string', enum: name === 'attribution' ? ATTRIBUTIONS
+        : name === 'polarity' ? POLARITIES : QUANTIFIERS };
+    fields[name] = field(value);
+  }
+  fields.eventTimeContext = refs();
+  fields.reporterContext = refs();
+  return freeze(objectSchema({ units: arraySchema({ anyOf: [
+    objectSchema({ ...fields, kind: { type: 'string', enum: ['factual_claim'] } }),
+    objectSchema({ ...fields, kind: { type: 'string', enum: ['decision_state'] },
+      state: field({ type: 'string', enum: STATES }) }),
+  ] }, 0, 8) }));
+}
+function sourceInput(input) {
+  if (!exact(input, ['sources']) || !dense(input.sources, 1, 6)) fail('invalid_input');
+  return input.sources.map((source, sourceIndex) => {
+    if (!exact(source, ['receipts']) || !dense(source.receipts, 1, 4)) fail('invalid_input');
+    return { index: sourceIndex, receipts: source.receipts.map((receipt, receiptIndex) => {
+      if (!exact(receipt, ['role', 'excerpt']) || !['user', 'assistant'].includes(receipt.role)
+        || typeof receipt.excerpt !== 'string' || !receipt.excerpt.isWellFormed()
+        || !receipt.excerpt.trim() || receipt.excerpt.length > 800) fail('invalid_input');
+      const normalized = receipt.excerpt.normalize('NFKC');
+      if (redactSecrets(receipt.excerpt) !== receipt.excerpt
+        || redactSecrets(normalized) !== normalized) fail('invalid_input');
+      return { index: receiptIndex, role: receipt.role, excerpt: receipt.excerpt,
+        passages: partitionSourcePassages(receipt.excerpt).map((part, passage) =>
+          ({ index: passage, ...part })) };
+    }) };
+  });
+}
+function prepare(input) {
+  let originals, raw;
+  try {
+    if (!jsonTree(input)) fail('invalid_input');
+    raw = structuredClone(input);
+    if (JSON.stringify(raw).length > RAW_LIMIT) fail('invalid_input');
+    originals = sourceInput(raw);
+  } catch { fail('invalid_input'); }
+  const prepared = freeze({ sources: originals.map(source => ({ index: source.index,
+    receipts: source.receipts.map(receipt => ({ index: receipt.index, role: receipt.role,
+      passages: receipt.passages.map(({ index: passage, text }) => ({ index: passage, text })) })) })) });
+  if (JSON.stringify(prepared).length > PREPARED_LIMIT) fail('invalid_input');
+  return { input: prepared, responseSchema: schemaFor(prepared.sources), originals: freeze(originals) };
+}
+
+/** Pure source-only model input and response shape; no prompt, transport, or storage. */
+export function prepareSourceContextUnits(input) {
+  const prepared = prepare(input);
+  return freeze({ input: prepared.input, responseSchema: prepared.responseSchema });
+}
+
+function references(value, receipt) {
+  if (!dense(value, 0, 4) || new Set(value).size !== value.length
+    || value.some(id => !index(id) || !receipt.passages[id])) fail('invalid_model_output');
+  return value;
+}
+function fieldReferences(field, receipt) {
+  if (!exact(field, ['value', 'evidence'])) fail('invalid_model_output');
+  return references(field.evidence, receipt);
+}
+function canonicalLabel(value, maximum) {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !value.isWellFormed() || value.length > maximum) {
+    fail('invalid_model_output');
+  }
+  return value.normalize('NFKC');
+}
+function anchors(ids, receipt) {
+  return [...ids].sort((a, b) => a - b).map(id => {
+    const passage = receipt.passages[id];
+    return { passage: id, start: passage.start, end: passage.end, text: passage.text };
+  });
+}
+function context(ids, receipt) {
+  return { anchors: anchors(ids, receipt), interpretationStatus: 'model-proposed-unverified' };
+}
+function compilePrepared(prepared, proposed) {
+  let output;
+  try {
+    if (!jsonTree(proposed) || JSON.stringify(proposed).length > OUTPUT_LIMIT) {
+      fail('invalid_model_output');
+    }
+    output = structuredClone(proposed);
+  } catch { fail('invalid_model_output'); }
+  if (!exact(output, ['units']) || !dense(output.units, 0, 8)) fail('invalid_model_output');
+  const seen = new Set();
+  const units = output.units.map((unit, unitIndex) => {
+    const decision = unit?.kind === 'decision_state';
+    const fields = ['source', 'receipt', ...FIELDS, 'eventTimeContext', 'reporterContext',
+      'kind', ...(decision ? ['state'] : [])];
+    if (!exact(unit, fields) || !['factual_claim', 'decision_state'].includes(unit.kind)
+      || !index(unit.source) || !index(unit.receipt)) fail('invalid_model_output');
+    const receipt = prepared.originals[unit.source]?.receipts[unit.receipt];
+    if (!receipt) fail('invalid_model_output');
+    const selected = [];
+    const values = {};
+    for (const name of FIELDS) {
+      selected.push(...fieldReferences(unit[name], receipt));
+      const value = name in LABEL_LIMITS ? canonicalLabel(unit[name].value, LABEL_LIMITS[name])
+        : unit[name].value;
+      const allowed = name === 'attribution' ? ATTRIBUTIONS
+        : name === 'polarity' ? POLARITIES : name === 'quantifier' ? QUANTIFIERS : null;
+      if (allowed && (typeof value !== 'string' || !allowed.includes(value))) {
+        fail('invalid_model_output');
+      }
+      const unknown = value === null || (allowed && value === 'unknown');
+      if (!unknown && !unit[name].evidence.length) fail('invalid_model_output');
+      values[name] = value;
+    }
+    if (decision) {
+      selected.push(...fieldReferences(unit.state, receipt));
+      if (!STATES.includes(unit.state.value)
+        || (unit.state.value !== 'unknown' && !unit.state.evidence.length)) {
+        fail('invalid_model_output');
+      }
+    }
+    const timeRefs = references(unit.eventTimeContext, receipt);
+    const reporterRefs = references(unit.reporterContext, receipt);
+    selected.push(...timeRefs, ...reporterRefs);
+    const focusIds = [...new Set(selected)].sort((a, b) => a - b);
+    if (focusIds.length < 1 || focusIds.length > 4) fail('invalid_model_output');
+    const commitment = decision && ['considered', 'adopted', 'rejected'].includes(unit.state.value)
+      ? unit.state.value : 'unknown';
+    const evidence = Object.fromEntries(FIELDS.map(name => [name, unit[name].evidence]));
+    evidence.commitment = commitment === 'unknown' ? [] : unit.state.evidence;
+    const qualificationAnchors = focusIds.map(id => ({ receiptIndex: unit.receipt,
+      start: receipt.passages[id].start, end: receipt.passages[id].end,
+      text: receipt.passages[id].text,
+      fields: QUALIFICATION_FIELDS.filter(name => evidence[name].includes(id)) }))
+      .filter(anchor => anchor.fields.length);
+    let qualification;
+    try {
+      const receipts = prepared.originals[unit.source].receipts.map(sourceReceipt =>
+        ({ role: sourceReceipt.role, excerpt: sourceReceipt.excerpt }));
+      qualification = qualificationInput({ version: 1,
+        slot: { subject: values.subject, property: values.property,
+          scope: values.scope, applies: values.applies }, value: values.value,
+        attribution: values.attribution, commitment, anchors: qualificationAnchors }, receipts);
+    } catch { fail('invalid_model_output'); }
+    const compiled = { index: unitIndex, source: unit.source, receipt: unit.receipt,
+      focus: anchors(focusIds, receipt), qualification,
+      polarity: { value: values.polarity, anchors: anchors(unit.polarity.evidence, receipt) },
+      quantifier: { value: values.quantifier, anchors: anchors(unit.quantifier.evidence, receipt) },
+      kind: unit.kind,
+      ...(decision ? { state: { value: unit.state.value,
+        anchors: anchors(unit.state.evidence, receipt) } } : {}),
+      eventTimeContext: context(timeRefs, receipt),
+      reporterContext: context(reporterRefs, receipt),
+      interpretationStatus: 'model-proposed-unverified' };
+    const signature = JSON.stringify({ ...compiled, index: 0 });
+    if (seen.has(signature)) fail('invalid_model_output');
+    seen.add(signature);
+    return compiled;
+  });
+  const result = { units, status: 'assessment-only', persistence: 'not-stored' };
+  if (JSON.stringify(result).length > OUTPUT_LIMIT) fail('invalid_model_output');
+  return freeze(result);
+}
+
+/** Compile structural source bindings only; accepted units remain unverified. */
+export function compileSourceContextUnits(input, proposed) {
+  return compilePrepared(prepare(input), proposed);
+}
