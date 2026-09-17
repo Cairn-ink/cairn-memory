@@ -341,13 +341,36 @@ test('SRL1–3 v3 prepares a closed link schema and derives same-receipt exact a
   raw.sources[0].receipts[0].excerpt = 'mutated';
   assert.match(result.reasonLinks[0].anchors[0].text, /considered A/u);
   assert.deepEqual(compileSourceContextUnits(v3Input(), linked([])).reasonLinks, []);
-  assert.equal(compileSourceContextUnits(v3Input(), linked([v3Fact(), v3Decision(0, 0, 'rejected')],
-    [reason()])).units[1].state.value, 'rejected');
   const recheck = compileSourceContextUnits(v3Input('The team adopted A, but its failed export now requires reconfirmation.'),
     linked([v3Fact(), v3Decision(0, 0, 'pending_reconfirmation')], [reason()]));
   assert.equal(recheck.units[1].state.value, 'pending_reconfirmation');
   assert.equal(recheck.units[1].qualification.commitment, 'unknown');
   assert.equal(recheck.reasonLinks[0].relation, 'stated-reason-for');
+});
+
+test('SRL6 explicitly rejected choice keeps its stated reason without inventing adoption', () => {
+  const excerpt = 'The panel rejected route B because its audit log cannot be exported.';
+  const factual = v3Fact();
+  factual.subject = field('route B audit log', [0]);
+  factual.property = field('can be exported', [0]);
+  factual.value = field('no', [0]);
+  factual.polarity = field('negated', [0]);
+  const choice = v3Decision(0, 0, 'rejected');
+  choice.subject = field('panel', [0]);
+  choice.property = field('route B selection', [0]);
+  choice.value = field('rejected', [0]);
+  const result = compileSourceContextUnits(v3Input(excerpt),
+    linked([factual, choice], [reason()]));
+  assert.equal(result.units[0].qualification.slot.subject, 'route B audit log');
+  assert.equal(result.units[0].polarity.value, 'negated');
+  assert.equal(result.units[1].qualification.slot.subject, 'panel');
+  assert.equal(result.units[1].state.value, 'rejected');
+  assert.equal(result.units[1].qualification.commitment, 'rejected');
+  assert.deepEqual(result.reasonLinks.map(link => [link.from, link.to, link.relation]),
+    [[0, 1, 'stated-reason-for']]);
+  assert.equal(result.reasonLinks[0].anchors[0].text, excerpt);
+  assert.equal(result.reasonLinks[0].interpretationStatus, 'model-proposed-unverified');
+  assert.equal(result.persistence, 'not-stored');
 });
 
 test('SRL2 rejects wrong direction, identity, references, duplicates and open shape', () => {
