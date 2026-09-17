@@ -9,6 +9,7 @@ VERSION="1.8.1"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 ASSET="mcp-publisher_${OS}_${ARCH}.tar.gz"
+trap 'rm -f "$ASSET"' EXIT
 
 case "$ASSET" in
   mcp-publisher_linux_amd64.tar.gz)  SUM="a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc" ;;
@@ -28,5 +29,4 @@ else
 fi
 
 tar xzf "$ASSET" mcp-publisher
-rm -f "$ASSET"
 ./mcp-publisher --version
