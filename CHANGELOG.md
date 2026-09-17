@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — opt-in source-evidence-first neighborhood ranking
+
+- Embedded and local MCP RN source projection may rank complete source-only
+  candidates before expanding only ranked roots. An unrelated oversized
+  neighborhood no longer blocks ranking; selected-root and source-union limits
+  still fail. Defaults and relationship-aware ranking are unchanged. This is
+  a different read path, not measured answer-quality or reliability improvement.
+
 ## Unreleased — opt-in neighborhood source projection
 
 - Embedded and local MCP RN recall can explicitly return a complete bounded

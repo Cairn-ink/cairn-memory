@@ -596,7 +596,7 @@ export function openMemoryCore(input) {
   async function recall(input) {
     try {
       runtime.ready();
-      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode', 'sourceProjection']);
+      object(input, ['readSet', 'query', 'limit', 'includeQualification', 'contextMode', 'selectionMode', 'sourceProjection', 'rankingMode']);
       const includeQualification = Object.hasOwn(input, 'includeQualification') ? input.includeQualification : false;
       if (typeof includeQualification !== 'boolean') throw new MemoryStoreError('invalid_input');
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
@@ -617,6 +617,12 @@ export function openMemoryCore(input) {
         || Object.hasOwn(input, 'selectionMode') || namespaces.length !== 1)) {
         throw new MemoryStoreError('invalid_input');
       }
+      const sourceFirst = Object.hasOwn(input, 'rankingMode');
+      if (sourceFirst && (input.rankingMode !== 'source-evidence-first-v1' || !projected
+        || contextMode !== 'rationale-neighborhood-evidence' || includeQualification
+        || Object.hasOwn(input, 'selectionMode') || namespaces.length !== 1)) {
+        throw new MemoryStoreError('invalid_input');
+      }
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
@@ -632,19 +638,21 @@ export function openMemoryCore(input) {
       }));
       const recalled = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
-        validateFresh,
+        validateFresh, rankingMode: sourceFirst ? input.rankingMode : undefined,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
-          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
+          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode,
+          sourceFirst),
       });
       if (!projected) return success(recalled);
       if (recalled.coverage !== 'complete' || recalled.namespaces.some(item =>
         item.mapExhausted !== true || item.fetchExhausted !== true)) throw new MemoryStoreError('context_budget_exceeded');
       const value = { ...recalled, memories: projectNeighborhoodSources(recalled.memories),
-        sourceProjection: 'neighborhood-sources-v1' };
+        sourceProjection: 'neighborhood-sources-v1',
+        ...(sourceFirst ? { rankingMode: input.rankingMode } : {}) };
       if (JSON.stringify(value).length > 24_000) throw new MemoryStoreError('context_item_too_large');
       return success(value);
     } catch (error) { return failure(error); }

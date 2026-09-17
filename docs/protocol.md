@@ -333,3 +333,7 @@ An explicit single-namespace RN recall can additionally request
 union of original sources without graph interpretations in the result. RN
 selection and ranking still see unverified links; no default or hosted wire
 schema changes. See [the projection contract](neighborhood-source-projection.md).
+That projection alone leaves relationship-aware RN ranking unchanged. The
+additional opt-in `rankingMode: 'source-evidence-first-v1'` ranks source-only
+candidates before expanding ranked roots; it is valid only with this RN
+projection and has different ranking information, not a higher graph cap.

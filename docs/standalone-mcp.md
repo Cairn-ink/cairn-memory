@@ -9,6 +9,9 @@ An explicit `rationale-neighborhood-evidence` recall may also request
 `sourceProjection: "neighborhood-sources-v1"` to return only its complete
 bounded original source union. The ranker still sees unverified links; see
 [the projection contract](neighborhood-source-projection.md).
+With that projection, optional `rankingMode: "source-evidence-first-v1"` instead
+ranks complete source-only candidates before expanding ranked roots. It is a
+different opt-in read path, not a relaxed graph or source-union limit.
 
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run

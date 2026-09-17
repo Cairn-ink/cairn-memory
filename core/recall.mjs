@@ -32,7 +32,7 @@ function selection(output, allowed, maximum, model, stage) {
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize,
-  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
+  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode, rankingMode }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
@@ -85,7 +85,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     validateFresh([...chosen.values()]);
     const request = { namespace: readSet[ref.namespaceIndex], tokenBudget: 4000,
       ...(includeQualification ? { includeQualification: true } : {}),
-      ...(isSourceContext(contextMode) ? { contextMode } : {}),
+      ...(isSourceContext(contextMode) ? { contextMode: rankingMode ? 'source-evidence' : contextMode } : {}),
       refs: [{ memoryId: ref.memoryId, revision: ref.revision }] };
     const receipts = [];
     const receiptIds = new Set();
@@ -112,7 +112,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   });
   let ranked = [];
   if (candidates.length) {
-    const prompt = isRationaleContext(contextMode) ? rationaleRankPrompt
+    const prompt = rankingMode ? sourceRankPrompt : isRationaleContext(contextMode) ? rationaleRankPrompt
       : contextMode === 'source-evidence' ? sourceRankPrompt : includeQualification ? qualifiedRankPrompt : rankPrompt;
     const rankOutput = await callModel(model, 'rank', prompt, { query, limit,
       candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },

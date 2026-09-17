@@ -435,7 +435,8 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
+  function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode,
+    sourceFirst = false) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
@@ -450,11 +451,13 @@ export function createMemoryRuntime(input) {
       }
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
-          const source = readUsageEvidence(candidates[index].namespace, row, contextMode);
+          const source = readUsageEvidence(candidates[index].namespace, row,
+            sourceFirst ? 'source-evidence' : contextMode);
           if (JSON.stringify(source) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
           return source;
         });
-        return selected.map(index => sources[index]);
+        return selected.map(index => sourceFirst
+          ? readUsageEvidence(candidates[index].namespace, rows[index], contextMode) : sources[index]);
       }
       const qualifications = includeQualification ? rows.map(row => qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {
