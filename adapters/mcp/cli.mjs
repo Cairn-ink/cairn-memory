@@ -13,6 +13,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
+  cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
@@ -27,6 +28,12 @@ the core success envelope, not MCP framing or the host's whole prompt. Oversize
 fails without partial results or fallback. Sources are not full conversation
 history, relevance, truth, current applicability or execution authority.
 Semantic recall and capture still require a separately configured model.
+--recall-context source-evidence makes source-only recall the default for this
+server. It returns complete retained receipts instead of generated summaries
+or qualifications within existing namespace and budgets. Per-call contextMode
+overrides it; explicit includeQualification true conflicts with source mode.
+This does not enable capture, prove source truth or currentness, or make recall
+work without a configured model. Complete excerpts may expose more source text.
 --capture-qualification source-bound-v1 or source-bound-v2 adds capture_memory for explicitly
 submitted messages. No background capture or hooks are installed. Submitted
 roles/text are claims, not authenticated human intent. Qualification binds
@@ -63,7 +70,7 @@ It cannot verify database permissions, credentials or model availability.
 
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
-    '--capture-evidence', '--capture-evidence-access', '--source-snapshot']);
+    '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -89,13 +96,17 @@ export function parseConfiguration(args) {
   if (values.has('--source-snapshot') && values.get('--source-snapshot') !== 'current-admitted-v1') {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--recall-context') && values.get('--recall-context') !== 'source-evidence') {
+    throw new Error('invalid_mcp_configuration');
+  }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
     ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
     ...(values.has('--capture-evidence') ? { captureEvidence: values.get('--capture-evidence') } : {}),
     ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}),
-    ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}) };
+    ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}),
+    ...(values.has('--recall-context') ? { recallContext: values.get('--recall-context') } : {}) };
 }
 
 export async function start(args = process.argv.slice(2), env = process.env) {
@@ -112,6 +123,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
+      ...(config.recallContext ? { recallContext: config.recallContext } : {}),
       ...(config.sourceSnapshot ? { sourceSnapshot: config.sourceSnapshot,
         sourceSnapshotTokenizer: 'o200k_base' } : {}),
       ...(config.captureQualification ? { captureQualification: config.captureQualification,

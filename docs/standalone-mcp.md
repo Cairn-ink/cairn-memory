@@ -3,8 +3,25 @@
 `recall_memory` can opt into `contextMode: "source-evidence"` to rank and return
 complete retained sources instead of generated summaries and qualification
 labels. In this mode, omit includeQualification or set it false; explicit true
-conflicts. Existing defaults are unchanged without contextMode. See
+conflicts. Existing defaults are unchanged without contextMode or the startup
+option below. See
 [source evidence context](source-evidence-context.md) for limits and examples.
+
+To select that presentation by default for one local server, start with
+`--recall-context source-evidence`, or pass `recallContext: 'source-evidence'`
+to `createCairnServer`. A call with an explicit `contextMode` wins, including
+`rationale-evidence`; `includeQualification: false` does not turn off the
+source default. To use legacy summary context by default, restart without
+this option. `inspect_memory` remains available for explicit interpretations.
+The option does not enable capture, source snapshot, staging, or a provider.
+Recall still needs a configured model; keyless remember and inspection still
+work. Complete retained excerpts can expose more source text than legacy
+summary-oriented context, within the same namespace and budgets. Sources do
+not establish truth, current applicability, or execution authority.
+This is a runtime MCP flag, not an `install:preview` option. For an installed
+preview, append the flag/value pair to the generated `stdio.args` in your MCP
+client (or invoke the installed executable with them); the installer receipt
+itself remains unchanged.
 
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run
@@ -65,6 +82,8 @@ On Node >=22.16, from the repository root:
 npm ci --prefix adapters/mcp
 npm ci --prefix adapters/openai
 node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user
+# Optional source-first presentation for recall_memory:
+node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --recall-context source-evidence
 ```
 
 The database parent directory must exist and be controlled by you. Supply
@@ -91,7 +110,7 @@ someone who can edit your process configuration or read your database file.
 | Tool | Input | Behavior |
 | --- | --- | --- |
 | remember_memory | content, optional kind | Explicit memory plus receipt derived from supplied content |
-| recall_memory | query, optional limit (1–12), includeQualification | Same bounded model-driven core recall; source qualification defaults on with qualified capture |
+| recall_memory | query, optional limit (1–12), includeQualification, contextMode, selectionMode | Same bounded model-driven core recall; source qualification defaults on with qualified capture unless source context is resolved |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |

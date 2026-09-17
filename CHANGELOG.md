@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — explicit MCP source recall default
+
+- Local stdio `--recall-context source-evidence` defaults `recall_memory` to the
+  existing source-only view; explicit per-call context still wins. Omission
+  preserves legacy and qualified-capture defaults. This adds no capture,
+  retention, provider calls or semantic guarantee.
+
 ## Unreleased — independent provider usage bounds
 
 - The optional OpenAI adapter accepts bounded observed input usage that differs
