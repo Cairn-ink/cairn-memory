@@ -41,6 +41,13 @@ code, provider policy/grants, budget, user stores, or primary worktrees.
   Primary personally inspects full diff and reruns key paths. Freeze a scoped
   candidate commit, then independent Standards and Spec review the same base
   and HEAD. Push/PR only after both pass; monitor exact-head CI. No merge/release.
+- SP6: Installed delivery must include the helper in the explicit
+  `packaging/artifact-files.json` runtime closure. A regression must build and
+  install the actual local artifact, import its qualification caller/helper
+  without source-checkout imports, and verify exact source mapping. Run the full
+  artifact suite on both22.16/24.15 after documented isolated dependency/cache
+  preparation. No widening to a recursive blanket file allowlist. Any new core
+  relative import must be audited for installed closure, not just source tests.
 
 ## Ownership and evidence
 
@@ -72,3 +79,36 @@ ASCII lengths 1–800, every astral position in 800 units, and whitespace,
 full-width and combining text. All matched. This is differential mechanical
 evidence, not a semantic quality result. Fixed cuts may separate a condition
 from its claim; future selection must allow adjacent passages or abstention.
+
+## Installed-closure correction
+
+The first PR167 CI run35209018891 on f333804c failed the Node24 artifact job
+(53 failures/21 passes); Node22 sibling was cancelled. The installed module
+loader reported missing core/source-passages.mjs imported by the qualification
+caller. Source tests passed, but the explicit artifact allowlist omitted the
+new helper. This is a real missing runtime dependency, not a transient CI failure.
+Primary converted PR167 to draft and added SP6 before correction. Earlier final
+reviews cover f333804c only; the corrected full diff requires fresh independent
+reviews and exact-head CI. No merge, release or provider call occurred.
+
+Worker correction: the new `packaging/test/source-passages.test.mjs` built and
+offline-installed the actual archive. Before the allowlist edit it failed when
+the installed child imported the missing helper (`artifact_command_failed` at
+the child boundary, matching CI's `ERR_MODULE_NOT_FOUND`); after adding only
+`core/source-passages.mjs` to `packaging/artifact-files.json`, the same test
+passed. The child imports the installed helper and qualification caller and
+checks exact raw Unicode partitioning, candidate indices, source offsets,
+model-facing text and compiled anchors. It does not import runtime code from
+the source checkout or contact a provider.
+
+Per `docs/install-artifact.md`, the worker ran `npm ci --prefix adapters/mcp`,
+`npm ci --prefix adapters/openai`, then `node packaging/prepare-cache.mjs` to
+populate pinned public registry metadata. On each of Node22.16 and24.15,
+`npm run test:artifact` passed **75/75**; the offline installed suite includes
+the previously failing v2 qualification caller. Repeated affected gates on
+both runtimes passed: `npm test` **143/143**, `npm run validate`, and the
+focused core/adapter qualification command above **17/17**. The core algorithm,
+capture path and store example are byte-unchanged from f333804c, whose full
+core **730/730** and `npm run demo:store` passed on both runtimes. This correction
+is only installed-file closure plus an installed regression; those earlier
+core/store results are not represented as reruns of the correction commit.

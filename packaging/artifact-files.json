@@ -26,6 +26,7 @@
   "core/ordered-capture.mjs",
   "core/placement-input.mjs",
   "core/qualification-candidates.mjs",
+  "core/source-passages.mjs",
   "core/query-candidates.mjs",
   "core/query-excerpt.mjs",
   "core/qualified-transition-schema.mjs",
