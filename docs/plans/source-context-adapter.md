@@ -141,3 +141,49 @@ port equivalence against the fixed dependency for all three existing profiles.
 They supplement, rather than replace, public synthetic and installed tests.
 Runtime and test files stayed frozen throughout these reruns. Independent
 committed-diff reviews and remote CI remain separate delivery gates.
+
+### Remote timing failure and bounded correction
+
+Candidate `bab4a307c6fd9d0c028b14f09aa6702fd92cc324` passed both independent
+review axes but CI35242814796 failed the existing Node22 tokenizer performance
+guard: its child exceeded5000ms (5027ms), with200/201 adapter tests passing.
+PR170 was returned to draft; this failure is not discarded or called a clean run.
+Primary's unchanged isolated A01 test passed in1743ms. Worker reproduced the
+same timeout with four exact A01 processes restricted to one CPU; isolated and
+unconstrained runs passed. The new SCA3 budget fixture used repeated BPE searches
+over long unbroken strings and took26800ms in that CI job. A fixed separated-token
+candidate instead has5057 tokens without schema and6586 with schema, measured
+independently by primary in14ms for the two counts. These assertions establish
+the same schema-budget precondition without a costly search for an exact boundary
+that this test does not require.
+
+Correction acceptance: preserve both explicit <=6000/>6000 preconditions,
+the actual adapter rejection and zero HTTP assertion. Do not modify runtime,
+tokenizer, existing A01 test, its5000ms process guard or suite concurrency.
+Record bounded diagnostic comparisons, rerun affected full adapter suites on both
+versions, freeze new candidate and repeat both independent review axes and CI.
+The exact CI scheduler state cannot be recreated; local contention demonstrates
+the failure mechanism, not an assertion that all CI host conditions are known.
+
+Worker correction changed only the new test fixture. Same-core paired SCA/A01
+comparison: original SCA3 about18.6s and A01 4.866s; corrected complete source
+test1.035s and A01 2.165s. Both pairs passed, so they establish avoided load, not
+a paired red-before/green-after claim. Separate fixed-base/current measurements
+were import168/145ms and whitespace counting1568/1546ms (same313 tokens); no
+counting regression was measured. Commands used Node22.16 with `taskset -c 0`
+for the existing source-context and tokenizer-performance test files. The
+four-process same-core reproduction above independently showed the guard's
+contention sensitivity. Worker full OpenAI201 and offline demo passed on both
+runtimes after correction. Primary inspected the exact diff and matched test
+SHA256 `c221044be113bf31f92e0bb05818055a2a415e1e12d8f699b676bbc3a0c9f983`.
+
+Primary correction reruns passed on both runtimes without retries: generic106,
+JSON, strict plugin/marketplace, full OpenAI201, offline demo, independent4 probes
+and actual installed source-context child1. Commands were the corresponding
+commands above, with `node --test packaging/test/source-context-adapter.test.mjs`
+for the focused installed gate. Logs: `/tmp/cairn-sca-correction-gates-q9ViqP/`.
+Runtime and installed-test hashes remained identical to the fully tested earlier
+candidate; only the new fixture and this evidence record changed. Complete core,
+artifact and rationale suites from the earlier runtime-identical candidate are
+not represented as rerun locally after this test-only correction. Final CI runs
+those complete suites again. Both independent axes must review the new commit.

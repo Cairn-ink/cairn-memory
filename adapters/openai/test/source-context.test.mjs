@@ -115,15 +115,9 @@ test('SCA2 caller mutations during count cannot change snapshotted schema or sou
 
 test('SCA3 local request budget includes the canonical schema before HTTP', async () => {
   const value = request();
+  value.system = 'x '.repeat(5000);
   const tokens = system => countOpenAITokens(JSON.stringify({ system, input: value.input,
     maxOutputTokens: 3072, responseSchema: value.responseSchema }));
-  let low = 0, high = 80000;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if (tokens('x'.repeat(middle)) > 6000) high = middle;
-    else low = middle + 1;
-  }
-  value.system = 'x'.repeat(low);
   assert.ok(countOpenAITokens(JSON.stringify({ system: value.system, input: value.input,
     maxOutputTokens: 3072 })) <= 6000);
   assert.ok(tokens(value.system) > 6000);
