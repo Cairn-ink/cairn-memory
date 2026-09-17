@@ -1,5 +1,25 @@
 # Optional OpenAI adapter — source preview
 
+## Explicit source-context assessment transport
+
+The optional adapter now implements `reviewSourceContext` for the embedded
+[bound source-context review](bound-source-context.md). A host must explicitly
+call that core method and provide the adapter; no automatic capture, MCP or
+hosted route is added. This method reuses the configured `basisModel` without
+changing its selection or any existing model port. It validates and snapshots
+the core's canonical source-only CU input and strict schema before callbacks,
+then sends at most one count and one generation request. Persistent identities,
+generated memory text and graph edges are excluded from those requests.
+
+This method alone permits 6,000 local and provider input tokens and reserves
+3,072 output tokens within the selected model's context window. The response
+must be complete and structurally compile through CU; compiled interpretation
+remains model-proposed and unverified. Existing ports retain their 1,024-output
+request shapes and limits. Existing paid-experiment guards do **not** authorize
+`reviewSourceContext`; using a real provider requires separate consent, budget
+authority and data-policy review. Fake-HTTP tests prove transport behavior, not
+provider compatibility or semantic quality.
+
 The embedded adapter can separately select an experimental
 [rationale model](rationale-model-controls.md). This changes only an explicitly
 configured relate port, not other methods or MCP defaults, and grants no paid

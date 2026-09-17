@@ -1,4 +1,6 @@
 import { denseArray, identifier, revision } from '../../core/validation.mjs';
+import { isDeepStrictEqual } from 'node:util';
+import { prepareSourceContextUnits } from '../../core/source-context-units.mjs';
 
 const string = { type: 'string' };
 const integer = { type: 'integer', minimum: 0 };
@@ -26,6 +28,68 @@ export const schemas = {
 };
 
 const invalid = () => { throw new Error('invalid_openai_request'); };
+
+function plainJSON(value, active = new Set(), count = { nodes: 0 }, depth = 0) {
+  if (++count.nodes > 12_000 || depth > 18) return false;
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'object' || active.has(value)) return false;
+  const arrayValue = Array.isArray(value);
+  if (Object.getPrototypeOf(value) !== (arrayValue ? Array.prototype : Object.prototype)) return false;
+  const keys = Reflect.ownKeys(value);
+  if (keys.length > 12_000 || (arrayValue && keys.length !== value.length + 1)) return false;
+  active.add(value);
+  const valid = keys.every(key => {
+    if (typeof key !== 'string') return false;
+    if (arrayValue && key === 'length') return true;
+    if (arrayValue && (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)) return false;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor?.enumerable && Object.hasOwn(descriptor, 'value')
+      && plainJSON(descriptor.value, active, count, depth + 1);
+  });
+  active.delete(value);
+  return valid;
+}
+
+function snapshotJSON(value) {
+  try {
+    if (!plainJSON(value)) invalid();
+    return structuredClone(value);
+  } catch { invalid(); }
+}
+
+function sourceContextContract(input, suppliedSchema) {
+  try {
+    const sources = input.sources.map(source => ({ receipts: source.receipts.map(receipt => ({
+      role: receipt.role, excerpt: receipt.passages.map(passage => passage.text).join(''),
+    })) }));
+    const raw = { sources };
+    const prepared = prepareSourceContextUnits(raw);
+    if (!isDeepStrictEqual(input, prepared.input) ||
+        (suppliedSchema !== undefined && !isDeepStrictEqual(suppliedSchema, prepared.responseSchema))) invalid();
+    return { raw, schema: prepared.responseSchema };
+  } catch { invalid(); }
+}
+
+/** Closed transport request; core remains the sole passage/schema compiler. */
+export function sourceContextRequest(request) {
+  try {
+    if (!request || Object.getPrototypeOf(request) !== Object.prototype ||
+        !isDeepStrictEqual(Reflect.ownKeys(request).sort(),
+          ['system', 'input', 'responseSchema', 'maxOutputTokens', 'signal'].sort())) invalid();
+    for (const key of ['system', 'input', 'responseSchema', 'maxOutputTokens', 'signal']) {
+      const descriptor = Object.getOwnPropertyDescriptor(request, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+    }
+    if (typeof request.system !== 'string' || !request.system.isWellFormed() ||
+        request.maxOutputTokens !== 3072 || !(request.signal instanceof AbortSignal)) invalid();
+    const input = snapshotJSON(request.input);
+    const responseSchema = snapshotJSON(request.responseSchema);
+    const { raw, schema } = sourceContextContract(input, responseSchema);
+    return { system: request.system, input, responseSchema: schema,
+      maxOutputTokens: 3072, signal: request.signal, raw };
+  } catch { invalid(); }
+}
 const id = (value) => { if (typeof value !== 'string' || !value.length) invalid(); return value; };
 const index = (value) => { if (!Number.isSafeInteger(value) || value < 0) invalid(); return value; };
 const positive = (value) => { if (!Number.isSafeInteger(value) || value < 1) invalid(); return value; };
@@ -114,6 +178,7 @@ function checklistSchema(input) {
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'reviewSourceContext') return sourceContextContract(snapshotJSON(input)).schema;
   if (method === 'selectChecklist') {
     try { return checklistSchema(input); } catch { invalid(); }
   }

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — optional source-context adapter transport
+
+- The optional OpenAI adapter can service explicit embedded
+  `reviewSourceContext` calls with canonical source-only CU input and schema,
+  the existing basis-model selection, and a method-specific 3,072-output-token
+  reservation. Existing ports and paid-experiment allowlists are unchanged;
+  fake-HTTP coverage is not provider or semantic acceptance.
+
 ## Unreleased — explicit bound source-context review
 
 - The embedded core can explicitly review current receipt passages with an

@@ -17,6 +17,10 @@ persistent identities are bound afterward from the captured snapshot and
 rechecked after all callbacks. Selected sources and interpretations are bounded,
 unverified and not stored. This adds no automatic capture, MCP/HTTP tool,
 provider configuration, permission or durable interpretation.
+The optional OpenAI adapter can service this explicit injected model port using
+its existing basis-model selection and method-specific 3,072-output-token cap.
+Other model calls and paid-method allowlists remain unchanged; this is not
+automatic provider enablement or semantic verification.
 
 ### Explicit embedded complete-source snapshot
 

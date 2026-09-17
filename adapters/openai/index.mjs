@@ -1,7 +1,8 @@
 import { get_encoding } from 'tiktoken';
 import { MemoryStoreError } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
-import { schemasFor } from './schemas.mjs';
+import { compileSourceContextUnits } from '../../core/source-context-units.mjs';
+import { schemasFor, sourceContextRequest } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 
 const encoder = get_encoding('o200k_base');
@@ -100,7 +101,8 @@ async function readJSON(response, maximum, signal, diagnose) {
   }
 }
 
-function parseOutput(response, contextWindow, model, diagnose) {
+function parseOutput(response, contextWindow, model, diagnose, inputMaximum = 7024,
+  outputMaximum = 1024) {
   const reject = (reason) => { diagnose(reason); fail('invalid_model_output'); };
   if (!record(response) || response.object !== 'response' || response.model !== model ||
       response.status !== 'completed' ||
@@ -108,7 +110,8 @@ function parseOutput(response, contextWindow, model, diagnose) {
       !Array.isArray(response.output) || !response.output.length) reject('response_envelope');
   const usage = response.usage;
   if (!record(usage) || !count(usage.input_tokens) || !count(usage.output_tokens) ||
-      !count(usage.total_tokens) || usage.input_tokens > 7024 || usage.input_tokens + 1024 > contextWindow || usage.output_tokens > 1024 ||
+      !count(usage.total_tokens) || usage.input_tokens > inputMaximum ||
+      usage.input_tokens + outputMaximum > contextWindow || usage.output_tokens > outputMaximum ||
       usage.total_tokens !== usage.input_tokens + usage.output_tokens) reject('response_usage');
   let text = '';
   for (const message of response.output) {
@@ -125,7 +128,7 @@ function parseOutput(response, contextWindow, model, diagnose) {
     }
   }
   if (!text.length) reject('response_content');
-  if (countTokens(text) > 1024) reject('output_bounds');
+  if (countTokens(text) > outputMaximum) reject('output_bounds');
   let output;
   try { output = JSON.parse(text); } catch { reject('output_json'); }
   if (!record(output)) reject('output_shape');
@@ -162,9 +165,11 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     }
   }
 
-  async function invoke(method, { system, input, maxOutputTokens, signal }) {
+  async function invoke(method, { system, input, maxOutputTokens, signal, responseSchema, raw }) {
     const diagnose = (reason) => emitDiagnostic({ onDiagnostic }, method, 'adapter', reason);
-    if (!(signal instanceof AbortSignal) || typeof system !== 'string' || maxOutputTokens !== 1024) {
+    const sourceContext = method === 'reviewSourceContext';
+    if (!(signal instanceof AbortSignal) || typeof system !== 'string' ||
+        maxOutputTokens !== (sourceContext ? 3072 : 1024)) {
       diagnose('request_invalid');
       throw new Error('invalid_openai_request');
     }
@@ -179,9 +184,10 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       if (method === 'selectChecklist') schemasFor(method, input);
       serializedInput = JSON.stringify(input);
       snapshot = JSON.parse(serializedInput);
-      schema = schemasFor(method, snapshot);
+      schema = sourceContext ? responseSchema : schemasFor(method, snapshot);
       instructions = qualificationInstructions(method, system, snapshot);
-      localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
+      localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens,
+        ...(sourceContext ? { responseSchema: schema } : {}) }));
     } catch (error) {
       diagnose('request_invalid');
       if (error instanceof MemoryStoreError) throw error;
@@ -189,28 +195,38 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     }
     if (typeof serializedInput !== 'string') { diagnose('request_invalid'); throw new Error('invalid_openai_request'); }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
-    const selected = profile[method === 'selectChecklist' ? 'select' : method];
+    const selected = profile[method === 'selectChecklist' ? 'select' :
+      sourceContext ? 'reviewBasis' : method];
     const payload = { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
         schema } }, truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
     // Serialize both requests before the first asynchronous host callback.
     const countBody = JSON.stringify(payload);
-    const generateBody = JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
+    const generateBody = JSON.stringify({ ...payload, max_output_tokens: maxOutputTokens,
+      store: false, stream: false });
     const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose);
     if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
       diagnose('token_count_response');
       fail('token_count_unavailable');
     }
-    if (counted.input_tokens > 7024 || counted.input_tokens + 1024 > selected.contextWindow) {
+    const inputMaximum = sourceContext ? 6000 : 7024;
+    if (counted.input_tokens > inputMaximum ||
+        counted.input_tokens + maxOutputTokens > selected.contextWindow) {
       diagnose('request_bounds');
       fail('context_budget_exceeded');
     }
     checkAbort(signal, diagnose);
     const response = await post('/responses', generateBody, 262144, signal, diagnose);
     checkAbort(signal, diagnose);
-    return normalizeQualificationSlots(method, snapshot,
-      parseOutput(response, selected.contextWindow, selected.model, diagnose), schema, diagnose);
+    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose,
+      inputMaximum, maxOutputTokens);
+    if (sourceContext) {
+      try { compileSourceContextUnits(raw, output); }
+      catch { diagnose('output_shape'); fail('invalid_model_output'); }
+      return output;
+    }
+    return normalizeQualificationSlots(method, snapshot, output, schema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
@@ -219,6 +235,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     qualifyCandidates: (request) => invoke('qualifyCandidates', request),
     relate: (request) => invoke('relate', request),
     reviewBasis: (request) => invoke('reviewBasis', request),
+    reviewSourceContext: async (request) => invoke('reviewSourceContext', sourceContextRequest(request)),
     classify: (request) => invoke('classify', request),
     select: (request) => invoke('select', request),
     selectChecklist: (request) => invoke('selectChecklist', request),

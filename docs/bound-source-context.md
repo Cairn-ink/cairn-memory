@@ -7,6 +7,13 @@ its current `memoryId` and `revision`. It requires an injected
 signal })` and `model.countTokens(text)`; opening a core without them does not
 enable any provider. The operation is not an MCP or hosted HTTP tool.
 
+The optional OpenAI adapter supplies this explicit model port using its
+existing `basisModel` selection. It validates the source-only CU request and
+schema, then uses bounded count and generation calls with a 3,072-output-token
+reservation and 6,000-input-token ceiling. This does not alter other adapter
+ports or authorize the method in existing paid-experiment guards; fake-HTTP
+integration is not real-provider or semantic acceptance.
+
 The core takes a transactional `rationaleSnapshot` before calling the model.
 The request contains only original receipt roles, exact excerpt passages and
 source-local numeric indices. It excludes namespace, persistent memory/receipt
