@@ -18,7 +18,9 @@ to the fields named on screen. No model call was made and nothing is staged.
    ```
 
 3. Render frames and the GIF. Needs Python 3 with Pillow, DejaVu Sans Mono and
-   ffmpeg:
+   ffmpeg. The font is read from `/usr/share/fonts/truetype/dejavu`; set
+   `CAIRN_DEMO_FONT_DIR` to the directory holding `DejaVuSansMono.ttf` and
+   `DejaVuSansMono-Bold.ttf` on other systems:
 
    ```sh
    python3 docs/demo/render-gif.py

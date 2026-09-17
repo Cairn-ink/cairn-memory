@@ -10,9 +10,12 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 const executable = process.argv[2];
 const db = join(await mkdtemp(join(tmpdir(), 'cairn-d1-')), 'memory.sqlite');
+// The child gets only PATH and HOME: no provider key can reach it, so recall
+// reports model_not_configured by construction, as in walkthrough.mjs.
+const childEnv = { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' };
 let client, transport;
 async function connect(label) {
-  transport = new StdioClientTransport({ command: process.execPath, args: [executable, '--db', db, '--owner', 'demo-user'], stderr: 'pipe' });
+  transport = new StdioClientTransport({ command: process.execPath, args: [executable, '--db', db, '--owner', 'demo-user'], env: childEnv, stderr: 'pipe' });
   transport.stderr?.resume();
   client = new Client({ name: 'cairn-demo', version: '1.0.0' });
   await client.connect(transport, { timeout: 15000 });
@@ -26,6 +29,7 @@ async function call(name, args = {}) {
   console.log(JSON.stringify(v, null, 2));
   return v;
 }
+try {
 await connect('session A');
 const saved = (await call('remember_memory', { content: 'I prefer tabs over spaces in this repo.', kind: 'fact' })).value.memory;
 await call('inspect_memory', { memoryId: saved.id });
@@ -36,4 +40,6 @@ const corrected = (await call('correct_memory', { memoryId: saved.id, expectedRe
 await call('recall_memory', { query: 'tabs or spaces?' });
 await call('forget_memory', { memoryId: saved.id, expectedRevision: corrected.revision });
 await call('inspect_memory', {});
-await close();
+} finally {
+  await close();
+}

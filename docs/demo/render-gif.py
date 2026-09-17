@@ -9,8 +9,9 @@ for m in re.finditer(r"^\$ (\w+) (\{[^\n]*\})\n(\{\n.*?\n\})", log, re.M|re.S):
     calls.append((m.group(1), json.loads(m.group(2)), json.loads(m.group(3))))
 assert len(calls)==7, len(calls)
 W,H=1000,560; PAD=28; FS=19
-font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", FS)
-bold=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", FS)
+FONT_DIR=os.environ.get("CAIRN_DEMO_FONT_DIR","/usr/share/fonts/truetype/dejavu")
+font=ImageFont.truetype(f"{FONT_DIR}/DejaVuSansMono.ttf", FS)
+bold=ImageFont.truetype(f"{FONT_DIR}/DejaVuSansMono-Bold.ttf", FS)
 BG=(24,24,27); FG=(228,228,231); DIM=(140,140,150); GREEN=(134,239,172); AMBER=(253,224,71); CYAN=(103,232,249); RED=(252,165,165)
 def frame(lines, title):
     im=Image.new("RGB",(W,H),BG); d=ImageDraw.Draw(im)

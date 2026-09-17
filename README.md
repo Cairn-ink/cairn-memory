@@ -27,7 +27,7 @@ next with its receipt attached; then forget it and confirm it is gone. The
 synthetic data. Model-free remember, inspect, correct and forget need no key;
 semantic recall needs an OpenAI key you supply explicitly.
 
-![Thirty seconds of the loop on an installed local preview: remember, inspect the receipt, restart, inspect again, correct at the inspected revision, recall without a key, forget, empty store](docs/demo/cairn-memory-loop.gif)
+![Thirty seconds of the loop on an installed local preview: remember, inspect the receipt, restart, inspect again, correct at the inspected revision, recall without a key which reports model_not_configured, forget, empty store](docs/demo/cairn-memory-loop.gif)
 
 Rendered from the recorded tool responses of one real keyless run; see
 [how to regenerate it](docs/demo/README.md).
