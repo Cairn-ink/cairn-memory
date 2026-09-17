@@ -53,12 +53,14 @@ await core.recall({ readSet: [namespace], query: 'Why did we choose A?',
   rankingMode: 'source-evidence-first-v1' });
 ```
 
-This mode requires exactly the combination above: one namespace, ordinary
-selection, and no qualification inclusion (explicit `includeQualification: false`
-is allowed). Unknown or incompatible values fail
-before a model callback. Omission preserves the earlier RN ranking behavior.
-The response includes the explicit `rankingMode` marker, including for an empty
-rank selection; that marker counts toward the 24,000-character output ceiling.
+With `neighborhood-sources-v1`, this ranking mode requires one namespace,
+ordinary selection, and no qualification inclusion (explicit
+`includeQualification: false` is allowed). The event projection below also
+accepts and requires this same ranking mode. Unknown or incompatible values
+fail before a model callback. Omitting the mode from `neighborhood-sources-v1`
+preserves its earlier RN ranking behavior. Its response includes the explicit
+`rankingMode` marker, including for an empty rank selection; that marker counts
+toward the legacy 24,000-character output ceiling.
 
 MOC selection and candidate limits are unchanged. Each selected MOC candidate
 is fetched as complete source evidence, without relationship expansion, and

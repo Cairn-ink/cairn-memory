@@ -335,8 +335,8 @@ selection and ranking still see unverified links; no default or hosted wire
 schema changes. See [the projection contract](neighborhood-source-projection.md).
 That projection alone leaves relationship-aware RN ranking unchanged. The
 additional opt-in `rankingMode: 'source-evidence-first-v1'` ranks source-only
-candidates before expanding ranked roots; it is valid only with this RN
-projection and has different ranking information, not a higher graph cap.
+candidates before expanding ranked roots; it is valid with either explicit RN
+source projection and has different ranking information, not a higher graph cap.
 The separate opt-in `sourceProjection: 'neighborhood-source-events-v1'` requires
 that source-first ranking mode and returns `sourceEvents` rather than legacy
 `memories`. Exact private receipt provenance is checked within the final read,
