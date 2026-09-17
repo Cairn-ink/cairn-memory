@@ -1,0 +1,286 @@
+{
+  "version": "decision-transition-results-v1",
+  "assessment": "nonblind-synthetic-development-ai-review",
+  "pins": {
+    "sourceCommit": "bdc7be8a59b2a535144e1c851133a1fa970cc442",
+    "sourceTreeSha256": "a74aa6bc5efc82be140096d92552cc1dc0a6a75e0f7c5bfcc3f5487d8c0162be",
+    "fixtureSha256": "79c4065542d69e52be88b9880b8f507c863995d4005c5f6e911461927ca4420d",
+    "rubricSha256": "409973020867c7a66c843ca1354e355bee0310ca62f00c37a49347e6de52f958",
+    "operatorSha256": "62b4fba74887135c924844a5733a47d2e7896058169b3e2f55425ddca68b7ce1",
+    "coldReaderSha256": "506fb035594d0149dd7be4e5315114ad0a369643e2c2c498bc9038d7d914d794",
+    "archiveSha256": "09d45659837d034d37274e04558c47033dd7068607584ce8d49c69f845f1c1ca",
+    "finalReportSha256": "4cfe3fcb92298abc3bc5267194f4994cadca9c4d837feaa25e22473642397ca9"
+  },
+  "model": "gpt-4.1-mini-2025-04-14",
+  "limits": {
+    "operatorRequests": 156,
+    "operatorCoreRequests": 144,
+    "operatorHostRequests": 12,
+    "operatorReservationMicroUsd": 1320000,
+    "outerRequests": 240,
+    "outerReservationMicroUsd": 2500000,
+    "hostOutputTokens": 1024,
+    "projectedUniqueMemoryIdentities": 6,
+    "projectedValueUtf16Units": 24000,
+    "answerBodyUtf8Bytes": 24000
+  },
+  "observed": {
+    "requests": 139,
+    "coreRequests": 128,
+    "hostRequests": 11,
+    "reservedMicroUsd": 1190000,
+    "knownUsageEstimateMicroUsd": 64571,
+    "unknownCostAttempts": 64,
+    "unsettledBefore": 0,
+    "unsettledAfter": 0,
+    "capturesCompleted": 12,
+    "memoryArmSnapshotParity": 8,
+    "submittedMessages": 36,
+    "retainedDistinctMessages": 26,
+    "retainedRelevantUserMessages": 24,
+    "admittedMemoryUnits": 27,
+    "plannedAnswers": 12,
+    "generatedAnswers": 11,
+    "unavailableAnswers": 1,
+    "status": "completed-with-failures"
+  },
+  "costMeaning": "The known usage value is a token-based estimate, not an invoice; unknown-cost attempts include count-only requests and are not failed requests. Reserved cost is a conservative accounting reservation, not measured spend or a provider-enforced billing cap.",
+  "limitations": [
+    "Four engineered paired Chinese cases, one one-shot run, and nonblind primary plus independent AI judgments do not estimate general accuracy or real-user benefit.",
+    "The memory paths differ in selected roots and ranking context; the full-history path uses three diagnostic-only source groups and is not a product arm, equal-context benchmark, or pure causal ablation.",
+    "Warm/cold and before/after parity cover admitted-source and graph snapshots, not every SQLite table.",
+    "Model-proposed graph edges are unverified and are not authority for an answer or an action."
+  ],
+  "graphAudit": {
+    "scope": "three definite examples from a non-exhaustive primary inspection, not a graph-quality rate",
+    "wrongProposals": [
+      { "caseId": "export-review", "fromMessageId": "export-review-m01", "toMessageId": "export-review-m04", "relation": "challenges-premise", "issue": "The original choice does not challenge the later report that its offline ability was lost." },
+      { "caseId": "export-replaced", "fromMessageId": "export-replaced-m04", "toMessageId": "export-replaced-m07", "relation": "challenges-premise", "issue": "Loss of the old product's feature is not a challenge to the later adoption of a different product." },
+      { "caseId": "field-active", "fromMessageId": "field-active-m04", "toMessageId": "field-active-m02", "relation": "supports-decision", "issue": "Retiring the report does not support its earlier field use, which is not a decision." }
+    ]
+  },
+  "cases": [
+    {
+      "id": "export-review",
+      "submittedMessageIds": ["export-review-m01", "export-review-m02", "export-review-m03", "export-review-m04", "export-review-m05", "export-review-m06", "export-review-m07", "export-review-m08", "export-review-m09"],
+      "captureBatchStatuses": ["completed", "completed", "completed"],
+      "retainedMessageIds": ["export-review-m01", "export-review-m02", "export-review-m04", "export-review-m05", "export-review-m06", "export-review-m07", "export-review-m08"],
+      "units": { "u01": "export-review-m08", "u02": "export-review-m07", "u03": "export-review-m07", "u04": "export-review-m05", "u05": "export-review-m04", "u06": "export-review-m06", "u07": "export-review-m02", "u08": "export-review-m01" },
+      "memoryArmSnapshotsMatchColdBaseline": [true, true],
+      "arms": [
+        {
+          "path": "ordinary-source-evidence",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u08", "u05", "u04", "u02", "u01", "u03"],
+          "selectedRootUnitIds": ["u08", "u05", "u04", "u02", "u01"],
+          "expandedNeighborhoodUnitIds": [],
+          "deliveredUnitIds": ["u08", "u05", "u04", "u02", "u01"],
+          "deliveredMessageIds": ["export-review-m01", "export-review-m04", "export-review-m05", "export-review-m07", "export-review-m08"],
+          "literalAnchors": { "matched": 8, "total": 9, "missingMessageIds": ["export-review-m02"], "requiredClaimsWithSupport": 7 },
+          "answerText": "展務組目前採用的說明牌匯出軟體是「流光」。最初選擇流光的兩個獨立理由是：\n1. 能在斷網時批次匯出 PDF。\n2. 每次匯出都有可追溯的簽核紀錄。\n\n後來流光升級後停止支援斷網批次匯出 PDF，這項能力失效；但流光的每次匯出簽核紀錄能力仍可用且沒有失效。\n\n目前尚未核准換用其他軟體，仍採用流光。斷網匯出理由失效後，需要重新審查選用依據。",
+          "supportedRequiredClaimIds": ["historical-choice", "historical-offline-reason", "historical-audit-reason", "offline-reason-lost", "audit-reason-still-valid", "current-choice", "review-needed"],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "projected-rationale-neighborhood",
+          "status": "unavailable",
+          "recallError": "context_item_too_large",
+          "rankCandidateUnitIds": ["u08", "u05", "u04", "u02", "u01", "u03"],
+          "selectedRootUnitIds": ["u08", "u05", "u04", "u02", "u01", "u03"],
+          "rootNeighborhoods": [
+            { "root": "u08", "sources": ["u08", "u07", "u04", "u05", "u02", "u03"] },
+            { "root": "u05", "sources": ["u05", "u07", "u08"] },
+            { "root": "u04", "sources": ["u04", "u08", "u01"] },
+            { "root": "u02", "sources": ["u02", "u08"] },
+            { "root": "u01", "sources": ["u01", "u04"] },
+            { "root": "u03", "sources": ["u03", "u08"] }
+          ],
+          "expandedNeighborhoodUnitIds": ["u08", "u07", "u04", "u05", "u02", "u03", "u01"],
+          "expandedDistinctMessageIds": ["export-review-m01", "export-review-m02", "export-review-m04", "export-review-m05", "export-review-m07", "export-review-m08"],
+          "deliveredUnitIds": [],
+          "deliveredMessageIds": [],
+          "literalAnchors": null,
+          "answerText": null,
+          "supportedRequiredClaimIds": [],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "full-history-diagnostic",
+          "status": "generated-unassessed",
+          "diagnosticSourceGroups": 3,
+          "syntheticRevisionAndCurrentness": "transport placeholders only, not persisted state or verified truth",
+          "deliveredMessageIds": ["export-review-m01", "export-review-m02", "export-review-m03", "export-review-m04", "export-review-m05", "export-review-m06", "export-review-m07", "export-review-m08", "export-review-m09"],
+          "literalAnchors": { "matched": 9, "total": 9, "missingMessageIds": [], "requiredClaimsWithSupport": 7 },
+          "answerText": "展務組目前採用的是流光軟體來製作展品說明牌的匯出檔。最初選擇流光有兩個獨立理由：一是可在斷網時批次匯出PDF，二是每次匯出都有可追溯的簽核紀錄。\n\n後來流光升級後停止支援斷網批次匯出PDF的能力（即斷網匯出能力失效），但它原有的每次匯出簽核紀錄這項能力仍然可用。\n\n目前沒有核准換用其他軟體，仍持續使用流光。斷網匯出能力失效後，需要重新審查選用依據。",
+          "supportedRequiredClaimIds": ["historical-choice", "historical-offline-reason", "historical-audit-reason", "offline-reason-lost", "audit-reason-still-valid", "current-choice", "review-needed"],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        }
+      ]
+    },
+    {
+      "id": "export-replaced",
+      "submittedMessageIds": ["export-replaced-m01", "export-replaced-m02", "export-replaced-m03", "export-replaced-m04", "export-replaced-m05", "export-replaced-m06", "export-replaced-m07", "export-replaced-m08", "export-replaced-m09"],
+      "captureBatchStatuses": ["completed", "completed", "completed"],
+      "retainedMessageIds": ["export-replaced-m01", "export-replaced-m02", "export-replaced-m04", "export-replaced-m05", "export-replaced-m06", "export-replaced-m07", "export-replaced-m08"],
+      "units": { "u01": "export-replaced-m07", "u02": "export-replaced-m08", "u03": "export-replaced-m05", "u04": "export-replaced-m04", "u05": "export-replaced-m06", "u06": "export-replaced-m01", "u07": "export-replaced-m02" },
+      "memoryArmSnapshotsMatchColdBaseline": [true, true],
+      "arms": [
+        {
+          "path": "ordinary-source-evidence",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u06", "u04", "u01", "u03", "u02"],
+          "selectedRootUnitIds": ["u06", "u04", "u03", "u01", "u02"],
+          "expandedNeighborhoodUnitIds": [],
+          "deliveredUnitIds": ["u06", "u04", "u03", "u01", "u02"],
+          "deliveredMessageIds": ["export-replaced-m01", "export-replaced-m04", "export-replaced-m05", "export-replaced-m07", "export-replaced-m08"],
+          "literalAnchors": { "matched": 9, "total": 10, "missingMessageIds": ["export-replaced-m02"], "requiredClaimsWithSupport": 7 },
+          "answerText": "展務組目前採用霧杉作為說明牌匯出軟體。\n\n最初選擇流光的兩個獨立理由是：\n1. 流光可在斷網時批次匯出 PDF。\n2. 每次匯出都有可追溯的簽核紀錄。\n\n後來，流光升級後停止支援斷網批次匯出 PDF，這項能力失效；但流光原有的每次匯出簽核紀錄能力仍可用。\n\n展務組已核准換用霧杉取代流光，理由是霧杉在斷網驗收中能批次匯出 PDF，符合先前流光斷網批次匯出功能的需求。\n\n若未換用，原先流光簽核紀錄的有效性仍需重新審查使用需求的依據，但此點因已換用霧杉而不再適用。",
+          "supportedRequiredClaimIds": ["historical-choice", "historical-offline-reason", "historical-audit-reason", "offline-reason-lost", "audit-reason-not-rewritten", "replacement-adopted", "replacement-reason"],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": ["若未換用，原先流光簽核紀錄的有效性仍需重新審查使用需求的依據，但此點因已換用霧杉而不再適用。"],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "projected-rationale-neighborhood",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u01", "u06", "u04", "u02", "u03"],
+          "selectedRootUnitIds": ["u01", "u06", "u04", "u03", "u02"],
+          "expandedNeighborhoodUnitIds": ["u01", "u06", "u04", "u03", "u07", "u02"],
+          "deliveredUnitIds": ["u01", "u06", "u04", "u03", "u07", "u02"],
+          "deliveredMessageIds": ["export-replaced-m07", "export-replaced-m01", "export-replaced-m04", "export-replaced-m05", "export-replaced-m02", "export-replaced-m08"],
+          "literalAnchors": { "matched": 10, "total": 10, "missingMessageIds": [], "requiredClaimsWithSupport": 7 },
+          "answerText": "展務組目前採用的說明牌匯出軟體是霧杉。\n\n最初選擇流光的兩個獨立理由是：\n1. 在斷網時能批次匯出PDF。\n2. 每次匯出都有可追溯的簽核紀錄。\n\n後來流光升級後，斷網批次匯出PDF的能力失效，必須連網才能匯出；但流光的簽核紀錄能力仍可用，未被推翻。\n\n展務組已正式核准換用霧杉，理由是霧杉在斷網驗收中能批次匯出PDF。\n\n因此，未換用流光，且換用決定已核准，選用依據中的斷網批次匯出能力需要重新審查。",
+          "supportedRequiredClaimIds": ["historical-choice", "historical-offline-reason", "historical-audit-reason", "offline-reason-lost", "audit-reason-not-rewritten", "replacement-adopted", "replacement-reason"],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": ["選用依據中的斷網批次匯出能力需要重新審查。"],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "full-history-diagnostic",
+          "status": "generated-unassessed",
+          "diagnosticSourceGroups": 3,
+          "syntheticRevisionAndCurrentness": "transport placeholders only, not persisted state or verified truth",
+          "deliveredMessageIds": ["export-replaced-m01", "export-replaced-m02", "export-replaced-m03", "export-replaced-m04", "export-replaced-m05", "export-replaced-m06", "export-replaced-m07", "export-replaced-m08", "export-replaced-m09"],
+          "literalAnchors": { "matched": 10, "total": 10, "missingMessageIds": [], "requiredClaimsWithSupport": 7 },
+          "answerText": "展務組目前採用的說明牌匯出軟體是「霧杉」，已於2026-03-06正式決議取代流光。\n\n最初選用流光的兩個獨立理由是：\n1. 在斷網時可以批次匯出PDF。\n2. 每次匯出都有可追溯的簽核紀錄。\n\n後來流光升級後失效的能力是「斷網批次匯出PDF」功能，必須連網才能匯出；但原有的「每次匯出簽核紀錄仍可查」的能力保持可用。\n\n目前已核准換用軟體為霧杉，理由是霧杉在展務組的斷網驗收中能批次匯出PDF。\n\n由此可知，因為流光斷網匯出功能失效，且簽核紀錄仍有價值但不足以維持使用，故展務組決議改用霧杉。先前選用除斷網匯出外還有簽核紀錄作為選用依據，但換用後相關依據如斷網匯出能力的選用依據已被重新審查並更新。",
+          "supportedRequiredClaimIds": ["historical-choice", "historical-offline-reason", "historical-audit-reason", "offline-reason-lost", "audit-reason-not-rewritten", "replacement-adopted", "replacement-reason"],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": ["換用後相關依據如斷網匯出能力的選用依據已被重新審查並更新。"],
+          "forbiddenConclusion": false
+        }
+      ]
+    },
+    {
+      "id": "field-unknown",
+      "submittedMessageIds": ["field-unknown-m01", "field-unknown-m02", "field-unknown-m03", "field-unknown-m04", "field-unknown-m05", "field-unknown-m06", "field-unknown-m07", "field-unknown-m08", "field-unknown-m09"],
+      "captureBatchStatuses": ["completed", "completed", "completed"],
+      "retainedMessageIds": ["field-unknown-m01", "field-unknown-m02", "field-unknown-m04", "field-unknown-m05", "field-unknown-m07", "field-unknown-m08"],
+      "units": { "u01": "field-unknown-m07", "u02": "field-unknown-m08", "u03": "field-unknown-m04", "u04": "field-unknown-m05", "u05": "field-unknown-m02", "u06": "field-unknown-m01" },
+      "memoryArmSnapshotsMatchColdBaseline": [true, true],
+      "arms": [
+        {
+          "path": "ordinary-source-evidence",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u06", "u03", "u04", "u01", "u02"],
+          "selectedRootUnitIds": ["u06", "u03", "u04", "u01", "u02"],
+          "expandedNeighborhoodUnitIds": [],
+          "deliveredUnitIds": ["u06", "u03", "u04", "u01", "u02"],
+          "deliveredMessageIds": ["field-unknown-m01", "field-unknown-m04", "field-unknown-m05", "field-unknown-m07", "field-unknown-m08"],
+          "literalAnchors": { "matched": 11, "total": 12, "missingMessageIds": ["field-unknown-m02"], "requiredClaimsWithSupport": 8 },
+          "answerText": "pickup_zone 欄位目前仍受刪除限制。\n\n最初的兩項依賴造成限制是：\n1. 每週分區結案報表\n2. 合作商的 GET /zones API\n\n其中，每週分區結案報表已於 2026-05-15 正式退役，排程停止，現在不再讀取 pickup_zone。5月16日匯入的舊報告是日期為 2026-02-10 的舊相依性報告，記錄的是報表與 GET /zones API 當時都讀 pickup_zone 的舊狀態，並非重新啟用報表。\n\n而另一項依賴 GET /zones API 是否仍讀取 pickup_zone，目前尚未完成查核，不能斷言是否仍在使用，也不可以標記為已解除。\n\n因此，現在因為 API 依賴尚未確認解除，pickup_zone 欄位不得刪除，沒有核准刪欄位或執行遷移。",
+          "supportedRequiredClaimIds": ["historical-report-dependency", "historical-api-dependency", "report-retired", "older-import", "api-unknown", "restriction-remains", "not-authorized"],
+          "partialRequiredClaimIds": ["historical-restriction"],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "projected-rationale-neighborhood",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u06", "u04", "u03", "u01", "u02"],
+          "selectedRootUnitIds": ["u06", "u03", "u04", "u01", "u02"],
+          "expandedNeighborhoodUnitIds": ["u06", "u03", "u05", "u04", "u01", "u02"],
+          "deliveredUnitIds": ["u06", "u03", "u05", "u04", "u01", "u02"],
+          "deliveredMessageIds": ["field-unknown-m01", "field-unknown-m04", "field-unknown-m02", "field-unknown-m05", "field-unknown-m07", "field-unknown-m08"],
+          "literalAnchors": { "matched": 12, "total": 12, "missingMessageIds": [], "requiredClaimsWithSupport": 8 },
+          "answerText": "pickup_zone 欄位目前仍受刪除限制，原因是「每週分區結案報表」與「合作商的 GET /zones API」這兩項依賴造成限制。\n\n其中，每週分區結案報表已在 2026-05-15 正式退役並停止排程，所以不再讀取 pickup_zone。5月16日匯入的舊報告是 2026-02-10 的舊相依性報告，說明該報表與 GET /zones API 當時都還有讀取 pickup_zone，但僅是記錄舊狀態，並非重新啟用該報表。\n\n另一項依賴，合作商的 GET /zones API 是否仍讀取 pickup_zone，尚未完成查核，現在既不能斷言已解除，也不能斷言仍在使用。\n\n因此，因為 API 依賴尚未確認解除，pickup_zone 欄位的刪除限制仍在，現在不可以直接刪欄位或執行遷移。",
+          "supportedRequiredClaimIds": ["historical-report-dependency", "historical-api-dependency", "report-retired", "older-import", "api-unknown", "restriction-remains", "not-authorized"],
+          "partialRequiredClaimIds": ["historical-restriction"],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "full-history-diagnostic",
+          "status": "generated-unassessed",
+          "diagnosticSourceGroups": 3,
+          "syntheticRevisionAndCurrentness": "transport placeholders only, not persisted state or verified truth",
+          "deliveredMessageIds": ["field-unknown-m01", "field-unknown-m02", "field-unknown-m03", "field-unknown-m04", "field-unknown-m05", "field-unknown-m06", "field-unknown-m07", "field-unknown-m08", "field-unknown-m09"],
+          "literalAnchors": { "matched": 12, "total": 12, "missingMessageIds": [], "requiredClaimsWithSupport": 8 },
+          "answerText": "pickup_zone 欄位目前仍受刪除限制。最初受兩項依賴限制：\n1. 每週分區結案報表的排程（排程讀取該欄位）\n2. 合作商的 GET /zones API（API 調用該欄位）\n\n其中，每週分區結案報表已於 2026-05-15 正式退役並停止排程，不再讀取 pickup_zone。2026-05-16 匯入了一份日期為 2026-02-10 的舊相依性報告，該報告只是記錄舊狀態，代表歷史情況，並非報表重新啟用。\n\n至於合作商的 GET /zones API，目前仍未完成查核，無法確認該 API 是否仍讀取 pickup_zone，也不能確定是否已解除依賴。\n\n因為 API 依賴尚未確認解除，pickup_zone 欄位的不得刪除限制仍在，尚未核准刪除欄位或執行欄位遷移。",
+          "supportedRequiredClaimIds": ["historical-report-dependency", "historical-api-dependency", "report-retired", "older-import", "api-unknown", "restriction-remains", "not-authorized"],
+          "partialRequiredClaimIds": ["historical-restriction"],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        }
+      ]
+    },
+    {
+      "id": "field-active",
+      "submittedMessageIds": ["field-active-m01", "field-active-m02", "field-active-m03", "field-active-m04", "field-active-m05", "field-active-m06", "field-active-m07", "field-active-m08", "field-active-m09"],
+      "captureBatchStatuses": ["completed", "completed", "completed"],
+      "retainedMessageIds": ["field-active-m01", "field-active-m02", "field-active-m04", "field-active-m05", "field-active-m07", "field-active-m08"],
+      "units": { "u01": "field-active-m07", "u02": "field-active-m08", "u03": "field-active-m04", "u04": "field-active-m05", "u05": "field-active-m02", "u06": "field-active-m01" },
+      "memoryArmSnapshotsMatchColdBaseline": [true, true],
+      "arms": [
+        {
+          "path": "ordinary-source-evidence",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u06", "u03", "u04", "u02", "u01"],
+          "selectedRootUnitIds": ["u06", "u03", "u04", "u02", "u01"],
+          "expandedNeighborhoodUnitIds": [],
+          "deliveredUnitIds": ["u06", "u03", "u04", "u02", "u01"],
+          "deliveredMessageIds": ["field-active-m01", "field-active-m04", "field-active-m05", "field-active-m08", "field-active-m07"],
+          "literalAnchors": { "matched": 10, "total": 11, "missingMessageIds": ["field-active-m02"], "requiredClaimsWithSupport": 8 },
+          "answerText": "pickup_zone 欄位目前仍受刪除限制。最初這限制來自兩項依賴：每週分區結案報表與合作商的 GET /zones API。  \n其中，每週分區結案報表已於 2026-05-15 正式退役並停止排程，不再讀取 pickup_zone。5月16日匯入的舊報告是日期為 2026-02-10 的相依性舊狀態報告，僅紀錄當時報表與 API 都讀 pickup_zone 的情況，並非表示報表重新啟用。  \n目前另一項依賴——GET /zones API 仍在使用 pickup_zone，經 2026-06-02 讀取追蹤已確認依賴未解除。  \n因此，現在 pickup_zone 欄位不能直接刪除或執行遷移，必須在解除所有依賴後並經資料庫變更核准後才能進行。",
+          "supportedRequiredClaimIds": ["historical-restriction", "historical-report-dependency", "historical-api-dependency", "report-retired", "older-import", "api-active", "restriction-remains", "not-authorized"],
+          "partialRequiredClaimIds": [],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "projected-rationale-neighborhood",
+          "status": "generated-unassessed",
+          "rankCandidateUnitIds": ["u06", "u03", "u04", "u02", "u01"],
+          "selectedRootUnitIds": ["u06", "u03", "u04", "u01", "u02"],
+          "expandedNeighborhoodUnitIds": ["u06", "u01", "u05", "u03", "u04", "u02"],
+          "deliveredUnitIds": ["u06", "u01", "u05", "u03", "u04", "u02"],
+          "deliveredMessageIds": ["field-active-m01", "field-active-m07", "field-active-m02", "field-active-m04", "field-active-m05", "field-active-m08"],
+          "literalAnchors": { "matched": 11, "total": 11, "missingMessageIds": [], "requiredClaimsWithSupport": 8 },
+          "answerText": "pickup_zone 欄位目前仍受刪除限制。最初有兩項依賴造成限制：(1) 每週分區結案報表，(2) 合作商端點的 GET /zones API。  \n其中，每週分區結案報表已於 2026-05-15 正式退役並停止排程，不再讀取 pickup_zone。2026-05-16 匯入了一份日期為 2026-02-10 的舊報告，該報告記錄的是當時的狀態（報表與 GET /zones API 都會讀 pickup_zone），但不是重新啟用報表。  \n另一方面，合作商端點 GET /zones API 仍會讀取 pickup_zone，該依賴未解除。  \n因此，因為 API 依賴仍在，pickup_zone 欄位的刪除限制仍存在，尚未核准刪欄位或執行遷移。",
+          "supportedRequiredClaimIds": ["historical-report-dependency", "historical-api-dependency", "report-retired", "older-import", "api-active", "restriction-remains", "not-authorized"],
+          "partialRequiredClaimIds": ["historical-restriction"],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        },
+        {
+          "path": "full-history-diagnostic",
+          "status": "generated-unassessed",
+          "diagnosticSourceGroups": 3,
+          "syntheticRevisionAndCurrentness": "transport placeholders only, not persisted state or verified truth",
+          "deliveredMessageIds": ["field-active-m01", "field-active-m02", "field-active-m03", "field-active-m04", "field-active-m05", "field-active-m06", "field-active-m07", "field-active-m08", "field-active-m09"],
+          "literalAnchors": { "matched": 11, "total": 11, "missingMessageIds": [], "requiredClaimsWithSupport": 8 },
+          "answerText": "pickup_zone 欄位目前仍受刪除限制。最初的兩項依賴是每週分區結案報表和合作商的 GET /zones API。報表依賴已於 2026-05-15 正式退役並停止排程，5月16日匯入的舊報告是記錄舊狀態，表示報表與 API 當時都讀 pickup_zone，並非重新啟用報表。另一項依賴，即 GET /zones API，經 2026-06-02 讀取追蹤確認仍會讀取 pickup_zone，這項依賴尚未解除。因此，pickup_zone 欄位仍不得刪除，目前也沒有核准執行欄位刪除或遷移。",
+          "supportedRequiredClaimIds": ["historical-report-dependency", "historical-api-dependency", "report-retired", "older-import", "api-active", "restriction-remains", "not-authorized"],
+          "partialRequiredClaimIds": ["historical-restriction"],
+          "unsupportedExtraStatements": [],
+          "forbiddenConclusion": false
+        }
+      ]
+    }
+  ]
+}
