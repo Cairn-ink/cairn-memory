@@ -102,3 +102,15 @@ groups, exact association round-trip and no collision; a grouping key that
 omits `projectId` would fail. The evaluation module's record predicate and
 entry validator were renamed for clarity only. All four gates above passed
 again on both pinned runtimes before the replacement candidate was frozen.
+
+Correction round 2, from PR163 CI on `90b956f`: the generic Node 20.20.2
+test job failed at test-module load with `ERR_UNKNOWN_BUILTIN_MODULE:
+node:sqlite`. The evaluation test had statically imported the local core,
+which supports only Node >=22.16, so its intended generic-runtime separation
+never took effect. The test now dynamically imports core inside its actual-
+core case and explicitly skips only that case below 22.16. On actual
+Node 20.20.2, the focused file passes 4/4 pure cases with one explicit
+core-case skip; the full generic suite passes 145 with eight skips total and
+JSON validation passes. Node 22.16/24.15 still execute the actual-core case.
+No dependency or lockfile changed. Repeat both independent reviews on the
+replacement fixed head before updating PR163.

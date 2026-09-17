@@ -3,9 +3,10 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { openMemoryCore } from '../../../core/index.mjs';
 import { groupSourceEvents } from '../source-event-grouping.mjs';
 
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+const supportsCore = nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 16);
 const namespace = { ownerId: 'synthetic-event-grouping', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const bytes = packet => Buffer.byteLength(JSON.stringify(packet), 'utf8');
@@ -25,7 +26,9 @@ const unpack = packet => packet.sources.flatMap(source => source.associations.ma
   eventId: source.eventId, role: source.role, excerpt: source.excerpt, ...association,
 }))).sort(ordered);
 
-test('SEG1/3 actual core stores seven distinct cards from six events, preserving every receipt link', t => {
+test('SEG1/3 actual core stores seven distinct cards from six events, preserving every receipt link',
+  { skip: supportsCore ? false : 'local core requires Node >=22.16' }, async t => {
+  const { openMemoryCore } = await import('../../../core/index.mjs');
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-event-grouping-')), 'memory.sqlite');
   const core = openMemoryCore({ path }); t.after(() => core.close());
   const events = [
