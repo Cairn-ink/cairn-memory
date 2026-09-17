@@ -23,6 +23,18 @@ const proposal = () => ({ units: [{ source: 0, receipt: 0, kind: 'decision_state
 const request = () => ({ system: 'Synthetic source-only assessment.',
   ...prepareSourceContextUnits(raw()), maxOutputTokens: 3072,
   signal: new AbortController().signal });
+const v2Raw = () => ({ version: 2, sources: [{ receipts: [
+  { role: 'user', excerpt: "Mina relays Lee's tentative view that a sensor failed." },
+] }] });
+const v2Proposal = () => ({ units: [{ source: 0, receipt: 0, kind: 'factual_claim',
+  subject: field('sensor', [0]), property: field('failed', [0]), scope: field(null),
+  applies: field(null), value: field(null), attribution: field('reported', [0]),
+  polarity: field('affirmed', [0]), quantifier: field('unknown'),
+  eventTimeContext: [], reporterContext: [], epistemicState: field('tentative', [0]),
+  claimant: field('Lee', [0]), reporter: field('Mina', [0]) }] });
+const v2Request = () => ({ system: 'Synthetic v2 source stance assessment.',
+  ...prepareSourceContextUnits(v2Raw()), maxOutputTokens: 3072,
+  signal: new AbortController().signal });
 const response = (body, output = proposal(), usage = {}) => Response.json({
   object: 'response', model: body.model, status: 'completed', error: null,
   incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
@@ -68,6 +80,61 @@ test('SCA1–4 exact source-only count/generation bodies use basisModel and CU s
     assert.equal(Object.hasOwn(schemas, 'reviewSourceContext'), false);
     assert.deepEqual(schemasFor('reviewSourceContext', input.input), input.responseSchema);
   }
+});
+
+test('SCS1/5 v1 reviewSourceContext bodies match fixed-base bytes; v2 uses canonical CU schema', async () => {
+  const legacy = harness({ output: { units: [] } });
+  assert.deepEqual(await legacy.model.reviewSourceContext(request()), { units: [] });
+  assert.deepEqual(legacy.calls.map(call => createHash('sha256').update(call.options.body).digest('hex')),
+    ['8b395e53339fbc637fc4cd968a0e628a15a3a775ea24a2224e299c5af09d36f0',
+      '30e6c385cbb64dacafee1752a645876a328176cd6584dfbd95df8493f8f6cff5']);
+  const input = v2Request(); const h = harness({ output: v2Proposal() });
+  assert.deepEqual(await h.model.reviewSourceContext(input), v2Proposal());
+  assert.deepEqual(h.calls.map(call => call.url), [
+    'https://api.openai.com/v1/responses/input_tokens',
+    'https://api.openai.com/v1/responses']);
+  const [counted, generated] = h.calls.map(call => call.body);
+  assert.equal(JSON.parse(counted.input[0].content[0].text).version, 2);
+  assert.deepEqual(counted.text.format.schema, input.responseSchema);
+  assert.deepEqual(generated, { ...counted, max_output_tokens: 3072,
+    store: false, stream: false });
+  assert.equal(compileSourceContextUnits(v2Raw(), v2Proposal()).version, 2);
+  assert.equal(JSON.stringify(h.calls).includes('synthetic-client'), false);
+});
+
+test('SCS5 v2 rejects mismatched schema, malformed stance and caller mutation without retries', async () => {
+  const h = harness({ output: v2Proposal() });
+  for (const [index, mutate] of [
+    value => { delete value.input.version; },
+    value => { value.input.version = 3; },
+    value => { value.responseSchema.properties.units.items.anyOf[0].properties.claimant
+      .properties.evidence.maxItems = 5; },
+    value => { value.input.sources[0].receipts[0].passages[0].text = ''; },
+  ].entries()) {
+    const original = v2Request();
+    const value = { ...original, input: structuredClone(original.input),
+      responseSchema: structuredClone(original.responseSchema) };
+    mutate(value);
+    await assert.rejects(h.model.reviewSourceContext(value), /invalid_openai_request/,
+      `mutation ${index}`);
+  }
+  assert.equal(h.calls.length, 0);
+  const bad = v2Proposal(); bad.units[0].epistemicState.evidence = [1];
+  const invalid = harness({ output: bad });
+  await assert.rejects(invalid.model.reviewSourceContext(v2Request()),
+    { code: 'invalid_model_output' });
+  assert.equal(invalid.calls.length, 2);
+  const prepared = v2Request();
+  const mutable = { ...prepared, input: structuredClone(prepared.input),
+    responseSchema: structuredClone(prepared.responseSchema) };
+  const original = structuredClone({ input: mutable.input, responseSchema: mutable.responseSchema });
+  const detached = harness({ output: v2Proposal(), onCount: () => {
+    mutable.input.sources[0].receipts[0].passages[0].text = 'mutated';
+    mutable.responseSchema.properties.units.maxItems = 9;
+  } });
+  assert.deepEqual(await detached.model.reviewSourceContext(mutable), v2Proposal());
+  assert.deepEqual(JSON.parse(detached.calls[1].body.input[0].content[0].text), original.input);
+  assert.deepEqual(detached.calls[1].body.text.format.schema, original.responseSchema);
 });
 
 test('SCA2 malformed options, source input and schema reject before HTTP', async () => {
@@ -309,6 +376,50 @@ test('SCA5 actual core binds adapter output and rejects correction during provid
   const result = await cold.reviewSourceContext({ namespace, refs: [ref] });
   assert.equal(result.ok, false, JSON.stringify(result));
   assert.equal(result.error.code, 'revision_conflict');
+  assert.equal(stale.calls.length, 2);
+});
+
+test('SCS4/5 actual v2 core-to-adapter path binds stance and fences correction', async t => {
+  const path = join(mkdtempSync(join(tmpdir(), 'cairn-v2-context-adapter-')), 'store.sqlite');
+  const namespace = { ownerId: 'synthetic-v2-owner', scope: 'personal', projectId: null };
+  const h = harness({ output: v2Proposal() });
+  const core = openMemoryCore({ path, model: h.model }); t.after(() => core.close());
+  const admitted = core.admit({ namespace,
+    memory: { content: 'Opaque generated text', kind: 'context' },
+    receipts: [{ client: 'synthetic-client', sessionId: 'synthetic-session',
+      eventId: 'synthetic-v2-event', role: 'user',
+      excerpt: v2Raw().sources[0].receipts[0].excerpt }] });
+  assert.equal(admitted.ok, true, JSON.stringify(admitted));
+  const ref = { memoryId: admitted.value.memory.id, revision: admitted.value.memory.revision };
+  const before = core.getRationale({ namespace, ...ref });
+  const review = await core.reviewSourceContext({ namespace, refs: [ref], version: 2 });
+  assert.equal(review.ok, true, JSON.stringify(review));
+  assert.equal(review.value.version, 2);
+  assert.equal(review.value.units[0].memoryId, ref.memoryId);
+  assert.equal(review.value.units[0].receiptId, review.value.sources[0].receipts[0].id);
+  assert.equal(review.value.units[0].epistemicState.value, 'tentative');
+  assert.equal(review.value.units[0].claimant.value, 'Lee');
+  assert.equal(review.value.units[0].reporter.value, 'Mina');
+  assert.equal(review.value.semanticCoverage, 'unassessed');
+  assert.equal(review.value.sourceSelectionCoverage, 'unassessed');
+  assert.equal(review.value.persistence, 'not-stored');
+  assert.deepEqual(core.getRationale({ namespace, ...ref }), before);
+  assert.equal(JSON.stringify(h.calls).includes('Opaque generated text'), false);
+  assert.equal(JSON.stringify(h.calls).includes(ref.memoryId), false);
+  core.close();
+  let changed = false;
+  const stale = harness({ output: v2Proposal(), onCount: () => {
+    if (changed) return; changed = true;
+    const corrected = cold.correct({ namespace, memoryId: ref.memoryId,
+      expectedRevision: ref.revision, content: 'Corrected interpretation', kind: 'context',
+      receipt: { client: 'synthetic-client', sessionId: 'synthetic-session',
+        eventId: 'synthetic-v2-correction', role: 'user', excerpt: 'Corrected source' } });
+    assert.equal(corrected.ok, true, JSON.stringify(corrected));
+  } });
+  const cold = openMemoryCore({ path, model: stale.model }); t.after(() => cold.close());
+  const failure = await cold.reviewSourceContext({ namespace, refs: [ref], version: 2 });
+  assert.equal(failure.ok, false, JSON.stringify(failure));
+  assert.equal(failure.error.code, 'revision_conflict');
   assert.equal(stale.calls.length, 2);
 });
 

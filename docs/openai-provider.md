@@ -20,6 +20,14 @@ request shapes and limits. Existing paid-experiment guards do **not** authorize
 authority and data-policy review. Fake-HTTP tests prove transport behavior, not
 provider compatibility or semantic quality.
 
+The same explicit `reviewSourceContext` port also accepts the core's canonical
+version 2 prepared input and schema when the caller opts in. It uses the same
+count/generation routes, `basisModel`, 6,000/3,072 token ceilings, bounded
+response reading and cancellation. The adapter delegates structural output
+validation to the existing core compiler; it does not verify source stance or
+speaker identity. Versionless serialized requests and all other model methods
+are unchanged, and the old paid guards still deny this port.
+
 The embedded adapter can separately select an experimental
 [rationale model](rationale-model-controls.md). This changes only an explicitly
 configured relate port, not other methods or MCP defaults, and grants no paid

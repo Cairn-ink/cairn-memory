@@ -63,7 +63,7 @@ function sourceContextContract(input, suppliedSchema) {
     const sources = input.sources.map(source => ({ receipts: source.receipts.map(receipt => ({
       role: receipt.role, excerpt: receipt.passages.map(passage => passage.text).join(''),
     })) }));
-    const raw = { sources };
+    const raw = { ...(Object.hasOwn(input, 'version') ? { version: input.version } : {}), sources };
     const prepared = prepareSourceContextUnits(raw);
     if (!isDeepStrictEqual(input, prepared.input) ||
         (suppliedSchema !== undefined && !isDeepStrictEqual(suppliedSchema, prepared.responseSchema))) invalid();

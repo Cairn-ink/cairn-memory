@@ -24,6 +24,10 @@ function fact(source, receiptIndex) {
     eventTimeContext: [], reporterContext: [] };
 }
 const proposed = (...items) => ({ units: items });
+const v2Fact = (source, epistemicState, claimant, reporter) => ({ ...fact(source, 0),
+  epistemicState: field(epistemicState, epistemicState === 'unknown' ? [] : [0]),
+  claimant: field(claimant, claimant === null ? [] : [0]),
+  reporter: field(reporter, reporter === null ? [] : [0]) });
 function fixture(t, overrides = {}) {
   const path = join(mkdtempSync(join(tmpdir(), 'cairn-bound-source-')), 'store.sqlite');
   const requests = [];
@@ -83,6 +87,38 @@ test('BCU1/2/4 same-text receipts bind distinct persistent IDs without leaking t
     f.refs[0].revision);
   value.sources[0].receipts[0].excerpt = 'caller changed result';
   assert.equal(ok(await f.review()).sources[0].receipts[0].excerpt, text);
+});
+
+test('SCS1–4 explicit v2 binds direct and reported tentative propositions without persistence', async t => {
+  const f = fixture(t);
+  const direct = f.admit('direct-hypothesis', ['Nora suspects the valve may be blocked; not confirmed.']);
+  const reported = f.admit('reported-hypothesis',
+    ["Mina relays Lee's tentative view that a sensor failed; still unconfirmed."]);
+  const refs = [direct, reported].map(memory =>
+    ({ memoryId: memory.id, revision: memory.revision }));
+  const before = f.stored();
+  f.model.reviewSourceContext = request => { f.requests.push(request);
+    return proposed(v2Fact(0, 'tentative', 'Nora', null),
+      v2Fact(1, 'tentative', 'Lee', 'Mina')); };
+  const value = ok(await f.core.reviewSourceContext({ namespace, refs, version: 2 }));
+  assert.equal(value.version, 2);
+  assert.deepEqual(value.units.map(unit => [unit.memoryId, unit.revision, unit.receiptId]),
+    refs.map((ref, index) => [ref.memoryId, ref.revision, value.sources[index].receipts[0].id]));
+  assert.deepEqual(value.units.map(unit => unit.epistemicState.value), ['tentative', 'tentative']);
+  assert.deepEqual(value.units.map(unit => unit.claimant.value), ['Nora', 'Lee']);
+  assert.deepEqual(value.units.map(unit => unit.reporter.value), [null, 'Mina']);
+  assert.equal(value.units.every(unit => unit.epistemicState.interpretationStatus ===
+    'model-proposed-unverified'), true);
+  assert.equal(value.sourceSelectionCoverage, 'unassessed');
+  assert.equal(value.semanticCoverage, 'unassessed');
+  assert.equal(value.persistence, 'not-stored');
+  const request = f.requests.at(-1);
+  assert.equal(request.input.version, 2);
+  assert.match(request.system, /claimant/u);
+  assert.match(request.system, /same unit as each proposition/u);
+  assert.equal(JSON.stringify({ input: request.input, schema: request.responseSchema })
+    .includes(direct.id), false);
+  assert.deepEqual(f.stored(), before);
 });
 
 test('BCU1/4 caller input is captured before assay; unrelated namespaces do not stale it', async t => {

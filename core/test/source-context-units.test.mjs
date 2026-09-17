@@ -242,3 +242,117 @@ test('CU5 strict trees, detached input and wrong semantic context remain unverif
   assert.equal(compiled.units[0].eventTimeContext.interpretationStatus,
     'model-proposed-unverified');
 });
+
+const v2Input = (excerpt = 'Mina relays Lee’s tentative view that a sensor failed.') =>
+  ({ version: 2, sources: [{ receipts: [{ role: 'user', excerpt }] }] });
+const v2Fact = () => ({ ...fact(), epistemicState: field('tentative', [0]),
+  claimant: field('Lee', [0]), reporter: field('Mina', [0]) });
+
+test('SCS1/2 version 2 preparation and compilation keep stance on the proposition', () => {
+  const raw = v2Input();
+  const prepared = prepareSourceContextUnits(raw);
+  assert.equal(prepared.input.version, 2);
+  assert.deepEqual(Object.keys(prepared.responseSchema.properties), ['units']);
+  for (const branch of prepared.responseSchema.properties.units.items.anyOf) {
+    for (const name of ['epistemicState', 'claimant', 'reporter']) {
+      assert.equal(Object.hasOwn(branch.properties, name), true);
+      assert.equal(branch.required.includes(name), true);
+      assert.equal(branch.properties[name].properties.evidence.maxItems, 4);
+    }
+  }
+  const result = compileSourceContextUnits(raw, units(v2Fact()));
+  assert.equal(result.version, 2);
+  assert.equal(result.units.length, 1);
+  const unit = result.units[0];
+  assert.equal(unit.qualification.slot.subject, null);
+  assert.equal(unit.epistemicState.value, 'tentative');
+  assert.equal(unit.claimant.value, 'Lee');
+  assert.equal(unit.reporter.value, 'Mina');
+  assert.deepEqual(unit.focus.map(anchor => anchor.passage), [0]);
+  for (const name of ['epistemicState', 'claimant', 'reporter']) {
+    assert.equal(unit[name].anchors[0].text, raw.sources[0].receipts[0].excerpt);
+    assert.equal(unit[name].interpretationStatus, 'model-proposed-unverified');
+  }
+  assert.equal(unit.interpretationStatus, 'model-proposed-unverified');
+  assert.equal(result.persistence, 'not-stored');
+  raw.sources[0].receipts[0].excerpt = 'changed';
+  assert.match(unit.claimant.anchors[0].text, /Mina relays Lee/u);
+});
+
+test('SCS1/2 legacy and explicit v2 shapes reject cross-version and malformed stance fields', () => {
+  for (const version of [1, 3, null, '2']) rejectedInput({ ...input(), version });
+  rejectedInput({ ...v2Input(), extra: true });
+  rejectedOutput(input(), units(v2Fact()));
+  rejectedOutput(v2Input(), units(fact()));
+  rejectedOutput(v2Input(), { version: 2, units: [v2Fact()] });
+  for (const name of ['epistemicState', 'claimant', 'reporter']) {
+    const missing = v2Fact(); delete missing[name]; rejectedOutput(v2Input(), units(missing));
+    const wrong = v2Fact(); wrong[name].evidence = [1]; rejectedOutput(v2Input(), units(wrong));
+    const repeated = v2Fact(); repeated[name].evidence = [0, 0];
+    rejectedOutput(v2Input(), units(repeated));
+    const noEvidence = v2Fact(); noEvidence[name].evidence = [];
+    rejectedOutput(v2Input(), units(noEvidence));
+  }
+  for (const value of ['confirmed', 2, ['tentative']]) {
+    const wrong = v2Fact(); wrong.epistemicState.value = value;
+    rejectedOutput(v2Input(), units(wrong));
+  }
+  for (const name of ['claimant', 'reporter']) {
+    for (const value of ['sk-' + 'a'.repeat(24), 'ｓｋ-' + 'a'.repeat(24),
+      'x'.repeat(161), '㍍'.repeat(41), '   ', '\ud800', 'Lee\0', ' Lee', 'Lee  Team']) {
+      const wrong = v2Fact(); wrong[name].value = value;
+      rejectedOutput(v2Input(), units(wrong));
+    }
+  }
+  const extra = v2Fact(); extra.confirmed = true; rejectedOutput(v2Input(), units(extra));
+});
+
+test('SCS2 foreign receipt, focus overflow, asserted negation and unknowns use existing bounds', () => {
+  const raw = { version: 2, sources: [{ receipts: [
+    { role: 'user', excerpt: 'f'.repeat(201) },
+    { role: 'assistant', excerpt: 'Lee says the valve is not blocked.' },
+  ] }] };
+  const item = v2Fact(); item.receipt = 1;
+  item.epistemicState = field('asserted', [0]);
+  item.claimant = field(null); item.reporter = field(null);
+  item.polarity = field('negated', [0]);
+  assert.equal(prepareSourceContextUnits(raw).responseSchema.properties.units.items.anyOf[0]
+    .properties.claimant.properties.evidence.items.enum.includes(1), true);
+  const compiled = compileSourceContextUnits(raw, units(item)).units[0];
+  assert.equal(compiled.epistemicState.value, 'asserted');
+  assert.equal(compiled.polarity.value, 'negated');
+  assert.equal(compiled.claimant.value, null);
+  assert.equal(compiled.reporter.value, null);
+  for (const name of ['epistemicState', 'claimant', 'reporter']) {
+    const foreign = structuredClone(item); foreign[name].evidence = [1];
+    rejectedOutput(raw, units(foreign));
+  }
+  const five = v2Input('a'.repeat(199) + '🚚' + 'b'.repeat(599));
+  const crowded = v2Fact(); crowded.subject.evidence = [0];
+  crowded.property = field('p', [1]); crowded.scope = field('s', [2]);
+  crowded.applies = field('a', [3]); crowded.epistemicState.evidence = [4];
+  rejectedOutput(five, units(crowded));
+  const unknown = v2Fact(); unknown.epistemicState = field('unknown');
+  unknown.claimant = field(null); unknown.reporter = field(null);
+  assert.equal(compileSourceContextUnits(v2Input(), units(unknown)).units[0]
+    .epistemicState.value, 'unknown');
+  const decisionUnit = { ...v2Fact(), kind: 'decision_state', state: field('considered', [0]) };
+  assert.equal(compileSourceContextUnits(v2Input(), units(decisionUnit)).units[0]
+    .state.value, 'considered');
+  const nine = Array.from({ length: 9 }, (_, index) => {
+    const candidate = v2Fact(); candidate.subject = field(`subject ${index}`, [0]);
+    return candidate;
+  });
+  rejectedOutput(v2Input(), units(...nine));
+  const semanticallyWrong = v2Fact(); semanticallyWrong.epistemicState = field('asserted', [0]);
+  const unverified = compileSourceContextUnits(v2Input(), units(semanticallyWrong)).units[0];
+  assert.equal(unverified.epistemicState.value, 'asserted');
+  assert.equal(unverified.epistemicState.interpretationStatus, 'model-proposed-unverified');
+  const self = v2Fact(); self.subject = field('Inez', [0]);
+  self.claimant = field('Inez', [0]); self.reporter = field('Inez', [0]);
+  self.epistemicState = field('asserted', [0]);
+  const samePerson = compileSourceContextUnits(v2Input('I, Inez, feel tired today.'), units(self)).units[0];
+  assert.equal(samePerson.qualification.slot.subject, 'Inez');
+  assert.equal(samePerson.claimant.value, 'Inez');
+  assert.equal(samePerson.reporter.value, 'Inez');
+});

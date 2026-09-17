@@ -1,6 +1,6 @@
 import { qualificationInput } from './claim-qualification-input.mjs';
 import { partitionSourcePassages } from './source-passages.mjs';
-import { fail } from './validation.mjs';
+import { boundedText, fail } from './validation.mjs';
 import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
 
 const FIELDS = Object.freeze(['subject', 'property', 'scope', 'applies', 'value',
@@ -12,6 +12,7 @@ const STATES = Object.freeze(['considered', 'adopted', 'rejected', 'not_approved
 const ATTRIBUTIONS = Object.freeze(['direct', 'reported', 'quoted', 'proposed', 'unknown']);
 const POLARITIES = Object.freeze(['affirmed', 'negated', 'unknown']);
 const QUANTIFIERS = Object.freeze(['universal', 'existential', 'zero', 'unspecified', 'unknown']);
+const EPISTEMIC_STATES = Object.freeze(['tentative', 'asserted', 'unknown']);
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120,
   applies: 120, value: 160 });
 const RAW_LIMIT = 6_000;
@@ -66,7 +67,7 @@ const objectSchema = properties => ({ type: 'object', additionalProperties: fals
 const integerSchema = values => ({ type: 'integer', minimum: 0, enum: values });
 const arraySchema = (items, minimum, maximum) => ({ type: 'array', items,
   minItems: minimum, maxItems: maximum });
-function schemaFor(sources) {
+function schemaFor(sources, version) {
   const sourceIds = sources.map(source => source.index);
   const receiptIds = [...new Set(sources.flatMap(source => source.receipts.map(receipt => receipt.index)))];
   const passageIds = [...new Set(sources.flatMap(source => source.receipts.flatMap(receipt =>
@@ -82,6 +83,11 @@ function schemaFor(sources) {
   }
   fields.eventTimeContext = refs();
   fields.reporterContext = refs();
+  if (version === 2) {
+    fields.epistemicState = field({ type: 'string', enum: EPISTEMIC_STATES });
+    fields.claimant = field({ type: ['string', 'null'] });
+    fields.reporter = field({ type: ['string', 'null'] });
+  }
   return freeze(objectSchema({ units: arraySchema({ anyOf: [
     objectSchema({ ...fields, kind: { type: 'string', enum: ['factual_claim'] } }),
     objectSchema({ ...fields, kind: { type: 'string', enum: ['decision_state'] },
@@ -89,7 +95,9 @@ function schemaFor(sources) {
   ] }, 0, 8) }));
 }
 function sourceInput(input) {
-  if (!exact(input, ['sources']) || !dense(input.sources, 1, 6)) fail('invalid_input');
+  const version = Object.hasOwn(input, 'version') ? input.version : 1;
+  if ((version === 2 ? !exact(input, ['version', 'sources']) : !exact(input, ['sources'])) ||
+      !dense(input.sources, 1, 6)) fail('invalid_input');
   return input.sources.map((source, sourceIndex) => {
     if (!exact(source, ['receipts']) || !dense(source.receipts, 1, 4)) fail('invalid_input');
     return { index: sourceIndex, receipts: source.receipts.map((receipt, receiptIndex) => {
@@ -113,11 +121,14 @@ function prepare(input) {
     if (JSON.stringify(raw).length > RAW_LIMIT) fail('invalid_input');
     originals = sourceInput(raw);
   } catch { fail('invalid_input'); }
-  const prepared = freeze({ sources: originals.map(source => ({ index: source.index,
+  const version = Object.hasOwn(raw, 'version') ? 2 : 1;
+  const prepared = freeze({ ...(version === 2 ? { version: 2 } : {}),
+    sources: originals.map(source => ({ index: source.index,
     receipts: source.receipts.map(receipt => ({ index: receipt.index, role: receipt.role,
-      passages: receipt.passages.map(({ index: passage, text }) => ({ index: passage, text })) })) })) });
+    passages: receipt.passages.map(({ index: passage, text }) => ({ index: passage, text })) })) })) });
   if (JSON.stringify(prepared).length > PREPARED_LIMIT) fail('invalid_input');
-  return { input: prepared, responseSchema: schemaFor(prepared.sources), originals: freeze(originals) };
+  return { input: prepared, responseSchema: schemaFor(prepared.sources, version),
+    originals: freeze(originals), version };
 }
 
 /** Pure source-only model input and response shape; no prompt, transport, or storage. */
@@ -142,6 +153,18 @@ function canonicalLabel(value, maximum) {
   }
   return value.normalize('NFKC');
 }
+function canonicalSourceLabel(value) {
+  const label = canonicalLabel(value, 160);
+  if (value !== null) {
+    try {
+      if (label.length > 160 || boundedText(label, 160) !== label ||
+          redactSecrets(value) !== value || redactSecrets(label) !== label) {
+        fail('invalid_model_output');
+      }
+    } catch { fail('invalid_model_output'); }
+  }
+  return label;
+}
 function anchors(ids, receipt) {
   return [...ids].sort((a, b) => a - b).map(id => {
     const passage = receipt.passages[id];
@@ -164,6 +187,7 @@ function compilePrepared(prepared, proposed) {
   const units = output.units.map((unit, unitIndex) => {
     const decision = unit?.kind === 'decision_state';
     const fields = ['source', 'receipt', ...FIELDS, 'eventTimeContext', 'reporterContext',
+      ...(prepared.version === 2 ? ['epistemicState', 'claimant', 'reporter'] : []),
       'kind', ...(decision ? ['state'] : [])];
     if (!exact(unit, fields) || !['factual_claim', 'decision_state'].includes(unit.kind)
       || !index(unit.source) || !index(unit.receipt)) fail('invalid_model_output');
@@ -194,6 +218,28 @@ function compilePrepared(prepared, proposed) {
     const timeRefs = references(unit.eventTimeContext, receipt);
     const reporterRefs = references(unit.reporterContext, receipt);
     selected.push(...timeRefs, ...reporterRefs);
+    let stance;
+    if (prepared.version === 2) {
+      const epistemicRefs = fieldReferences(unit.epistemicState, receipt);
+      const claimantRefs = fieldReferences(unit.claimant, receipt);
+      const reporterLabelRefs = fieldReferences(unit.reporter, receipt);
+      const epistemicState = unit.epistemicState.value;
+      const claimant = canonicalSourceLabel(unit.claimant.value);
+      const reporter = canonicalSourceLabel(unit.reporter.value);
+      if (!EPISTEMIC_STATES.includes(epistemicState) ||
+          (epistemicState !== 'unknown' && !epistemicRefs.length) ||
+          (claimant !== null && !claimantRefs.length) ||
+          (reporter !== null && !reporterLabelRefs.length)) fail('invalid_model_output');
+      selected.push(...epistemicRefs, ...claimantRefs, ...reporterLabelRefs);
+      stance = {
+        epistemicState: { value: epistemicState, anchors: anchors(epistemicRefs, receipt),
+          interpretationStatus: 'model-proposed-unverified' },
+        claimant: { value: claimant, anchors: anchors(claimantRefs, receipt),
+          interpretationStatus: 'model-proposed-unverified' },
+        reporter: { value: reporter, anchors: anchors(reporterLabelRefs, receipt),
+          interpretationStatus: 'model-proposed-unverified' },
+      };
+    }
     const focusIds = [...new Set(selected)].sort((a, b) => a - b);
     if (focusIds.length < 1 || focusIds.length > 4) fail('invalid_model_output');
     const commitment = decision && ['considered', 'adopted', 'rejected'].includes(unit.state.value)
@@ -223,13 +269,15 @@ function compilePrepared(prepared, proposed) {
         anchors: anchors(unit.state.evidence, receipt) } } : {}),
       eventTimeContext: context(timeRefs, receipt),
       reporterContext: context(reporterRefs, receipt),
+      ...(stance ?? {}),
       interpretationStatus: 'model-proposed-unverified' };
     const signature = JSON.stringify({ ...compiled, index: 0 });
     if (seen.has(signature)) fail('invalid_model_output');
     seen.add(signature);
     return compiled;
   });
-  const result = { units, status: 'assessment-only', persistence: 'not-stored' };
+  const result = { ...(prepared.version === 2 ? { version: 2 } : {}),
+    units, status: 'assessment-only', persistence: 'not-stored' };
   if (JSON.stringify(result).length > OUTPUT_LIMIT) fail('invalid_model_output');
   return freeze(result);
 }

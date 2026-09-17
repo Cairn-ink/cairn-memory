@@ -22,6 +22,16 @@ its existing basis-model selection and method-specific 3,072-output-token cap.
 Other model calls and paid-method allowlists remain unchanged; this is not
 automatic provider enablement or semantic verification.
 
+An explicit local `{ version: 2 }` on `reviewSourceContext` selects
+[proposition-local source stance](source-context-units.md#explicit-version-2-source-stance)
+without changing versionless requests. Tentative/asserted/unknown stance,
+nullable claimant and nullable reporter are model interpretations attached to
+each unit and grounded to that unit's original receipt. Asserted does not mean
+verified; claimant, reporter and subject are distinct roles that can refer to
+the same person, never authenticated identities. The same source and output caps, final revision fence and unassessed
+coverage remain. This is no new MCP, hosted HTTP, capture, storage or paid-call
+capability.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the

@@ -52,3 +52,15 @@ receipt drift without an epoch bump. Another namespace's change alone does not
 invalidate this review. No callback runs after that final read. Nothing is
 persisted: reopening the store reveals the same memories and receipts, not
 the proposed units.
+
+Explicit `core.reviewSourceContext({ namespace, refs, version: 2 })` uses the
+same captured source snapshot, identity binding, 30-second deadline and final
+freshness fence, but selects a separate version 2 prompt and response schema.
+Each returned unit carries source-attributed epistemic stance, claimant and
+reporter fields with exact source anchors; the result derives `version: 2`.
+Versionless calls retain their original prompt, request bytes and result shape.
+An `asserted` source stance is not Cairn confirmation, and claimant/reporter
+labels are not authenticated identities; the same person can also be the
+subject. Both semantic and source-selection
+coverage remain unassessed. No new provider is selected, and no interpretation
+is written to the store.

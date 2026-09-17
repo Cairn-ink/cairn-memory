@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildArtifact, command, packageName } from '../build.mjs';
 
-test('installed core and adapter cold-bind CU units through two fake HTTP calls only',
+test('installed core and adapter cold-bind legacy and v2 CU units through four fake HTTP calls',
   { timeout: 60000 }, async t => {
     const artifact = buildArtifact();
     const root = mkdtempSync(join(tmpdir(), 'cairn-installed-context-adapter-'));
@@ -39,21 +39,26 @@ test('installed core and adapter cold-bind CU units through two fake HTTP calls 
         value: field(null), attribution: field('unknown'), polarity: field('unknown'),
         quantifier: field('unknown'), state: field('considered', [0]),
         eventTimeContext: [], reporterContext: [] }] };
+      const v2Proposal = { units: [{ ...proposal.units[0],
+        epistemicState: field('asserted', [0]), claimant: field(null), reporter: field(null) }] };
       const calls = [];
       const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: async (url, options) => {
         const body = JSON.parse(options.body); calls.push({ url, body });
         if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+        const version = JSON.parse(body.input[0].content[0].text).version;
         return Response.json({ object: 'response', model: body.model, status: 'completed',
           error: null, incomplete_details: null,
           output: [{ type: 'message', role: 'assistant', status: 'completed',
-            content: [{ type: 'output_text', text: JSON.stringify(proposal) }] }],
+            content: [{ type: 'output_text', text: JSON.stringify(version === 2 ? v2Proposal : proposal) }] }],
           usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });
       } });
       const core = openMemoryCore({ path: process.argv[2], model });
       const prior = core.getRationale({ namespace, ...ref });
       const review = await core.reviewSourceContext({ namespace, refs: [ref] });
+      const v2 = await core.reviewSourceContext({ namespace, refs: [ref], version: 2 });
+      const after = core.getRationale({ namespace, ...ref });
       core.close();
-      process.stdout.write(JSON.stringify({ prior, review, calls }));
+      process.stdout.write(JSON.stringify({ prior, review, v2, after, calls }));
     `, packageRoot, path, JSON.stringify(namespace), JSON.stringify(ref)],
     { encoding: 'utf8', timeout: 30000 });
     assert.equal(child.status, 0, child.stderr);
@@ -65,9 +70,22 @@ test('installed core and adapter cold-bind CU units through two fake HTTP calls 
       result.review.value.sources[0].receipts[0].id);
     assert.equal(result.review.value.units[0].state.value, 'considered');
     assert.equal(result.review.value.units[0].interpretationStatus, 'model-proposed-unverified');
+    assert.equal(result.v2.ok, true, JSON.stringify(result.v2));
+    assert.equal(result.v2.value.version, 2);
+    assert.equal(result.v2.value.units[0].epistemicState.value, 'asserted');
+    assert.equal(result.v2.value.units[0].claimant.value, null);
+    assert.equal(result.v2.value.units[0].reporter.value, null);
+    assert.equal(result.v2.value.units[0].memoryId, ref.memoryId);
+    assert.equal(result.v2.value.units[0].receiptId, result.v2.value.sources[0].receipts[0].id);
+    assert.equal(result.after.value.edges.length, 0);
     assert.deepEqual(result.calls.map(call => call.url), [
+      'https://api.openai.com/v1/responses/input_tokens', 'https://api.openai.com/v1/responses',
       'https://api.openai.com/v1/responses/input_tokens', 'https://api.openai.com/v1/responses']);
     assert.equal(result.calls[1].body.max_output_tokens, 3072);
+    assert.equal(result.calls[3].body.max_output_tokens, 3072);
+    assert.equal(JSON.parse(result.calls[2].body.input[0].content[0].text).version, 2);
+    assert.equal(Object.hasOwn(result.calls[2].body.text.format.schema.properties.units
+      .items.anyOf[0].properties, 'epistemicState'), true);
     assert.equal(JSON.stringify(result.calls).includes('Generated interpretation'), false);
     assert.equal(JSON.stringify(result.calls).includes(ref.memoryId), false);
   });

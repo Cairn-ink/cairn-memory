@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — opt-in source-context stance
+
+- Explicit version 2 source-context preparation and review attach
+  source-attributed tentative/asserted/unknown stance, claimant and reporter
+  to each unverified unit with same-receipt anchors. The existing compiler,
+  snapshot fence and optional adapter remain the only engines; versionless
+  requests, provider budgets, storage, MCP and hosted behavior are unchanged.
+- Citation and shape checks do not establish semantic accuracy, identity,
+  confirmation or complete source coverage. No paid call is enabled.
+
 ## Unreleased — optional source-context adapter transport
 
 - The optional OpenAI adapter can service explicit embedded

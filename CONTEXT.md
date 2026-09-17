@@ -74,6 +74,18 @@ _Avoid_: Objective truth, model confidence
 The attributed speaker of recorded evidence, who may be describing somebody else.
 _Avoid_: Claim subject
 
+**Source epistemic stance**:
+How a source presents a particular proposition—as tentative, asserted, or unclear—without establishing whether it is true or confirmed.
+_Avoid_: Model confidence, verified certainty
+
+**Claimant**:
+The source-attributed holder of a particular proposition, a role distinct from its subject or reporter even when one person fills more than one role; the attribution is not authenticated identity.
+_Avoid_: Claim subject, verified speaker
+
+**Reporter**:
+The source-attributed person relaying a proposition, a role that may be filled by the claimant or subject too; the attribution is not authenticated identity.
+_Avoid_: Claimant, claim subject
+
 **Claim subject**:
 The person or thing an assertion describes, distinct from who reported it.
 _Avoid_: Message author, namespace owner

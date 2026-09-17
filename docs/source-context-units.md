@@ -54,3 +54,33 @@ applicability, or downstream answer quality. Source identity/revision fencing,
 model transport, cold-session retrieval and consumer integration remain future
 separate work. Existing capture, store, rationale, recall, SDK store methods,
 MCP, hosted HTTP and adapter prompts are unchanged.
+
+## Explicit version 2 source stance
+
+`{ version: 2, sources }` opts into the same preparation and compiler with a
+separate strict response schema. The prepared model input retains `version: 2`;
+the model proposal still has only `{ units }`, and the compiled result derives
+its own `version: 2` from the caller's input. Versionless inputs and results are
+unchanged; other explicit versions and cross-version fields reject. Existing
+source, receipt, passage, unit-count and serialization limits do not expand.
+
+Every version 2 factual or decision unit additionally has three required
+`{ value, evidence }` fields. `epistemicState` is `tentative`, `asserted`, or
+`unknown`: it describes how the attributed source presents this particular
+proposition, not model confidence or verified truth. `claimant` is a nullable
+source-attributed holder of the proposition; `reporter` is a nullable relayer.
+These roles differ from the proposition's subject but one person may fill more
+than one role; none is an authenticated identity. Unknown/null
+values do not become known from a role or namespace. Known values require
+same-receipt evidence, and claimant/reporter labels have the same canonical,
+secret-safe 160-character limit. Their references join the existing derived
+one-to-four-passage focus. Each compiled field carries its exact original
+anchors and `model-proposed-unverified` status; the existing qualification
+fields and decision-state mapping are unchanged.
+
+The schema and compiler can reject malformed labels and foreign passages, but
+cannot decide whether a cited passage really makes a claim tentative, whether
+the named claimant is correct, or whether a statement is true. This version
+does not assess selection coverage: the global eight-unit cap can still leave
+relevant receipts without an interpreted unit. It adds no persistence or
+automatic provider call.
