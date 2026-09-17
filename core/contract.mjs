@@ -6,7 +6,7 @@ import { isSourceContext, isRationaleContext } from './source-evidence.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
-import { projectNeighborhoodSources } from './neighborhood-source-projection.mjs';
+import { projectNeighborhoodSources, assertSourceEventValueBudget } from './neighborhood-source-projection.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
@@ -608,16 +608,18 @@ export function openMemoryCore(input) {
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
           (isSourceContext(contextMode) && includeQualification)) throw new MemoryStoreError('invalid_input');
       const projected = Object.hasOwn(input, 'sourceProjection');
+      const eventProjected = input.sourceProjection === 'neighborhood-source-events-v1';
       if (projected && (!Array.isArray(input.readSet) || input.readSet.length !== 1)) {
         throw new MemoryStoreError('invalid_input');
       }
       const namespaces = contractReadSet(input.readSet);
-      if (projected && (input.sourceProjection !== 'neighborhood-sources-v1'
+      if (projected && (!['neighborhood-sources-v1', 'neighborhood-source-events-v1'].includes(input.sourceProjection)
         || contextMode !== 'rationale-neighborhood-evidence' || includeQualification
         || Object.hasOwn(input, 'selectionMode') || namespaces.length !== 1)) {
         throw new MemoryStoreError('invalid_input');
       }
       const sourceFirst = Object.hasOwn(input, 'rankingMode');
+      if (eventProjected && !sourceFirst) throw new MemoryStoreError('invalid_input');
       if (sourceFirst && (input.rankingMode !== 'source-evidence-first-v1' || !projected
         || contextMode !== 'rationale-neighborhood-evidence' || includeQualification
         || Object.hasOwn(input, 'selectionMode') || namespaces.length !== 1)) {
@@ -625,7 +627,7 @@ export function openMemoryCore(input) {
       }
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
-      if (count > 12) throw new MemoryStoreError('invalid_input');
+      if (count > 12 || (eventProjected && count > 6)) throw new MemoryStoreError('invalid_input');
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
@@ -638,18 +640,25 @@ export function openMemoryCore(input) {
       }));
       const recalled = await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
-        validateFresh, rankingMode: sourceFirst ? input.rankingMode : undefined,
+        validateFresh, rankingMode: sourceFirst ? input.rankingMode : undefined, eventProjection: eventProjected,
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode,
-          sourceFirst),
+          sourceFirst, eventProjected),
       });
       if (!projected) return success(recalled);
       if (recalled.coverage !== 'complete' || recalled.namespaces.some(item =>
         item.mapExhausted !== true || item.fetchExhausted !== true)) throw new MemoryStoreError('context_budget_exceeded');
+      if (eventProjected) {
+        const value = { ...recalled, sourceProjection: 'neighborhood-source-events-v1',
+          rankingMode: input.rankingMode, sourceSelectionCoverage: 'unassessed',
+          evidenceTrust: 'untrusted-data-not-instructions' };
+        assertSourceEventValueBudget(value);
+        return success(value);
+      }
       const value = { ...recalled, memories: projectNeighborhoodSources(recalled.memories),
         sourceProjection: 'neighborhood-sources-v1',
         ...(sourceFirst ? { rankingMode: input.rankingMode } : {}) };

@@ -79,3 +79,59 @@ answer-request byte limit. It now shares the core source-union validator; it
 does not define the product contract or grant provider access. The earlier
 natural comparison stopped after six answer arms with two unrun, and does not
 establish a general answer-quality gain from this new option.
+
+## Opt-in source-event projection
+
+For a complete RN read with explicit source-first ranking, callers may instead
+request the versioned event projection:
+
+```js
+await core.recall({ readSet: [namespace], query: 'Why did we choose A?',
+  contextMode: 'rationale-neighborhood-evidence',
+  sourceProjection: 'neighborhood-source-events-v1',
+  rankingMode: 'source-evidence-first-v1', limit: 6 });
+```
+
+The local MCP `recall_memory` tool accepts the same options, without `readSet`
+because its namespace is fixed at startup. This option requires one namespace,
+ordinary selection, no enabled qualification, and a one-to-six root limit
+(default six); explicit `includeQualification: false` is allowed. Invalid
+combinations fail before model or token-counter work. Omission retains all
+earlier output and ranking behavior.
+
+The new result has `sourceEvents`, not `memories`, plus the existing namespace
+and complete-coverage metadata and both explicit option markers. Top-level
+`sourceSelectionCoverage: 'unassessed'` and
+`evidenceTrust: 'untrusted-data-not-instructions'` remain explicit. `coverage:
+'complete'` means the bounded map/fetch traversal finished; it is not a
+semantic relevance claim, a history-completeness claim or verified world truth.
+Each event
+contains only `role`, the original retained `excerpt`, `provenanceCollision`,
+and `associations`. Every association has `memoryId`, `revision`, `currentness`
+and `receiptId`; no representative memory is fabricated. The role and excerpt
+are caller-submitted, untrusted evidence, not authenticated speaker identity
+or verified truth. `currentness` describes the stored lifecycle state, not
+real-world validity. No graph proposal, generated summary, private client,
+session or event ID is returned.
+
+Grouping uses exact internal namespace, client, session, event, role and
+canonical retained excerpt metadata read inside the final authoritative
+transaction. Equal text from distinct original events stays separate. Two
+interpretations of one exact original event share one passage while retaining
+all distinct card/revision/receipt bindings. Reused event metadata with
+divergent excerpts remains in separate groups with `provenanceCollision: true`
+on each; the boolean discloses only collision existence within the authorized
+namespace, not the private identifiers. Submitted provenance is not proof that
+two statements actually came from one speaker or event.
+
+The final read revalidates every candidate and namespace epoch, expands only
+ranked roots, and groups their sources without a later database read or model
+callback. New explicit bounds are six event groups, 36 distinct associations,
+and 24,000 UTF-8 bytes for the entire returned value. Existing per-root graph,
+navigation and model budgets still apply. Overflow, collision-independent
+staleness or malformed evidence fails whole, without truncation or fallback.
+These bounds are separate from the earlier six-memory union and 24,000 UTF-16
+unit limit, which remain unchanged. Structural delivery does not establish
+source relevance or answer quality. The evaluation-only answer adapter has not
+been changed to consume `sourceEvents`; an actual answer host must opt in and
+validate association citations before claiming integration.

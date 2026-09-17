@@ -9,6 +9,7 @@ import { createSupersessionStorage } from "./supersession-storage.mjs";
 import { createOrderedCaptureStorage } from './ordered-capture-storage.mjs';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext, isRationaleContext } from './source-evidence.mjs';
+import { collectNeighborhoodEventSources } from './neighborhood-source-projection.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
@@ -435,8 +436,52 @@ export function createMemoryRuntime(input) {
     });
   }
 
+  function sourceEvents(ns, selectedRoots) {
+    const sources = collectNeighborhoodEventSources(selectedRoots);
+    const groups = new Map(), metadataGroups = new Map(), associations = new Set();
+    const privateReceipts = db.prepare(`SELECT id, client, session_id AS sessionId,
+      event_id AS eventId, role, excerpt FROM receipts WHERE memory_id = ?
+      ORDER BY created_at, id LIMIT 101`);
+    for (const source of sources) {
+      const row = currentRow(ns, source.memory.id);
+      if (!row || row.revision !== source.memory.revision ||
+          JSON.stringify(readSourceEvidence(row)) !== JSON.stringify(source)) fail('revision_conflict');
+      const receipts = privateReceipts.all(row.id);
+      if (receipts.length !== source.receipts.length) fail('revision_conflict');
+      for (const [index, receipt] of receipts.entries()) {
+        const visible = source.receipts[index];
+        if (receipt.id !== visible.id || receipt.role !== visible.role || receipt.excerpt !== visible.excerpt) {
+          fail('revision_conflict');
+        }
+        const metadata = JSON.stringify([ns.ownerId, ns.scope, ns.projectId,
+          receipt.client, receipt.sessionId, receipt.eventId, receipt.role]);
+        const key = JSON.stringify([metadata, receipt.excerpt]);
+        let group = groups.get(key);
+        if (!group) {
+          if (groups.size === 6) fail('context_item_too_large');
+          group = { role: receipt.role, excerpt: receipt.excerpt,
+            provenanceCollision: false, associations: [] };
+          groups.set(key, group);
+          const siblings = metadataGroups.get(metadata) ?? [];
+          siblings.push(group); metadataGroups.set(metadata, siblings);
+        }
+        const association = { memoryId: source.memory.id, revision: source.memory.revision,
+          currentness: source.memory.currentness, receiptId: receipt.id };
+        const associationKey = JSON.stringify([association.memoryId, association.revision, association.receiptId]);
+        if (associations.has(associationKey)) continue;
+        if (associations.size === 36) fail('context_item_too_large');
+        associations.add(associationKey);
+        group.associations.push(association);
+      }
+    }
+    for (const siblings of metadataGroups.values()) {
+      if (siblings.length > 1) for (const group of siblings) group.provenanceCollision = true;
+    }
+    return [...groups.values()];
+  }
+
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode,
-    sourceFirst = false) {
+    sourceFirst = false, eventProjection = false) {
     ready();
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
@@ -456,8 +501,9 @@ export function createMemoryRuntime(input) {
           if (JSON.stringify(source) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
           return source;
         });
-        return selected.map(index => sourceFirst
+        const selectedRoots = selected.map(index => sourceFirst
           ? readUsageEvidence(candidates[index].namespace, rows[index], contextMode) : sources[index]);
+        return eventProjection ? sourceEvents(namespaces[0].namespace, selectedRoots) : selectedRoots;
       }
       const qualifications = includeQualification ? rows.map(row => qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {

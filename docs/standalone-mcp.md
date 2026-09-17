@@ -12,6 +12,22 @@ bounded original source union. The ranker still sees unverified links; see
 With that projection, optional `rankingMode: "source-evidence-first-v1"` instead
 ranks complete source-only candidates before expanding ranked roots. It is a
 different opt-in read path, not a relaxed graph or source-union limit.
+For an explicit source-first RN call, `sourceProjection:
+"neighborhood-source-events-v1"` instead returns original `sourceEvents` with
+all receipt/card associations, not legacy `memories`. For example:
+
+```json
+{"query":"Why did we choose A?","contextMode":"rationale-neighborhood-evidence","sourceProjection":"neighborhood-source-events-v1","rankingMode":"source-evidence-first-v1","limit":6}
+```
+
+The six-group, 36-association and complete-value 24,000-UTF-8-byte bounds are
+strict. Private client/session/event IDs stay internal; a collision flag only
+indicates reused submitted metadata with differing original excerpts. This
+does not authenticate provenance or prove semantic relevance. The installed
+local artifact and actual stdio receiving tests validate this DTO, but an
+external answer host still must explicitly consume and cite `sourceEvents`;
+legacy answer consumers are not silently adapted. See
+[the projection contract](neighborhood-source-projection.md#opt-in-source-event-projection).
 
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run

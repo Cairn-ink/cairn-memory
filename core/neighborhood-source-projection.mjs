@@ -28,8 +28,8 @@ function checkSource(source) {
   }
 }
 
-/** Pure validation and stable source union of already-authoritatively-read RN items. */
-export function projectNeighborhoodSources(items) {
+/** Shared validation and stable source union of already-authoritatively-read RN items. */
+function validatedUnion(items, identityLimit) {
   if (!Array.isArray(items) || Object.keys(items).length !== items.length) bad();
   const byId = new Map(), sources = [];
   let indexRevision;
@@ -37,7 +37,7 @@ export function projectNeighborhoodSources(items) {
     checkSource(source);
     const existing = byId.get(source.memory.id);
     if (existing) { if (!isDeepStrictEqual(existing, source)) fail('revision_conflict'); return; }
-    if (sources.length === 6) fail('context_item_too_large');
+    if (sources.length === identityLimit) fail('context_item_too_large');
     byId.set(source.memory.id, source);
     sources.push(source);
   };
@@ -85,4 +85,17 @@ export function projectNeighborhoodSources(items) {
     }
   }
   return sources;
+}
+
+/** The legacy projection retains its six-memory union cap unchanged. */
+export const projectNeighborhoodSources = items => validatedUnion(items, 6);
+
+/** Internal event projection pre-group cap; each identity has at least one association. */
+export const collectNeighborhoodEventSources = items => validatedUnion(items, 36);
+
+/** Byte bound applies to the complete public value, including read metadata. */
+export function assertSourceEventValueBudget(value) {
+  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 24_000) {
+    fail('context_item_too_large');
+  }
 }

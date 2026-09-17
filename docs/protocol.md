@@ -337,3 +337,10 @@ That projection alone leaves relationship-aware RN ranking unchanged. The
 additional opt-in `rankingMode: 'source-evidence-first-v1'` ranks source-only
 candidates before expanding ranked roots; it is valid only with this RN
 projection and has different ranking information, not a higher graph cap.
+The separate opt-in `sourceProjection: 'neighborhood-source-events-v1'` requires
+that source-first ranking mode and returns `sourceEvents` rather than legacy
+`memories`. Exact private receipt provenance is checked within the final read,
+but only original passage, collision existence and explicit receipt/card
+associations leave the authorized namespace. Its six-group, 36-association and
+24,000-UTF-8-byte bounds do not raise the older projection's limits. See the
+[event projection contract](neighborhood-source-projection.md#opt-in-source-event-projection).

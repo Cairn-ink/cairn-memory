@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — opt-in neighborhood source-event projection
+
+- Embedded and local MCP source-first RN recall can return each exact original
+  source event once with all memory/revision/receipt associations, retaining
+  distinct same-text events and disclosing divergent reused-metadata collisions
+  without exporting private provenance identifiers. It has separate six-event,
+  36-association and 24,000-UTF-8-byte whole-result bounds. Legacy recall and
+  its limits are unchanged; no answer-host quality improvement is claimed.
+
 ## Unreleased — opt-in source-evidence-first neighborhood ranking
 
 - Embedded and local MCP RN source projection may rank complete source-only

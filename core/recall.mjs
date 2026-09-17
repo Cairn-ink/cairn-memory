@@ -32,7 +32,8 @@ function selection(output, allowed, maximum, model, stage) {
 }
 
 export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize,
-  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode, rankingMode }) {
+  validateFresh = () => {}, includeQualification = false, contextMode, selectionMode, rankingMode,
+  eventProjection = false }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
     fail('model_not_configured');
@@ -120,8 +121,8 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     ranked = selection(rankOutput, new Map(candidates.map((ref) => [key(ref), ref])), limit, model, 'rank');
   }
   // No model/counter callback may follow the authoritative final read.
-  const memories = finalize(candidates, ranked.map((ref) => candidates.findIndex((item) => key(item) === key(ref))));
-  return { memories, namespaces,
+  const finalized = finalize(candidates, ranked.map((ref) => candidates.findIndex((item) => key(item) === key(ref))));
+  return { ...(eventProjection ? { sourceEvents: finalized } : { memories: finalized }), namespaces,
     ...(selectionMode ? { selection: { mode: selectionMode, strategy, semanticCoverage: 'unassessed' } } : {}),
     coverage: namespaces.every((ns) => ns.mapExhausted && ns.fetchExhausted)
     ? 'complete' : 'budget_exhausted' };
