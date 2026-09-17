@@ -73,7 +73,17 @@ function schemaFor(sources, version) {
   const passageIds = [...new Set(sources.flatMap(source => source.receipts.flatMap(receipt =>
     receipt.passages.map(passage => passage.index))))];
   const refs = () => arraySchema(integerSchema(passageIds), 0, 4);
-  const field = value => objectSchema({ value, evidence: refs() });
+  const field = value => {
+    if (version !== 3) return objectSchema({ value, evidence: refs() });
+    const nullable = Array.isArray(value.type);
+    const known = nullable ? { type: 'string' }
+      : { type: 'string', enum: value.enum.filter(option => option !== 'unknown') };
+    const unknown = nullable ? { type: 'null' } : { type: 'string', enum: ['unknown'] };
+    return { anyOf: [
+      objectSchema({ value: known, evidence: arraySchema(integerSchema(passageIds), 1, 4) }),
+      objectSchema({ value: unknown, evidence: refs() }),
+    ] };
+  };
   const fields = { source: integerSchema(sourceIds), receipt: integerSchema(receiptIds) };
   for (const name of FIELDS) {
     const value = name in LABEL_LIMITS ? { type: ['string', 'null'] }

@@ -318,6 +318,65 @@ const linked = (items, reasonLinks = []) => ({ units: items, reasonLinks });
 const reason = (from = 0, to = 1, evidence = [0]) =>
   ({ from, to, relation: 'stated-reason-for', evidence });
 
+test('SCC2/3 v3 generation schema requires citations for every interpreted field', () => {
+  const raw = v3Input('The panel reported that route B was rejected because its export failed.');
+  const schema = prepareSourceContextUnits(raw).responseSchema;
+  assert.equal(schema.type, 'object');
+  assert.equal(schema.additionalProperties, false);
+  const [factual, decisionSchema] = schema.properties.units.items.anyOf;
+  const cases = [
+    ['subject', 'panel', null], ['property', 'export failed', null],
+    ['scope', 'route B', null], ['applies', 'panel', null], ['value', 'failed', null],
+    ['attribution', 'reported', 'unknown'], ['polarity', 'negated', 'unknown'],
+    ['quantifier', 'unspecified', 'unknown'], ['epistemicState', 'tentative', 'unknown'],
+    ['claimant', 'panel', null], ['reporter', 'panel', null],
+  ];
+  const accepts = (fieldSchema, value, evidence) => (fieldSchema.anyOf ?? [fieldSchema])
+    .some(branch => {
+      const candidate = branch.properties.value;
+      const refs = branch.properties.evidence;
+      return (candidate.enum ? candidate.enum.includes(value)
+        : candidate.type === 'null' ? value === null : typeof value === candidate.type)
+        && evidence.length >= refs.minItems && evidence.length <= refs.maxItems
+        && evidence.every(id => refs.items.enum.includes(id));
+    });
+  for (const branch of [factual, decisionSchema]) {
+    for (const [name, known, unknown] of cases) {
+      const fieldSchema = branch.properties[name];
+      assert.equal(fieldSchema.anyOf?.length, 2, name);
+      for (const variant of fieldSchema.anyOf) {
+        assert.equal(variant.type, 'object', name);
+        assert.equal(variant.additionalProperties, false, name);
+        assert.deepEqual(variant.required, ['value', 'evidence'], name);
+      }
+      assert.equal(accepts(fieldSchema, known, []), false, `${name}: known without citation`);
+      assert.equal(accepts(fieldSchema, known, [0]), true, `${name}: known cited`);
+      assert.equal(accepts(fieldSchema, unknown, []), true, `${name}: unknown without citation`);
+      assert.equal(accepts(fieldSchema, unknown, [0]), true, `${name}: unknown cited`);
+      assert.equal(accepts(fieldSchema, known, [0, 0, 0, 0, 0]), false, `${name}: max four`);
+      const base = branch === factual ? v3Fact() : v3Decision();
+      base.subject = field('panel', [0]);
+      base.property = field('export', [0]);
+      const missing = structuredClone(base); missing[name] = field(known);
+      rejectedOutput(raw, linked([missing]));
+      const cited = structuredClone(base); cited[name] = field(known, [0]);
+      assert.equal(compileSourceContextUnits(raw, linked([cited])).units.length, 1, name);
+      for (const evidence of [[], [0]]) {
+        const unassessed = structuredClone(base); unassessed[name] = field(unknown, evidence);
+        assert.equal(compileSourceContextUnits(raw, linked([unassessed])).units.length, 1, name);
+      }
+    }
+  }
+  const state = decisionSchema.properties.state;
+  assert.equal(state.anyOf?.length, 2);
+  assert.equal(accepts(state, 'adopted', []), false);
+  assert.equal(accepts(state, 'adopted', [0]), true);
+  assert.equal(accepts(state, 'unknown', []), true);
+  assert.equal(accepts(state, 'unknown', [0]), true);
+  const invalidOldOutput = v3Fact(); invalidOldOutput.quantifier = field('unspecified');
+  rejectedOutput(raw, linked([invalidOldOutput]));
+});
+
 test('SRL1–3 v3 prepares a closed link schema and derives same-receipt exact anchors', () => {
   const raw = v3Input('The team considered A because its export is auditable. '.repeat(5));
   const prepared = prepareSourceContextUnits(raw);

@@ -30,7 +30,8 @@ for (const staleVersion of [2, 3]) test(`installed core and adapter bind v1/v2/v
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
       import { pathToFileURL } from 'node:url';
       const packageRoot = process.argv[1];
-      const { openMemoryCore } = await import(pathToFileURL(packageRoot + '/core/index.mjs').href);
+      const { openMemoryCore, prepareSourceContextUnits } = await import(
+        pathToFileURL(packageRoot + '/core/index.mjs').href);
       const { createOpenAIModel } = await import(pathToFileURL(packageRoot + '/adapters/openai/index.mjs').href);
       const namespace = JSON.parse(process.argv[3]); const ref = JSON.parse(process.argv[4]);
       const field = (value, evidence = []) => ({ value, evidence });
@@ -73,6 +74,17 @@ for (const staleVersion of [2, 3]) test(`installed core and adapter bind v1/v2/v
       const review = await core.reviewSourceContext({ namespace, refs: [ref] });
       const v2 = await core.reviewSourceContext({ namespace, refs: [ref], version: 2 });
       const v3 = await core.reviewSourceContext({ namespace, refs: [ref], version: 3 });
+      const canonicalV3 = prepareSourceContextUnits({ version: 3, sources: [
+        { receipts: [{ role: 'user', excerpt: process.argv[6] }] }] }).responseSchema;
+      for (const call of calls.slice(4, 6)) {
+        if (JSON.stringify(call.body.text.format.schema) !== JSON.stringify(canonicalV3)) {
+          throw new Error('installed_v3_schema_mismatch');
+        }
+        if (call.body.text.format.schema.properties.units.items.anyOf[0]
+          .properties.quantifier.anyOf[0].properties.evidence.minItems !== 1) {
+          throw new Error('installed_v3_citation_minimum_missing');
+        }
+      }
       const afterSuccessfulSnapshot = core.sourceSnapshot({ readSet: [namespace], limit: 12 });
       const after = core.getRationale({ namespace, ...ref });
       correctionMode = true;
@@ -90,7 +102,7 @@ for (const staleVersion of [2, 3]) test(`installed core and adapter bind v1/v2/v
         afterSuccessfulSnapshot, after, corrected, stale,
         afterCorrectionSnapshot, postCorrectionSnapshot, coldSnapshot,
         correctedRationale, coldRationale, calls }));
-    `, packageRoot, path, JSON.stringify(namespace), JSON.stringify(ref), String(staleVersion)],
+    `, packageRoot, path, JSON.stringify(namespace), JSON.stringify(ref), String(staleVersion), excerpt],
     { encoding: 'utf8', timeout: 30000 });
     assert.equal(child.status, 0, child.stderr);
     const result = JSON.parse(child.stdout);

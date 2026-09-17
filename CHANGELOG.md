@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — version 3 source citation schema correction
+
+- The opt-in version 3 source-context generation schema now requires a passage
+  reference for every non-null/non-`unknown` interpreted field, matching the
+  existing compiler rejection of uncited known values. Versionless/version 2
+  requests and compiler behavior are unchanged. This does not repair failed
+  diagnostic output or establish provider compatibility or semantic accuracy.
+
 ## Unreleased — opt-in source-local reason associations
 
 - Explicit version 3 source-context assessment adds bounded, same-receipt

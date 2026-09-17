@@ -174,6 +174,45 @@ test('SRL1/2 v3 transports the canonical schema and rejects mismatches before HT
   assert.equal(invalid.calls.length, 0);
 });
 
+test('SCC3/4 v3 count and generation use the tightened schema within unchanged budgets', async () => {
+  const input = v3Request();
+  const local = JSON.stringify({ system: input.system, input: input.input,
+    maxOutputTokens: input.maxOutputTokens, responseSchema: input.responseSchema });
+  // The same fixture on fixed base d4797027 was 8,241 UTF-8 bytes / 2,177 tokens.
+  assert.equal(Buffer.byteLength(local), 13_596);
+  assert.equal(countOpenAITokens(local), 3_661);
+  assert.ok(countOpenAITokens(local) <= 6_000);
+  const h = harness({ output: v3Proposal() });
+  assert.deepEqual(await h.model.reviewSourceContext(input), v3Proposal());
+  assert.equal(h.calls.length, 2);
+  // Fixed base d4797027 sent 8,447 / 8,501 UTF-8 bytes for these exact two bodies.
+  assert.deepEqual(h.calls.map(call => Buffer.byteLength(call.options.body)), [13_802, 13_856]);
+  for (const call of h.calls) {
+    assert.deepEqual(call.body.text.format.schema, input.responseSchema);
+    assert.equal(call.body.text.format.schema.properties.units.items.anyOf[0]
+      .properties.quantifier.anyOf[0].properties.evidence.minItems, 1);
+  }
+  const old = v3Request(); old.responseSchema = structuredClone(old.responseSchema);
+  old.responseSchema.properties.units.items.anyOf[0].properties.quantifier
+    .anyOf[0].properties.evidence.minItems = 0;
+  const denied = harness();
+  await assert.rejects(denied.model.reviewSourceContext(old), /invalid_openai_request/u);
+  assert.equal(denied.calls.length, 0);
+  const invalid = v3Proposal(); invalid.units[0].quantifier = field('unspecified');
+  const bad = harness({ output: invalid });
+  await assert.rejects(bad.model.reviewSourceContext(v3Request()),
+    { code: 'invalid_model_output' });
+  assert.equal(bad.calls.length, 2);
+  const excessive = v3Request(); excessive.system = 'x '.repeat(5_000);
+  const padded = JSON.stringify({ system: excessive.system, input: excessive.input,
+    maxOutputTokens: excessive.maxOutputTokens, responseSchema: excessive.responseSchema });
+  assert.ok(countOpenAITokens(padded) > 6_000);
+  const bounded = harness();
+  await assert.rejects(bounded.model.reviewSourceContext(excessive),
+    { code: 'context_budget_exceeded' });
+  assert.equal(bounded.calls.length, 0);
+});
+
 test('SCA2 malformed options, source input and schema reject before HTTP', async () => {
   const h = harness();
   const mutations = [

@@ -106,3 +106,13 @@ pending reconfirmation or withheld approval. The same 24,000-unit proposal and
 compiled-result bounds apply to units **and** links; nothing is trimmed.
 This is an opt-in source interpretation, not a stored rationale edge, semantic
 coverage guarantee, or permission.
+
+For version 3 only, the generation schema now requires one to four passage
+references on each interpreted `{ value, evidence }` field: a non-null label
+or an enum other than `unknown` cannot be emitted with `evidence: []`.
+Null/unknown fields retain zero to four references, and the existing compiler
+still rejects malformed, duplicate, foreign or otherwise incompatible
+references. This aligns the provider-facing shape with an existing compiler
+rule; it neither adds citations to saved output nor proves that a cited
+passage supports a value, stance, speaker or decision. Versionless and version
+2 schemas and prompts remain unchanged.

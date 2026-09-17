@@ -34,6 +34,21 @@ decision units within one receipt; the adapter neither infers missing links
 nor validates that cited words truly express a reason. The existing token,
 transport, cancellation and paid-guard boundaries are unchanged.
 
+The version 3 provider schema requires at least one passage reference for
+each non-null/non-`unknown` interpreted field, matching the existing compiler
+rule; null/unknown fields may have zero references. This changes only the
+opt-in version 3 schema bytes, not versionless/version 2 requests or the
+compiler. Offline fake-HTTP and installed tests check the structural seam,
+but live provider acceptance of the tightened nested schema and semantic
+correctness remain unverified.
+
+For one small synthetic version 3 request, the serialized local counting
+envelope rose from 8,241 bytes/2,177 locally counted tokens to 13,596
+bytes/3,661 tokens; complete count/generation HTTP bodies rose from
+8,447/8,501 to 13,802/13,856 UTF-8 bytes. Both request phases retained the
+same canonical schema and stayed under the unchanged 6,000-token local input
+ceiling. These measured body sizes are not provider-reported token usage.
+
 The embedded adapter can separately select an experimental
 [rationale model](rationale-model-controls.md). This changes only an explicitly
 configured relate port, not other methods or MCP defaults, and grants no paid
