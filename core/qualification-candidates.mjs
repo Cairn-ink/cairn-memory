@@ -3,6 +3,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { boundedText, denseArray, fail, object } from './validation.mjs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { partitionSourcePassages } from './source-passages.mjs';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
@@ -38,18 +39,9 @@ export function createQualificationCandidateSnapshot(items) {
       const entries = [];
       item.receipts.forEach((receipt, receiptIndex) => {
         if (boundedText(receipt.excerpt, 800) !== receipt.excerpt) fail('invalid_model_output');
-        let start = 0, text = '';
-        const flush = () => {
-          if (!text.length) return;
-          entries.push({ candidateIndex: candidateIndex++, receiptIndex, start, end: start + text.length,
-            text, role: receipt.role });
-          start += text.length; text = '';
-        };
-        for (const point of receipt.excerpt) {
-          if (text.length + point.length > 200) flush();
-          text += point;
+        for (const passage of partitionSourcePassages(receipt.excerpt)) {
+          entries.push({ candidateIndex: candidateIndex++, receiptIndex, ...passage, role: receipt.role });
         }
-        flush();
       });
       return entries;
     });
