@@ -175,12 +175,14 @@ test('EAC4 empty complete evidence is explicit; completion failure/output remain
     r => { r.choices[0].message.tool_calls = []; },
     r => { r.choices[0].message.refusal = 'refused'; },
     r => { r.model = 'wrong'; }, r => { r.choices = []; },
+    r => { r.choices = [null]; }, r => { r.choices = [undefined]; },
+    r => { r.choices = new Array(1); }, r => { r.choices = ['malformed']; },
     r => { r.choices[0].message.content = '\ud800'; }]) {
     const output = response(); mutate(output);
     const result = await deliverSourceEventAnswer({ ...input, complete: () => { calls++; return output; } });
     assert.equal(result.status, 'invalid-output'); assert.equal(result.completionCalls, 1);
-    assert.equal(result.answer, output.choices[0]?.message.content ?? null);
+    assert.equal(result.answer, output.choices[0]?.message?.content ?? null);
   }
-  assert.equal(calls, 7);
+  assert.equal(calls, 11);
   assert.equal((await deliverSourceEventAnswer(input)).completionCalls, 0);
 });

@@ -101,3 +101,26 @@ Actual Node 20.20.2 ran through `npm exec --yes --package=node@20.20.2 -- sh
 seven expected SQLite-only skips, no failures; JSON validation passed. No
 provider call, real budget ledger, scored evaluation or live result is implied
 by these checks.
+
+## EAC4 review correction
+
+The first frozen candidate `111a7215260a9cbbe58152d28de6743a14168ff5`
+could throw on a structurally malformed fake completion with
+`choices: [null]`: the new consumer read `choice.finish_reason` before checking
+that the one choice was an object. A focused regression was added for null,
+undefined, sparse and primitive choices and observed red on that exact
+dereference before the localized guard was added. These now return
+`invalid-output` with one completion recorded, no retry and no thrown error.
+The existing legacy installed-source answer consumer has an analogous
+pre-existing malformed-choice issue. It is intentionally unchanged in this
+evaluation-only source-event PR and remains a separate follow-up; the ordinary
+legacy focused tests still run here for compatibility, not as a claim that
+their malformed-output handling is complete.
+
+After the correction, the focused new, legacy installed, legacy neighborhood
+and installed-artifact tests passed 14/14 on each PATH-pinned Node 22.16.0 and
+24.15.0 runtime. The affected full `npm run test:live-evidence-offline` suite
+passed again on both (274 passes, 30 existing opt-in skips), and full
+`npm run test:artifact` passed again on both (74/74). Generic/JSON/strict gates
+and actual Node 20 generic support were unaffected by this localized change
+and retain the earlier results recorded above.
