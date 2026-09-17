@@ -485,7 +485,7 @@ async function readBounded(response, maximum, signal) {
       if (!(value instanceof Uint8Array)) fail('invalid_response');
       size += value.byteLength;
       if (size > maximum) fail('response_too_large');
-      chunks.push(value);
+      chunks.push(new Uint8Array(value));
     }
     const bytes = new Uint8Array(size);
     let offset = 0;

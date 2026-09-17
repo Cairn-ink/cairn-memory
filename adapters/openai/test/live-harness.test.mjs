@@ -8,6 +8,42 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), { stat
 const request = () => ({ system: 'Extract durable memories.', input: { messages: [] },
   maxOutputTokens: 1024, signal: new AbortController().signal });
 
+test('PSO2: exported budgeted fetch owns count bytes before a reader reuses them', async () => {
+  const original = new TextEncoder().encode(JSON.stringify({ object: 'response.input_tokens', input_tokens: 50 }));
+  const split = Math.floor(original.length / 2);
+  for (const reuse of [false, true]) {
+    const backing = new Uint8Array(original.length);
+    let reads = 0, sends = 0, cancelled = 0, released = 0;
+    const guard = createBudgetedFetch({ budgetUsd: 0.1, fetchImpl: async (url, options) => {
+      sends++;
+      assert.equal(options.signal instanceof AbortSignal, true);
+      if (!url.endsWith('/input_tokens')) return json({ object: 'response', model: JSON.parse(options.body).model,
+        status: 'completed', error: null, incomplete_details: null,
+        output: [{ type: 'message', role: 'assistant', status: 'completed',
+          content: [{ type: 'output_text', text: '{"items":[]}' }] }],
+        usage: { input_tokens: 50, output_tokens: 5, total_tokens: 55 } });
+      return { ok: true, redirected: false, status: 200, body: { getReader() { return {
+        async read() {
+          reads++;
+          if (reads === 1) { backing.set(original.subarray(0, split));
+            return { done: false, value: reuse ? backing.subarray(0, split) : original.subarray(0, split) }; }
+          if (reads === 2) { backing.fill(0); backing.set(original.subarray(split));
+            return { done: false, value: reuse ? backing.subarray(0, original.length - split)
+              : original.subarray(split) }; }
+          return { done: true };
+        }, async cancel() { cancelled++; }, releaseLock() { released++; },
+      }; } } };
+    } });
+    const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: guard.fetchImpl });
+    assert.deepEqual(await model.extract(request()), { items: [] }, `reuse=${reuse}`);
+    assert.equal(reads, 3);
+    assert.equal(sends, 2);
+    assert.equal(cancelled, 1);
+    assert.equal(released, 1);
+    assert.deepEqual(guard.snapshot().requests.map(entry => entry.outcome), ['received', 'received']);
+  }
+});
+
 test('live budget wrapper reports count/generation usage without request content', async () => {
   let calls = 0;
   const budget = createBudgetedFetch({ budgetUsd: 0.1, fetchImpl: async (url, options) => {

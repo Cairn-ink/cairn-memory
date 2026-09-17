@@ -156,6 +156,39 @@ function fakeOpenAI(calls, host = hostEnvelope()) {
   };
 }
 
+test('PSO2: exported experiment guard owns host bytes before a reader reuses them', async (t) => {
+  const original = new TextEncoder().encode(JSON.stringify(hostEnvelope()));
+  const split = Math.floor(original.length / 2);
+  for (const reuse of [false, true]) {
+    const { ledger } = workspace(t);
+    const backing = new Uint8Array(original.length);
+    let reads = 0, sends = 0, cancelled = 0, released = 0;
+    const guard = createExperimentRequestGuard({ ledger, policy: policy(), fetchImpl: async (url) => {
+      sends++;
+      assert.equal(url, urls.host);
+      const response = Response.json(hostEnvelope());
+      Object.defineProperty(response, 'body', { value: { getReader() { return { async read() {
+          reads++;
+          if (reads === 1) { backing.set(original.subarray(0, split));
+            return { done: false, value: reuse ? backing.subarray(0, split) : original.subarray(0, split) }; }
+          if (reads === 2) { backing.fill(0); backing.set(original.subarray(split));
+            return { done: false, value: reuse ? backing.subarray(0, original.length - split)
+              : original.subarray(split) }; }
+          return { done: true };
+        }, async cancel() { cancelled++; }, releaseLock() { released++; } }; } } });
+      return response;
+    } });
+    t.after(() => guard.close());
+    const response = await guard.hostFetch(urls.host, options(hostBody()));
+    assert.equal((await response.json()).choices[0].message.content, 'Synthetic reply.', `reuse=${reuse}`);
+    assert.equal(reads, 3);
+    assert.equal(sends, 1);
+    assert.equal(cancelled, 1);
+    assert.equal(released, 1);
+    assert.equal(guard.getState().attempts[0].outcome, 'succeeded');
+  }
+});
+
 const guardError = (code) => (error) => error instanceof ExperimentRequestGuardError
   && error.code === code && error.message === code && !`${error} ${error.stack}`.includes(sensitive)
   && !`${error} ${error.stack}`.includes(secret);

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — owned provider response chunks
+
+- The optional OpenAI adapter, live budget wrapper and experiment HTTP guard
+  now copy each bounded delivered stream view before reading the next chunk.
+  This prevents an injected reader from rewriting already delivered bytes by
+  reusing a Uint8Array or Buffer backing store.
+- Existing response limits, cancellation, reservation and no-retry behavior
+  remain unchanged. Synthetic fake-transport reproduction does not establish
+  that native fetch reuses buffers or that memory/answer quality improved.
+
 ## Unreleased — independent provider usage bounds
 
 - The optional OpenAI adapter accepts bounded observed input usage that differs

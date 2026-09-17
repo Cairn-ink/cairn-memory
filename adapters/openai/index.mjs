@@ -85,7 +85,7 @@ async function readJSON(response, maximum, signal, diagnose) {
       if (!(value instanceof Uint8Array)) providerFailure();
       size += value.byteLength;
       if (size > maximum) { diagnose('response_body_bounds'); providerFailure(); }
-      chunks.push(value);
+      chunks.push(new Uint8Array(value));
     }
     const bytes = new Uint8Array(size);
     let offset = 0;
