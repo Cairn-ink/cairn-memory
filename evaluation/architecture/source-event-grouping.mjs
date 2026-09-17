@@ -1,6 +1,6 @@
 // Offline design experiment only. This is not an SDK, MCP, or answer-consumer DTO.
 const fail = code => { throw Object.assign(new Error(code), { code }); };
-const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const nonempty = value => typeof value === 'string' && value.length > 0 && value.isWellFormed();
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const identity = namespace => JSON.stringify([namespace.ownerId, namespace.scope, namespace.projectId]);
@@ -8,8 +8,8 @@ const metadata = (namespace, receipt) => JSON.stringify([identity(namespace), re
   receipt.sessionId, receipt.eventId, receipt.role]);
 const sourceKey = (namespace, receipt) => JSON.stringify([metadata(namespace, receipt), receipt.excerpt]);
 
-function check(entry) {
-  if (!record(entry) || !record(entry.namespace) || !record(entry.memory)
+function validateEntry(entry) {
+  if (!isRecord(entry) || !isRecord(entry.namespace) || !isRecord(entry.memory)
     || !Array.isArray(entry.receipts) || !entry.receipts.length
     || !nonempty(entry.namespace.ownerId)
     || !['personal', 'project'].includes(entry.namespace.scope)
@@ -19,7 +19,7 @@ function check(entry) {
     || !Number.isSafeInteger(entry.memory.revision) || entry.memory.revision < 1
     || !['current', 'historical'].includes(entry.memory.currentness)) fail('invalid_input');
   for (const receipt of entry.receipts) {
-    if (!record(receipt) || !nonempty(receipt.id) || !nonempty(receipt.client)
+    if (!isRecord(receipt) || !nonempty(receipt.id) || !nonempty(receipt.client)
       || !nonempty(receipt.sessionId) || !nonempty(receipt.eventId)
       || !['user', 'assistant'].includes(receipt.role) || !nonempty(receipt.excerpt)) fail('invalid_input');
   }
@@ -30,7 +30,7 @@ export function groupSourceEvents(entries) {
   if (!Array.isArray(entries) || Object.keys(entries).length !== entries.length) fail('invalid_input');
   const groups = new Map(), metadataTexts = new Map(), associations = new Map();
   for (const entry of entries) {
-    check(entry);
+    validateEntry(entry);
     for (const receipt of entry.receipts) {
       const key = sourceKey(entry.namespace, receipt);
       const meta = metadata(entry.namespace, receipt);

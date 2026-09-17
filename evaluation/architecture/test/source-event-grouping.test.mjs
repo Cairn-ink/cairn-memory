@@ -95,6 +95,22 @@ test('SEG2/5 each provenance discriminator separates sources; divergent reused m
   const textOnly = input('same-text-different-event', { receipts: [{ ...base.receipts[0],
     id: 'another-receipt', eventId: 'another-event' }] });
   assert.equal(groupSourceEvents([base, textOnly]).counts.sourceEventGroups, 2);
+
+  const projectA = input('project-a', { namespace: { ownerId: namespace.ownerId,
+    scope: 'project', projectId: 'project-a' },
+  receipts: [{ ...base.receipts[0], id: 'project-receipt-a' }] });
+  const projectB = input('project-b', { namespace: { ownerId: namespace.ownerId,
+    scope: 'project', projectId: 'project-b' },
+  receipts: [{ ...base.receipts[0], id: 'project-receipt-b' }] });
+  const withoutProjectId = entry => JSON.stringify([entry.namespace.ownerId,
+    entry.namespace.scope, entry.receipts[0].client, entry.receipts[0].sessionId,
+    entry.receipts[0].eventId, entry.receipts[0].role, entry.receipts[0].excerpt]);
+  assert.equal(withoutProjectId(projectA), withoutProjectId(projectB),
+    'projectId is the only differing source-identity field');
+  const projects = groupSourceEvents([projectA, projectB]);
+  assert.equal(projects.counts.sourceEventGroups, 2);
+  assert.equal(projects.counts.provenanceCollisionGroups, 0);
+  assert.deepEqual(unpack(projects), inventory([projectA, projectB]));
 });
 
 test('SEG3/5 different revisions of one memory remain separate associations without a representative card', () => {

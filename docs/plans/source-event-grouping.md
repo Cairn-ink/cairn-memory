@@ -94,3 +94,11 @@ in the result note; they describe payload structure, not semantic quality.
 Candidate SHA is reported with the scoped local commit. Primary fixed-point
 acceptance and independent Standards/Spec review remain separate before any
 push or PR.
+
+Correction round 1, from independent fixed-point review of `68f341f`:
+the provenance test now isolates `projectId` while owner, project scope,
+client, session, event, role and excerpt are equal. It proves two distinct
+groups, exact association round-trip and no collision; a grouping key that
+omits `projectId` would fail. The evaluation module's record predicate and
+entry validator were renamed for clarity only. All four gates above passed
+again on both pinned runtimes before the replacement candidate was frozen.
