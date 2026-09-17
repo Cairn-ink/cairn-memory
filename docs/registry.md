@@ -23,8 +23,11 @@ correct entry is what makes the server discoverable in all of them.
 
 ## Validate locally
 
+`scripts/install-mcp-publisher.sh` downloads a pinned `mcp-publisher` release
+and checks it against the release's published checksums before extracting it:
+
 ```sh
-curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+sh scripts/install-mcp-publisher.sh
 ./mcp-publisher validate
 ```
 
@@ -32,16 +35,19 @@ curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/downlo
 
 Publishing under `io.github.cairn-ink/*` requires the GitHub account to be an
 **Owner** of the Cairn-ink organization; ordinary membership is not enough. The
-first publish should be done by hand by an Owner:
+first publish is a manual step by an Owner:
 
 ```sh
 ./mcp-publisher login github
 ./mcp-publisher publish
 ```
 
-After that, the `Publish to MCP Registry` workflow republishes on every `v*`
-tag using GitHub OIDC. Bump `version` in `server.json` with each tag; the
-registry rejects a version that already exists.
+The `Publish to MCP Registry` workflow runs only when someone dispatches it by
+hand; it is not tied to tags or pushes. Listing the server exposes it on the
+public registry and its aggregators, and `ROADMAP.md` has not cleared broad
+promotion, so that decision stays with a person. When the gate is lifted, add a
+`push: tags: ["v*"]` trigger to the workflow. Bump `version` in `server.json`
+before each publish; the registry rejects a version that already exists.
 
 ## When the npm package ships
 
