@@ -79,3 +79,14 @@ test('ISAD4 completion failures, malformed/truncated/tool-bearing answers are re
   }
   assert.equal((await deliverInstalledSourceAnswer(input())).completionCalls, 0);
 });
+
+test('LAC1 malformed single choices remain invalid output after exactly one completion', async () => {
+  for (const malformed of [[null], [undefined], new Array(1), ['primitive']]) {
+    let calls = 0;
+    const output = { ...response(), choices: malformed };
+    const result = await deliverInstalledSourceAnswer({ ...input(), complete: () => { calls++; return output; } });
+    assert.deepEqual(result, { status: 'invalid-output', answer: null,
+      completionCalls: 1, finishReason: null });
+    assert.equal(calls, 1);
+  }
+});

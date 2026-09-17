@@ -64,7 +64,9 @@ export async function deliverInstalledSourceAnswer({ question, toolResult, compl
   const choice = response?.choices?.[0];
   const answer = typeof choice?.message?.content === 'string' ? choice.message.content : null;
   const valid = response?.object === 'chat.completion' && response.model === SOURCE_ANSWER_MODEL
-    && Array.isArray(response.choices) && response.choices.length === 1 && choice.finish_reason === 'stop'
+    && Array.isArray(response.choices) && response.choices.length === 1
+    && choice !== null && typeof choice === 'object' && !Array.isArray(choice)
+    && choice.finish_reason === 'stop'
     && choice.message?.role === 'assistant' && !choice.message.tool_calls && !choice.message.function_call
     && !choice.message.refusal && text(answer, 16000) && answer.trim();
   return { status: valid ? 'generated-unassessed' : 'invalid-output', answer, completionCalls: 1,

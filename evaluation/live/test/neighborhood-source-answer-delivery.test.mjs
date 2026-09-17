@@ -134,3 +134,15 @@ test('NC2/4 empty complete result is valid only with declared mode; completion f
     complete: () => { calls++; } })).status, 'invalid-source');
   assert.equal(calls, 2);
 });
+
+test('LAC2 neighborhood wrapper preserves malformed-choice invalid-output without retry', async () => {
+  const input = options(envelope([root(source('chosen'), source('linked'))]));
+  for (const malformed of [[null], [undefined], new Array(1), ['primitive']]) {
+    let calls = 0;
+    const output = { ...response(), choices: malformed };
+    const result = await deliverNeighborhoodSourceAnswer({ ...input, complete: () => { calls++; return output; } });
+    assert.deepEqual(result, { status: 'invalid-output', answer: null,
+      completionCalls: 1, finishReason: null });
+    assert.equal(calls, 1);
+  }
+});
