@@ -13,7 +13,7 @@ const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
 const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
 
-test('installed adapter/core/MCP automatically retains and returns rationale, with keyless cold replay and forgetting', { timeout: 60000 }, async t => {
+test('installed adapter/core/MCP cold rationale recall preserves linked evidence and observes forgetting', { timeout: 60000 }, async t => {
   const artifact = buildArtifact(); const root = mkdtempSync(join(tmpdir(), 'cairn-installed-rationale-'));
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-rationale', private: true, version: '0.0.0' }), { flag: 'wx' });
   command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], root, artifact.userconfig);
@@ -47,24 +47,65 @@ test('installed adapter/core/MCP automatically retains and returns rationale, wi
     const response = await active.callTool({ name, arguments: args }); const result = JSON.parse(response.content[0].text);
     assert.equal(result.ok, true, JSON.stringify(result)); return result.value;
   };
+  const query = { query: 'Why chose A?', contextMode: 'rationale-evidence' };
+  const recallTrace = since => {
+    assert.deepEqual(calls.slice(since).map(({ method }) => method),
+      ['cairn_select', 'cairn_select', 'cairn_rank', 'cairn_rank']);
+    assert.ok(calls.slice(since).every(({ route }) =>
+      ['/responses', '/responses/input_tokens'].some(suffix => route.endsWith(suffix))));
+  };
+  const retainedReceipts = rationale => rationale.sources.flatMap(source =>
+    source.receipts.map(({ role, excerpt }) => ({ role, excerpt }))).sort((a, b) => a.excerpt.localeCompare(b.excerpt));
   await start(proxy.token); assert.equal((await active.listTools()).tools.length, 7);
   const batches = [['one', 'I chose A because it supports offline work.'], ['two', 'I checked: A cannot work offline.']]
     .map(([batchId, content]) => ({ batchId, messages: [{ role: 'user', content }] }));
   for (const batch of batches) assert.equal((await call('capture_memory', batch)).rationale.status, 'reviewed');
   assert.equal(calls.length, 16);
-  const recalled = await call('recall_memory', { query: 'Why chose A?', contextMode: 'rationale-evidence' });
+  const recalled = await call('recall_memory', query);
   assert.equal(calls.length, 20); const rootMemory = recalled.memories[0];
   assert.equal(rootMemory.rationale.status, 'reconfirmation-suggested'); assert.equal(rootMemory.rationale.sources.length, 2);
+  assert.deepEqual(retainedReceipts(rootMemory.rationale), batches.map(batch => ({ role: 'user', excerpt: batch.messages[0].content }))
+    .sort((a, b) => a.excerpt.localeCompare(b.excerpt)));
   assert.deepEqual(ranks[0].candidates[0].rationale, rootMemory.rationale);
+  recallTrace(16);
   const ref = { memoryId: rootMemory.memory.id, revision: rootMemory.memory.revision };
+  await active.close(); const beforeColdStart = calls.length; await start(proxy.token);
+  assert.equal(calls.length, beforeColdStart);
+  const coldStart = calls.length;
+  const cold = await call('recall_memory', query);
+  recallTrace(coldStart); assert.equal(calls.length, 24);
+  assert.deepEqual(cold, recalled);
+  assert.deepEqual(cold.memories[0].memory, rootMemory.memory);
+  assert.deepEqual(retainedReceipts(cold.memories[0].rationale), retainedReceipts(rootMemory.rationale));
+  assert.deepEqual(ranks[1].candidates[0].rationale, cold.memories[0].rationale);
   await active.close(); await start('');
   assert.deepEqual(await call('inspect_rationale', ref), rootMemory.rationale);
   const duplicate = await call('capture_memory', batches[1]); assert.equal(duplicate.duplicate, true);
-  assert.equal(duplicate.rationale.reason, 'duplicate'); assert.equal(calls.length, 20);
-  const challenge = rootMemory.rationale.sources.find(source => source.memory.id !== ref.memoryId).memory;
+  assert.equal(duplicate.rationale.reason, 'duplicate'); assert.equal(calls.length, 24);
+  const challengeSource = rootMemory.rationale.sources.find(source => source.memory.id !== ref.memoryId);
+  const challenge = challengeSource.memory;
+  const challengeReceiptIds = new Set(challengeSource.receipts.map(receipt => receipt.id));
   const audit = await call('inspect_rationale', { memoryId: challenge.id, revision: challenge.revision, view: 'incident-proposals' });
   assert.equal(audit.edges.length, 1); assert.equal(audit.status, 'unassessed');
-  assert.equal(audit.view, 'incident-proposals'); assert.equal(calls.length, 20);
+  assert.equal(audit.view, 'incident-proposals'); assert.equal(calls.length, 24);
   await call('forget_memory', { memoryId: challenge.id, expectedRevision: challenge.revision });
-  assert.equal((await call('inspect_rationale', ref)).status, 'unassessed'); assert.equal(calls.length, 20);
+  assert.equal((await call('inspect_rationale', ref)).status, 'unassessed'); assert.equal(calls.length, 24);
+  await active.close(); const beforeAfterForgetStart = calls.length; await start(proxy.token);
+  assert.equal(calls.length, beforeAfterForgetStart);
+  const afterForgetStart = calls.length;
+  const afterForget = await call('recall_memory', query);
+  recallTrace(afterForgetStart); assert.equal(calls.length, 28);
+  assert.equal(afterForget.memories.length, 1);
+  assert.deepEqual(afterForget.memories[0].memory, rootMemory.memory);
+  assert.equal(afterForget.memories[0].rationale.status, 'unassessed');
+  assert.deepEqual(afterForget.memories[0].rationale.edges, rootMemory.rationale.edges.filter(edge =>
+    edge.from !== challenge.id && edge.to !== challenge.id &&
+    !challengeReceiptIds.has(edge.fromReceipt) && !challengeReceiptIds.has(edge.toReceipt)));
+  assert.ok(afterForget.memories[0].rationale.edges.every(edge => edge.relation !== 'challenges-premise'));
+  assert.deepEqual(retainedReceipts(afterForget.memories[0].rationale),
+    [{ role: 'user', excerpt: batches[0].messages[0].content }]);
+  assert.equal(JSON.stringify(afterForget).includes(batches[1].messages[0].content), false);
+  assert.equal(JSON.stringify(afterForget).includes(challenge.id), false);
+  assert.equal(ranks[2].candidates.length, 1);
+  assert.deepEqual(ranks[2].candidates[0].rationale, afterForget.memories[0].rationale);
 });
