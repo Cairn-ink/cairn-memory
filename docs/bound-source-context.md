@@ -64,3 +64,13 @@ labels are not authenticated identities; the same person can also be the
 subject. Both semantic and source-selection
 coverage remain unassessed. No new provider is selected, and no interpretation
 is written to the store.
+
+Explicit `{ namespace, refs, version: 3 }` selects a separate prompt and the
+version 3 CU `{ units, reasonLinks }` response. The compiler accepts only
+same-receipt, factual-to-decision, cited `stated-reason-for` associations, then
+binds each link to the captured `memoryId`, `revision` and `receiptId` just as
+it binds units. A link is an unverified account of a source-stated reason, not
+a verified cause, adoption, current applicability, permission or persisted
+rationale edge. The versionless and version 2 prompts, schemas, transport
+bytes and result shapes are unchanged. The same model, limits, snapshot fence,
+unassessed coverage and non-persistence apply; no receipt is guaranteed a unit.

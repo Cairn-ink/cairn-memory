@@ -280,7 +280,7 @@ test('SCS1/2 version 2 preparation and compilation keep stance on the propositio
 });
 
 test('SCS1/2 legacy and explicit v2 shapes reject cross-version and malformed stance fields', () => {
-  for (const version of [1, 3, null, '2']) rejectedInput({ ...input(), version });
+  for (const version of [1, 4, null, '2']) rejectedInput({ ...input(), version });
   rejectedInput({ ...v2Input(), extra: true });
   rejectedOutput(input(), units(v2Fact()));
   rejectedOutput(v2Input(), units(fact()));
@@ -305,6 +305,103 @@ test('SCS1/2 legacy and explicit v2 shapes reject cross-version and malformed st
     }
   }
   const extra = v2Fact(); extra.confirmed = true; rejectedOutput(v2Input(), units(extra));
+});
+
+const v3Input = (excerpt = 'The committee considered A because the export is auditable.') =>
+  ({ ...v2Input(excerpt), version: 3 });
+const v3Fact = (source = 0, receipt = 0) => ({ ...v2Fact(), source, receipt,
+  epistemicState: field('asserted', [0]), claimant: field(null), reporter: field(null) });
+const v3Decision = (source = 0, receipt = 0, state = 'considered') => ({
+  ...v3Fact(source, receipt), kind: 'decision_state', state: field(state, [0]),
+});
+const linked = (items, reasonLinks = []) => ({ units: items, reasonLinks });
+const reason = (from = 0, to = 1, evidence = [0]) =>
+  ({ from, to, relation: 'stated-reason-for', evidence });
+
+test('SRL1–3 v3 prepares a closed link schema and derives same-receipt exact anchors', () => {
+  const raw = v3Input('The team considered A because its export is auditable. '.repeat(5));
+  const prepared = prepareSourceContextUnits(raw);
+  assert.equal(prepared.input.version, 3);
+  assert.deepEqual(Object.keys(prepared.responseSchema.properties), ['units', 'reasonLinks']);
+  const linkSchema = prepared.responseSchema.properties.reasonLinks;
+  assert.equal(linkSchema.maxItems, 8);
+  assert.deepEqual(linkSchema.items.required, ['from', 'to', 'relation', 'evidence']);
+  assert.deepEqual(linkSchema.items.properties.from.enum, [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(linkSchema.items.properties.evidence.minItems, 1);
+  const proposal = linked([v3Fact(), v3Decision()], [reason(0, 1, [1, 0])]);
+  const result = compileSourceContextUnits(raw, proposal);
+  assert.equal(result.version, 3);
+  assert.equal(result.units[1].state.value, 'considered');
+  assert.deepEqual(result.reasonLinks.map(link => [link.from, link.to, link.source, link.receipt]),
+    [[0, 1, 0, 0]]);
+  assert.deepEqual(result.reasonLinks[0].anchors.map(anchor => anchor.passage), [0, 1]);
+  assert.equal(result.reasonLinks[0].interpretationStatus, 'model-proposed-unverified');
+  assert.equal(Object.isFrozen(result.reasonLinks[0].anchors[0]), true);
+  proposal.reasonLinks[0].evidence[0] = 99;
+  raw.sources[0].receipts[0].excerpt = 'mutated';
+  assert.match(result.reasonLinks[0].anchors[0].text, /considered A/u);
+  assert.deepEqual(compileSourceContextUnits(v3Input(), linked([])).reasonLinks, []);
+  assert.equal(compileSourceContextUnits(v3Input(), linked([v3Fact(), v3Decision(0, 0, 'rejected')],
+    [reason()])).units[1].state.value, 'rejected');
+  const recheck = compileSourceContextUnits(v3Input('The team adopted A, but its failed export now requires reconfirmation.'),
+    linked([v3Fact(), v3Decision(0, 0, 'pending_reconfirmation')], [reason()]));
+  assert.equal(recheck.units[1].state.value, 'pending_reconfirmation');
+  assert.equal(recheck.units[1].qualification.commitment, 'unknown');
+  assert.equal(recheck.reasonLinks[0].relation, 'stated-reason-for');
+});
+
+test('SRL2 rejects wrong direction, identity, references, duplicates and open shape', () => {
+  const raw = { version: 3, sources: [
+    { receipts: [{ role: 'user', excerpt: 'a'.repeat(201) },
+      { role: 'assistant', excerpt: 'Other receipt.' }] },
+    { receipts: [{ role: 'user', excerpt: 'Other source.' }] },
+  ] };
+  const valid = [v3Fact(), v3Decision()];
+  assert.ok(prepareSourceContextUnits(raw).responseSchema.properties.reasonLinks.items
+    .properties.evidence.items.enum.includes(1));
+  assert.equal(compileSourceContextUnits(raw, linked(valid, [reason()])).reasonLinks.length, 1);
+  for (const bad of [reason(1, 0), reason(0, 0), reason(0, 2), reason(-1, 1),
+    reason('0', 1), reason(0, 1, []), reason(0, 1, [0, 0]), reason(0, 1, [99])]) {
+    rejectedOutput(raw, linked(valid, [bad]));
+  }
+  rejectedOutput(raw, linked(valid, [reason(), reason()]));
+  const crossReceipt = [v3Fact(), v3Decision(0, 1)];
+  rejectedOutput(raw, linked(crossReceipt, [reason()]));
+  const crossSource = [v3Fact(), v3Decision(1, 0)];
+  rejectedOutput(raw, linked(crossSource, [reason()]));
+  rejectedOutput(raw, linked([v3Fact(), v3Fact()], [reason()]));
+  rejectedOutput(raw, linked([v3Decision(), v3Decision()], [reason()]));
+  rejectedOutput(raw, { units: valid });
+  rejectedOutput(raw, { units: valid, reasonLinks: [], extra: true });
+  rejectedOutput(raw, linked(valid, [{ ...reason(), extra: true }]));
+  rejectedOutput(raw, linked(valid, [{ ...reason(), relation: 'causes' }]));
+  rejectedOutput(raw, linked(valid, [, reason()]));
+  rejectedOutput(raw, linked(valid, Array(9).fill(reason())));
+});
+
+test('SRL3 links remain unverified even when a valid citation is semantically wrong', () => {
+  const raw = v3Input('The audit passed. The team considered A for a different reason.');
+  const result = compileSourceContextUnits(raw, linked([v3Fact(), v3Decision()], [reason()]));
+  assert.equal(result.reasonLinks[0].interpretationStatus, 'model-proposed-unverified');
+  assert.equal(result.status, 'assessment-only');
+  assert.equal(result.persistence, 'not-stored');
+});
+
+test('SRL5 reason anchors count toward the existing complete compiled-output limit', () => {
+  const raw = v3Input('x'.repeat(800));
+  const items = Array.from({ length: 6 }, (_, i) => {
+    const unit = i < 3 ? v3Fact() : v3Decision();
+    unit.subject = field(`unit ${i}`, [0, 1, 2, 3]);
+    unit.polarity = field('affirmed', [0, 1]);
+    return unit;
+  });
+  for (const item of items) assert.equal(compileSourceContextUnits(raw, linked([item])).units.length, 1);
+  const links = Array.from({ length: 8 }, (_, i) => reason(i % 3, 3 + Math.floor(i / 3), [0, 1, 2, 3]));
+  assert.ok(JSON.stringify(linked(items, links)).length < 24_000);
+  const withoutLinks = compileSourceContextUnits(raw, linked(items));
+  assert.ok(JSON.stringify(withoutLinks).length <= 24_000);
+  assert.equal(withoutLinks.units.length, 6);
+  rejectedOutput(raw, linked(items, links));
 });
 
 test('SCS2 foreign receipt, focus overflow, asserted negation and unknowns use existing bounds', () => {

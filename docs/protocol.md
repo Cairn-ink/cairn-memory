@@ -32,6 +32,14 @@ the same person, never authenticated identities. The same source and output caps
 coverage remain. This is no new MCP, hosted HTTP, capture, storage or paid-call
 capability.
 
+Explicit local `{ version: 3 }` adds bounded, same-receipt
+[`stated-reason-for` associations](source-context-units.md#explicit-version-3-source-local-reasons)
+between factual and decision units. Anchors and persistent identity are
+derived from the captured source snapshot; the association remains
+model-proposed, unverified and not stored. It cannot establish a true cause,
+adoption or permission. Earlier versions and their prompts/wires remain
+unchanged; the same caps and final freshness fence apply.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the

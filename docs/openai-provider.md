@@ -28,6 +28,12 @@ validation to the existing core compiler; it does not verify source stance or
 speaker identity. Versionless serialized requests and all other model methods
 are unchanged, and the old paid guards still deny this port.
 
+Explicit version 3 uses that same port and model with the core's separate
+source-local reason-link schema. Its bounded `reasonLinks` join factual and
+decision units within one receipt; the adapter neither infers missing links
+nor validates that cited words truly express a reason. The existing token,
+transport, cancellation and paid-guard boundaries are unchanged.
+
 The embedded adapter can separately select an experimental
 [rationale model](rationale-model-controls.md). This changes only an explicitly
 configured relate port, not other methods or MCP defaults, and grants no paid

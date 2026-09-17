@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — opt-in source-local reason associations
+
+- Explicit version 3 source-context assessment adds bounded, same-receipt
+  `stated-reason-for` links between factual and decision units. Links retain
+  exact source anchors and identity, remain unverified and are not stored.
+  Versionless/version 2 requests and provider defaults are unchanged.
+
 ## Unreleased — opt-in source-context stance
 
 - Explicit version 2 source-context preparation and review attach

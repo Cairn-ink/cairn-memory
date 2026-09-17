@@ -35,6 +35,14 @@ const v2Proposal = () => ({ units: [{ source: 0, receipt: 0, kind: 'factual_clai
 const v2Request = () => ({ system: 'Synthetic v2 source stance assessment.',
   ...prepareSourceContextUnits(v2Raw()), maxOutputTokens: 3072,
   signal: new AbortController().signal });
+const v3Raw = () => ({ ...v2Raw(), version: 3 });
+const v3Proposal = () => ({ units: [
+  v2Proposal().units[0],
+  { ...v2Proposal().units[0], kind: 'decision_state', state: field('considered', [0]) },
+], reasonLinks: [{ from: 0, to: 1, relation: 'stated-reason-for', evidence: [0] }] });
+const v3Request = () => ({ system: 'Synthetic v3 source-local reason assessment.',
+  ...prepareSourceContextUnits(v3Raw()), maxOutputTokens: 3072,
+  signal: new AbortController().signal });
 const response = (body, output = proposal(), usage = {}) => Response.json({
   object: 'response', model: body.model, status: 'completed', error: null,
   incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
@@ -90,6 +98,9 @@ test('SCS1/5 v1 reviewSourceContext bodies match fixed-base bytes; v2 uses canon
       '30e6c385cbb64dacafee1752a645876a328176cd6584dfbd95df8493f8f6cff5']);
   const input = v2Request(); const h = harness({ output: v2Proposal() });
   assert.deepEqual(await h.model.reviewSourceContext(input), v2Proposal());
+  assert.deepEqual(h.calls.map(call => createHash('sha256').update(call.options.body).digest('hex')),
+    ['18d37298777d37037d3ca32f8c5e4cc9151b7f85248b5e7605ef03651bd4966d',
+      '5ff68e9f26a607c7e9eac62505a190aabbf8a04eab24e58a41c6fda3623eb7ad']);
   assert.deepEqual(h.calls.map(call => call.url), [
     'https://api.openai.com/v1/responses/input_tokens',
     'https://api.openai.com/v1/responses']);
@@ -135,6 +146,32 @@ test('SCS5 v2 rejects mismatched schema, malformed stance and caller mutation wi
   assert.deepEqual(await detached.model.reviewSourceContext(mutable), v2Proposal());
   assert.deepEqual(JSON.parse(detached.calls[1].body.input[0].content[0].text), original.input);
   assert.deepEqual(detached.calls[1].body.text.format.schema, original.responseSchema);
+});
+
+test('SRL1/2 v3 transports the canonical schema and rejects mismatches before HTTP', async () => {
+  const input = v3Request(); const h = harness({ output: v3Proposal() });
+  assert.deepEqual(await h.model.reviewSourceContext(input), v3Proposal());
+  assert.equal(h.calls.length, 2);
+  const [count, generate] = h.calls.map(call => call.body);
+  assert.equal(JSON.parse(count.input[0].content[0].text).version, 3);
+  assert.deepEqual(count.text.format.schema, input.responseSchema);
+  assert.deepEqual(generate, { ...count, max_output_tokens: 3072,
+    store: false, stream: false });
+  assert.equal(compileSourceContextUnits(v3Raw(), v3Proposal()).reasonLinks.length, 1);
+  const invalid = harness();
+  for (const mutate of [
+    value => { value.responseSchema.properties.reasonLinks.maxItems = 9; },
+    value => { delete value.input.version; },
+    value => { value.input.version = 2; },
+    value => { value.responseSchema.properties.reasonLinks.items.properties.relation.enum = ['causes']; },
+  ]) {
+    const value = { ...v3Request() };
+    value.input = structuredClone(value.input);
+    value.responseSchema = structuredClone(value.responseSchema);
+    mutate(value);
+    await assert.rejects(invalid.model.reviewSourceContext(value), /invalid_openai_request/u);
+  }
+  assert.equal(invalid.calls.length, 0);
 });
 
 test('SCA2 malformed options, source input and schema reject before HTTP', async () => {

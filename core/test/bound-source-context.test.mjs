@@ -121,6 +121,40 @@ test('SCS1–4 explicit v2 binds direct and reported tentative propositions with
   assert.deepEqual(f.stored(), before);
 });
 
+test('SRL1–5 v3 binds reason identity, preserves store, and fences source correction', async t => {
+  const f = fixture(t); const before = f.stored();
+  const source = { ...v2Fact(0, 'asserted', null, null), kind: 'factual_claim' };
+  const choice = { ...v2Fact(0, 'asserted', null, null), kind: 'decision_state',
+    state: field('considered', [0]) };
+  f.model.reviewSourceContext = request => { f.requests.push(request);
+    return { units: [source, choice], reasonLinks: [
+      { from: 0, to: 1, relation: 'stated-reason-for', evidence: [0] }] }; };
+  const value = ok(await f.review({ version: 3 }));
+  assert.equal(value.version, 3);
+  assert.equal(value.reasonLinks.length, 1);
+  assert.deepEqual([value.reasonLinks[0].memoryId, value.reasonLinks[0].revision,
+    value.reasonLinks[0].receiptId], [f.refs[0].memoryId, f.refs[0].revision,
+    value.sources[0].receipts[0].id]);
+  assert.equal(value.reasonLinks[0].interpretationStatus, 'model-proposed-unverified');
+  assert.equal(value.units[1].state.value, 'considered');
+  assert.equal(value.semanticCoverage, 'unassessed');
+  assert.equal(value.persistence, 'not-stored');
+  assert.deepEqual(f.stored(), before);
+  assert.equal(f.requests[0].input.version, 3);
+  assert.deepEqual(Object.keys(f.requests[0].responseSchema.properties), ['units', 'reasonLinks']);
+  assert.match(f.requests[0].system, /never-finalized choice/u);
+  const cold = openMemoryCore({ path: f.path }); t.after(() => cold.close());
+  assert.equal(ok(cold.getRationale({ namespace, ...f.refs[0] })).edges.length, 0);
+  f.model.reviewSourceContext = () => {
+    ok(f.core.correct({ namespace, memoryId: f.refs[0].memoryId,
+      expectedRevision: f.refs[0].revision, content: 'Corrected', kind: 'context',
+      receipt: receipt('reason-corrected', 'The team rejected A.') }));
+    return { units: [source, choice], reasonLinks: [
+      { from: 0, to: 1, relation: 'stated-reason-for', evidence: [0] }] };
+  };
+  rejected(await f.review({ version: 3 }), 'revision_conflict');
+});
+
 test('BCU1/4 caller input is captured before assay; unrelated namespaces do not stale it', async t => {
   const f = fixture(t);
   const request = { namespace: { ...namespace }, refs: f.refs.map(ref => ({ ...ref })) };

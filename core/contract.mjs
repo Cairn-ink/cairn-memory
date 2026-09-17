@@ -687,7 +687,7 @@ export function openMemoryCore(input) {
       object(input, ['namespace', 'refs', 'version']);
       const versionField = Object.getOwnPropertyDescriptor(input, 'version');
       if (versionField && (!versionField.enumerable || !Object.hasOwn(versionField, 'value') ||
-          versionField.value !== 2)) throw new MemoryStoreError('invalid_input');
+          ![2, 3].includes(versionField.value))) throw new MemoryStoreError('invalid_input');
       const ns = contractNamespace(input.namespace);
       denseArray(input.refs, 1, 6);
       const refs = memoryRefs(input.refs);

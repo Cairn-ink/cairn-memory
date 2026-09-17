@@ -50,9 +50,22 @@ _Avoid_: Supersession
 A source-attributed reason explicitly associated with a decision or conclusion.
 _Avoid_: Reconstructed motive, proof of causation
 
+**Source-local reason association**:
+An interpretation that one receipt explicitly states a factual premise as a reason
+for considering, adopting, rejecting, or re-examining a choice. Its source anchor does not prove
+that the premise is true, the reasoning sound, or the choice authorized.
+_Avoid_: Nearby facts, inferred motive, verified cause
+
+**Never-finalized choice**:
+A choice for which the source records no completed adoption. Consideration or an
+unselected replacement alone does not establish rejection, withheld approval,
+or a previous decision needing reconfirmation.
+_Avoid_: Pending reconfirmation, cancelled decision
+
 **Needs reconfirmation**:
 A decision whose recorded supporting premise no longer holds, without evidence
 that its source has adopted a different decision.
+This presupposes an existing decision, unlike a never-finalized choice.
 _Avoid_: Cancelled decision, replacement decision
 
 **Reconfirmation suggestion**:

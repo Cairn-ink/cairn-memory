@@ -84,3 +84,25 @@ the named claimant is correct, or whether a statement is true. This version
 does not assess selection coverage: the global eight-unit cap can still leave
 relevant receipts without an interpreted unit. It adds no persistence or
 automatic provider call.
+
+## Explicit version 3 source-local reasons
+
+`{ version: 3, sources }` keeps every version 2 unit field, input limit and
+eight-unit cap. Its separate closed proposal root is `{ units, reasonLinks }`;
+the versionless and version 2 roots remain `{ units }`. Each of at most eight
+links has `{ from, to, relation: 'stated-reason-for', evidence }`, where `from`
+indexes a factual-claim unit, `to` a decision-state unit, and `evidence` cites
+one to four distinct original passages. Both units and link evidence must refer
+to the same source receipt. Duplicate endpoint pairs and foreign references
+reject. Empty links are allowed; the compiler does not infer them.
+
+The compiler derives each link's source/receipt indices and sorted exact
+anchors, and marks it `model-proposed-unverified`. It does not verify that the
+words actually state a reason or that the reason is true or causal. A reason
+can be stated for consideration, rejection, or re-examination without implying
+adoption or retroactively becoming the reason for an earlier choice.
+Neither a never-finalized choice nor an unselected replacement is evidence of
+pending reconfirmation or withheld approval. The same 24,000-unit proposal and
+compiled-result bounds apply to units **and** links; nothing is trimmed.
+This is an opt-in source interpretation, not a stored rationale edge, semantic
+coverage guarantee, or permission.

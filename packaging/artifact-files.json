@@ -42,6 +42,7 @@
   "core/prompts/review-addressed-basis.md",
   "core/prompts/review-source-context.md",
   "core/prompts/review-source-context-v2.md",
+  "core/prompts/review-source-context-v3.md",
   "core/prompts/relate-rationale.md",
   "core/prompts/relate-claim-focus.md",
   "core/recall.mjs",
