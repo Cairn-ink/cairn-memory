@@ -134,13 +134,56 @@ test('CU3 rejects every foreign, duplicate and missing field/state/context refer
   const known = fact(); known.property = field('claim'); rejectedOutput(raw, units(known));
   const noQualification = fact(); noQualification.subject.evidence = [];
   noQualification.eventTimeContext = [0]; rejectedOutput(raw, units(noQualification));
-  const foreignReceipt = { sources: [{ receipts: [
-    { role: 'user', excerpt: 'f'.repeat(201) },
-    { role: 'assistant', excerpt: 'second' }] }] };
-  assert.ok(prepareSourceContextUnits(foreignReceipt).responseSchema.properties.units.items
-    .anyOf[0].properties.subject.properties.evidence.items.enum.includes(1));
-  const cross = fact(); cross.receipt = 1; cross.subject.evidence = [1];
-  rejectedOutput(foreignReceipt, units(cross));
+  const scenarios = [
+    { name: 'other receipt', raw: { sources: [{ receipts: [
+      { role: 'user', excerpt: 'f'.repeat(201) },
+      { role: 'assistant', excerpt: 'own receipt' }] }] }, source: 0, receipt: 1 },
+    { name: 'other source', raw: { sources: [
+      { receipts: [{ role: 'user', excerpt: 'f'.repeat(201) }] },
+      { receipts: [{ role: 'assistant', excerpt: 'own source' }] },
+    ] }, source: 1, receipt: 0 },
+  ];
+  for (const scenario of scenarios) {
+    const prepared = prepareSourceContextUnits(scenario.raw);
+    const schemaIds = prepared.responseSchema.properties.units.items.anyOf[0]
+      .properties.subject.properties.evidence.items.enum;
+    assert.ok(schemaIds.includes(1), scenario.name); // Globally valid, foreign locally.
+    assert.deepEqual(prepared.input.sources[scenario.source].receipts[scenario.receipt]
+      .passages.map(passage => passage.index), [0], scenario.name);
+    const ownFact = fact(); ownFact.source = scenario.source; ownFact.receipt = scenario.receipt;
+    const ownDecision = decision(); ownDecision.source = scenario.source;
+    ownDecision.receipt = scenario.receipt;
+    assert.equal(compileSourceContextUnits(scenario.raw, units(ownFact)).units.length, 1);
+    assert.equal(compileSourceContextUnits(scenario.raw, units(ownDecision)).units.length, 1);
+    for (const name of ['subject', 'property', 'scope', 'applies', 'value',
+      'attribution', 'polarity', 'quantifier']) {
+      const foreign = structuredClone(ownFact);
+      foreign[name].evidence = [1];
+      rejectedOutput(scenario.raw, units(foreign));
+    }
+    for (const name of ['eventTimeContext', 'reporterContext']) {
+      const foreign = structuredClone(ownFact);
+      foreign[name] = [1];
+      rejectedOutput(scenario.raw, units(foreign));
+    }
+    const foreignState = structuredClone(ownDecision);
+    foreignState.state.evidence = [1]; rejectedOutput(scenario.raw, units(foreignState));
+    for (const stateRefs of [[0, 0], [99]]) {
+      const malformedState = structuredClone(ownDecision);
+      malformedState.state.evidence = stateRefs;
+      rejectedOutput(scenario.raw, units(malformedState));
+    }
+    for (const name of ['source', 'receipt']) {
+      for (const badId of [-1, 99, '0', undefined]) {
+        const malformedId = structuredClone(ownFact);
+        malformedId[name] = badId;
+        rejectedOutput(scenario.raw, units(malformedId));
+      }
+      const missingId = structuredClone(ownFact);
+      delete missingId[name];
+      rejectedOutput(scenario.raw, units(missingId));
+    }
+  }
 });
 
 test('CU3 five passages within valid 800 UTF16 cannot widen four-passage focus', () => {

@@ -139,3 +139,16 @@ results remain intact. No paid request, merge, release or deployment occurred.
 Independent Standards and Spec review and latest-head CI are subsequent delivery
 gates recorded in the PR, not implied by the local results above. Review must use
 the fixed main base at the top of this plan and the final committed candidate.
+
+The first independent Spec review of `cb48971` found one low-severity CU5 coverage
+gap: foreign-reference tests covered only subject across receipts, not all roles.
+The same worker expanded the public test matrix across receipts and sources for
+all eight fields, state, and both contexts, including positive own-source and
+global-schema preconditions. Duplicate/out-of-bounds state refs and invalid/missing
+IDs are also checked. No compiler or runtime code changed.
+
+Primary inspected this correction and reran `npm test`106/106, JSON validation,
+full core627/627, actual installed CU test1/1, and private parity2/2 on both pinned
+runtimes. Full artifact68/68 and installed rationale4/4 above were run before
+this test-only correction; runtime/artifact hashes are unchanged. Both independent
+axes must review the corrected final commit, and latest-head CI remains required.
