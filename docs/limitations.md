@@ -7,7 +7,7 @@ revises evidence appends to or edits this file rather than the README; see
 [CONTRIBUTING](../CONTRIBUTING.md#where-to-record-evaluation-limitations).
 
 The section below is the text that opened the README until 2026-09-18, moved
-here unchanged apart from link paths.
+here unchanged apart from link paths and the bold lead-in becoming this section's heading.
 
 ## Preview, not a quality guarantee
 
