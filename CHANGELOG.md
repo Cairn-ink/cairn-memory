@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — explicit bound source-context review
+
+- The embedded core can explicitly review current receipt passages with an
+  injected assessor, then bind structurally compiled units to the captured
+  memory revision and receipt IDs. A final snapshot fence rejects stale output.
+- The source-only request and full response are bounded; proposals remain
+  unverified and unstored. Existing model calls, automatic capture, MCP and
+  hosted HTTP defaults are unchanged. See [bound source context](docs/bound-source-context.md).
+
 ## Unreleased — pure source-context unit compiler
 
 - The embedded core exports explicit source-only preparation and structural

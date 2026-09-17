@@ -10,6 +10,14 @@ Compiled field/state/context roles remain model-proposed and unverified; exact
 original passage anchors are not semantic proof, authenticated identity or
 permission. Context passages are not parsed dates or reporter identities.
 
+Explicit local [`reviewSourceContext`](bound-source-context.md) now composes that
+compiler with a current, exact-namespace source snapshot and an injected model.
+Only source-local passages and the strict response schema reach the model;
+persistent identities are bound afterward from the captured snapshot and
+rechecked after all callbacks. Selected sources and interpretations are bounded,
+unverified and not stored. This adds no automatic capture, MCP/HTTP tool,
+provider configuration, permission or durable interpretation.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the

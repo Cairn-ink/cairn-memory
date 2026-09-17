@@ -13,6 +13,7 @@ import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './q
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
+import { reviewBoundSourceContext } from './bound-source-context.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
@@ -680,6 +681,28 @@ export function openMemoryCore(input) {
     } catch (error) { return failure(error); }
   }
 
+  async function reviewSourceContext(input) {
+    try {
+      runtime.ready();
+      object(input, ['namespace', 'refs']);
+      const ns = contractNamespace(input.namespace);
+      denseArray(input.refs, 1, 6);
+      const refs = memoryRefs(input.refs);
+      const snapshot = runtime.rationaleSnapshot(ns, refs);
+      const validateFresh = () => {
+        if (JSON.stringify(runtime.rationaleSnapshot(ns, refs)) !== JSON.stringify(snapshot)) {
+          throw new MemoryStoreError('revision_conflict');
+        }
+      };
+      const value = await reviewBoundSourceContext(model, snapshot, validateFresh);
+      if (Buffer.byteLength(JSON.stringify(success(value)), 'utf8') > 24_000) {
+        throw new MemoryStoreError('context_item_too_large');
+      }
+      validateFresh();
+      return success(value);
+    } catch (error) { return failure(error); }
+  }
+
   function getRationale(input) {
     return invoke(() => {
       runtime.ready();
@@ -762,7 +785,7 @@ export function openMemoryCore(input) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectCaptureEvidence, discardCaptureEvidence,
     applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture, classifyPlacement, rebuildIndex,
-    reviewRationale, getRationale, reviewDecisionBasis,
+    reviewRationale, getRationale, reviewDecisionBasis, reviewSourceContext,
     close() {
       runtime.close();
       return success(null);
