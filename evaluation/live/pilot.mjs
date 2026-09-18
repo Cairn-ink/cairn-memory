@@ -21,7 +21,10 @@ import {
   runLongMemEvalComparison,
 } from '../longmemeval/comparison.mjs';
 import { planLongMemEvalCase, projectIngestionFailure } from '../longmemeval/ingestion.mjs';
-import { opaqueQuestionId, SCHEMA_VERSION as PREPARATION_SCHEMA_VERSION } from '../longmemeval/prepare.mjs';
+import {
+  opaqueQuestionId, opaqueSessionId, stableTurnIdV2,
+  SCHEMA_VERSION as PREPARATION_SCHEMA_VERSION,
+} from '../longmemeval/prepare.mjs';
 import { scoreLongMemEvalComparison } from '../longmemeval/scoring.mjs';
 import { deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
 
@@ -150,7 +153,7 @@ const validateArtifactMetadata = (value, expectedFilename) => {
 
 const validateManifest = (manifest) => {
   exactObject(manifest, ['schema_version', 'preparation_kind', 'dataset', 'selection',
-    'artifacts', 'sizes', 'compatibility', 'boundaries'], 'invalid_manifest');
+    'session_id_map', 'artifacts', 'sizes', 'compatibility', 'boundaries'], 'invalid_manifest');
   if (manifest.schema_version !== PREPARATION_SCHEMA_VERSION || manifest.preparation_kind !== 'pilot') {
     fail('invalid_manifest');
   }
@@ -177,6 +180,22 @@ const validateManifest = (manifest) => {
     || new Set(manifest.selection.source_question_ids).size !== manifest.selection.count
     || manifest.selection.source_question_ids.some((id, index) =>
       opaqueQuestionId(id) !== manifest.selection.question_ids[index])) fail('invalid_manifest');
+
+  denseArray(manifest.session_id_map, manifest.selection.count, 'invalid_manifest');
+  if (manifest.session_id_map.length !== manifest.selection.count) fail('invalid_manifest');
+  manifest.session_id_map.forEach((entry, index) => {
+    exactObject(entry, ['question_id', 'source_question_id', 'occurrences'], 'invalid_manifest');
+    if (entry.question_id !== manifest.selection.question_ids[index]
+      || entry.source_question_id !== manifest.selection.source_question_ids[index]) fail('invalid_manifest');
+    denseArray(entry.occurrences, 1, 'invalid_manifest');
+    entry.occurrences.forEach((occurrence, sessionIndex) => {
+      exactObject(occurrence, ['session_index', 'source_session_id', 'session_id'], 'invalid_manifest');
+      if (occurrence.session_index !== sessionIndex || !validString(occurrence.source_session_id)
+        || occurrence.session_id !== opaqueSessionId(entry.source_question_id, sessionIndex)) {
+        fail('invalid_manifest');
+      }
+    });
+  });
 
   exactObject(manifest.artifacts, ['history', 'questions', 'evaluator'], 'invalid_manifest');
   for (const [name, filename] of Object.entries(ARTIFACTS)) {
@@ -278,6 +297,14 @@ export async function loadPreparedPilot(options) {
         ownerId: 'longmemeval-live-pilot', scope: 'project', projectId: question.question_id,
       } });
     } catch { fail('invalid_history'); }
+    const mapped = manifest.session_id_map[index].occurrences;
+    if (history.sessions.length !== mapped.length
+      || history.sessions.some((session, sessionIndex) =>
+        session.session_index !== mapped[sessionIndex].session_index
+        || session.session_id !== mapped[sessionIndex].session_id
+        || session.turns.some((turn, turnIndex) =>
+          turn.turn_id !== stableTurnIdV2(manifest.selection.source_question_ids[index],
+            sessionIndex, turnIndex)))) fail('case_identity_mismatch');
     validateEvaluator(evaluator, history, question, manifest.selection.source_question_ids[index]);
     const generationCase = deepFreeze({ history, question });
     cases.push(generationCase);

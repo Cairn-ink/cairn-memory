@@ -89,6 +89,11 @@ Import `scoreLongMemEvalComparison` from `evaluation/longmemeval/scoring.mjs`.
 After generation, call it with exactly `{run, evaluator}`. `evaluator` is the
 matching prepared evaluator record with `question_id`, `source_question_id`,
 `question_type`, `reference_answer`, `answer_session_ids` and `turn_labels`.
+For preparation v2, `answer_session_ids` contains opaque session-occurrence IDs
+matching the prepared history. Raw source labels stay in the private manifest
+map, never in generation. Earlier v1 artifacts need regeneration; a hand-built
+legacy in-memory history can still exercise diagnostic APIs but is not v2
+benchmark evidence.
 Case identity and referenced source coordinates are checked before scoring.
 An in-memory record is not a signed artifact: retain its preparation hashes and
 run provenance separately instead of treating schema validation as authenticity.
