@@ -216,12 +216,13 @@ test('OC4: private callback error codes never cross the run boundary', async () 
 test('OC4: empty prior capture cannot pass freshness through a duplicate result', async () => {
   let recalled = false;
   const run = await runPublicComparison(options({ core: fakeCore({
-    capture: () => ({ ok: true, value: { ...captureOk().value, duplicate: true } }),
+    capture: () => ({ ok: true, value: { duplicate: true, memoryIds: [], suppressedCount: 0 } }),
     recall: () => { recalled = true; return emptyRecall(); },
   }) }));
   assert.equal(recalled, false);
   assert.equal(run.arms[0].status, 'failed');
   assert.equal(run.arms[0].reason, 'ingestion_incomplete');
+  assert.equal(run.arms[0].diagnostics.ingestion.outcomes[0].status, 'duplicate');
   assert.deepEqual(run.arms.slice(1).map(item => item.status), ['completed', 'completed']);
 });
 
