@@ -93,8 +93,14 @@ reset or replaced.
   stage or channel, `usage` is `{inputTokens, outputTokens}` or null, and
   timestamps are epoch milliseconds. It never contains bodies, headers, keys,
   prompts or provider error text. Rate assumptions are the stage
-  `inputPrice`/`outputPrice` as recorded in the extension file.
-- **BG7 Offline tests** in `evaluation/experiment-budget/test/benchmark-guard.test.mjs`
+  `inputPrice`/`outputPrice` as recorded in the extension file. If the
+  settlement write fails, the record keeps the parsed `usage` for manual
+  settlement while `outcome`, `actualMicroUsd`, `settledAt` and `elapsedMs`
+  remain null and this guard never re-settles the attempt; `outcome`/
+  `settledAt`, never `usage`, indicate settlement (a succeeded `cairn-count`
+  also has null `usage`).
+- **BG7 Offline tests** in
+  `evaluation/experiment-budget/test/benchmark-guard.test.mjs`
   with synthetic private ledgers and fake HTTP only, passing on Node 22.16 and
   24: rejection before send (wrong model, wrong endpoint, extra key,
   `temperature` ≠ 0, missing `store`/`stream`, oversized input) with zero
@@ -111,9 +117,9 @@ reset or replaced.
   the new file; `docs/experiment-request-guard.md` gains a "Benchmark answer
   and judge stages" section (channel mapping, allowlist, halt rule, the
   explicit `store`/`stream` addition, unknown count-call billing counted
-  conservatively); `CHANGELOG.md`
-  entry. `npm run test:experiment-request-guard`, `npm test` and `npm run
-  validate` pass on both Node lines with `git diff --check` clean.
+  conservatively); `CHANGELOG.md` entry. `npm run
+  test:experiment-request-guard`, `npm test` and `npm run validate` pass on
+  both Node lines with `git diff --check` clean.
 
 ## Ownership and evidence
 

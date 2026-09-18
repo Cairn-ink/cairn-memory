@@ -352,13 +352,17 @@ outcome, actualMicroUsd, usage, startedAt, settledAt, elapsedMs}`, where
 `stage` is `answer`, `judge`, `cairn-count` or `cairn-generation` and `rates`
 copies the stage or channel `inputPrice`/`outputPrice`; it never contains
 bodies, headers, keys or provider text. Rate assumptions are the stage prices
-recorded in the extension file, not a provider invoice. This record is
-process-local: the ledger persists only channel, reservation, outcome and
-cost. Durable per-case stage records, checkpoint state and no-replay-on-resume
-are the runner's responsibility, per the issue #180 handoff's P2 bullets
-("persist … checkpoint state" and "checkpoint/no retry"), delivered with P2
-together with its plan `docs/plans/public-pilot-runner.md`. Constructing this
-guard or passing its tests authorizes no paid run, and
+recorded in the extension file, not a provider invoice. If the settlement
+write fails, the record keeps the parsed `usage` for manual settlement while
+`outcome`, `actualMicroUsd`, `settledAt` and `elapsedMs` remain null and this
+guard never re-settles the attempt; `outcome`/`settledAt`, never `usage`,
+indicate settlement (a succeeded `cairn-count` also has null `usage`). This
+record is process-local: the ledger persists only channel, reservation,
+outcome and cost. Durable per-case stage records, checkpoint state and
+no-replay-on-resume are the runner's responsibility, per the issue #180
+handoff's P2 bullets ("persist … checkpoint state" and "checkpoint/no retry"),
+delivered with P2 together with its plan. Constructing this guard or passing
+its tests authorizes no paid run, and
 `evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses synthetic
 ledgers with fake HTTP only. See [acceptance](plans/live-pilot-transport.md).
 
@@ -376,6 +380,11 @@ accounting. Inject a one-attempt transport, disable hidden SDK retries, and
 verify the pinned host's complete route before treating the experiment as
 protected. The guard cannot sandbox hostile callbacks or another same-user
 process that replaces its files.
+
+The allowlist is evaluated on the parsed JSON while the raw text is forwarded
+verbatim, so a body with duplicate JSON keys is validated on the last
+occurrence and sent with both; this is identical to the baseline guard,
+providers parse last-wins, and the accepted set is unchanged.
 
 Never create a new ledger to replenish an existing experiment. Historical
 spending authority is not renewed by a merge, passing tests or this policy.

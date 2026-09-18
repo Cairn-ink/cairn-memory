@@ -447,6 +447,11 @@ test('BG5 a ledger lock during settlement leaves the attempt unsettled and halts
     lock.exec('BEGIN IMMEDIATE');
     return Response.json(chatEnvelope(JUDGE_MODEL));
   });
+  // An assertion failure must not leak the held lock; the happy path below releases it explicitly.
+  f.drain(async () => {
+    try { lock?.exec('ROLLBACK'); } catch { /* already released */ }
+    try { lock?.close(); } catch { /* already closed */ }
+  });
   await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), (error) =>
     error.name === 'ExperimentBudgetError' && error.code === 'ledger_busy');
   lock.exec('ROLLBACK');
