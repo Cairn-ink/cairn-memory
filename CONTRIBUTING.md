@@ -61,6 +61,9 @@ core; its diagnostic scores are not measured real-model accuracy. See
 For the separately versioned public comparison/scorer, also run
 `npm run demo:longmemeval-public` on both runtimes. This synthetic demo verifies
 source-only evidence and official-style prompt plumbing, not real-model quality.
+The optional reference-sidecar tests invoke Python 3 (standard library only)
+on synthetic JSON. Install Python 3 for the LongMemEval maintainer test suite;
+the public memory core and ordinary scorer do not invoke Python.
 
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.

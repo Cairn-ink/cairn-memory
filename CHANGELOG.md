@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — evaluator-only Python reference rendering
+
+- Add an opt-in offline reference-rendering sidecar from checksum-bound raw
+  JSON, preserving official Python number and array formatting without
+  changing preparation v2 or model-facing history/question files.
+- Scoring may consume loader-issued evaluator-bound rendering capabilities;
+  absent a verified capability, non-string references remain unresolved.
+  This is scoring infrastructure, not a measured accuracy result.
+
 ## Unreleased — offline public benchmark infrastructure
 
 - Add a separately versioned Cairn/source-evidence, full-history and no-memory

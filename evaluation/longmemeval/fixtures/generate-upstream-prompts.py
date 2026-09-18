@@ -33,6 +33,18 @@ inputs = [
     ("multi-session", "Curly {q}?", "brace {answer}", "line one\nline two", False),
 ]
 
+if sys.argv[1:] == ["--typed-hashes"]:
+    typed = [
+        ("integer", 3), ("float", 3.0), ("large", 9007199254740993),
+        ("negative-zero", -0.0), ("exponent", 1e2),
+        ("array", [3.0, "a", "it's", 'quo"te']),
+    ]
+    print(json.dumps([{"id": case_id, "prompt_sha256": hashlib.sha256(
+        namespace["get_anscheck_prompt"]("single-session-user", "What?", answer,
+                                         "answer", False).encode("utf-8")).hexdigest()}
+        for case_id, answer in typed], separators=(",", ":")))
+    sys.exit(0)
+
 print("[")
 for index, (question_type, question, reference, response, abstention) in enumerate(inputs):
     case = {

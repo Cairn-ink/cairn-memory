@@ -21,17 +21,17 @@ content:prompt}], n:1, temperature:0, max_tokens:10}`. The upstream parser
 trims and lowercases judge text, then tests whether it contains `yes` anywhere:
 even `yesterday` is positive. This is compatibility, not a truth guarantee.
 
-Only string references have verified prompt-byte parity. Prepared JSON has
-lost the Python lexical/type distinctions needed to reconstruct numeric and
-array reference formatting. Such references receive
-`reference_serialization_unverified` on every completed arm, with no judge
-call. A fully resolved official-style score therefore requires verified parity
-for every actual reference type; this packet cannot claim that condition for
-non-string references.
+By default, only string references have verified prompt-byte parity. Prepared
+JSON has lost the Python lexical/type distinctions needed to reconstruct
+numeric and array reference formatting. Without the separate, checksum-bound
+[offline Python reference rendering](official-reference-rendering.md), such
+references receive `reference_serialization_unverified` on every completed arm,
+with no judge call. The optional renderer uses Python's `str(answer)` from the
+original verified source bytes; no Python is loaded by the public core.
 
 ## API and unresolved outcomes
 
-`scorePublicComparison({run,evaluator,judge,judgeTimeoutMs})` consumes the
+`scorePublicComparison({run,evaluator,judge,judgeTimeoutMs,referenceRendering})` consumes the
 public-comparison-v1 run and its matching prepared evaluator record. The
 optional `judge({request,signal})` returns `{text}`; omission leaves completed
 arms unresolved as `judge_not_configured`. The callback is invoked serially,
@@ -62,7 +62,8 @@ coverage (`resolved / fixedN`); and fixed-N lower/upper bounds (`correct / N`,
 separate `_abs` overlay. Empty type buckets have null accuracy, and the
 six-type macro accuracy is null unless every type has at least one roster case
 and all six buckets resolve. The `completeVerifiedOfficialStyle` flag means
-only that every declared outcome resolved under this string-reference protocol.
+only that every declared outcome resolved under verified string or Python-
+rendered reference protocols.
 It does not prove corpus completeness, genuine model provenance, or a
 published LongMemEval result. Records also carry and aggregate-check the
 answer model identity; mixing different answer models is rejected.

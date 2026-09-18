@@ -1,4 +1,5 @@
 import { opaqueQuestionId } from './prepare.mjs';
+import { resolveReferenceRendering } from './reference-rendering.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const OFFICIAL_SCORING_SCHEMA_VERSION = 'cairn-longmemeval-official-scoring-v1';
@@ -143,7 +144,8 @@ const judgeOnce = async (judge, request, timeoutMs) => {
   finally { clearTimeout(timer); }
 };
 
-export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeoutMs = 30_000 }) => {
+export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeoutMs = 30_000,
+  referenceRendering }) => {
   validateRun(run);
   validateEvaluator(evaluator, run);
   if (judge !== undefined && typeof judge !== 'function') fail('invalid_judge');
@@ -153,7 +155,15 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
   const fixedRun = snapshot(run, 'invalid_run');
   const fixedEvaluator = snapshot(evaluator, 'invalid_evaluator');
   const abstention = fixedEvaluator.source_question_id.includes('_abs');
-  const verifiedReference = typeof fixedEvaluator.reference_answer === 'string';
+  let referenceText = fixedEvaluator.reference_answer;
+  let referenceSerialization = 'verified-string';
+  if (referenceRendering !== undefined) {
+    try { referenceText = resolveReferenceRendering(referenceRendering, fixedEvaluator); }
+    catch { fail('rendering_mismatch'); }
+    referenceSerialization = 'verified-python-rendered';
+  }
+  const verifiedReference = typeof referenceText === 'string';
+  if (!verifiedReference) referenceSerialization = 'unverified-non-string';
   const arms = [];
   let priorJudgeTimeout = false;
   for (const name of OFFICIAL_ARM_NAMES) {
@@ -180,7 +190,7 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
       continue;
     }
     const prompt = officialPrompt({ questionType: fixedEvaluator.question_type,
-      question: fixedRun.question.text, reference: fixedEvaluator.reference_answer,
+      question: fixedRun.question.text, reference: referenceText,
       response: arm.answer.text, abstention });
     const result = await judgeOnce(judge, officialJudgeRequest(prompt), judgeTimeoutMs);
     if (result.kind === 'timeout') {
@@ -203,7 +213,7 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
   return deepFreeze({ schemaVersion: OFFICIAL_SCORING_SCHEMA_VERSION,
     questionId: fixedRun.questionId, sourceQuestionId: fixedEvaluator.source_question_id,
     questionType: fixedEvaluator.question_type, abstention, answerModel: fixedRun.answerModel,
-    compatibility: { referenceSerialization: verifiedReference ? 'verified-string' : 'unverified-non-string',
+    compatibility: { referenceSerialization,
       upstreamCommit: OFFICIAL_UPSTREAM_COMMIT,
       judgeRequest: { model: OFFICIAL_JUDGE_MODEL, n: 1, temperature: 0, max_tokens: 10 } }, arms });
 };
@@ -258,7 +268,8 @@ export const aggregateOfficialScores = ({ roster, records }) => {
     if (record.sourceQuestionId !== item.sourceQuestionId || record.questionType !== item.questionType
       || record.abstention !== item.sourceQuestionId.includes('_abs')
       || !isPlainObject(record.compatibility)
-      || !['verified-string', 'unverified-non-string'].includes(record.compatibility.referenceSerialization)
+      || !['verified-string', 'verified-python-rendered', 'unverified-non-string']
+        .includes(record.compatibility.referenceSerialization)
       || record.compatibility.upstreamCommit !== OFFICIAL_UPSTREAM_COMMIT
       || !isPlainObject(record.compatibility.judgeRequest)
       || Object.keys(record.compatibility.judgeRequest).length !== 4
@@ -280,14 +291,15 @@ export const aggregateOfficialScores = ({ roster, records }) => {
       if (judgment.status === 'resolved') {
         if (arm.generationStatus !== 'completed' || typeof judgment.correct !== 'boolean'
           || judgment.reason !== null || judgment.stage !== null || !judgment.attempted
-          || record.compatibility.referenceSerialization !== 'verified-string') fail('invalid_records');
+          || record.compatibility.referenceSerialization === 'unverified-non-string') fail('invalid_records');
       } else if (judgment.correct !== null || !validString(judgment.reason)
         || !['generation', 'compatibility', 'judge'].includes(judgment.stage)
         || (judgment.stage === 'generation' && (arm.generationStatus === 'completed' || judgment.attempted))
         || (judgment.stage !== 'generation' && arm.generationStatus !== 'completed')
         || (judgment.stage === 'compatibility' && (judgment.reason !== 'reference_serialization_unverified'
           || judgment.attempted || record.compatibility.referenceSerialization !== 'unverified-non-string'))
-        || (judgment.stage === 'judge' && record.compatibility.referenceSerialization !== 'verified-string')) {
+        || (judgment.stage === 'judge'
+          && record.compatibility.referenceSerialization === 'unverified-non-string')) {
         fail('invalid_records');
       }
     }

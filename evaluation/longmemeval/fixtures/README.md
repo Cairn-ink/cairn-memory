@@ -21,6 +21,9 @@ gh api 'repos/xiaowu0162/LongMemEval/contents/src/evaluation/evaluate_qa.py?ref=
 
 The printed JSON should match `upstream-prompts.json` byte-for-byte.
 
-The fixture is deliberately string-only. It establishes prompt parity for
-those inputs, not Python's formatting of numeric or array references, provider
-behavior, or accuracy on the public corpus.
+The original `upstream-prompts.json` fixture remains string-only. For typed
+references, `generate-upstream-prompts.py --typed-hashes` executes the same
+hash-checked pinned function and prints six expected prompt SHA-256 values
+in `upstream-typed-prompt-hashes.json`. These cover Python formatting of
+integers, floats, negative zero, a beyond-JS-safe integer and a mixed array;
+they do not establish provider behavior or public-corpus accuracy.
