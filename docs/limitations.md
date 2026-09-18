@@ -60,6 +60,15 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 
+Prepared LongMemEval v1 histories exposed raw session-ID labels to ingestion
+and answer evidence, and legacy turn IDs depended on those labels. A source
+session ID could itself encode an answer or abstention. Preparation v2 blinds
+that metadata and makes turn identities label-independent, with an offline
+synthetic preparation → local-core comparison → scoring regression. Old v1
+artifacts must be regenerated, not counted as blinded. This repair does not
+scrub exact source prose, prove public benchmark quality, or revise retained
+historical results.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)
