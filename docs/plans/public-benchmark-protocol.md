@@ -140,7 +140,8 @@ in evaluator-only artifacts. The same occurrence must have one consistent
 opaque ID across arms and source maps. Test noninterference by changing only
 raw label-bearing session IDs while keeping bodies, roles, dates and occurrence
 positions fixed: every model-facing artifact and request must remain identical.
-Also assert that raw session IDs never appear in these artifacts. Identifier
+Also assert that raw session IDs never appear as metadata in these artifacts;
+unchanged source prose may naturally spell an ID and must remain verbatim. Identifier
 tests may check label substrings in identifiers, but must **not** ban ordinary
 words such as “answer” from user/assistant content. Do not inject a question
 into capture or pass evaluator labels, reference answers, raw session IDs,
