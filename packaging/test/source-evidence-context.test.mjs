@@ -4,7 +4,6 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { buildArtifact, command, packageName } from '../build.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
@@ -13,7 +12,7 @@ const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
 const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
 
-test('installed source context omits deliberately wrong interpretations from rank and final output', { timeout: 60000 }, async t => {
+test('installed MCP source default omits deliberately wrong interpretations from rank and final output', { timeout: 60000 }, async t => {
   const artifact = buildArtifact(), root = mkdtempSync(join(tmpdir(), 'cairn-installed-source-context-'));
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-source-context', private: true, version: '0.0.0' }), { flag: 'wx' });
   command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], root, artifact.userconfig);
@@ -67,14 +66,18 @@ test('installed source context omits deliberately wrong interpretations from ran
       usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
   } } });
   t.after(async () => { if (active) await active.close(); await proxy.close(); });
-  const config = join(root, 'transport.json');
-  writeFileSync(config, JSON.stringify({ version: 1, packageRoot, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
-  const start = async () => {
+  const preload = `const nativeFetch=globalThis.fetch;globalThis.fetch=(url,options)=>{
+    const target=new URL(url);if(target.origin!=='https://api.openai.com'||target.search||target.hash||
+    !['/v1/responses','/v1/responses/input_tokens'].includes(target.pathname))throw new Error('test_route_denied');
+    return nativeFetch(${JSON.stringify(proxy.url)}+target.pathname,options);};`;
+  const start = async (sourceDefault = true) => {
     active = new Client({ name: 'synthetic-source-context', version: '1.0.0' });
     await active.connect(new StdioClientTransport({ command: process.execPath,
-      args: [fileURLToPath(new URL('../../evaluation/live/cairn-launcher.mjs', import.meta.url)),
-        '--db', join(root, 'memory.sqlite'), '--owner', 'synthetic-source-context', '--capture-qualification', 'source-bound-v2'],
-      env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1' }, stderr: 'ignore' }));
+      args: [join(packageRoot, 'bin/cairn-memory.mjs'),
+        '--db', join(root, 'memory.sqlite'), '--owner', 'synthetic-source-context', '--capture-qualification', 'source-bound-v2',
+        ...(sourceDefault ? ['--recall-context', 'source-evidence'] : [])],
+      env: { OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1',
+        NODE_OPTIONS: `--import=data:text/javascript;base64,${Buffer.from(preload).toString('base64')}` }, stderr: 'ignore' }));
   };
   const call = async (name, args) => {
     const r = await active.callTool({ name, arguments: args }), envelope = JSON.parse(r.content[0].text);
@@ -87,17 +90,24 @@ test('installed source context omits deliberately wrong interpretations from ran
   const memoryId = captured.admission.memories[0].id;
   const inspection = await call('inspect_memory', { memoryId, includeQualification: true });
   assert.equal(inspection.memory.content, wrong); assert.equal(inspection.qualification.commitment, 'adopted');
-  const query = { query: 'What did the user ask about the train?', contextMode: 'source-evidence' };
+  const query = { query: 'What did the user ask about the train?' };
   const warm = await call('recall_memory', query); assertSources(warm.memories[0]); assert.equal(sends, 10);
+  const conflictResponse = await active.callTool({ name: 'recall_memory', arguments: { ...query, includeQualification: true } });
+  const conflict = JSON.parse(conflictResponse.content[0].text);
+  assert.equal(conflictResponse.isError, true); assert.equal(conflict.ok, false);
+  assert.equal(conflict.error.code, 'invalid_input'); assert.equal(sends, 10);
   await active.close(); await start(); forbid = true;
   assert.deepEqual(await call('inspect_memory', { memoryId, includeQualification: true }), inspection);
   assert.equal((await call('capture_memory', batch)).duplicate, true); assert.equal(sends, 10); forbid = false;
   const cold = await call('recall_memory', query); assert.deepEqual(cold, warm); assert.equal(sends, 14);
-  sourceMode = false;
+  await active.close(); await start(false); sourceMode = false;
   const legacy = await call('recall_memory', { query: query.query });
   assert.equal(legacy.memories[0].memory.content, wrong); assert.equal(sends, 18);
   sourceMode = true;
+  const explicit = await call('recall_memory', { ...query, contextMode: 'source-evidence' });
+  assert.deepEqual(explicit, warm); assert.equal(sends, 22);
+  await active.close(); await start(); sourceMode = true;
   const scanned = await call('recall_memory', { ...query, selectionMode: 'bounded-source-scan' });
-  assertSources(scanned.memories[0]); assert.equal(sends, 20);
+  assertSources(scanned.memories[0]); assert.equal(sends, 24);
   assert.deepEqual(scanned.selection, { mode: 'bounded-source-scan', strategy: 'complete-map', semanticCoverage: 'unassessed' });
 });

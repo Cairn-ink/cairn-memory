@@ -40,6 +40,26 @@ source completeness or downstream answers. The
 [integration inventory](source-reliability-integration.md) distinguishes
 shipped security work, developer-preview changes and unfinished reliability goals.
 
+## Verified preview baseline is not a semantic benchmark
+
+The [consolidation baseline](plans/pr-consolidation.md) combines a narrow
+filing-only rationale preservation fix, a bounded direct premise-challenge
+read fix extracted from #136, an explicit local MCP source-evidence recall
+startup default, provider response-byte ownership, and an installed cold-recall
+regression. These are engineering and offline regression checks.
+They do not show that proposed rationale is correct, that source selection is
+complete, or that an answer faithfully uses the retained evidence. The larger
+rationale lifecycle in #142 and the remaining #136 branch, as well as later
+experimental assessment paths, were not adopted as a whole; their code and
+prior failures remain in archived branches and evidence.
+
+There is no measured LongMemEval score for this combined candidate. A public,
+reproducible benchmark needs a frozen dataset and scoring protocol, declared
+model/configuration and comparison arms, retained per-case failures, and an
+independent review before any quality claim. Offline ingestion/comparison demos
+exercise mechanics with scripted models; they are not that measurement. No
+paid evaluation or broad promotion is authorized by this consolidation.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

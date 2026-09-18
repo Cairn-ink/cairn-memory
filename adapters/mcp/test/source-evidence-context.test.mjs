@@ -36,9 +36,10 @@ function seed() {
   } finally { core.close(); }
   return { path, details };
 }
-async function host(t, path, mode) {
+async function host(t, path, mode, recallContext = false) {
   const transport = new StdioClientTransport({ command: process.execPath,
-    args: [fixture, '--db', path, '--owner', namespace.ownerId, ...(mode ? ['--capture-qualification', mode] : [])],
+    args: [fixture, '--db', path, '--owner', namespace.ownerId, ...(mode ? ['--capture-qualification', mode] : []),
+      ...(recallContext ? ['--recall-context', 'source-evidence'] : [])],
     env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
   let pending = ''; const ranks = [], waiting = [];
   transport.stderr.on('data', chunk => {
@@ -124,3 +125,29 @@ test('S6 SDK source-mode enum and authority overrides are strict; query remains 
   const result = await recall(hosted, { contextMode: 'source-evidence', query: `Redaction probe sk-${'a'.repeat(40)}` });
   assert.equal(result.rank.query, 'Redaction probe [REDACTED]'); assertSources(result, details);
 });
+
+for (const mode of [undefined, 'source-bound-v2']) {
+  test(`SCD SDK startup source default with capture ${mode ?? 'absent'} resolves each call`, options, async t => {
+    const { path, details } = seed(); const hosted = await host(t, path, mode, true);
+    assertSources(await recall(hosted), details);
+    assertSources(await recall(hosted, { includeQualification: false }), details);
+    const scanned = await recall(hosted, { selectionMode: 'bounded-source-scan' });
+    assertSources(scanned, details); assert.equal(scanned.result.selection.strategy, 'complete-map');
+    const conflict = await call(hosted.client, 'recall_memory', { query: 'conflicting source call', includeQualification: true });
+    assert.equal(conflict.ok, false); assert.equal(conflict.error.code, 'invalid_input');
+    const afterConflict = await recall(hosted, { query: 'after conflict' });
+    assert.equal(afterConflict.rank.query, 'after conflict'); assertSources(afterConflict, details);
+    const rationale = await recall(hosted, { contextMode: 'rationale-evidence' });
+    assert.equal(rationale.rank.query, 'What do the sources say?');
+    assert.ok(rationale.result.memories.every(item => item.rationale?.status === 'unassessed'));
+    assert.ok(rationale.rank.candidates.every(item => item.rationale?.status === 'unassessed'));
+    for (const patch of [{ namespace: { ownerId: 'foreign' } }, { ownerId: 'foreign' }]) {
+      const response = await hosted.client.callTool({ name: 'recall_memory', arguments: { query: 'foreign', ...patch } });
+      assert.equal(response.isError, true);
+    }
+    const old = await host(t, path, mode);
+    const legacy = await recall(old, { includeQualification: false });
+    assert.ok(legacy.result.memories.every(item => item.memory.content.startsWith('WRONG_CONFIRMED_INTERPRETATION')));
+    assert.ok(legacy.rank.candidates.every(item => item.memory.content.startsWith('WRONG_CONFIRMED_INTERPRETATION')));
+  });
+}
