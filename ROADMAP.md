@@ -38,10 +38,15 @@ reliability work below without declaring older failure gates resolved.
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
    rerun needs scoped authorization; earlier one-shot approvals do not roll over.
-   A public LongMemEval benchmark remains a separate next gate: freeze the
-   dataset, model/configuration, scorer and comparison arms, publish per-case
-   failures and independently review the result. Offline scripted demos are not
-   a measured score, and this baseline authorizes no paid run.
+   A public LongMemEval benchmark remains a separate next gate. The
+   [design protocol](docs/plans/public-benchmark-protocol.md) inventories the
+   legacy failed pilot and the missing protocol-compliant three-arm harness;
+   it is not yet frozen or a runnable manifest. First blind model-facing session
+   IDs and verify the exposure registry, then freeze and verify the dataset,
+   model/configuration, official-compatible
+   scorer, guarded calls and comparison arms before any pilot; publish all
+   per-case failures and independently review any result. Offline scripted
+   demos are not a measured score, and this baseline authorizes no paid run.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
