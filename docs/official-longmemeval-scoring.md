@@ -61,9 +61,11 @@ coverage (`resolved / fixedN`); and fixed-N lower/upper bounds (`correct / N`,
 `(correct + unresolved) / N`). It also reports stage/reason counts and a
 separate `_abs` overlay. Empty type buckets have null accuracy, and the
 six-type macro accuracy is null unless every type has at least one roster case
-and all six buckets resolve. The `completeVerifiedOfficialStyle` flag means
-only that every declared outcome resolved under verified string or Python-
-rendered reference protocols.
+and all six buckets resolve. It also reports `common`: cases in which all three
+arms resolved (`commonN`), per-arm correct/incorrect/accuracy over those cases,
+by type and as an `_abs` overlay; accuracy is null at `commonN` 0. The
+`completeVerifiedOfficialStyle` flag means only that every declared outcome
+resolved under verified string or Python-rendered reference protocols.
 It does not prove corpus completeness, genuine model provenance, or a
 published LongMemEval result. Records also carry and aggregate-check the
 answer model identity; mixing different answer models is rejected.

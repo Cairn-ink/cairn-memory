@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased — public pilot runner and paired report
+
+- Add `evaluation/live/public-pilot.mjs`: a benchmark live session that binds
+  the real OpenAI adapter and the answer/judge stages to the P1 benchmark
+  guard, and `runPublicPilot`, which runs the public comparison and the
+  official-style scorer per prepared v2 case with a fresh private store,
+  per-case 0600 artifacts (run record, exact answer requests, truncation and
+  evidence accounting, guard accounting, timings, scoring), projected-cap and
+  ledger-allowance checks before every case, a halt on any guard halt, an
+  atomic checkpoint with no replay on resume, and a redacted `report.json`.
+- Add `evaluation/live/public-pilot-cli.mjs` with `--dry-run` projections and
+  explicit operator inputs only; the key is read from `OPENAI_API_KEY` inside
+  `main()` and used solely in the Authorization header. A resume is refused
+  (`run_directory_mismatch`) when limits, judge timeout, caps or stage policy
+  differ from what the directory's manifest recorded; blocked reasons are
+  counted once per case.
+- Add `evaluation/live/public-pilot-merge.mjs` (`mergePublicPilotRuns`, CLI
+  `--merge dir,dir --output dir`): an offline merge of completed batch
+  directories into one paired report, refusing mismatched configurations,
+  overlapping case lists, incomplete sources, non-integer run and per-stage
+  totals, and an output directory that is or sits inside a source, with no
+  key, ledger or call.
+- Answer requests are labelled by the run's own arm order rather than by the
+  evidence shape, so a Cairn arm that retrieved nothing is no longer recorded
+  as the no-memory arm and contributes an all-zero packed truncation row. A
+  resumed run refuses a completed or failed case whose accounting, request or
+  truncation file is missing (`invalid_checkpoint`), since both can follow real
+  spend and only a blocked case legitimately has its generation record alone,
+  and an `aggregate.json` left without a `report.json` is reported as
+  `aggregate_without_report`.
+- `aggregateOfficialScores` additionally reports a `common` bucket (cases in
+  which all three arms resolved, per arm, per type and abstention overlay,
+  `null` accuracy at zero); existing buckets are unchanged. `pilotEvaluatorFor`
+  exposes a loaded pilot's private evaluator read-only. Offline synthetic tests
+  only; no paid call, key discovery or ledger change is added.
+
 ## Unreleased — guarded benchmark answer/judge transport
 
 - The experiment request guard gains an immutable benchmark extension

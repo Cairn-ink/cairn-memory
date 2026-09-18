@@ -99,7 +99,9 @@ const validateDirectory = async (directory, code) => {
   if (!entry.isDirectory() || entry.isSymbolicLink() || resolved !== directory) fail(code);
 };
 
-const readRegularFile = async (filename, code, maximumBytes) => {
+// Handle-based read: O_NOFOLLOW plus dev/ino and size re-checks, so the bytes
+// read belong to the file that was inspected. Exported for the public pilot runner.
+export const readRegularFile = async (filename, code, maximumBytes) => {
   let before;
   try { before = await lstat(filename); } catch { fail(code); }
   if (!before.isFile() || before.isSymbolicLink()
@@ -326,6 +328,9 @@ export async function loadPreparedPilot(options) {
   PRIVATE_PILOTS.set(pilot, deepFreeze({ evaluators }));
   return pilot;
 }
+
+// Read-only accessor for the private evaluator of one loaded case; undefined when unknown.
+export const pilotEvaluatorFor = (pilot, questionId) => PRIVATE_PILOTS.get(pilot)?.evaluators.get(questionId);
 
 const snapshotSession = (session) => {
   if (!isPlainObject(session) || !validString(session.modelId)

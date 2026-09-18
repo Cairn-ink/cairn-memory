@@ -174,3 +174,52 @@ test('OS4: fixed roster retains omitted cases, type and abstention denominators'
   assert.equal(Object.getPrototypeOf(hostileSummary.arms.cairn.overall.reasonCounts), null);
   assert.equal(hostileSummary.arms.cairn.overall.reasonCounts.__proto__, 1);
 });
+
+test('OS5: common bucket counts only cases in which all three arms resolved, null accuracy at zero', async () => {
+  const yes = async () => ({ text: 'yes' });
+  const scored = await scorePublicComparison({ run: run(), evaluator: evaluator(), judge: yes });
+  const otherSource = 'official-synthetic-second';
+  const otherId = opaqueQuestionId(otherSource);
+  const asymmetric = run();
+  asymmetric.questionId = otherId;
+  asymmetric.arms[0] = { ...asymmetric.arms[0], status: 'failed', reason: 'answer_failed', answer: null };
+  const partial = await scorePublicComparison({ run: asymmetric, evaluator: { ...evaluator(),
+    question_id: otherId, source_question_id: otherSource, question_type: 'multi-session' },
+  judge: async ({ request }) => ({ text: request.messages[0].content.includes('Model Response: Kyoto') ? 'no' : 'yes' }) });
+  const missingSource = 'official-synthetic-missing';
+  const roster = [
+    { questionId, sourceQuestionId, questionType: 'single-session-user' },
+    { questionId: otherId, sourceQuestionId: otherSource, questionType: 'multi-session' },
+    { questionId: opaqueQuestionId(missingSource), sourceQuestionId: missingSource, questionType: 'knowledge-update' },
+  ];
+  const summary = aggregateOfficialScores({ roster, records: [scored, partial] });
+  assert.deepEqual(Object.keys(summary.common).sort(), ['abstentionOverlay', 'byArm', 'byType', 'commonN']);
+  assert.equal(summary.common.commonN, 1);
+  assert.deepEqual(summary.common.byArm, {
+    cairn: { correct: 1, incorrect: 0, accuracy: 1 },
+    'full-history': { correct: 1, incorrect: 0, accuracy: 1 },
+    'no-memory': { correct: 1, incorrect: 0, accuracy: 1 },
+  });
+  assert.equal(summary.common.byType['single-session-user'].commonN, 1);
+  assert.equal(summary.common.byType['multi-session'].commonN, 0);
+  assert.equal(summary.common.byType['multi-session'].byArm['full-history'].accuracy, null);
+  assert.equal(summary.common.byType['knowledge-update'].commonN, 0);
+  assert.deepEqual(summary.common.abstentionOverlay,
+    { commonN: 1, byArm: summary.common.byArm });
+  // Existing per-arm buckets are unchanged by the addition.
+  assert.deepEqual([summary.arms.cairn.overall.fixedN, summary.arms.cairn.overall.resolved,
+    summary.arms.cairn.overall.unresolved], [3, 1, 2]);
+  assert.deepEqual([summary.arms['full-history'].overall.resolved, summary.arms['full-history'].overall.correct,
+    summary.arms['full-history'].overall.incorrect], [2, 1, 1]);
+  assert.equal(summary.fixedCaseCount, 3);
+  assert.equal(summary.scoredRecordCount, 2);
+  assert.equal(Object.isFrozen(summary.common.byArm.cairn), true);
+
+  const none = aggregateOfficialScores({ roster: [roster[1]], records: [partial] });
+  assert.equal(none.common.commonN, 0);
+  assert.ok(Object.values(none.common.byArm).every((entry) => entry.accuracy === null && entry.correct === 0));
+  assert.equal(none.common.abstentionOverlay, null);
+  const empty = aggregateOfficialScores({ roster: [roster[2]], records: [] });
+  assert.equal(empty.common.commonN, 0);
+  assert.equal(empty.common.byArm.cairn.accuracy, null);
+});
