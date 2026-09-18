@@ -35,6 +35,8 @@ This packet is offline plumbing, not a live manifest or a quality result.
   Record failed ingestion/recall/provenance/answer/timeout; never synthesize a
   successful answer. Usage is nullable and labeled answer-only. Capture/recall
   transport guarding and whole-pipeline spend remain a later packet.
+  If an answer callback times out, block later arms without invoking them: an
+  abort signal does not prove the underlying operation stopped.
 - **OS1:** Add an evaluator-only compatibility adapter for pinned upstream
   `evaluate_qa.py` at `9e0b455f4ef0e2ab8f2e582289761153549043fc`.
   Match all six task rubrics and the `_abs` substring overlay, exact prompt
@@ -53,6 +55,8 @@ This packet is offline plumbing, not a live manifest or a quality result.
   judge call. Single bounded judge attempt; timeout/invalid transport response
   stays unresolved. Retain the odd upstream parser behavior (e.g. `yesterday`
   contains `yes`) as compatibility, not an improved truth guarantee.
+  After a judge timeout, later arms remain unresolved and unattempted; no
+  potentially overlapping callback is started.
 - **OS4:** Aggregate against a predeclared nonempty unique case roster and fixed
   three arms. Missing results remain unresolved; unexpected/duplicate IDs are
   rejected. Report resolved accuracy with coverage, fixed-N lower/upper bounds,
@@ -92,4 +96,11 @@ unexecuted roster cases are unresolved rather than dropped.
 
 ## Verification record
 
-Pending implementation. No score or measured semantic improvement yet.
+Comparison and scoring implemented by separate Sol/high workers. Primary
+integration added the synthetic demo/test and shared documentation/CI wiring.
+One integration correction made the scripted classifier reuse its existing L1
+instead of proposing a duplicate title on the second capture. This corrected
+the test double, not production core behavior. Integrated LongMemEval tests:
+59/59 on Node 22.16 before the full dual-runtime gate. The final SHA, complete
+gate results and independent reviews are recorded in the delivery PR.
+No score or measured semantic improvement is claimed; provider calls: zero.

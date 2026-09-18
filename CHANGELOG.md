@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — offline public benchmark infrastructure
+
+- Add a separately versioned Cairn/source-evidence, full-history and no-memory
+  comparison API, with source dates, provenance checks and whole-request
+  context preflight. Legacy comparison and live-pilot behavior are unchanged.
+- Add pinned upstream LongMemEval judge prompts, string-reference parity
+  fixtures and fixed-roster scoring with unresolved cases retained. Numeric
+  and array references remain unverified; no real-model score is claimed.
+- Add `npm run demo:longmemeval-public`: synthetic actual-core integration
+  with scripted answer/judge callbacks, no keys or provider calls.
+
 ## Unreleased — LongMemEval session-label blinding
 
 - Preparation v2 replaces raw model-facing session labels with deterministic

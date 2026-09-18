@@ -11,6 +11,17 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The [offline public comparison](public-longmemeval-comparison.md) and
+[official-style scoring adapter](official-longmemeval-scoring.md) provide
+synthetic plumbing, not measured accuracy. The three arms now retain source
+dates and Cairn uses source receipts rather than generated summaries. Capture
+itself is still source-time-unaware. Context counts are caller estimates, not
+proof of a provider's context-window fit. Judge prompt parity is verified only
+for string references; numeric/array references remain unresolved. A complete
+protocol record does not prove that a real provider ran. Dataset exposure,
+configuration freeze, guarded transport and independently reviewed paid results
+remain separate gates; no competitor comparison or promotion readiness follows.
+
 An installed subprocess has passed a real
 model-backed remember → restart → sourced recall → forget loop. The frozen
 semantic evaluation still fails source support: an extractor sometimes turns

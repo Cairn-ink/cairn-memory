@@ -70,6 +70,7 @@ jobs:
       - run: npm run test:longmemeval
       - run: npm run demo:longmemeval-ingestion
       - run: npm run demo:longmemeval-comparison
+      - run: npm run demo:longmemeval-public
 
   openai-offline:
     runs-on: ubuntu-latest
