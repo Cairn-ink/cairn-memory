@@ -77,11 +77,14 @@ export class PublicPilotError extends Error {
   }
 }
 
-export const { fail, exactObject } = createShapeValidators(PublicPilotError);
+const validators = createShapeValidators(PublicPilotError);
+export const { fail } = validators;
+const { exactObject } = validators;
 const safeInteger = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
 const priced = (tokens, price) => Math.ceil((tokens * price.microUsdNumerator) / price.tokenDenominator);
 const elapsedMs = (started) => Math.max(0, Date.now() - started);
-const guarded = async (action, code) => { try { return await action(); } catch { return fail(code); } };
+// Filesystem failures become fixed codes: a raw Node error would carry the path.
+export const guarded = async (action, code) => { try { return await action(); } catch { return fail(code); } };
 const safeError = (error, fallback) => ({
   code: validString(error?.code) && /^[a-z0-9_-]+$/u.test(error.code) ? error.code : fallback,
 });
@@ -157,30 +160,36 @@ export const resolveDirectory = (directory, code) => {
 };
 
 // Inspect (or create) a directory without changing permissions on one this
-// process did not create: the caller decides whether to accept it first.
+// process did not create: the caller decides whether to accept it first. The
+// returned handle keeps that directory bound, so the later seal cannot follow a
+// symlink or a path swapped underneath it while the caller was deciding.
 export const openPrivateDirectory = async (directory, code) => {
   let entry;
-  let created = false;
   try { entry = await lstat(directory); } catch (error) {
     if (error?.code !== 'ENOENT') return fail(code);
     await guarded(() => mkdir(directory, { mode: 0o700 }), code);
     entry = await guarded(() => lstat(directory), code);
-    created = true;
   }
   const resolved = await guarded(() => realpath(directory), code);
   if (!entry.isDirectory() || entry.isSymbolicLink() || resolved !== directory) fail(code);
-  return created;
+  const flags = fsConstants.O_RDONLY | (fsConstants.O_DIRECTORY ?? 0) | (fsConstants.O_NOFOLLOW ?? 0);
+  return guarded(() => open(directory, flags), code);
 };
 
-// Applied only once the caller has accepted the directory.
-export const sealPrivateDirectory = async (directory, code) => {
-  await guarded(() => chmod(directory, 0o700), code);
-  await guarded(() => access(directory, fsConstants.W_OK), code);
+// Applied only once the caller has accepted the directory, through the handle
+// the inspection opened, and always closing it.
+export const sealPrivateDirectory = async (handle, directory, code) => {
+  try {
+    const opened = await guarded(() => handle.stat(), code);
+    if (!opened.isDirectory()) fail(code);
+    await guarded(() => handle.chmod(0o700), code);
+    await guarded(() => access(directory, fsConstants.W_OK), code);
+  } finally { await handle.close().catch(() => {}); }
 };
 
-export const ensurePrivateDirectory = async (directory, code) => {
-  await openPrivateDirectory(directory, code);
-  await sealPrivateDirectory(directory, code);
+const ensurePrivateDirectory = async (directory, code) => {
+  const handle = await openPrivateDirectory(directory, code);
+  await sealPrivateDirectory(handle, directory, code);
 };
 
 export const writePrivateJson = async (filename, value) => {
@@ -264,12 +273,14 @@ const evidenceArmGuess = (request) => {
 
 // An arm invoked the answer callback exactly when it reached the answer stage:
 // preflight was measured and the request was not blocked before sending.
-const answeringArms = (run) => (run ? ARM_NAMES
-  .map((name) => run.arms.find((arm) => arm.name === name))
+const answeringArms = (run) => (run ? run.arms
   .filter((arm) => isPlainObject(arm?.diagnostics?.preflight) && arm.status !== 'blocked') : []);
 
-// Label each captured request by the arm that sent it, positionally in send order.
-const labelCapturedArms = (captured, run) => {
+// Label each captured request by the arm that sent it, positionally in send
+// order. Exported so the evidence-shape fallback can be exercised directly: the
+// comparator catches every per-arm failure, so a run record and the captured
+// requests cannot disagree through it today, and the fallback is defensive.
+export const labelCapturedArms = (captured, run) => {
   const answering = answeringArms(run);
   const positional = run !== null && answering.length === captured.length;
   for (const [index, entry] of captured.entries()) {
@@ -420,10 +431,12 @@ const casePaths = (directory, questionId) => {
     scoring: path.join(caseDirectory, 'scoring.json') };
 };
 
-// A completed case whose accounting, requests or truncation file is missing was
-// interrupted mid-write: its real cost cannot be reported, so the resume stops.
+// Only a blocked generation legitimately has generation.json alone; a completed
+// or failed one was written with its four companions, and both can follow real
+// spend. Missing any of them means the case was interrupted mid-write and its
+// cost cannot be reported, so the resume stops rather than reporting zero.
 const requireCaseArtifacts = async (files, generation) => {
-  if (generation?.status !== 'completed') return;
+  if (generation?.status === 'blocked') return;
   for (const filename of [files.accounting, files.answerRequests, files.truncation]) {
     if (await readPrivateJson(filename, 'invalid_artifact') === null) fail('invalid_checkpoint');
   }
@@ -502,39 +515,46 @@ export async function runPublicPilot(options) {
   const { pilot, session, limits, judgeTimeoutMs, caps, manifest, caseIds, referenceRenderings, onCase }
     = validateOptions(options);
   const directory = resolveDirectory(options.directory, 'unsafe_output');
-  await openPrivateDirectory(directory, 'unsafe_output');
+  const directoryHandle = await openPrivateDirectory(directory, 'unsafe_output');
   const checkpointPath = path.join(directory, 'checkpoint.json');
   const manifestPath = path.join(directory, 'manifest.json');
   const casesRoot = path.join(directory, 'cases');
-  let checkpoint = await readPrivateJson(checkpointPath, 'invalid_checkpoint');
   const started = Date.now();
-  if (checkpoint === null) {
-    const entries = await guarded(() => readdir(directory), 'unsafe_output');
-    if (entries.length !== 0) fail('output_not_empty');
-    await sealPrivateDirectory(directory, 'unsafe_output');
-    checkpoint = { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, pilotManifestSha256: pilot.identity.manifestSha256,
-      baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
-    await writePrivateJson(manifestPath, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
-      createdAt: new Date(started).toISOString(), pilot: pilot.identity, caseIds,
-      stages: session.stages, limits, judgeTimeoutMs, caps,
-      receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
-      limitations: PUBLIC_PILOT_LIMITATIONS, interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest });
-    await replacePrivateJson(checkpointPath, checkpoint);
-    await ensurePrivateDirectory(casesRoot, 'unsafe_output');
-  } else if (!isPlainObject(checkpoint) || checkpoint.schemaVersion !== PUBLIC_PILOT_SCHEMA_VERSION
-    || checkpoint.pilotManifestSha256 !== pilot.identity.manifestSha256
-    || !isPlainObject(checkpoint.baseline) || !isPlainObject(checkpoint.cases)
-    || !Array.isArray(checkpoint.caseIds) || JSON.stringify(checkpoint.caseIds) !== JSON.stringify(caseIds)) {
-    fail('run_directory_mismatch');
-  } else {
-    // The recorded configuration must match, so a resumed run cannot change its own rules.
-    const recorded = await readPrivateJson(manifestPath, 'invalid_artifact');
-    if (!isPlainObject(recorded) || canonical(recorded.limits) !== canonical(limits)
-      || recorded.judgeTimeoutMs !== judgeTimeoutMs || canonical(recorded.caps ?? null) !== canonical(caps)
-      || canonical(recorded.stages) !== canonical(session.stages)) fail('run_directory_mismatch');
-    await sealPrivateDirectory(directory, 'unsafe_output');
-    await ensurePrivateDirectory(casesRoot, 'unsafe_output');
+  let checkpoint;
+  let sealed = false;
+  try {
+    checkpoint = await readPrivateJson(checkpointPath, 'invalid_checkpoint');
+    if (checkpoint === null) {
+      const entries = await guarded(() => readdir(directory), 'unsafe_output');
+      if (entries.length !== 0) fail('output_not_empty');
+      await sealPrivateDirectory(directoryHandle, directory, 'unsafe_output');
+      sealed = true;
+      checkpoint = { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, pilotManifestSha256: pilot.identity.manifestSha256,
+        baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
+      await writePrivateJson(manifestPath, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
+        createdAt: new Date(started).toISOString(), pilot: pilot.identity, caseIds,
+        stages: session.stages, limits, judgeTimeoutMs, caps,
+        receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
+        limitations: PUBLIC_PILOT_LIMITATIONS, interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest });
+      await replacePrivateJson(checkpointPath, checkpoint);
+    } else if (!isPlainObject(checkpoint) || checkpoint.schemaVersion !== PUBLIC_PILOT_SCHEMA_VERSION
+      || checkpoint.pilotManifestSha256 !== pilot.identity.manifestSha256
+      || !isPlainObject(checkpoint.baseline) || !isPlainObject(checkpoint.cases)
+      || !Array.isArray(checkpoint.caseIds) || JSON.stringify(checkpoint.caseIds) !== JSON.stringify(caseIds)) {
+      fail('run_directory_mismatch');
+    } else {
+      // The recorded configuration must match, so a resumed run cannot change its own rules.
+      const recorded = await readPrivateJson(manifestPath, 'invalid_artifact');
+      if (!isPlainObject(recorded) || canonical(recorded.limits) !== canonical(limits)
+        || recorded.judgeTimeoutMs !== judgeTimeoutMs || canonical(recorded.caps ?? null) !== canonical(caps)
+        || canonical(recorded.stages) !== canonical(session.stages)) fail('run_directory_mismatch');
+      await sealPrivateDirectory(directoryHandle, directory, 'unsafe_output');
+      sealed = true;
+    }
+  } finally {
+    if (!sealed) await directoryHandle.close().catch(() => {});
   }
+  await ensurePrivateDirectory(casesRoot, 'unsafe_output');
   const saveCheckpoint = () => replacePrivateJson(checkpointPath, checkpoint);
   const runUsage = () => {
     const state = ledgerSummary(session.getState());

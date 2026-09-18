@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -186,6 +186,9 @@ test('PP10: overlap, mismatch, incomplete sources and occupied outputs are refus
   await assert.rejects(merge([f.at('batch-2'), incomplete], f.at('out-incomplete')), { code: 'run_incomplete' });
   await assert.rejects(merge([f.at('missing-run')], f.at('out-incomplete')), { code: 'run_incomplete' });
   await assert.rejects(merge([f.at('batch-2')], f.at('batch-2')), { code: 'unsafe_output' });
+  await assert.rejects(merge([f.at('batch-1'), f.at('batch-2')], path.join(f.at('batch-2'), 'nested')),
+    { code: 'unsafe_output' });
+  await assert.rejects(lstat(path.join(f.at('batch-2'), 'nested')), { code: 'ENOENT' });
 
   await mkdir(f.at('occupied'), { mode: 0o700 });
   await writeFile(path.join(f.at('occupied'), 'stray.json'), '{}', { mode: 0o600 });
@@ -250,10 +253,28 @@ test('S2/S3: a tampered total and a pre-existing output directory are refused wi
   await writeFile(path.join(floatLatency, 'report.json'), JSON.stringify(floated), { mode: 0o600 });
   await assert.rejects(merge([floatLatency, f.at('batch-2')], f.at('out-float')), { code: 'invalid_artifact' });
 
+  const stageTampered = f.at('batch-1-stage');
+  await cp(f.at('batch-1'), stageTampered, { recursive: true });
+  const staged = await readJson(path.join(stageTampered, 'report.json'));
+  staged.cost.byStage.answer.requests = 'many';
+  await writeFile(path.join(stageTampered, 'report.json'), JSON.stringify(staged), { mode: 0o600 });
+  await assert.rejects(merge([stageTampered, f.at('batch-2')], f.at('out-stage')), { code: 'invalid_artifact' });
+  const outcomeTampered = f.at('batch-1-outcome');
+  await cp(f.at('batch-1'), outcomeTampered, { recursive: true });
+  const outcomes = await readJson(path.join(outcomeTampered, 'report.json'));
+  delete outcomes.cost.byStage.answer.reservedMicroUsd;
+  await writeFile(path.join(outcomeTampered, 'report.json'), JSON.stringify(outcomes), { mode: 0o600 });
+  await assert.rejects(merge([outcomeTampered, f.at('batch-2')], f.at('out-outcome')), { code: 'invalid_artifact' });
+  await assert.rejects(lstat(f.at('out-stage')), { code: 'ENOENT' });
+
   const occupied = f.at('pre-existing');
   await mkdir(occupied, { mode: 0o755 });
   await chmod(occupied, 0o755);
   await writeFile(path.join(occupied, 'stray.json'), '{}', { mode: 0o644 });
+  const before = await readdir(occupied);
   await assert.rejects(merge([f.at('batch-1'), f.at('batch-2')], occupied), { code: 'output_not_empty' });
   assert.equal((await lstat(occupied)).mode & 0o777, 0o755);
+  assert.deepEqual(await readdir(occupied), before);
+  assert.deepEqual(before, ['stray.json']);
+  assert.equal((await lstat(path.join(occupied, 'stray.json'))).mode & 0o777, 0o644);
 });

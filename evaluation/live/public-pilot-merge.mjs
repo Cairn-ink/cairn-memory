@@ -10,6 +10,7 @@ import {
   canonical,
   caseBlockedReason,
   fail,
+  guarded,
   openPrivateDirectory,
   PUBLIC_PILOT_INTERPRETATION,
   PUBLIC_PILOT_LIMITATIONS,
@@ -24,11 +25,24 @@ import {
 const RUN_FILES = ['manifest', 'checkpoint', 'aggregate', 'report'];
 const CASE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const COST_FIELDS = ['reservedMicroUsd', 'knownActualMicroUsd', 'unknownCostRequests', 'requests'];
+const STAGE_FIELDS = ['requests', 'reservedMicroUsd', 'knownActualMicroUsd', 'unknownCostRequests'];
 const LATENCY_FIELDS = ['generationMs', 'scoringMs', 'totalMs'];
 
 // Totals are integer counts and micro-USD; a non-integer field is a tampered
 // artifact, never a zero to sum silently.
 const numeric = (value) => (Number.isSafeInteger(value) ? value : fail('invalid_artifact'));
+
+// Per-stage totals are summed field by field, so each one is checked before it
+// is added: a tampered entry must be refused, never concatenated or turned into NaN.
+const validateStageTotals = (byStage) => {
+  if (!isPlainObject(byStage)) fail('invalid_artifact');
+  for (const entry of Object.values(byStage)) {
+    if (!isPlainObject(entry) || !isPlainObject(entry.outcomes)) fail('invalid_artifact');
+    for (const field of STAGE_FIELDS) numeric(entry[field]);
+    for (const count of Object.values(entry.outcomes)) numeric(count);
+  }
+  return byStage;
+};
 
 async function loadRun(directory) {
   let entry;
@@ -54,6 +68,7 @@ async function loadRun(directory) {
     || !isPlainObject(report.summary) || !isPlainObject(report.cost) || !isPlainObject(report.cost.byStage)
     || !isPlainObject(report.latency) || !isPlainObject(report.truncation)
     || !isPlainObject(report.models) || !isPlainObject(report.pilot)) fail('invalid_artifact');
+  validateStageTotals(report.cost.byStage);
   for (const [index, item] of report.cases.entries()) {
     if (!isPlainObject(item) || item.questionId !== report.caseIds[index] || !CASE_ID.test(item.questionId)
       || !validString(item.sourceQuestionId) || !validString(item.questionType)
@@ -71,7 +86,7 @@ export async function mergePublicPilotRuns(options) {
   const sources = directories.map((item) => resolveDirectory(item, 'unsafe_source'));
   if (new Set(sources).size !== sources.length) fail('merge_overlap');
   const output = resolveDirectory(options.output, 'unsafe_output');
-  if (sources.includes(output)) fail('unsafe_output');
+  if (sources.some((source) => output === source || output.startsWith(`${source}${path.sep}`))) fail('unsafe_output');
 
   const runs = [];
   for (const directory of sources) runs.push(await loadRun(directory));
@@ -134,11 +149,16 @@ export async function mergePublicPilotRuns(options) {
     progressCallbackFailures: callbackFailures,
   };
 
-  await openPrivateDirectory(output, 'unsafe_output');
-  let entries;
-  try { entries = await readdir(output); } catch { return fail('unsafe_output'); }
-  if (entries.length !== 0) fail('output_not_empty');
-  await sealPrivateDirectory(output, 'unsafe_output');
+  const outputHandle = await openPrivateDirectory(output, 'unsafe_output');
+  let sealed = false;
+  try {
+    const entries = await guarded(() => readdir(output), 'unsafe_output');
+    if (entries.length !== 0) fail('output_not_empty');
+    await sealPrivateDirectory(outputHandle, output, 'unsafe_output');
+    sealed = true;
+  } finally {
+    if (!sealed) await outputHandle.close().catch(() => {});
+  }
   const merged = {
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, kind: 'merged', generatedAt: new Date().toISOString(),
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: null, pilot: first.report.pilot, caseIds: [...caseIds],

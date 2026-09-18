@@ -15,6 +15,7 @@ import { main as cliMain, parseArguments, USAGE } from '../public-pilot-cli.mjs'
 import {
   benchmarkStagePolicy,
   createBenchmarkLiveSession,
+  labelCapturedArms,
   PUBLIC_PILOT_LIMITS,
   RECEIPT_EXCERPT_BOUND_UTF16,
   runPublicPilot,
@@ -628,10 +629,14 @@ test('S2: an existing non-empty directory is refused without changing its permis
   await mkdir(output, { mode: 0o755 });
   await chmod(output, 0o755);
   await writeFile(path.join(output, 'stray.json'), '{}', { mode: 0o644 });
+  const before = await readdir(output);
   const session = f.session();
   await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: output }), { code: 'output_not_empty' });
   session.close();
   assert.equal((await lstat(output)).mode & 0o777, 0o755);
+  assert.deepEqual(await readdir(output), before);
+  assert.deepEqual(before, ['stray.json']);
+  assert.equal((await lstat(path.join(output, 'stray.json'))).mode & 0o777, 0o644);
   assert.equal(f.calls.length, 0);
 });
 
@@ -686,4 +691,77 @@ test('N12: every CLI refusal exits 1 with a fixed code and no transport call', a
   }
   assert.equal(f.calls.length, 0);
   assert.equal(ledgerState(f.ledger).requestCount, 0);
+});
+
+test('A1: a failed generation missing its accounting artifacts refuses the resume and sends nothing', async (t) => {
+  const f = await setup(t);
+  const output = f.output('failed-half-written');
+  let poisoned = false;
+  const session = f.session((body) => {
+    if (body.model === ANSWER_MODEL && !poisoned) {
+      poisoned = true;
+      return new Response('not json', { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return defaultChat(body);
+  });
+  await runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds: [ids.plain] });
+  session.close();
+  const callsAfterFirst = f.calls.length;
+  assert.ok(callsAfterFirst > 0);
+
+  // A halted case still reserved real spend before its generation record was written.
+  const generation = await readJson(output, 'cases', ids.plain, 'generation.json');
+  assert.equal(generation.status, 'completed');
+  const accounting = await readJson(output, 'cases', ids.plain, 'accounting.json');
+  assert.ok(accounting.totals['cairn-count'].requests > 0);
+
+  // Rewrite the record as a crash would leave it: failed, with its companions gone.
+  await rm(path.join(output, 'report.json'));
+  await rm(path.join(output, 'aggregate.json'));
+  for (const name of ['accounting.json', 'answer-requests.json', 'truncation.json']) {
+    await rm(path.join(output, 'cases', ids.plain, name));
+  }
+  await rm(path.join(output, 'cases', ids.plain, 'generation.json'));
+  await writeFile(path.join(output, 'cases', ids.plain, 'generation.json'),
+    JSON.stringify({ schemaVersion: 'cairn-longmemeval-public-pilot-v1', questionId: ids.plain,
+      status: 'failed', latencyMs: 1, error: { code: 'generation_failed' } }), { mode: 0o600 });
+  const checkpoint = await readJson(output, 'checkpoint.json');
+  checkpoint.cases[ids.plain] = { stage: 'generating', attemptIds: [] };
+  checkpoint.halted = false;
+  await writeFile(path.join(output, 'checkpoint.json'), JSON.stringify(checkpoint), { mode: 0o600 });
+
+  const second = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: second, directory: output, caseIds: [ids.plain] }),
+    { code: 'invalid_checkpoint' });
+  second.close();
+  assert.equal(f.calls.length, callsAfterFirst);
+});
+
+test('A3: the evidence-shape fallback labels requests when no run record backs them', async (t) => {
+  const f = await setup(t);
+  const cairnRequest = (evidence) => ({ messages: [{ role: 'system', content: 'Answer from evidence.' },
+    { role: 'user', content: JSON.stringify({ question: { text: 'q', date: 'd' }, evidence }) }] });
+  const entries = () => [
+    { order: 0, armGuess: 'unknown', request: cairnRequest([{ receipts: [] }]) },
+    { order: 1, armGuess: 'unknown', request: cairnRequest([{ turns: [] }]) },
+    { order: 2, armGuess: 'unknown', request: cairnRequest([]) },
+  ];
+  // No run record at all: the shape decides, and an empty evidence array stays unknown.
+  const withoutRun = labelCapturedArms(entries().map((entry) =>
+    ({ ...entry, armGuess: entry.order === 0 ? 'cairn' : entry.order === 1 ? 'full-history' : 'unknown' })), null);
+  assert.deepEqual(withoutRun.map((entry) => entry.armGuess), ['cairn', 'full-history', 'unknown']);
+  assert.ok(withoutRun.every((entry) => entry.armLabelMethod === 'evidence-shape-fallback'));
+
+  // A run record that accounts for fewer requests than were captured is not trusted positionally.
+  const partialRun = { arms: [{ name: 'cairn', status: 'completed', diagnostics: { preflight: { inputTokens: 1 } } }] };
+  const mismatched = labelCapturedArms(entries(), partialRun);
+  assert.ok(mismatched.every((entry) => entry.armLabelMethod === 'evidence-shape-fallback'));
+  assert.deepEqual(mismatched.map((entry) => entry.armGuess), ['unknown', 'unknown', 'unknown']);
+
+  // The positional path still wins whenever the counts agree.
+  const fullRun = { arms: ['cairn', 'full-history', 'no-memory'].map((name) =>
+    ({ name, status: 'completed', diagnostics: { preflight: { inputTokens: 1 } } })) };
+  const positional = labelCapturedArms(entries(), fullRun);
+  assert.deepEqual(positional.map((entry) => entry.armGuess), ['cairn', 'full-history', 'no-memory']);
+  assert.ok(positional.every((entry) => entry.armLabelMethod === 'run-arm-order'));
 });

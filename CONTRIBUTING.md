@@ -123,10 +123,10 @@ and synthetic ledgers, not paid requests or a configured Hermes profile. See
 
 For public pilot runner changes (`evaluation/live/public-pilot.mjs`,
 `evaluation/live/public-pilot-merge.mjs`, `evaluation/live/public-pilot-cli.mjs`
-and their tests), run
-`npm run test:live-evidence-offline` on Node 22.16 and 24 with both adapters
-installed, plus `npm run test:longmemeval` and `npm run demo:longmemeval-public`
-on both runtimes when the common bucket of `aggregateOfficialScores` changes. These suites use fake HTTP only and never
+and their tests), run `npm run test:live-evidence-offline` on Node 22.16 and 24
+with both adapters installed, plus `npm run test:longmemeval` and
+`npm run demo:longmemeval-public` on both runtimes when the common bucket of
+`aggregateOfficialScores` changes. These suites use fake HTTP only and never
 read an environment key; see `docs/public-pilot-runner.md`. Passing them does
 not authorize a paid run, which needs an operator-supplied key, the existing
 campaign ledger and a frozen manifest.

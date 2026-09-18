@@ -38,8 +38,9 @@ network or key discovery.
   verbatim into `manifest.json` and `report.json`.
 - **PP3 Private artifacts.** Per case, mode 0600 under the run directory:
   `generation.json` (frozen run record), `answer-requests.json` (exact request
-  bodies sent per arm in send order, including packed evidence, with an
-  `armGuess` inferred from the evidence shape), `truncation.json`,
+  bodies sent per arm in send order, including packed evidence, each labelled
+  positionally from the run's arm order with the method recorded as
+  `armLabelMethod`), `truncation.json`,
   `accounting.json` (guard attempts for the case plus ledger state before and
   after), `timings.json`, `scoring.json`; run-level `manifest.json` (version
   hashes, models, stage policy, limits, caps, roster, operator fields),
@@ -56,12 +57,14 @@ network or key discovery.
   status, so capture truncation, retrieval, packing and answer failure are
   separately visible. Each captured request is labelled positionally from the
   run's own arm order (each arm that reached the answer stage takes the next
-  request in send order, recorded as `armLabelMethod`), with the evidence shape
-  used only as a fallback when the comparison produced no arm record, because
-  an empty evidence array is ambiguous between the no-memory arm and a Cairn
-  arm that retrieved nothing. A Cairn arm that answered with no receipts
-  records an all-zero packed row (`receipts` 0) rather than a null row, so the
-  run-level truncation totals include the case as a measured zero.
+  request in send order, recorded as `armLabelMethod: 'run-arm-order'`). The
+  evidence shape labels them instead whenever the run's answering arms do not
+  account for exactly the captured requests, including when the comparison
+  produced no arm record at all, because an empty evidence array is ambiguous
+  between the no-memory arm and a Cairn arm that retrieved nothing. A Cairn arm
+  that answered with no receipts records an all-zero packed row (`receipts` 0)
+  rather than a null row, so the run-level truncation totals include the case
+  as a measured zero.
 - **PP5 Common bucket.** `aggregateOfficialScores` additionally reports
   `common`: the number of roster cases in which all three arms resolved
   (`commonN`), per-arm `correct`/`incorrect`/`accuracy` over those cases, the

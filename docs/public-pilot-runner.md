@@ -84,7 +84,8 @@ refused or failed (a fixed code on stderr, never data), 2 missing key.
   ids seen; rewritten atomically after every durable step.
 - `cases/<opaque-id>/`: `memory.sqlite` (fresh per case), `generation.json`
   (the frozen comparison run), `answer-requests.json` (the exact request bodies
-  in send order including packed evidence, with `armGuess`, timings and the
+  in send order including packed evidence, each with the arm that sent it in
+  `armGuess`, how that label was decided in `armLabelMethod`, timings and the
   guard outcome), `truncation.json`, `accounting.json` (guard attempts for the
   case plus ledger state before and after), `timings.json`, `scoring.json`
   (the official-style record plus its own judge accounting, or a blocked or
@@ -102,11 +103,14 @@ those longer than the 800-UTF-16-unit receipt bound and the omitted units; the
 Cairn arm's retrieval counts and omissions; the packed receipts whose source
 chunk exceeded the bound and their omitted units; and each arm's status.
 
-Each stored answer request is labelled with the arm that sent it. The label is
-positional: the runner walks the arms in order and gives each arm that reached
-the answer stage the next request in send order, recording
-`armLabelMethod: 'run-arm-order'`. The evidence shape is only a fallback when
-the comparison itself failed and no arm record exists, because an empty
+Each stored answer request is labelled with the arm that sent it, in
+`armGuess`, and the label's provenance is recorded beside it in
+`armLabelMethod`. The label is positional: the runner walks the run's arms in
+their own order and gives each arm that reached the answer stage the next
+request in send order, recording `run-arm-order`. It falls back to the evidence
+shape, recorded as `evidence-shape-fallback`, whenever the run's answering arms
+do not account for exactly the captured requests, which includes a generation
+that produced no run record at all. The fallback exists because an empty
 evidence array cannot distinguish the no-memory arm from a Cairn arm that
 retrieved nothing. A Cairn arm that answered with zero receipts therefore
 records an all-zero packed row rather than no row at all, so the run totals
@@ -171,8 +175,8 @@ redacted while full history is raw; Cairn's effective budget is further capped
 by `recallLimit` and core recall budgets; the no-memory arm trivially passes
 abstention cases; counted context and usage are local estimates or
 provider-reported usage, not invoices; `overall.coverage` is the resolved
-fraction of the fixed roster, not retrieval coverage. Seven selected cases are a plumbing
-pilot, not a population estimate.
+fraction of the fixed roster, not retrieval coverage. Seven selected cases are
+a plumbing pilot, not a population estimate.
 
 ## Verification
 
