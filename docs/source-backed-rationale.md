@@ -59,9 +59,12 @@ remain a separate gate before using this keyless inspection payload in a prompt.
 Both endpoints bind to current revisions and actual receipts. The entire read
 set is revalidated after callbacks and atomically before writes, including
 unselected inputs. At most 10 incident edges per memory are allowed. Corrections,
-forgetting, receipt changes, retirement and filing revision changes invalidate
-incident links, including legacy writes. Conservative invalidation may require
-another review even when the underlying wording has not changed.
+forgetting, receipt changes, retirement and arbitrary revision changes invalidate
+incident links, including legacy writes. Filing-only revisions through MOC
+placement preserve valid incident links by rebinding their revision guards in
+the same transaction, after checking unchanged memory content and full retained
+receipts. Old refs still fail and the index epoch still advances. This preserves
+proposed evidence, not the semantic validity of a link or a decision's currentness.
 
 Schema 12 adds the relation table, index and invalidation triggers. Older supported
 databases migrate atomically; old binaries do not support schema 12. Use backups

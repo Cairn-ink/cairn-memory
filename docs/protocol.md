@@ -101,8 +101,13 @@ Local rows store endpoint/revision links, selected receipt IDs and SHA256 source
 digests with model-proposed relation types. These are sensitive relationship
 metadata, not anonymization, semantic proof, authenticated roles or permissions.
 Source text is not duplicated in relation rows. Exact namespace and current
-revision guards apply on inference and inspection; mutations clear affected
-links. Logical forgetting has the same journal/backup/secure-erasure limitations
+revision guards apply on inference and inspection. Corrections, receipt changes,
+retirement, forgetting and arbitrary revision changes clear affected links. MOC
+placement alone can rebind valid existing receipt-bound proposals across a
+filing-only revision when content and complete retained receipts are unchanged;
+old revision references still fail. The global invalidation trigger is unchanged,
+and this adds no public wire or schema fields. Logical forgetting has the same
+journal/backup/secure-erasure limitations
 as the existing store. No telemetry, automatic execution, implicit supersession,
 data-sharing scope or user consent is introduced by a rationale proposal.
 
