@@ -11,6 +11,26 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The optional [Python reference sidecar](official-reference-rendering.md)
+preserves number/array rendering from original JSON for official-style judging.
+It is evaluator-only and requires an independently pinned sidecar digest.
+Hash/capability checks bind reviewed artifacts; they do not authenticate the
+corpus or prove a model was called. Without that opt-in binding, non-string
+references still remain unresolved. No public accuracy result follows from
+these synthetic compatibility tests.
+
+The [offline public comparison](public-longmemeval-comparison.md) and
+[official-style scoring adapter](official-longmemeval-scoring.md) provide
+synthetic plumbing, not measured accuracy. The three arms now retain source
+dates and Cairn uses source receipts rather than generated summaries. Capture
+itself is still source-time-unaware. Context counts are caller estimates, not
+proof of a provider's context-window fit. The default scorer verifies string
+references only; numeric/array references require the opt-in bound Python
+sidecar above or remain unresolved. A complete
+protocol record does not prove that a real provider ran. Dataset exposure,
+configuration freeze, guarded transport and independently reviewed paid results
+remain separate gates; no competitor comparison or promotion readiness follows.
+
 An installed subprocess has passed a real
 model-backed remember → restart → sourced recall → forget loop. The frozen
 semantic evaluation still fails source support: an extractor sometimes turns
@@ -59,6 +79,15 @@ model/configuration and comparison arms, retained per-case failures, and an
 independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
+
+Prepared LongMemEval v1 histories exposed raw session-ID labels to ingestion
+and answer evidence, and legacy turn IDs depended on those labels. A source
+session ID could itself encode an answer or abstention. Preparation v2 blinds
+that metadata and makes turn identities label-independent, with an offline
+synthetic preparation → local-core comparison → scoring regression. Old v1
+artifacts must be regenerated, not counted as blinded. This repair does not
+scrub exact source prose, prove public benchmark quality, or revise retained
+historical results.
 
 ## Where the evidence lives
 

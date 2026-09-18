@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased — evaluator-only Python reference rendering
+
+- Add an opt-in offline reference-rendering sidecar from checksum-bound raw
+  JSON, preserving official Python number and array formatting without
+  changing preparation v2 or model-facing history/question files.
+- Scoring may consume loader-issued evaluator-bound rendering capabilities;
+  absent a verified capability, non-string references remain unresolved.
+  This is scoring infrastructure, not a measured accuracy result.
+
+## Unreleased — offline public benchmark infrastructure
+
+- Add a separately versioned Cairn/source-evidence, full-history and no-memory
+  comparison API, with source dates, provenance checks and whole-request
+  context preflight. Legacy comparison and live-pilot behavior are unchanged.
+- Add pinned upstream LongMemEval judge prompts, string-reference parity
+  fixtures and fixed-roster scoring with unresolved cases retained. Numeric
+  and array references remain unverified; no real-model score is claimed.
+- Add `npm run demo:longmemeval-public`: synthetic actual-core integration
+  with scripted answer/judge callbacks, no keys or provider calls.
+
+## Unreleased — LongMemEval session-label blinding
+
+- Preparation v2 replaces raw model-facing session labels with deterministic
+  opaque occurrence IDs and uses label-independent turn IDs. The private
+  manifest holds the raw-to-opaque map; evaluator evidence IDs use opaque
+  labels so retrieved/packed coverage remains joinable without changing the
+  strict evaluator record shape.
+- The live-pilot loader accepts v2, validates the map and derived IDs, and
+  rejects old v1 artifacts. Old preparations require regeneration from a
+  reviewed pinned source. Synthetic offline regression checks do not measure
+  real-model answer quality or authorize a paid benchmark run.
+
 ## Unreleased — direct premise challenges in decision context
 
 - The local rationale decision-context read now includes a stored direct

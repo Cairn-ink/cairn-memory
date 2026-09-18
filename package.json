@@ -15,6 +15,7 @@
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",
     "demo:longmemeval-ingestion": "node evaluation/longmemeval/demo.mjs",
     "demo:longmemeval-comparison": "node evaluation/longmemeval/comparison-demo.mjs",
+    "demo:longmemeval-public": "node evaluation/longmemeval/public-demo.mjs",
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
     "demo:history": "node examples/historical-evidence.mjs",
