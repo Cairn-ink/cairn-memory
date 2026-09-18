@@ -282,6 +282,12 @@ candidate, token, source and freshness bounds remain. It requires explicit sourc
 context and reports its actual strategy with semantic coverage unassessed.
 
 Local fetch/recall and MCP recall may select `contextMode: 'source-evidence'`.
+The local MCP server can also select that presentation by default with
+`--recall-context source-evidence` (programmatic `recallContext`). A per-call
+`contextMode` overrides the default. Explicit `includeQualification: true`
+conflicts with effective source mode before model calls; false does not disable
+the source default. Omitting the startup option preserves legacy and qualified-
+capture defaults. This changes neither capture nor the core view or authority.
 This exposes complete retained receipt excerpts and claimed user/assistant roles
 without model summaries, kind/confidence or qualifications in rank/final memory
 context. It reduces that payload to source IDs, record ID/revision/lifecycle,

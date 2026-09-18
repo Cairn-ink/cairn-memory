@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createCairnServer } from '../server.mjs';
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 function run(args, key = '') {
@@ -84,4 +85,36 @@ test('qualified capture config reports explicit opt-in but unverified models wit
     assert.equal(result.status, 1); assert.equal(result.stdout, ''); assert.deepEqual(readdirSync(directory), []);
   }
   const help = run(['--help']); assert.match(help.stdout, /--capture-qualification/);
+});
+
+test('source recall default parses strictly and check-config stays syntax-only and keyless', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cairn-source-default-'));
+  const path = join(directory, 'memory.sqlite');
+  const args = ['--check-config', '--db', path, '--owner', 'synthetic-owner', '--recall-context', 'source-evidence'];
+  for (const key of ['', 'synthetic-private-key']) {
+    const result = run(args, key); assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.recallContext, 'source-evidence');
+    assert.equal(report.recall, key ? 'configured-not-verified' : 'model_not_configured');
+    assert.equal(report.automaticCapture, false); assert.equal(report.databaseOpened, false);
+    assert.equal(report.providerContacted, false); assert.deepEqual(readdirSync(directory), []);
+    assert.ok(!result.stdout.includes('synthetic-private-key'));
+  }
+  for (const tail of [[], ['wrong'], ['rationale-evidence'], ['source-evidence', '--recall-context', 'source-evidence'],
+    ['source-evidence', '--capture-qualification', 'source-bound-v3']]) {
+    const result = run([...args.slice(0, -1), ...tail]);
+    assert.equal(result.status, 1); assert.equal(result.stdout, ''); assert.deepEqual(readdirSync(directory), []);
+  }
+  const help = run(['--help']); assert.match(help.stdout, /--recall-context source-evidence/);
+  assert.match(help.stdout, /Complete excerpts may expose more source text/);
+});
+
+test('invalid programmatic recallContext rejects before opening a database', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cairn-source-default-constructor-'));
+  const path = join(directory, 'memory.sqlite');
+  const base = { path, namespace: { ownerId: 'synthetic-owner', scope: 'personal', projectId: null } };
+  for (const recallContext of [undefined, null, false, '', 'rationale-evidence', 'SOURCE-EVIDENCE']) {
+    assert.throws(() => createCairnServer({ ...base, recallContext }), /invalid_mcp_configuration/);
+    assert.deepEqual(readdirSync(directory), []);
+  }
 });
