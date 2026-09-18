@@ -63,6 +63,44 @@ test('RF1 captured rationale survives filing-only revision, old ref fails, and c
   assert.deepEqual(ok(cold.getRationale({ namespace, ...newRef })), after);
 });
 
+test('RF1 direct-only challenge survives filing and cold recall, then forgetting cannot revive it', async t => {
+  const f = fixture(t);
+  f.model.relate = ({ input: { memories } }) => {
+    const root = memories.find(memory => memory.receipts.some(receipt =>
+      receipt.excerpt.startsWith('I chose A because')));
+    const later = memories.find(memory => memory.receipts.some(receipt =>
+      receipt.excerpt.startsWith('I checked: A cannot work offline')));
+    return { edges: root && later ? [{ from: later.index, to: root.index,
+      relation: 'challenges-premise', fromReceipt: 0, toReceipt: 0 }] : [] };
+  };
+  const { decision, challenge } = await capturedPair(f);
+  const before = ok(f.core.getRationale({ namespace, ...f.ref(decision.id) }));
+  assert.deepEqual(before.edges.map(edge => edge.relation), ['challenges-premise']);
+  f.place([{ memoryId: decision.id, parentIds: [],
+    newL1: { title: 'Direct challenge decision', parentL2Ids: [] } }]);
+  const filed = f.ref(decision.id);
+  assert.equal(filed.revision, decision.revision + 1);
+  const warm = ok(f.core.getRationale({ namespace, ...filed }));
+  assert.deepEqual(warm.edges, before.edges);
+  assert.equal(warm.status, 'reconfirmation-suggested');
+  f.core.close();
+  const cold = openMemoryCore({ path: f.path, model: f.model }); t.after(() => cold.close());
+  assert.deepEqual(ok(cold.getRationale({ namespace, ...filed })), warm);
+  const recalled = ok(await cold.recall({ readSet: [namespace], query: 'Why did I choose A?',
+    contextMode: 'rationale-evidence' }));
+  assert.deepEqual(recalled.memories.find(item => item.memory.id === decision.id)?.rationale, warm);
+  ok(cold.forget({ namespace, memoryId: challenge.id, expectedRevision: challenge.revision }));
+  assert.deepEqual(ok(cold.getRationale({ namespace, ...filed })).edges, []);
+  const placed = ok(cold.applyPlacement({ namespace, proposal: { items: [{ memoryId: decision.id,
+    parentIds: [], newL1: { title: 'After challenge forgotten', parentL2Ids: [] } }] },
+    expectedMemoryRevisions: [filed],
+    expectedIndexRevision: ok(cold.map({ namespace, purpose: 'classification' })).indexRevision }));
+  assert.ok(placed.indexRevision);
+  const latest = ok(cold.get({ namespace, memoryId: decision.id })).memory;
+  assert.deepEqual(ok(cold.getRationale({ namespace, memoryId: decision.id, revision: latest.revision })).edges, []);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM rationale_edges').get().n, 0);
+});
+
 test('RF2 two revised endpoints, self-edge and filing transitions retain one copy of each edge', async t => {
   const f = fixture(t); const { decision, challenge } = await capturedPair(f);
   const baseline = ok(f.core.getRationale({ namespace, ...f.ref(decision.id) }));

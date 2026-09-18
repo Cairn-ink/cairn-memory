@@ -34,7 +34,11 @@ and the exact #136 extraction commit named in PC1, plus this plan,
   experiment-budget and request-guard gates and applicable contributor demos;
   live-evidence and LongMemEval offline checks remain CI gates. Primary reruns
   integrated source-default/cold-recall/filing/stream tests personally, plus
-  direct-only challenge and support-chain recall after restart and forgetting. Two
+  direct-only challenge and support-chain recall after restart and forgetting.
+  `core/test/rationale-filing.test.mjs` asserts the combined direct-only
+  challenge survives filing revision, cold inspection and recall, then cannot
+  reappear after forgetting and another filing; the installed artifact test
+  covers direct-only and support-chain variants across MCP restarts. Two
   independent reviewers inspect the frozen final diff; all latest-head CI must
   pass before authorized merge. A changed main/head requires reassessment.
 - PC6: After merge, verify original selected heads are included or document
@@ -42,6 +46,9 @@ and the exact #136 extraction commit named in PC1, plus this plan,
   selected obsolete/deferred PRs with this disposition link and a clear reason,
   preserving branches and immutable prior failures. Recheck head/state before
   each action; concurrently changed work is left open for separate handling.
+  Because this repository may auto-delete a source branch on merge, capture and
+  verify original selected refs before and after merging; restore those refs
+  if the host deleted them. Do not alter repository settings.
 
 ## Snapshot and planned disposition
 
@@ -102,6 +109,9 @@ evaluation-only malformed-answer repair remains preserved, not silently applied.
 | #176 | `567ee6ea122efe8801196ef41cdf1df521bbacfc` | Integrate existing branch; close as included only after verification and merge | feat: configure source-evidence recall default for local MCP |
 | #177 | `a2f123111c03942586f7a2d5422c9eb8f8a7c368` | Integrate existing branch; close as included only after verification and merge | fix: own provider response bytes before subsequent reads |
 | #178 | `9eb5aaa5a553df123d618fe20b1e6c15cf5761f8` | Integrate existing branch; close as included only after verification and merge | test: verify rationale recall across installed MCP restarts |
+
+The public benchmark is deferred to the next discussion after consolidation;
+this plan does not authorize a live or paid evaluation.
 
 ## Verification and ownership
 
