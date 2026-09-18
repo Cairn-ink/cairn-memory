@@ -161,8 +161,10 @@ export const resolveDirectory = (directory, code) => {
 
 // Inspect (or create) a directory without changing permissions on one this
 // process did not create: the caller decides whether to accept it first. The
-// returned handle keeps that directory bound, so the later seal cannot follow a
-// symlink or a path swapped underneath it while the caller was deciding.
+// returned handle is bound to the inspected inode, re-checked by device and
+// inode after the open, so the later seal cannot follow a symlink or a path
+// swapped underneath it while the caller was deciding. The caller owns that
+// handle and must close it, which sealPrivateDirectory always does.
 export const openPrivateDirectory = async (directory, code) => {
   let entry;
   try { entry = await lstat(directory); } catch (error) {
@@ -173,15 +175,20 @@ export const openPrivateDirectory = async (directory, code) => {
   const resolved = await guarded(() => realpath(directory), code);
   if (!entry.isDirectory() || entry.isSymbolicLink() || resolved !== directory) fail(code);
   const flags = fsConstants.O_RDONLY | (fsConstants.O_DIRECTORY ?? 0) | (fsConstants.O_NOFOLLOW ?? 0);
-  return guarded(() => open(directory, flags), code);
+  const handle = await guarded(() => open(directory, flags), code);
+  let opened;
+  try { opened = await handle.stat(); } catch { opened = null; }
+  if (!opened?.isDirectory() || opened.dev !== entry.dev || opened.ino !== entry.ino) {
+    await handle.close().catch(() => {});
+    return fail(code);
+  }
+  return handle;
 };
 
 // Applied only once the caller has accepted the directory, through the handle
-// the inspection opened, and always closing it.
+// the inspection bound to the inspected directory, and always closing it.
 export const sealPrivateDirectory = async (handle, directory, code) => {
   try {
-    const opened = await guarded(() => handle.stat(), code);
-    if (!opened.isDirectory()) fail(code);
     await guarded(() => handle.chmod(0o700), code);
     await guarded(() => access(directory, fsConstants.W_OK), code);
   } finally { await handle.close().catch(() => {}); }
@@ -260,8 +267,9 @@ export const projectCaseReservation = (plan, stages) => {
 };
 
 // Fallback only: an empty evidence array is ambiguous between the no-memory arm
-// and a Cairn arm that packed nothing, so the run's own arm order decides when it exists.
-const evidenceArmGuess = (request) => {
+// and a Cairn arm that packed nothing, so the run's own arm order decides when
+// it exists. Exported alongside labelCapturedArms for the fallback's own tests.
+export const evidenceArmGuess = (request) => {
   let payload;
   try { payload = JSON.parse(request?.messages?.[1]?.content); } catch { return 'unknown'; }
   if (!Array.isArray(payload?.evidence)) return 'unknown';

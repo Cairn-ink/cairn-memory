@@ -15,6 +15,7 @@ import { main as cliMain, parseArguments, USAGE } from '../public-pilot-cli.mjs'
 import {
   benchmarkStagePolicy,
   createBenchmarkLiveSession,
+  evidenceArmGuess,
   labelCapturedArms,
   PUBLIC_PILOT_LIMITS,
   RECEIPT_EXCERPT_BOUND_UTF16,
@@ -741,14 +742,17 @@ test('A3: the evidence-shape fallback labels requests when no run record backs t
   const f = await setup(t);
   const cairnRequest = (evidence) => ({ messages: [{ role: 'system', content: 'Answer from evidence.' },
     { role: 'user', content: JSON.stringify({ question: { text: 'q', date: 'd' }, evidence }) }] });
-  const entries = () => [
-    { order: 0, armGuess: 'unknown', request: cairnRequest([{ receipts: [] }]) },
-    { order: 1, armGuess: 'unknown', request: cairnRequest([{ turns: [] }]) },
-    { order: 2, armGuess: 'unknown', request: cairnRequest([]) },
-  ];
-  // No run record at all: the shape decides, and an empty evidence array stays unknown.
-  const withoutRun = labelCapturedArms(entries().map((entry) =>
-    ({ ...entry, armGuess: entry.order === 0 ? 'cairn' : entry.order === 1 ? 'full-history' : 'unknown' })), null);
+  // Each label is derived from the payload exactly as the runner derives it.
+  const payloads = [cairnRequest([{ receipts: [] }]), cairnRequest([{ turns: [] }]), cairnRequest([])];
+  const entries = () => payloads.map((request, order) =>
+    ({ order, armGuess: evidenceArmGuess(request), request }));
+  assert.deepEqual(entries().map((entry) => entry.armGuess), ['cairn', 'full-history', 'unknown']);
+  assert.equal(evidenceArmGuess({ messages: [{ content: 'x' }, { content: 'not json' }] }), 'unknown');
+  assert.equal(evidenceArmGuess(cairnRequest([{ receipts: [] }, { turns: [] }])), 'unknown');
+
+  // No run record at all: the shape decides, and an empty evidence array stays unknown,
+  // because a Cairn arm that packed nothing looks exactly like the no-memory arm.
+  const withoutRun = labelCapturedArms(entries(), null);
   assert.deepEqual(withoutRun.map((entry) => entry.armGuess), ['cairn', 'full-history', 'unknown']);
   assert.ok(withoutRun.every((entry) => entry.armLabelMethod === 'evidence-shape-fallback'));
 
@@ -756,7 +760,7 @@ test('A3: the evidence-shape fallback labels requests when no run record backs t
   const partialRun = { arms: [{ name: 'cairn', status: 'completed', diagnostics: { preflight: { inputTokens: 1 } } }] };
   const mismatched = labelCapturedArms(entries(), partialRun);
   assert.ok(mismatched.every((entry) => entry.armLabelMethod === 'evidence-shape-fallback'));
-  assert.deepEqual(mismatched.map((entry) => entry.armGuess), ['unknown', 'unknown', 'unknown']);
+  assert.deepEqual(mismatched.map((entry) => entry.armGuess), ['cairn', 'full-history', 'unknown']);
 
   // The positional path still wins whenever the counts agree.
   const fullRun = { arms: ['cairn', 'full-history', 'no-memory'].map((name) =>

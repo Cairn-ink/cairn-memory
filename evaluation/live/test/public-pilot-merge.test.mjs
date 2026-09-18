@@ -259,6 +259,13 @@ test('S2/S3: a tampered total and a pre-existing output directory are refused wi
   staged.cost.byStage.answer.requests = 'many';
   await writeFile(path.join(stageTampered, 'report.json'), JSON.stringify(staged), { mode: 0o600 });
   await assert.rejects(merge([stageTampered, f.at('batch-2')], f.at('out-stage')), { code: 'invalid_artifact' });
+  const countTampered = f.at('batch-1-count');
+  await cp(f.at('batch-1'), countTampered, { recursive: true });
+  const counted = await readJson(path.join(countTampered, 'report.json'));
+  counted.cost.byStage.answer.outcomes.succeeded = 2.5;
+  await writeFile(path.join(countTampered, 'report.json'), JSON.stringify(counted), { mode: 0o600 });
+  await assert.rejects(merge([countTampered, f.at('batch-2')], f.at('out-count')), { code: 'invalid_artifact' });
+
   const outcomeTampered = f.at('batch-1-outcome');
   await cp(f.at('batch-1'), outcomeTampered, { recursive: true });
   const outcomes = await readJson(path.join(outcomeTampered, 'report.json'));

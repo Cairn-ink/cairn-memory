@@ -19,14 +19,17 @@
 - Add `evaluation/live/public-pilot-merge.mjs` (`mergePublicPilotRuns`, CLI
   `--merge dir,dir --output dir`): an offline merge of completed batch
   directories into one paired report, refusing mismatched configurations,
-  overlapping case lists, incomplete sources and non-integer totals, with no
+  overlapping case lists, incomplete sources, non-integer run and per-stage
+  totals, and an output directory that is or sits inside a source, with no
   key, ledger or call.
 - Answer requests are labelled by the run's own arm order rather than by the
   evidence shape, so a Cairn arm that retrieved nothing is no longer recorded
   as the no-memory arm and contributes an all-zero packed truncation row. A
-  resumed run refuses a completed case whose accounting, request or truncation
-  file is missing (`invalid_checkpoint`), and an `aggregate.json` left without
-  a `report.json` is reported as `aggregate_without_report`.
+  resumed run refuses a completed or failed case whose accounting, request or
+  truncation file is missing (`invalid_checkpoint`), since both can follow real
+  spend and only a blocked case legitimately has its generation record alone,
+  and an `aggregate.json` left without a `report.json` is reported as
+  `aggregate_without_report`.
 - `aggregateOfficialScores` additionally reports a `common` bucket (cases in
   which all three arms resolved, per arm, per type and abstention overlay,
   `null` accuracy at zero); existing buckets are unchanged. `pilotEvaluatorFor`

@@ -89,9 +89,13 @@ network or key discovery.
   attempt ids seen; it is rewritten atomically after every durable step.
   Resuming on the same directory re-reads finished cases from disk, never
   re-sends for a case left `generating`/`scoring` (it becomes
-  `blocked: interrupted`), treats every `blocked` case as terminal, never
-  overwrites an existing artifact (`output_exists`), returns the existing
-  `report.json` unchanged for a completed directory, and refuses
+  `blocked: interrupted`), treats every `blocked` case as terminal, refuses
+  (`invalid_checkpoint`) a case whose generation record is `completed` or
+  `failed` and whose accounting, answer-request or truncation artifact is
+  missing rather than reporting it as costing nothing, since only a blocked
+  case legitimately has its generation record alone, never overwrites an
+  existing artifact (`output_exists`), returns the existing `report.json`
+  unchanged for a completed directory, and refuses
   (`run_directory_mismatch`) when the pilot identity, case list, limits,
   judge timeout, caps or stage policy differ from what `manifest.json` and
   `checkpoint.json` recorded. A non-empty directory without a checkpoint is

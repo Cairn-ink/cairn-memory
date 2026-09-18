@@ -160,9 +160,13 @@ distinct from the `output_exists` a genuine overwrite attempt raises.
 `aggregate.json` is derived entirely from the per-case files, so the operator
 may remove that one file and resume; every case is then re-read from its
 checkpointed artifacts and nothing is re-sent. A case whose `generation.json`
-says `completed` but whose `accounting.json`, `answer-requests.json` or
-`truncation.json` is missing was interrupted mid-write; the resume refuses it
-with `invalid_checkpoint` rather than reporting a cost it cannot substantiate.
+says `completed` or `failed` but whose `accounting.json`,
+`answer-requests.json` or `truncation.json` is missing was interrupted
+mid-write; the resume refuses it with `invalid_checkpoint` rather than
+reporting a cost it cannot substantiate. A failed generation is the one that
+most needs this, because ingestion and answer calls can have been paid for
+before the failure. Only a blocked case legitimately has its generation record
+alone.
 
 ## Limitations disclosed with every result
 
