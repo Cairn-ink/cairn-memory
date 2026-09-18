@@ -12,3 +12,6 @@ coverage/
 *.db-*
 __pycache__/
 .pytest_cache/
+
+# rendered frames for docs/demo/cairn-memory-loop.gif
+docs/demo/frames/

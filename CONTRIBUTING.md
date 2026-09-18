@@ -2,6 +2,14 @@
 
 Thanks for helping make agent memory smaller, safer, and easier to inspect.
 
+## Where to record evaluation limitations
+
+Retained failures, frozen evaluation results and claims the evidence does not
+support belong in [`docs/limitations.md`](docs/limitations.md), not in the
+README. The README's first screen stays short and links there. A PR that adds
+or revises evidence appends to or edits `docs/limitations.md` and, when a gate
+changes, `ROADMAP.md`.
+
 ## Before opening a pull request
 
 For `evaluation/live` changes, install the isolated OpenAI and MCP dependency
