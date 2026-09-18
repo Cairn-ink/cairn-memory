@@ -20,7 +20,7 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Optional reference sidecar | `--sidecar /private/reference-sidecar.json --sidecar-sha256 <hex>` | From `render-reference-sidecar.py`; needed only for non-string references |
 | Output | `--output /private/run-dir` (new, or a previous run directory to resume) | Created 0700; every file 0600 |
 | Case subset | `--cases id1,id2` (source or opaque ids; roster order is kept) | Omit to run every prepared case |
-| Batch caps | `--batch-cap-micro-usd N --batch-request-cap N` | This run's own reservations and requests, checked before every case against that case's projected reservation |
+| Batch caps | `--batch-cap-micro-usd N --batch-request-cap N` | This run's own reservations and requests, checked before every case against that case's projected reservation. Size the cap at or above the `totals` that `--dry-run` prints for the selected cases, not at a single case's figure: every case generates before any case scores, so a later generation can consume the headroom an earlier case needs for its three judge calls |
 | Provenance | `--run-commit <sha>`, `--exclusions-file <json array>` | Recorded in `manifest.json` and `report.json` |
 | Merge | `--merge /private/run-a,/private/run-b --output /private/merged` | Offline; no key, no ledger; only `--output` may accompany it |
 
@@ -102,6 +102,16 @@ those longer than the 800-UTF-16-unit receipt bound and the omitted units; the
 Cairn arm's retrieval counts and omissions; the packed receipts whose source
 chunk exceeded the bound and their omitted units; and each arm's status.
 
+Each stored answer request is labelled with the arm that sent it. The label is
+positional: the runner walks the arms in order and gives each arm that reached
+the answer stage the next request in send order, recording
+`armLabelMethod: 'run-arm-order'`. The evidence shape is only a fallback when
+the comparison itself failed and no arm record exists, because an empty
+evidence array cannot distinguish the no-memory arm from a Cairn arm that
+retrieved nothing. A Cairn arm that answered with zero receipts therefore
+records an all-zero packed row rather than no row at all, so the run totals
+count it as a measured zero.
+
 ## Resume
 
 Running again on the same directory with the same pilot and the same case
@@ -141,10 +151,14 @@ cap, and the paired report is assembled afterwards without any paid call:
    `checkpoint.json`, `aggregate.json` or `report.json` is `run_incomplete`.
 
 Recovery note: if the process dies between writing `aggregate.json` and
-`report.json`, resuming fails with `output_exists` because `aggregate.json`
-already exists. `aggregate.json` is derived entirely from the per-case files,
-so the operator may remove that one file and resume; every case is then
-re-read from its checkpointed artifacts and nothing is re-sent.
+`report.json`, resuming fails with `aggregate_without_report`, which is
+distinct from the `output_exists` a genuine overwrite attempt raises.
+`aggregate.json` is derived entirely from the per-case files, so the operator
+may remove that one file and resume; every case is then re-read from its
+checkpointed artifacts and nothing is re-sent. A case whose `generation.json`
+says `completed` but whose `accounting.json`, `answer-requests.json` or
+`truncation.json` is missing was interrupted mid-write; the resume refuses it
+with `invalid_checkpoint` rather than reporting a cost it cannot substantiate.
 
 ## Limitations disclosed with every result
 
@@ -156,7 +170,8 @@ answer timeout blocks the later arms; Cairn evidence is normalized and
 redacted while full history is raw; Cairn's effective budget is further capped
 by `recallLimit` and core recall budgets; the no-memory arm trivially passes
 abstention cases; counted context and usage are local estimates or
-provider-reported usage, not invoices. Seven selected cases are a plumbing
+provider-reported usage, not invoices; `overall.coverage` is the resolved
+fraction of the fixed roster, not retrieval coverage. Seven selected cases are a plumbing
 pilot, not a population estimate.
 
 ## Verification

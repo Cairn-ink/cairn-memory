@@ -54,7 +54,14 @@ network or key discovery.
   for the packed evidence (from the stored answer request) the receipts whose
   source chunk exceeded the bound and their omitted units; and each arm's
   status, so capture truncation, retrieval, packing and answer failure are
-  separately visible.
+  separately visible. Each captured request is labelled positionally from the
+  run's own arm order (each arm that reached the answer stage takes the next
+  request in send order, recorded as `armLabelMethod`), with the evidence shape
+  used only as a fallback when the comparison produced no arm record, because
+  an empty evidence array is ambiguous between the no-memory arm and a Cairn
+  arm that retrieved nothing. A Cairn arm that answered with no receipts
+  records an all-zero packed row (`receipts` 0) rather than a null row, so the
+  run-level truncation totals include the case as a measured zero.
 - **PP5 Common bucket.** `aggregateOfficialScores` additionally reports
   `common`: the number of roster cases in which all three arms resolved
   (`commonN`), per-arm `correct`/`incorrect`/`accuracy` over those cases, the

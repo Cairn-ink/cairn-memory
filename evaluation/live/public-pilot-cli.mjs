@@ -2,7 +2,7 @@
 // Guarded launcher for the private LongMemEval public-comparison pilot.
 // Every input is explicit. The provider key is read from OPENAI_API_KEY inside
 // main() only, handed to the session, and never printed or written anywhere.
-import { lstat, readFile } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -12,13 +12,15 @@ import { authorizeBenchmarkExtension } from '../experiment-budget/request-guard.
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { opaqueQuestionId } from '../longmemeval/prepare.mjs';
 import { loadReferenceRenderings } from '../longmemeval/reference-rendering.mjs';
-import { loadPreparedPilot } from './pilot.mjs';
+import { isPlainObject } from '../longmemeval/validation.mjs';
+import { loadPreparedPilot, readRegularFile } from './pilot.mjs';
 import { mergePublicPilotRuns } from './public-pilot-merge.mjs';
 import {
   benchmarkStagePolicy,
   createBenchmarkLiveSession,
   projectCaseReservation,
   PUBLIC_PILOT_JUDGE_TIMEOUT_MS,
+  OWNER_ID,
   PUBLIC_PILOT_LIMITS,
   runPublicPilot,
 } from './public-pilot.mjs';
@@ -56,7 +58,6 @@ const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output',
   '--merge'];
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
 const MAX_INPUT_BYTES = 1024 * 1024;
-const OWNER_ID = 'longmemeval-public-pilot';
 
 export class PublicPilotCliError extends Error {
   constructor(code, detail = null) {
@@ -82,7 +83,7 @@ export function parseArguments(argv) {
       flags[token] = true;
       continue;
     }
-    if (!VALUE_FLAGS.includes(token)) fail('unknown_flag', token);
+    if (!VALUE_FLAGS.includes(token)) fail('unknown_flag');
     const value = argv[index + 1];
     if (value === undefined || value.startsWith('--') || Object.hasOwn(values, token)) fail('invalid_flag_value', token);
     values[token] = value;
@@ -102,12 +103,16 @@ async function readPrivateJsonInput(filename, { requireMode600 = false } = {}) {
   try { entry = await lstat(resolved); } catch { fail('input_unreadable'); }
   if (!entry.isFile() || entry.isSymbolicLink() || entry.size > MAX_INPUT_BYTES) fail('input_unreadable');
   if (requireMode600 && (entry.mode & 0o777) !== 0o600) fail('input_permissions');
-  try { return JSON.parse(await readFile(resolved, 'utf8')); } catch { fail('input_invalid_json'); }
+  let bytes;
+  try { bytes = await readRegularFile(resolved, 'input_unreadable', MAX_INPUT_BYTES); }
+  catch { return fail('input_unreadable'); }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+  catch { return fail('input_invalid_json'); }
 }
 
 const validateLedgerConfig = (value) => {
   const keys = ['directory', 'runId', 'limitMicroUsd', 'requestCap'];
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== keys.length
+  if (!isPlainObject(value) || Object.keys(value).length !== keys.length
     || keys.some((key) => !Object.hasOwn(value, key)) || typeof value.directory !== 'string'
     || typeof value.runId !== 'string' || !Number.isSafeInteger(value.limitMicroUsd)
     || !Number.isSafeInteger(value.requestCap)) fail('invalid_ledger_config');

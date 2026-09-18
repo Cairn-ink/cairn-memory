@@ -88,6 +88,7 @@ const defaultChat = (body) => Response.json(chatEnvelope(body.model,
   body.model === JUDGE_MODEL ? judgeText(body) : answerText(body)));
 const fakeUpstream = ({ calls, chat = defaultChat }) => async (url, options) => {
   const body = JSON.parse(options.body);
+  assert.equal(new URL(url).origin, 'https://api.openai.com');
   const record = { url: `${url}`, pathname: new URL(url).pathname, body, rawBody: options.body,
     headers: options.headers, model: body.model };
   calls.push(record);
@@ -124,7 +125,10 @@ async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, re
     output: (name) => path.join(root, name) };
 }
 const readJson = async (...segments) => JSON.parse(await readFile(path.join(...segments), 'utf8'));
-const ledgerState = (ledger) => { const handle = reopenExperimentBudget(ledger); try { return handle.getState(); } finally { handle.close(); } };
+const ledgerState = (ledger) => {
+  const handle = reopenExperimentBudget(ledger);
+  try { return handle.getState(); } finally { handle.close(); }
+};
 async function walk(directory) {
   const entries = [];
   for (const name of await readdir(directory)) {
@@ -207,6 +211,7 @@ test('PP1-PP5/PP8: end-to-end through real runner, guard, adapter and core on pr
   for (const questionId of Object.values(ids)) {
     const stored = await readJson(output, 'cases', questionId, 'answer-requests.json');
     assert.deepEqual(stored.requests.map((item) => item.armGuess), ['cairn', 'full-history', 'no-memory']);
+    assert.ok(stored.requests.every((item) => item.armLabelMethod === 'run-arm-order'));
     for (const item of stored.requests) {
       const expected = JSON.stringify({ ...item.request, store: false, stream: false });
       assert.equal(f.calls.filter((call) => call.rawBody === expected).length, 1);
@@ -416,7 +421,8 @@ test('PP7: resume skips finished cases, never re-sends, and never overwrites art
   await writeFile(path.join(interrupted, 'manifest.json'), JSON.stringify(manifest), { mode: 0o600 });
   const callsBefore = f.calls.length;
   const third = f.session();
-  const resumed = await runPublicPilot({ pilot: f.pilot, session: third, directory: interrupted, caseIds: [ids.plain, ids.abstain_abs] });
+  const resumed = await runPublicPilot({ pilot: f.pilot, session: third, directory: interrupted,
+    caseIds: [ids.plain, ids.abstain_abs] });
   third.close();
   assert.equal(resumed.cases[0].generation.status, 'blocked');
   assert.equal(resumed.cases[0].generation.reason, 'interrupted');
@@ -448,8 +454,8 @@ test('PP7: resume skips finished cases, never re-sends, and never overwrites art
 
 test('PP1: session uses the key only in headers, pins stage models, and propagates guard refusals', async (t) => {
   const f = await setup(t);
-  assert.throws(() => createBenchmarkLiveSession({ ledger: f.ledger, apiKey: '', fetchImpl: () => {}, benchmarkExtension: f.benchmarkExtension }),
-    { code: 'invalid_benchmark_session' });
+  assert.throws(() => createBenchmarkLiveSession({ ledger: f.ledger, apiKey: '',
+    fetchImpl: () => {}, benchmarkExtension: f.benchmarkExtension }), { code: 'invalid_benchmark_session' });
   assert.throws(() => createBenchmarkLiveSession({ ledger: f.ledger, apiKey: KEY, fetchImpl: () => {} }),
     { code: 'invalid_benchmark_session' });
   const session = f.session();
@@ -487,8 +493,9 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
   assert.equal(await cliMain(['--help'], { env: {}, stdout, stderr, fetchImpl: () => assert.fail('no transport') }), 0);
   assert.equal(stdout.text(), USAGE);
   assert.throws(() => parseArguments(['--bogus']), { code: 'unknown_flag' });
-  assert.equal(await cliMain(['--bogus'], { env: {}, stdout: out(), stderr, fetchImpl: () => assert.fail('no transport') }), 1);
-  assert.match(stderr.text(), /^unknown_flag --bogus\n/u);
+  assert.equal(await cliMain(['--bogus'], { env: {}, stdout: out(),
+    stderr, fetchImpl: () => assert.fail('no transport') }), 1);
+  assert.match(stderr.text(), /^unknown_flag\n/u);
 
   const ledgerFile = f.output('ledger.json');
   await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
@@ -543,4 +550,140 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
   assert.deepEqual(report.operator.exclusionRegistry, ['excluded-one', 'excluded-two']);
   assert.equal(report.operator.authorizationId, 'synthetic-public-pilot');
   assert.equal(ledgerState(f.ledger).requestCount, calls.length);
+});
+
+test('X1: a Cairn arm that packs no receipts is labelled by arm order and counted as a measured zero', async (t) => {
+  const f = await setup(t, { source: [
+    fixture({ id: 'plain', answerTurn: 'The plain color is amber.' }),
+    fixture({ id: 'norecall', answerTurn: 'The norecall shade was chosen quietly last spring.' }),
+  ] });
+  const norecall = opaqueQuestionId('norecall');
+  const session = f.session();
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: f.output('zero-recall') });
+  session.close();
+
+  const stored = await readJson(f.output('zero-recall'), 'cases', norecall, 'answer-requests.json');
+  assert.deepEqual(stored.requests.map((item) => item.armGuess), ['cairn', 'full-history', 'no-memory']);
+  assert.ok(stored.requests.every((item) => item.armLabelMethod === 'run-arm-order'));
+  const cairnEvidence = JSON.parse(stored.requests[0].request.messages[1].content).evidence;
+  assert.deepEqual(cairnEvidence, []);
+
+  const truncation = await readJson(f.output('zero-recall'), 'cases', norecall, 'truncation.json');
+  assert.equal(truncation.armStatus.cairn.status, 'completed');
+  assert.equal(truncation.retrieval.selectedCount, 0);
+  assert.equal(truncation.retrieval.candidateCount, 0);
+  assert.deepEqual(truncation.packed,
+    { receipts: 0, receiptsFromTruncatedChunks: 0, omittedUnits: 0, unmatched: 0 });
+
+  const zeroCase = report.cases.find((item) => item.sourceQuestionId === 'norecall');
+  assert.deepEqual(zeroCase.truncation.packed, truncation.packed);
+  assert.notEqual(zeroCase.truncation.packed, null);
+  const packedCases = report.cases.map((item) => item.truncation.packed);
+  assert.ok(packedCases.every((item) => item !== null));
+  const aggregate = await readJson(f.output('zero-recall'), 'aggregate.json');
+  assert.equal(aggregate.truncation.packedReceipts,
+    packedCases.reduce((sum, item) => sum + item.receipts, 0));
+  assert.ok(aggregate.truncation.packedReceipts > 0);
+});
+
+test('X2: a completed case missing its accounting artifacts refuses the resume and sends nothing', async (t) => {
+  const f = await setup(t);
+  const output = f.output('half-written');
+  const first = f.session();
+  await runPublicPilot({ pilot: f.pilot, session: first, directory: output, caseIds: [ids.plain] });
+  first.close();
+  const callsAfterFirst = f.calls.length;
+  await rm(path.join(output, 'report.json'));
+  await rm(path.join(output, 'aggregate.json'));
+  await rm(path.join(output, 'cases', ids.plain, 'accounting.json'));
+  const second = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: second, directory: output, caseIds: [ids.plain] }),
+    { code: 'invalid_checkpoint' });
+  second.close();
+  assert.equal(f.calls.length, callsAfterFirst);
+});
+
+test('X4: aggregate.json without report.json is its own code, and removing it lets the run finish', async (t) => {
+  const f = await setup(t);
+  const output = f.output('aggregate-only');
+  const first = f.session();
+  const report = await runPublicPilot({ pilot: f.pilot, session: first, directory: output, caseIds: [ids.plain] });
+  first.close();
+  const callsAfterFirst = f.calls.length;
+  await rm(path.join(output, 'report.json'));
+  const second = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: second, directory: output, caseIds: [ids.plain] }),
+    { code: 'aggregate_without_report' });
+  await rm(path.join(output, 'aggregate.json'));
+  const again = await runPublicPilot({ pilot: f.pilot, session: second, directory: output, caseIds: [ids.plain] });
+  second.close();
+  assert.equal(f.calls.length, callsAfterFirst);
+  assert.deepEqual(again.cases, report.cases);
+  assert.deepEqual(again.official, report.official);
+});
+
+test('S2: an existing non-empty directory is refused without changing its permissions', async (t) => {
+  const f = await setup(t);
+  const output = f.output('pre-existing');
+  await mkdir(output, { mode: 0o755 });
+  await chmod(output, 0o755);
+  await writeFile(path.join(output, 'stray.json'), '{}', { mode: 0o644 });
+  const session = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: output }), { code: 'output_not_empty' });
+  session.close();
+  assert.equal((await lstat(output)).mode & 0o777, 0o755);
+  assert.equal(f.calls.length, 0);
+});
+
+test('N12: every CLI refusal exits 1 with a fixed code and no transport call', async (t) => {
+  const f = await setup(t);
+  const out = () => {
+    const chunks = [];
+    return { write: (text) => { chunks.push(text); return true; }, text: () => chunks.join('') };
+  };
+  const noTransport = () => assert.fail('transport must not be invoked');
+  const ledgerFile = f.output('ledger.json');
+  await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
+  await chmod(ledgerFile, 0o600);
+  const garbage = f.output('garbage.json');
+  await writeFile(garbage, 'not json', { mode: 0o600 });
+  await chmod(garbage, 0o600);
+  const emptyLedger = f.output('empty-ledger.json');
+  await writeFile(emptyLedger, '{}', { mode: 0o600 });
+  await chmod(emptyLedger, 0o600);
+  const badExclusions = f.output('bad-exclusions.json');
+  await writeFile(badExclusions, '{}');
+  const base = ['--prepared', f.prepared, '--ledger', ledgerFile,
+    '--authorization-id', 'synthetic-public-pilot', '--dry-run'];
+  const rows = [
+    { code: 'duplicate_flag --dry-run', argv: ['--dry-run', '--dry-run'] },
+    { code: 'unknown_flag', argv: ['--bogus'] },
+    { code: 'invalid_flag_value --prepared', argv: ['--prepared'] },
+    { code: 'invalid_flag_value --prepared', argv: ['--prepared', '--ledger', ledgerFile] },
+    { code: 'sidecar_flags_incomplete', argv: [...base, '--sidecar', f.prepared] },
+    { code: 'cap_flags_incomplete', argv: [...base, '--batch-cap-micro-usd', '1000'] },
+    { code: 'invalid_number --batch-cap-micro-usd',
+      argv: [...base, '--batch-cap-micro-usd', 'abc', '--batch-request-cap', '600'] },
+    { code: 'invalid_run_commit', argv: [...base, '--run-commit', 'ZZZZZZZ'] },
+    { code: 'input_unreadable',
+      argv: ['--prepared', f.prepared, '--ledger', f.output('missing.json'),
+        '--authorization-id', 'synthetic-public-pilot', '--dry-run'] },
+    { code: 'input_invalid_json',
+      argv: ['--prepared', f.prepared, '--ledger', garbage,
+        '--authorization-id', 'synthetic-public-pilot', '--dry-run'] },
+    { code: 'invalid_ledger_config',
+      argv: ['--prepared', f.prepared, '--ledger', emptyLedger,
+        '--authorization-id', 'synthetic-public-pilot', '--dry-run'] },
+    { code: 'invalid_exclusions', argv: [...base, '--exclusions-file', badExclusions] },
+  ];
+  for (const row of rows) {
+    const stdout = out();
+    const stderr = out();
+    const exit = await cliMain(row.argv, { env: {}, stdout, stderr, fetchImpl: noTransport });
+    assert.equal(exit, 1, row.code);
+    assert.equal(stderr.text(), `${row.code}\n`, row.code);
+    assert.equal(stdout.text(), '', row.code);
+  }
+  assert.equal(f.calls.length, 0);
+  assert.equal(ledgerState(f.ledger).requestCount, 0);
 });

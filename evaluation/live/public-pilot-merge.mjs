@@ -1,7 +1,7 @@
 // Offline merge of completed public pilot run directories into one paired report.
 // No session, no ledger, no key, no network: every input is a private artifact
 // written by runPublicPilot and is re-read with the runner's own file checks.
-import { lstat, readdir } from 'node:fs/promises';
+import { lstat, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 import { aggregateOfficialScores } from '../longmemeval/official-scoring.mjs';
@@ -9,13 +9,14 @@ import { deepFreeze, isPlainObject, validString } from '../longmemeval/validatio
 import {
   canonical,
   caseBlockedReason,
-  ensurePrivateDirectory,
+  fail,
+  openPrivateDirectory,
   PUBLIC_PILOT_INTERPRETATION,
   PUBLIC_PILOT_LIMITATIONS,
   PUBLIC_PILOT_SCHEMA_VERSION,
-  PublicPilotError,
   readPrivateJson,
   resolveDirectory,
+  sealPrivateDirectory,
   sumStageTotals,
   writePrivateJson,
 } from './public-pilot.mjs';
@@ -25,13 +26,16 @@ const CASE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const COST_FIELDS = ['reservedMicroUsd', 'knownActualMicroUsd', 'unknownCostRequests', 'requests'];
 const LATENCY_FIELDS = ['generationMs', 'scoringMs', 'totalMs'];
 
-const fail = (code) => { throw new PublicPilotError(code); };
-const numeric = (value) => (Number.isFinite(value) ? value : 0);
+// Totals are integer counts and micro-USD; a non-integer field is a tampered
+// artifact, never a zero to sum silently.
+const numeric = (value) => (Number.isSafeInteger(value) ? value : fail('invalid_artifact'));
 
 async function loadRun(directory) {
   let entry;
-  try { entry = await lstat(directory); } catch { fail('run_incomplete'); }
-  if (!entry.isDirectory() || entry.isSymbolicLink()) fail('unsafe_source');
+  try { entry = await lstat(directory); } catch { return fail('run_incomplete'); }
+  let resolved;
+  try { resolved = await realpath(directory); } catch { return fail('unsafe_source'); }
+  if (!entry.isDirectory() || entry.isSymbolicLink() || resolved !== directory) fail('unsafe_source');
   const files = {};
   for (const name of RUN_FILES) {
     const value = await readPrivateJson(path.join(directory, `${name}.json`), 'invalid_artifact');
@@ -130,8 +134,11 @@ export async function mergePublicPilotRuns(options) {
     progressCallbackFailures: callbackFailures,
   };
 
-  await ensurePrivateDirectory(output, 'unsafe_output');
-  if ((await readdir(output)).length !== 0) fail('output_not_empty');
+  await openPrivateDirectory(output, 'unsafe_output');
+  let entries;
+  try { entries = await readdir(output); } catch { return fail('unsafe_output'); }
+  if (entries.length !== 0) fail('output_not_empty');
+  await sealPrivateDirectory(output, 'unsafe_output');
   const merged = {
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, kind: 'merged', generatedAt: new Date().toISOString(),
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: null, pilot: first.report.pilot, caseIds: [...caseIds],

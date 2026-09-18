@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { cp, lstat, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -19,6 +19,7 @@ const KEY = 'synthetic-merge-key-never-expose';
 const RAW_PHRASE = 'zqx-private-merge-phrase-never-in-report';
 const JUDGE_MODEL = 'gpt-4o-2024-08-06';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+const FILLER = 'The long session discusses the weather at great length and in careful detail. '.repeat(14);
 const fixture = ({ id, answerTurn, answer = 'amber' }) => ({
   question_id: id, question_type: 'single-session-user', question: `What is the ${id.split('_')[0]} color?`, answer,
   question_date: 'Saturday', haystack_session_ids: [`${id}-first`, `${id}-second`], haystack_dates: ['Tuesday', 'Friday'],
@@ -28,8 +29,10 @@ const fixture = ({ id, answerTurn, answer = 'amber' }) => ({
 });
 const sourceCases = () => [
   fixture({ id: 'plain', answerTurn: 'The plain color is amber.' }),
-  fixture({ id: 'long', answerTurn: `${'The long session discusses the weather at great length and in careful detail. '.repeat(14)}The long color is amber.` }),
-  fixture({ id: 'abstain_abs', answerTurn: 'The abstain session mentions nothing about colors.', answer: 'The color is never stated.' }),
+  fixture({ id: 'long',
+    answerTurn: `${FILLER}The long color is amber.` }),
+  fixture({ id: 'abstain_abs', answerTurn: 'The abstain session mentions nothing about colors.',
+    answer: 'The color is never stated.' }),
   fixture({ id: 'numeric', answerTurn: 'The numeric count is 3.', answer: 3 }),
 ];
 const ids = Object.fromEntries(['plain', 'long', 'abstain_abs', 'numeric'].map((id) => [id, opaqueQuestionId(id)]));
@@ -54,6 +57,7 @@ const judgeText = (prompt) => {
 };
 const fakeUpstream = (calls) => async (url, options) => {
   const body = JSON.parse(options.body);
+  assert.equal(new URL(url).origin, 'https://api.openai.com');
   const pathname = new URL(url).pathname;
   calls.push({ pathname, body });
   if (pathname === '/v1/responses/input_tokens') return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
@@ -226,4 +230,30 @@ test('PP10: the CLI merges offline with no key and rejects any other flag', asyn
   assert.equal(await cliMain(['--merge', f.at('batch-1')], { env: {}, stdout: out(), stderr: missing, fetchImpl: noTransport }), 1);
   assert.equal(missing.text(), 'missing_required_flag --output\n');
   await assert.rejects(lstat(f.at('cli-bad')), { code: 'ENOENT' });
+});
+
+test('S2/S3: a tampered total and a pre-existing output directory are refused without writing', async (t) => {
+  const f = await setup(t);
+  await f.run('batch-1', [ids.plain]);
+  await f.run('batch-2', [ids.abstain_abs]);
+  const tampered = f.at('batch-1-tampered');
+  await cp(f.at('batch-1'), tampered, { recursive: true });
+  const report = await readJson(path.join(tampered, 'report.json'));
+  report.cost.requests = 'many';
+  await writeFile(path.join(tampered, 'report.json'), JSON.stringify(report), { mode: 0o600 });
+  await assert.rejects(merge([tampered, f.at('batch-2')], f.at('out-tampered')), { code: 'invalid_artifact' });
+
+  const floatLatency = f.at('batch-1-float');
+  await cp(f.at('batch-1'), floatLatency, { recursive: true });
+  const floated = await readJson(path.join(floatLatency, 'report.json'));
+  floated.latency.generationMs = 1.5;
+  await writeFile(path.join(floatLatency, 'report.json'), JSON.stringify(floated), { mode: 0o600 });
+  await assert.rejects(merge([floatLatency, f.at('batch-2')], f.at('out-float')), { code: 'invalid_artifact' });
+
+  const occupied = f.at('pre-existing');
+  await mkdir(occupied, { mode: 0o755 });
+  await chmod(occupied, 0o755);
+  await writeFile(path.join(occupied, 'stray.json'), '{}', { mode: 0o644 });
+  await assert.rejects(merge([f.at('batch-1'), f.at('batch-2')], occupied), { code: 'output_not_empty' });
+  assert.equal((await lstat(occupied)).mode & 0o777, 0o755);
 });

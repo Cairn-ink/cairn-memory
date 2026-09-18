@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import {
   access,
@@ -5,7 +6,6 @@ import {
   lstat,
   mkdir,
   open,
-  readFile,
   readdir,
   realpath,
   rename,
@@ -20,8 +20,8 @@ import { createBenchmarkExperimentRequestGuard } from '../experiment-budget/requ
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { aggregateOfficialScores, scorePublicComparison } from '../longmemeval/official-scoring.mjs';
 import { runPublicComparison } from '../longmemeval/public-comparison.mjs';
-import { deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
-import { PILOT_SCHEMA_VERSION, pilotEvaluatorFor } from './pilot.mjs';
+import { createShapeValidators, deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
+import { PILOT_SCHEMA_VERSION, pilotEvaluatorFor, readRegularFile } from './pilot.mjs';
 import { experimentPolicy } from './session.mjs';
 
 export const PUBLIC_PILOT_SCHEMA_VERSION = 'cairn-longmemeval-public-pilot-v1';
@@ -41,13 +41,14 @@ export const PUBLIC_PILOT_LIMITATIONS = deepFreeze([
   'Cairn evidence is additionally capped by recallLimit and the core recall budgets, independent of contextWindow.',
   'The no-memory arm answers "I do not know" by instruction and therefore passes abstention cases trivially.',
   'Counted context and usage figures are local estimates or provider-reported usage, not invoices; count-call billing is unknown.',
+  '`overall.coverage` is the resolved fraction of the fixed roster, not retrieval coverage.',
 ]);
 
 const CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 const ANSWER_MODEL = 'gpt-4.1-mini-2025-04-14';
 const JUDGE_MODEL = 'gpt-4o-2024-08-06';
 const ARM_NAMES = ['cairn', 'full-history', 'no-memory'];
-const OWNER_ID = 'longmemeval-public-pilot';
+export const OWNER_ID = 'longmemeval-public-pilot';
 const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const CASE_STAGES = new Set(['pending', 'generating', 'generated', 'scoring', 'scored', 'blocked']);
 const RUN_OPTION_KEYS = ['pilot', 'session', 'directory', 'limits', 'judgeTimeoutMs', 'referenceRenderings',
@@ -76,14 +77,11 @@ export class PublicPilotError extends Error {
   }
 }
 
-const fail = (code) => { throw new PublicPilotError(code); };
+export const { fail, exactObject } = createShapeValidators(PublicPilotError);
 const safeInteger = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
 const priced = (tokens, price) => Math.ceil((tokens * price.microUsdNumerator) / price.tokenDenominator);
 const elapsedMs = (started) => Math.max(0, Date.now() - started);
-const exactObject = (value, keys, code) => {
-  if (!isPlainObject(value) || Object.keys(value).length !== keys.length
-    || keys.some((key) => !Object.hasOwn(value, key))) fail(code);
-};
+const guarded = async (action, code) => { try { return await action(); } catch { return fail(code); } };
 const safeError = (error, fallback) => ({
   code: validString(error?.code) && /^[a-z0-9_-]+$/u.test(error.code) ? error.code : fallback,
 });
@@ -158,18 +156,31 @@ export const resolveDirectory = (directory, code) => {
   return resolved;
 };
 
-export const ensurePrivateDirectory = async (directory, code) => {
+// Inspect (or create) a directory without changing permissions on one this
+// process did not create: the caller decides whether to accept it first.
+export const openPrivateDirectory = async (directory, code) => {
   let entry;
+  let created = false;
   try { entry = await lstat(directory); } catch (error) {
-    if (error?.code !== 'ENOENT') fail(code);
-    try { await mkdir(directory, { mode: 0o700 }); } catch { fail(code); }
-    entry = await lstat(directory);
+    if (error?.code !== 'ENOENT') return fail(code);
+    await guarded(() => mkdir(directory, { mode: 0o700 }), code);
+    entry = await guarded(() => lstat(directory), code);
+    created = true;
   }
-  let resolved;
-  try { resolved = await realpath(directory); } catch { fail(code); }
+  const resolved = await guarded(() => realpath(directory), code);
   if (!entry.isDirectory() || entry.isSymbolicLink() || resolved !== directory) fail(code);
-  await chmod(directory, 0o700);
-  await access(directory, fsConstants.W_OK).catch(() => fail(code));
+  return created;
+};
+
+// Applied only once the caller has accepted the directory.
+export const sealPrivateDirectory = async (directory, code) => {
+  await guarded(() => chmod(directory, 0o700), code);
+  await guarded(() => access(directory, fsConstants.W_OK), code);
+};
+
+export const ensurePrivateDirectory = async (directory, code) => {
+  await openPrivateDirectory(directory, code);
+  await sealPrivateDirectory(directory, code);
 };
 
 export const writePrivateJson = async (filename, value) => {
@@ -183,7 +194,7 @@ export const writePrivateJson = async (filename, value) => {
 };
 
 const replacePrivateJson = async (filename, value) => {
-  const temporary = `${filename}.${process.pid}.tmp`;
+  const temporary = `${filename}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, `${JSON.stringify(value)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     await chmod(temporary, 0o600);
@@ -192,13 +203,12 @@ const replacePrivateJson = async (filename, value) => {
 };
 
 export const readPrivateJson = async (filename, code) => {
-  let entry;
-  try { entry = await lstat(filename); } catch (error) {
+  try { await lstat(filename); } catch (error) {
     if (error?.code === 'ENOENT') return null;
-    fail(code);
+    return fail(code);
   }
-  if (!entry.isFile() || entry.isSymbolicLink() || entry.size > MAX_ARTIFACT_BYTES) fail(code);
-  try { return JSON.parse(await readFile(filename, 'utf8')); } catch { fail(code); }
+  const bytes = await guarded(() => readRegularFile(filename, code, MAX_ARTIFACT_BYTES), code);
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return fail(code); }
 };
 
 const databaseMeasurement = async (database) => {
@@ -240,14 +250,33 @@ export const projectCaseReservation = (plan, stages) => {
   };
 };
 
+// Fallback only: an empty evidence array is ambiguous between the no-memory arm
+// and a Cairn arm that packed nothing, so the run's own arm order decides when it exists.
 const evidenceArmGuess = (request) => {
   let payload;
   try { payload = JSON.parse(request?.messages?.[1]?.content); } catch { return 'unknown'; }
   if (!Array.isArray(payload?.evidence)) return 'unknown';
-  if (payload.evidence.length === 0) return 'no-memory';
+  if (payload.evidence.length === 0) return 'unknown';
   if (payload.evidence.every((item) => Array.isArray(item?.receipts))) return 'cairn';
   if (payload.evidence.every((item) => Array.isArray(item?.turns))) return 'full-history';
   return 'unknown';
+};
+
+// An arm invoked the answer callback exactly when it reached the answer stage:
+// preflight was measured and the request was not blocked before sending.
+const answeringArms = (run) => (run ? ARM_NAMES
+  .map((name) => run.arms.find((arm) => arm.name === name))
+  .filter((arm) => isPlainObject(arm?.diagnostics?.preflight) && arm.status !== 'blocked') : []);
+
+// Label each captured request by the arm that sent it, positionally in send order.
+const labelCapturedArms = (captured, run) => {
+  const answering = answeringArms(run);
+  const positional = run !== null && answering.length === captured.length;
+  for (const [index, entry] of captured.entries()) {
+    entry.armGuess = positional ? answering[index].name : entry.armGuess;
+    entry.armLabelMethod = positional ? 'run-arm-order' : 'evidence-shape-fallback';
+  }
+  return captured;
 };
 
 const truncationRecord = ({ questionId, plan, run, captured }) => {
@@ -267,7 +296,9 @@ const truncationRecord = ({ questionId, plan, run, captured }) => {
   const cairnRequest = captured.find((item) => item.armGuess === 'cairn')?.request;
   let packed = null;
   if (cairnRequest) {
-    const receipts = JSON.parse(cairnRequest.messages[1].content).evidence.flatMap((item) => item.receipts);
+    // Zero receipts is a measured zero, not an absent measurement: the row stays.
+    const receipts = JSON.parse(cairnRequest.messages[1].content).evidence
+      .flatMap((item) => (Array.isArray(item?.receipts) ? item.receipts : []));
     let truncated = 0;
     let omittedUnits = 0;
     let unmatched = 0;
@@ -389,6 +420,15 @@ const casePaths = (directory, questionId) => {
     scoring: path.join(caseDirectory, 'scoring.json') };
 };
 
+// A completed case whose accounting, requests or truncation file is missing was
+// interrupted mid-write: its real cost cannot be reported, so the resume stops.
+const requireCaseArtifacts = async (files, generation) => {
+  if (generation?.status !== 'completed') return;
+  for (const filename of [files.accounting, files.answerRequests, files.truncation]) {
+    if (await readPrivateJson(filename, 'invalid_artifact') === null) fail('invalid_checkpoint');
+  }
+};
+
 const blockedGeneration = (questionId, reason, extra = {}) => deepFreeze({
   schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId, status: 'blocked', reason, ...extra,
 });
@@ -416,9 +456,9 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   await ensurePrivateDirectory(files.directory, 'unsafe_output');
   let handle;
   try { handle = await open(files.database, 'wx', 0o600); }
-  catch (error) { fail(error?.code === 'EEXIST' ? 'output_exists' : 'output_write_failed'); }
-  await handle.close();
-  await chmod(files.database, 0o600);
+  catch (error) { return fail(error?.code === 'EEXIST' ? 'output_exists' : 'output_write_failed'); }
+  await guarded(() => handle.close(), 'output_write_failed');
+  await guarded(() => chmod(files.database, 0o600), 'output_write_failed');
   const started = Date.now();
   const attemptStart = session.attempts().length;
   let core;
@@ -438,6 +478,7 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   });
   const attempts = session.attempts().slice(attemptStart);
   const ledgerAfter = ledgerSummary(session.getState());
+  labelCapturedArms(captured, run ?? null);
   await writePrivateJson(files.generation, generation);
   await writePrivateJson(files.answerRequests, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
     requests: captured });
@@ -446,8 +487,8 @@ async function generateCase({ item, files, session, limits, plan, projected, led
     phase: 'generation', ledgerBefore, ledgerAfter, attempts, totals: stageTotals(attempts) });
   await writePrivateJson(files.timings, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
     caseLatencyMs: generation.latencyMs,
-    answerRequests: captured.map(({ order, armGuess, startedAt, elapsedMs: ms, status }) =>
-      ({ order, armGuess, startedAt, elapsedMs: ms, status })),
+    answerRequests: captured.map(({ order, armGuess, armLabelMethod, startedAt, elapsedMs: ms, status }) =>
+      ({ order, armGuess, armLabelMethod, startedAt, elapsedMs: ms, status })),
     arms: run ? run.arms.map((arm) => ({ name: arm.name, status: arm.status, reason: arm.reason,
       latencyMs: arm.diagnostics?.latencyMs ?? null })) : [] });
   return { generation, attemptIds: attempts.map((attempt) => attempt.attemptId) };
@@ -461,15 +502,16 @@ export async function runPublicPilot(options) {
   const { pilot, session, limits, judgeTimeoutMs, caps, manifest, caseIds, referenceRenderings, onCase }
     = validateOptions(options);
   const directory = resolveDirectory(options.directory, 'unsafe_output');
-  await ensurePrivateDirectory(directory, 'unsafe_output');
+  await openPrivateDirectory(directory, 'unsafe_output');
   const checkpointPath = path.join(directory, 'checkpoint.json');
   const manifestPath = path.join(directory, 'manifest.json');
   const casesRoot = path.join(directory, 'cases');
   let checkpoint = await readPrivateJson(checkpointPath, 'invalid_checkpoint');
   const started = Date.now();
   if (checkpoint === null) {
-    const entries = await readdir(directory);
+    const entries = await guarded(() => readdir(directory), 'unsafe_output');
     if (entries.length !== 0) fail('output_not_empty');
+    await sealPrivateDirectory(directory, 'unsafe_output');
     checkpoint = { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, pilotManifestSha256: pilot.identity.manifestSha256,
       baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
     await writePrivateJson(manifestPath, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
@@ -490,6 +532,7 @@ export async function runPublicPilot(options) {
     if (!isPlainObject(recorded) || canonical(recorded.limits) !== canonical(limits)
       || recorded.judgeTimeoutMs !== judgeTimeoutMs || canonical(recorded.caps ?? null) !== canonical(caps)
       || canonical(recorded.stages) !== canonical(session.stages)) fail('run_directory_mismatch');
+    await sealPrivateDirectory(directory, 'unsafe_output');
     await ensurePrivateDirectory(casesRoot, 'unsafe_output');
   }
   const saveCheckpoint = () => replacePrivateJson(checkpointPath, checkpoint);
@@ -531,8 +574,10 @@ export async function runPublicPilot(options) {
     if (['generated', 'scoring', 'scored', 'blocked'].includes(state.stage)) {
       generation = await readPrivateJson(files.generation, 'invalid_artifact');
       if (generation === null) fail('invalid_checkpoint');
+      await requireCaseArtifacts(files, generation);
     } else if (state.stage === 'generating') {
       generation = await readPrivateJson(files.generation, 'invalid_artifact');
+      if (generation !== null) await requireCaseArtifacts(files, generation);
       if (generation === null) {
         await ensurePrivateDirectory(files.directory, 'unsafe_output');
         generation = blockedGeneration(questionId, 'interrupted');
@@ -634,11 +679,14 @@ export async function runPublicPilot(options) {
   }
 
   // Aggregate and redacted report. A completed directory is returned as it was written.
+  const aggregatePath = path.join(directory, 'aggregate.json');
   const existingReport = await readPrivateJson(path.join(directory, 'report.json'), 'invalid_artifact');
   if (existingReport !== null) {
-    if (await readPrivateJson(path.join(directory, 'aggregate.json'), 'invalid_artifact') === null) fail('invalid_artifact');
+    if (await readPrivateJson(aggregatePath, 'invalid_artifact') === null) fail('invalid_artifact');
     return deepFreeze(existingReport);
   }
+  // aggregate.json is derived from the per-case files; the operator may delete it and resume.
+  if (await readPrivateJson(aggregatePath, 'invalid_artifact') !== null) fail('aggregate_without_report');
   const records = [...scorings.values()].filter((scoring) => scoring.status === 'completed')
     .map((scoring) => scoring.score);
   const official = aggregateOfficialScores({ roster, records });
@@ -712,7 +760,7 @@ export async function runPublicPilot(options) {
     latency: { ...latency, totalMs: elapsedMs(started) }, truncation,
     receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
   });
-  await writePrivateJson(path.join(directory, 'aggregate.json'), aggregate);
+  await writePrivateJson(aggregatePath, aggregate);
   const report = deepFreeze({
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, generatedAt: aggregate.generatedAt,
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest, pilot: pilot.identity, caseIds,
