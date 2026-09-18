@@ -327,6 +327,9 @@ export async function loadPreparedPilot(options) {
   return pilot;
 }
 
+// Read-only accessor for the private evaluator of one loaded case; undefined when unknown.
+export const pilotEvaluatorFor = (pilot, questionId) => PRIVATE_PILOTS.get(pilot)?.evaluators.get(questionId);
+
 const snapshotSession = (session) => {
   if (!isPlainObject(session) || !validString(session.modelId)
     || !isPlainObject(session.memoryModel) || typeof session.countTokens !== 'function'

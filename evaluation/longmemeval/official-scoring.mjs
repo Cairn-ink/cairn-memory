@@ -327,7 +327,38 @@ export const aggregateOfficialScores = ({ roster, records }) => {
           / OFFICIAL_QUESTION_TYPES.length : null,
       completeVerifiedOfficialStyle: overall.unresolved === 0 };
   }
+  // Common bucket: only roster cases in which all three arms resolved, so the
+  // paired comparison never mixes denominators. Accuracy is null, never 0, at commonN 0.
+  const commonBucket = () => ({ commonN: 0,
+    byArm: Object.fromEntries(OFFICIAL_ARM_NAMES.map((name) => [name, { correct: 0, incorrect: 0, accuracy: null }])) });
+  const countCommon = (bucket, record) => {
+    bucket.commonN += 1;
+    for (const arm of record.arms) bucket.byArm[arm.name][arm.judgment.correct ? 'correct' : 'incorrect'] += 1;
+  };
+  const finishCommon = (bucket) => {
+    for (const entry of Object.values(bucket.byArm)) {
+      entry.accuracy = bucket.commonN ? entry.correct / bucket.commonN : null;
+    }
+    return bucket;
+  };
+  const common = commonBucket();
+  const commonByType = Object.fromEntries(OFFICIAL_QUESTION_TYPES.map((type) => [type, commonBucket()]));
+  const commonAbstention = commonBucket();
+  let abstentionRosterCount = 0;
+  for (const item of rosterMap.values()) {
+    const abstention = item.sourceQuestionId.includes('_abs');
+    if (abstention) abstentionRosterCount += 1;
+    const record = recordMap.get(item.questionId);
+    if (!record || record.arms.length !== OFFICIAL_ARM_NAMES.length
+      || record.arms.some((arm) => arm.judgment.status !== 'resolved')) continue;
+    countCommon(common, record);
+    countCommon(commonByType[item.questionType], record);
+    if (abstention) countCommon(commonAbstention, record);
+  }
   return deepFreeze({ schemaVersion: OFFICIAL_SCORING_SCHEMA_VERSION,
     fixedCaseCount: roster.length, scoredRecordCount: records.length, arms: byArm,
-    completeVerifiedOfficialStyle: Object.values(byArm).every((arm) => arm.completeVerifiedOfficialStyle) });
+    completeVerifiedOfficialStyle: Object.values(byArm).every((arm) => arm.completeVerifiedOfficialStyle),
+    common: { ...finishCommon(common),
+      byType: Object.fromEntries(Object.entries(commonByType).map(([type, bucket]) => [type, finishCommon(bucket)])),
+      abstentionOverlay: abstentionRosterCount ? finishCommon(commonAbstention) : null } });
 };
