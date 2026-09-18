@@ -287,6 +287,64 @@ and [Responses reference](https://developers.openai.com/api/reference/cli/resour
 The accepted subset is not a claim to support every API option or every host's
 request shape. Existing application/provider defaults are unchanged.
 
+## Benchmark answer and judge stages
+
+`authorizeBenchmarkExtension({ledger, policy, authorizationId, stages})`
+provisions `experiment-benchmark-extension.json` (mode 0600) beside the bound
+baseline policy, under the reservation writer lock, only while the ledger is
+open and every attempt is settled. `stages` has exactly `answer` and `judge`;
+each carries the same closed channel fields as a policy channel with the
+endpoint fixed to Chat Completions, a closed model allowlist (`answer`:
+`gpt-4.1-mini-2025-04-14`; `judge`: `gpt-4o-2024-08-06`), rational integer
+prices and a reservation at least equal to the priced upper bound. Identical
+re-authorization returns the same record; any other input fails
+`policy_mismatch` or `invalid_extension`. It never resets, refills or
+replaces the ledger.
+
+The ledger's attempt channels are fixed by its checked schema, so answer and
+judge requests are reserved and settled under `host-completion`, exactly like
+a host chat completion, while the stage identity lives in this extension and
+in the guard's own record. `createBenchmarkExperimentRequestGuard({ledger,
+policy, benchmarkExtension, fetchImpl})` returns `{cairnFetch, answerFetch,
+judgeFetch, hostFetch, getState, attempts, isHalted, close, policy, stages}`.
+`hostFetch` always fails `unsupported_request`; `cairnFetch` accepts only the
+baseline extract/classify/select/rank payloads on the baseline model. Older
+guard constructors reject a benchmark token and never gain the stages.
+
+A stage body must contain exactly `model, messages, n, temperature,
+max_tokens, store, stream` with the stage model, `n: 1`, `temperature: 0`,
+`store: false`, `stream: false`, an integer `max_tokens` within the stage
+output cap, and 1–128 `{role, content}` string messages. The local
+`o200k_base` count of the messages plus the stage framing must fit the stage
+input bound. The guard never rewrites, adds, removes or translates a field
+and never substitutes a model: the upstream LongMemEval judge kwargs
+(`n: 1, temperature: 0, max_tokens: 10`) pass through unchanged, and the
+caller adds `store: false`/`stream: false` explicitly as a documented
+deviation from the upstream script. Every accepted request reserves the stage
+amount before the injected transport runs; exhausted money or requests,
+an overrun ledger or a lock failure sends nothing, and nothing is refunded.
+
+Settlement follows the baseline rules: non-2xx → `failed`; transport failure,
+stage timeout, oversized or malformed response, or missing/invalid usage →
+`unknown` with null cost; valid usage → `succeeded` with integer-priced cost
+at the stage rates, and usage beyond the bounds or the reservation fails
+`usage_bound_exceeded` after the overrun persists. After any `unknown`
+outcome or overrun seen by this guard, and whenever the ledger holds an
+unsettled attempt this guard does not own, `isHalted()` is true and every
+further `answerFetch`, `judgeFetch` or `cairnFetch` fails `paid_work_halted`
+before reserving. A count call's provider billing is unknown and remains
+reserved at the full channel amount with null actual cost.
+
+`attempts()` returns this guard's attempts in reservation order as
+`{attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd,
+outcome, actualMicroUsd, usage, startedAt, settledAt, elapsedMs}`, where
+`stage` is `answer`, `judge`, `cairn-count` or `cairn-generation`; it never
+contains bodies, headers, keys or provider text. Rate assumptions are the
+stage prices recorded in the extension file, not a provider invoice.
+Constructing this guard or passing its tests authorizes no paid run, and
+`evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses synthetic
+ledgers with fake HTTP only.
+
 ## Limits that must remain visible
 
 The invariant is a cap on reserved, declared upper bounds, not a guarantee about

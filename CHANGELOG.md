@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — guarded benchmark answer/judge transport
+
+- The experiment request guard gains an immutable benchmark extension
+  (`experiment-benchmark-extension.json`) that binds a separate answer stage
+  (`gpt-4.1-mini-2025-04-14`) and official judge stage (`gpt-4o-2024-08-06`)
+  with their own prices, bounds and per-request reservations. Both stages
+  reserve on the existing ledger's fixed `host-completion` channel before every
+  send; the ledger schema, history and allowance are unchanged.
+- `createBenchmarkExperimentRequestGuard` exposes `answerFetch`, `judgeFetch`
+  and baseline `cairnFetch`, denies the host channel, passes stage bodies
+  through with an explicit allowlist (`temperature: 0`, `n: 1`, `max_tokens`,
+  `store: false`, `stream: false`), records each attempt's stage, model and
+  priced usage without bodies or keys, and halts all further paid work after
+  any unknown outcome, overrun or foreign unsettled attempt. Offline synthetic
+  tests only; no live command, key discovery or paid call is added.
+
 ## Unreleased — evaluator-only Python reference rendering
 
 - Add an opt-in offline reference-rendering sidecar from checksum-bound raw
