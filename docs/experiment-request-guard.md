@@ -383,8 +383,10 @@ process that replaces its files.
 
 The allowlist is evaluated on the parsed JSON while the raw text is forwarded
 verbatim, so a body with duplicate JSON keys is validated on the last
-occurrence and sent with both; this is identical to the baseline guard,
-providers parse last-wins, and the accepted set is unchanged.
+occurrence and sent with both; this is identical to the baseline guard and
+the accepted set is unchanged. The guard assumes the provider keeps the last
+occurrence, as common JSON parsers do; this is not verified against the live
+endpoint.
 
 Never create a new ledger to replenish an existing experiment. Historical
 spending authority is not renewed by a merge, passing tests or this policy.
