@@ -192,6 +192,86 @@ test('A03: malformed preflight counts fail before generation', async () => {
   }
 });
 
+test('PSO1: exported adapter owns delivered count chunks before a reader reuses its backing', async () => {
+  const stable = harness([() => json(countEnvelope()), () => json(envelope())]);
+  assert.deepEqual(await stable.model.select(request()), { refs: [] });
+  assert.equal(stable.calls.length, 2);
+
+  const original = new TextEncoder().encode(JSON.stringify(countEnvelope()));
+  const split = Math.floor(original.length / 2);
+  let stableReads = 0;
+  const stableReader = harness([() => ({ ok: true, redirected: false, status: 200,
+    body: { getReader() { return { async read() {
+      stableReads++;
+      if (stableReads === 1) return { done: false, value: original.subarray(0, split) };
+      if (stableReads === 2) return { done: false, value: original.subarray(split) };
+      return { done: true };
+    }, async cancel() {}, releaseLock() {} }; } },
+  }), () => json(envelope())]);
+  assert.deepEqual(await stableReader.model.select(request()), { refs: [] });
+  assert.equal(stableReads, 3);
+  assert.equal(stableReader.calls.length, 2);
+
+  const backing = new Uint8Array(original.length);
+  let reads = 0, cancelled = 0, released = 0;
+  const reused = harness([() => ({ ok: true, redirected: false, status: 200,
+    body: { getReader() { return { async read() {
+      reads++;
+      if (reads === 1) { backing.set(original.subarray(0, split));
+        return { done: false, value: backing.subarray(0, split) }; }
+      if (reads === 2) { backing.fill(0); backing.set(original.subarray(split));
+        return { done: false, value: backing.subarray(0, original.length - split) }; }
+      return { done: true };
+    }, async cancel() { cancelled++; }, releaseLock() { released++; } }; } },
+  }), () => json(envelope())]);
+  assert.deepEqual(await reused.model.select(request()), { refs: [] });
+  assert.equal(reads, 3);
+  assert.equal(cancelled, 1);
+  assert.equal(released, 1);
+  assert.equal(reused.calls.length, 2);
+});
+
+function reusedBufferResponse(value, { split, offset, mutateOnEof = false }) {
+  const bytes = Buffer.from(JSON.stringify(value));
+  const backing = Buffer.alloc(bytes.length + offset + 3);
+  let reads = 0;
+  return { ok: true, redirected: false, status: 200,
+    body: { getReader() { return { async read() {
+      reads++;
+      if (reads === 1) {
+        backing.set(bytes.subarray(0, split), offset);
+        return { done: false, value: backing.subarray(offset, offset + split) };
+      }
+      backing.fill(0, offset, offset + split);
+      if (mutateOnEof || reads > 2) return { done: true };
+      backing.set(bytes.subarray(split), offset);
+      return { done: false, value: backing.subarray(offset, offset + bytes.length - split) };
+    }, async cancel() {}, releaseLock() {} }; } },
+  };
+}
+
+test('PSO1: Buffer subarray at nonzero offset preserves a split UTF-8 code point', async () => {
+  const generated = envelope();
+  generated.id = 'resp_界';
+  const encoded = Buffer.from(JSON.stringify(generated));
+  const split = encoded.indexOf(Buffer.from('界')) + 1;
+  assert.ok(split > 0 && split < encoded.length);
+  assert.equal(encoded[split - 1], Buffer.from('界')[0]);
+  const { model, calls } = harness([() => json(countEnvelope()),
+    () => reusedBufferResponse(generated, { split, offset: 7 })]);
+  assert.deepEqual(await model.select(request()), { refs: [] });
+  assert.equal(calls.length, 2);
+});
+
+test('PSO1: EOF-time mutation cannot rewrite the sole delivered Buffer view', async () => {
+  const count = countEnvelope();
+  const length = Buffer.byteLength(JSON.stringify(count));
+  const { model, calls } = harness([() => reusedBufferResponse(count,
+    { split: length, offset: 5, mutateOnEof: true }), () => json(envelope())]);
+  assert.deepEqual(await model.select(request()), { refs: [] });
+  assert.equal(calls.length, 2);
+});
+
 test('A03: HTTP, redirects, malformed JSON and transport exceptions never disclose bodies or retry', async () => {
   for (const phase of ['count', 'generate']) for (const failure of ['http', 'redirect', 'json', 'throw', 'redirected']) {
     const failed = () => {
