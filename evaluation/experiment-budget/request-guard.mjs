@@ -1201,6 +1201,9 @@ function constructBenchmarkGuard(options, benchmark) {
       if (outcome === 'unknown' || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
         halted = true;
       }
+      // Observed token counts survive a failed ledger write so an operator can settle by hand;
+      // outcome and cost stay null until the ledger accepted them.
+      record.usage = usage;
       try {
         ledger.recordOutcome(actualMicroUsd === null
           ? { attemptId, outcome }
@@ -1212,7 +1215,6 @@ function constructBenchmarkGuard(options, benchmark) {
       }
       record.outcome = outcome;
       record.actualMicroUsd = actualMicroUsd;
-      record.usage = usage;
       record.settledAt = Date.now();
       record.elapsedMs = record.settledAt - startedAt;
       deepFreeze(record);
@@ -1289,6 +1291,7 @@ function constructBenchmarkGuard(options, benchmark) {
   const cairnFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
+    verify();
     const channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);
     validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
@@ -1298,6 +1301,7 @@ function constructBenchmarkGuard(options, benchmark) {
   const stageFetch = (name) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
+    verify();
     const stage = stages[name];
     const snapshot = requestSnapshot(url, requestOptions, stage);
     validateStageBody(snapshot.body, stage);

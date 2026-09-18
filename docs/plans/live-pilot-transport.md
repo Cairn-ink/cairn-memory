@@ -73,24 +73,27 @@ reset or replaced.
   lock failure sends nothing. There are no refunds and no retries inside the
   guard; an external retry is a new reservation.
 - **BG5 Settlement and halt.** HTTP non-2xx → `failed` (null cost); transport
-  error, stage timeout, oversized/malformed response, or missing/invalid usage
-  → `unknown` (null cost); valid usage → `succeeded` with integer-priced actual
-  cost at the stage rates; usage above bounds or above the reservation fails
-  `usage_bound_exceeded` after settlement and the ledger overrun persists.
-  After any `unknown` settlement or overrun observed by this guard,
-  `isHalted()` is true and every further `answerFetch`, `judgeFetch` or
+  error, stage timeout, external abort after reservation, oversized/malformed
+  response, or missing/invalid usage → `unknown` (null cost); valid usage →
+  `succeeded` with integer-priced actual cost at the stage rates. As
+  implemented (round 2): usage above the declared bounds fails
+  `usage_bound_exceeded` after settlement while the ledger stays open; only
+  cost above the reservation overruns the ledger and halts. After any
+  `unknown` settlement, overrun or failed settlement write observed by this
+  guard, `isHalted()` is true and every further `answerFetch`, `judgeFetch` or
   `cairnFetch` fails `paid_work_halted` before reserving. At construction and
-  before every reservation, a ledger attempt with a null outcome that this
-  guard does not own also halts (an unsettled request from another process).
+  before every reservation, any ledger attempt with a null outcome that is not
+  currently in flight on this guard, including this guard's own attempt whose
+  settlement could not be persisted, halts.
 - **BG6 Accounting record.** `attempts()` returns a frozen array, in reservation
   order, of `{attemptId, stage, ledgerChannel, model, endpoint,
   reservedMicroUsd, rates, outcome, actualMicroUsd, usage, startedAt,
   settledAt, elapsedMs}` where `stage ∈ {answer, judge, cairn-count,
   cairn-generation}`, `rates` is `{inputPrice, outputPrice}` copied from the
   stage or channel, `usage` is `{inputTokens, outputTokens}` or null, and
-  timestamps are epoch milliseconds. It never contains bodies, headers, keys, prompts or provider
-  error text. Rate assumptions are the stage `inputPrice`/`outputPrice` as
-  recorded in the extension file.
+  timestamps are epoch milliseconds. It never contains bodies, headers, keys,
+  prompts or provider error text. Rate assumptions are the stage
+  `inputPrice`/`outputPrice` as recorded in the extension file.
 - **BG7 Offline tests** in `evaluation/experiment-budget/test/benchmark-guard.test.mjs`
   with synthetic private ledgers and fake HTTP only, passing on Node 22.16 and
   24: rejection before send (wrong model, wrong endpoint, extra key,
@@ -105,9 +108,10 @@ reset or replaced.
   guards reject the benchmark token and gain no stage; `attempts()` shape and
   redaction. Tests must not read the environment for keys.
 - **BG8 Docs and gates.** `package.json` `test:experiment-request-guard` runs
-  the new file; `docs/experiment-request-guard.md` gains a "Benchmark stages"
-  section (channel mapping, allowlist, halt rule, the explicit `store`/`stream`
-  addition, unknown count-call billing counted conservatively); `CHANGELOG.md`
+  the new file; `docs/experiment-request-guard.md` gains a "Benchmark answer
+  and judge stages" section (channel mapping, allowlist, halt rule, the
+  explicit `store`/`stream` addition, unknown count-call billing counted
+  conservatively); `CHANGELOG.md`
   entry. `npm run test:experiment-request-guard`, `npm test` and `npm run
   validate` pass on both Node lines with `git diff --check` clean.
 

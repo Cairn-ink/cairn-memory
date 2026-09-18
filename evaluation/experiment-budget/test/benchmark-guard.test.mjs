@@ -16,19 +16,20 @@ import { experimentPolicy } from '../../live/session.mjs';
 const filename = 'experiment-benchmark-extension.json';
 const key = 'synthetic-benchmark-parent-key-never-expose';
 const secretPrompt = 'synthetic-private-question-never-expose';
+const ANSWER_MODEL = 'gpt-4.1-mini-2025-04-14';
 const JUDGE_MODEL = 'gpt-4o-2024-08-06';
 const urls = { host: 'https://api.openai.com/v1/chat/completions',
   count: 'https://api.openai.com/v1/responses/input_tokens', generation: 'https://api.openai.com/v1/responses' };
 const price = (microUsdNumerator, tokenDenominator) => ({ microUsdNumerator, tokenDenominator });
 const stages = (overrides = {}) => ({
-  answer: { endpoint: urls.host, model: DEFAULT_MODEL, reservedMicroUsd: 60_000, maxRequestBytes: 1_500_000,
+  answer: { endpoint: urls.host, model: ANSWER_MODEL, reservedMicroUsd: 60_000, maxRequestBytes: 1_500_000,
     maxResponseBytes: 262_144, timeoutMs: 5_000, maxInputTokens: 125_000, maxOutputTokens: 512,
     inputTokenFraming: 1_024, inputPrice: price(2, 5), outputPrice: price(8, 5), ...(overrides.answer ?? {}) },
   judge: { endpoint: urls.host, model: JUDGE_MODEL, reservedMicroUsd: 11_000, maxRequestBytes: 100_000,
     maxResponseBytes: 65_536, timeoutMs: 5_000, maxInputTokens: 4_096, maxOutputTokens: 16,
     inputTokenFraming: 256, inputPrice: price(5, 2), outputPrice: price(10, 1), ...(overrides.judge ?? {}) },
 });
-const answerBody = (overrides = {}) => ({ model: DEFAULT_MODEL,
+const answerBody = (overrides = {}) => ({ model: ANSWER_MODEL,
   messages: [{ role: 'system', content: 'Answer using only the supplied evidence.' },
     { role: 'user', content: JSON.stringify({ question: { text: secretPrompt, date: 'Tuesday' }, evidence: [] }) }],
   temperature: 0, max_tokens: 512, n: 1, store: false, stream: false, ...overrides });
@@ -55,19 +56,29 @@ const fake = (calls, host = (body) => chatEnvelope(body.model)) => async (url, o
   return Response.json(host(body));
 };
 
+// node:test runs after-hooks in registration order, so the fixture's single hook (registered first)
+// drains any in-flight work, closes every tracked guard and only then removes the ledger directory.
 function fixture(t, { limitMicroUsd = 50_000_000, requestCap = 1_000, stageOverrides = {}, provision = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-benchmark-guard-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const tracked = [];
+  const drains = [];
+  t.after(async () => {
+    for (const drain of drains) await drain();
+    for (const guard of tracked) guard.close();
+    rmSync(root, { recursive: true, force: true });
+  });
   const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd, requestCap };
   createExperimentBudget(ledger).close();
   const policy = experimentPolicy();
   guards.createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('No setup transport') }).close();
   const authorization = { ledger, policy, authorizationId: 'synthetic-benchmark-approval', stages: stages(stageOverrides) };
   return { root, ledger, policy, authorization,
-    benchmarkExtension: provision ? guards.authorizeBenchmarkExtension(authorization) : undefined };
+    benchmarkExtension: provision ? guards.authorizeBenchmarkExtension(authorization) : undefined,
+    track: (guard) => { tracked.push(guard); return guard; },
+    drain: (settle) => { drains.push(settle); } };
 }
-const make = (f, fetchImpl) => guards.createBenchmarkExperimentRequestGuard({ ledger: f.ledger, policy: f.policy,
-  benchmarkExtension: f.benchmarkExtension, fetchImpl });
+const make = (f, fetchImpl) => f.track(guards.createBenchmarkExperimentRequestGuard({ ledger: f.ledger,
+  policy: f.policy, benchmarkExtension: f.benchmarkExtension, fetchImpl }));
 const file = (f) => join(f.ledger.directory, filename);
 const state = (ledger) => { const h = reopenExperimentBudget(ledger); try { return h.getState(); } finally { h.close(); } };
 const noTransport = () => assert.fail('transport must not be invoked');
@@ -96,7 +107,7 @@ test('BG1 authorization writes a private checkpointed record, is idempotent, and
 test('BG1 invalid stages, missing binding and unsettled ledgers fail before any authorization file exists', (t) => {
   const f = fixture(t, { provision: false });
   const attempt = (stageOverrides) => () => guards.authorizeBenchmarkExtension({ ...f.authorization, stages: stages(stageOverrides) });
-  assert.throws(attempt({ judge: { model: DEFAULT_MODEL } }), guardError('invalid_extension'));
+  assert.throws(attempt({ judge: { model: ANSWER_MODEL } }), guardError('invalid_extension'));
   assert.throws(attempt({ answer: { model: JUDGE_MODEL } }), guardError('invalid_extension'));
   assert.throws(attempt({ answer: { endpoint: urls.generation } }), guardError('invalid_extension'));
   assert.throws(attempt({ answer: { reservedMicroUsd: 100 } }), guardError('invalid_extension'));
@@ -126,11 +137,10 @@ test('BG1 invalid stages, missing binding and unsettled ledgers fail before any 
 test('BG2 handle shape, denied host channel, and older guards never gain the stages', async (t) => {
   const f = fixture(t);
   const guard = make(f, noTransport);
-  t.after(() => guard.close());
   assert.deepEqual(Object.keys(guard).sort(), ['answerFetch', 'attempts', 'cairnFetch', 'close', 'getState',
     'hostFetch', 'isHalted', 'judgeFetch', 'policy', 'stages']);
   assert.equal(Object.isFrozen(guard), true);
-  assert.equal(guard.stages.answer.model, DEFAULT_MODEL);
+  assert.equal(guard.stages.answer.model, ANSWER_MODEL);
   assert.equal(guard.isHalted(), false);
   await assert.rejects(guard.hostFetch(urls.host, request(answerBody())), guardError('unsupported_request'));
   assert.deepEqual(guard.attempts(), []);
@@ -150,8 +160,7 @@ test('BG2 handle shape, denied host channel, and older guards never gain the sta
     guardError('invalid_extension'));
   assert.throws(() => guards.createBasisModelsExperimentRequestGuard({ ...base, basisModelsExtension: token }),
     guardError('invalid_extension'));
-  const baseline = guards.createExperimentRequestGuard(base);
-  t.after(() => baseline.close());
+  const baseline = f.track(guards.createExperimentRequestGuard(base));
   assert.equal(baseline.answerFetch, undefined);
   assert.equal(baseline.judgeFetch, undefined);
   const rationale = guards.authorizeRationaleExtension({ ledger: f.ledger, policy: f.policy, authorizationId: 'synthetic-rationale' });
@@ -164,10 +173,9 @@ test('BG3 every disallowed stage request is rejected before reservation or trans
   const f = fixture(t);
   let sends = 0;
   const guard = make(f, () => { sends += 1; assert.fail('must not send'); });
-  t.after(() => guard.close());
   const cases = [
     ['answer', answerBody({ model: JUDGE_MODEL }), 'unsupported_request'],
-    ['judge', { ...judgeBody(), model: DEFAULT_MODEL }, 'unsupported_request'],
+    ['judge', { ...judgeBody(), model: ANSWER_MODEL }, 'unsupported_request'],
     ['answer', answerBody({ top_p: 1 }), 'unsupported_request'],
     ['answer', answerBody({ temperature: 0.5 }), 'unsupported_request'],
     ['answer', answerBody({ n: 2 }), 'unsupported_request'],
@@ -205,14 +213,13 @@ test('BG3/BG6 the judge and answer stages pass the caller body through unchanged
   const f = fixture(t);
   const calls = [];
   const guard = make(f, fake(calls));
-  t.after(() => guard.close());
   const judgeResponse = await guard.judgeFetch(urls.host, request(judgeBody()));
   assert.equal((await judgeResponse.json()).choices[0].message.content, 'Kyoto');
   assert.equal(calls[0].rawBody, JSON.stringify(judgeBody()));
   assert.equal(new Headers(calls[0].headers).get('authorization'), `Bearer ${key}`);
   assert.equal(calls[0].url, urls.host);
   const answerResponse = await guard.answerFetch(urls.host, request(answerBody()));
-  assert.equal((await answerResponse.json()).model, DEFAULT_MODEL);
+  assert.equal((await answerResponse.json()).model, ANSWER_MODEL);
   assert.equal(calls[1].rawBody, JSON.stringify(answerBody()));
   const attempts = guard.attempts();
   assert.equal(Object.isFrozen(attempts), true);
@@ -226,7 +233,7 @@ test('BG3/BG6 the judge and answer stages pass the caller body through unchanged
     ({ stage, ledgerChannel, model, endpoint, reservedMicroUsd, outcome, actualMicroUsd, usage })), [
     { stage: 'judge', ledgerChannel: 'host-completion', model: JUDGE_MODEL, endpoint: urls.host, reservedMicroUsd: 11_000,
       outcome: 'succeeded', actualMicroUsd: 155, usage: { inputTokens: 50, outputTokens: 3 } },
-    { stage: 'answer', ledgerChannel: 'host-completion', model: DEFAULT_MODEL, endpoint: urls.host, reservedMicroUsd: 60_000,
+    { stage: 'answer', ledgerChannel: 'host-completion', model: ANSWER_MODEL, endpoint: urls.host, reservedMicroUsd: 60_000,
       outcome: 'succeeded', actualMicroUsd: 25, usage: { inputTokens: 50, outputTokens: 3 } },
   ]);
   for (const item of attempts) {
@@ -252,7 +259,6 @@ test('BG4 reservation precedes transport, failures never refund, and caps stop s
     observedDuringSend = state(f.ledger);
     return Response.json(chatEnvelope(JSON.parse(options.body).model), { status: 500 });
   });
-  t.after(() => guard.close());
   await assert.rejects(guard.answerFetch(urls.host, request(answerBody())), guardError('http_failed'));
   assert.equal(observedDuringSend.reservedMicroUsd, 60_000);
   assert.equal(observedDuringSend.attempts[0].outcome, null);
@@ -265,7 +271,6 @@ test('BG4 reservation precedes transport, failures never refund, and caps stop s
   const g2 = fixture(t, { requestCap: 1 });
   const calls = [];
   const capped = make(g2, fake(calls));
-  t.after(() => capped.close());
   await capped.judgeFetch(urls.host, request(judgeBody()));
   await assert.rejects(capped.judgeFetch(urls.host, request(judgeBody())), (error) =>
     error.code === 'request_cap_exceeded' && error.name === 'ExperimentBudgetError');
@@ -280,13 +285,12 @@ test('BG5 timeout, malformed response and missing usage settle unknown and halt 
     }), 'request_timeout'],
     ['malformed', async () => new Response('not json', { status: 200 }), 'invalid_response'],
     ['missing-usage', async () => Response.json({ ...chatEnvelope(JUDGE_MODEL), usage: undefined }), 'invalid_response'],
-    ['wrong-model', async () => Response.json(chatEnvelope(DEFAULT_MODEL)), 'invalid_response'],
+    ['wrong-model', async () => Response.json(chatEnvelope(ANSWER_MODEL)), 'invalid_response'],
     ['transport-throw', async () => { throw new Error(secretPrompt); }, 'transport_failed'],
   ]) {
     const f = fixture(t, { stageOverrides: { judge: { timeoutMs: 20 } } });
     let sends = 0;
     const guard = make(f, (url, options) => { sends += 1; return fetchImpl(url, options); });
-    t.after(() => guard.close());
     await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError(code), label);
     assert.equal(guard.isHalted(), true, label);
     assert.deepEqual(guard.attempts().map((item) => [item.stage, item.outcome, item.actualMicroUsd, item.usage]),
@@ -306,7 +310,6 @@ test('BG5 an overrun response persists, halts this guard, and blocks the ledger 
   const f = fixture(t);
   const guard = make(f, async () => Response.json(chatEnvelope(JUDGE_MODEL,
     { usage: { prompt_tokens: 4_000, completion_tokens: 10, total_tokens: 4_010 } })));
-  t.after(() => guard.close());
   const within = await guard.judgeFetch(urls.host, request(judgeBody()));
   assert.equal((await within.json()).usage.prompt_tokens, 4_000);
   assert.equal(guard.attempts()[0].outcome, 'succeeded');
@@ -315,14 +318,12 @@ test('BG5 an overrun response persists, halts this guard, and blocks the ledger 
   const overrun = fixture(t);
   const guard2 = make(overrun, async () => Response.json(chatEnvelope(JUDGE_MODEL,
     { usage: { prompt_tokens: 4_096, completion_tokens: 16, total_tokens: 4_112 } })));
-  t.after(() => guard2.close());
   await assert.rejects(guard2.judgeFetch(urls.host, request(judgeBody())), guardError('usage_bound_exceeded'));
   assert.equal(guard2.attempts()[0].actualMicroUsd, 10_400);
   assert.equal(guard2.isHalted(), false);
   const big = fixture(t);
   const guard3 = make(big, async () => Response.json(chatEnvelope(JUDGE_MODEL,
     { usage: { prompt_tokens: 4_096, completion_tokens: 16_000, total_tokens: 20_096 } })));
-  t.after(() => guard3.close());
   await assert.rejects(guard3.judgeFetch(urls.host, request(judgeBody())), guardError('usage_bound_exceeded'));
   assert.equal(guard3.attempts()[0].outcome, 'succeeded');
   assert.equal(guard3.attempts()[0].actualMicroUsd, 170_240);
@@ -330,7 +331,6 @@ test('BG5 an overrun response persists, halts this guard, and blocks the ledger 
   assert.equal(guard3.getState().state, 'overrun');
   await assert.rejects(guard3.answerFetch(urls.host, request(answerBody())), guardError('paid_work_halted'));
   const guard4 = make(big, noTransport);
-  t.after(() => guard4.close());
   await assert.rejects(guard4.answerFetch(urls.host, request(answerBody())), (error) =>
     error.code === 'budget_blocked' && error.name === 'ExperimentBudgetError');
 });
@@ -342,19 +342,16 @@ test('BG5 a foreign unsettled ledger attempt halts a benchmark guard; a fresh gu
   foreign.reserve({ attemptId, channel: 'cairn-count', reservedMicroUsd: 1 });
   foreign.close();
   const halted = make(f, noTransport);
-  t.after(() => halted.close());
   assert.equal(halted.isHalted(), true);
   await assert.rejects(halted.answerFetch(urls.host, request(answerBody())), guardError('paid_work_halted'));
   assert.equal(halted.getState().requestCount, 1);
   const calls = [];
   const live = make(f, fake(calls));
-  t.after(() => live.close());
   assert.equal(live.isHalted(), true);
   const settle = reopenExperimentBudget(f.ledger);
   settle.recordOutcome({ attemptId, outcome: 'failed' });
   settle.close();
   const fresh = make(f, fake(calls));
-  t.after(() => fresh.close());
   assert.equal(fresh.isHalted(), false);
   await fresh.judgeFetch(urls.host, request(judgeBody()));
   assert.equal(calls.length, 1);
@@ -400,7 +397,6 @@ test('BG7 the actual OpenAI adapter runs baseline Cairn methods through the benc
   const f = fixture(t);
   const calls = [];
   const guard = make(f, fake(calls));
-  t.after(() => guard.close());
   const model = createOpenAIModel({ apiKey: key, fetchImpl: guard.cairnFetch });
   assert.deepEqual(await model.extract({ system: 'Synthetic extraction.', input: extractInput(), maxOutputTokens: 1024,
     signal: new AbortController().signal }), { items: [] });
@@ -432,7 +428,6 @@ test('BG5/BG7 an external abort before send settles nothing and sends nothing', 
   const f = fixture(t);
   let sends = 0;
   const guard = make(f, () => { sends += 1; assert.fail('must not send'); });
-  t.after(() => guard.close());
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(guard.answerFetch(urls.host, request(answerBody(), controller.signal)), guardError('request_aborted'));
@@ -452,7 +447,6 @@ test('BG5 a ledger lock during settlement leaves the attempt unsettled and halts
     lock.exec('BEGIN IMMEDIATE');
     return Response.json(chatEnvelope(JUDGE_MODEL));
   });
-  t.after(() => guard.close());
   await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), (error) =>
     error.name === 'ExperimentBudgetError' && error.code === 'ledger_busy');
   lock.exec('ROLLBACK');
@@ -462,20 +456,19 @@ test('BG5 a ledger lock during settlement leaves the attempt unsettled and halts
   assert.equal(stuck.attempts.length, 1);
   assert.equal(stuck.attempts[0].outcome, null);
   assert.equal(stuck.reservedMicroUsd, 11_000);
-  assert.deepEqual(guard.attempts().map((item) => [item.outcome, item.settledAt]), [[null, null]]);
+  assert.deepEqual(guard.attempts().map((item) => [item.outcome, item.actualMicroUsd, item.settledAt, item.usage]),
+    [[null, null, null, { inputTokens: 50, outputTokens: 3 }]]);
   await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError('paid_work_halted'));
   await assert.rejects(guard.answerFetch(urls.host, request(answerBody())), guardError('paid_work_halted'));
   assert.equal(sends, 1);
   assert.equal(guard.getState().requestCount, 1);
   const stillHalted = make(f, noTransport);
-  t.after(() => stillHalted.close());
   assert.equal(stillHalted.isHalted(), true);
   const settle = reopenExperimentBudget(f.ledger);
   settle.recordOutcome({ attemptId: stuck.attempts[0].attemptId, outcome: 'unknown' });
   settle.close();
   const calls = [];
   const fresh = make(f, fake(calls));
-  t.after(() => fresh.close());
   assert.equal(fresh.isHalted(), false);
   await fresh.judgeFetch(urls.host, request(judgeBody()));
   assert.equal(calls.length, 1);
@@ -490,7 +483,6 @@ test('BG5 an external abort after reservation settles unknown, keeps the reserva
     options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
     controller.abort();
   }); });
-  t.after(() => guard.close());
   await assert.rejects(guard.answerFetch(urls.host, request(answerBody(), controller.signal)), guardError('request_aborted'));
   assert.equal(sends, 1);
   assert.deepEqual(guard.attempts().map((item) => [item.stage, item.outcome, item.actualMicroUsd]), [['answer', 'unknown', null]]);
@@ -505,7 +497,6 @@ test('BG5 a foreign unsettled attempt that appears after construction halts befo
   const f = fixture(t);
   let sends = 0;
   const guard = make(f, () => { sends += 1; assert.fail('must not send'); });
-  t.after(() => guard.close());
   assert.equal(guard.isHalted(), false);
   const foreign = reopenExperimentBudget(f.ledger);
   foreign.reserve({ attemptId: randomUUID(), channel: 'cairn-generation', reservedMicroUsd: 1 });
@@ -525,6 +516,8 @@ test('BG4/BG5 two concurrent in-flight calls both reserve, block close, and both
   }));
   const pendingJudge = guard.judgeFetch(urls.host, request(judgeBody()));
   const pendingAnswer = guard.answerFetch(urls.host, request(answerBody()));
+  // An assertion failure below must not leak in-flight work: release, settle, then the fixture closes.
+  f.drain(async () => { for (const release of releases) release(); await Promise.allSettled([pendingJudge, pendingAnswer]); });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(releases.length, 2);
   assert.equal(guard.getState().requestCount, 2);
@@ -548,7 +541,6 @@ test('BG5 oversized and non-Response transport results settle unknown and halt',
     const f = fixture(t);
     let sends = 0;
     const guard = make(f, (url, options) => { sends += 1; return fetchImpl(url, options); });
-    t.after(() => guard.close());
     await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError(code), label);
     assert.deepEqual(guard.attempts().map((item) => [item.outcome, item.actualMicroUsd]), [['unknown', null]], label);
     assert.equal(guard.isHalted(), true, label);
@@ -574,7 +566,6 @@ test('BG3 the 128-message boundary is accepted and 129 messages are rejected bef
   const f = fixture(t);
   const calls = [];
   const guard = make(f, fake(calls));
-  t.after(() => guard.close());
   const messages = (count) => Array.from({ length: count }, (_, index) => ({ role: index % 2 ? 'assistant' : 'user', content: `turn ${index}` }));
   await assert.rejects(guard.judgeFetch(urls.host, request({ ...judgeBody(), messages: messages(129) })), guardError('unsupported_request'));
   assert.equal(calls.length, 0);

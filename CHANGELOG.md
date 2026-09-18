@@ -12,9 +12,10 @@
   and baseline `cairnFetch`, denies the host channel, passes stage bodies
   through with an explicit allowlist (`temperature: 0`, `n: 1`, `max_tokens`,
   `store: false`, `stream: false`), records each attempt's stage, model, rate
-  assumptions and priced usage without bodies or keys, and halts all further paid work after
-  any unknown outcome, overrun or foreign unsettled attempt. Offline synthetic
-  tests only; no live command, key discovery or paid call is added.
+  assumptions and priced usage without bodies or keys, and halts all further
+  paid work after any unknown outcome, overrun or any unsettled attempt not in
+  flight on this guard. Offline synthetic tests only; no live command, key
+  discovery or paid call is added.
 
 ## Unreleased — evaluator-only Python reference rendering
 

@@ -335,7 +335,11 @@ the ledger overrun persists and the guard halts. The unsettled-attempt check
 runs at construction and again before every reservation: any ledger attempt
 with a null outcome that is not currently in flight on this guard, including
 this guard's own attempt whose settlement could not be persisted, halts new
-paid work. After any `unknown` outcome, overrun or failed settlement,
+paid work. The check and the reservation are two SQLite transactions, so a
+foreign reservation landing between them is caught before the next
+reservation rather than this one; that is acceptable for the documented
+single-operator exclusive-intent use and must be revisited before any
+multi-process use. After any `unknown` outcome, overrun or failed settlement,
 `isHalted()` reports the cached halt flag and every further `answerFetch`,
 `judgeFetch` or `cairnFetch` fails `paid_work_halted` before reserving.
 Additional fixed error: `paid_work_halted`. A count call's provider billing
@@ -350,12 +354,13 @@ copies the stage or channel `inputPrice`/`outputPrice`; it never contains
 bodies, headers, keys or provider text. Rate assumptions are the stage prices
 recorded in the extension file, not a provider invoice. This record is
 process-local: the ledger persists only channel, reservation, outcome and
-cost, so durable per-attempt stage records and replay prevention across
-process restarts are the runner's responsibility (see the runner packet's
-PP3/PP7). Constructing this guard or passing its tests authorizes no paid run,
-and `evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses
-synthetic ledgers with fake HTTP only. See
-[acceptance](plans/live-pilot-transport.md).
+cost. Durable per-case stage records, checkpoint state and no-replay-on-resume
+are the runner's responsibility, per the issue #180 handoff's P2 bullets
+("persist … checkpoint state" and "checkpoint/no retry"), delivered with P2
+together with its plan `docs/plans/public-pilot-runner.md`. Constructing this
+guard or passing its tests authorizes no paid run, and
+`evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses synthetic
+ledgers with fake HTTP only. See [acceptance](plans/live-pilot-transport.md).
 
 ## Limits that must remain visible
 
