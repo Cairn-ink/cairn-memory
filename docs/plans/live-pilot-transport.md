@@ -84,10 +84,11 @@ reset or replaced.
   guard does not own also halts (an unsettled request from another process).
 - **BG6 Accounting record.** `attempts()` returns a frozen array, in reservation
   order, of `{attemptId, stage, ledgerChannel, model, endpoint,
-  reservedMicroUsd, outcome, actualMicroUsd, usage, startedAt, settledAt,
-  elapsedMs}` where `stage ∈ {answer, judge, cairn-count, cairn-generation}`,
-  `usage` is `{inputTokens, outputTokens}` or null, and timestamps are epoch
-  milliseconds. It never contains bodies, headers, keys, prompts or provider
+  reservedMicroUsd, rates, outcome, actualMicroUsd, usage, startedAt,
+  settledAt, elapsedMs}` where `stage ∈ {answer, judge, cairn-count,
+  cairn-generation}`, `rates` is `{inputPrice, outputPrice}` copied from the
+  stage or channel, `usage` is `{inputTokens, outputTokens}` or null, and
+  timestamps are epoch milliseconds. It never contains bodies, headers, keys, prompts or provider
   error text. Rate assumptions are the stage `inputPrice`/`outputPrice` as
   recorded in the extension file.
 - **BG7 Offline tests** in `evaluation/experiment-budget/test/benchmark-guard.test.mjs`

@@ -325,25 +325,37 @@ amount before the injected transport runs; exhausted money or requests,
 an overrun ledger or a lock failure sends nothing, and nothing is refunded.
 
 Settlement follows the baseline rules: non-2xx → `failed`; transport failure,
-stage timeout, oversized or malformed response, or missing/invalid usage →
-`unknown` with null cost; valid usage → `succeeded` with integer-priced cost
-at the stage rates, and usage beyond the bounds or the reservation fails
-`usage_bound_exceeded` after the overrun persists. After any `unknown`
-outcome or overrun seen by this guard, and whenever the ledger holds an
-unsettled attempt this guard does not own, `isHalted()` is true and every
-further `answerFetch`, `judgeFetch` or `cairnFetch` fails `paid_work_halted`
-before reserving. A count call's provider billing is unknown and remains
-reserved at the full channel amount with null actual cost.
+stage timeout, external abort after reservation, oversized or malformed
+response, or missing/invalid usage → `unknown` with null cost; valid usage →
+`succeeded` with integer-priced cost at the stage rates. Two priced cases are
+distinct: usage beyond the declared token bounds but within the reservation
+fails `usage_bound_exceeded` while the ledger stays open and the guard does
+not halt; cost above the reservation also fails `usage_bound_exceeded`, but
+the ledger overrun persists and the guard halts. The unsettled-attempt check
+runs at construction and again before every reservation: any ledger attempt
+with a null outcome that is not currently in flight on this guard, including
+this guard's own attempt whose settlement could not be persisted, halts new
+paid work. After any `unknown` outcome, overrun or failed settlement,
+`isHalted()` reports the cached halt flag and every further `answerFetch`,
+`judgeFetch` or `cairnFetch` fails `paid_work_halted` before reserving.
+Additional fixed error: `paid_work_halted`. A count call's provider billing
+is unknown and remains reserved at the full channel amount with null actual
+cost.
 
 `attempts()` returns this guard's attempts in reservation order as
-`{attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd,
+`{attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd, rates,
 outcome, actualMicroUsd, usage, startedAt, settledAt, elapsedMs}`, where
-`stage` is `answer`, `judge`, `cairn-count` or `cairn-generation`; it never
-contains bodies, headers, keys or provider text. Rate assumptions are the
-stage prices recorded in the extension file, not a provider invoice.
-Constructing this guard or passing its tests authorizes no paid run, and
-`evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses synthetic
-ledgers with fake HTTP only.
+`stage` is `answer`, `judge`, `cairn-count` or `cairn-generation` and `rates`
+copies the stage or channel `inputPrice`/`outputPrice`; it never contains
+bodies, headers, keys or provider text. Rate assumptions are the stage prices
+recorded in the extension file, not a provider invoice. This record is
+process-local: the ledger persists only channel, reservation, outcome and
+cost, so durable per-attempt stage records and replay prevention across
+process restarts are the runner's responsibility (see the runner packet's
+PP3/PP7). Constructing this guard or passing its tests authorizes no paid run,
+and `evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses
+synthetic ledgers with fake HTTP only. See
+[acceptance](plans/live-pilot-transport.md).
 
 ## Limits that must remain visible
 

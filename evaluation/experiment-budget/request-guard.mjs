@@ -51,7 +51,7 @@ const BENCHMARK_KIND = Object.freeze({
 });
 const BENCHMARK_STAGES = Object.freeze(['answer', 'judge']);
 const BENCHMARK_MODELS = Object.freeze({
-  answer: Object.freeze([DEFAULT_MODEL]),
+  answer: Object.freeze(['gpt-4.1-mini-2025-04-14']),
   judge: Object.freeze(['gpt-4o-2024-08-06']),
 });
 const STAGE_BODY_KEYS = Object.freeze(['max_tokens', 'messages', 'model', 'n', 'store', 'stream', 'temperature']);
@@ -1047,20 +1047,14 @@ function validateStage(name, value) {
 }
 
 function benchmarkConfiguration(options) {
-  const policy = validateConstructor({ ledger: options.ledger, policy: options.policy, fetchImpl: () => {} });
-  if (typeof options.authorizationId !== 'string'
-    || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/u.test(options.authorizationId)) fail('invalid_extension');
-  if (Object.keys(CHANNELS).some((name) => policy[name].model !== DEFAULT_MODEL)
-    || policy.cairnCount.maxInputTokens !== 7024 || policy.cairnGeneration.maxInputTokens !== 7024
-    || policy.cairnGeneration.maxOutputTokens !== 1024) fail('invalid_extension');
+  // Reuse the exact baseline gate; the two chat stages grant no Cairn method or extraction model.
+  const { version, authorizationId, ledger, policy } = extensionConfiguration({ ledger: options.ledger,
+    policy: options.policy, authorizationId: options.authorizationId });
   let stages;
   try { stages = structuredClone(options.stages); } catch { fail('invalid_extension'); }
   exactKeys(stages, BENCHMARK_STAGES, 'invalid_extension');
   for (const name of BENCHMARK_STAGES) validateStage(name, stages[name]);
-  const ledger = structuredClone(options.ledger);
-  ledger.directory = path.resolve(ledger.directory);
-  return { version: 1, authorizationId: options.authorizationId, ledger, policy,
-    method: BENCHMARK_KIND.method, stages: deepFreeze(stages) };
+  return { version, authorizationId, ledger, policy, method: BENCHMARK_KIND.method, stages: deepFreeze(stages) };
 }
 
 function verifyBenchmarkExtension(extension, ledger, policy) {
@@ -1159,37 +1153,40 @@ function constructBenchmarkGuard(options, benchmark) {
     if (error instanceof ExperimentBudgetError) throw error;
     fail('ledger_failed');
   }
-  const owned = new Set();
+  const inFlightIds = new Set();
   const records = [];
   let closed = false;
   let inFlight = 0;
   let halted = false;
-  const unsettledForeign = (state) => state.attempts.some((attempt) =>
-    attempt.outcome === null && !owned.has(attempt.attemptId));
+  // Any unsettled ledger attempt that is not currently in flight on this guard halts new paid work,
+  // including this guard's own attempt whose settlement failed to persist.
+  const unsettled = (state) => state.attempts.some((attempt) =>
+    attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
   const verify = () => {
     verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
     const state = ledger.getState();
     verifyExtensionCheckpoint(benchmark, state);
     return state;
   };
-  try { if (unsettledForeign(verify())) halted = true; }
+  try { if (unsettled(verify())) halted = true; }
   catch (error) { ledger.close(); throw error; }
   const stages = benchmark.stages;
   const fetchImpl = options.fetchImpl;
 
-  const send = async (stage, kind, ledgerChannel, channel, snapshot, requestedOutputTokens) => {
+  const send = async (stage, kind, channel, snapshot, requestedOutputTokens) => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the capability and the shared ledger after those callbacks, before reserving.
-    if (unsettledForeign(verify())) { halted = true; fail('paid_work_halted'); }
+    if (unsettled(verify())) { halted = true; fail('paid_work_halted'); }
     const attemptId = randomUUID();
     const startedAt = Date.now();
-    ledger.reserve({ attemptId, channel: ledgerChannel, reservedMicroUsd: channel.reservedMicroUsd });
-    owned.add(attemptId);
-    const record = { attemptId, stage, ledgerChannel, model: channel.model, endpoint: channel.endpoint,
-      reservedMicroUsd: channel.reservedMicroUsd, outcome: null, actualMicroUsd: null, usage: null,
-      startedAt, settledAt: null, elapsedMs: null };
+    ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd });
+    inFlightIds.add(attemptId);
+    const record = { attemptId, stage, ledgerChannel: CHANNELS[kind], model: channel.model,
+      endpoint: channel.endpoint, reservedMicroUsd: channel.reservedMicroUsd,
+      rates: { inputPrice: { ...channel.inputPrice }, outputPrice: { ...channel.outputPrice } },
+      outcome: null, actualMicroUsd: null, usage: null, startedAt, settledAt: null, elapsedMs: null };
     records.push(record);
     inFlight += 1;
     const controller = new AbortController();
@@ -1201,18 +1198,24 @@ function constructBenchmarkGuard(options, benchmark) {
     const settle = (outcome, actualMicroUsd, usage = null) => {
       if (settled) return;
       settled = true;
-      ledger.recordOutcome(actualMicroUsd === null
-        ? { attemptId, outcome }
-        : { attemptId, outcome, actualMicroUsd });
+      if (outcome === 'unknown' || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
+        halted = true;
+      }
+      try {
+        ledger.recordOutcome(actualMicroUsd === null
+          ? { attemptId, outcome }
+          : { attemptId, outcome, actualMicroUsd });
+      } catch (error) {
+        // The attempt stays unsettled in the ledger; no later paid work may proceed.
+        halted = true;
+        throw error;
+      }
       record.outcome = outcome;
       record.actualMicroUsd = actualMicroUsd;
       record.usage = usage;
       record.settledAt = Date.now();
       record.elapsedMs = record.settledAt - startedAt;
-      Object.freeze(record);
-      if (outcome === 'unknown' || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
-        halted = true;
-      }
+      deepFreeze(record);
     };
     try {
       let response;
@@ -1278,6 +1281,7 @@ function constructBenchmarkGuard(options, benchmark) {
     } finally {
       clearTimeout(timer);
       snapshot.signal.removeEventListener('abort', externalAbort);
+      inFlightIds.delete(attemptId);
       inFlight -= 1;
     }
   };
@@ -1288,7 +1292,7 @@ function constructBenchmarkGuard(options, benchmark) {
     const channel = policy[kind];
     const snapshot = requestSnapshot(url, requestOptions, channel);
     validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
-    return send(CHANNELS[kind], kind, CHANNELS[kind], channel, snapshot,
+    return send(CHANNELS[kind], kind, channel, snapshot,
       kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0);
   };
   const stageFetch = (name) => async (url, requestOptions) => {
@@ -1297,7 +1301,7 @@ function constructBenchmarkGuard(options, benchmark) {
     const stage = stages[name];
     const snapshot = requestSnapshot(url, requestOptions, stage);
     validateStageBody(snapshot.body, stage);
-    return send(name, 'hostCompletion', CHANNELS.hostCompletion, stage, snapshot, snapshot.body.max_tokens);
+    return send(name, 'hostCompletion', stage, snapshot, snapshot.body.max_tokens);
   };
 
   return Object.freeze({
@@ -1315,8 +1319,7 @@ function constructBenchmarkGuard(options, benchmark) {
       return ledger.getState();
     },
     attempts() {
-      return Object.freeze(records.map((record) => Object.freeze({ ...record,
-        usage: record.usage === null ? null : Object.freeze({ ...record.usage }) })));
+      return Object.freeze(records.map((record) => deepFreeze(structuredClone(record))));
     },
     isHalted() { return halted; },
     close() {

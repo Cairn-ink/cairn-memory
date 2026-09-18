@@ -4,6 +4,7 @@ import { chmodSync, lstatSync, mkdtempSync, readFileSync, rmSync, unlinkSync, wr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL } from '../../../adapters/openai/profiles.mjs';
 import { schemasFor } from '../../../adapters/openai/schemas.mjs';
@@ -137,11 +138,18 @@ test('BG2 handle shape, denied host channel, and older guards never gain the sta
   const base = { ledger: f.ledger, policy: f.policy, fetchImpl: noTransport };
   const token = f.benchmarkExtension;
   assert.throws(() => guards.createExtendedExperimentRequestGuard({ ...base, extension: token }), guardError('invalid_extension'));
-  assert.throws(() => guards.createReconciliationExperimentRequestGuard({ ...base, extension: token, reconciliationExtension: token }));
-  assert.throws(() => guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension: token }));
-  assert.throws(() => guards.createCandidateQualificationExperimentRequestGuard({ ...base, candidateQualificationExtension: token }));
-  assert.throws(() => guards.createRationaleExperimentRequestGuard({ ...base, rationaleExtension: token }));
-  assert.throws(() => guards.createChecklistSelectionExperimentRequestGuard({ ...base, checklistSelectionExtension: token }));
+  assert.throws(() => guards.createReconciliationExperimentRequestGuard({ ...base, extension: token, reconciliationExtension: token }),
+    guardError('invalid_extension'));
+  assert.throws(() => guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension: token }), guardError('invalid_extension'));
+  assert.throws(() => guards.createCandidateQualificationExperimentRequestGuard({ ...base, candidateQualificationExtension: token }),
+    guardError('invalid_extension'));
+  assert.throws(() => guards.createRationaleExperimentRequestGuard({ ...base, rationaleExtension: token }), guardError('invalid_extension'));
+  assert.throws(() => guards.createChecklistSelectionExperimentRequestGuard({ ...base, checklistSelectionExtension: token }),
+    guardError('invalid_extension'));
+  assert.throws(() => guards.createRationaleModelsExperimentRequestGuard({ ...base, rationaleModelsExtension: token }),
+    guardError('invalid_extension'));
+  assert.throws(() => guards.createBasisModelsExperimentRequestGuard({ ...base, basisModelsExtension: token }),
+    guardError('invalid_extension'));
   const baseline = guards.createExperimentRequestGuard(base);
   t.after(() => baseline.close());
   assert.equal(baseline.answerFetch, undefined);
@@ -209,7 +217,11 @@ test('BG3/BG6 the judge and answer stages pass the caller body through unchanged
   const attempts = guard.attempts();
   assert.equal(Object.isFrozen(attempts), true);
   assert.deepEqual(attempts.map((item) => Object.keys(item).sort()), Array(2).fill(['actualMicroUsd', 'attemptId',
-    'elapsedMs', 'endpoint', 'ledgerChannel', 'model', 'outcome', 'reservedMicroUsd', 'settledAt', 'stage', 'startedAt', 'usage']));
+    'elapsedMs', 'endpoint', 'ledgerChannel', 'model', 'outcome', 'rates', 'reservedMicroUsd', 'settledAt', 'stage',
+    'startedAt', 'usage']));
+  assert.deepEqual(attempts.map((item) => item.rates), [
+    { inputPrice: price(5, 2), outputPrice: price(10, 1) }, { inputPrice: price(2, 5), outputPrice: price(8, 5) }]);
+  assert.equal(Object.isFrozen(attempts[0].rates.inputPrice), true);
   assert.deepEqual(attempts.map(({ stage, ledgerChannel, model, endpoint, reservedMicroUsd, outcome, actualMicroUsd, usage }) =>
     ({ stage, ledgerChannel, model, endpoint, reservedMicroUsd, outcome, actualMicroUsd, usage })), [
     { stage: 'judge', ledgerChannel: 'host-completion', model: JUDGE_MODEL, endpoint: urls.host, reservedMicroUsd: 11_000,
@@ -323,7 +335,7 @@ test('BG5 an overrun response persists, halts this guard, and blocks the ledger 
     error.code === 'budget_blocked' && error.name === 'ExperimentBudgetError');
 });
 
-test('BG5 a foreign unsettled ledger attempt halts a benchmark guard until it is settled', async (t) => {
+test('BG5 a foreign unsettled ledger attempt halts a benchmark guard; a fresh guard after settlement proceeds', async (t) => {
   const f = fixture(t);
   const foreign = reopenExperimentBudget(f.ledger);
   const attemptId = randomUUID();
@@ -353,16 +365,16 @@ test('BG7 restart re-reads the extension, keeps the ledger history, and rejects 
   const f = fixture(t);
   const calls = [];
   const first = make(f, fake(calls));
-  await first.answerFetch(urls.host, request(answerBody()));
-  first.close();
+  try { await first.answerFetch(urls.host, request(answerBody())); } finally { first.close(); }
   assert.throws(() => first.getState(), guardError('guard_closed'));
   const second = make(f, fake(calls));
-  assert.deepEqual(second.attempts(), []);
-  assert.equal(second.getState().requestCount, 1);
-  await second.judgeFetch(urls.host, request(judgeBody()));
-  assert.equal(second.getState().requestCount, 2);
-  assert.equal(second.attempts().length, 1);
-  second.close();
+  try {
+    assert.deepEqual(second.attempts(), []);
+    assert.equal(second.getState().requestCount, 1);
+    await second.judgeFetch(urls.host, request(judgeBody()));
+    assert.equal(second.getState().requestCount, 2);
+    assert.equal(second.attempts().length, 1);
+  } finally { second.close(); }
   const reauthorized = guards.authorizeBenchmarkExtension(f.authorization);
   assert.deepEqual(reauthorized, f.benchmarkExtension);
   const forged = { ...f.benchmarkExtension, checkpoint: { requestCount: 1, reservedMicroUsd: 60_000 } };
@@ -428,4 +440,148 @@ test('BG5/BG7 an external abort before send settles nothing and sends nothing', 
   assert.deepEqual(guard.attempts(), []);
   assert.equal(guard.getState().requestCount, 0);
   assert.equal(guard.isHalted(), false);
+});
+
+test('BG5 a ledger lock during settlement leaves the attempt unsettled and halts later paid work', async (t) => {
+  const f = fixture(t);
+  let sends = 0;
+  let lock;
+  const guard = make(f, async () => {
+    sends += 1;
+    lock = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    return Response.json(chatEnvelope(JUDGE_MODEL));
+  });
+  t.after(() => guard.close());
+  await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), (error) =>
+    error.name === 'ExperimentBudgetError' && error.code === 'ledger_busy');
+  lock.exec('ROLLBACK');
+  lock.close();
+  assert.equal(guard.isHalted(), true);
+  const stuck = guard.getState();
+  assert.equal(stuck.attempts.length, 1);
+  assert.equal(stuck.attempts[0].outcome, null);
+  assert.equal(stuck.reservedMicroUsd, 11_000);
+  assert.deepEqual(guard.attempts().map((item) => [item.outcome, item.settledAt]), [[null, null]]);
+  await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError('paid_work_halted'));
+  await assert.rejects(guard.answerFetch(urls.host, request(answerBody())), guardError('paid_work_halted'));
+  assert.equal(sends, 1);
+  assert.equal(guard.getState().requestCount, 1);
+  const stillHalted = make(f, noTransport);
+  t.after(() => stillHalted.close());
+  assert.equal(stillHalted.isHalted(), true);
+  const settle = reopenExperimentBudget(f.ledger);
+  settle.recordOutcome({ attemptId: stuck.attempts[0].attemptId, outcome: 'unknown' });
+  settle.close();
+  const calls = [];
+  const fresh = make(f, fake(calls));
+  t.after(() => fresh.close());
+  assert.equal(fresh.isHalted(), false);
+  await fresh.judgeFetch(urls.host, request(judgeBody()));
+  assert.equal(calls.length, 1);
+  assert.equal(fresh.getState().requestCount, 2);
+});
+
+test('BG5 an external abort after reservation settles unknown, keeps the reservation and halts', async (t) => {
+  const f = fixture(t);
+  const controller = new AbortController();
+  let sends = 0;
+  const guard = make(f, (url, options) => { sends += 1; return new Promise((_, reject) => {
+    options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    controller.abort();
+  }); });
+  t.after(() => guard.close());
+  await assert.rejects(guard.answerFetch(urls.host, request(answerBody(), controller.signal)), guardError('request_aborted'));
+  assert.equal(sends, 1);
+  assert.deepEqual(guard.attempts().map((item) => [item.stage, item.outcome, item.actualMicroUsd]), [['answer', 'unknown', null]]);
+  assert.equal(guard.getState().reservedMicroUsd, 60_000);
+  assert.equal(guard.getState().attempts[0].outcome, 'unknown');
+  assert.equal(guard.isHalted(), true);
+  await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError('paid_work_halted'));
+  assert.equal(sends, 1);
+});
+
+test('BG5 a foreign unsettled attempt that appears after construction halts before the next reservation', async (t) => {
+  const f = fixture(t);
+  let sends = 0;
+  const guard = make(f, () => { sends += 1; assert.fail('must not send'); });
+  t.after(() => guard.close());
+  assert.equal(guard.isHalted(), false);
+  const foreign = reopenExperimentBudget(f.ledger);
+  foreign.reserve({ attemptId: randomUUID(), channel: 'cairn-generation', reservedMicroUsd: 1 });
+  foreign.close();
+  await assert.rejects(guard.answerFetch(urls.host, request(answerBody())), guardError('paid_work_halted'));
+  assert.equal(guard.isHalted(), true);
+  assert.equal(sends, 0);
+  assert.deepEqual(guard.attempts(), []);
+  assert.equal(guard.getState().requestCount, 1);
+});
+
+test('BG4/BG5 two concurrent in-flight calls both reserve, block close, and both settle', async (t) => {
+  const f = fixture(t);
+  const releases = [];
+  const guard = make(f, (url, options) => new Promise((resolve) => {
+    releases.push(() => resolve(Response.json(chatEnvelope(JSON.parse(options.body).model))));
+  }));
+  const pendingJudge = guard.judgeFetch(urls.host, request(judgeBody()));
+  const pendingAnswer = guard.answerFetch(urls.host, request(answerBody()));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(releases.length, 2);
+  assert.equal(guard.getState().requestCount, 2);
+  assert.equal(guard.getState().reservedMicroUsd, 71_000);
+  assert.deepEqual(guard.getState().attempts.map((item) => item.outcome), [null, null]);
+  assert.throws(() => guard.close(), guardError('guard_busy'));
+  assert.equal(guard.isHalted(), false);
+  for (const release of releases) release();
+  assert.equal((await pendingJudge).status, 200);
+  assert.equal((await pendingAnswer).status, 200);
+  assert.deepEqual(guard.attempts().map((item) => [item.stage, item.outcome]), [['judge', 'succeeded'], ['answer', 'succeeded']]);
+  assert.equal(guard.isHalted(), false);
+  guard.close();
+});
+
+test('BG5 oversized and non-Response transport results settle unknown and halt', async (t) => {
+  for (const [label, fetchImpl, code] of [
+    ['response-too-large', async () => new Response('x'.repeat(70_000), { status: 200 }), 'response_too_large'],
+    ['non-response', async () => ({ ok: true, status: 200 }), 'transport_failed'],
+  ]) {
+    const f = fixture(t);
+    let sends = 0;
+    const guard = make(f, (url, options) => { sends += 1; return fetchImpl(url, options); });
+    t.after(() => guard.close());
+    await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError(code), label);
+    assert.deepEqual(guard.attempts().map((item) => [item.outcome, item.actualMicroUsd]), [['unknown', null]], label);
+    assert.equal(guard.isHalted(), true, label);
+    await assert.rejects(guard.judgeFetch(urls.host, request(judgeBody())), guardError('paid_work_halted'), label);
+    assert.equal(sends, 1, label);
+    assert.equal(guard.getState().reservedMicroUsd, 11_000, label);
+  }
+});
+
+test('BG1 authorization on an overrun ledger fails extension_busy without writing a file', (t) => {
+  const f = fixture(t, { provision: false });
+  const handle = reopenExperimentBudget(f.ledger);
+  const attemptId = randomUUID();
+  handle.reserve({ attemptId, channel: 'host-completion', reservedMicroUsd: 1 });
+  handle.recordOutcome({ attemptId, outcome: 'succeeded', actualMicroUsd: 5 });
+  assert.equal(handle.getState().state, 'overrun');
+  handle.close();
+  assert.throws(() => guards.authorizeBenchmarkExtension(f.authorization), guardError('extension_busy'));
+  assert.throws(() => lstatSync(file(f)), { code: 'ENOENT' });
+});
+
+test('BG3 the 128-message boundary is accepted and 129 messages are rejected before reservation', async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const guard = make(f, fake(calls));
+  t.after(() => guard.close());
+  const messages = (count) => Array.from({ length: count }, (_, index) => ({ role: index % 2 ? 'assistant' : 'user', content: `turn ${index}` }));
+  await assert.rejects(guard.judgeFetch(urls.host, request({ ...judgeBody(), messages: messages(129) })), guardError('unsupported_request'));
+  assert.equal(calls.length, 0);
+  assert.equal(guard.getState().requestCount, 0);
+  const response = await guard.judgeFetch(urls.host, request({ ...judgeBody(), messages: messages(128) }));
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.messages.length, 128);
+  assert.equal(guard.getState().requestCount, 1);
 });
