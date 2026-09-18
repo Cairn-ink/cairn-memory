@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.cairn-ink/cairn-memory",
+  "title": "Cairn Memory",
+  "description": "Cross-session memory for AI agents with a Source Receipt for every memory, over MCP.",
+  "repository": {
+    "url": "https://github.com/Cairn-ink/cairn-memory",
+    "source": "github"
+  },
+  "websiteUrl": "https://cairn.ink",
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://cairn.ink/api/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Optional. Bearer <personal access token> from https://cairn.ink/settings/tokens. Clients that support OAuth discover authentication automatically and can omit this header.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
