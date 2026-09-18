@@ -252,7 +252,7 @@ async function cairnArm(snapshot) {
   const outcomes = ingestion.outcomes.map((outcome) => ({ batchIndex: outcome.batchIndex,
     status: outcome.status, ...projectIngestionFailure(outcome) }));
   const ingestionDiagnostics = { executable: ingestion.plan.executable, outcomes };
-  if (!ingestion.plan.executable || outcomes.some((item) => !['completed', 'duplicate'].includes(item.status)))
+  if (!ingestion.plan.executable || outcomes.some((item) => item.status !== 'completed'))
     return arm('cairn', 'failed', 'ingestion_incomplete', { stage: 'ingestion', ingestion: ingestionDiagnostics });
   let recalled;
   try { recalled = await snapshot.callbacks.recall({ readSet: [clone(snapshot.namespace)],

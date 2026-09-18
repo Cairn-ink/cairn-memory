@@ -60,7 +60,12 @@ answer call**. This is a local counter estimate, not proof of a real provider
 window or provider wire framing. There is no truncation fallback.
 
 Cairn checks the namespace before capture, then uses the existing source-mapped
-ingestion planner/capture path. Source dates stay metadata; capture does not
+ingestion planner/capture path. The runner does not accept duplicate outcomes:
+replaying even an empty previous
+capture fails the Cairn arm. The memory-list precheck cannot prove the absence
+of unrelated event-history rows; the calling harness must own a newly created
+store/namespace rather than relying on this check as freshness authentication.
+Source dates stay metadata; capture does not
 receive the question date. Recall uses `contextMode:'source-evidence'` and
 includes the question date in the retrieval query. The answer never receives
 generated memory content or a generated summary. For every selected memory the
@@ -91,3 +96,8 @@ The integrated synthetic demo uses the real local core and scripted models.
 It verifies wiring and separation only, not semantic answer quality, real
 context fit, official scoring, or total experiment cost. Capture/recall
 transport guards and whole-pipeline spend accounting are later work.
+Full-history evidence intentionally retains the original text, unlike the
+core's redacted capture path. Only synthetic fixtures belong in this offline
+demo. Before a real provider transport is connected, the operator must review
+dataset privacy and permissions; this API does not authorize exporting private
+conversations or bypassing the project's redaction rules.

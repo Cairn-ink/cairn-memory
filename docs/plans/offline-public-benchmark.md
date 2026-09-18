@@ -104,3 +104,14 @@ the test double, not production core behavior. Integrated LongMemEval tests:
 59/59 on Node 22.16 before the full dual-runtime gate. The final SHA, complete
 gate results and independent reviews are recorded in the delivery PR.
 No score or measured semantic improvement is claimed; provider calls: zero.
+Primary also corrected owned test-temp cleanup and added isolated duplicate
+receipt coverage. Redispatch was unavailable (runtime agent-thread limit), so
+these bounded acceptance corrections remained with primary. Independent Spec
+review identified permissive judge response shape; the callback now requires
+exactly `{text}` and mixed text/error objects remain unresolved. Both axes must
+recheck the final corrected SHA.
+Spec review also identified replayed empty captures: duplicate ingestion now
+fails Cairn rather than being counted as a fresh capture. The memory-only
+namespace precheck cannot authenticate absence of event history; a future
+live harness must own newly created stores. Full-history fidelity does not
+authorize private-data export or override redaction requirements.

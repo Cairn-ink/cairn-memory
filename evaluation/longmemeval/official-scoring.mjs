@@ -190,7 +190,8 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
     }
     else if (result.kind === 'failure') arms.push({ ...unresolved(name, arm.status, 'judge_failed', 'judge', true),
       referenceSessionCoverage: coverageResult });
-    else if (!isPlainObject(result.value) || typeof result.value.text !== 'string') {
+    else if (!isPlainObject(result.value) || Object.keys(result.value).length !== 1
+      || !Object.hasOwn(result.value, 'text') || typeof result.value.text !== 'string') {
       arms.push({ ...unresolved(name, arm.status, 'invalid_judge_response', 'judge', true),
         referenceSessionCoverage: coverageResult });
     } else {

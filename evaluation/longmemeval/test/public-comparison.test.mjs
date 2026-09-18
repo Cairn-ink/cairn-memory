@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -97,7 +97,10 @@ test('OC1/OC4: poison rejected before callbacks; originals cannot change after s
 });
 
 test('OC3/OI1: real core source-evidence receipts, not generated memory content', async (t) => {
-  const path = join(mkdtempSync(join(tmpdir(), 'cairn-public-comparison-')), 'memory.sqlite');
+  const root = mkdtempSync(join(tmpdir(), 'cairn-public-comparison-'));
+  let core;
+  t.after(() => { core?.close(); rmSync(root, { recursive: true, force: true }); });
+  const path = join(root, 'memory.sqlite');
   const modelCalls = [];
   const model = { contextWindow: 8192, countTokens: () => 1,
     extract: async ({ input }) => { modelCalls.push('extract'); return { items: input.messages.some((item) => item.content.includes('amber'))
@@ -114,7 +117,7 @@ test('OC3/OI1: real core source-evidence receipts, not generated memory content'
       .map((item) => ({ namespaceIndex: item.namespaceIndex, memoryId: item.memory.id,
         revision: item.memory.revision })) }; },
   };
-  const core = openMemoryCore({ path, model }); t.after(() => core.close());
+  core = openMemoryCore({ path, model });
   const seen = [];
   const run = await runPublicComparison(options({ core, answer: async ({ request }) => {
     seen.push(request); return { text: 'amber' };
@@ -168,6 +171,13 @@ test('OC3: authoritative get and recall receipt faults each block Cairn only', a
     [(detail) => { detail.memory.receiptCount = 2; }, () => {}, 'source_get_mismatch'],
     [() => {}, (recall) => { recall.memories[0].receiptCount = 2; }, 'invalid_recall_provenance'],
     [() => {}, (recall) => { recall.memories[0].receipts[0].excerpt = 'wrong'; }, 'unknown_or_mismatched_receipt'],
+    [(detail) => {
+      detail.memory.receiptCount = 2;
+      detail.receipts.push({ ...detail.receipts[0] });
+    }, (recall) => {
+      recall.memories[0].receiptCount = 2;
+      recall.memories[0].receipts.push({ ...recall.memories[0].receipts[0] });
+    }, 'duplicate_receipt'],
   ];
   for (const [mutateGet, mutateRecall, reason] of cases) {
     const run = await runPublicComparison(options({ core: sourceCore(mutateGet, mutateRecall) }));
@@ -201,6 +211,18 @@ test('OC4: private callback error codes never cross the run boundary', async () 
   assert.equal(run.arms[0].status, 'failed');
   assert.equal(run.arms[0].reason, 'recall_failed');
   assert.doesNotMatch(JSON.stringify(run), /customer_private_secret/u);
+});
+
+test('OC4: empty prior capture cannot pass freshness through a duplicate result', async () => {
+  let recalled = false;
+  const run = await runPublicComparison(options({ core: fakeCore({
+    capture: () => ({ ok: true, value: { ...captureOk().value, duplicate: true } }),
+    recall: () => { recalled = true; return emptyRecall(); },
+  }) }));
+  assert.equal(recalled, false);
+  assert.equal(run.arms[0].status, 'failed');
+  assert.equal(run.arms[0].reason, 'ingestion_incomplete');
+  assert.deepEqual(run.arms.slice(1).map(item => item.status), ['completed', 'completed']);
 });
 
 test('OC4: timed-out answer blocks later arms to prevent overlapping callbacks', async () => {

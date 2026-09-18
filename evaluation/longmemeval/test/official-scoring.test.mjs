@@ -83,6 +83,7 @@ test('OS3: transport failure, invalid response, and timeout stay unresolved', as
   for (const [judge, reason] of [
     [async () => { throw new Error('private detail'); }, 'judge_failed'],
     [async () => ({ verdict: 'yes' }), 'invalid_judge_response'],
+    [async () => ({ text: 'yes', error: 'transport_failed' }), 'invalid_judge_response'],
     [async ({ signal }) => new Promise((resolve) => signal.addEventListener('abort',
       () => resolve({ text: 'yes' }))), 'judge_timeout'],
   ]) {
