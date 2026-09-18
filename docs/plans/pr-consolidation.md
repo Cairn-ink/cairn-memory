@@ -5,13 +5,19 @@ User explicitly requested consolidation after the 48-PR audit. This permits
 scoped integration, independently verified merge, and explained PR closure;
 not branch deletion, evidence deletion, package publication, deployment or paid
 experiments. Decisions below are planned actions until the integration lands.
+The allowed cumulative diff is the changed-file union from the four pinned heads
+and the exact #136 extraction commit named in PC1, plus this plan,
+`docs/limitations.md` and `ROADMAP.md`; no other files or descendants.
 
 ## Acceptance
 
 - PC1: Integrate only existing #135 filing-only rationale preservation, #176
   explicit MCP source-evidence startup default, #177 provider byte ownership,
-  and #178 installed cold-recall regression. Preserve their original commit
-  ancestry where possible. Do not pull in later experimental descendants.
+  and #178 installed cold-recall regression. Also extract only the direct
+  premise-challenge read fix from #136 at exact commit
+  `b3bb6b41a00eb119ba191ea4fe3ef3384b3b6389`, with `cherry-pick -x` to
+  avoid adopting that branch's wider research stack. Preserve the four selected
+  heads' original ancestry. Do not pull in later experimental descendants.
 - PC2: Preserve current main's README/demo/limitations contributions. Resolve
   conflicts by retaining scoped changes from both sides, not replacing files
   wholesale. No semantic prompt/default/model/retention/permission relaxation.
@@ -21,11 +27,14 @@ experiments. Decisions below are planned actions until the integration lands.
 - PC4: Preserve this complete 48-PR snapshot with exact heads and disposition.
   Archived means not selected for the baseline, NOT proved wrong or merged.
   #142 contains more than #135; do not call all of #142 delivered. #175 belongs
-  to a parallel registry workflow and remains open and untouched.
+  to a parallel registry workflow and remains open and untouched. #136 is only
+  partially extracted at the commit named in PC1; its remaining branch and
+  evidence are archived, not delivered.
 - PC5: Both Node22.16/24 run generic, JSON/plugin, core, OpenAI, MCP, artifact,
   experiment-budget and request-guard gates and applicable contributor demos;
   live-evidence and LongMemEval offline checks remain CI gates. Primary reruns
-  integrated source-default/cold-recall/filing/stream tests personally. Two
+  integrated source-default/cold-recall/filing/stream tests personally, plus
+  direct-only challenge and support-chain recall after restart and forgetting. Two
   independent reviewers inspect the frozen final diff; all latest-head CI must
   pass before authorized merge. A changed main/head requires reassessment.
 - PC6: After merge, verify original selected heads are included or document
@@ -37,8 +46,9 @@ experiments. Decisions below are planned actions until the integration lands.
 ## Snapshot and planned disposition
 
 No prior green check or valid source citation is a semantic quality endorsement.
-Archived PR pages/branches retain code and experiment evidence. The larger
-#142 lifecycle API, #148–167 experimental paths, and #168–173 assessments are
+Archived PR pages/branches retain code and experiment evidence. Apart from the
+selected #135 filing fix and extracted #136 read fix, the larger #142 lifecycle
+API, #148–167 experimental paths, and #168–173 assessments are
 not prerequisites for measuring the selected baseline. #166's additional
 evaluation-only malformed-answer repair remains preserved, not silently applied.
 
@@ -50,7 +60,7 @@ evaluation-only malformed-answer repair remains preserved, not silently applied.
 | #133 | `2d5f003aac0c4f8604c40b0376174211479c3395` | Close archived/deferred, not adopted or semantically certified | test: define decision-evolution acceptance contract |
 | #134 | `832a93f74582c8cc108272d6af0a5a7e98b470bd` | Close archived/deferred, not adopted or semantically certified | test: trace decision evolution through actual capture and recall |
 | #135 | `ac8b93c9e4715089bd55c0a84261cf3685595a69` | Integrate existing branch; close as included only after verification and merge | fix: preserve rationale across filing-only revisions |
-| #136 | `54036d9d4002c6b2334d4b9867aa63cb7ff6cffc` | Close archived/deferred, not adopted or semantically certified | fix: preserve and surface decision rationale with real-capture evidence |
+| #136 | `54036d9d4002c6b2334d4b9867aa63cb7ff6cffc` | Close as partially extracted only after baseline merge; direct-challenge read fix `b3bb6b41a00eb119ba191ea4fe3ef3384b3b6389` adopted, remainder archived/deferred and not certified | fix: preserve and surface decision rationale with real-capture evidence |
 | #137 | `e11ee2e3f60497a2b5eb9416fbbe6fd46f645419` | Close archived/deferred, not adopted or semantically certified | test: measure lightweight relation definitions without promoting defaults |
 | #138 | `ccfcbc937d7513f70651e46bb77d183f31fafa85` | Close archived/deferred, not adopted or semantically certified | test: record bounded source-by-source basis coverage comparison |
 | #139 | `819f60bcc32dbdffd142602f08654734e9949ea9` | Close archived/deferred, not adopted or semantically certified | test: verify migration memory lifecycle across cold sessions |
