@@ -13,7 +13,7 @@ currently points readers toward V2; that does not change this v1 target.
 | Existing entry point | What it establishes | Missing for a public score |
 | --- | --- | --- |
 | [`prepare:longmemeval`](../../evaluation/longmemeval/prepare.mjs), [`cli.mjs`](../../evaluation/longmemeval/cli.mjs) | Local, digest-checked, explicit-ID preparation; private, answer-blind `history.jsonl`/`questions.jsonl` separated from `evaluator.jsonl`/manifest. Six question types, original session order and source dates are retained. | No corpus acquisition, pilot selector, official scorer or live runner. The declared variant/revision is not upstream authentication. |
-| [`planLongMemEvalCase` / `ingestLongMemEvalCase`](../../evaluation/longmemeval/ingestion.mjs) | Splits/normalizes turns into bounded sequential `core.capture` batches and maps derived messages back to source session, turn, offset and **source event date**. Stops on incomplete/unknown outcomes. | Date is source-map metadata, not an engine-visible event timestamp. Engine write/admission time may differ; expose both. No live provider orchestration or cost ledger for this benchmark. |
+| [`planLongMemEvalCase` / `ingestLongMemEvalCase`](../../evaluation/longmemeval/ingestion.mjs) | Splits/normalizes turns into bounded sequential `core.capture` batches and maps derived messages back to source session, turn, offset and **session-level source date**. Stops on incomplete/unknown outcomes. | Date is source-map metadata, not an engine-visible event timestamp or a per-turn timestamp. Engine write/admission time may differ; expose both. No live provider orchestration or cost ledger for this benchmark. |
 | [`runLongMemEvalComparison`](../../evaluation/longmemeval/comparison.mjs) | Offline Cairn + lexical + no-memory comparison, common answer callback/template/limits, whole-item packing and per-arm failure records. Cairn uses programmatic capture/legacy memory summary plus bounded receipt excerpt; this is not the installed MCP's explicit opt-in source-evidence startup default. | **No direct full-history arm**. Lexical is only an optional diagnostic, not its substitute. No full-context fit check against an actual provider, isolated-case lifecycle owner, or guarded live runner. The primary Cairn evidence mode must be chosen and implemented explicitly. |
 | [`scoreLongMemEvalComparison`](../../evaluation/longmemeval/scoring.mjs) | Evaluator-only exact-match diagnostic and optional `{correct,incorrect,unknown}` judge; reference-session retrieved/packed coverage and unknown outcomes are retained. | Neither diagnostic nor custom judge is official LongMemEval accuracy. Its judge input lacks `question_type`/`_abs` identity required by the upstream rubric. No official-compatibility adapter, aggregate bounds or reviewed judge transport. |
 | [`evaluation/experiment-budget`](../../evaluation/experiment-budget/index.mjs) and [`request-guard.mjs`](../../evaluation/experiment-budget/request-guard.mjs) | General reservation/reconciliation mechanisms exist. | Not bound to all LongMemEval ingestion, maintenance, retrieval, answer and judge calls. The comparison's reported usage is **answer callback only** (`comparison.mjs`); it is not whole-pipeline cost. |
@@ -61,7 +61,7 @@ them official accuracy.
 
 ## Planned paired arms and isolation (BP3)
 
-For each case run three primary arms: **Cairn**, **full timestamped source
+For each case run three primary arms: **Cairn**, **full session-dated source
 history**, **no memory**. Use the same stateless answer model, frozen instruction
 and question serialization, question date, output cap and provider parameters.
 The evidence field is the only intended difference. Answer callback state,
@@ -75,7 +75,8 @@ harness, with exact core/MCP boundary and prompt pinned; the current legacy
 summary/receipt path may be retained only as a labeled diagnostic. This is a
 design choice, **not** behavior already implemented by the comparator. The
 direct-history arm includes every original turn in source session order,
-with roles and **source event dates**. Preflight its complete wire request with
+with roles and its session's **source date** (`haystack_dates`); LongMemEval-S
+does not supply a separate timestamp for each turn. Preflight its complete wire request with
 the exact answer-model tokenizer and context window, including framing and
 reserved output. If it does not fit, mark the primary paired case **blocked**;
 do not silently truncate, select oracle evidence, or call a shortened history
@@ -84,7 +85,7 @@ from the run. A separately named truncated-history sensitivity analysis may be
 designed later, but cannot replace the primary arm. Record whether dataset
 order and date strings agree chronologically; preserve MOC admission/filing
 order, source occurrence indices, and any divergence. The engine's stored
-write/admission timestamp is not the dataset's source event date. Disclose both
+write/admission timestamp is not the dataset's source session date. Disclose both
 and test temporal cases for that mismatch. Identical output caps and model do
 not imply matched input token counts, bytes, costs or latency; disclose them
 by arm. Do not inject a question into capture
@@ -96,14 +97,19 @@ original IDs, or scoring artifacts to generation.
 The plumbing pilot is exactly seven cases: one from each of the six non-abstention
 question types (`single-session-user`, `single-session-assistant`,
 `single-session-preference`, `temporal-reasoning`, `knowledge-update`,
-`multi-session`) plus one abstention case. From the pinned dataset's evaluator
-metadata only, within each stratum select the minimum lexicographic
-`SHA-256(UTF-8(JSON.stringify([seed, question_id])))`, with `question_id` as
-tie-breaker and fixed seed `cairn-lme-s-pilot-v1`,
+`multi-session`) plus one abstention case. Use the original dataset
+`question_id` (the preparer's evaluator-only `source_question_id`), **not** its
+opaque model-facing `question_id`, for selection. Original IDs ending `_abs`
+form the abstention stratum; exclude them from the six type strata. From the
+pinned dataset's evaluator metadata only, within each stratum select the
+minimum lexicographic `SHA-256(UTF-8(JSON.stringify([seed, source_question_id])))`,
+with original `source_question_id` as tie-breaker and fixed seed
+`cairn-lme-s-pilot-v1`,
 excluding the seven previously inspected format cases named in the
 [preparation record](benchmark-preparation.md#verification-record). Freeze an
 exposure registry (including those IDs), selected original IDs, strata,
-ordering, dataset digest and selection code before calls. IDs are **not frozen
+the output order (the six types listed above, then abstention), dataset digest
+and selection code before calls. IDs are **not frozen
 here** because this turn does not acquire/revalidate a corpus. No answer or outcome can influence
 selection. This is a plumbing pilot, neither an accuracy estimate nor a
 pristine holdout; no score claim follows from it.
