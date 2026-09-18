@@ -59,6 +59,9 @@ model/configuration and comparison arms, retained per-case failures, and an
 independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
+The [public benchmark design protocol](plans/public-benchmark-protocol.md)
+inventories the missing live harness and freezes proposed measurement rules;
+it is not an executable run manifest or a result.
 
 ## Where the evidence lives
 
