@@ -60,8 +60,16 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 The [public benchmark design protocol](plans/public-benchmark-protocol.md)
-inventories the missing live harness and freezes proposed measurement rules;
-it is not an executable run manifest or a result.
+inventories the legacy pilot and the missing protocol-compliant three-arm
+harness and proposes measurement rules; the design is not yet frozen and is
+not an executable run manifest or a result. The
+[2026-09-09 live seven-case pilot](evidence/first-live-evidence.md)
+remains a failed, non-official diagnostic: Cairn completed only three cases,
+four stopped in ingestion, and two machine-judge positives were false. Its raw
+outcomes are retained unchanged. The later review found that raw prepared
+session IDs can encode answer labels and reach generation; whether and how
+much this affected the old answers is unknown. That leak is another reason not
+to promote the historical machine judgments or treat them as a benchmark score.
 
 ## Where the evidence lives
 

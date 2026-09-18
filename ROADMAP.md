@@ -40,8 +40,10 @@ reliability work below without declaring older failure gates resolved.
    rerun needs scoped authorization; earlier one-shot approvals do not roll over.
    A public LongMemEval benchmark remains a separate next gate. The
    [design protocol](docs/plans/public-benchmark-protocol.md) inventories the
-   missing harness and planned full-history control; it is not a runnable
-   manifest. Freeze and verify the dataset, model/configuration, official-compatible
+   legacy failed pilot and the missing protocol-compliant three-arm harness;
+   it is not yet frozen or a runnable manifest. First blind model-facing session
+   IDs and verify the exposure registry, then freeze and verify the dataset,
+   model/configuration, official-compatible
    scorer, guarded calls and comparison arms before any pilot; publish all
    per-case failures and independently review any result. Offline scripted
    demos are not a measured score, and this baseline authorizes no paid run.
