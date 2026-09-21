@@ -46,6 +46,89 @@ function deferredModel() {
     confidence: 0.5, sourceIndices: [0] }] }), extract: () => { started(); return pending; } };
 }
 
+test('CAO1 canonical source distinguishes empty, suppression, attachment, qualified dedup and failure', async t => {
+  const source = 'Synthetic source text '.repeat(24).slice(0, 490);
+  assert.equal(source.length, 490);
+  const capture = (core, eventId, sessionId = 'fresh-session', messageId = 'fresh-message') => core.capture({
+    namespace, client: 'synthetic', eventId, sessionId,
+    messages: [{ id: messageId, role: 'assistant', content: source }],
+  });
+
+  const empty = fixture(t, { extract: () => ({ items: [] }) });
+  const emptyInput = input({ eventId: 'empty', sessionId: 'fresh-session',
+    messages: [{ id: 'fresh-message', role: 'assistant', content: source }] });
+  const emptyResult = ok(await empty.core.capture(emptyInput));
+  assert.deepEqual(emptyResult.admission.memories, []);
+  assert.equal(emptyResult.admission.suppressedCount, 0);
+  assert.deepEqual(emptyResult.classification, { status: 'skipped', reason: 'empty' });
+  assert.equal(inspect(empty.core, emptyInput).state, 'admitted');
+  const emptyCalls = empty.calls.length;
+  assert.deepEqual(ok(await empty.core.capture(emptyInput)),
+    { duplicate: true, memoryIds: [], suppressedCount: 0,
+      retainedSourceWindow: { maxUnitsPerMessage: 800, truncatedMessageIndices: [] } });
+  assert.equal(empty.calls.length, emptyCalls);
+
+  const suppressed = fixture(t);
+  const explicit = ok(suppressed.core.admit({ namespace,
+    memory: { content: source, kind: 'context' }, receipts: [{ client: 'synthetic',
+      sessionId: 'explicit', eventId: 'suppressed-source', role: 'assistant', excerpt: source }] })).memory;
+  ok(suppressed.core.forget({ namespace, memoryId: explicit.id, expectedRevision: explicit.revision }));
+  const suppressedInput = input({ eventId: 'suppressed', sessionId: 'fresh-session',
+    messages: [{ id: 'fresh-message', role: 'assistant', content: source }] });
+  const suppressedResult = ok(await suppressed.core.capture(suppressedInput));
+  assert.deepEqual(suppressedResult.admission.memories, []);
+  assert.equal(suppressedResult.admission.suppressedCount, 1);
+  assert.deepEqual(suppressedResult.classification, { status: 'skipped', reason: 'empty' });
+  assert.equal(inspect(suppressed.core, suppressedInput).state, 'admitted');
+  assert.deepEqual(suppressed.calls, ['extract', 'qualifyCandidates']);
+
+  const legacy = fixture(t, {}, {});
+  const priorLegacy = ok(await capture(legacy.core, 'legacy-prior', 'prior-session', 'prior-message'));
+  const legacyId = priorLegacy.admission.memories[0].id;
+  const freshLegacy = ok(await capture(legacy.core, 'legacy-fresh'));
+  assert.equal(freshLegacy.admission.memories.length, 1);
+  assert.equal(freshLegacy.admission.memories[0].id, legacyId);
+  assert.equal(ok(legacy.core.get({ namespace, memoryId: legacyId })).receipts.length, 2);
+  const legacyCalls = legacy.calls.length;
+  assert.deepEqual(ok(await capture(legacy.core, 'legacy-fresh')),
+    { duplicate: true, memoryIds: [legacyId], suppressedCount: 0 });
+  assert.equal(legacy.calls.length, legacyCalls);
+
+  const qualified = fixture(t);
+  const priorQualified = ok(await capture(qualified.core, 'qualified-prior'));
+  const qualifiedId = priorQualified.admission.memories[0].id;
+  const sameSource = ok(await capture(qualified.core, 'qualified-same-source'));
+  assert.equal(sameSource.admission.memories.length, 1);
+  assert.equal(sameSource.admission.memories[0].id, qualifiedId);
+  assert.equal(ok(qualified.core.get({ namespace, memoryId: qualifiedId })).receipts.length, 1);
+  const sameInput = input({ eventId: 'qualified-same-source', sessionId: 'fresh-session',
+    messages: [{ id: 'fresh-message', role: 'assistant', content: source }] });
+  assert.equal(inspect(qualified.core, sameInput).state, 'admitted');
+  const qualifiedCalls = qualified.calls.length;
+  assert.deepEqual(ok(await qualified.core.capture(sameInput)),
+    { duplicate: true, memoryIds: [qualifiedId], suppressedCount: 0,
+      retainedSourceWindow: { maxUnitsPerMessage: 800, truncatedMessageIndices: [] } });
+  assert.equal(qualified.calls.length, qualifiedCalls);
+
+  const db = new DatabaseSync(qualified.path); t.after(() => db.close());
+  const material = () => ['memories', 'receipts', 'memory_qualifications', 'qualification_anchors']
+    .map(table => [table, db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map(row => ({ ...row }))]);
+  const beforeConflict = material();
+  const changedInput = input({ eventId: 'qualified-changed-source', sessionId: 'changed-session',
+    messages: [{ id: 'changed-message', role: 'assistant', content: source }] });
+  error(await qualified.core.capture(changedInput), 'qualification_conflict');
+  assert.deepEqual(material(), beforeConflict);
+  assert.equal(inspect(qualified.core, changedInput).state, 'failed');
+
+  const malformed = fixture(t, { extract: () => ({ items: [{ invented: true }] }) });
+  const malformedInput = input({ eventId: 'malformed', sessionId: 'fresh-session',
+    messages: [{ id: 'fresh-message', role: 'assistant', content: source }] });
+  error(await malformed.core.capture(malformedInput), 'invalid_model_output');
+  assert.equal(inspect(malformed.core, malformedInput).state, 'failed');
+  assert.deepEqual(ok(malformed.core.list({ namespace })).memories, []);
+  assert.deepEqual(malformed.calls, ['extract']);
+});
+
 test('staging options reject before a database is created', () => {
   for (const invalid of [{ captureEvidence: 'unknown' }, { captureEvidence: 'staged-v1' },
     { captureEvidence: 'staged-v1', captureQualification: 'source-bound-v1' },
