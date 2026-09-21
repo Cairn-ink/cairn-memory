@@ -53,7 +53,9 @@ export const OWNER_ID = 'longmemeval-public-pilot';
 const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const CASE_STAGES = new Set(['pending', 'generating', 'generated', 'scoring', 'scored', 'blocked']);
 const DIAGNOSTIC_RECORD_LIMIT = 64;
+const CAPTURE_ADMISSION_RECORD_LIMIT = 64;
 const ANSWER_COMPLETION_LIMIT = ARM_NAMES.length;
+export const CAPTURE_ADMISSION_OBSERVATION_VERSION = 'cairn-capture-admission-observation-v1';
 const MODEL_DIAGNOSTIC_STAGES = new Set([
   'extract', 'classify', 'select', 'rank', 'reconcile', 'qualify', 'qualifyCandidates', 'relate', 'reviewBasis',
 ]);
@@ -132,6 +134,142 @@ const projectModelDiagnostic = (event) => {
   } catch { return null; }
 };
 
+const exactKeys = (value, expected) => {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && expected.every((key) => keys.includes(key));
+};
+const validCoreIdentifier = (value) => typeof value === 'string' && value.length > 0
+  && value.length <= 200 && value.isWellFormed() && value.trim() === value
+  && !/[\x00-\x1f\x7f]/u.test(value);
+const validObservedRef = (value, idKey) => {
+  if (!isPlainObject(value)) return false;
+  const { [idKey]: id, revision } = value;
+  return exactKeys(value, [idKey, 'revision']) && validCoreIdentifier(id)
+    && Number.isSafeInteger(revision) && revision >= 1;
+};
+const denseCount = (value, maximum, validate = () => true) => {
+  if (!Array.isArray(value)) return null;
+  const length = value.length;
+  if (!Number.isSafeInteger(length) || length < 0 || length > maximum
+    || Object.keys(value).length !== length) return null;
+  for (let index = 0; index < length; index += 1) {
+    if (!Object.hasOwn(value, index)) return null;
+    const item = value[index];
+    if (!validate(item)) return null;
+  }
+  return length;
+};
+const availableCaptureObservation = (batchOrdinal, status, admittedReferenceCount,
+  suppressedCount, duplicateEvent, classificationStatus) => Object.freeze({
+  batchOrdinal, status, admittedReferenceCount, suppressedCount, duplicateEvent, classificationStatus,
+});
+const unavailableCaptureObservation = (batchOrdinal) => availableCaptureObservation(
+  batchOrdinal, 'unavailable', null, null, null, null);
+
+// Capture response projection is private runner evidence, never a public-core
+// response change. Every untrusted field is read once into primitives or local
+// references; arbitrary values and identifiers are validated but never retained.
+export const projectCaptureAdmissionObservation = (response, batchOrdinal) => {
+  try {
+    if (!Number.isSafeInteger(batchOrdinal) || batchOrdinal < 0) {
+      return unavailableCaptureObservation(null);
+    }
+    if (!isPlainObject(response)) {
+      return unavailableCaptureObservation(batchOrdinal);
+    }
+    const { ok, value, error } = response;
+    if (ok === false) {
+      if (!exactKeys(response, ['ok', 'error']) || !isPlainObject(error)) {
+        return unavailableCaptureObservation(batchOrdinal);
+      }
+      const { code, retryable } = error;
+      if (!exactKeys(error, ['code', 'retryable']) || typeof code !== 'string'
+        || !/^[a-z0-9_-]+$/u.test(code) || typeof retryable !== 'boolean') {
+        return unavailableCaptureObservation(batchOrdinal);
+      }
+      return availableCaptureObservation(batchOrdinal, 'failed', null, null, null, null);
+    }
+    if (ok !== true || !exactKeys(response, ['ok', 'value']) || !isPlainObject(value)) {
+      return unavailableCaptureObservation(batchOrdinal);
+    }
+    const { duplicate, memoryIds, suppressedCount: replaySuppressed,
+      admission, classification } = value;
+    if (duplicate === true) {
+      const admittedReferenceCount = denseCount(memoryIds, 5, validCoreIdentifier);
+      if (!exactKeys(value, ['duplicate', 'memoryIds', 'suppressedCount'])
+        || admittedReferenceCount === null || !Number.isSafeInteger(replaySuppressed)
+        || replaySuppressed < 0 || replaySuppressed > 5) return unavailableCaptureObservation(batchOrdinal);
+      return availableCaptureObservation(batchOrdinal, 'completed', admittedReferenceCount,
+        replaySuppressed, true, null);
+    }
+    if (duplicate !== false || !exactKeys(value, ['duplicate', 'admission', 'classification'])
+      || !isPlainObject(admission) || !isPlainObject(classification)) {
+      return unavailableCaptureObservation(batchOrdinal);
+    }
+    const { memories, suppressedCount, indexRevision } = admission;
+    const admittedReferenceCount = denseCount(memories, 5, item => validObservedRef(item, 'id'));
+    if (!exactKeys(admission, ['memories', 'suppressedCount', 'indexRevision'])
+      || admittedReferenceCount === null || !Number.isSafeInteger(suppressedCount)
+      || suppressedCount < 0 || suppressedCount > 5
+      || !Number.isSafeInteger(indexRevision) || indexRevision < 1) {
+      return unavailableCaptureObservation(batchOrdinal);
+    }
+    const { status, reason, memoryRevisions, indexRevision: classificationRevision,
+      error: classificationError } = classification;
+    const skipped = exactKeys(classification, ['status', 'reason']) && status === 'skipped'
+      && ['empty', 'already_filed'].includes(reason);
+    const appliedCount = denseCount(memoryRevisions, 5, item => validObservedRef(item, 'memoryId'));
+    const applied = exactKeys(classification, ['status', 'memoryRevisions', 'indexRevision'])
+      && status === 'applied' && appliedCount !== null && appliedCount <= admittedReferenceCount
+      && Number.isSafeInteger(classificationRevision) && classificationRevision >= 1;
+    let failed = false;
+    if (exactKeys(classification, ['status', 'error']) && status === 'failed'
+      && isPlainObject(classificationError)) {
+      const { code, retryable } = classificationError;
+      failed = exactKeys(classificationError, ['code', 'retryable']) && typeof code === 'string'
+        && /^[a-z0-9_-]+$/u.test(code) && typeof retryable === 'boolean';
+    }
+    if (!skipped && !applied && !failed) return unavailableCaptureObservation(batchOrdinal);
+    return availableCaptureObservation(batchOrdinal, failed ? 'partial' : 'completed',
+      admittedReferenceCount, suppressedCount, false, status);
+  } catch { return unavailableCaptureObservation(batchOrdinal); }
+};
+
+export const createCaptureAdmissionCollector = () => {
+  const records = [];
+  let droppedRecords = 0;
+  let nextBatchOrdinal = 0;
+  let closed = false;
+  const capture = async (operation) => {
+    const batchOrdinal = nextBatchOrdinal++;
+    try {
+      const response = await operation();
+      const projected = projectCaptureAdmissionObservation(response, batchOrdinal);
+      if (!closed) {
+        if (records.length === CAPTURE_ADMISSION_RECORD_LIMIT) droppedRecords += 1;
+        else records.push(projected);
+      }
+      return response;
+    } catch (error) {
+      if (!closed) {
+        const projected = availableCaptureObservation(batchOrdinal, 'failed', null, null, null, null);
+        if (records.length === CAPTURE_ADMISSION_RECORD_LIMIT) droppedRecords += 1;
+        else records.push(projected);
+      }
+      throw error;
+    }
+  };
+  const close = () => { closed = true; };
+  const snapshot = () => deepFreeze({
+    schemaVersion: CAPTURE_ADMISSION_OBSERVATION_VERSION,
+    availability: 'available',
+    recordLimit: CAPTURE_ADMISSION_RECORD_LIMIT,
+    droppedRecords,
+    records: records.map((entry) => ({ ...entry })),
+  });
+  return Object.freeze({ capture, close, snapshot });
+};
+
 const createCaseDiagnosticCollector = (available) => {
   const modelRecords = [];
   const answerRecords = [];
@@ -151,7 +289,7 @@ const createCaseDiagnosticCollector = (available) => {
     } catch { /* Observation never changes benchmark behavior. */ }
   };
   const close = () => { closed = true; };
-  const snapshot = (questionId, captured) => {
+  const snapshot = (questionId, captured, captureAdmission) => {
     const completions = new Map(answerRecords.map((entry) => [entry.answerIndex, entry.finishReason]));
     return deepFreeze({
       schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
@@ -174,6 +312,7 @@ const createCaseDiagnosticCollector = (available) => {
             : { availability: 'unavailable' },
         })),
       },
+      captureAdmission,
     });
   };
   return Object.freeze({ observe, close, snapshot });
@@ -588,13 +727,15 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   let error;
   const diagnosticScope = diagnosticScopes.get(session);
   const diagnostics = createCaseDiagnosticCollector(diagnosticScope !== undefined);
+  const captureAdmission = createCaptureAdmissionCollector();
   try {
     core = openMemoryCore({ path: files.database, model: session.memoryModel });
-    const operation = () => runPublicComparison({ history: item.history, question: item.question, namespace, core,
+    const observedCore = { ...core, capture: input => captureAdmission.capture(() => core.capture(input)) };
+    const operation = () => runPublicComparison({ history: item.history, question: item.question, namespace, core: observedCore,
       answer, countTokens: session.countTokens, answerModel: session.stages.answer.model, limits });
     run = await (diagnosticScope ? diagnosticScope(diagnostics.observe, operation) : operation());
   } catch (caught) { error = safeError(caught, 'generation_failed'); }
-  finally { diagnostics.close(); core?.close(); }
+  finally { captureAdmission.close(); diagnostics.close(); core?.close(); }
   const database = await databaseMeasurement(files.database);
   const generation = deepFreeze({
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
@@ -604,7 +745,7 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   const attempts = session.attempts().slice(attemptStart);
   const ledgerAfter = ledgerSummary(session.getState());
   labelCapturedArms(captured, run ?? null);
-  const diagnosticSnapshot = diagnostics.snapshot(questionId, captured);
+  const diagnosticSnapshot = diagnostics.snapshot(questionId, captured, captureAdmission.snapshot());
   await writePrivateJson(files.generation, generation);
   await writePrivateJson(files.answerRequests, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
     requests: captured });

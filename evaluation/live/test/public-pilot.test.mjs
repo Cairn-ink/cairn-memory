@@ -9,15 +9,22 @@ import test from 'node:test';
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
+import { scorePublicComparison } from '../../longmemeval/official-scoring.mjs';
+import { runPublicComparison } from '../../longmemeval/public-comparison.mjs';
 import { loadReferenceRenderings } from '../../longmemeval/reference-rendering.mjs';
+import { openMemoryCore } from '../../../core/contract.mjs';
 import { loadPreparedPilot, pilotEvaluatorFor } from '../pilot.mjs';
 import { main as cliMain, parseArguments, USAGE } from '../public-pilot-cli.mjs';
 import {
   benchmarkStagePolicy,
+  CAPTURE_ADMISSION_OBSERVATION_VERSION,
+  createCaptureAdmissionCollector,
   createBenchmarkLiveSession,
   evidenceArmGuess,
   labelCapturedArms,
+  OWNER_ID,
   PUBLIC_PILOT_LIMITS,
+  projectCaptureAdmissionObservation,
   RECEIPT_EXCERPT_BOUND_UTF16,
   runPublicPilot,
 } from '../public-pilot.mjs';
@@ -809,6 +816,7 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
   const source = [
     fixture({ id: 'adapterbad', answerTurn: 'The adapterbad color is amber.' }),
     fixture({ id: 'corebad', answerTurn: 'The corebad color is amber.' }),
+    fixture({ id: 'partial', answerTurn: 'The partial color is amber.' }),
     fixture({ id: 'clean', answerTurn: 'The clean color is amber.' }),
   ];
   const caseIds = Object.fromEntries(source.map(({ question_id: id }) => [id, opaqueQuestionId(id)]));
@@ -825,6 +833,15 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
       return Response.json(responsesEnvelope(body.model, { items: [{ content: 'synthetic invalid item',
         kind: 'fact', confidence: 2, sourceIndices: [0] }] }));
     }
+    if (method === 'extract' && serialized.includes('partial')) {
+      return Response.json(responsesEnvelope(body.model, { items: [{ content: 'partial classification marker',
+        kind: 'fact', confidence: 0.5, sourceIndices: [0] }] }));
+    }
+    if (method === 'classify' && serialized.includes('partial classification marker')) {
+      const response = responsesEnvelope(body.model, { items: [] });
+      response.output[0].content[0].text = '{not-json';
+      return Response.json(response);
+    }
     return Response.json(responsesEnvelope(body.model, scripted[method](input)));
   };
   const session = f.session(null, null, generation);
@@ -834,6 +851,7 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
 
   const adapter = await readJson(output, 'cases', caseIds.adapterbad, 'diagnostics.json');
   const core = await readJson(output, 'cases', caseIds.corebad, 'diagnostics.json');
+  const partial = await readJson(output, 'cases', caseIds.partial, 'diagnostics.json');
   const clean = await readJson(output, 'cases', caseIds.clean, 'diagnostics.json');
   assert.deepEqual(adapter.memoryModel.records, [
     { version: 1, stage: 'extract', layer: 'adapter', reason: 'output_json' },
@@ -841,17 +859,24 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
   ]);
   assert.deepEqual(core.memoryModel.records,
     [{ version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction' }]);
+  assert.ok(partial.memoryModel.records.some(record => record.stage === 'classify'));
   assert.deepEqual(clean.memoryModel.records, []);
-  assert.ok([adapter, core, clean].every((item) => item.questionId
+  assert.ok([adapter, core, partial, clean].every((item) => item.questionId
     && item.memoryModel.availability === 'available' && item.memoryModel.recordLimit === 64
     && item.memoryModel.droppedRecords === 0));
+  assert.deepEqual(adapter.captureAdmission.records.map(record => record.status), ['failed']);
+  assert.deepEqual(core.captureAdmission.records.map(record => record.status), ['failed']);
+  assert.deepEqual(partial.captureAdmission.records.map(record => [record.status,
+    record.admittedReferenceCount, record.classificationStatus]), [['partial', 1, 'failed']]);
+  assert.ok(clean.captureAdmission.records.every(record => record.status === 'completed'));
+  assert.ok(clean.captureAdmission.records.some(record => record.admittedReferenceCount > 0));
   assert.deepEqual(adapter.answerCompletions.records.map((item) => [item.arm, item.diagnostic]), [
     ['full-history', { availability: 'available', finishReason: 'stop' }],
     ['no-memory', { availability: 'available', finishReason: 'stop' }],
   ]);
   assert.deepEqual(clean.answerCompletions.records.map((item) => item.diagnostic.finishReason),
     ['stop', 'stop', 'stop']);
-  assert.equal(report.summary.generated, 3);
+  assert.equal(report.summary.generated, 4);
   assert.equal(report.summary.generationFailed, 0);
   assert.equal(Object.hasOwn(report, 'diagnostics'), false);
   assert.ok(report.cases.every((item) => Object.hasOwn(item, 'diagnostics') === false));
@@ -861,7 +886,7 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
     assert.equal(memoryGenerations.filter((call) => call.rawBody.includes(marker)).length, 1,
       `${marker} must stop memory generation after failed extraction`);
   }
-  for (const diagnostic of [adapter, core, clean]) {
+  for (const diagnostic of [adapter, core, partial, clean]) {
     const filename = path.join(output, 'cases', diagnostic.questionId, 'diagnostics.json');
     assert.equal((await lstat(filename)).mode & 0o777, 0o600);
     const text = await readFile(filename, 'utf8');
@@ -1024,6 +1049,9 @@ test('PO1/PO4: legacy custom sessions stay compatible and explicitly report unav
   assert.equal(diagnostics.answerCompletions.droppedRecords, null);
   assert.ok(diagnostics.answerCompletions.records.every((item) =>
     JSON.stringify(item.diagnostic) === JSON.stringify({ availability: 'unavailable' })));
+  assert.equal(diagnostics.captureAdmission.availability, 'available');
+  assert.ok(diagnostics.captureAdmission.records.length > 0);
+  assert.ok(diagnostics.captureAdmission.records.every(record => record.status === 'completed'));
 
   const calls = f.calls.length;
   await rm(path.join(output, 'cases', ids.plain, 'diagnostics.json'));
@@ -1068,4 +1096,202 @@ test('PO3/PO4: a diagnostic artifact write refusal preserves accounting and resu
   assert.equal(f.calls.slice(callsAfterGeneration).filter((call) => call.model === ANSWER_MODEL).length, 0);
   assert.equal(await readFile(diagnosticPath, 'utf8').then(() => true,
     (error) => error.code === 'ENOENT'), true);
+});
+
+test('CAO4: actual runner and core retain successful empty capture admission counts', async t => {
+  const source = [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })];
+  const f = await setup(t, { source });
+  const generation = (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    return Response.json(responsesEnvelope(body.model,
+      method === 'extract' ? { items: [] } : scripted[method](input)));
+  };
+  const session = f.session(null, null, generation);
+  const output = f.output('capture-admission-empty');
+  await runPublicPilot({ pilot: f.pilot, session, directory: output });
+  session.close();
+  const diagnostics = await readJson(output, 'cases', ids.plain, 'diagnostics.json');
+  assert.equal(Object.hasOwn(diagnostics, 'captureAdmission'), true,
+    'successful empty capture currently has no retained admission-count observation');
+  assert.equal(diagnostics.captureAdmission.schemaVersion, CAPTURE_ADMISSION_OBSERVATION_VERSION);
+  assert.equal(diagnostics.captureAdmission.availability, 'available');
+  assert.equal(diagnostics.captureAdmission.recordLimit, 64);
+  assert.equal(diagnostics.captureAdmission.droppedRecords, 0);
+  assert.ok(diagnostics.captureAdmission.records.length > 0);
+  assert.ok(diagnostics.captureAdmission.records.every((record) =>
+    record.status === 'completed' && record.admittedReferenceCount === 0 && record.suppressedCount === 0
+      && record.duplicateEvent === false && record.classificationStatus === 'skipped'));
+  assert.equal(JSON.stringify(await readJson(output, 'aggregate.json')).includes('captureAdmission'), false);
+  assert.equal(JSON.stringify(await readJson(output, 'report.json')).includes('captureAdmission'), false);
+
+  const baseline = await setup(t, { source });
+  const baselineSession = baseline.session(null, null, generation);
+  const databaseRoot = await mkdtemp(path.join(tmpdir(), 'cairn-unobserved-public-comparison-'));
+  t.after(() => rm(databaseRoot, { recursive: true, force: true }));
+  const core = openMemoryCore({ path: path.join(databaseRoot, 'memory.sqlite'), model: baselineSession.memoryModel });
+  const item = baseline.pilot.cases[0];
+  const directAnswerRequests = [];
+  const directRun = await runPublicComparison({ history: item.history, question: item.question,
+    namespace: { ownerId: OWNER_ID, scope: 'project', projectId: item.question.question_id }, core,
+    answer: call => { directAnswerRequests.push(structuredClone(call.request)); return baselineSession.answer(call); },
+    countTokens: baselineSession.countTokens, answerModel: baselineSession.stages.answer.model,
+    limits: PUBLIC_PILOT_LIMITS });
+  const directScore = await scorePublicComparison({ run: directRun,
+    evaluator: pilotEvaluatorFor(baseline.pilot, item.question.question_id), judge: baselineSession.judge,
+    judgeTimeoutMs: 90_000 });
+  core.close();
+  const directAttempts = baselineSession.attempts();
+  baselineSession.close();
+  const generated = await readJson(output, 'cases', ids.plain, 'generation.json');
+  const scored = await readJson(output, 'cases', ids.plain, 'scoring.json');
+  const storedRequests = await readJson(output, 'cases', ids.plain, 'answer-requests.json');
+  const stripLatency = value => JSON.parse(JSON.stringify(value, (key, entry) =>
+    key === 'latencyMs' ? undefined : entry));
+  assert.deepEqual(stripLatency(generated.run), stripLatency(directRun));
+  assert.deepEqual(scored.score, directScore);
+  assert.deepEqual(storedRequests.requests.map(entry => entry.request), directAnswerRequests);
+  const callShape = call => ({ pathname: call.pathname, rawBody: call.rawBody });
+  assert.deepEqual(f.calls.map(callShape), baseline.calls.map(callShape));
+  const accounting = await readJson(output, 'cases', ids.plain, 'accounting.json');
+  const attemptShape = attempt => ({ stage: attempt.stage, reservedMicroUsd: attempt.reservedMicroUsd,
+    actualMicroUsd: attempt.actualMicroUsd, outcome: attempt.outcome,
+    ...(attempt.countDiagnostic ? { countDiagnostic: attempt.countDiagnostic } : {}) });
+  assert.deepEqual([...accounting.attempts, ...scored.accounting.attempts].map(attemptShape),
+    directAttempts.map(attemptShape));
+});
+
+test('CAO2/CAO3: capture projection distinguishes outcomes and rejects malformed or hostile metadata', () => {
+  const reference = { id: 'synthetic-memory', revision: 1 };
+  const fresh = (memories, suppressedCount, classification) => ({ ok: true, value: { duplicate: false,
+    admission: { memories, suppressedCount, indexRevision: 1 }, classification } });
+  const expected = (batchOrdinal, status, admittedReferenceCount, suppressedCount,
+    duplicateEvent, classificationStatus) => ({ batchOrdinal, status, admittedReferenceCount,
+    suppressedCount, duplicateEvent, classificationStatus });
+  assert.deepEqual(projectCaptureAdmissionObservation(fresh([], 0,
+    { status: 'skipped', reason: 'empty' }), 0), expected(0, 'completed', 0, 0, false, 'skipped'));
+  assert.deepEqual(projectCaptureAdmissionObservation(fresh([], 1,
+    { status: 'skipped', reason: 'empty' }), 1), expected(1, 'completed', 0, 1, false, 'skipped'));
+  assert.deepEqual(projectCaptureAdmissionObservation(fresh([reference], 0,
+    { status: 'applied', memoryRevisions: [{ memoryId: reference.id, revision: 2 }], indexRevision: 2 }), 2),
+  expected(2, 'completed', 1, 0, false, 'applied'));
+  assert.deepEqual(projectCaptureAdmissionObservation({ ok: true, value: { duplicate: true,
+    memoryIds: [reference.id], suppressedCount: 0 } }, 3), expected(3, 'completed', 1, 0, true, null));
+  assert.deepEqual(projectCaptureAdmissionObservation({ ok: false,
+    error: { code: 'invalid_model_output', retryable: false } }, 4),
+  expected(4, 'failed', null, null, null, null));
+  assert.deepEqual(projectCaptureAdmissionObservation(fresh([reference], 0,
+    { status: 'failed', error: { code: 'classification_failed', retryable: false } }), 5),
+  expected(5, 'partial', 1, 0, false, 'failed'));
+
+  const malformed = [
+    { ok: true, value: { processing: true } },
+    { ok: true, value: { duplicate: true, memoryIds: Array(1), suppressedCount: 0 } },
+    { ok: true, value: { duplicate: true,
+      memoryIds: Object.assign(Array(1), { extra: reference.id }), suppressedCount: 0 } },
+    { ok: true, value: { duplicate: true, memoryIds: [{}], suppressedCount: 0 } },
+    fresh([{ id: '', revision: 1 }], 0, { status: 'skipped', reason: 'empty' }),
+    fresh([reference], 0, { status: 'applied', memoryRevisions: [{ memoryId: {}, revision: 1 }], indexRevision: 1 }),
+    { ok: false, error: { code: { toString: () => 'invalid_model_output' }, retryable: false } },
+  ];
+  for (const [batchOrdinal, response] of malformed.entries()) {
+    assert.deepEqual(projectCaptureAdmissionObservation(response, batchOrdinal),
+      expected(batchOrdinal, 'unavailable', null, null, null, null));
+  }
+
+  let okReads = 0; let valueReads = 0; let duplicateReads = 0;
+  const hostileValue = {};
+  Object.defineProperties(hostileValue, {
+    duplicate: { enumerable: true, get: () => { duplicateReads += 1; return true; } },
+    memoryIds: { enumerable: true, value: [reference.id] },
+    suppressedCount: { enumerable: true, value: 0 },
+  });
+  const hostile = {};
+  Object.defineProperties(hostile, {
+    ok: { enumerable: true, get: () => { okReads += 1; return true; } },
+    value: { enumerable: true, get: () => { valueReads += 1; return hostileValue; } },
+  });
+  assert.deepEqual(projectCaptureAdmissionObservation(hostile, 9),
+    expected(9, 'completed', 1, 0, true, null));
+  assert.deepEqual([okReads, valueReads, duplicateReads], [1, 1, 1]);
+  const throwing = {};
+  Object.defineProperty(throwing, 'ok', { enumerable: true, get: () => { throw new Error(KEY); } });
+  assert.doesNotThrow(() => projectCaptureAdmissionObservation(throwing, 10));
+  assert.deepEqual(projectCaptureAdmissionObservation(throwing, 10),
+    expected(10, 'unavailable', null, null, null, null));
+  for (const ordinal of [NaN, -1, { toString: () => { throw new Error(KEY); } }]) {
+    assert.deepEqual(projectCaptureAdmissionObservation({ ok: true, value: {} }, ordinal),
+      expected(null, 'unavailable', null, null, null, null));
+  }
+});
+
+test('CAO3: capture collector bounds records, preserves throws and closes late observations per case', async () => {
+  const empty = { ok: true, value: { duplicate: false,
+    admission: { memories: [], suppressedCount: 0, indexRevision: 1 },
+    classification: { status: 'skipped', reason: 'empty' } } };
+  const first = createCaptureAdmissionCollector();
+  for (let index = 0; index < 66; index += 1) {
+    assert.equal(await first.capture(async () => empty), empty);
+  }
+  const bounded = first.snapshot();
+  assert.equal(bounded.records.length, 64);
+  assert.equal(bounded.droppedRecords, 2);
+  assert.deepEqual(bounded.records.map(record => record.batchOrdinal),
+    Array.from({ length: 64 }, (_, index) => index));
+  let settle;
+  const pending = first.capture(() => new Promise(resolve => { settle = resolve; }));
+  const beforeLate = first.snapshot();
+  first.close();
+  const isolated = createCaptureAdmissionCollector();
+  settle(empty);
+  assert.equal(await pending, empty);
+  assert.deepEqual(first.snapshot(), beforeLate);
+  assert.deepEqual(isolated.snapshot().records, []);
+  assert.equal(await first.capture(async () => empty), empty);
+  assert.deepEqual(first.snapshot(), beforeLate);
+
+  const second = createCaptureAdmissionCollector();
+  const sentinel = new Error('synthetic throw must be preserved');
+  let caught;
+  try { await second.capture(async () => { throw sentinel; }); } catch (error) { caught = error; }
+  assert.equal(caught, sentinel);
+  assert.deepEqual(second.snapshot().records,
+    [{ batchOrdinal: 0, status: 'failed', admittedReferenceCount: null,
+      suppressedCount: null, duplicateEvent: null, classificationStatus: null }]);
+  assert.deepEqual(first.snapshot(), beforeLate);
+});
+
+test('CAO2: actual core mixed filed dedup and fresh admission keeps a two-ref observation', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'cairn-capture-observation-core-'));
+  const database = path.join(root, 'memory.sqlite');
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const namespace = { ownerId: 'capture-observation', scope: 'personal', projectId: null };
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    extract: ({ input }) => ({ items: input.messages.map(message => ({ content: message.content,
+      kind: 'fact', confidence: 0.5, sourceIndices: [message.index] })) }),
+    classify: ({ input }) => ({ items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) }) };
+  const core = openMemoryCore({ path: database, model }); t.after(() => core.close());
+  const capture = (eventId, messages) => core.capture({ namespace, client: 'synthetic', sessionId: 'session', eventId, messages });
+  const existingMessage = { id: 'existing-source', role: 'assistant', content: 'Existing filed memory' };
+  const first = await capture('first', [existingMessage]);
+  assert.equal(first.ok, true, JSON.stringify(first));
+  const existing = first.value.admission.memories[0];
+  const current = core.get({ namespace, memoryId: existing.id });
+  assert.equal(current.ok, true, JSON.stringify(current));
+  const currentRef = { memoryId: existing.id, revision: current.value.memory.revision };
+  const mapped = core.map({ namespace });
+  assert.equal(mapped.ok, true, JSON.stringify(mapped));
+  const placed = core.applyPlacement({ namespace,
+    proposal: { items: [{ memoryId: existing.id, parentIds: [],
+      newL1: { title: 'Filed observations', parentL2Ids: [] } }] },
+    expectedMemoryRevisions: [currentRef], expectedIndexRevision: mapped.value.indexRevision });
+  assert.equal(placed.ok, true, JSON.stringify(placed));
+  const mixed = await capture('mixed', [existingMessage,
+    { id: 'fresh-source', role: 'assistant', content: 'Fresh unfiled memory' }]);
+  assert.equal(mixed.ok, true, JSON.stringify(mixed));
+  assert.equal(mixed.value.admission.memories.length, 2);
+  assert.equal(mixed.value.classification.status, 'applied');
+  assert.equal(mixed.value.classification.memoryRevisions.length, 1);
+  assert.deepEqual(projectCaptureAdmissionObservation(mixed, 0),
+    { batchOrdinal: 0, status: 'completed', admittedReferenceCount: 2,
+      suppressedCount: 0, duplicateEvent: false, classificationStatus: 'applied' });
 });

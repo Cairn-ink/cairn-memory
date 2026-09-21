@@ -89,6 +89,32 @@ artifacts must be regenerated, not counted as blinded. This repair does not
 scrub exact source prose, prove public benchmark quality, or revise retained
 historical results.
 
+## Capture-admission diagnostics are prospective mechanics, not coverage
+
+Fresh private public-pilot diagnostics can distinguish a completed empty
+capture, suppression, admitted references, an exact duplicate, a capture
+failure and admission followed by classification failure. This observation is
+prospective. An old completed batch did not retain this observation or the
+receipts needed to determine retroactively which submitted messages extraction
+omitted; absence of the new subsection is unavailable evidence, not a measured
+zero. This does not erase separately retained failure evidence.
+
+`admittedReferenceCount` counts references accepted by the core. It is not a
+new-memory count: content deduplication may return an existing memory. It is
+also not retained-message or source coverage: partial extraction can omit
+messages despite a nonzero count, and stage `admitted` can accompany zero
+references. The diagnostic says nothing about semantic quality, answer quality
+or whether a source claim is true.
+
+The private observation retains at most 64 primitive-only rows per case, counts
+overflow and marks malformed response projections unavailable. It retains no
+source text or identifiers and does not enter ordinary comparison output,
+scoring, aggregates or the redacted report. Qualified deduplication attaches to
+an existing memory only for identical resolved source anchors. A changed source
+identity intentionally fails with `qualification_conflict`; the observer does
+not turn that immutable provenance boundary into a successful attach. No source
+archive, staging default, retry or source-bound-v2 benchmark switch is added.
+
 ## Source-aware candidate navigation is a bounded literal heuristic
 
 Explicit `source-evidence` and `rationale-evidence` recall can now use at most

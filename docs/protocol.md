@@ -11,12 +11,23 @@ contracts. Ordinary answer callbacks remain exactly `{text,usage}`.
 The artifact contains only the opaque case ID; fixed version, stage, layer and
 reason categories already allowed by model diagnostics; runner-owned answer
 order and arm categories; `stop`/`length`; availability markers; fixed limits;
-and drop counts. It never accepts provider/model exception strings, raw
-responses, request bodies, source or answer text, headers, keys, paths or
-arbitrary observer fields. Every observed field is read once, checked against
-the fixed allowlists and projected into a new object. Model events are capped at
-64 per case and answer completion rows at the three fixed arms; overflow is
-counted, not retained.
+drop counts; and a separately versioned optional capture-admission subsection.
+That subsection is `cairn-capture-admission-observation-v1`, contains at most 64
+rows, and projects only a batch ordinal, `completed|partial|failed|unavailable`,
+finite admitted-reference and suppression counts, a duplicate-event boolean and
+`skipped|applied|failed` classification status. Unsupported fields are `null`;
+malformed projections are unavailable, not zero.
+
+The artifact never accepts provider/model exception strings, raw responses,
+request bodies, source or answer text, headers, keys, paths, memory/receipt/
+source identifiers or arbitrary observer fields. Every observed field is read
+once, checked against the fixed allowlists and projected into a new object.
+Model and capture events are each capped at 64 per case and answer completion
+rows at the three fixed arms; overflow is counted, not retained. Capture observation wraps the
+runner-owned core call and is available independently of a session's optional
+model-diagnostic hook. It preserves the original capture response, exception,
+call order and request and does not change the public core response or any
+HTTP/MCP/adapter wire contract.
 
 The real benchmark session binds collection to each asynchronous case
 invocation and keeps sessions separate. Work spawned in an earlier case retains
@@ -28,6 +39,15 @@ an unavailable row, a legacy/custom session or a case blocked before generation
 is non-evidence. These local files share the run directory's ordinary
 filesystem, journal, backup and secure-erasure limitations and grant no
 authority or semantic correctness.
+
+An admitted-reference count describes references accepted by core admission,
+not newly created memories or retained-message coverage. A content-deduplicated
+memory can contribute a reference, partial extraction can omit source messages,
+and an admitted stage can contain zero references. Source retention remains the
+separate prospective opt-in described below. Existing qualified deduplication
+requires identical resolved source anchors; a changed source identity remains
+an intentional `qualification_conflict`. Observation does not weaken either
+boundary or reconstruct old pilot artifacts.
 
 ### Explicit embedded complete-source snapshot
 

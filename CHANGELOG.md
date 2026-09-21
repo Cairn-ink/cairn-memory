@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — private capture-admission observation
+
+- Fresh public-pilot cases now retain a separately versioned, bounded private
+  capture-admission subsection that distinguishes completed empty admission,
+  suppression, accepted references, duplicate replay, failure and partial
+  classification. It contains primitive counts/categories only, caps records at
+  64 with explicit drops, and treats malformed projections as unavailable.
+- The admitted-reference count is neither newly created memories nor retained-
+  message coverage. Observation preserves capture responses, exceptions,
+  requests, accounting, scoring and aggregate/report output. Missing new
+  observations in legacy artifacts remain unavailable; no source retention,
+  retry, capture policy, benchmark mode or public core/wire contract changes.
+
 ## Unreleased — public pilot rejection diagnostics
 
 - Public-pilot cases now write a bounded private `diagnostics.json` with fixed

@@ -86,8 +86,9 @@ refused or failed (a fixed code on stderr, never data), 2 missing key.
   (the frozen comparison run), `answer-requests.json` (the exact request bodies
   in send order including packed evidence, each with the arm that sent it in
   `armGuess`, how that label was decided in `armLabelMethod`, timings and the
-  guard outcome), `diagnostics.json` (bounded content-free model diagnostics
-  and per-answer `stop`/`length` completion diagnostics), `truncation.json`,
+  guard outcome), `diagnostics.json` (bounded content-free model diagnostics,
+  per-answer `stop`/`length` completion diagnostics and capture-admission
+  observations), `truncation.json`,
   `accounting.json` (guard attempts for the case plus ledger state before and
   after), `timings.json`, `scoring.json` (the official-style record plus its own
   judge accounting, or a blocked or failed marker).
@@ -128,15 +129,54 @@ The ordinary answer callback remains exactly `{text,usage}`, and neither
 diagnostic changes answer text, score input, request bodies, limits, arm order,
 guard accounting or retry policy.
 
-`availability: available` means the real benchmark session installed the
-observation hook; an empty record list does not prove that no model failure
-occurred or that every callback was delivered. Legacy/custom sessions report
-`unavailable`. Old run directories and blocked cases may have no diagnostic
-file at all, which is also unavailable rather than an observed zero. Collection
-is scoped to the asynchronous case invocation and to its session. A callback
-created in an older case remains bound to that closed collector, so a late event
-is ignored rather than attached to the next case. Closing and snapshotting do
-not claim completeness.
+Fresh generated cases also contain the separately versioned optional
+`captureAdmission` subsection:
+
+```json
+{
+  "schemaVersion": "cairn-capture-admission-observation-v1",
+  "availability": "available",
+  "recordLimit": 64,
+  "droppedRecords": 0,
+  "records": [{
+    "batchOrdinal": 0,
+    "status": "completed",
+    "admittedReferenceCount": 0,
+    "suppressedCount": 0,
+    "duplicateEvent": false,
+    "classificationStatus": "skipped"
+  }]
+}
+```
+
+Each row is the runner's projection of one actual core capture call. `status`
+is `completed`, `partial`, `failed` or `unavailable`; the three counts/flags
+and `classificationStatus` (`skipped`, `applied` or `failed`) are `null` when
+the core response cannot support them. `partial` means admission completed but
+classification failed. A failed or thrown capture has no admission counts, and
+a malformed response projection is unavailable rather than an observed zero.
+At most 64 rows are retained per case and later rows only increment
+`droppedRecords`. The subsection is available even when a custom session has no
+memory-model diagnostic callback, because it observes the runner's actual core.
+
+`admittedReferenceCount` counts accepted memory references returned by the
+core. It is neither a newly created memory count nor proof that every submitted
+message was retained: content deduplication can return an existing memory, and
+partial extraction can omit messages. Likewise, stage `admitted` does not mean
+the reference count is nonzero. A qualified content duplicate attaches only
+when its resolved source anchors are identical; a changed source identity is
+an intentional qualification conflict, not a missing observation.
+
+For model and answer diagnostics, `availability: available` means the real
+benchmark session installed the observation hook; an empty record list does not
+prove that no model failure occurred or that every callback was delivered.
+Legacy/custom sessions report those sections as `unavailable`. Old run
+directories and blocked cases may have no diagnostic file or no
+`captureAdmission` subsection at all, which is also unavailable rather than an
+observed zero. Collection is scoped to the asynchronous case invocation and to
+its session. Work created in an older case remains bound to that closed
+collector, so a late model event or capture settlement is ignored rather than
+attached to the next case. Closing and snapshotting do not claim completeness.
 
 ## Resume
 
