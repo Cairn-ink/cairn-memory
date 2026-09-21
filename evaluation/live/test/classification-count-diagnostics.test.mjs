@@ -119,9 +119,13 @@ function tokenMetrics(model, body, store) {
   const schemaText = JSON.stringify(schema);
   const visibleIds = [...input.memories.map((memory) => memory.id),
     ...input.map.filter((item) => item.type === 'moc').map((item) => item.moc.id)];
-  const idOccurrences = visibleIds.map((id) => ({ id, occurrences: schemaText.split(id).length - 1 }));
+  const idOccurrences = visibleIds.map((id) => {
+    const literal = JSON.stringify(id);
+    return { id, literal, occurrences: schemaText.split(literal).length - 1 };
+  });
   const occurrences = idOccurrences.reduce((total, entry) => total + entry.occurrences, 0);
-  const schemaWithoutIds = visibleIds.reduce((text, id) => text.replaceAll(id, '<id>'), schemaText);
+  const schemaWithoutIds = idOccurrences.reduce((text, entry) =>
+    text.replaceAll(entry.literal, JSON.stringify('<id>')), schemaText);
   const component = (value) => {
     const text = typeof value === 'string' ? value : JSON.stringify(value);
     return { bytes: Buffer.byteLength(text, 'utf8'), localTokens: model.countTokens(text) };
@@ -209,6 +213,9 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
       } else {
         assert.ok(metric.visibleMocs > 0 && metric.visibleMocs < topicCount);
         assert.equal(metric.mapExhausted, false);
+        assert.equal(metric.schemaVisibleIdOccurrences,
+          metric.visibleTargetCards + metric.visibleMocs);
+        assert.equal(metric.schemaRepeatedVisibleIdOccurrences, 0);
       }
       growth.push({ topicCount, ...metric });
     }
