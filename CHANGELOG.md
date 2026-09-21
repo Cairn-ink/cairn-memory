@@ -663,6 +663,22 @@ reliability.
   change is included. Frozen v1 evidence remains unchanged; offline tests do not
   establish model-quality or latency improvements.
 
+## Unreleased — bounded source-aware recall candidates
+
+- For explicit `source-evidence` and `rationale-evidence` recall only, rank
+  private navigation candidates by the maximum literal overlap of the generated
+  body and first four stable-ID retained receipt excerpts. A strictly winning
+  receipt supplies the existing 120-code-point query preview; body and receipt
+  ties keep the body, and receipt ties keep the first stable ID.
+- Keep the 1,024-memory scan, two select calls, page/token/reference limits,
+  public maps, classification, default recall and automatic rationale discovery
+  unchanged. Source cursors bind mode, policy and the four-receipt limit; existing
+  epoch/revision/final-read fences cover later use. A fifth-receipt-only match
+  remains a documented heuristic miss, not invented incomplete map coverage.
+- This widens opt-in selector exposure to bounded retained personal source text.
+  Offline synthetic and local-tokenizer checks establish reachability and bounds,
+  not semantic relevance, provider cost, latency or answer quality.
+
 ## Unreleased — bounded query-aware candidates
 
 - Score current exact-namespace memory bodies by distinct literal query-token

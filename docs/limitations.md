@@ -89,6 +89,39 @@ artifacts must be regenerated, not counted as blinded. This repair does not
 scrub exact source prose, prove public benchmark quality, or revise retained
 historical results.
 
+## Source-aware candidate navigation is a bounded literal heuristic
+
+Explicit `source-evidence` and `rationale-evidence` recall can now use at most
+the first four stable-ID receipt excerpts of each eligible current memory as
+private select-label features. This improves literal reachability when a
+generated interpretation omits query words, but it is not semantic retrieval,
+source completeness or answer-quality evidence. Whole Unicode letter/number
+runs still do not handle paraphrases, stemming, synonyms or dictionary-style
+CJK segmentation. A useful match in receipt five or later remains invisible to
+candidate scoring in a crowded store, although complete fetched sources are
+still returned if some other feature selects that memory. Stable receipt-ID
+order is deterministic, not chronological.
+
+Internally, explicit source mode reads and scores up to four retained excerpts
+of 800 UTF-16 units per eligible memory within the existing 1,024-current-memory
+scan. The supplied selector receives only the winning 120-code-point preview for
+each candidate packed into the existing at-most-100-item, 4,000-token page over
+at most two rounds, not those four full excerpts, receipt IDs or source metadata.
+That preview still widens opt-in personal-data exposure. It does not widen
+namespace authority or affect default recall and automatic rationale discovery;
+public maps and the classification topic catalog remain unchanged. Existing
+freshness checks stop later use or finalization after a valid mutation, but data
+already sent in a begun model request cannot be withdrawn retroactively.
+
+Synthetic actual-core tests demonstrate bounded page visibility, including one
+offline run with the pinned local tokenizer. A post-hoc development replay over
+already exposed copied stores moved one previously absent target onto the first
+candidate page while preserving two targets that were already visible; an
+explicit visibility oracle could then fetch and finalize them. This does not
+measure model selection, answer quality or a benchmark score. Neither probe
+measures provider token accounting, latency or total SQLite page I/O. The row
+and excerpt limits describe returned SQL rows and core scoring work only.
+
 ## Classification count limit: pilot halted before scoring
 
 The [P3 pilot report](https://github.com/Cairn-ink/cairn-memory/issues/180#issuecomment-5751116229)

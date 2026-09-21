@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
-import { fail } from "./validation.mjs";
-import { QUERY_SCAN_LIMIT } from './query-candidates.mjs';
+import { boundedText, fail } from "./validation.mjs";
+import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT } from './query-candidates.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -352,8 +352,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
-  function queryCandidateRows(ns, { score, memoryLabel }) {
+  function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0 }) {
     return transaction(db, () => {
+      if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       // The existing partial index excludes history/tombstones before traversal.
@@ -363,17 +364,40 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         INDEXED BY capture_current_memories WHERE ${namespaceWhere}
           AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
         .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
+      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT excerpt FROM receipts
+        INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`);
       const eligible = [];
       for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
         if (memory.deleted || memory.currentness !== 'current') continue;
         // Respect active-generation membership, never bypass its read authority.
         if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
           AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
-        eligible.push({ memory, score: score(memory.content) });
+        const bodyScore = score(memory.content);
+        let candidateScore = bodyScore;
+        let winningExcerpt;
+        if (receiptSources) {
+          const receipts = receiptSources.all(memory.id, sourceReceiptLimit);
+          for (const receipt of receipts) {
+            try {
+              if (!receipt.excerpt.isWellFormed() || boundedText(receipt.excerpt, 800) !== receipt.excerpt) {
+                fail('storage_error');
+              }
+            } catch { fail('storage_error'); }
+            const receiptScore = score(receipt.excerpt);
+            // Stable receipt-ID order and strict improvement preserve the first
+            // receipt on ties and retain the body label on a body/receipt tie.
+            if (receiptScore > candidateScore) {
+              candidateScore = receiptScore;
+              winningExcerpt = receipt.excerpt;
+            }
+          }
+        }
+        eligible.push({ memory, score: candidateScore,
+          sourceLabel: winningExcerpt === undefined ? undefined : memoryLabel(winningExcerpt) });
       }
       eligible.sort((a, b) => b.score - a.score ||
         (a.memory.id < b.memory.id ? -1 : a.memory.id > b.memory.id ? 1 : 0));
-      const rows = eligible.map(({ memory }) => {
+      const rows = eligible.map(({ memory, sourceLabel }) => {
         const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
           JOIN mocs parent ON parent.id = r.moc_id
           WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
@@ -381,9 +405,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           ORDER BY parent.canonical_title, parent.id LIMIT 1`)
           .get(memory.id, memory.revision, ...boundary(ns));
         return { item: placement
-          ? { type: 'ref', ref: memoryRef(placement), label: memoryLabel(memory.content) }
+          ? { type: 'ref', ref: memoryRef(placement), label: sourceLabel ?? memoryLabel(memory.content) }
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
-            label: memoryLabel(memory.content) } };
+            label: sourceLabel ?? memoryLabel(memory.content) } };
       });
       return { rows, epoch: currentEpoch, scanExhausted: scanned.length <= QUERY_SCAN_LIMIT };
     });

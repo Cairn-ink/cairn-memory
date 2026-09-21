@@ -329,6 +329,31 @@ personal fields, provider method, telemetry or hosted wire schema is introduced.
 Source roles and passages remain untrusted; even explicit remember may contain
 an assertion supplied by a client, not an authenticated transcript. Source
 selection remains unassessed and MOC routing labels remain model interpretations.
+For an explicit `source-evidence` or `rationale-evidence` recall only, private
+candidate navigation may score the first four retained receipt excerpts for
+each already current, namespace-owned and published-projection-eligible memory.
+It reads receipts in stable opaque-ID order, which is not event chronology, and
+uses the greatest distinct literal query-token overlap across the generated body
+and those four excerpts. A receipt supplies the existing 120-code-point select
+preview only when it scores strictly above the body; the first stable-ID receipt
+wins a receipt tie, while a body tie keeps the body preview. Internally, across
+the existing 1,024-memory scan, at most 4,096 excerpts of at most 800 UTF-16
+units are read and scored. The selector sees only a winning 120-code-point
+preview for each candidate actually packed into the existing at-most-100-item,
+4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
+metadata. This is bounded navigation, not complete source search or semantic
+relevance.
+
+Default recall and automatic rationale discovery remain body-only; public maps
+and the classification topic catalog remain unchanged. Source-aware cursor
+state binds the explicit mode, query, policy version and four-receipt limit
+separately from body-only cursors. The four-receipt score bound does not change
+map/reference exhaustion or complete-map source ranking: later receipts can
+still be fetched after a memory is selected, but a query term present only in
+receipt five or later cannot help that memory reach selection. Existing epoch,
+revision and final-snapshot checks prevent stale later use and finalization;
+they cannot retract a preview after a model request has already begun.
+
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can
 still expose the original model interpretation. File-access, journals, backups
