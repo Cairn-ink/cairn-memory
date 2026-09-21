@@ -71,8 +71,10 @@ prefix, one-attempt request policy and stage-bound guard were unchanged.
 Capture used baseline `core.capture`, without qualification or rationale
 variants. The bounds remained 6,000 local classification-input tokens, 7,024
 provider-input tokens and 1,024 provider-output tokens; answers used a 123,000
-token context bound and 512 output tokens; judge input/output bounds were
-4,096/16 tokens. This direct-core pilot is not evidence for advanced
+token context bound and 512 output tokens, while the separate answer transport
+guard used `maxInputTokens: 125,000` with `inputTokenFraming: 1,024` and
+`maxOutputTokens: 512`; judge input/output bounds were 4,096/16 tokens. This
+direct-core pilot is not evidence for advanced
 reliability modes, an installed-live package or a native Hermes/provider path.
 
 The original seven-case campaign envelope was 8,000,000 micro-USD and 1,600
