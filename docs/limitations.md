@@ -11,6 +11,26 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The optional [Python reference sidecar](official-reference-rendering.md)
+preserves number/array rendering from original JSON for official-style judging.
+It is evaluator-only and requires an independently pinned sidecar digest.
+Hash/capability checks bind reviewed artifacts; they do not authenticate the
+corpus or prove a model was called. Without that opt-in binding, non-string
+references still remain unresolved. No public accuracy result follows from
+these synthetic compatibility tests.
+
+The [offline public comparison](public-longmemeval-comparison.md) and
+[official-style scoring adapter](official-longmemeval-scoring.md) provide
+synthetic plumbing, not measured accuracy. The three arms now retain source
+dates and Cairn uses source receipts rather than generated summaries. Capture
+itself is still source-time-unaware. Context counts are caller estimates, not
+proof of a provider's context-window fit. The default scorer verifies string
+references only; numeric/array references require the opt-in bound Python
+sidecar above or remain unresolved. A complete
+protocol record does not prove that a real provider ran. Dataset exposure,
+configuration freeze, guarded transport and independently reviewed paid results
+remain separate gates; no competitor comparison or promotion readiness follows.
+
 An installed subprocess has passed a real
 model-backed remember → restart → sourced recall → forget loop. The frozen
 semantic evaluation still fails source support: an extractor sometimes turns
@@ -59,6 +79,124 @@ model/configuration and comparison arms, retained per-case failures, and an
 independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
+
+Prepared LongMemEval v1 histories exposed raw session-ID labels to ingestion
+and answer evidence, and legacy turn IDs depended on those labels. A source
+session ID could itself encode an answer or abstention. Preparation v2 blinds
+that metadata and makes turn identities label-independent, with an offline
+synthetic preparation → local-core comparison → scoring regression. Old v1
+artifacts must be regenerated, not counted as blinded. This repair does not
+scrub exact source prose, prove public benchmark quality, or revise retained
+historical results.
+
+## Capture-admission diagnostics are prospective mechanics, not coverage
+
+Fresh private public-pilot diagnostics can distinguish a completed empty
+capture, suppression, admitted references, an exact duplicate, a capture
+failure and admission followed by classification failure. This observation is
+prospective. An old completed batch did not retain this observation or the
+receipts needed to determine retroactively which submitted messages extraction
+omitted; absence of the new subsection is unavailable evidence, not a measured
+zero. This does not erase separately retained failure evidence.
+
+`admittedReferenceCount` counts references accepted by the core. It is not a
+new-memory count: content deduplication may return an existing memory. It is
+also not retained-message or source coverage: partial extraction can omit
+messages despite a nonzero count, and stage `admitted` can accompany zero
+references. The diagnostic says nothing about semantic quality, answer quality
+or whether a source claim is true.
+
+The private observation retains at most 64 primitive-only rows per case, counts
+overflow and marks malformed response projections unavailable. It retains no
+source text or identifiers and does not enter ordinary comparison output,
+scoring, aggregates or the redacted report. Qualified deduplication attaches to
+an existing memory only for identical resolved source anchors. A changed source
+identity intentionally fails with `qualification_conflict`; the observer does
+not turn that immutable provenance boundary into a successful attach. No source
+archive, staging default, retry or source-bound-v2 benchmark switch is added.
+
+## Source-aware candidate navigation is a bounded literal heuristic
+
+Explicit `source-evidence` and `rationale-evidence` recall can now use at most
+the first four stable-ID receipt excerpts of each eligible current memory as
+private select-label features. This improves literal reachability when a
+generated interpretation omits query words, but it is not semantic retrieval,
+source completeness or answer-quality evidence. Whole Unicode letter/number
+runs still do not handle paraphrases, stemming, synonyms or dictionary-style
+CJK segmentation. A useful match in receipt five or later remains invisible to
+candidate scoring in a crowded store, although complete fetched sources are
+still returned if some other feature selects that memory. Stable receipt-ID
+order is deterministic, not chronological.
+
+Internally, explicit source mode reads and scores up to four retained excerpts
+of 800 UTF-16 units per eligible memory within the existing 1,024-current-memory
+scan. The supplied selector receives only the winning 120-code-point preview for
+each candidate packed into the existing at-most-100-item, 4,000-token page over
+at most two rounds, not those four full excerpts, receipt IDs or source metadata.
+Each candidate receipt must first pass the same authoritative stored identity,
+memory binding, role, canonical-excerpt and receipt-key validation as final source
+output; corruption fails before selector invocation, including empty selection.
+That preview still widens opt-in personal-data exposure. It does not widen
+namespace authority or affect default recall and automatic rationale discovery;
+public maps and the classification topic catalog remain unchanged. Existing
+freshness checks stop later use or finalization after a valid mutation, but data
+already sent in a begun model request cannot be withdrawn retroactively.
+
+Synthetic actual-core tests demonstrate bounded page visibility, including one
+offline run with the pinned local tokenizer. A post-hoc development replay over
+already exposed copied stores moved one previously absent target onto the first
+candidate page while preserving two targets that were already visible; an
+explicit visibility oracle could then fetch and finalize them. This does not
+measure model selection, answer quality or a benchmark score. Neither probe
+measures provider token accounting, latency or total SQLite page I/O. The row
+and excerpt limits describe returned SQL rows and core scoring work only.
+
+## Classification count limit: pilot halted before scoring
+
+The [P3 pilot report](https://github.com/Cairn-ink/cairn-memory/issues/180#issuecomment-5751116229)
+records 67 provider requests, USD0.335 reserved, and no answer or judge requests.
+The first case stopped during classification and the second never started;
+common resolved N is zero, not a measured zero-percent accuracy. These failures
+and their reservations must remain visible in any subsequent experiment.
+
+The run's `a31f9d9` classification path sends a token-bounded MOC catalog page
+and at most five target memories, not all stored memory bodies. The ordinary
+OpenAI adapter also has a 6,000-token local-input limit and a 7,024-token
+provider-input limit; these are not only benchmark guard settings. The provider
+request includes the dynamic output schema as well as instructions and input.
+The benchmark guard can turn a count-response rejection into an unknown
+outcome and a paid-work halt; the ordinary adapter's own oversize check refuses
+generation with `context_budget_exceeded`.
+
+Classification runs after admission. A failed classification can therefore leave
+retained current memories unfiled; a successful top-level capture envelope is
+not proof of successful filing. The MCP/Hermes bridge passes this nested status
+through rather than turning it into a host-wide halt. The classification call
+currently reads one catalog page, with no public continuation for that private
+catalog cursor; an incomplete map cannot propose new topics. These are product
+boundaries to test separately from the pilot's whole-run stop policy.
+
+The rejected provider response and its exact token count were not retained.
+Database size and a matching synthetic rejection do not establish that the
+historical response exceeded the token ceiling. Neither a deterministic repeat
+at batch 16 nor failure of all seven cases has been demonstrated. See the
+[bounded diagnosis plan](plans/classification-count-diagnostics.md). A later
+[benchmark-only guard diagnostic](plans/guard-count-reason.md) can retain a
+finite reason and exact structurally validated count in private attempt
+accounting, but it is not retroactive and does not recover this response or
+resolve its cause. No budget increase, automatic retry, successful score or
+historical count is implied.
+
+The optional OpenAI adapter now compresses repeated classification target/MOC
+UUIDs into request-local role-separated wire aliases and decodes validated
+references before core/storage. Offline fixed fixtures and a separately replayed
+copy show material local-token and byte reduction with the same visible
+candidate/card/MOC content, but local tokenizer measurements are not provider
+counts. Aliases do not hide personal content, titles or metadata, do not solve
+arbitrary catalog growth or source-support quality, and do not recover the
+historical count or prove its cause. The 6,000/7,024/1,024 limits, incomplete-map
+behavior and benchmark halt policy remain. Any paid rerun still requires a
+frozen, independently reviewed candidate and separate authorization.
 
 ## Where the evidence lives
 

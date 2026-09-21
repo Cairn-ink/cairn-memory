@@ -5,6 +5,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  rm,
   stat,
   writeFile,
 } from 'node:fs/promises';
@@ -120,7 +121,8 @@ test('two-case pilot uses actual core, retains capture failure, and judges only 
   const pilot = await loadPreparedPilot({ directory: prepared });
   assert.equal(Object.isFrozen(pilot), true);
   assert.equal(Object.isFrozen(pilot.cases[0].history), true);
-  assert.doesNotMatch(JSON.stringify(pilot), /reference_answer|has_answer|synthetic-pilot-revision/iu);
+  assert.doesNotMatch(JSON.stringify(pilot),
+    /reference_answer|has_answer|synthetic-pilot-revision|working-case-answer|source_session_id|session_id_map/iu);
 
   const { session, calls } = scriptedSession();
   const progress = [];
@@ -235,6 +237,72 @@ test('artifact digest mismatch fails before a model callback or output mutation'
     { code: 'artifact_digest_mismatch' });
   assert.deepEqual(calls, { extract: 0, answer: [], judge: [] });
   await assert.rejects(stat(path.join(root, 'output')), { code: 'ENOENT' });
+});
+
+test('v1 artifacts and self-consistent legacy turn IDs fail closed before generation', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'cairn-live-pilot-v2-identity-'));
+  const prepared = await prepare(root);
+  const manifestPath = path.join(prepared, 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.schema_version = 'cairn-longmemeval-preparation-v1';
+  await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+  await assert.rejects(loadPreparedPilot({ directory: prepared }), { code: 'invalid_manifest' });
+
+  manifest.schema_version = 'cairn-longmemeval-preparation-v2';
+  const historyPath = path.join(prepared, 'history.jsonl');
+  const evaluatorPath = path.join(prepared, 'evaluator.jsonl');
+  const histories = (await readFile(historyPath, 'utf8')).trimEnd().split('\n').map(JSON.parse);
+  const evaluators = (await readFile(evaluatorPath, 'utf8')).trimEnd().split('\n').map(JSON.parse);
+  const oldTurnId = histories[0].sessions[0].turns[0].turn_id;
+  const legacyTurnId = `lme-turn-${digest('raw-source-label').slice(0, 64)}`;
+  histories[0].sessions[0].turns[0].turn_id = legacyTurnId;
+  evaluators[0].turn_labels.find((label) => label.turn_id === oldTurnId).turn_id = legacyTurnId;
+  for (const [name, filename, rows] of [
+    ['history', historyPath, histories], ['evaluator', evaluatorPath, evaluators],
+  ]) {
+    const content = `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
+    await writeFile(filename, content);
+    manifest.artifacts[name].sha256 = digest(content);
+    manifest.artifacts[name].byte_count = Buffer.byteLength(content);
+  }
+  await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+  await assert.rejects(loadPreparedPilot({ directory: prepared }), { code: 'case_identity_mismatch' });
+});
+
+test('malformed private map and rehashed raw public session label fail closed', async (t) => {
+  for (const [name, mutate, code] of [
+    ['wrong-opaque-id', (manifest) => {
+      manifest.session_id_map[0].occurrences[0].session_id = 'raw-answer-label';
+    }, 'invalid_manifest'],
+    ['extra-occurrence', (manifest) => {
+      manifest.session_id_map[0].occurrences.push({ session_index: 2,
+        source_session_id: 'extra', session_id: 'raw-extra' });
+    }, 'invalid_manifest'],
+    ['missing-occurrence', (manifest) => {
+      manifest.session_id_map[0].occurrences.pop();
+    }, 'case_identity_mismatch'],
+    ['wrong-question', (manifest) => {
+      manifest.session_id_map[0].source_question_id = 'another-case';
+    }, 'invalid_manifest'],
+    ['raw-public-label', (manifest, histories) => {
+      histories[0].sessions[0].session_id = 'working-case-answer';
+    }, 'case_identity_mismatch'],
+  ]) {
+    const root = await mkdtemp(path.join(tmpdir(), `cairn-live-pilot-map-${name}-`));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const prepared = await prepare(root);
+    const manifestPath = path.join(prepared, 'manifest.json');
+    const historyPath = path.join(prepared, 'history.jsonl');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const histories = (await readFile(historyPath, 'utf8')).trimEnd().split('\n').map(JSON.parse);
+    mutate(manifest, histories);
+    const historyContent = `${histories.map((row) => JSON.stringify(row)).join('\n')}\n`;
+    await writeFile(historyPath, historyContent);
+    manifest.artifacts.history.sha256 = digest(historyContent);
+    manifest.artifacts.history.byte_count = Buffer.byteLength(historyContent);
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+    await assert.rejects(loadPreparedPilot({ directory: prepared }), { code }, name);
+  }
 });
 
 test('checkpoint failure drains sibling generation before returning and starts no judges', async () => {
