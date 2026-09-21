@@ -88,7 +88,7 @@ const judgeText = (body) => {
 };
 const defaultChat = (body) => Response.json(chatEnvelope(body.model,
   body.model === JUDGE_MODEL ? judgeText(body) : answerText(body)));
-const fakeUpstream = ({ calls, chat = defaultChat, count = null }) => async (url, options) => {
+const fakeUpstream = ({ calls, chat = defaultChat, count = null, generation = null }) => async (url, options) => {
   const body = JSON.parse(options.body);
   assert.equal(new URL(url).origin, 'https://api.openai.com');
   const record = { url: `${url}`, pathname: new URL(url).pathname, body, rawBody: options.body,
@@ -99,6 +99,7 @@ const fakeUpstream = ({ calls, chat = defaultChat, count = null }) => async (url
     : Response.json({ object: 'response.input_tokens', input_tokens: 100 });
   if (record.pathname === URLS.generation) {
     const method = body.text.format.name.replace(/^cairn_/u, '');
+    if (generation) return generation(body, record, method);
     return Response.json(responsesEnvelope(body.model, scripted[method](JSON.parse(body.input[0].content[0].text))));
   }
   if (record.pathname === URLS.chat) return chat(body, record);
@@ -123,8 +124,9 @@ async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, re
     authorizationId: 'synthetic-public-pilot', stages: benchmarkStagePolicy() });
   const pilot = await loadPreparedPilot({ directory: prepared });
   const calls = [];
-  const session = (chat, count) => createBenchmarkLiveSession({ ledger, apiKey: KEY,
-    fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}) }), benchmarkExtension });
+  const session = (chat, count, generation) => createBenchmarkLiveSession({ ledger, apiKey: KEY,
+    fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}),
+      ...(generation ? { generation } : {}) }), benchmarkExtension });
   return { root, inputPath, prepared, ledger, policy, benchmarkExtension, pilot, calls, session,
     output: (name) => path.join(root, name) };
 }
@@ -801,4 +803,269 @@ test('A3: the evidence-shape fallback labels requests when no run record backs t
   const positional = labelCapturedArms(entries(), fullRun);
   assert.deepEqual(positional.map((entry) => entry.armGuess), ['cairn', 'full-history', 'no-memory']);
   assert.ok(positional.every((entry) => entry.armLabelMethod === 'run-arm-order'));
+});
+
+test('PO1-PO4: case artifacts distinguish adapter and core rejection without changing generation', async (t) => {
+  const source = [
+    fixture({ id: 'adapterbad', answerTurn: 'The adapterbad color is amber.' }),
+    fixture({ id: 'corebad', answerTurn: 'The corebad color is amber.' }),
+    fixture({ id: 'clean', answerTurn: 'The clean color is amber.' }),
+  ];
+  const caseIds = Object.fromEntries(source.map(({ question_id: id }) => [id, opaqueQuestionId(id)]));
+  const f = await setup(t, { source });
+  const generation = (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    const serialized = JSON.stringify(input);
+    if (method === 'extract' && serialized.includes('adapterbad')) {
+      const response = responsesEnvelope(body.model, { items: [] });
+      response.output[0].content[0].text = '{not-json';
+      return Response.json(response);
+    }
+    if (method === 'extract' && serialized.includes('corebad')) {
+      return Response.json(responsesEnvelope(body.model, { items: [{ content: 'synthetic invalid item',
+        kind: 'fact', confidence: 2, sourceIndices: [0] }] }));
+    }
+    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+  };
+  const session = f.session(null, null, generation);
+  const output = f.output('diagnostic-rejections');
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: output });
+  session.close();
+
+  const adapter = await readJson(output, 'cases', caseIds.adapterbad, 'diagnostics.json');
+  const core = await readJson(output, 'cases', caseIds.corebad, 'diagnostics.json');
+  const clean = await readJson(output, 'cases', caseIds.clean, 'diagnostics.json');
+  assert.deepEqual(adapter.memoryModel.records, [
+    { version: 1, stage: 'extract', layer: 'adapter', reason: 'output_json' },
+    { version: 1, stage: 'extract', layer: 'core_call', reason: 'adapter_output_invalid' },
+  ]);
+  assert.deepEqual(core.memoryModel.records,
+    [{ version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction' }]);
+  assert.deepEqual(clean.memoryModel.records, []);
+  assert.ok([adapter, core, clean].every((item) => item.questionId
+    && item.memoryModel.availability === 'available' && item.memoryModel.recordLimit === 64
+    && item.memoryModel.droppedRecords === 0));
+  assert.deepEqual(adapter.answerCompletions.records.map((item) => [item.arm, item.diagnostic]), [
+    ['full-history', { availability: 'available', finishReason: 'stop' }],
+    ['no-memory', { availability: 'available', finishReason: 'stop' }],
+  ]);
+  assert.deepEqual(clean.answerCompletions.records.map((item) => item.diagnostic.finishReason),
+    ['stop', 'stop', 'stop']);
+  assert.equal(report.summary.generated, 3);
+  assert.equal(report.summary.generationFailed, 0);
+  assert.equal(Object.hasOwn(report, 'diagnostics'), false);
+  assert.ok(report.cases.every((item) => Object.hasOwn(item, 'diagnostics') === false));
+
+  const memoryGenerations = f.calls.filter((call) => call.pathname === URLS.generation);
+  for (const marker of ['adapterbad', 'corebad']) {
+    assert.equal(memoryGenerations.filter((call) => call.rawBody.includes(marker)).length, 1,
+      `${marker} must stop memory generation after failed extraction`);
+  }
+  for (const diagnostic of [adapter, core, clean]) {
+    const filename = path.join(output, 'cases', diagnostic.questionId, 'diagnostics.json');
+    assert.equal((await lstat(filename)).mode & 0o777, 0o600);
+    const text = await readFile(filename, 'utf8');
+    assert.equal(text.includes(KEY), false);
+    assert.equal(text.includes(RAW_PHRASE), false);
+    assert.equal(text.includes('synthetic invalid item'), false);
+    assert.ok(diagnostic.memoryModel.records.every((item) =>
+      Object.keys(item).sort().join(',') === 'layer,reason,stage,version'));
+  }
+});
+
+test('PO2-PO4: stop and length stay private while unknown finish rejection is unchanged', async (t) => {
+  const f = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const lengthChat = (body) => {
+    const response = chatEnvelope(body.model, body.model === JUDGE_MODEL ? judgeText(body) : answerText(body));
+    if (body.model === ANSWER_MODEL) response.choices[0].finish_reason = 'length';
+    return Response.json(response);
+  };
+  const session = f.session(lengthChat);
+  const output = f.output('length-finish');
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: output });
+  const diagnostics = await readJson(output, 'cases', ids.plain, 'diagnostics.json');
+  assert.deepEqual(diagnostics.answerCompletions.records.map((item) => item.diagnostic), [
+    { availability: 'available', finishReason: 'length' },
+    { availability: 'available', finishReason: 'length' },
+    { availability: 'available', finishReason: 'length' },
+  ]);
+  assert.ok(report.cases[0].arms.every((arm) => arm.generation.status === 'completed'));
+  assert.equal(JSON.stringify(report).includes('finishReason'), false);
+  assert.equal(JSON.stringify(await readJson(output, 'aggregate.json')).includes('finishReason'), false);
+  session.close();
+
+  const unknown = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const unknownChat = (body) => {
+    const response = chatEnvelope(body.model, body.model === JUDGE_MODEL ? judgeText(body) : answerText(body));
+    if (body.model === ANSWER_MODEL) response.choices[0].finish_reason = 'content_filter';
+    return Response.json(response);
+  };
+  const unknownSession = unknown.session(unknownChat);
+  const unknownOutput = unknown.output('unknown-finish');
+  const unknownReport = await runPublicPilot({ pilot: unknown.pilot, session: unknownSession,
+    directory: unknownOutput });
+  unknownSession.close();
+  assert.ok(unknownReport.cases[0].arms.every((arm) => arm.generation.status === 'failed'
+    && arm.generation.reason === 'answer_failed'));
+  const unknownDiagnostics = await readJson(unknownOutput, 'cases', ids.plain, 'diagnostics.json');
+  assert.ok(unknownDiagnostics.answerCompletions.records.every((item) =>
+    JSON.stringify(item.diagnostic) === JSON.stringify({ availability: 'unavailable' })));
+  assert.equal(unknownDiagnostics.answerCompletions.droppedRecords, 0);
+});
+
+test('PO3-PO4: observation is bounded and late case callbacks cannot contaminate the next case', async (t) => {
+  const source = [
+    fixture({ id: 'latefirst', answerTurn: 'The latefirst color is amber.' }),
+    fixture({ id: 'latesecond', answerTurn: 'The latesecond color is amber.' }),
+  ];
+  const caseIds = Object.fromEntries(source.map(({ question_id: id }) => [id, opaqueQuestionId(id)]));
+  const f = await setup(t, { source });
+  let releaseLate;
+  const late = new Promise((resolve) => { releaseLate = resolve; });
+  let session;
+  let scheduled = false;
+  const generation = async (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    const serialized = JSON.stringify(input);
+    if (method === 'extract' && serialized.includes('latefirst') && !scheduled) {
+      scheduled = true;
+      let reasonReads = 0;
+      const changing = { version: 1, stage: 'extract', layer: 'adapter' };
+      Object.defineProperty(changing, 'reason', { enumerable: true,
+        get: () => reasonReads++ === 0 ? 'output_shape' : KEY });
+      session.memoryModel.onDiagnostic(changing);
+      session.memoryModel.onDiagnostic({ version: 1, stage: 'extract',
+        layer: { secret: KEY, toString: () => 'adapter' }, reason: 'output_shape' });
+      for (let index = 0; index < 66; index += 1) {
+        session.memoryModel.onDiagnostic({ version: 1, stage: 'extract', layer: 'adapter',
+          reason: 'output_json', raw: `${KEY}-${index}` });
+      }
+      session.memoryModel.onDiagnostic({ version: 1, stage: 'extract', layer: 'adapter', reason: 'not-allowlisted' });
+      const hostile = {};
+      Object.defineProperty(hostile, 'version', { get: () => { throw new Error(KEY); } });
+      assert.doesNotThrow(() => session.memoryModel.onDiagnostic(hostile));
+      late.then(() => session.memoryModel.onDiagnostic({ version: 1, stage: 'extract',
+        layer: 'adapter', reason: 'output_shape' }));
+    }
+    if (method === 'extract' && serialized.includes('latesecond')) {
+      releaseLate();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+  };
+  session = f.session(null, null, generation);
+  const output = f.output('late-isolation');
+  let firstSnapshot;
+  await runPublicPilot({ pilot: f.pilot, session, directory: output,
+    onCase: async ({ stage, index }) => {
+      if (stage === 'generation' && index === 0) {
+        firstSnapshot = await readFile(path.join(output, 'cases', caseIds.latefirst, 'diagnostics.json'), 'utf8');
+      }
+    } });
+  session.close();
+  const first = await readJson(output, 'cases', caseIds.latefirst, 'diagnostics.json');
+  const second = await readJson(output, 'cases', caseIds.latesecond, 'diagnostics.json');
+  assert.equal(first.memoryModel.records.length, 64);
+  assert.equal(first.memoryModel.droppedRecords, 3);
+  assert.ok(first.memoryModel.records.every((item) => Object.keys(item).sort().join(',')
+    === 'layer,reason,stage,version'));
+  assert.equal(JSON.stringify(first).includes(KEY), false);
+  assert.deepEqual(second.memoryModel.records, []);
+  assert.equal(second.memoryModel.droppedRecords, 0);
+  assert.equal(await readFile(path.join(output, 'cases', caseIds.latefirst, 'diagnostics.json'), 'utf8'), firstSnapshot);
+});
+
+test('PO3-PO4: concurrent live sessions keep diagnostic contexts isolated', async (t) => {
+  const one = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const two = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  let secondStarted;
+  const secondGate = new Promise((resolve) => { secondStarted = resolve; });
+  let sessionOne;
+  let injected = false;
+  const generationOne = async (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    if (method === 'extract' && !injected) {
+      injected = true;
+      sessionOne.memoryModel.onDiagnostic({ version: 1, stage: 'extract', layer: 'adapter', reason: 'output_json' });
+      await secondGate;
+    }
+    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+  };
+  const generationTwo = (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    if (method === 'extract') secondStarted();
+    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+  };
+  sessionOne = one.session(null, null, generationOne);
+  const sessionTwo = two.session(null, null, generationTwo);
+  const outputOne = one.output('concurrent-one');
+  const outputTwo = two.output('concurrent-two');
+  await Promise.all([
+    runPublicPilot({ pilot: one.pilot, session: sessionOne, directory: outputOne }),
+    runPublicPilot({ pilot: two.pilot, session: sessionTwo, directory: outputTwo }),
+  ]);
+  sessionOne.close();
+  sessionTwo.close();
+  assert.deepEqual((await readJson(outputOne, 'cases', ids.plain, 'diagnostics.json')).memoryModel.records,
+    [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'output_json' }]);
+  assert.deepEqual((await readJson(outputTwo, 'cases', ids.plain, 'diagnostics.json')).memoryModel.records, []);
+});
+
+test('PO1/PO4: legacy custom sessions stay compatible and explicitly report unavailable observation', async (t) => {
+  const f = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const actual = f.session();
+  const legacy = Object.freeze({ ...actual });
+  const output = f.output('legacy-session');
+  const report = await runPublicPilot({ pilot: f.pilot, session: legacy, directory: output });
+  const diagnostics = await readJson(output, 'cases', ids.plain, 'diagnostics.json');
+  assert.deepEqual(diagnostics.memoryModel,
+    { availability: 'unavailable', recordLimit: 64, droppedRecords: null, records: [] });
+  assert.equal(diagnostics.answerCompletions.availability, 'unavailable');
+  assert.equal(diagnostics.answerCompletions.droppedRecords, null);
+  assert.ok(diagnostics.answerCompletions.records.every((item) =>
+    JSON.stringify(item.diagnostic) === JSON.stringify({ availability: 'unavailable' })));
+
+  const calls = f.calls.length;
+  await rm(path.join(output, 'cases', ids.plain, 'diagnostics.json'));
+  await rm(path.join(output, 'report.json'));
+  await rm(path.join(output, 'aggregate.json'));
+  const resumed = await runPublicPilot({ pilot: f.pilot, session: legacy, directory: output });
+  actual.close();
+  assert.equal(f.calls.length, calls);
+  assert.deepEqual(resumed.official, report.official);
+  assert.equal(await readFile(path.join(output, 'cases', ids.plain, 'diagnostics.json'), 'utf8').then(() => true,
+    (error) => error.code === 'ENOENT'), true);
+});
+
+test('PO3/PO4: a diagnostic artifact write refusal preserves accounting and resume never repeats generation', async (t) => {
+  const f = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const output = f.output('diagnostic-write-refusal');
+  const diagnosticPath = path.join(output, 'cases', ids.plain, 'diagnostics.json');
+  let planted = false;
+  const chat = async (body) => {
+    if (body.model === ANSWER_MODEL && !planted) {
+      planted = true;
+      await writeFile(diagnosticPath, '{}', { mode: 0o600 });
+    }
+    return defaultChat(body);
+  };
+  const first = f.session(chat);
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: first, directory: output }),
+    { code: 'output_exists' });
+  first.close();
+  const callsAfterGeneration = f.calls.length;
+  const accounting = await readJson(output, 'cases', ids.plain, 'accounting.json');
+  assert.ok(accounting.attempts.length > 0);
+  assert.equal(accounting.ledgerAfter.requestCount, ledgerState(f.ledger).requestCount);
+  assert.equal((await readJson(output, 'checkpoint.json')).cases[ids.plain].stage, 'generating');
+
+  await rm(diagnosticPath);
+  const second = f.session();
+  const report = await runPublicPilot({ pilot: f.pilot, session: second, directory: output });
+  second.close();
+  assert.equal(report.summary.generated, 1);
+  assert.equal(report.summary.scored, 1);
+  assert.equal(f.calls.slice(callsAfterGeneration).filter((call) => call.model === ANSWER_MODEL).length, 0);
+  assert.equal(await readFile(diagnosticPath, 'utf8').then(() => true,
+    (error) => error.code === 'ENOENT'), true);
 });

@@ -86,10 +86,11 @@ refused or failed (a fixed code on stderr, never data), 2 missing key.
   (the frozen comparison run), `answer-requests.json` (the exact request bodies
   in send order including packed evidence, each with the arm that sent it in
   `armGuess`, how that label was decided in `armLabelMethod`, timings and the
-  guard outcome), `truncation.json`, `accounting.json` (guard attempts for the
-  case plus ledger state before and after), `timings.json`, `scoring.json`
-  (the official-style record plus its own judge accounting, or a blocked or
-  failed marker).
+  guard outcome), `diagnostics.json` (bounded content-free model diagnostics
+  and per-answer `stop`/`length` completion diagnostics), `truncation.json`,
+  `accounting.json` (guard attempts for the case plus ledger state before and
+  after), `timings.json`, `scoring.json` (the official-style record plus its own
+  judge accounting, or a blocked or failed marker).
 - `aggregate.json`: `aggregateOfficialScores` output including the `common`
   bucket, per-stage cost and request totals, latency, truncation totals and
   blocked reasons.
@@ -116,6 +117,27 @@ retrieved nothing. A Cairn arm that answered with zero receipts therefore
 records an all-zero packed row rather than no row at all, so the run totals
 count it as a measured zero.
 
+`diagnostics.json` is a private observation artifact, not part of the ordinary
+answer callback, comparison run, aggregate or report. `memoryModel.records`
+retains at most 64 existing version/stage/layer/reason events from the adapter
+and core allowlists and explicitly counts records dropped beyond that bound.
+`answerCompletions.records` has one row per answer attempt (at most the three
+fixed arms), labelled after the run by its runner-owned order and arm; each row
+records only `finishReason: stop|length` or `availability: unavailable`.
+The ordinary answer callback remains exactly `{text,usage}`, and neither
+diagnostic changes answer text, score input, request bodies, limits, arm order,
+guard accounting or retry policy.
+
+`availability: available` means the real benchmark session installed the
+observation hook; an empty record list does not prove that no model failure
+occurred or that every callback was delivered. Legacy/custom sessions report
+`unavailable`. Old run directories and blocked cases may have no diagnostic
+file at all, which is also unavailable rather than an observed zero. Collection
+is scoped to the asynchronous case invocation and to its session. A callback
+created in an older case remains bound to that closed collector, so a late event
+is ignored rather than attached to the next case. Closing and snapshotting do
+not claim completeness.
+
 ## Resume
 
 Running again on the same directory with the same pilot and the same case
@@ -129,6 +151,14 @@ list, `limits`, the judge timeout, `caps` (absent versus present, compared as
 canonical JSON) or the stage policy differ from `manifest.json` and
 `checkpoint.json`, the run is refused with `run_directory_mismatch` before
 any request is sent.
+
+For a fresh generated case, the runner writes `diagnostics.json` only after the
+existing generation, request, truncation, accounting and timing companions.
+A diagnostic-file collision therefore raises the existing `output_exists`
+artifact-delivery refusal after accounting is durable. Removing that colliding
+file and resuming does not repeat generation; because diagnostic files remain
+optional for old-run compatibility, the resumed case has unavailable
+diagnostics rather than a reconstructed or fabricated record.
 
 ## Batches and merge
 

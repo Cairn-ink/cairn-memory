@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import {
@@ -51,8 +52,25 @@ const ARM_NAMES = ['cairn', 'full-history', 'no-memory'];
 export const OWNER_ID = 'longmemeval-public-pilot';
 const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const CASE_STAGES = new Set(['pending', 'generating', 'generated', 'scoring', 'scored', 'blocked']);
+const DIAGNOSTIC_RECORD_LIMIT = 64;
+const ANSWER_COMPLETION_LIMIT = ARM_NAMES.length;
+const MODEL_DIAGNOSTIC_STAGES = new Set([
+  'extract', 'classify', 'select', 'rank', 'reconcile', 'qualify', 'qualifyCandidates', 'relate', 'reviewBasis',
+]);
+const MODEL_DIAGNOSTIC_REASONS = {
+  core_call: new Set(['model_not_configured', 'context_budget_exceeded', 'token_count_unavailable',
+    'model_timeout', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',
+    'output_serialization', 'output_bounds']),
+  core_validation: new Set(['invalid_extraction', 'invalid_qualification', 'invalid_classification',
+    'invalid_reconciliation', 'invalid_rationale', 'malformed_refs', 'duplicate_ref', 'non_visible_ref',
+    'namespace_selection_limit']),
+  adapter: new Set(['response_envelope', 'response_usage', 'response_message', 'response_content',
+    'output_json', 'output_shape', 'output_bounds', 'request_invalid', 'request_bounds',
+    'token_count_response', 'transport_failure', 'response_body_bounds', 'response_json', 'model_cancelled']),
+};
 const RUN_OPTION_KEYS = ['pilot', 'session', 'directory', 'limits', 'judgeTimeoutMs', 'referenceRenderings',
   'caps', 'manifest', 'onCase', 'caseIds'];
+const diagnosticScopes = new WeakMap();
 
 export function benchmarkStagePolicy() {
   return {
@@ -101,6 +119,66 @@ export const caseBlockedReason = (entry) => {
   return null;
 };
 
+const projectModelDiagnostic = (event) => {
+  try {
+    if (!isPlainObject(event)) return null;
+    // Read untrusted accessors once; validation and projection use the same
+    // primitive snapshot so a stateful getter cannot swap in arbitrary data.
+    const { version, stage, layer, reason } = event;
+    if (version !== 1 || !MODEL_DIAGNOSTIC_STAGES.has(stage) || typeof layer !== 'string'
+      || !Object.hasOwn(MODEL_DIAGNOSTIC_REASONS, layer)
+      || !MODEL_DIAGNOSTIC_REASONS[layer].has(reason)) return null;
+    return Object.freeze({ version: 1, stage, layer, reason });
+  } catch { return null; }
+};
+
+const createCaseDiagnosticCollector = (available) => {
+  const modelRecords = [];
+  const answerRecords = [];
+  let modelDrops = 0;
+  let answerDrops = 0;
+  let closed = false;
+  const observe = (event) => {
+    try {
+      if (closed || !isPlainObject(event)) return;
+      if (event.kind === 'memory_model') {
+        if (modelRecords.length === DIAGNOSTIC_RECORD_LIMIT) { modelDrops += 1; return; }
+        modelRecords.push(event.diagnostic);
+      } else if (event.kind === 'answer_completion') {
+        if (answerRecords.length === ANSWER_COMPLETION_LIMIT) { answerDrops += 1; return; }
+        answerRecords.push({ answerIndex: event.answerIndex, finishReason: event.finishReason });
+      }
+    } catch { /* Observation never changes benchmark behavior. */ }
+  };
+  const close = () => { closed = true; };
+  const snapshot = (questionId, captured) => {
+    const completions = new Map(answerRecords.map((entry) => [entry.answerIndex, entry.finishReason]));
+    return deepFreeze({
+      schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
+      questionId,
+      memoryModel: {
+        availability: available ? 'available' : 'unavailable',
+        recordLimit: DIAGNOSTIC_RECORD_LIMIT,
+        droppedRecords: available ? modelDrops : null,
+        records: available ? modelRecords.map((entry) => ({ ...entry })) : [],
+      },
+      answerCompletions: {
+        availability: available ? 'available' : 'unavailable',
+        recordLimit: ANSWER_COMPLETION_LIMIT,
+        droppedRecords: available ? answerDrops : null,
+        records: captured.map((entry) => ({
+          order: entry.order,
+          arm: entry.armGuess,
+          diagnostic: available && completions.has(entry.order)
+            ? { availability: 'available', finishReason: completions.get(entry.order) }
+            : { availability: 'unavailable' },
+        })),
+      },
+    });
+  };
+  return Object.freeze({ observe, close, snapshot });
+};
+
 // ---------------------------------------------------------------------------
 // Session: the only place the provider key is used, and only in headers.
 // ---------------------------------------------------------------------------
@@ -113,8 +191,21 @@ export function createBenchmarkLiveSession(options = {}) {
   const guard = createBenchmarkExperimentRequestGuard({ ledger, policy: experimentPolicy(),
     benchmarkExtension, fetchImpl });
   const stages = guard.stages;
+  const diagnosticContext = new AsyncLocalStorage();
+  const emitObservation = (event) => {
+    try {
+      const context = diagnosticContext.getStore();
+      if (!context) return;
+      const result = context.observe(event);
+      Promise.resolve(result).catch(() => {});
+    } catch { /* Observation never changes provider or benchmark behavior. */ }
+  };
+  const observeModel = (event) => {
+    const diagnostic = projectModelDiagnostic(event);
+    if (diagnostic) emitObservation(Object.freeze({ kind: 'memory_model', diagnostic }));
+  };
   let memoryModel;
-  try { memoryModel = createOpenAIModel({ apiKey, fetchImpl: guard.cairnFetch }); }
+  try { memoryModel = createOpenAIModel({ apiKey, fetchImpl: guard.cairnFetch, onDiagnostic: observeModel }); }
   catch (error) { guard.close(); throw error; }
 
   const send = async (stageFetch, request, signal) => {
@@ -129,11 +220,14 @@ export function createBenchmarkLiveSession(options = {}) {
     if (!Array.isArray(data?.choices) || data.choices.length !== 1 || !isPlainObject(choice)
       || choice.message?.role !== 'assistant' || typeof choice.message?.content !== 'string'
       || !['stop', 'length'].includes(choice.finish_reason)) fail('invalid_completion');
-    return { text: choice.message.content, usage: data.usage };
+    return { text: choice.message.content, usage: data.usage, finishReason: choice.finish_reason };
   };
   const answer = async ({ request, signal } = {}) => {
     if (!isPlainObject(request) || request.model !== stages.answer.model) fail('invalid_answer_request');
-    const { text, usage } = await send(guard.answerFetch, request, signal);
+    const context = diagnosticContext.getStore();
+    const answerIndex = context?.nextAnswerIndex();
+    const { text, usage, finishReason } = await send(guard.answerFetch, request, signal);
+    if (context) emitObservation(Object.freeze({ kind: 'answer_completion', answerIndex, finishReason }));
     return { text, usage: { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
       costMicroUsd: priced(usage.prompt_tokens, stages.answer.inputPrice)
         + priced(usage.completion_tokens, stages.answer.outputPrice) } };
@@ -143,9 +237,15 @@ export function createBenchmarkLiveSession(options = {}) {
     const { text } = await send(guard.judgeFetch, request, signal);
     return { text };
   };
-  return Object.freeze({ stages, memoryModel, countTokens: memoryModel.countTokens, answer, judge,
+  const session = Object.freeze({ stages, memoryModel, countTokens: memoryModel.countTokens, answer, judge,
     attempts: () => guard.attempts(), getState: () => guard.getState(), isHalted: () => guard.isHalted(),
     close: () => guard.close() });
+  diagnosticScopes.set(session, (observe, operation) => {
+    let answerIndex = 0;
+    const context = Object.freeze({ observe, nextAnswerIndex: () => answerIndex++ });
+    return diagnosticContext.run(context, operation);
+  });
+  return session;
 }
 
 // ---------------------------------------------------------------------------
@@ -433,6 +533,7 @@ const casePaths = (directory, questionId) => {
     database: path.join(caseDirectory, 'memory.sqlite'),
     generation: path.join(caseDirectory, 'generation.json'),
     answerRequests: path.join(caseDirectory, 'answer-requests.json'),
+    diagnostics: path.join(caseDirectory, 'diagnostics.json'),
     truncation: path.join(caseDirectory, 'truncation.json'),
     accounting: path.join(caseDirectory, 'accounting.json'),
     timings: path.join(caseDirectory, 'timings.json'),
@@ -485,12 +586,15 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   let core;
   let run;
   let error;
+  const diagnosticScope = diagnosticScopes.get(session);
+  const diagnostics = createCaseDiagnosticCollector(diagnosticScope !== undefined);
   try {
     core = openMemoryCore({ path: files.database, model: session.memoryModel });
-    run = await runPublicComparison({ history: item.history, question: item.question, namespace, core,
+    const operation = () => runPublicComparison({ history: item.history, question: item.question, namespace, core,
       answer, countTokens: session.countTokens, answerModel: session.stages.answer.model, limits });
+    run = await (diagnosticScope ? diagnosticScope(diagnostics.observe, operation) : operation());
   } catch (caught) { error = safeError(caught, 'generation_failed'); }
-  finally { core?.close(); }
+  finally { diagnostics.close(); core?.close(); }
   const database = await databaseMeasurement(files.database);
   const generation = deepFreeze({
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
@@ -500,6 +604,7 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   const attempts = session.attempts().slice(attemptStart);
   const ledgerAfter = ledgerSummary(session.getState());
   labelCapturedArms(captured, run ?? null);
+  const diagnosticSnapshot = diagnostics.snapshot(questionId, captured);
   await writePrivateJson(files.generation, generation);
   await writePrivateJson(files.answerRequests, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
     requests: captured });
@@ -512,6 +617,9 @@ async function generateCase({ item, files, session, limits, plan, projected, led
       ({ order, armGuess, armLabelMethod, startedAt, elapsedMs: ms, status })),
     arms: run ? run.arms.map((arm) => ({ name: arm.name, status: arm.status, reason: arm.reason,
       latencyMs: arm.diagnostics?.latencyMs ?? null })) : [] });
+  // Optional for old runs, but last for a fresh case: a diagnostic-artifact
+  // write refusal cannot strand already-spent work without its accounting.
+  await writePrivateJson(files.diagnostics, diagnosticSnapshot);
   return { generation, attemptIds: attempts.map((attempt) => attempt.attemptId) };
 }
 
