@@ -1,12 +1,21 @@
 # Classification request-local wire aliases
 
-Status: implementation acceptance contract; offline synthetic evidence only.
+Status: implementation accepted; offline repair evidence and a separately
+frozen five-case development pilot retained.
 
 This repair is based on `b43f7308c6d7cad2c3affc0e09ac26fe3f7bbdae`.
 It responds to measured UUID repetition in the classification transport, not to
 a retained provider count. The interrupted pilot's historical provider count
 and failure cause remain unknown, so this change cannot establish that the
 pilot is fixed or supply a benchmark score.
+
+The reviewed candidate is PR 189 at exact commit
+`8132c552bcf88df5d0f539475ef13b683baf480c`. Its 17 remote CI checks are green,
+and independent Standards and Spec reviews report PASS with zero findings.
+Those gates cover the bounded alias-only implementation; they do not establish
+unlimited catalog scale or semantic correctness. A later fixed development
+pilot is reported separately below; it does not turn those engineering gates
+into a quality claim.
 
 ## Scope and invariants
 
@@ -122,4 +131,6 @@ the same `8546cf...` SHA-256 after the replay.
 | Work item | Owner/model/effort | Base | Evidence | Status |
 | --- | --- | --- | --- | --- |
 | Implementation and scoped verification | `classification_alias_impl`, requested/actual GPT-5.6 Sol high | `b43f7308` | uncoded regression red; adapter 200/200, targeted guarded core 2/2, installed round-trip 1/1 and offline demo green on Node 22.16 | complete |
-| Primary acceptance, full gates, fixed-diff reviews, commit/push/PR | primary | candidate TBD | workflow-owned final evidence | pending |
+| Primary candidate acceptance and PR189 gates | primary | `8132c552` / PR 189 | all 17 remote CI checks green; independent Standards and Spec reviews PASS (0 findings) | complete |
+| Fixed five-case development pilot | primary | `8132c552` | [Final evidence report](../public-pilot-results.md), report SHA-256 `6dd0f102f6032756f0bd97be3b2c9ea212217d174e8a145d391d46e629fe3b5b`; generated/scored 5, paired common result Cairn 1/4, full-history 1/4, no-memory 0/4; one Cairn `ingestion_incomplete`; attempt, cost and ordering audit PASS | complete |
+| Evidence documentation | requested Luna max scaffold; Sol high final after runtime spawning limit | `8132c552` | four-file evidence update; primary read-only source-boundary trace verified; primary verification and two independent fixed-diff reviews remain required before delivery | implementation handoff |

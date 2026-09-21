@@ -136,8 +136,46 @@ historical count or prove its cause. The 6,000/7,024/1,024 limits, incomplete-ma
 behavior and benchmark halt policy remain. Any paid rerun still requires a
 frozen, independently reviewed candidate and separate authorization.
 
+## Fixed five-case development pilot: low score and retained failure
+
+The separately revised [five-case development pilot](public-pilot-results.md)
+at reviewed PR 189 commit
+`8132c552bcf88df5d0f539475ef13b683baf480c` produced a paired common result of
+Cairn 1/4, full-history 1/4 and no-memory 0/4. Across the fixed roster, Cairn
+resolved four cases with one correct and one unresolved; full-history was 1/5
+and no-memory 0/5. Cairn's 25% resolved accuracy and full-history's 20%
+fixed-roster accuracy have different denominators and do not establish
+superiority. This selected plumbing pilot is not a benchmark population,
+leaderboard result, competitive comparison or reliability percentage.
+
+The unresolved Cairn case failed on the 24th of 54 capture batches with
+`invalid_model_output`; the exact adapter-versus-core validation rejection was
+not retained. The other three incorrect Cairn answers lacked necessary source
+context. A post-hoc audit found two required passages retained in current filed
+memories but not recalled, while the temporal case's required passage had no
+receipt row despite completed ingestion. These observations bound the failures
+to broader recall-selection/budget and capture/admission/source-attachment
+layers; they do not identify a narrower subroutine or alter the official score.
+
+The baseline still reads one classification page and can leave applied memories
+unfiled; unfiled memories remain retained and recall-eligible. Recall and source
+scanning are bounded, and receipt excerpts retain only an 800-UTF-16-unit
+prefix. Corpus-wide planned suffix counts are not necessarily answer-relevant
+loss, packed counts can repeat a source, and no missing truncation denominator
+should be invented. This direct-core run used baseline capture without
+qualification or rationale variants and makes no native Hermes/provider,
+installed-live or advanced-reliability claim.
+
+The report keeps the original two-case `a31f9d9` failure separate: 67 requests,
+USD 0.335 reserved, USD 0.058266 known usage-priced cost, one unknown
+classification-count outcome, no answer or judge requests, and `commonN = 0`.
+The two revisions are not combined into one accuracy denominator. The local
+7,349-to-3,803 token diagnostic remains transport evidence, not a provider
+count or proof of the historical failure's cause.
+
 ## Where the evidence lives
 
+- [Fixed five-case public pilot report](public-pilot-results.md)
 - [Semantic evaluation](semantic-evaluation.md)
 - [Paired update-reliability experiment](evidence/qualified-comparison.md)
 - [Source-support pilot results](../evaluations/results/source-support-v1.json)
