@@ -47,7 +47,12 @@ reliability work below without declaring older failure gates resolved.
    optional sidecar below, non-string reference parity remains unresolved.
    An opt-in evaluator-only Python reference sidecar addresses original-number
    and array formatting; its synthetic parity is not a corpus-quality result.
-   Stage-bound transport, exposure accounting and the frozen run remain gates.
+   Stage-bound transport and a public pilot runner are available as development
+   candidates. The first pilot halted before answering; no score is available.
+   Follow the [classification diagnosis plan](docs/plans/classification-count-diagnostics.md):
+   establish the failing request boundary, verify the smallest necessary repair,
+   then run a separately recorded fixed pilot before broader architecture work.
+   Preserve the original failed run and spending; offline tests are not scores.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
