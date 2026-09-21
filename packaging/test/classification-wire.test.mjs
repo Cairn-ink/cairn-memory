@@ -48,4 +48,3 @@ test('installed adapter packages classification wire aliases and round-trips onl
   assert.equal(JSON.stringify(bodies[0].text.format.schema).includes(memoryId), false);
   assert.equal(JSON.stringify(bodies[0].text.format.schema).includes(mocId), false);
 });
-
