@@ -1,5 +1,34 @@
 # Compatibility protocol v0.1
 
+### Private public-pilot diagnostic boundary
+
+The optional live public-pilot runner writes a per-case `diagnostics.json` only
+inside its private 0700 run directory. This is benchmark-local observation, not
+a hosted protocol field, telemetry event, model request, public comparison
+response or scoring input. It does not widen HTTP, MCP, core or adapter
+contracts. Ordinary answer callbacks remain exactly `{text,usage}`.
+
+The artifact contains only the opaque case ID; fixed version, stage, layer and
+reason categories already allowed by model diagnostics; runner-owned answer
+order and arm categories; `stop`/`length`; availability markers; fixed limits;
+and drop counts. It never accepts provider/model exception strings, raw
+responses, request bodies, source or answer text, headers, keys, paths or
+arbitrary observer fields. Every observed field is read once, checked against
+the fixed allowlists and projected into a new object. Model events are capped at
+64 per case and answer completion rows at the three fixed arms; overflow is
+counted, not retained.
+
+The real benchmark session binds collection to each asynchronous case
+invocation and keeps sessions separate. Work spawned in an earlier case retains
+that earlier collector even if it completes after another case begins; once a
+collector closes, late events are ignored and cannot be reassigned. This avoids
+cross-case attribution but does not prove complete delivery. `available` means
+the hook was installed, not that an empty list proves no error. A missing file,
+an unavailable row, a legacy/custom session or a case blocked before generation
+is non-evidence. These local files share the run directory's ordinary
+filesystem, journal, backup and secure-erasure limitations and grant no
+authority or semantic correctness.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the

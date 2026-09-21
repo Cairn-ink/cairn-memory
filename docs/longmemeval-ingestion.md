@@ -16,7 +16,8 @@ changing source under existing event IDs is not a supported resume strategy.
 Every original turn retains its role, session occurrence, original date and
 raw text. Oversized turns are split on Unicode code-point boundaries, with
 UTF-16 offsets mapping each derived message back to its original turn interval.
-Repeated original session IDs remain separate indexed occurrences. Derived IDs
+Repeated original session IDs remain separate indexed occurrences. Prepared
+v2 histories expose opaque occurrence IDs, not those original labels. Derived IDs
 are deterministic and bounded for the core; dates remain source-map metadata,
 not invented extra dialogue fed to the extractor.
 
