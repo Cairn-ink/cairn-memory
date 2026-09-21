@@ -1,5 +1,16 @@
 # Compatibility protocol v0.1
 
+### Experimental public-pilot answer boundary
+
+The evaluation-only public comparison and pilot accept an explicit
+`cairn-longmemeval-public-answer-v2` opt-in. It changes only the answer user
+message from v1 `{question,evidence}` ordering to
+`{evidence,currentQuestion}` ordering, identically across all three arms.
+The system instruction, provider controls, evidence, scoring rubric, guard,
+limits and retry policy are unchanged. Identity is retained through private
+pilot artifacts, resume and offline merge so v1 and v2 cannot be mixed. This
+does not change the public core, plugin, MCP, HTTP, or telemetry protocol.
+
 ### Private public-pilot diagnostic boundary
 
 The optional live public-pilot runner writes a per-case `diagnostics.json` only

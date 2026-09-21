@@ -8,6 +8,7 @@ import test from 'node:test';
 import { createExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
+import { PUBLIC_ANSWER_TEMPLATE_VERSION_V2 } from '../../longmemeval/public-comparison.mjs';
 import { loadPreparedPilot } from '../pilot.mjs';
 import { main as cliMain } from '../public-pilot-cli.mjs';
 import { mergePublicPilotRuns } from '../public-pilot-merge.mjs';
@@ -155,6 +156,52 @@ test('PP10: merging two disjoint completed runs sums the paired report and never
   assert.equal(text.includes(f.root), false);
   assert.equal(text.includes('amber'), false);
   assert.doesNotMatch(text, /official benchmark score/iu);
+});
+
+test('AB4: v2 merge preserves identity and rejects mixed versions before output creation', async (t) => {
+  const f = await setup(t);
+  await f.run('v2-a', [ids.plain], { answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 });
+  await f.run('v2-b', [ids.abstain_abs], { answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 });
+  const calls = f.calls.length;
+  const merged = await merge([f.at('v2-a'), f.at('v2-b')], f.at('v2-merged'));
+  assert.equal(merged.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(merged.official.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(f.calls.length, calls);
+  const blocked = await f.run('v2-blocked', [ids.long], { answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
+    caps: { reservedMicroUsd: 0, requests: 0 } });
+  assert.equal(blocked.summary.scored, 0);
+  assert.equal(blocked.official.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  const populatedAndBlocked = await merge([f.at('v2-a'), f.at('v2-blocked')], f.at('v2-populated-blocked'));
+  assert.equal(populatedAndBlocked.summary.fixedN, 2);
+  assert.equal(populatedAndBlocked.summary.scored, 1);
+  assert.equal(populatedAndBlocked.official.common.commonN, 1);
+  assert.equal(populatedAndBlocked.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  const blockedTwo = await f.run('v2-blocked-two', [ids.numeric], {
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2, caps: { reservedMicroUsd: 0, requests: 0 } });
+  assert.equal(blockedTwo.summary.scored, 0);
+  const allBlocked = await merge([f.at('v2-blocked'), f.at('v2-blocked-two')], f.at('v2-all-blocked'));
+  assert.equal(allBlocked.summary.scored, 0);
+  assert.equal(allBlocked.official.scoredRecordCount, 0);
+  assert.equal(allBlocked.official.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  await f.run('v1', [ids.long]);
+  await assert.rejects(merge([f.at('v2-a'), f.at('v1')], f.at('mixed')), { code: 'merge_mismatch' });
+  await assert.rejects(lstat(f.at('mixed')), { code: 'ENOENT' });
+
+  const identityLayers = [
+    ['manifest.json'], ['checkpoint.json'], ['aggregate.json'], ['report.json'],
+    ['cases', ids.plain, 'generation.json'], ['cases', ids.plain, 'scoring.json'],
+  ];
+  for (const [index, segments] of identityLayers.entries()) {
+    const tampered = f.at(`v2-tampered-${index}`);
+    await cp(f.at('v2-a'), tampered, { recursive: true });
+    const filename = path.join(tampered, ...segments);
+    const artifact = await readJson(filename);
+    delete artifact.answerTemplateVersion;
+    await writeFile(filename, JSON.stringify(artifact), { mode: 0o600 });
+    const out = f.at(`tampered-out-${index}`);
+    await assert.rejects(merge([tampered, f.at('v2-b')], out), { code: 'invalid_artifact' });
+    await assert.rejects(lstat(out), { code: 'ENOENT' });
+  }
 });
 
 test('PP10: overlap, mismatch, incomplete sources and occupied outputs are refused without writing', async (t) => {

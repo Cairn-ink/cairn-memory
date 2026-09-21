@@ -19,8 +19,10 @@ import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { openMemoryCore } from '../../core/contract.mjs';
 import { createBenchmarkExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
-import { aggregateOfficialScores, scorePublicComparison } from '../longmemeval/official-scoring.mjs';
-import { runPublicComparison } from '../longmemeval/public-comparison.mjs';
+import { aggregateOfficialScores, OFFICIAL_SCORING_SCHEMA_VERSION,
+  OFFICIAL_SCORING_SCHEMA_VERSION_V2, scorePublicComparison } from '../longmemeval/official-scoring.mjs';
+import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
+  runPublicComparison } from '../longmemeval/public-comparison.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
 import { PILOT_SCHEMA_VERSION, pilotEvaluatorFor, readRegularFile } from './pilot.mjs';
 import { experimentPolicy } from './session.mjs';
@@ -71,7 +73,7 @@ const MODEL_DIAGNOSTIC_REASONS = {
     'token_count_response', 'transport_failure', 'response_body_bounds', 'response_json', 'model_cancelled']),
 };
 const RUN_OPTION_KEYS = ['pilot', 'session', 'directory', 'limits', 'judgeTimeoutMs', 'referenceRenderings',
-  'caps', 'manifest', 'onCase', 'caseIds'];
+  'caps', 'manifest', 'onCase', 'caseIds', 'answerTemplateVersion'];
 const diagnosticScopes = new WeakMap();
 
 export function benchmarkStagePolicy() {
@@ -634,6 +636,11 @@ const validateOptions = (options) => {
   if (!isPlainObject(options) || Object.keys(options).some((key) => !RUN_OPTION_KEYS.includes(key))
     || ['pilot', 'session', 'directory'].some((key) => !Object.hasOwn(options, key))) fail('invalid_options');
   const { pilot } = options;
+  const answerTemplateVersion = Object.hasOwn(options, 'answerTemplateVersion')
+    ? options.answerTemplateVersion : PUBLIC_ANSWER_TEMPLATE_VERSION;
+  if (![PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2].includes(answerTemplateVersion)) {
+    fail('invalid_answer_template_version');
+  }
   if (!pilot || typeof pilot !== 'object' || pilot.schemaVersion !== PILOT_SCHEMA_VERSION
     || !Array.isArray(pilot.cases) || pilot.cases.length < 1 || !isPlainObject(pilot.identity)
     || !validString(pilot.identity.manifestSha256) || !Array.isArray(pilot.identity.questionIds)) fail('invalid_pilot');
@@ -663,7 +670,42 @@ const validateOptions = (options) => {
   }
   return { pilot, session: options.session, limits: structuredClone(limits), judgeTimeoutMs,
     caps: options.caps ? structuredClone(options.caps) : null, manifest, caseIds,
-    referenceRenderings: options.referenceRenderings, onCase: options.onCase };
+    referenceRenderings: options.referenceRenderings, onCase: options.onCase, answerTemplateVersion };
+};
+
+export const answerTemplateIdentity = (answerTemplateVersion) => (answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2
+  ? { answerTemplateVersion } : {});
+export const artifactTemplateVersion = (artifact) => {
+  if (!isPlainObject(artifact)) fail('invalid_artifact');
+  if (!Object.hasOwn(artifact, 'answerTemplateVersion')) return PUBLIC_ANSWER_TEMPLATE_VERSION;
+  if (artifact.answerTemplateVersion !== PUBLIC_ANSWER_TEMPLATE_VERSION_V2) fail('invalid_artifact');
+  return artifact.answerTemplateVersion;
+};
+export const nestedRunTemplateVersion = (run) => {
+  if (!isPlainObject(run)) fail('invalid_artifact');
+  if (!Object.hasOwn(run, 'templateVersion')) return PUBLIC_ANSWER_TEMPLATE_VERSION;
+  if (![PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2].includes(run.templateVersion)) {
+    fail('invalid_artifact');
+  }
+  return run.templateVersion;
+};
+export const nestedScoreTemplateVersion = (score) => {
+  if (!isPlainObject(score)) fail('invalid_artifact');
+  if (score.schemaVersion === OFFICIAL_SCORING_SCHEMA_VERSION
+    && !Object.hasOwn(score, 'answerTemplateVersion')) return PUBLIC_ANSWER_TEMPLATE_VERSION;
+  if (score.schemaVersion === OFFICIAL_SCORING_SCHEMA_VERSION_V2
+    && score.answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2) return PUBLIC_ANSWER_TEMPLATE_VERSION_V2;
+  return fail('invalid_artifact');
+};
+export const validateGenerationIdentity = (generation, expected, questionId) => {
+  if (artifactTemplateVersion(generation) !== expected || generation.questionId !== questionId
+    || !['completed', 'failed', 'blocked'].includes(generation.status)) fail('invalid_artifact');
+  if (generation.status === 'completed' && nestedRunTemplateVersion(generation.run) !== expected) fail('invalid_artifact');
+};
+export const validateScoringIdentity = (scoring, expected, questionId) => {
+  if (artifactTemplateVersion(scoring) !== expected || scoring.questionId !== questionId
+    || !['completed', 'failed', 'blocked'].includes(scoring.status)) fail('invalid_artifact');
+  if (scoring.status === 'completed' && nestedScoreTemplateVersion(scoring.score) !== expected) fail('invalid_artifact');
 };
 
 const casePaths = (directory, questionId) => {
@@ -690,11 +732,12 @@ const requireCaseArtifacts = async (files, generation) => {
   }
 };
 
-const blockedGeneration = (questionId, reason, extra = {}) => deepFreeze({
-  schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId, status: 'blocked', reason, ...extra,
+const blockedGeneration = (questionId, reason, answerTemplateVersion, extra = {}) => deepFreeze({
+  schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
+  questionId, status: 'blocked', reason, ...extra,
 });
 
-async function generateCase({ item, files, session, limits, plan, projected, ledgerBefore }) {
+async function generateCase({ item, files, session, limits, plan, projected, ledgerBefore, answerTemplateVersion }) {
   const questionId = item.question.question_id;
   const namespace = { ownerId: OWNER_ID, scope: 'project', projectId: questionId };
   const captured = [];
@@ -732,13 +775,13 @@ async function generateCase({ item, files, session, limits, plan, projected, led
     core = openMemoryCore({ path: files.database, model: session.memoryModel });
     const observedCore = { ...core, capture: input => captureAdmission.capture(() => core.capture(input)) };
     const operation = () => runPublicComparison({ history: item.history, question: item.question, namespace, core: observedCore,
-      answer, countTokens: session.countTokens, answerModel: session.stages.answer.model, limits });
+      answer, countTokens: session.countTokens, answerModel: session.stages.answer.model, limits, answerTemplateVersion });
     run = await (diagnosticScope ? diagnosticScope(diagnostics.observe, operation) : operation());
   } catch (caught) { error = safeError(caught, 'generation_failed'); }
   finally { captureAdmission.close(); diagnostics.close(); core?.close(); }
   const database = await databaseMeasurement(files.database);
   const generation = deepFreeze({
-    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
+    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), questionId,
     status: run ? 'completed' : 'failed', latencyMs: elapsedMs(started), database, projected,
     ...(run ? { run } : { error }),
   });
@@ -769,7 +812,8 @@ const summarizeArm = (arm) => arm ? { name: arm.name, status: arm.status, reason
   latencyMs: arm.diagnostics?.latencyMs ?? null } : null;
 
 export async function runPublicPilot(options) {
-  const { pilot, session, limits, judgeTimeoutMs, caps, manifest, caseIds, referenceRenderings, onCase }
+  const { pilot, session, limits, judgeTimeoutMs, caps, manifest, caseIds, referenceRenderings, onCase,
+    answerTemplateVersion }
     = validateOptions(options);
   const directory = resolveDirectory(options.directory, 'unsafe_output');
   const directoryHandle = await openPrivateDirectory(directory, 'unsafe_output');
@@ -787,9 +831,9 @@ export async function runPublicPilot(options) {
       await sealPrivateDirectory(directoryHandle, directory, 'unsafe_output');
       sealed = true;
       checkpoint = { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, pilotManifestSha256: pilot.identity.manifestSha256,
-        baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
+        ...answerTemplateIdentity(answerTemplateVersion), baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
       await writePrivateJson(manifestPath, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
-        createdAt: new Date(started).toISOString(), pilot: pilot.identity, caseIds,
+        ...answerTemplateIdentity(answerTemplateVersion), createdAt: new Date(started).toISOString(), pilot: pilot.identity, caseIds,
         stages: session.stages, limits, judgeTimeoutMs, caps,
         receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
         limitations: PUBLIC_PILOT_LIMITATIONS, interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest });
@@ -804,7 +848,34 @@ export async function runPublicPilot(options) {
       const recorded = await readPrivateJson(manifestPath, 'invalid_artifact');
       if (!isPlainObject(recorded) || canonical(recorded.limits) !== canonical(limits)
         || recorded.judgeTimeoutMs !== judgeTimeoutMs || canonical(recorded.caps ?? null) !== canonical(caps)
-        || canonical(recorded.stages) !== canonical(session.stages)) fail('run_directory_mismatch');
+        || canonical(recorded.stages) !== canonical(session.stages)
+        || artifactTemplateVersion(checkpoint) !== answerTemplateVersion
+        || artifactTemplateVersion(recorded) !== answerTemplateVersion) fail('run_directory_mismatch');
+      const existingAggregate = await readPrivateJson(path.join(directory, 'aggregate.json'), 'invalid_artifact');
+      const existingReport = await readPrivateJson(path.join(directory, 'report.json'), 'invalid_artifact');
+      if (existingAggregate !== null && existingReport === null) fail('aggregate_without_report');
+      if (existingReport !== null && existingAggregate === null) fail('invalid_artifact');
+      for (const artifact of [existingAggregate, existingReport].filter((item) => item !== null)) {
+        if (artifactTemplateVersion(artifact) !== answerTemplateVersion
+          || nestedScoreTemplateVersion(artifact.official) !== answerTemplateVersion) fail('invalid_artifact');
+      }
+      for (const questionId of caseIds) {
+        const state = checkpoint.cases[questionId] ?? { stage: 'pending' };
+        if (!isPlainObject(state) || !CASE_STAGES.has(state.stage)) fail('invalid_checkpoint');
+        const files = casePaths(directory, questionId);
+        const generation = await readPrivateJson(files.generation, 'invalid_artifact');
+        const scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
+        if (generation !== null) { validateGenerationIdentity(generation, answerTemplateVersion, questionId); await requireCaseArtifacts(files, generation); }
+        if (scoring !== null) validateScoringIdentity(scoring, answerTemplateVersion, questionId);
+        if (state.stage === 'pending' && (generation !== null || scoring !== null)) fail('invalid_checkpoint');
+        if (state.stage === 'generating' && scoring !== null) fail('invalid_checkpoint');
+        if (state.stage === 'generated' && (generation === null || (scoring !== null
+          && !(generation.status === 'failed' && scoring.status === 'blocked'
+            && scoring.reason === 'generation_failed')))) fail('invalid_checkpoint');
+        if (state.stage === 'scoring' && generation === null) fail('invalid_checkpoint');
+        if (state.stage === 'scored' && (generation === null || scoring === null)) fail('invalid_checkpoint');
+        if (state.stage === 'blocked' && generation === null) fail('invalid_checkpoint');
+      }
       await sealPrivateDirectory(directoryHandle, directory, 'unsafe_output');
       sealed = true;
     }
@@ -857,7 +928,7 @@ export async function runPublicPilot(options) {
       if (generation !== null) await requireCaseArtifacts(files, generation);
       if (generation === null) {
         await ensurePrivateDirectory(files.directory, 'unsafe_output');
-        generation = blockedGeneration(questionId, 'interrupted');
+        generation = blockedGeneration(questionId, 'interrupted', answerTemplateVersion);
         await writePrivateJson(files.generation, generation);
         await setStage(questionId, 'blocked', { reason: 'interrupted', phase: 'generation' });
       } else await setStage(questionId, 'generated');
@@ -871,13 +942,14 @@ export async function runPublicPilot(options) {
       const reason = halted ? 'paid_work_halted' : capReason(projected);
       if (reason) {
         await ensurePrivateDirectory(files.directory, 'unsafe_output');
-        generation = blockedGeneration(questionId, reason, { projected });
+        generation = blockedGeneration(questionId, reason, answerTemplateVersion, { projected });
         await writePrivateJson(files.generation, generation);
         await setStage(questionId, 'blocked', { reason, phase: 'generation' });
       } else {
         await setStage(questionId, 'generating');
         const ledgerBefore = ledgerSummary(session.getState());
-        const generated = await generateCase({ item, files, session, limits, plan, projected, ledgerBefore });
+        const generated = await generateCase({ item, files, session, limits, plan, projected, ledgerBefore,
+          answerTemplateVersion });
         generation = generated.generation;
         await setStage(questionId, 'generated', { attemptIds: generated.attemptIds });
       }
@@ -907,7 +979,8 @@ export async function runPublicPilot(options) {
     } else if (state.stage === 'scoring') {
       scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
       if (scoring === null) {
-        scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId, status: 'blocked',
+        scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
+          questionId, status: 'blocked',
           reason: 'interrupted' });
         await writePrivateJson(files.scoring, scoring);
         await setStage(questionId, 'blocked', { reason: 'interrupted', phase: 'scoring' });
@@ -915,7 +988,8 @@ export async function runPublicPilot(options) {
     } else if (state.stage === 'blocked' || generation.status !== 'completed') {
       scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
       if (scoring === null) {
-        scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId, status: 'blocked',
+        scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
+          questionId, status: 'blocked',
           reason: generation.status === 'blocked' ? generation.reason : 'generation_failed' });
         await writePrivateJson(files.scoring, scoring);
       }
@@ -924,7 +998,8 @@ export async function runPublicPilot(options) {
       const halted = checkpoint.halted || session.isHalted();
       const reason = halted ? 'paid_work_halted' : capReason(projected);
       if (reason) {
-        scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId, status: 'blocked', reason });
+        scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
+          questionId, status: 'blocked', reason });
         await writePrivateJson(files.scoring, scoring);
         await setStage(questionId, 'blocked', { reason, phase: 'scoring' });
       } else {
@@ -941,6 +1016,7 @@ export async function runPublicPilot(options) {
         } catch (caught) { error = safeError(caught, 'scoring_failed'); }
         const attempts = session.attempts().slice(attemptStart);
         scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
+          ...answerTemplateIdentity(answerTemplateVersion),
           status: score ? 'completed' : 'failed', latencyMs: elapsedMs(scoringStarted),
           accounting: { ledgerBefore, ledgerAfter: ledgerSummary(session.getState()), attempts,
             totals: stageTotals(attempts) },
@@ -966,7 +1042,7 @@ export async function runPublicPilot(options) {
   if (await readPrivateJson(aggregatePath, 'invalid_artifact') !== null) fail('aggregate_without_report');
   const records = [...scorings.values()].filter((scoring) => scoring.status === 'completed')
     .map((scoring) => scoring.score);
-  const official = aggregateOfficialScores({ roster, records });
+  const official = aggregateOfficialScores({ roster, records, answerTemplateVersion });
   const cost = {};
   const truncation = { turns: 0, turnsOverBound: 0, chunks: 0, chunksOverBound: 0, omittedUnits: 0,
     packedReceipts: 0, packedReceiptsFromTruncatedChunks: 0, packedOmittedUnits: 0 };
@@ -1029,7 +1105,7 @@ export async function runPublicPilot(options) {
     progressCallbackFailures: callbackFailures,
   };
   const aggregate = deepFreeze({
-    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, generatedAt: new Date().toISOString(),
+    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), generatedAt: new Date().toISOString(),
     interpretation: PUBLIC_PILOT_INTERPRETATION, pilot: pilot.identity, caseIds, limits, judgeTimeoutMs, caps,
     stages: session.stages, summary, official,
     cost: { byStage: cost, reservedMicroUsd: totalReserved, knownActualMicroUsd: totalKnown,
@@ -1039,7 +1115,7 @@ export async function runPublicPilot(options) {
   });
   await writePrivateJson(aggregatePath, aggregate);
   const report = deepFreeze({
-    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, generatedAt: aggregate.generatedAt,
+    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), generatedAt: aggregate.generatedAt,
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest, pilot: pilot.identity, caseIds,
     models: { answer: session.stages.answer.model, judge: session.stages.judge.model },
     limits, judgeTimeoutMs, caps, receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,

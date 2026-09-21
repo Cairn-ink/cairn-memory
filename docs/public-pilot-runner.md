@@ -22,6 +22,7 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Case subset | `--cases id1,id2` (source or opaque ids; roster order is kept) | Omit to run every prepared case |
 | Batch caps | `--batch-cap-micro-usd N --batch-request-cap N` | This run's own reservations and requests, checked before every case against that case's projected reservation. Size the cap at or above the `totals` that `--dry-run` prints for the selected cases, not at a single case's figure: every case generates before any case scores, so a later generation can consume the headroom an earlier case needs for its three judge calls |
 | Provenance | `--run-commit <sha>`, `--exclusions-file <json array>` | Recorded in `manifest.json` and `report.json` |
+| Answer boundary | `--answer-template-version cairn-longmemeval-public-answer-v2` | Experimental opt-in; omission is v1, and v1/v2 runs and scores are not comparable |
 | Merge | `--merge /private/run-a,/private/run-b --output /private/merged` | Offline; no key, no ledger; only `--output` may accompany it |
 
 Safe launch (no request is sent until the ledger, the extension and the
@@ -63,6 +64,9 @@ refused or failed (a fixed code on stderr, never data), 2 missing key.
   `officialJudgeRequest` produce, plus `store:false` and `stream:false` added
   by the session (a documented deviation from upstream judge kwargs; no other
   translation). The guard allowlist rejects anything else.
+- Answer template: v1 remains the default with its original artifact and CLI
+  shapes. V2 records its identity in every run, case, scoring, aggregate and
+  report layer, including blocked and zero-score runs.
 - Projection per case, checked before the case starts: reservation
   `(batches × 4 + 6) × 5,000 + 3 × 50,820 + 3 × 10,400` µUSD and
   `batches × 4 + 12` requests, where `batches` comes from the case's real
@@ -192,6 +196,11 @@ canonical JSON) or the stage policy differ from `manifest.json` and
 `checkpoint.json`, the run is refused with `run_directory_mismatch` before
 any request is sent.
 
+For resume, answer-template identity is also checked across the manifest,
+checkpoint, every selected case artifact, aggregate and report before any
+write, callback or reservation. Missing identity denotes only legacy v1;
+unknown, mixed, or missing-v2 identity fails closed.
+
 For a fresh generated case, the runner writes `diagnostics.json` only after the
 existing generation, request, truncation, accounting and timing companions.
 A diagnostic-file collision therefore raises the existing `output_exists`
@@ -212,10 +221,10 @@ cap, and the paired report is assembled afterwards without any paid call:
    to the remaining allowance. Resuming batch 1's directory with a different
    cap or case list is refused, so a second batch is always a second directory.
 3. `--merge dirA,dirB --output merged` reads the completed directories,
-   checks that they share the pilot manifest digest, stage policy, models,
+   checks that they share one answer-template version, pilot manifest digest, stage policy, models,
    limits, judge timeout and receipt bound (`merge_mismatch` otherwise) and
    that their case lists are disjoint (`merge_overlap`), re-reads every
-   completed case's `scoring.json`, recomputes `aggregateOfficialScores` over
+   case's generation and scoring wrappers, recomputes `aggregateOfficialScores` over
    the union roster (including the common bucket), sums cost, request,
    latency and truncation totals, and writes one `report.json` (0600) into the
    new empty 0700 output directory. The merged report has the runner's

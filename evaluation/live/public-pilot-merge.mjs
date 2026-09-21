@@ -7,6 +7,7 @@ import path from 'node:path';
 import { aggregateOfficialScores } from '../longmemeval/official-scoring.mjs';
 import { deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
 import {
+  answerTemplateIdentity,
   canonical,
   caseBlockedReason,
   fail,
@@ -19,6 +20,10 @@ import {
   resolveDirectory,
   sealPrivateDirectory,
   sumStageTotals,
+  artifactTemplateVersion,
+  nestedScoreTemplateVersion,
+  validateGenerationIdentity,
+  validateScoringIdentity,
   writePrivateJson,
 } from './public-pilot.mjs';
 
@@ -69,12 +74,30 @@ async function loadRun(directory) {
     || !isPlainObject(report.latency) || !isPlainObject(report.truncation)
     || !isPlainObject(report.models) || !isPlainObject(report.pilot)) fail('invalid_artifact');
   validateStageTotals(report.cost.byStage);
+  const answerTemplateVersion = artifactTemplateVersion(manifest);
+  for (const artifact of [checkpoint, aggregate, report]) {
+    if (artifactTemplateVersion(artifact) !== answerTemplateVersion) fail('invalid_artifact');
+  }
+  if (nestedScoreTemplateVersion(aggregate.official) !== answerTemplateVersion
+    || nestedScoreTemplateVersion(report.official) !== answerTemplateVersion) fail('invalid_artifact');
+  if (JSON.stringify(manifest.caseIds) !== JSON.stringify(report.caseIds)
+    || JSON.stringify(checkpoint.caseIds) !== JSON.stringify(report.caseIds)) fail('invalid_artifact');
+  const caseArtifacts = new Map();
   for (const [index, item] of report.cases.entries()) {
     if (!isPlainObject(item) || item.questionId !== report.caseIds[index] || !CASE_ID.test(item.questionId)
       || !validString(item.sourceQuestionId) || !validString(item.questionType)
       || !isPlainObject(item.generation) || !isPlainObject(item.scoring)) fail('invalid_artifact');
+    const generation = await readPrivateJson(path.join(directory, 'cases', item.questionId, 'generation.json'),
+      'invalid_artifact');
+    const scoring = await readPrivateJson(path.join(directory, 'cases', item.questionId, 'scoring.json'),
+      'invalid_artifact');
+    if (generation === null || scoring === null) fail('invalid_artifact');
+    validateGenerationIdentity(generation, answerTemplateVersion, item.questionId);
+    validateScoringIdentity(scoring, answerTemplateVersion, item.questionId);
+    if (generation.status !== item.generation.status || scoring.status !== item.scoring.status) fail('invalid_artifact');
+    caseArtifacts.set(item.questionId, { generation, scoring });
   }
-  return { directory, manifest, checkpoint, aggregate, report };
+  return { directory, manifest, checkpoint, aggregate, report, answerTemplateVersion, caseArtifacts };
 }
 
 export async function mergePublicPilotRuns(options) {
@@ -92,7 +115,8 @@ export async function mergePublicPilotRuns(options) {
   for (const directory of sources) runs.push(await loadRun(directory));
   const [first] = runs;
   for (const run of runs.slice(1)) {
-    if (run.manifest.pilot.manifestSha256 !== first.manifest.pilot.manifestSha256
+    if (run.answerTemplateVersion !== first.answerTemplateVersion
+      || run.manifest.pilot.manifestSha256 !== first.manifest.pilot.manifestSha256
       || canonical(run.manifest.stages) !== canonical(first.manifest.stages)
       || canonical(run.report.models) !== canonical(first.report.models)
       || canonical(run.manifest.limits) !== canonical(first.manifest.limits)
@@ -114,16 +138,16 @@ export async function mergePublicPilotRuns(options) {
     for (const item of run.report.cases) {
       roster.push({ questionId: item.questionId, sourceQuestionId: item.sourceQuestionId,
         questionType: item.questionType });
+      const { scoring } = run.caseArtifacts.get(item.questionId);
       if (item.scoring.status === 'completed') {
-        const scoring = await readPrivateJson(path.join(run.directory, 'cases', item.questionId, 'scoring.json'),
-          'invalid_artifact');
-        if (!isPlainObject(scoring) || !isPlainObject(scoring.score)) fail('run_incomplete');
+        if (scoring.status !== 'completed' || !isPlainObject(scoring.score)) fail('invalid_artifact');
         records.push(scoring.score);
       }
       cases.push(item);
     }
   }
-  const official = aggregateOfficialScores({ roster, records });
+  const official = aggregateOfficialScores({ roster, records,
+    answerTemplateVersion: first.answerTemplateVersion });
 
   const cost = { byStage: {}, reservedMicroUsd: 0, knownActualMicroUsd: 0, unknownCostRequests: 0, requests: 0,
     ledger: null };
@@ -160,7 +184,8 @@ export async function mergePublicPilotRuns(options) {
     if (!sealed) await outputHandle.close().catch(() => {});
   }
   const merged = {
-    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, kind: 'merged', generatedAt: new Date().toISOString(),
+    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(first.answerTemplateVersion),
+    kind: 'merged', generatedAt: new Date().toISOString(),
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: null, pilot: first.report.pilot, caseIds: [...caseIds],
     models: first.report.models, limits: first.manifest.limits, judgeTimeoutMs: first.manifest.judgeTimeoutMs,
     caps: null, receiptExcerptBoundUtf16: first.manifest.receiptExcerptBoundUtf16,

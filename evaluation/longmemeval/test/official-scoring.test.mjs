@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { opaqueQuestionId, opaqueSessionId } from '../prepare.mjs';
-import { aggregateOfficialScores, OFFICIAL_JUDGE_MODEL, officialJudgeRequest,
+import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2 } from '../public-comparison.mjs';
+import { aggregateOfficialScores, OFFICIAL_JUDGE_MODEL, OFFICIAL_SCORING_SCHEMA_VERSION,
+  OFFICIAL_SCORING_SCHEMA_VERSION_V2, officialJudgeRequest,
   officialPrompt, parseOfficialJudgeText, scorePublicComparison } from '../official-scoring.mjs';
 
 const fixtures = JSON.parse(readFileSync(new URL('../fixtures/upstream-prompts.json', import.meta.url), 'utf8'));
@@ -48,6 +50,46 @@ test('OS2/OS3: string reference only; failed and blocked arms never call judge',
     assert.equal(called, false);
     assert.ok(score.arms.every((arm) => arm.judgment.reason === 'reference_serialization_unverified'));
   }
+});
+
+test('AB3: v1 scoring stays byte-shaped while v2 identity survives scoring', async () => {
+  const legacy = run();
+  const explicitV1 = { ...run(), templateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION };
+  const [legacyScore, explicitV1Score] = await Promise.all([legacy, explicitV1].map((candidate) =>
+    scorePublicComparison({ run: candidate, evaluator: evaluator(), judge: async () => ({ text: 'yes' }) })));
+  assert.deepEqual(explicitV1Score, legacyScore);
+  assert.equal(legacyScore.schemaVersion, OFFICIAL_SCORING_SCHEMA_VERSION);
+  assert.equal(Object.hasOwn(legacyScore, 'answerTemplateVersion'), false);
+  assert.deepEqual(Object.keys(legacyScore), ['schemaVersion', 'questionId', 'sourceQuestionId', 'questionType',
+    'abstention', 'answerModel', 'compatibility', 'arms']);
+
+  const v2 = await scorePublicComparison({ run: { ...run(), templateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 },
+    evaluator: evaluator(), judge: async () => ({ text: 'yes' }) });
+  assert.equal(v2.schemaVersion, OFFICIAL_SCORING_SCHEMA_VERSION_V2);
+  assert.equal(v2.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.deepEqual(v2.arms, legacyScore.arms);
+});
+
+test('AB3: unknown generation identity rejects before judge calls', async () => {
+  for (const templateVersion of [undefined, '', 'cairn-longmemeval-public-answer-v3']) {
+    let calls = 0;
+    await assert.rejects(scorePublicComparison({ run: { ...run(), templateVersion }, evaluator: evaluator(),
+      judge: async () => { calls += 1; return { text: 'yes' }; } }), { code: 'invalid_run' });
+    assert.equal(calls, 0);
+  }
+});
+
+test('AB3: generation identity accessor is snapshotted once before scoring', async () => {
+  const candidate = run();
+  let reads = 0;
+  Object.defineProperty(candidate, 'templateVersion', { enumerable: true, get() {
+    reads += 1;
+    return PUBLIC_ANSWER_TEMPLATE_VERSION_V2;
+  } });
+  const score = await scorePublicComparison({ run: candidate, evaluator: evaluator(),
+    judge: async () => ({ text: 'yes' }) });
+  assert.equal(reads, 1);
+  assert.equal(score.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
 });
 
 test('OS3: all input is validated before first judge call and snapshots are immutable', async () => {
@@ -98,7 +140,8 @@ test('OS3: transport failure, invalid response, and timeout stay unresolved', as
 
 test('OS3: ignored abort still permits only one judge callback after timeout', async () => {
   let calls = 0;
-  const score = await scorePublicComparison({ run: run(), evaluator: evaluator(),
+  const score = await scorePublicComparison({ run: { ...run(), templateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 },
+    evaluator: evaluator(),
     judgeTimeoutMs: 5, judge: async () => { calls += 1; return new Promise(() => {}); } });
   assert.equal(calls, 1);
   assert.deepEqual(score.arms.map((arm) => arm.judgment.reason),
@@ -173,6 +216,38 @@ test('OS4: fixed roster retains omitted cases, type and abstention denominators'
   const hostileSummary = aggregateOfficialScores({ roster: [roster[0]], records: [hostile] });
   assert.equal(Object.getPrototypeOf(hostileSummary.arms.cairn.overall.reasonCounts), null);
   assert.equal(hostileSummary.arms.cairn.overall.reasonCounts.__proto__, 1);
+});
+
+test('AB3: aggregate binds v2 with zero records and rejects mixed or ambiguous schemas', async () => {
+  const roster = [{ questionId, sourceQuestionId, questionType: 'single-session-user' }];
+  const v1 = await scorePublicComparison({ run: run(), evaluator: evaluator(),
+    judge: async () => ({ text: 'yes' }) });
+  const v2 = await scorePublicComparison({ run: { ...run(), templateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 },
+    evaluator: evaluator(), judge: async () => ({ text: 'yes' }) });
+  const omitted = aggregateOfficialScores({ roster, records: [v1] });
+  const explicitV1 = aggregateOfficialScores({ roster, records: [v1],
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION });
+  assert.deepEqual(explicitV1, omitted);
+  assert.equal(Object.hasOwn(omitted, 'answerTemplateVersion'), false);
+  assert.deepEqual(Object.keys(omitted), ['schemaVersion', 'fixedCaseCount', 'scoredRecordCount', 'arms',
+    'completeVerifiedOfficialStyle', 'common']);
+
+  const emptyV2 = aggregateOfficialScores({ roster, records: [],
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 });
+  assert.equal(emptyV2.schemaVersion, OFFICIAL_SCORING_SCHEMA_VERSION_V2);
+  assert.equal(emptyV2.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(emptyV2.scoredRecordCount, 0);
+  assert.throws(() => aggregateOfficialScores({ roster, records: [v1],
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 }), { code: 'invalid_records' });
+  assert.throws(() => aggregateOfficialScores({ roster, records: [v2] }), { code: 'invalid_records' });
+  assert.throws(() => aggregateOfficialScores({ roster, records: [{ ...v1,
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 }] }), { code: 'invalid_records' });
+  const missingMarker = { ...v2 };
+  delete missingMarker.answerTemplateVersion;
+  assert.throws(() => aggregateOfficialScores({ roster, records: [missingMarker],
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 }), { code: 'invalid_records' });
+  assert.throws(() => aggregateOfficialScores({ roster, records: [], answerTemplateVersion: undefined }),
+    { code: 'invalid_answer_template_version' });
 });
 
 test('OS5: common bucket counts only cases in which all three arms resolved, null accuracy at zero', async () => {

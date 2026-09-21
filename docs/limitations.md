@@ -31,6 +31,12 @@ protocol record does not prove that a real provider ran. Dataset exposure,
 configuration freeze, guarded transport and independently reviewed paid results
 remain separate gates; no competitor comparison or promotion readiness follows.
 
+The experimental answer-template v2 only moves the quoted evidence before a
+separate final current question/date in the private evaluation request. Its
+synthetic tests establish request, identity, resume, and merge mechanics—not
+better instruction following or answer quality. V1 and v2 scores are distinct
+protocols and must not be compared as though the request were unchanged.
+
 An installed subprocess has passed a real
 model-backed remember → restart → sourced recall → forget loop. The frozen
 semantic evaluation still fails source support: an extractor sometimes turns

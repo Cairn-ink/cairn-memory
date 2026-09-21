@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -9,8 +9,9 @@ import test from 'node:test';
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
-import { scorePublicComparison } from '../../longmemeval/official-scoring.mjs';
-import { runPublicComparison } from '../../longmemeval/public-comparison.mjs';
+import { OFFICIAL_SCORING_SCHEMA_VERSION_V2, scorePublicComparison } from '../../longmemeval/official-scoring.mjs';
+import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
+  runPublicComparison } from '../../longmemeval/public-comparison.mjs';
 import { loadReferenceRenderings } from '../../longmemeval/reference-rendering.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { loadPreparedPilot, pilotEvaluatorFor } from '../pilot.mjs';
@@ -151,6 +152,13 @@ async function walk(directory) {
     if (entry.isDirectory()) entries.push(...await walk(filename));
   }
   return entries;
+}
+async function fileSnapshot(directory) {
+  const snapshot = {};
+  for (const { filename, entry } of await walk(directory)) {
+    if (entry.isFile()) snapshot[path.relative(directory, filename)] = digest(await readFile(filename));
+  }
+  return snapshot;
 }
 
 test('PP1-PP5/PP8: end-to-end through real runner, guard, adapter and core on prepared v2 synthetic data', async (t) => {
@@ -496,6 +504,127 @@ test('PP7: resume skips finished cases, never re-sends, and never overwrites art
   assert.equal(f.calls.length, before);
 });
 
+test('AB4/AB5: v2 binds every pilot layer, resumes without work, and cannot cross versions', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  const invalid = f.session();
+  const callsBeforeInvalid = f.calls.length;
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: invalid, directory: f.output('invalid'),
+    answerTemplateVersion: undefined }), { code: 'invalid_answer_template_version' });
+  invalid.close();
+  assert.equal(f.calls.length, callsBeforeInvalid);
+  await assert.rejects(lstat(f.output('invalid')), { code: 'ENOENT' });
+  const output = f.output('v2');
+  const first = f.session();
+  const report = await runPublicPilot({ pilot: f.pilot, session: first, directory: output,
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 });
+  first.close();
+  assert.equal(report.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  for (const name of ['manifest', 'checkpoint', 'aggregate']) {
+    assert.equal((await readJson(output, `${name}.json`)).answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  }
+  const generation = await readJson(output, 'cases', ids.plain, 'generation.json');
+  const scoring = await readJson(output, 'cases', ids.plain, 'scoring.json');
+  assert.equal(generation.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(generation.run.templateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(scoring.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(scoring.score.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(scoring.score.schemaVersion, OFFICIAL_SCORING_SCHEMA_VERSION_V2);
+  const answers = chatCalls(f.calls).filter((call) => call.model === ANSWER_MODEL);
+  assert.equal(answers.length, 3);
+  for (const call of answers) {
+    assert.deepEqual(Object.keys(JSON.parse(call.body.messages[1].content)), ['evidence', 'currentQuestion']);
+    assert.equal(call.rawBody.includes('reference_answer'), false);
+  }
+  const calls = f.calls.length;
+  const second = f.session();
+  assert.deepEqual(await runPublicPilot({ pilot: f.pilot, session: second, directory: output,
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 }), report);
+  assert.equal(f.calls.length, calls);
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: second, directory: output }),
+    { code: 'run_directory_mismatch' });
+  const identityLayers = [
+    ['manifest.json'], ['checkpoint.json'], ['aggregate.json'], ['report.json'],
+    ['cases', ids.plain, 'generation.json'], ['cases', ids.plain, 'scoring.json'],
+  ];
+  for (const [index, segments] of identityLayers.entries()) {
+    const altered = f.output(`v2-layer-${index}`);
+    await cp(output, altered, { recursive: true });
+    const filename = path.join(altered, ...segments);
+    const artifact = await readJson(filename);
+    delete artifact.answerTemplateVersion;
+    await writeFile(filename, JSON.stringify(artifact), { mode: 0o600 });
+    await assert.rejects(runPublicPilot({ pilot: f.pilot, session: second, directory: altered,
+      answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 }),
+    { code: index < 2 ? 'run_directory_mismatch' : 'invalid_artifact' });
+    assert.equal(f.calls.length, calls);
+  }
+  await writeFile(path.join(output, 'report.json'), 'false', { mode: 0o600 });
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: second, directory: output,
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 }), { code: 'invalid_artifact' });
+  assert.equal(f.calls.length, calls);
+  second.close();
+
+  const legacy = f.output('explicit-v1');
+  const third = f.session();
+  await runPublicPilot({ pilot: f.pilot, session: third, directory: legacy,
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION });
+  third.close();
+  for (const file of [await readJson(legacy, 'manifest.json'), await readJson(legacy, 'checkpoint.json'),
+    await readJson(legacy, 'aggregate.json'), await readJson(legacy, 'report.json'),
+    await readJson(legacy, 'cases', ids.plain, 'generation.json'),
+    await readJson(legacy, 'cases', ids.plain, 'scoring.json')]) {
+    assert.equal(Object.hasOwn(file, 'answerTemplateVersion'), false);
+  }
+});
+
+test('AB4: resume preflights a later identity mismatch before an earlier pending case', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 3) });
+  const output = f.output('preflight');
+  const first = f.session();
+  await runPublicPilot({ pilot: f.pilot, session: first, directory: output,
+    caseIds: [ids.plain, ids.abstain_abs] });
+  first.close();
+  await rm(path.join(output, 'aggregate.json'));
+  await rm(path.join(output, 'report.json'));
+  await rm(path.join(output, 'cases', ids.plain), { recursive: true });
+  const checkpoint = await readJson(output, 'checkpoint.json');
+  checkpoint.cases[ids.plain] = { stage: 'pending', attemptIds: [] };
+  const later = await readJson(output, 'cases', ids.abstain_abs, 'generation.json');
+  later.answerTemplateVersion = PUBLIC_ANSWER_TEMPLATE_VERSION_V2;
+  await writeFile(path.join(output, 'checkpoint.json'), JSON.stringify(checkpoint), { mode: 0o600 });
+  await writeFile(path.join(output, 'cases', ids.abstain_abs, 'generation.json'), JSON.stringify(later), { mode: 0o600 });
+  const before = { calls: f.calls.length, ledger: ledgerState(f.ledger), files: await fileSnapshot(output) };
+  let progress = 0;
+  const session = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: output,
+    caseIds: [ids.plain, ids.abstain_abs], onCase: () => { progress += 1; } }), { code: 'invalid_artifact' });
+  session.close();
+  assert.equal(f.calls.length, before.calls);
+  assert.equal(progress, 0);
+  assert.deepEqual(ledgerState(f.ledger), before.ledger);
+  assert.deepEqual(await fileSnapshot(output), before.files);
+});
+
+test('AB4: a durably failed generation and its blocked scoring wrapper resume without replay', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  const live = f.session();
+  const broken = Object.freeze({ ...live, memoryModel: { onDiagnostic: 1 } });
+  for (const [label, answerTemplateVersion] of [
+    ['v1', null], ['v2', PUBLIC_ANSWER_TEMPLATE_VERSION_V2],
+  ]) {
+    const output = f.output(`failed-generation-${label}`);
+    const options = { pilot: f.pilot, session: broken, directory: output,
+      ...(answerTemplateVersion ? { answerTemplateVersion } : {}) };
+    const report = await runPublicPilot(options);
+    assert.equal(report.cases[0].generation.status, 'failed');
+    assert.equal(report.cases[0].scoring.status, 'blocked');
+    assert.equal(f.calls.length, 0);
+    assert.deepEqual(await runPublicPilot(options), report);
+    assert.equal(f.calls.length, 0);
+  }
+  live.close();
+});
+
 test('PP1: session uses the key only in headers, pins stage models, and propagates guard refusals', async (t) => {
   const f = await setup(t);
   assert.throws(() => createBenchmarkLiveSession({ ledger: f.ledger, apiKey: '',
@@ -540,6 +669,10 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
   assert.equal(await cliMain(['--bogus'], { env: {}, stdout: out(),
     stderr, fetchImpl: () => assert.fail('no transport') }), 1);
   assert.match(stderr.text(), /^unknown_flag\n/u);
+  const invalidVersion = out();
+  assert.equal(await cliMain(['--answer-template-version', 'cairn-longmemeval-public-answer-v3'],
+    { env: {}, stdout: out(), stderr: invalidVersion, fetchImpl: () => assert.fail('no transport') }), 1);
+  assert.equal(invalidVersion.text(), 'invalid_answer_template_version\n');
 
   const ledgerFile = f.output('ledger.json');
   await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
@@ -560,6 +693,10 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
   assert.equal(projection.ledger.requestCount, 0);
   assert.equal(dry.text().includes(KEY), false);
   assert.equal(ledgerState(f.ledger).requestCount, 0);
+  const v2Dry = out();
+  assert.equal(await cliMain([...base, '--answer-template-version', PUBLIC_ANSWER_TEMPLATE_VERSION_V2, '--dry-run'],
+    { env: {}, stdout: v2Dry, stderr: out(), fetchImpl: () => assert.fail('no transport') }), 0);
+  assert.equal(JSON.parse(v2Dry.text()).answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
 
   await chmod(ledgerFile, 0o644);
   const loose = out();

@@ -1,8 +1,10 @@
 import { opaqueQuestionId } from './prepare.mjs';
+import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2 } from './public-comparison.mjs';
 import { resolveReferenceRendering } from './reference-rendering.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const OFFICIAL_SCORING_SCHEMA_VERSION = 'cairn-longmemeval-official-scoring-v1';
+export const OFFICIAL_SCORING_SCHEMA_VERSION_V2 = 'cairn-longmemeval-official-scoring-v2';
 export const OFFICIAL_JUDGE_MODEL = 'gpt-4o-2024-08-06';
 export const OFFICIAL_UPSTREAM_COMMIT = '9e0b455f4ef0e2ab8f2e582289761153549043fc';
 export const OFFICIAL_ARM_NAMES = Object.freeze(['cairn', 'full-history', 'no-memory']);
@@ -91,6 +93,12 @@ const validateRun = (run) => {
     }
   }
   if (OFFICIAL_ARM_NAMES.some((name) => !names.has(name))) fail('invalid_run');
+  const templateVersion = Object.hasOwn(run, 'templateVersion')
+    ? run.templateVersion : PUBLIC_ANSWER_TEMPLATE_VERSION;
+  if (![PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2].includes(templateVersion)) {
+    fail('invalid_run');
+  }
+  return templateVersion;
 };
 
 const validateEvaluator = (evaluator, run) => {
@@ -146,14 +154,14 @@ const judgeOnce = async (judge, request, timeoutMs) => {
 
 export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeoutMs = 30_000,
   referenceRendering }) => {
-  validateRun(run);
-  validateEvaluator(evaluator, run);
+  const fixedRun = snapshot(run, 'invalid_run');
+  const answerTemplateVersion = validateRun(fixedRun);
+  const fixedEvaluator = snapshot(evaluator, 'invalid_evaluator');
+  validateEvaluator(fixedEvaluator, fixedRun);
   if (judge !== undefined && typeof judge !== 'function') fail('invalid_judge');
   if (!Number.isSafeInteger(judgeTimeoutMs) || judgeTimeoutMs < 1 || judgeTimeoutMs > 2_147_483_647) {
     fail('invalid_judge_timeout');
   }
-  const fixedRun = snapshot(run, 'invalid_run');
-  const fixedEvaluator = snapshot(evaluator, 'invalid_evaluator');
   const abstention = fixedEvaluator.source_question_id.includes('_abs');
   let referenceText = fixedEvaluator.reference_answer;
   let referenceSerialization = 'verified-string';
@@ -210,7 +218,10 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
       referenceSessionCoverage: coverageResult });
     }
   }
-  return deepFreeze({ schemaVersion: OFFICIAL_SCORING_SCHEMA_VERSION,
+  return deepFreeze({
+    schemaVersion: answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2
+      ? OFFICIAL_SCORING_SCHEMA_VERSION_V2 : OFFICIAL_SCORING_SCHEMA_VERSION,
+    ...(answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2 ? { answerTemplateVersion } : {}),
     questionId: fixedRun.questionId, sourceQuestionId: fixedEvaluator.source_question_id,
     questionType: fixedEvaluator.question_type, abstention, answerModel: fixedRun.answerModel,
     compatibility: { referenceSerialization,
@@ -245,7 +256,13 @@ const finish = (bucket) => {
   return bucket;
 };
 
-export const aggregateOfficialScores = ({ roster, records }) => {
+export const aggregateOfficialScores = (options) => {
+  const { roster, records } = options;
+  const answerTemplateVersion = Object.hasOwn(options, 'answerTemplateVersion')
+    ? options.answerTemplateVersion : PUBLIC_ANSWER_TEMPLATE_VERSION;
+  if (![PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2].includes(answerTemplateVersion)) {
+    fail('invalid_answer_template_version');
+  }
   denseArray(roster, 1, 'invalid_roster');
   denseArray(records, 0, 'invalid_records');
   const rosterMap = new Map();
@@ -259,7 +276,12 @@ export const aggregateOfficialScores = ({ roster, records }) => {
   const recordMap = new Map();
   let answerModel;
   for (const record of records) {
-    if (!isPlainObject(record) || record.schemaVersion !== OFFICIAL_SCORING_SCHEMA_VERSION
+    const validIdentity = answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2
+      ? record?.schemaVersion === OFFICIAL_SCORING_SCHEMA_VERSION_V2
+        && record.answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2
+      : record?.schemaVersion === OFFICIAL_SCORING_SCHEMA_VERSION
+        && !Object.hasOwn(record, 'answerTemplateVersion');
+    if (!isPlainObject(record) || !validIdentity
       || !rosterMap.has(record.questionId) || recordMap.has(record.questionId)) fail('invalid_records');
     const item = rosterMap.get(record.questionId);
     if (!validString(record.answerModel)) fail('invalid_records');
@@ -355,7 +377,10 @@ export const aggregateOfficialScores = ({ roster, records }) => {
     countCommon(commonByType[item.questionType], record);
     if (abstention) countCommon(commonAbstention, record);
   }
-  return deepFreeze({ schemaVersion: OFFICIAL_SCORING_SCHEMA_VERSION,
+  return deepFreeze({
+    schemaVersion: answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2
+      ? OFFICIAL_SCORING_SCHEMA_VERSION_V2 : OFFICIAL_SCORING_SCHEMA_VERSION,
+    ...(answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2 ? { answerTemplateVersion } : {}),
     fixedCaseCount: roster.length, scoredRecordCount: records.length, arms: byArm,
     completeVerifiedOfficialStyle: Object.values(byArm).every((arm) => arm.completeVerifiedOfficialStyle),
     common: { ...finishCommon(common),

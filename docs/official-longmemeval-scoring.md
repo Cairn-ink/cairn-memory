@@ -44,13 +44,19 @@ might still be running. The scorer snapshots inputs before calls and freezes jud
 requests/results. A judge callback can be a scripted test double: these
 records alone do not prove a real request reached the pinned model.
 
+Generation answer-template identity is validated before a judge call. Legacy
+missing identity means v1 only. V1 preserves the existing scoring shape; v2
+uses a distinct scoring schema and carries
+`answerTemplateVersion: cairn-longmemeval-public-answer-v2`. This changes no
+judge prompt, rubric, parser, model, or reference rendering.
+
 When comparison diagnostics contain opaque `retrievedSessionIds` and
 `packedSessionIds`, the scorer separately reports reference-session coverage
 for both stages using the evaluator's `answer_session_ids`. Missing retrieval
 diagnostics and absent reference labels yield null coverage, not a fabricated
 zero. These diagnostic IDs never enter the judge request.
 
-`aggregateOfficialScores({roster,records})` requires a nonempty, unique roster
+`aggregateOfficialScores({roster,records,answerTemplateVersion})` requires a nonempty, unique roster
 of `{questionId,sourceQuestionId,questionType}` and zero or more completed
 scoring records. It rejects duplicate/unexpected IDs, mismatched source IDs or
 types, mixed rubric/request versions, and malformed arm outcomes. Omitted
@@ -69,6 +75,9 @@ resolved under verified string or Python-rendered reference protocols.
 It does not prove corpus completeness, genuine model provenance, or a
 published LongMemEval result. Records also carry and aggregate-check the
 answer model identity; mixing different answer models is rejected.
+The optional expected template defaults to v1. It rejects mixed or mismatched
+record identity; v2 retains its marker even with zero scored records. V1 and
+v2 aggregates are not directly comparable.
 
 No downloaded corpus, provider credential, paid call, or measured quality
 result is part of this adapter or its synthetic tests.

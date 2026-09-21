@@ -7,7 +7,7 @@ fixed serial arms are `cairn`, `full-history`, and `no-memory`. The API has no
 provider transport, credential discovery, evaluator input, or default model.
 
 The exact input is `{history, question, namespace, core, answer, countTokens,
-answerModel, limits}`. `history` and `question` are one matching prepared v2
+answerModel, limits}` plus optional `answerTemplateVersion`. `history` and `question` are one matching prepared v2
 history/question pair; `question` contains exactly `{question_id,text,date}`.
 Opaque v2 session-occurrence IDs must be unique and have the `lme-session-`
 digest shape; this checks shape, not the originating corpus digest.
@@ -36,6 +36,15 @@ receives one provider-shaped request:
   temperature: 0, max_tokens: limits.outputTokens, n: 1,
 }
 ```
+
+That request is the default `cairn-longmemeval-public-answer-v1`; explicit v1
+is byte-identical to omission. The experimental opt-in
+`cairn-longmemeval-public-answer-v2` keeps the same system instruction and all
+request controls, but serializes user content as
+`{evidence,currentQuestion:{text,date}}`, in that key order, for all three arms.
+Evidence remains quoted JSON data: historical roles never become provider
+message roles. V1 and v2 results are separate protocols and must not be mixed
+or treated as directly comparable quality measurements.
 
 The callback is stateless by contract and receives no arm name, reference,
 labels, or scoring rubric. It returns `{text}` or `{text,usage}`, where usage

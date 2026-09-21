@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — explicit answer boundary v2
+
+- Add an experimental, explicit `cairn-longmemeval-public-answer-v2` option to
+  the offline public comparison and guarded private pilot. It places quoted
+  evidence before a separate current question/date for all three arms while
+  preserving v1 as the byte- and shape-compatible default.
+- Scoring, aggregation, resume, CLI, and offline merge retain and validate v2
+  identity, including failed, blocked, and zero-score runs. V1 and v2 results
+  are intentionally non-comparable; no provider result or quality claim is
+  included.
+
 ## Unreleased — private capture-admission observation
 
 - Fresh public-pilot cases now retain a separately versioned, bounded private

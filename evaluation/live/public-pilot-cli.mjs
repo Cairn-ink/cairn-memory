@@ -11,6 +11,8 @@ import { reopenExperimentBudget } from '../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension } from '../experiment-budget/request-guard.mjs';
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { opaqueQuestionId } from '../longmemeval/prepare.mjs';
+import { PUBLIC_ANSWER_TEMPLATE_VERSION,
+  PUBLIC_ANSWER_TEMPLATE_VERSION_V2 } from '../longmemeval/public-comparison.mjs';
 import { loadReferenceRenderings } from '../longmemeval/reference-rendering.mjs';
 import { isPlainObject } from '../longmemeval/validation.mjs';
 import { loadPreparedPilot, readRegularFile } from './pilot.mjs';
@@ -42,6 +44,8 @@ Optional:
   --batch-request-cap <n>     this run's request cap
   --run-commit <sha>          recorded in the run manifest and report
   --exclusions-file <file>    JSON array of excluded source question ids, recorded in the manifest and report
+  --answer-template-version <version>
+                              experimental answer boundary; cairn-longmemeval-public-answer-v1 (default) or v2
   --dry-run                   verify ledger, extension and prepared input, print projections, reserve nothing
   --help                      print this text
 
@@ -55,7 +59,7 @@ Exit codes: 0 done, 1 refused or failed (code on stderr), 2 missing OPENAI_API_K
 
 const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output', '--cases', '--sidecar',
   '--sidecar-sha256', '--batch-cap-micro-usd', '--batch-request-cap', '--run-commit', '--exclusions-file',
-  '--merge'];
+  '--answer-template-version', '--merge'];
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
 const MAX_INPUT_BYTES = 1024 * 1024;
 
@@ -158,6 +162,12 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
         summary: merged.summary, common: merged.official.common, cost: merged.cost })}\n`);
       return 0;
     }
+    const answerTemplateVersion = values['--answer-template-version'] ?? PUBLIC_ANSWER_TEMPLATE_VERSION;
+    if (![PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2].includes(answerTemplateVersion)) {
+      fail('invalid_answer_template_version');
+    }
+    const answerTemplateIdentity = answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2
+      ? { answerTemplateVersion } : {};
     for (const required of ['--prepared', '--ledger', '--authorization-id', ...(dryRun ? [] : ['--output'])]) {
       if (!Object.hasOwn(values, required)) fail('missing_required_flag', required);
     }
@@ -200,7 +210,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       ledger: ledgerState.limitMicroUsd - ledgerState.reservedMicroUsd >= totals.reservedMicroUsd
         && ledgerState.requestCap - ledgerState.requestCount >= totals.requests,
     };
-    const summary = { pilot: pilot.identity, caseIds,
+    const summary = { pilot: pilot.identity, caseIds, ...answerTemplateIdentity,
       models: { answer: stages.answer.model, judge: stages.judge.model },
       limits: PUBLIC_PILOT_LIMITS, judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, caps: caps ?? null,
       extension: { authorizationId: benchmarkExtension.authorizationId, checkpoint: benchmarkExtension.checkpoint },
@@ -223,13 +233,13 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     let report;
     try {
       report = await runPublicPilot({ pilot, session, directory: values['--output'], limits: PUBLIC_PILOT_LIMITS,
-        judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, referenceRenderings, caps, caseIds,
+        judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, referenceRenderings, caps, caseIds, answerTemplateVersion,
         manifest: { runCommit, authorizationId: benchmarkExtension.authorizationId,
           extensionCheckpoint: benchmarkExtension.checkpoint, ledgerRunId: ledger.runId,
           sidecarSha256: sidecarSha256 ?? null, exclusionRegistry, projections, totals },
         onCase: (progress) => { stdout.write(`${JSON.stringify({ progress })}\n`); } });
     } finally { session.close(); }
-    stdout.write(`${JSON.stringify({ mode: 'run', directory: path.resolve(values['--output']),
+    stdout.write(`${JSON.stringify({ mode: 'run', directory: path.resolve(values['--output']), ...answerTemplateIdentity,
       summary: report.summary, common: report.official.common, cost: report.cost, latency: report.latency })}\n`);
     return 0;
   } catch (error) {
