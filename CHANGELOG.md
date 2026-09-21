@@ -1,5 +1,105 @@
 # Changelog
 
+## Unreleased — benchmark count diagnostics
+
+- Benchmark-guard count attempts now retain a finite private diagnostic for an
+  HTTP-2xx body that reaches parsing: exact structurally validated counts record
+  `within_limit` or `input_limit_exceeded` with the configured limit, while
+  malformed or structurally invalid bodies record `invalid_count_response`
+  without an observed count. Duplicate top-level keys are invalid for this
+  diagnostic path.
+- The 7,024 ceiling, unknown/null settlement and whole-run halt remain unchanged;
+  successful count cost is still unknown. Ordinary adapter/core errors, generic
+  guard behavior, ledger schema, reservations and retry policy are unchanged.
+  The public pilot's existing private per-case accounting preserves the new
+  record without raw provider data. Offline fake-HTTP evidence only: no paid
+  call, new score or historical failure reconstruction.
+
+## Unreleased — public pilot runner and paired report
+
+- Add `evaluation/live/public-pilot.mjs`: a benchmark live session that binds
+  the real OpenAI adapter and the answer/judge stages to the P1 benchmark
+  guard, and `runPublicPilot`, which runs the public comparison and the
+  official-style scorer per prepared v2 case with a fresh private store,
+  per-case 0600 artifacts (run record, exact answer requests, truncation and
+  evidence accounting, guard accounting, timings, scoring), projected-cap and
+  ledger-allowance checks before every case, a halt on any guard halt, an
+  atomic checkpoint with no replay on resume, and a redacted `report.json`.
+- Add `evaluation/live/public-pilot-cli.mjs` with `--dry-run` projections and
+  explicit operator inputs only; the key is read from `OPENAI_API_KEY` inside
+  `main()` and used solely in the Authorization header. A resume is refused
+  (`run_directory_mismatch`) when limits, judge timeout, caps or stage policy
+  differ from what the directory's manifest recorded; blocked reasons are
+  counted once per case.
+- Add `evaluation/live/public-pilot-merge.mjs` (`mergePublicPilotRuns`, CLI
+  `--merge dir,dir --output dir`): an offline merge of completed batch
+  directories into one paired report, refusing mismatched configurations,
+  overlapping case lists, incomplete sources, non-integer run and per-stage
+  totals, and an output directory that is or sits inside a source, with no
+  key, ledger or call.
+- Answer requests are labelled by the run's own arm order rather than by the
+  evidence shape, so a Cairn arm that retrieved nothing is no longer recorded
+  as the no-memory arm and contributes an all-zero packed truncation row. A
+  resumed run refuses a completed or failed case whose accounting, request or
+  truncation file is missing (`invalid_checkpoint`), since both can follow real
+  spend and only a blocked case legitimately has its generation record alone,
+  and an `aggregate.json` left without a `report.json` is reported as
+  `aggregate_without_report`.
+- `aggregateOfficialScores` additionally reports a `common` bucket (cases in
+  which all three arms resolved, per arm, per type and abstention overlay,
+  `null` accuracy at zero); existing buckets are unchanged. `pilotEvaluatorFor`
+  exposes a loaded pilot's private evaluator read-only. Offline synthetic tests
+  only; no paid call, key discovery or ledger change is added.
+
+## Unreleased — guarded benchmark answer/judge transport
+
+- The experiment request guard gains an immutable benchmark extension
+  (`experiment-benchmark-extension.json`) that binds a separate answer stage
+  (`gpt-4.1-mini-2025-04-14`) and official judge stage (`gpt-4o-2024-08-06`)
+  with their own prices, bounds and per-request reservations. Both stages
+  reserve on the existing ledger's fixed `host-completion` channel before every
+  send; the ledger schema, history and allowance are unchanged.
+- `createBenchmarkExperimentRequestGuard` exposes `answerFetch`, `judgeFetch`
+  and baseline `cairnFetch`, denies the host channel, passes stage bodies
+  through with an explicit allowlist (`temperature: 0`, `n: 1`, `max_tokens`,
+  `store: false`, `stream: false`), records each attempt's stage, model, rate
+  assumptions and priced usage without bodies or keys, and halts all further
+  paid work after any unknown outcome, overrun or any unsettled attempt not in
+  flight on this guard. Offline synthetic tests only; no live command, key
+  discovery or paid call is added.
+
+## Unreleased — evaluator-only Python reference rendering
+
+- Add an opt-in offline reference-rendering sidecar from checksum-bound raw
+  JSON, preserving official Python number and array formatting without
+  changing preparation v2 or model-facing history/question files.
+- Scoring may consume loader-issued evaluator-bound rendering capabilities;
+  absent a verified capability, non-string references remain unresolved.
+  This is scoring infrastructure, not a measured accuracy result.
+
+## Unreleased — offline public benchmark infrastructure
+
+- Add a separately versioned Cairn/source-evidence, full-history and no-memory
+  comparison API, with source dates, provenance checks and whole-request
+  context preflight. Legacy comparison and live-pilot behavior are unchanged.
+- Add pinned upstream LongMemEval judge prompts, string-reference parity
+  fixtures and fixed-roster scoring with unresolved cases retained. Numeric
+  and array references remain unverified; no real-model score is claimed.
+- Add `npm run demo:longmemeval-public`: synthetic actual-core integration
+  with scripted answer/judge callbacks, no keys or provider calls.
+
+## Unreleased — LongMemEval session-label blinding
+
+- Preparation v2 replaces raw model-facing session labels with deterministic
+  opaque occurrence IDs and uses label-independent turn IDs. The private
+  manifest holds the raw-to-opaque map; evaluator evidence IDs use opaque
+  labels so retrieved/packed coverage remains joinable without changing the
+  strict evaluator record shape.
+- The live-pilot loader accepts v2, validates the map and derived IDs, and
+  rejects old v1 artifacts. Old preparations require regeneration from a
+  reviewed pinned source. Synthetic offline regression checks do not measure
+  real-model answer quality or authorize a paid benchmark run.
+
 ## Unreleased — direct premise challenges in decision context
 
 - The local rationale decision-context read now includes a stored direct

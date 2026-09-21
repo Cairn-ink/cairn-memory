@@ -42,6 +42,21 @@ reliability work below without declaring older failure gates resolved.
    dataset, model/configuration, scorer and comparison arms, publish per-case
    failures and independently review the result. Offline scripted demos are not
    a measured score, and this baseline authorizes no paid run.
+   The separately versioned offline three-arm comparison and string-reference
+   official-style scorer now have synthetic integration coverage; without the
+   optional sidecar below, non-string reference parity remains unresolved.
+   An opt-in evaluator-only Python reference sidecar addresses original-number
+   and array formatting; its synthetic parity is not a corpus-quality result.
+   Stage-bound transport and a public pilot runner are available as development
+   candidates. The first pilot halted before answering; no score is available.
+   Follow the [classification diagnosis plan](docs/plans/classification-count-diagnostics.md):
+   reconstruct the failed input and verify the smallest necessary repair. The
+   [benchmark count diagnostic](docs/plans/guard-count-reason.md) preserves a
+   future structurally validated count without changing the adapter, ceiling or
+   halt policy; it is observability, not the repair or proof that a pilot is
+   ready. Then run a separately frozen and authorized fixed pilot before broader
+   architecture work.
+   Preserve the original failed run and spending; offline tests are not scores.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
