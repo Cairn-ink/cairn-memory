@@ -235,6 +235,32 @@ test('malformed persisted source excerpts fail closed before model selection', a
   assert.equal(f.model.calls.length, 0);
 });
 
+test('source candidate previews validate authoritative receipt identity before empty selection', async t => {
+  for (const contextMode of ['source-evidence', 'rationale-evidence']) {
+    for (const corruption of ['excerpt', 'role', 'event-id', 'receipt-key']) {
+      const f = fixture(t);
+      seed(f.db, 1, () => 'Body without the query', () => 'current',
+        () => corruption === 'excerpt' ? 'Original retained source' : 'violet keystone retained source');
+      if (corruption === 'excerpt') {
+        f.db.prepare('UPDATE receipts SET excerpt=? WHERE memory_id=?')
+          .run('violet keystone altered source', id(1));
+      }
+      if (corruption === 'role') {
+        f.db.prepare("UPDATE receipts SET role='assistant' WHERE memory_id=?").run(id(1));
+      }
+      if (corruption === 'event-id') {
+        f.db.prepare("UPDATE receipts SET event_id='changed-valid-source' WHERE memory_id=?").run(id(1));
+      }
+      if (corruption === 'receipt-key') {
+        f.db.prepare("UPDATE receipts SET receipt_key=? WHERE memory_id=?").run('0'.repeat(64), id(1));
+      }
+      assert.deepEqual(await f.core.recall({ readSet: [ns], query: 'violet keystone', contextMode }),
+        { ok: false, error: { code: 'storage_error', retryable: false } }, `${contextMode}/${corruption}`);
+      assert.equal(f.model.calls.length, 0, `${contextMode}/${corruption}`);
+    }
+  }
+});
+
 test('source modes read receipts only after namespace, currentness and projection eligibility', async t => {
   for (const contextMode of ['source-evidence', 'rationale-evidence']) {
     for (const exclusion of ['foreign', 'historical', 'forgotten', 'projection']) {
@@ -681,8 +707,9 @@ test('current scan scores at most 1024 bodies, excludes sentinel, and uses the p
       `bounded receipt ${offset + 1} for memory ${i}`)])
     .reduce((sum, value) => sum + Buffer.byteLength(value), 0);
   assert.equal(sourceScored.reduce((sum, value) => sum + Buffer.byteLength(value), 0), expectedSourceBytes);
-  const receiptPlan = f.db.prepare(`EXPLAIN QUERY PLAN SELECT excerpt FROM receipts
-    INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`)
+  const receiptPlan = f.db.prepare(`EXPLAIN QUERY PLAN SELECT id,memory_id,receipt_key,
+    client,session_id,event_id,role,excerpt FROM receipts INDEXED BY capture_memory_receipts
+    WHERE memory_id = ? ORDER BY id LIMIT ?`)
     .all(id(1), SOURCE_QUERY_RECEIPT_LIMIT);
   assert.ok(receiptPlan.some(({ detail }) => detail.includes('SEARCH receipts USING INDEX capture_memory_receipts')));
   assert.ok(receiptPlan.every(({ detail }) => !detail.includes('TEMP B-TREE')));

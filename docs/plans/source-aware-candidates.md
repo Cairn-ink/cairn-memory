@@ -43,8 +43,11 @@ not demonstrate semantic quality, answer accuracy or complete source coverage.
   `(memory_id,id)` index. The current-memory scan still returns at most 1,024
   rows plus one memory sentinel, and projection-rejected rows consume that
   allowance. SQLite returns and core scores at most 4,096 receipt excerpts,
-  each already bounded to 800 UTF-16 units; this is not provider output.
-  Malformed or over-limit persisted excerpts fail closed rather than being
+  each already bounded to 800 UTF-16 units; this is not provider output. Before
+  scoring or preview, validate each row's ID, memory binding, source identifiers,
+  role, canonical excerpt and receipt key through the authoritative per-receipt
+  validator shared with complete source output. Corrupted, malformed or
+  over-limit persisted rows fail closed before selection rather than being
   truncated. Candidate score is the maximum of body and receipt literal-overlap
   scores. Use the strictly highest-scoring receipt's existing 120-code-point
   query excerpt only
@@ -104,6 +107,13 @@ new dependency, prompt/schema/guard change, public fixture corpus or product
 identifier is in scope. A missing freshness or projection guarantee is a design
 blocker to report before widening this boundary.
 
+The primary accepted the first independent Spec finding and authorized the
+bounded correction to `core/source-evidence.mjs` and `core/runtime.mjs`: extract
+the existing pure authoritative per-receipt validator, inject the runtime's
+existing receipt-key function into candidate storage, and apply that validator
+before scoring. No fake partial source count/projection or new injected model,
+token-counter or user callback is permitted.
+
 ## Implementation evidence before primary gates
 
 The implementation worker first ran the named SC1 224-memory test against the
@@ -149,3 +159,12 @@ controls explicitly cover the new read path. Each correction passed on its first
 focused rerun. There was no repeated-defect escalation, ownership fallback or
 primary code takeover. Worker token and cost telemetry were unavailable and are
 not inferred.
+
+The first independent Spec review then found that source candidate scoring had
+validated excerpt shape but not the authoritative receipt identity/key before a
+preview could reach selection. A synthetic RED altered well-formed receipt
+fields without updating the key and observed a successful empty selection. The
+shared per-receipt validation correction now rejects altered excerpt, valid role,
+valid source identifier and receipt-key cases in both explicit source modes
+before any model callback. This is correction round one for that distinct
+finding; it does not change the score, caps, coverage or final source projection.

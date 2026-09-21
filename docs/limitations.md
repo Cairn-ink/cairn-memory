@@ -107,6 +107,9 @@ of 800 UTF-16 units per eligible memory within the existing 1,024-current-memory
 scan. The supplied selector receives only the winning 120-code-point preview for
 each candidate packed into the existing at-most-100-item, 4,000-token page over
 at most two rounds, not those four full excerpts, receipt IDs or source metadata.
+Each candidate receipt must first pass the same authoritative stored identity,
+memory binding, role, canonical-excerpt and receipt-key validation as final source
+output; corruption fails before selector invocation, including empty selection.
 That preview still widens opt-in personal-data exposure. It does not widen
 namespace authority or affect default recall and automatic rationale discovery;
 public maps and the classification topic catalog remain unchanged. Existing

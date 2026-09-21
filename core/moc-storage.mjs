@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
-import { boundedText, fail } from "./validation.mjs";
+import { fail } from "./validation.mjs";
 import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT } from './query-candidates.mjs';
+import { validateSourceReceipt } from './source-evidence.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -16,7 +17,7 @@ const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
 export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts,
-  assertIndexAvailable, rationaleStorage }) {
+  assertIndexAvailable, rationaleStorage, receiptKey }) {
   // Read authority is generation-owned; writes below continue targeting declarations.
   // Title validity deliberately consults every original source binding.
   function projectPrepare(sql) {
@@ -364,8 +365,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         INDEXED BY capture_current_memories WHERE ${namespaceWhere}
           AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
         .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
-      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT excerpt FROM receipts
-        INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`);
+      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT id,memory_id,receipt_key,
+        client,session_id,event_id,role,excerpt FROM receipts INDEXED BY capture_memory_receipts
+        WHERE memory_id = ? ORDER BY id LIMIT ?`);
       const eligible = [];
       for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
         if (memory.deleted || memory.currentness !== 'current') continue;
@@ -378,17 +380,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (receiptSources) {
           const receipts = receiptSources.all(memory.id, sourceReceiptLimit);
           for (const receipt of receipts) {
-            try {
-              if (!receipt.excerpt.isWellFormed() || boundedText(receipt.excerpt, 800) !== receipt.excerpt) {
-                fail('storage_error');
-              }
-            } catch { fail('storage_error'); }
-            const receiptScore = score(receipt.excerpt);
+            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+            const receiptScore = score(source.excerpt);
             // Stable receipt-ID order and strict improvement preserve the first
             // receipt on ties and retain the body label on a body/receipt tie.
             if (receiptScore > candidateScore) {
               candidateScore = receiptScore;
-              winningExcerpt = receipt.excerpt;
+              winningExcerpt = source.excerpt;
             }
           }
         }

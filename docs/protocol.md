@@ -342,7 +342,10 @@ units are read and scored. The selector sees only a winning 120-code-point
 preview for each candidate actually packed into the existing at-most-100-item,
 4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
 metadata. This is bounded navigation, not complete source search or semantic
-relevance.
+relevance. Before any receipt can contribute a score or preview, the core applies
+the same authoritative stored identity, ownership, role, canonical excerpt and
+receipt-key validation used by source output; corrupted rows fail before selector
+invocation.
 
 Default recall and automatic rationale discovery remain body-only; public maps
 and the classification topic catalog remain unchanged. Source-aware cursor

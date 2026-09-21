@@ -675,6 +675,9 @@ reliability.
   unchanged. Source cursors bind mode, policy and the four-receipt limit; existing
   epoch/revision/final-read fences cover later use. A fifth-receipt-only match
   remains a documented heuristic miss, not invented incomplete map coverage.
+- Validate every bounded candidate receipt against its authoritative stored
+  identity, memory binding, canonical excerpt and receipt key before it can reach
+  selection; corrupted rows fail closed even when the selector would return empty.
 - This widens opt-in selector exposure to bounded retained personal source text.
   Offline synthetic and local-tokenizer checks establish reachability and bounds,
   not semantic relevance, provider cost, latency or answer quality.
