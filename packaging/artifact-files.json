@@ -57,6 +57,7 @@
   "core/prompts/recall-select.md",
   "adapters/mcp/cli.mjs",
   "adapters/mcp/server.mjs",
+  "adapters/openai/classification-wire.mjs",
   "adapters/openai/index.mjs",
   "adapters/openai/profiles.mjs",
   "adapters/openai/schemas.mjs",
