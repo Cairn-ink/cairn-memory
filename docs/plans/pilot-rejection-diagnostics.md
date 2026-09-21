@@ -58,6 +58,11 @@ extra fields from changing the value after validation. Answer send retains the
 validated finish reason internally, emits it to the scoped collector, then
 returns the unchanged public `{text,usage}` object.
 
+This is a deliberate benchmark-local copy of the existing allowlist, not a new
+shared core observability API. Unknown or future categories fail closed until
+an explicit taxonomy review updates this boundary; the copy makes no claim of
+automatic alignment with later core taxonomy changes.
+
 Fresh cases write `diagnostics.json` last, after the existing generation,
 request, truncation, accounting and timing artifacts. A diagnostic write
 refusal uses the existing `output_exists`/`output_write_failed` policy without

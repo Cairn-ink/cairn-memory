@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — public pilot rejection diagnostics
+
+- Public-pilot cases now write a bounded private `diagnostics.json` with fixed
+  categorical adapter/core stage, layer and reason observations plus per-answer
+  `stop`/`length` completion diagnostics. Overflow and unavailable states are
+  explicit; no raw provider/model text or case context is retained.
+- Ordinary answer objects, scoring inputs and outputs, provider payloads,
+  models, policy, limits, reservations, accounting and halt behavior remain
+  unchanged. Legacy artifacts without diagnostics remain unavailable; offline
+  synthetic evidence does not establish a historical rejection cause or score
+  improvement.
+
 ## Unreleased — classification request-local wire aliases
 
 - The optional OpenAI adapter now sends deterministic request-local,
