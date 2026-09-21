@@ -204,6 +204,41 @@ historical count or prove its cause. The 6,000/7,024/1,024 limits, incomplete-ma
 behavior and benchmark halt policy remain. Any paid rerun still requires a
 frozen, independently reviewed candidate and separate authorization.
 
+## Public pilot v2: halted before scoring
+
+The [retained v2 halted-run record](plans/public-pilot-v2-halted-results.md)
+preserves a prospectively frozen seven-slot roster, the first-six packet and
+the conditional seventh slot. The run stopped in the first packet: `fixedN=6`,
+one generation wrapper was written, five following cases were blocked during
+generation, all six were blocked during scoring, and `commonN=0`. Every arm's
+accuracy is `null`, not zero percent; there is no v2 score.
+
+The wrapper's one generated case is not a successful Cairn result. Batches 0–4
+completed, batch 5 failed during extraction, and batches 6–50 were not run.
+The Cairn arm is `ingestion_incomplete` within the one completed generation
+wrapper; full-history and no-memory are `answer_failed` because the halt guard
+prevented answer work. No answer or judge request was made. Admission
+reference counts in the private diagnostics are not semantic source coverage,
+extracted unique-unit counts or verified truth.
+
+The safe audited packet contains 22 unique requests (11 count and 11
+generation), 110,000 micro-USD reserved, 12,037 micro-USD of known actual
+usage that is incomplete billing, and 12 requests with unknown billing. The
+observed `core_call/model_timeout` and `adapter/model_cancelled` labels do not
+identify a provider, network, HTTP or model-quality cause, and no fix is
+claimed. No automatic retry or new session is implied, and a longer timeout is
+not a proven remedy.
+
+This is a selected engineering packet without population, representativeness,
+blindness or contamination guarantees. It is not an official benchmark,
+competitiveness, production-reliability, installed-real-host or Hermes-quality
+claim. The offline diagnosis records fail-closed timing mechanics but cannot
+identify a provider or network cause; its focused and live-offline gates pass
+on Node 22.16 and 24.15. The legacy v1 result remains separate and is not
+combined with this v2 roster or identity. Any future score requires a new
+prospectively frozen and independently reviewed protocol and separate
+authorization.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

@@ -48,15 +48,24 @@ reliability work below without declaring older failure gates resolved.
    An opt-in evaluator-only Python reference sidecar addresses original-number
    and array formatting; its synthetic parity is not a corpus-quality result.
    Stage-bound transport and a public pilot runner are available as development
-   candidates. The first pilot halted before answering; no score is available.
+   candidates. The [retained v2 halted-run record](docs/plans/public-pilot-v2-halted-results.md)
+   documents the fixed-six packet, frozen conditional seventh and `commonN=0`;
+   no score is available.
    The [classification diagnosis plan](docs/plans/classification-count-diagnostics.md)
    motivated a classification-only
    [request-local wire repair](docs/plans/classification-wire-aliases.md) that
    preserves candidate coverage and all existing caps/policies while reducing
    repeated UUID literals in offline local-tokenizer/fake-HTTP checks. The
    historical provider count and cause remain unknown; this is not a recovered
-   score or proof that a future pilot will complete. Freeze and independently
-   review the repair before any separately authorized fixed pilot. The
+   score or proof that a future pilot will complete. The offline deadline
+   diagnosis records one 30,000 ms deadline per model call across that call's
+   count and generation, separate extraction/classification calls and a
+   separate 60,000 ms guard deadline; it does not establish a provider cause or
+   fix. Focused and live-offline safety gates pass on both Node 22.16 and 24.15.
+   Independently review a new prospectively frozen policy/protocol before any
+   separately authorized fixed pilot; under the current halt, do not start a
+   new paid run, automatic retry or new session, and do not treat an increased
+   timeout as a proven remedy. The
    [benchmark count diagnostic](docs/plans/guard-count-reason.md) preserves a
    future structurally validated count without changing the adapter, ceiling or
    halt policy; it is observability, not the repair or proof that a pilot is
