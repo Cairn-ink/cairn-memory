@@ -11,6 +11,26 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The optional [Python reference sidecar](official-reference-rendering.md)
+preserves number/array rendering from original JSON for official-style judging.
+It is evaluator-only and requires an independently pinned sidecar digest.
+Hash/capability checks bind reviewed artifacts; they do not authenticate the
+corpus or prove a model was called. Without that opt-in binding, non-string
+references still remain unresolved. No public accuracy result follows from
+these synthetic compatibility tests.
+
+The [offline public comparison](public-longmemeval-comparison.md) and
+[official-style scoring adapter](official-longmemeval-scoring.md) provide
+synthetic plumbing, not measured accuracy. The three arms now retain source
+dates and Cairn uses source receipts rather than generated summaries. Capture
+itself is still source-time-unaware. Context counts are caller estimates, not
+proof of a provider's context-window fit. The default scorer verifies string
+references only; numeric/array references require the opt-in bound Python
+sidecar above or remain unresolved. A complete
+protocol record does not prove that a real provider ran. Dataset exposure,
+configuration freeze, guarded transport and independently reviewed paid results
+remain separate gates; no competitor comparison or promotion readiness follows.
+
 An installed subprocess has passed a real
 model-backed remember → restart → sourced recall → forget loop. The frozen
 semantic evaluation still fails source support: an extractor sometimes turns
@@ -60,8 +80,102 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 
+Prepared LongMemEval v1 histories exposed raw session-ID labels to ingestion
+and answer evidence, and legacy turn IDs depended on those labels. A source
+session ID could itself encode an answer or abstention. Preparation v2 blinds
+that metadata and makes turn identities label-independent, with an offline
+synthetic preparation → local-core comparison → scoring regression. Old v1
+artifacts must be regenerated, not counted as blinded. This repair does not
+scrub exact source prose, prove public benchmark quality, or revise retained
+historical results.
+
+## Classification count limit: pilot halted before scoring
+
+The [P3 pilot report](https://github.com/Cairn-ink/cairn-memory/issues/180#issuecomment-5751116229)
+records 67 provider requests, USD0.335 reserved, and no answer or judge requests.
+The first case stopped during classification and the second never started;
+common resolved N is zero, not a measured zero-percent accuracy. These failures
+and their reservations must remain visible in any subsequent experiment.
+
+The run's `a31f9d9` classification path sends a token-bounded MOC catalog page
+and at most five target memories, not all stored memory bodies. The ordinary
+OpenAI adapter also has a 6,000-token local-input limit and a 7,024-token
+provider-input limit; these are not only benchmark guard settings. The provider
+request includes the dynamic output schema as well as instructions and input.
+The benchmark guard can turn a count-response rejection into an unknown
+outcome and a paid-work halt; the ordinary adapter's own oversize check refuses
+generation with `context_budget_exceeded`.
+
+Classification runs after admission. A failed classification can therefore leave
+retained current memories unfiled; a successful top-level capture envelope is
+not proof of successful filing. The MCP/Hermes bridge passes this nested status
+through rather than turning it into a host-wide halt. The classification call
+currently reads one catalog page, with no public continuation for that private
+catalog cursor; an incomplete map cannot propose new topics. These are product
+boundaries to test separately from the pilot's whole-run stop policy.
+
+The rejected provider response and its exact token count were not retained.
+Database size and a matching synthetic rejection do not establish that the
+historical response exceeded the token ceiling. Neither a deterministic repeat
+at batch 16 nor failure of all seven cases has been demonstrated. See the
+[bounded diagnosis plan](plans/classification-count-diagnostics.md). A later
+[benchmark-only guard diagnostic](plans/guard-count-reason.md) can retain a
+finite reason and exact structurally validated count in private attempt
+accounting, but it is not retroactive and does not recover this response or
+resolve its cause. No budget increase, automatic retry, successful score or
+historical count is implied.
+
+The optional OpenAI adapter now compresses repeated classification target/MOC
+UUIDs into request-local role-separated wire aliases and decodes validated
+references before core/storage. Offline fixed fixtures and a separately replayed
+copy show material local-token and byte reduction with the same visible
+candidate/card/MOC content, but local tokenizer measurements are not provider
+counts. Aliases do not hide personal content, titles or metadata, do not solve
+arbitrary catalog growth or source-support quality, and do not recover the
+historical count or prove its cause. The 6,000/7,024/1,024 limits, incomplete-map
+behavior and benchmark halt policy remain. Any paid rerun still requires a
+frozen, independently reviewed candidate and separate authorization.
+
+## Fixed five-case development pilot: low score and retained failure
+
+The separately revised [five-case development pilot](public-pilot-results.md)
+at reviewed PR 189 commit
+`8132c552bcf88df5d0f539475ef13b683baf480c` produced a paired common result of
+Cairn 1/4, full-history 1/4 and no-memory 0/4. Across the fixed roster, Cairn
+resolved four cases with one correct and one unresolved; full-history was 1/5
+and no-memory 0/5. Cairn's 25% resolved accuracy and full-history's 20%
+fixed-roster accuracy have different denominators and do not establish
+superiority. This selected plumbing pilot is not a benchmark population,
+leaderboard result, competitive comparison or reliability percentage.
+
+The unresolved Cairn case failed on the 24th of 54 capture batches with
+`invalid_model_output`; the exact adapter-versus-core validation rejection was
+not retained. The other three incorrect Cairn answers lacked necessary source
+context. A post-hoc audit found two required passages retained in current filed
+memories but not recalled, while the temporal case's required passage had no
+receipt row despite completed ingestion. These observations bound the failures
+to broader recall-selection/budget and capture/admission/source-attachment
+layers; they do not identify a narrower subroutine or alter the official score.
+
+The baseline still reads one classification page and can leave applied memories
+unfiled; unfiled memories remain retained and recall-eligible. Recall and source
+scanning are bounded, and receipt excerpts retain only an 800-UTF-16-unit
+prefix. Corpus-wide planned suffix counts are not necessarily answer-relevant
+loss, packed counts can repeat a source, and no missing truncation denominator
+should be invented. This direct-core run used baseline capture without
+qualification or rationale variants and makes no native Hermes/provider,
+installed-live or advanced-reliability claim.
+
+The report keeps the original two-case `a31f9d9` failure separate: 67 requests,
+USD 0.335 reserved, USD 0.058266 known usage-priced cost, one unknown
+classification-count outcome, no answer or judge requests, and `commonN = 0`.
+The two revisions are not combined into one accuracy denominator. The local
+7,349-to-3,803 token diagnostic remains transport evidence, not a provider
+count or proof of the historical failure's cause.
+
 ## Where the evidence lives
 
+- [Fixed five-case public pilot report](public-pilot-results.md)
 - [Semantic evaluation](semantic-evaluation.md)
 - [Paired update-reliability experiment](evidence/qualified-comparison.md)
 - [Source-support pilot results](../evaluations/results/source-support-v1.json)

@@ -42,6 +42,36 @@ reliability work below without declaring older failure gates resolved.
    dataset, model/configuration, scorer and comparison arms, publish per-case
    failures and independently review the result. Offline scripted demos are not
    a measured score, and this baseline authorizes no paid run.
+   The separately versioned offline three-arm comparison and string-reference
+   official-style scorer now have synthetic integration coverage; without the
+   optional sidecar below, non-string reference parity remains unresolved.
+   An opt-in evaluator-only Python reference sidecar addresses original-number
+   and array formatting; its synthetic parity is not a corpus-quality result.
+   Stage-bound transport and a public pilot runner are available as development
+   candidates. The original two-case pilot halted before answering; its failure
+   and spending remain retained separately. The independently checked
+   [five-case development pilot](docs/public-pilot-results.md) at reviewed PR
+   189 commit `8132c552bcf88df5d0f539475ef13b683baf480c` produced a paired
+   common result of Cairn 1/4, full-history 1/4 and no-memory 0/4. Cairn resolved
+   four of five fixed cases; its fifth arm failed during capture with
+   `invalid_model_output`. This is a selected plumbing diagnostic, not a
+   benchmark population, competitive result or reliability percentage, and it
+   does not meet the quality gate.
+   The [classification diagnosis plan](docs/plans/classification-count-diagnostics.md)
+   motivated a classification-only
+   [request-local wire repair](docs/plans/classification-wire-aliases.md) that
+   preserves candidate coverage and all existing caps/policies while reducing
+   repeated UUID literals in offline local-tokenizer/fake-HTTP checks. The
+   historical provider count and cause remain unknown; the lower local count
+   did not establish semantic quality or complete the fifth Cairn arm. The
+   [benchmark count diagnostic](docs/plans/guard-count-reason.md) preserves a
+   future structurally validated count without changing the adapter, ceiling or
+   halt policy; it is observability, not a quality repair. Before any larger or
+   paid follow-up, address the retained capture and missing-source failures,
+   freeze a new protocol, and confirm its scope and remaining shared budget
+   under the existing authorization. Seek renewed approval only if its scope or
+   budget exceeds that authorization.
+   Preserve the original failed run and spending; offline tests are not scores.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
