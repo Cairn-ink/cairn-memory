@@ -432,12 +432,21 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
 
 function integerUsage(value) { return safeInteger(value); }
 
-function parseUsage(json, kind, channel, requestedOutputTokens) {
+function countDiagnostic(json, channel) {
+  exactKeys(json, ['input_tokens', 'object'], 'invalid_response');
+  if (json.object !== 'response.input_tokens' || !integerUsage(json.input_tokens)) fail('invalid_response');
+  return deepFreeze({
+    reason: json.input_tokens <= channel.maxInputTokens ? 'within_limit' : 'input_limit_exceeded',
+    observedInputTokens: json.input_tokens,
+    configuredInputLimit: channel.maxInputTokens,
+  });
+}
+
+function parseUsage(json, kind, channel, requestedOutputTokens, retainCountOverflow = false) {
   if (kind === 'cairnCount') {
-    exactKeys(json, ['input_tokens', 'object'], 'invalid_response');
-    if (json.object !== 'response.input_tokens' || !integerUsage(json.input_tokens)
-      || json.input_tokens > channel.maxInputTokens) fail('invalid_response');
-    return { actualMicroUsd: null, withinBounds: true };
+    const diagnostic = countDiagnostic(json, channel);
+    if (diagnostic.reason === 'input_limit_exceeded' && !retainCountOverflow) fail('invalid_response');
+    return { actualMicroUsd: null, withinBounds: diagnostic.reason === 'within_limit', countDiagnostic: diagnostic };
   }
   if (kind === 'hostCompletion') {
     if (json?.object !== 'chat.completion' || json?.model !== channel.model) fail('invalid_response');
@@ -508,8 +517,37 @@ async function readBounded(response, maximum, signal) {
   }
 }
 
-function parseResponseJson(bytes) {
-  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+function hasDuplicateTopLevelKeys(text) {
+  let depth = 0;
+  const keys = new Set();
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      const start = index;
+      for (index += 1; index < text.length; index += 1) {
+        if (text[index] === '\\') index += 1;
+        else if (text[index] === '"') break;
+      }
+      if (depth !== 1) continue;
+      let cursor = index + 1;
+      while (/\s/u.test(text[cursor] ?? '')) cursor += 1;
+      if (text[cursor] !== ':') continue;
+      const key = JSON.parse(text.slice(start, index + 1));
+      if (keys.has(key)) return true;
+      keys.add(key);
+    } else if (character === '{' || character === '[') depth += 1;
+    else if (character === '}' || character === ']') depth -= 1;
+  }
+  return false;
+}
+
+function parseResponseJson(bytes, rejectDuplicateTopLevelKeys = false) {
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const json = JSON.parse(text);
+    if (rejectDuplicateTopLevelKeys && hasDuplicateTopLevelKeys(text)) fail('invalid_response');
+    return json;
+  }
   catch { fail('invalid_response'); }
 }
 
@@ -1195,7 +1233,7 @@ function constructBenchmarkGuard(options, benchmark) {
     if (snapshot.signal.aborted) externalAbort();
     const timer = setTimeout(() => controller.abort('request_timeout'), channel.timeoutMs);
     let settled = false;
-    const settle = (outcome, actualMicroUsd, usage = null) => {
+    const settle = (outcome, actualMicroUsd, usage = null, diagnostic = null) => {
       if (settled) return;
       settled = true;
       if (outcome === 'unknown' || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
@@ -1204,6 +1242,7 @@ function constructBenchmarkGuard(options, benchmark) {
       // Observed token counts survive a failed ledger write so an operator can settle by hand;
       // outcome and cost stay null until the ledger accepted them.
       record.usage = usage;
+      if (diagnostic !== null) record.countDiagnostic = diagnostic;
       try {
         ledger.recordOutcome(actualMicroUsd === null
           ? { attemptId, outcome }
@@ -1261,14 +1300,20 @@ function constructBenchmarkGuard(options, benchmark) {
       let json;
       let usage;
       try {
-        json = parseResponseJson(bytes);
-        usage = parseUsage(json, kind, channel, requestedOutputTokens);
+        json = parseResponseJson(bytes, kind === 'cairnCount');
+        usage = parseUsage(json, kind, channel, requestedOutputTokens, true);
       } catch (error) {
-        settle('unknown', null);
+        settle('unknown', null, null, kind === 'cairnCount'
+          ? deepFreeze({ reason: 'invalid_count_response', configuredInputLimit: channel.maxInputTokens })
+          : null);
         if (error instanceof ExperimentRequestGuardError) throw error;
         fail('invalid_response');
       }
-      settle('succeeded', usage.actualMicroUsd, usageRecord(kind, json));
+      if (kind === 'cairnCount' && !usage.withinBounds) {
+        settle('unknown', null, null, usage.countDiagnostic);
+        fail('invalid_response');
+      }
+      settle('succeeded', usage.actualMicroUsd, usageRecord(kind, json), usage.countDiagnostic ?? null);
       if (!usage.withinBounds
         || (usage.actualMicroUsd !== null && usage.actualMicroUsd > channel.reservedMicroUsd)) {
         fail('usage_bound_exceeded');

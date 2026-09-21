@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — benchmark count diagnostics
+
+- Benchmark-guard count attempts now retain a finite private diagnostic for an
+  HTTP-2xx body that reaches parsing: exact structurally validated counts record
+  `within_limit` or `input_limit_exceeded` with the configured limit, while
+  malformed or structurally invalid bodies record `invalid_count_response`
+  without an observed count. Duplicate top-level keys are invalid for this
+  diagnostic path.
+- The 7,024 ceiling, unknown/null settlement and whole-run halt remain unchanged;
+  successful count cost is still unknown. Ordinary adapter/core errors, generic
+  guard behavior, ledger schema, reservations and retry policy are unchanged.
+  The public pilot's existing private per-case accounting preserves the new
+  record without raw provider data. Offline fake-HTTP evidence only: no paid
+  call, new score or historical failure reconstruction.
+
 ## Unreleased — public pilot runner and paired report
 
 - Add `evaluation/live/public-pilot.mjs`: a benchmark live session that binds

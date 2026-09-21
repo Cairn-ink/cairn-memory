@@ -94,18 +94,20 @@ Normal CI diagnostic (expected green):
 node --test evaluation/live/test/classification-count-diagnostics.test.mjs
 ```
 
-Opt-in red loop for the unresolved diagnostic-code gap:
+Opt-in observability gate for the benchmark attempt artifact:
 
 ```sh
 CAIRN_EXPECT_COUNT_OVERFLOW_DIAGNOSTIC=1 \
   node --test evaluation/live/test/classification-count-diagnostics.test.mjs
 ```
 
-On the fixed base under Node 22.16, the normal command passed 1/1 in about four
-seconds. The red command failed 1/1 with expected
-`context_budget_exceeded`, actual `classification_failed`. That red assertion
-asks for a precise bounded error only; it does not ask the adapter or guard to
-accept 7025 or continue paid work after unknown settlement.
+On the diagnostic's fixed base under Node 22.16, the normal command passed 1/1
+in about four seconds. The former red command failed 1/1 with expected
+`context_budget_exceeded`, actual `classification_failed`; that historical red
+observation remains versioned evidence of the original visibility gap. The
+environment flag now checks the trusted attempt's finite `countDiagnostic`
+instead of requiring a public error translation. It does not ask the adapter or
+guard to accept 7025 or continue paid work after unknown settlement.
 
 Existing relevant evidence remains in
 `docs/plans/openai-framing-budget.md`: its earlier retained live diagnostic

@@ -118,8 +118,12 @@ The rejected provider response and its exact token count were not retained.
 Database size and a matching synthetic rejection do not establish that the
 historical response exceeded the token ceiling. Neither a deterministic repeat
 at batch 16 nor failure of all seven cases has been demonstrated. See the
-[bounded diagnosis plan](plans/classification-count-diagnostics.md). No budget
-increase, automatic retry, product fix or successful score is implied.
+[bounded diagnosis plan](plans/classification-count-diagnostics.md). A later
+[benchmark-only guard diagnostic](plans/guard-count-reason.md) can retain a
+finite reason and exact structurally validated count in private attempt
+accounting, but it is not retroactive and does not recover this response or
+resolve its cause. No budget increase, automatic retry, successful score or
+historical count is implied.
 
 ## Where the evidence lives
 

@@ -88,13 +88,15 @@ const judgeText = (body) => {
 };
 const defaultChat = (body) => Response.json(chatEnvelope(body.model,
   body.model === JUDGE_MODEL ? judgeText(body) : answerText(body)));
-const fakeUpstream = ({ calls, chat = defaultChat }) => async (url, options) => {
+const fakeUpstream = ({ calls, chat = defaultChat, count = null }) => async (url, options) => {
   const body = JSON.parse(options.body);
   assert.equal(new URL(url).origin, 'https://api.openai.com');
   const record = { url: `${url}`, pathname: new URL(url).pathname, body, rawBody: options.body,
     headers: options.headers, model: body.model };
   calls.push(record);
-  if (record.pathname === URLS.count) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+  if (record.pathname === URLS.count) return count
+    ? count(body, record)
+    : Response.json({ object: 'response.input_tokens', input_tokens: 100 });
   if (record.pathname === URLS.generation) {
     const method = body.text.format.name.replace(/^cairn_/u, '');
     return Response.json(responsesEnvelope(body.model, scripted[method](JSON.parse(body.input[0].content[0].text))));
@@ -121,8 +123,8 @@ async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, re
     authorizationId: 'synthetic-public-pilot', stages: benchmarkStagePolicy() });
   const pilot = await loadPreparedPilot({ directory: prepared });
   const calls = [];
-  const session = (chat) => createBenchmarkLiveSession({ ledger, apiKey: KEY,
-    fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}) }), benchmarkExtension });
+  const session = (chat, count) => createBenchmarkLiveSession({ ledger, apiKey: KEY,
+    fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}) }), benchmarkExtension });
   return { root, inputPath, prepared, ledger, policy, benchmarkExtension, pilot, calls, session,
     output: (name) => path.join(root, name) };
 }
@@ -237,6 +239,10 @@ test('PP1-PP5/PP8: end-to-end through real runner, guard, adapter and core on pr
   assert.equal(accounting.totals.answer.reservedMicroUsd, 3 * 50_820);
   assert.ok(accounting.ledgerAfter.reservedMicroUsd > accounting.ledgerBefore.reservedMicroUsd);
   assert.ok(accounting.attempts.every((attempt) => attempt.outcome === 'succeeded'));
+  assert.ok(accounting.attempts.filter((attempt) => attempt.stage === 'cairn-count').every((attempt) =>
+    JSON.stringify(attempt.countDiagnostic) === JSON.stringify({
+      reason: 'within_limit', observedInputTokens: 100, configuredInputLimit: 7_024,
+    })));
   const scoring = await readJson(output, 'cases', ids.plain, 'scoring.json');
   assert.equal(scoring.status, 'completed');
   assert.deepEqual(Object.keys(scoring.accounting.totals), ['judge']);
@@ -381,6 +387,33 @@ test('PP6/PP7: an unknown outcome halts all further paid work and the halt is ch
   const stored = await readJson(f.output('halted'), 'cases', ids.plain, 'answer-requests.json');
   assert.deepEqual(stored.requests.map((item) => item.status), ['threw', 'threw', 'threw']);
   assert.deepEqual(stored.requests.slice(1).map((item) => item.error.code), ['paid_work_halted', 'paid_work_halted']);
+});
+
+test('PP4/PP6: private accounting preserves a validated over-limit count diagnostic without provider data', async (t) => {
+  const f = await setup(t);
+  const providerSecret = 'private-provider-count-header-never-retain';
+  const session = f.session(undefined, () => new Response(JSON.stringify({
+    object: 'response.input_tokens', input_tokens: 7_025,
+  }), { status: 200, statusText: providerSecret,
+    headers: { 'content-type': 'application/json', 'x-provider-secret': providerSecret } }));
+  const output = f.output('count-over-limit');
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds: [ids.plain] });
+  assert.equal(session.isHalted(), true);
+  session.close();
+  assert.equal(f.calls.length, 1);
+  assert.equal(report.summary.halted, true);
+  const accounting = await readJson(output, 'cases', ids.plain, 'accounting.json');
+  assert.equal(accounting.attempts.length, 1);
+  assert.deepEqual(accounting.attempts[0].countDiagnostic, {
+    reason: 'input_limit_exceeded', observedInputTokens: 7_025, configuredInputLimit: 7_024,
+  });
+  assert.equal(accounting.attempts[0].outcome, 'unknown');
+  assert.equal(accounting.attempts[0].actualMicroUsd, null);
+  const serialized = JSON.stringify(accounting);
+  assert.equal(serialized.includes(providerSecret), false);
+  assert.equal(serialized.includes('authorization'), false);
+  assert.equal(serialized.includes(KEY), false);
+  assert.equal(serialized.includes('response.input_tokens'), false);
 });
 
 test('PP7: resume skips finished cases, never re-sends, and never overwrites artifacts', async (t) => {

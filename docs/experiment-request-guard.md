@@ -366,6 +366,28 @@ its tests authorizes no paid run, and
 `evaluation/experiment-budget/test/benchmark-guard.test.mjs` uses synthetic
 ledgers with fake HTTP only. See [acceptance](plans/live-pilot-transport.md).
 
+When an HTTP-2xx `cairn-count` response reaches bounded body parsing, its record
+additionally has `countDiagnostic`. A structurally valid exact count object
+records `{reason, observedInputTokens,
+configuredInputLimit}`, where `reason` is `within_limit` or
+`input_limit_exceeded`. Invalid JSON, duplicate top-level keys, the wrong or an
+extra field, a wrong discriminator, or a non-integer/negative count records only
+`{reason: "invalid_count_response", configuredInputLimit}`. No candidate value
+from an invalid response is retained. The over-limit outcome remains `unknown`,
+actual cost remains null and the guard remains halted; this observation neither
+raises the limit nor changes the ledger schema. A validated count is assigned
+before settlement so it remains available in the process-local record if the
+ledger write fails. Returned attempt snapshots are detached and deeply frozen.
+
+This count is potentially sensitive request-size metadata. It stays within the
+already-private benchmark attempt record and the public pilot's mode-0600
+per-case accounting artifact; it is not added to aggregate reports, telemetry,
+the public adapter or the core result. The finite diagnostic never stores raw
+response bytes, bodies, headers, credentials, status text or provider error
+strings. See the full [decision and threat model](plans/guard-count-reason.md).
+Transport failures, non-2xx responses and bodies rejected before JSON parsing
+retain their existing outcome and do not fabricate a count diagnostic.
+
 ## Limits that must remain visible
 
 The invariant is a cap on reserved, declared upper bounds, not a guarantee about

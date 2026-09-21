@@ -48,6 +48,11 @@ const responsesEnvelope = (inputTokens = 100) => ({ id: 'resp_synthetic', object
   output: [{ id: 'msg_synthetic', type: 'message', role: 'assistant', status: 'completed',
     content: [{ type: 'output_text', text: JSON.stringify({ items: [] }), annotations: [] }] }],
   usage: { input_tokens: inputTokens, output_tokens: 5, total_tokens: inputTokens + 5 } });
+const countBody = () => ({ model: DEFAULT_MODEL, instructions: 'Synthetic extraction.',
+  input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(extractInput()) }] }],
+  truncation: 'disabled',
+  text: { format: { name: 'cairn_extract', type: 'json_schema', strict: true,
+    schema: schemasFor('extract', extractInput()) } } });
 const fake = (calls, host = (body) => chatEnvelope(body.model)) => async (url, options) => {
   const body = JSON.parse(options.body);
   calls.push({ url, body, rawBody: options.body, headers: options.headers });
@@ -422,6 +427,110 @@ test('BG7 the actual OpenAI adapter runs baseline Cairn methods through the benc
   await assert.rejects(async () => guard.cairnFetch(urls.host, request(answerBody())), guardError('invalid_request'));
   assert.equal(guard.getState().requestCount, 2);
   assert.equal(calls.length, 2);
+});
+
+test('BG5 count diagnostics retain only structurally validated counts and preserve the halt policy', async (t) => {
+  const withinFixture = fixture(t);
+  let withinSends = 0;
+  const within = make(withinFixture, async () => {
+    withinSends += 1;
+    return Response.json({ object: 'response.input_tokens', input_tokens: 7_024 });
+  });
+  const response = await within.cairnFetch(urls.count, request(countBody()));
+  assert.equal((await response.json()).input_tokens, 7_024);
+  const [withinAttempt] = within.attempts();
+  assert.equal(withinAttempt.outcome, 'succeeded');
+  assert.equal(withinAttempt.actualMicroUsd, null);
+  assert.equal(withinAttempt.usage, null);
+  assert.deepEqual(withinAttempt.countDiagnostic, {
+    reason: 'within_limit', observedInputTokens: 7_024, configuredInputLimit: 7_024,
+  });
+  assert.equal(Object.isFrozen(withinAttempt.countDiagnostic), true);
+  assert.throws(() => { withinAttempt.countDiagnostic.reason = 'changed'; }, TypeError);
+  assert.equal(within.attempts()[0].countDiagnostic.reason, 'within_limit');
+  assert.equal(withinSends, 1);
+
+  const overFixture = fixture(t);
+  let overSends = 0;
+  const over = make(overFixture, async () => {
+    overSends += 1;
+    return Response.json({ object: 'response.input_tokens', input_tokens: 7_025 });
+  });
+  await assert.rejects(over.cairnFetch(urls.count, request(countBody())), guardError('invalid_response'));
+  const [overAttempt] = over.attempts();
+  assert.deepEqual(overAttempt.countDiagnostic, {
+    reason: 'input_limit_exceeded', observedInputTokens: 7_025, configuredInputLimit: 7_024,
+  });
+  assert.equal(overAttempt.outcome, 'unknown');
+  assert.equal(overAttempt.actualMicroUsd, null);
+  assert.equal(over.isHalted(), true);
+  await assert.rejects(over.cairnFetch(urls.generation, request({})), guardError('paid_work_halted'));
+  assert.equal(overSends, 1);
+  assert.deepEqual(over.getState().attempts.map(({ outcome, actualMicroUsd }) => ({ outcome, actualMicroUsd })),
+    [{ outcome: 'unknown', actualMicroUsd: null }]);
+});
+
+test('BG5 malformed count responses retain no unvalidated token value, body, or provider text', async (t) => {
+  const privateProviderText = 'private-provider-count-text-never-retain';
+  const cases = [
+    ['invalid-json', '{'],
+    ['array-shape', '[]'],
+    ['missing-count', JSON.stringify({ object: 'response.input_tokens' })],
+    ['wrong-object', JSON.stringify({ object: 'response', input_tokens: 7_025 })],
+    ['duplicate-key', '{"object":"response.input_tokens","input_tokens":7025,"input_tokens":1}'],
+    ['extra-field', JSON.stringify({ object: 'response.input_tokens', input_tokens: 7_025,
+      extra: privateProviderText })],
+    ['string', JSON.stringify({ object: 'response.input_tokens', input_tokens: '7025' })],
+    ['negative', JSON.stringify({ object: 'response.input_tokens', input_tokens: -1 })],
+    ['non-integer', JSON.stringify({ object: 'response.input_tokens', input_tokens: 7_024.5 })],
+  ];
+  for (const [label, body] of cases) {
+    const f = fixture(t);
+    let sends = 0;
+    const guard = make(f, async () => {
+      sends += 1;
+      return new Response(body, { status: 200, statusText: privateProviderText,
+        headers: { 'content-type': 'application/json', 'x-provider-text': privateProviderText } });
+    });
+    await assert.rejects(guard.cairnFetch(urls.count, request(countBody())), guardError('invalid_response'), label);
+    const [attempt] = guard.attempts();
+    assert.deepEqual(attempt.countDiagnostic,
+      { reason: 'invalid_count_response', configuredInputLimit: 7_024 }, label);
+    assert.equal(Object.hasOwn(attempt.countDiagnostic, 'observedInputTokens'), false, label);
+    assert.equal(attempt.outcome, 'unknown', label);
+    assert.equal(attempt.actualMicroUsd, null, label);
+    assert.equal(guard.isHalted(), true, label);
+    const serialized = JSON.stringify(attempt);
+    assert.equal(serialized.includes(privateProviderText), false, label);
+    assert.equal(JSON.stringify(attempt.countDiagnostic).includes('7025'), false, label);
+    await assert.rejects(guard.cairnFetch(urls.count, request(countBody())), guardError('paid_work_halted'), label);
+    assert.equal(sends, 1, label);
+  }
+});
+
+test('BG5 a validated count diagnostic survives a failed ledger settlement', async (t) => {
+  const f = fixture(t);
+  let lock;
+  const guard = make(f, async () => {
+    lock = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    return Response.json({ object: 'response.input_tokens', input_tokens: 7_024 });
+  });
+  f.drain(async () => {
+    try { lock?.exec('ROLLBACK'); } catch { /* already released */ }
+    try { lock?.close(); } catch { /* already closed */ }
+  });
+  await assert.rejects(guard.cairnFetch(urls.count, request(countBody())), (error) =>
+    error.name === 'ExperimentBudgetError' && error.code === 'ledger_busy');
+  const [attempt] = guard.attempts();
+  assert.deepEqual(attempt.countDiagnostic,
+    { reason: 'within_limit', observedInputTokens: 7_024, configuredInputLimit: 7_024 });
+  assert.equal(attempt.outcome, null);
+  assert.equal(attempt.actualMicroUsd, null);
+  assert.equal(attempt.settledAt, null);
+  assert.equal(guard.isHalted(), true);
+  lock.exec('ROLLBACK');
+  lock.close();
 });
 
 test('BG5/BG7 an external abort before send settles nothing and sends nothing', async (t) => {

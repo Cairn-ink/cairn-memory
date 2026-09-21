@@ -215,6 +215,9 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
     const edge = await core.classifyPlacement(fullRequest);
     assert.equal(edge.ok, true, JSON.stringify(edge));
     const edgeMetrics = tokenMetrics(guardedModel, latestCountBody(guardedTransport), countRows(path));
+    assert.deepEqual(guard.attempts().at(-2).countDiagnostic, {
+      reason: 'within_limit', observedInputTokens: 7_024, configuredInputLimit: 7_024,
+    });
 
     guardedTransport.setProviderCount(7_025);
     const callsBeforeOverflow = guardedTransport.calls.length;
@@ -226,6 +229,9 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
     assert.equal(attemptsAfterOverflow.at(-1).stage, 'cairn-count');
     assert.equal(attemptsAfterOverflow.at(-1).outcome, 'unknown');
     assert.equal(attemptsAfterOverflow.at(-1).actualMicroUsd, null);
+    assert.deepEqual(attemptsAfterOverflow.at(-1).countDiagnostic, {
+      reason: 'input_limit_exceeded', observedInputTokens: 7_025, configuredInputLimit: 7_024,
+    });
     const callsBeforeHaltedRetry = guardedTransport.calls.length;
     const haltedRetry = await core.classifyPlacement(fullRequest);
     errorCode(haltedRetry, 'classification_failed');
@@ -256,6 +262,7 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
       edge: { fakeProviderCount: 7_024, result: edge.ok ? 'ok' : edge.error.code, metrics: edgeMetrics },
       guardedOverflow: { fakeProviderCount: 7_025, coreResult: overflow.error.code,
         countOutcome: attemptsAfterOverflow.at(-1).outcome, halted: true,
+        countDiagnostic: attemptsAfterOverflow.at(-1).countDiagnostic,
         retryTransportCalls: guardedTransport.calls.length - callsBeforeHaltedRetry },
       ordinaryOverflow: { fakeProviderCount: 7_025, first: ordinaryFirst.error.code,
         second: ordinarySecond.error.code, countCalls: ordinaryTransport.calls.length,
@@ -268,11 +275,12 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
     };
     t.diagnostic(JSON.stringify(report));
 
-    // Opt-in red loop: the product adapter already classifies the same direct 7025
-    // response as a context bound. This asks only for that diagnosable error at the
-    // guarded seam; it does not authorize accepting >7024 or removing run-wide halt.
+    // Opt-in observability gate: the trusted benchmark artifact retains the exact
+    // validated count even though the unchanged public adapter/core error remains
+    // classification_failed. This does not authorize accepting >7024 or continuing.
     if (process.env.CAIRN_EXPECT_COUNT_OVERFLOW_DIAGNOSTIC === '1') {
-      assert.equal(overflow.error.code, 'context_budget_exceeded',
-        'guarded fake count 7025 is currently obscured as classification_failed');
+      assert.deepEqual(attemptsAfterOverflow.at(-1).countDiagnostic, {
+        reason: 'input_limit_exceeded', observedInputTokens: 7_025, configuredInputLimit: 7_024,
+      });
     }
   });
