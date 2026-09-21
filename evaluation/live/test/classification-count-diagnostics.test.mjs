@@ -50,7 +50,7 @@ const request = (core, memories) => ({
   mapRevision: ok(core.map({ namespace, purpose: 'classification', limit: 1 })).indexRevision,
 });
 
-function fakeTransport() {
+function fakeTransport(generate = (input) => ({ items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })) })) {
   let providerCount = 100;
   const calls = [];
   return {
@@ -64,7 +64,7 @@ function fakeTransport() {
       }
       assert.equal(url, urls.generation);
       const input = JSON.parse(body.input[0].content[0].text);
-      const text = JSON.stringify({ items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })) });
+      const text = JSON.stringify(generate(input));
       const outputTokens = 10;
       return Response.json({
         id: 'resp_synthetic', object: 'response', model: DEFAULT_MODEL, status: 'completed',
@@ -135,7 +135,7 @@ function tokenMetrics(model, body, store) {
     targetMemories: component(input.memories),
     catalogMap: component(input.map),
     jsonSchema: component(schema),
-    localPreflightTokens: model.countTokens(JSON.stringify({
+    wireEquivalentLocalTokens: model.countTokens(JSON.stringify({
       system: body.instructions, input, maxOutputTokens: 1024,
     })),
     providerRequestBytes: Buffer.byteLength(JSON.stringify(body), 'utf8'),
@@ -143,7 +143,8 @@ function tokenMetrics(model, body, store) {
     schemaRepeatedVisibleIdOccurrences: occurrences - visibleIds.length,
     schemaVisibleIdLiteralBytes: idOccurrences.reduce((total, entry) =>
       total + entry.occurrences * Buffer.byteLength(JSON.stringify(entry.id), 'utf8'), 0),
-    schemaVisibleIdTokenDelta: model.countTokens(schemaText) - model.countTokens(schemaWithoutIds),
+    schemaIdentifierTokenDeltaVersusPlaceholder: model.countTokens(schemaText) - model.countTokens(schemaWithoutIds),
+    transportIdentifierFormat: 'request-local-role-alias',
     containsStoredSourceBodies: JSON.stringify(input).includes('DO_NOT_SEND_STORED_SOURCE_'),
     containsUnrelatedBodies: JSON.stringify(input).includes('DO_NOT_SEND_UNRELATED_'),
   };
@@ -192,7 +193,9 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
       assert.equal(result.ok, true, JSON.stringify(result));
       const metric = tokenMetrics(guardedModel, latestCountBody(guardedTransport), countRows(path));
       const sent = JSON.parse(latestCountBody(guardedTransport).input[0].content[0].text);
-      assert.deepEqual(sent.memories.map((memory) => memory.id), targets.map((memory) => memory.id));
+      assert.deepEqual(sent.memories.map((memory) => memory.id), ['m0', 'm1', 'm2', 'm3', 'm4']);
+      assert.ok(sent.memories.every((memory) => !targets.some((target) => target.id === memory.id)));
+      assert.deepEqual(result.value.proposal.items.map((item) => item.memoryId), targets.map((memory) => memory.id));
       assert.ok(sent.map.every((item) => item.type === 'moc'));
       assert.equal(metric.storedMocs, topicCount);
       assert.equal(metric.visibleTargetCards, 5);
@@ -255,7 +258,8 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
 
     const report = {
       evidenceKind: 'deterministic synthetic mechanism; not a reconstruction of the historical response',
-      fixedBase: 'a31f9d9b948f1e9d7c7371be4d7e115a7cb021a8',
+      historicalRegressionBase: 'a31f9d9b948f1e9d7c7371be4d7e115a7cb021a8',
+      candidatePacketBase: 'b43f7308c6d7cad2c3affc0e09ac26fe3f7bbdae',
       bounds: { maximumTargets: 5, catalogPageLimit: 100, localInputLimit: 6_000,
         providerCountLimit: 7_024 },
       growth,
@@ -284,3 +288,96 @@ test('offline classification count overflow reproduces benchmark unknown/halt wh
       });
     }
   });
+
+test('classification wire aliases cross the actual guarded core seam and persist only decoded original links', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'cairn-classification-wire-'));
+  const path = join(root, 'memory.sqlite');
+  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 100 };
+  const policy = experimentPolicy();
+  let invalidOutput = false;
+  const transport = fakeTransport((input) => {
+    if (invalidOutput) return { items: [{ memoryId: 'm-unknown', parentIds: [] }] };
+    const l1 = input.map.find((item) => item.type === 'moc' && item.moc.level === 'L1').moc.id;
+    const l2 = input.map.find((item) => item.type === 'moc' && item.moc.level === 'L2').moc.id;
+    return { items: [
+      { memoryId: input.memories[0].id, parentIds: [l1] },
+      { memoryId: input.memories[1].id, parentIds: [], newL1: {
+        title: 'Decoded new leaf', parentL2Ids: [l2], newL2Title: 'Decoded new root',
+      } },
+    ] };
+  });
+  let core;
+  let guard;
+  t.after(() => {
+    try { core?.close(); } catch { /* best-effort test cleanup */ }
+    try { guard?.close(); } catch { /* best-effort test cleanup */ }
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  createExperimentBudget(ledger).close();
+  createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('setup transport') }).close();
+  const benchmarkExtension = authorizeBenchmarkExtension({
+    ledger, policy, authorizationId: 'synthetic-classification-wire', stages,
+  });
+  guard = createBenchmarkExperimentRequestGuard({ ledger, policy, benchmarkExtension,
+    fetchImpl: transport.fetch });
+  const model = createOpenAIModel({ apiKey: syntheticKey, fetchImpl: guard.cairnFetch });
+  core = openMemoryCore({ path, model });
+
+  const seed = admit(core, 'Synthetic existing hierarchy source.', 'wire-seed');
+  const seeded = ok(core.applyPlacement({
+    namespace,
+    proposal: { items: [{ memoryId: seed.id, parentIds: [], newL1: {
+      title: 'Existing decoded leaf', parentL2Ids: [], newL2Title: 'Existing decoded root',
+    } }] },
+    expectedMemoryRevisions: [{ memoryId: seed.id, revision: seed.revision }],
+    expectedIndexRevision: ok(core.map({ namespace, purpose: 'classification', limit: 1 })).indexRevision,
+  }));
+  const existingL1 = seeded.createdMocs.find((moc) => moc.level === 'L1');
+  const existingL2 = seeded.createdMocs.find((moc) => moc.level === 'L2');
+  assert.ok(existingL1); assert.ok(existingL2);
+
+  const targets = [admit(core, 'Synthetic existing-parent target.', 'wire-target-0'),
+    admit(core, 'Synthetic new-parent target.', 'wire-target-1')];
+  const classified = ok(await core.classifyPlacement(request(core, targets)));
+  assert.deepEqual(classified.proposal, { items: [
+    { memoryId: targets[0].id, parentIds: [existingL1.id] },
+    { memoryId: targets[1].id, parentIds: [], newL1: {
+      title: 'Decoded new leaf', parentL2Ids: [existingL2.id], newL2Title: 'Decoded new root',
+    } },
+  ] });
+
+  const countBody = transport.calls.find((call) => call.url === urls.count).body;
+  const generationBody = transport.calls.find((call) => call.url === urls.generation).body;
+  const { max_output_tokens, store, stream, ...generationProjection } = generationBody;
+  assert.deepEqual(generationProjection, countBody);
+  assert.equal(max_output_tokens, 1024); assert.equal(store, false); assert.equal(stream, false);
+  const sent = JSON.parse(countBody.input[0].content[0].text);
+  assert.deepEqual(sent.memories.map((memory) => memory.id), ['m0', 'm1']);
+  assert.ok(sent.map.every((item) => /^c[0-9a-z]+$/.test(item.moc.id)));
+  assert.ok(targets.every((target) => !JSON.stringify(countBody).includes(target.id)));
+  assert.ok(!JSON.stringify(countBody).includes(existingL1.id));
+  assert.ok(!JSON.stringify(countBody).includes(existingL2.id));
+
+  const applied = ok(core.applyPlacement({ namespace, proposal: classified.proposal,
+    expectedMemoryRevisions: classified.basedOn.memoryRevisions,
+    expectedIndexRevision: classified.basedOn.indexRevision }));
+  const createdL1 = applied.createdMocs.find((moc) => moc.level === 'L1');
+  const createdL2 = applied.createdMocs.find((moc) => moc.level === 'L2');
+  assert.ok(createdL1); assert.ok(createdL2);
+  assert.deepEqual(ok(core.get({ namespace, memoryId: targets[0].id })).placements.map((placement) => placement.mocId),
+    [existingL1.id]);
+  assert.deepEqual(ok(core.get({ namespace, memoryId: targets[1].id })).placements.map((placement) => placement.mocId),
+    [createdL1.id]);
+  assert.ok(applied.refs.some((ref) => ref.childType === 'moc' && ref.parentId === existingL2.id && ref.childId === createdL1.id));
+  assert.ok(applied.refs.some((ref) => ref.childType === 'moc' && ref.parentId === createdL2.id && ref.childId === createdL1.id));
+
+  const rejected = admit(core, 'Synthetic unknown-alias target.', 'wire-rejected');
+  const rejectedRequest = request(core, [rejected]);
+  invalidOutput = true;
+  errorCode(await core.classifyPlacement(rejectedRequest), 'invalid_model_output');
+  assert.equal(ok(core.get({ namespace, memoryId: rejected.id })).memory.filing.status, 'unfiled');
+  assert.equal(ok(core.map({ namespace, purpose: 'classification', limit: 1 })).indexRevision,
+    rejectedRequest.mapRevision);
+  assert.equal(guard.isHalted(), false);
+});

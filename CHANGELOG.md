@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — classification request-local wire aliases
+
+- The optional OpenAI adapter now sends deterministic request-local,
+  role-separated aliases for classification target-memory IDs and catalog-MOC
+  IDs, validates provider output against the exact alias schema, then decodes
+  authoritative reference fields before existing core validation and storage.
+- Classification candidate/card/MOC content, order, titles, metadata,
+  `mapExhausted`, durable IDs and MOC policy are unchanged. Unknown, cross-role
+  and raw UUID output references fail closed. Other adapter methods keep their
+  prior wire formats.
+- Original core/adapter 6,000-local-token preflights, the 7,024 provider-input
+  ceiling, 1,024 output cap, model policy, reservations, no-retry/no-truncation
+  behavior and benchmark halt policy remain unchanged. Offline fake-HTTP/local-
+  tokenizer tests show transport reduction only; aliases are not anonymization,
+  and no historical provider count, failure cause or benchmark score is claimed.
+
 ## Unreleased — benchmark count diagnostics
 
 - Benchmark-guard count attempts now retain a finite private diagnostic for an

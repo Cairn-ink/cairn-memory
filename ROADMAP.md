@@ -49,8 +49,14 @@ reliability work below without declaring older failure gates resolved.
    and array formatting; its synthetic parity is not a corpus-quality result.
    Stage-bound transport and a public pilot runner are available as development
    candidates. The first pilot halted before answering; no score is available.
-   Follow the [classification diagnosis plan](docs/plans/classification-count-diagnostics.md):
-   reconstruct the failed input and verify the smallest necessary repair. The
+   The [classification diagnosis plan](docs/plans/classification-count-diagnostics.md)
+   motivated a classification-only
+   [request-local wire repair](docs/plans/classification-wire-aliases.md) that
+   preserves candidate coverage and all existing caps/policies while reducing
+   repeated UUID literals in offline local-tokenizer/fake-HTTP checks. The
+   historical provider count and cause remain unknown; this is not a recovered
+   score or proof that a future pilot will complete. Freeze and independently
+   review the repair before any separately authorized fixed pilot. The
    [benchmark count diagnostic](docs/plans/guard-count-reason.md) preserves a
    future structurally validated count without changing the adapter, ceiling or
    halt policy; it is observability, not the repair or proof that a pilot is

@@ -125,6 +125,17 @@ accounting, but it is not retroactive and does not recover this response or
 resolve its cause. No budget increase, automatic retry, successful score or
 historical count is implied.
 
+The optional OpenAI adapter now compresses repeated classification target/MOC
+UUIDs into request-local role-separated wire aliases and decodes validated
+references before core/storage. Offline fixed fixtures and a separately replayed
+copy show material local-token and byte reduction with the same visible
+candidate/card/MOC content, but local tokenizer measurements are not provider
+counts. Aliases do not hide personal content, titles or metadata, do not solve
+arbitrary catalog growth or source-support quality, and do not recover the
+historical count or prove its cause. The 6,000/7,024/1,024 limits, incomplete-map
+behavior and benchmark halt policy remain. Any paid rerun still requires a
+frozen, independently reviewed candidate and separate authorization.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

@@ -86,6 +86,12 @@ review. The fake 7025 response reproduces the guard mechanism regardless of
 payload size, so it cannot prove that schema overhead caused the historical
 failure.
 
+That separate experiment is specified in
+[`classification-wire-aliases.md`](classification-wire-aliases.md). Its offline
+candidate reduces repeated identifiers without changing coverage or caps. It
+does not retroactively turn this representative diagnosis into a provider count,
+recover the historical response or prove why the interrupted pilot stopped.
+
 ## Commands
 
 Normal CI diagnostic (expected green):
