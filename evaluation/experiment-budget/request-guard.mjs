@@ -9,7 +9,8 @@ import {
   realpathSync,
   writeFileSync,
 } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -25,6 +26,7 @@ import {
 } from '../../adapters/openai/profiles.mjs';
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { schemasFor } from '../../adapters/openai/schemas.mjs';
+import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
@@ -49,6 +51,9 @@ const BASIS_MODELS_KIND = Object.freeze({
 const BENCHMARK_KIND = Object.freeze({
   filename: 'experiment-benchmark-extension.json', method: 'benchmark',
 });
+const CASE_DEADLINE_VERSION = 'case-deadline-v1';
+const CASE_PHASES = Object.freeze(['generation', 'scoring']);
+const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const BENCHMARK_STAGES = Object.freeze(['answer', 'judge']);
 const BENCHMARK_MODELS = Object.freeze({
   answer: Object.freeze(['gpt-4.1-mini-2025-04-14']),
@@ -488,7 +493,7 @@ function raceAbort(promise, signal) {
   });
 }
 
-async function readBounded(response, maximum, signal) {
+async function readBounded(response, maximum, signal, observeFailure = null) {
   if (!response?.body || typeof response.body.getReader !== 'function') fail('invalid_response');
   const reader = response.body.getReader();
   const cancel = () => {
@@ -499,11 +504,23 @@ async function readBounded(response, maximum, signal) {
   let size = 0;
   try {
     while (true) {
-      const { done, value } = await raceAbort(reader.read(), signal);
+      let read;
+      if (observeFailure === null) {
+        read = await raceAbort(reader.read(), signal);
+      } else {
+        try {
+          const raw = reader.read();
+          const pending = Promise.resolve(raw).catch((error) => { observeFailure(); throw error; });
+          const observed = await raceAbort(pending, signal);
+          // Read potentially hostile getters before cancellation can advance a timer.
+          read = { done: observed.done, value: observed.value };
+        } catch (error) { observeFailure(); throw error; }
+      }
+      const { done, value } = read;
       if (done) break;
-      if (!(value instanceof Uint8Array)) fail('invalid_response');
+      if (!(value instanceof Uint8Array)) { observeFailure?.(); fail('invalid_response'); }
       size += value.byteLength;
-      if (size > maximum) fail('response_too_large');
+      if (size > maximum) { observeFailure?.(); fail('response_too_large'); }
       chunks.push(new Uint8Array(value));
     }
     const bytes = new Uint8Array(size);
@@ -1175,6 +1192,203 @@ function usageRecord(kind, json) {
     : { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens };
 }
 
+function caseDeadlineFilenames(directory, executionId) {
+  return {
+    binding: path.join(directory, `experiment-case-deadline-${executionId}.json`),
+    claim: path.join(directory, `experiment-case-deadline-${executionId}.claim.json`),
+  };
+}
+
+function assertCaseClaimUnused(directory, executionId) {
+  const { claim } = caseDeadlineFilenames(directory, executionId);
+  try {
+    lstatSync(claim);
+    fail('capability_consumed');
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    if (error?.code !== 'ENOENT') fail('capability_consumed');
+  }
+}
+
+function historicalRows(state) {
+  return state.attempts.map((attempt) => ({
+    attemptId: attempt.attemptId,
+    channel: attempt.channel,
+    reservedMicroUsd: attempt.reservedMicroUsd,
+    outcome: attempt.outcome,
+    actualMicroUsd: attempt.actualMicroUsd,
+  }));
+}
+
+function historicalDigest(attempts) {
+  return createHash('sha256').update(canonical(attempts), 'utf8').digest('hex');
+}
+
+function validateCaseSchedule(value) {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 1_000 || value.length % 2 !== 0) {
+    fail('invalid_capability');
+  }
+  const schedule = value.map((entry) => {
+    exactKeys(entry, ['phase', 'caseId'], 'invalid_capability');
+    if (!CASE_PHASES.includes(entry.phase) || typeof entry.caseId !== 'string'
+      || !CASE_ID_PATTERN.test(entry.caseId)) fail('invalid_capability');
+    return { phase: entry.phase, caseId: entry.caseId };
+  });
+  const half = schedule.length / 2;
+  const ids = new Set();
+  for (let index = 0; index < half; index += 1) {
+    const generation = schedule[index];
+    const scoring = schedule[index + half];
+    if (generation.phase !== 'generation' || scoring.phase !== 'scoring'
+      || generation.caseId !== scoring.caseId || ids.has(generation.caseId)) fail('invalid_capability');
+    ids.add(generation.caseId);
+  }
+  return deepFreeze(schedule);
+}
+
+function snapshotCaseAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_capability'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'benchmarkExtension', 'authorizationId',
+    'executionId', 'checkpoint', 'schedule'], 'invalid_capability');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy, fetchImpl: () => {} });
+  const ledger = structuredClone(snapshot.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  if (typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || typeof snapshot.executionId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.executionId)) fail('invalid_capability');
+  exactKeys(snapshot.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_capability');
+  if (!safeInteger(snapshot.checkpoint.requestCount)
+    || !safeInteger(snapshot.checkpoint.reservedMicroUsd)
+    || snapshot.checkpoint.requestCount > ledger.requestCap
+    || snapshot.checkpoint.reservedMicroUsd > ledger.limitMicroUsd) fail('invalid_capability');
+  const benchmarkExtension = snapshotExtension(snapshot.benchmarkExtension);
+  const schedule = validateCaseSchedule(snapshot.schedule);
+  return { ledger, policy, benchmarkExtension, authorizationId: snapshot.authorizationId,
+    executionId: snapshot.executionId, checkpoint: deepFreeze(snapshot.checkpoint), schedule };
+}
+
+function caseCapabilityRecord(configuration, digest) {
+  return {
+    version: CASE_DEADLINE_VERSION,
+    authorizationId: configuration.authorizationId,
+    executionId: configuration.executionId,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    benchmarkExtension: configuration.benchmarkExtension,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+    schedule: configuration.schedule,
+  };
+}
+
+function verifyCaseCapability(capability, ledger, policy, benchmarkExtension) {
+  exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
+    'benchmarkExtension', 'checkpoint', 'historicalDigest', 'schedule'], 'invalid_capability');
+  const configuration = snapshotCaseAuthorization({ ledger, policy, benchmarkExtension,
+    authorizationId: capability.authorizationId, executionId: capability.executionId,
+    checkpoint: capability.checkpoint, schedule: capability.schedule });
+  if (capability.version !== CASE_DEADLINE_VERSION
+    || typeof capability.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(capability.historicalDigest)
+    || canonical(capability) !== canonical(caseCapabilityRecord(configuration, capability.historicalDigest))) {
+    fail('invalid_capability');
+  }
+  verifyBenchmarkExtension(configuration.benchmarkExtension, configuration.ledger, configuration.policy);
+  readBinding(caseDeadlineFilenames(configuration.ledger.directory, capability.executionId).binding, capability);
+  return configuration;
+}
+
+function verifyPinnedBaseline(capability, state) {
+  if (state.state !== 'open'
+    || state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.attempts.length !== capability.checkpoint.requestCount
+    || state.attempts.some((attempt) => attempt.outcome === null)
+    || historicalDigest(historicalRows(state)) !== capability.historicalDigest) fail('policy_mismatch');
+}
+
+// Provisioning pins the whole settled historical prefix. It does not consume the
+// one-shot execution claim and therefore is safe for a future dry-run verifier.
+export function authorizeCaseDeadlineCapability(options) {
+  const configuration = snapshotCaseAuthorization(options);
+  const ledger = reopenExperimentBudget(configuration.ledger);
+  let lock;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    verifyBenchmarkExtension(configuration.benchmarkExtension, configuration.ledger, configuration.policy);
+    const state = ledger.getState();
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+      fail('capability_busy');
+    }
+    if (state.requestCount !== configuration.checkpoint.requestCount
+      || state.reservedMicroUsd !== configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    const capability = caseCapabilityRecord(configuration, historicalDigest(historicalRows(state)));
+    const filename = caseDeadlineFilenames(configuration.ledger.directory, configuration.executionId).binding;
+    assertCaseClaimUnused(configuration.ledger.directory, configuration.executionId);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) {
+      const stored = readBinding(filename);
+      verifyCaseCapability(stored, configuration.ledger, configuration.policy,
+        configuration.benchmarkExtension);
+      if (canonical(stored) !== canonical(capability)) fail('policy_mismatch');
+      verifyPinnedBaseline(stored, state);
+      return deepFreeze(stored);
+    }
+    writeAuthorizationBinding(configuration.ledger.directory, filename, capability);
+    verifyCaseCapability(capability, configuration.ledger, configuration.policy,
+      configuration.benchmarkExtension);
+    verifyPinnedBaseline(capability, state);
+    return deepFreeze(capability);
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) throw error;
+    fail('unsafe_policy_binding');
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* No ledger writes were made. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
+function consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, benchmarkExtension) {
+  const ledger = reopenExperimentBudget(ledgerConfiguration);
+  let lock;
+  try {
+    lock = new DatabaseSync(path.join(ledgerConfiguration.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    verifyCaseCapability(capability, ledgerConfiguration, policy, benchmarkExtension);
+    const state = ledger.getState();
+    verifyPinnedBaseline(capability, state);
+    const { claim } = caseDeadlineFilenames(ledgerConfiguration.directory, capability.executionId);
+    let descriptor;
+    try {
+      descriptor = openSync(claim,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    } catch (error) {
+      if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+      fail('unsafe_policy_binding');
+    }
+    try {
+      const claimRecord = { version: 'case-deadline-claim-v1', executionId: capability.executionId,
+        capabilityDigest: historicalDigest([capability]) };
+      writeFileSync(descriptor, `${canonical(claimRecord)}\n`, { encoding: 'utf8' });
+      fsyncSync(descriptor);
+    } catch {
+      // Never unlink a partial claim: its existence is irrevocable consumption.
+      fail('unsafe_policy_binding');
+    } finally { try { closeSync(descriptor); } catch { /* Preserve the authoritative failure. */ } }
+    const directoryDescriptor = openSync(ledgerConfiguration.directory, constants.O_RDONLY);
+    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+    return deepFreeze(historicalRows(state));
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* Claim is a separate durable file. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
 export function createBenchmarkExperimentRequestGuard(options) {
   exactKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'fetchImpl']);
   const benchmark = snapshotExtension(options.benchmarkExtension);
@@ -1182,7 +1396,28 @@ export function createBenchmarkExperimentRequestGuard(options) {
     benchmark);
 }
 
-function constructBenchmarkGuard(options, benchmark) {
+export function createCaseDeadlineExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'caseDeadlineCapability', 'fetchImpl']);
+  // Read each caller-owned field once, then use only detached snapshots. In
+  // particular no accessor can swap the ledger or capability after claiming.
+  const caller = { ledger: options.ledger, policy: options.policy,
+    benchmarkExtension: options.benchmarkExtension, caseDeadlineCapability: options.caseDeadlineCapability };
+  const fetchImpl = options.fetchImpl;
+  if (typeof fetchImpl !== 'function') fail('invalid_options');
+  let detached;
+  try { detached = structuredClone(caller); } catch { fail('invalid_options'); }
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy, fetchImpl });
+  const benchmark = snapshotExtension(detached.benchmarkExtension);
+  const capability = snapshotExtension(detached.caseDeadlineCapability);
+  const ledgerConfiguration = structuredClone(detached.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  verifyCaseCapability(capability, ledgerConfiguration, policy, benchmark);
+  const baseline = consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, benchmark);
+  return constructBenchmarkGuard({ ledger: ledgerConfiguration, policy, fetchImpl }, benchmark,
+    capability, baseline);
+}
+
+function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null) {
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
@@ -1196,52 +1431,117 @@ function constructBenchmarkGuard(options, benchmark) {
   let closed = false;
   let inFlight = 0;
   let halted = false;
+  const scoped = caseCapability !== null;
+  const scopeStorage = scoped ? new AsyncLocalStorage() : null;
+  const sealedCases = new Set();
+  const timeoutRecords = [];
+  let scheduleIndex = 0;
+  let activeScope = null;
+  let lastScopeSnapshot = null;
   // Any unsettled ledger attempt that is not currently in flight on this guard halts new paid work,
   // including this guard's own attempt whose settlement failed to persist.
   const unsettled = (state) => state.attempts.some((attempt) =>
     attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
   const verify = () => {
     verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
+    if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
     const state = ledger.getState();
     verifyExtensionCheckpoint(benchmark, state);
+    if (scoped) {
+      const expectedAttempts = [...pinnedBaseline, ...records.map((record) => ({
+        attemptId: record.attemptId,
+        channel: record.ledgerChannel,
+        reservedMicroUsd: record.reservedMicroUsd,
+        outcome: record.outcome,
+        actualMicroUsd: record.actualMicroUsd,
+      }))];
+      const reservedMicroUsd = expectedAttempts.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0);
+      const expectedState = expectedAttempts.some((attempt) => attempt.actualMicroUsd !== null
+        && attempt.actualMicroUsd > attempt.reservedMicroUsd) ? 'overrun' : 'open';
+      if (canonical(historicalRows(state)) !== canonical(expectedAttempts)
+        || state.requestCount !== expectedAttempts.length
+        || state.reservedMicroUsd !== reservedMicroUsd
+        || state.state !== expectedState) fail('policy_mismatch');
+    }
     return state;
   };
-  try { if (unsettled(verify())) halted = true; }
+  const guardedVerify = () => {
+    try { return verify(); }
+    catch (error) { if (scoped) halted = true; throw error; }
+  };
+  try { if (unsettled(scoped ? guardedVerify() : verify())) halted = true; }
   catch (error) { ledger.close(); throw error; }
   const stages = benchmark.stages;
   const fetchImpl = options.fetchImpl;
 
-  const send = async (stage, kind, channel, snapshot, requestedOutputTokens) => {
+  const scopeSnapshot = (scope, status = scope.status) => deepFreeze({
+    version: 'case-deadline-scope-v1', phase: scope.phase, caseId: scope.caseId, status,
+  });
+  const requireScope = (route) => {
+    if (!scoped) return null;
+    const scope = scopeStorage.getStore();
+    if (!scope || scope !== activeScope || !scope.open) fail('case_scope_required');
+    if ((scope.phase === 'generation' && route === 'judge')
+      || (scope.phase === 'scoring' && route !== 'judge')) fail('case_scope_violation');
+    if (sealedCases.has(scope.caseId)) fail('case_timeout_halted');
+    if (inFlight !== 0) fail('guard_busy');
+    return scope;
+  };
+  const sealDeadline = (scope, termination) => {
+    if (!scoped || sealedCases.has(scope.caseId)) return;
+    sealedCases.add(scope.caseId);
+    scope.status = 'timed_out';
+    const timeout = deepFreeze({ version: 'case-deadline-timeout-v1', phase: scope.phase,
+      caseId: scope.caseId, termination });
+    timeoutRecords.push(timeout);
+    lastScopeSnapshot = scopeSnapshot(scope);
+  };
+
+  const send = async (stage, kind, channel, snapshot, requestedOutputTokens, caseScope = null) => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
+    if (scoped) requireScope(stage === 'judge' ? 'judge' : stage === 'answer' ? 'answer' : 'cairn');
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the capability and the shared ledger after those callbacks, before reserving.
-    if (unsettled(verify())) { halted = true; fail('paid_work_halted'); }
+    if (unsettled(scoped ? guardedVerify() : verify())) { halted = true; fail('paid_work_halted'); }
     const attemptId = randomUUID();
     const startedAt = Date.now();
-    ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd });
+    try { ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd }); }
+    catch (error) { if (scoped) halted = true; throw error; }
     inFlightIds.add(attemptId);
     const record = { attemptId, stage, ledgerChannel: CHANNELS[kind], model: channel.model,
       endpoint: channel.endpoint, reservedMicroUsd: channel.reservedMicroUsd,
       rates: { inputPrice: { ...channel.inputPrice }, outputPrice: { ...channel.outputPrice } },
-      outcome: null, actualMicroUsd: null, usage: null, startedAt, settledAt: null, elapsedMs: null };
+      outcome: null, actualMicroUsd: null, usage: null, startedAt, settledAt: null, elapsedMs: null,
+      ...(scoped ? { phase: caseScope.phase, caseId: caseScope.caseId, termination: null } : {}) };
     records.push(record);
     inFlight += 1;
     const controller = new AbortController();
-    const externalAbort = () => controller.abort('request_aborted');
+    let terminationCause = null;
+    const externalAbort = scoped ? () => {
+      if (terminationCause === null) terminationCause = isCoreModelDeadlineSignal(snapshot.signal)
+        ? 'core_deadline' : 'external_abort';
+      controller.abort('request_aborted');
+    } : () => controller.abort('request_aborted');
     snapshot.signal.addEventListener('abort', externalAbort, { once: true });
     if (snapshot.signal.aborted) externalAbort();
-    const timer = setTimeout(() => controller.abort('request_timeout'), channel.timeoutMs);
+    const timer = scoped ? setTimeout(() => {
+      if (terminationCause === null) terminationCause = 'transport_deadline';
+      controller.abort('request_timeout');
+    }, channel.timeoutMs) : setTimeout(() => controller.abort('request_timeout'), channel.timeoutMs);
     let settled = false;
-    const settle = (outcome, actualMicroUsd, usage = null, diagnostic = null) => {
+    const settle = (outcome, actualMicroUsd, usage = null, diagnostic = null,
+      termination = 'other_failure', isolatedDeadline = false) => {
       if (settled) return;
       settled = true;
-      if (outcome === 'unknown' || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
+      if ((outcome === 'unknown' && !isolatedDeadline)
+        || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
         halted = true;
       }
       // Observed token counts survive a failed ledger write so an operator can settle by hand;
       // outcome and cost stay null until the ledger accepted them.
       record.usage = usage;
+      if (scoped) record.termination = termination;
       if (diagnostic !== null) record.countDiagnostic = diagnostic;
       try {
         ledger.recordOutcome(actualMicroUsd === null
@@ -1261,7 +1561,7 @@ function constructBenchmarkGuard(options, benchmark) {
     try {
       let response;
       try {
-        const pending = Promise.resolve().then(() => {
+        let pending = Promise.resolve().then(() => {
           if (controller.signal.aborted) fail(abortError(controller.signal));
           return fetchImpl(channel.endpoint, {
             method: 'POST',
@@ -1271,6 +1571,10 @@ function constructBenchmarkGuard(options, benchmark) {
             body: snapshot.bodyText,
           });
         });
+        if (scoped) pending = pending.catch((error) => {
+          if (terminationCause === null) terminationCause = 'transport_failure';
+          throw error;
+        });
         pending.then((late) => {
           if (controller.signal.aborted) {
             try { Promise.resolve(late?.body?.cancel()).catch(() => {}); } catch { /* Late cleanup only. */ }
@@ -1278,23 +1582,38 @@ function constructBenchmarkGuard(options, benchmark) {
         }, () => {});
         response = await raceAbort(pending, controller.signal);
       } catch (error) {
-        settle('unknown', null);
+        const deadline = scoped && ['core_deadline', 'transport_deadline'].includes(terminationCause);
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline);
+        if (deadline) {
+          sealDeadline(caseScope, terminationCause);
+          fail('case_deadline_exceeded');
+        }
         if (error instanceof ExperimentRequestGuardError) throw error;
         fail('transport_failed');
       }
       if (!(response instanceof Response)) {
-        settle('unknown', null);
+        settle('unknown', null, null, null, 'other_failure');
         fail('transport_failed');
       }
       let bytes;
-      try { bytes = await readBounded(response, channel.maxResponseBytes, controller.signal); }
+      try {
+        bytes = await readBounded(response, channel.maxResponseBytes, controller.signal, scoped ? () => {
+          if (terminationCause === null) terminationCause = 'body_failure';
+        } : null);
+      }
       catch (error) {
-        settle('unknown', null);
+        const deadline = scoped && ['core_deadline', 'transport_deadline'].includes(terminationCause);
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline);
+        if (deadline) {
+          sealDeadline(caseScope, terminationCause);
+          fail('case_deadline_exceeded');
+        }
         if (error instanceof ExperimentRequestGuardError) throw error;
         fail('transport_failed');
       }
       if (response.redirected || response.status < 200 || response.status >= 300) {
-        settle('failed', null);
+        settle('failed', null, null, null, 'http_failure');
+        if (scoped) halted = true;
         fail('http_failed');
       }
       let json;
@@ -1305,17 +1624,18 @@ function constructBenchmarkGuard(options, benchmark) {
       } catch (error) {
         settle('unknown', null, null, kind === 'cairnCount'
           ? deepFreeze({ reason: 'invalid_count_response', configuredInputLimit: channel.maxInputTokens })
-          : null);
+          : null, 'invalid_response');
         if (error instanceof ExperimentRequestGuardError) throw error;
         fail('invalid_response');
       }
       if (kind === 'cairnCount' && !usage.withinBounds) {
-        settle('unknown', null, null, usage.countDiagnostic);
+        settle('unknown', null, null, usage.countDiagnostic, 'invalid_response');
         fail('invalid_response');
       }
-      settle('succeeded', usage.actualMicroUsd, usageRecord(kind, json), usage.countDiagnostic ?? null);
+      settle('succeeded', usage.actualMicroUsd, usageRecord(kind, json), usage.countDiagnostic ?? null, 'response');
       if (!usage.withinBounds
         || (usage.actualMicroUsd !== null && usage.actualMicroUsd > channel.reservedMicroUsd)) {
+        if (scoped) halted = true;
         fail('usage_bound_exceeded');
       }
       try {
@@ -1333,7 +1653,39 @@ function constructBenchmarkGuard(options, benchmark) {
     }
   };
 
-  const cairnFetch = (kind) => async (url, requestOptions) => {
+  const nonFatalScopeErrors = new Set(['case_deadline_exceeded', 'case_timeout_halted',
+    'case_scope_required', 'case_scope_violation', 'case_scope_busy', 'case_schedule_mismatch',
+    'guard_busy', 'paid_work_halted', 'guard_closed']);
+  const fatalizeRouteError = (error) => {
+    if (scoped && !nonFatalScopeErrors.has(error?.code)) halted = true;
+    throw error;
+  };
+  const scopedCairnFetch = (kind) => async (url, requestOptions) => {
+    try {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      const caseScope = requireScope('cairn');
+      guardedVerify();
+      const channel = policy[kind];
+      const snapshot = requestSnapshot(url, requestOptions, channel);
+      validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
+      return await send(CHANNELS[kind], kind, channel, snapshot,
+        kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope);
+    } catch (error) { fatalizeRouteError(error); }
+  };
+  const scopedStageFetch = (name) => async (url, requestOptions) => {
+    try {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      const caseScope = requireScope(name);
+      guardedVerify();
+      const stage = stages[name];
+      const snapshot = requestSnapshot(url, requestOptions, stage);
+      validateStageBody(snapshot.body, stage);
+      return await send(name, 'hostCompletion', stage, snapshot, snapshot.body.max_tokens, caseScope);
+    } catch (error) { fatalizeRouteError(error); }
+  };
+  const legacyCairnFetch = (kind) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
     verify();
@@ -1343,7 +1695,7 @@ function constructBenchmarkGuard(options, benchmark) {
     return send(CHANNELS[kind], kind, channel, snapshot,
       kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0);
   };
-  const stageFetch = (name) => async (url, requestOptions) => {
+  const legacyStageFetch = (name) => async (url, requestOptions) => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
     verify();
@@ -1352,6 +1704,53 @@ function constructBenchmarkGuard(options, benchmark) {
     validateStageBody(snapshot.body, stage);
     return send(name, 'hostCompletion', stage, snapshot, snapshot.body.max_tokens);
   };
+  const cairnFetch = scoped ? scopedCairnFetch : legacyCairnFetch;
+  const stageFetch = scoped ? scopedStageFetch : legacyStageFetch;
+
+  const caseMethods = scoped ? {
+    async withCaseScope(identity, operation) {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      let requested;
+      try { requested = structuredClone(identity); } catch { fail('case_schedule_mismatch'); }
+      exactKeys(requested, ['phase', 'caseId'], 'case_schedule_mismatch');
+      if (typeof operation !== 'function') fail('invalid_options');
+      if (activeScope !== null) fail('case_scope_busy');
+      const expected = caseCapability.schedule[scheduleIndex];
+      if (!expected || canonical(requested) !== canonical(expected)) fail('case_schedule_mismatch');
+      guardedVerify();
+      const scope = { phase: expected.phase, caseId: expected.caseId, open: true,
+        status: sealedCases.has(expected.caseId) ? 'blocked' : 'active' };
+      activeScope = scope;
+      lastScopeSnapshot = scopeSnapshot(scope);
+      const handle = Object.freeze({ snapshot: () => scopeSnapshot(scope) });
+      let value;
+      let operationError;
+      let operationFailed = false;
+      try { value = await scopeStorage.run(scope, () => operation(handle)); }
+      catch (error) { operationError = error; operationFailed = true; halted = true; }
+      // Fence descendants before any boundary check can authorize the next entry.
+      scope.open = false;
+      activeScope = null;
+      if (scope.status === 'active') scope.status = 'completed';
+      lastScopeSnapshot = scopeSnapshot(scope);
+      if (operationFailed) throw operationError;
+      if (inFlight !== 0 || records.some((record) => record.outcome === null)) {
+        halted = true;
+        fail('guard_busy');
+      }
+      guardedVerify();
+      scheduleIndex += 1;
+      return value;
+    },
+    caseTimeouts() {
+      return Object.freeze(timeoutRecords.map((record) => deepFreeze(structuredClone(record))));
+    },
+    caseScopeSnapshot() {
+      return lastScopeSnapshot === null ? null : deepFreeze(structuredClone(lastScopeSnapshot));
+    },
+    caseDeadlineCapability: caseCapability,
+  } : {};
 
   return Object.freeze({
     cairnFetch(url, requestOptions) {
@@ -1373,11 +1772,12 @@ function constructBenchmarkGuard(options, benchmark) {
     isHalted() { return halted; },
     close() {
       if (closed) return;
-      if (inFlight !== 0) fail('guard_busy');
+      if (inFlight !== 0 || activeScope !== null) fail('guard_busy');
       closed = true;
       ledger.close();
     },
     policy,
     stages,
+    ...caseMethods,
   });
 }

@@ -388,6 +388,59 @@ strings. See the full [decision and threat model](plans/guard-count-reason.md).
 Transport failures, non-2xx responses and bodies rejected before JSON parsing
 retain their existing outcome and do not fabricate a count diagnostic.
 
+### Prospective case-deadline capability
+
+`authorizeCaseDeadlineCapability({ledger, policy, benchmarkExtension,
+authorizationId, executionId, checkpoint, schedule})` separately provisions
+the explicit `case-deadline-v1` policy. It accepts only an open, fully settled
+existing ledger and an exact current checkpoint. Its private mode-0600 binding
+pins the original limits, policy, benchmark grant, ordered generation-then-
+scoring schedule and a SHA-256 digest of every historical attempt's five
+accounting fields. A terminal historical `unknown` remains fully charged and is
+allowed in that pinned prefix; an unsettled attempt or overrun is refused.
+
+`createCaseDeadlineExperimentRequestGuard` requires that returned detached
+token and exclusively creates a durable execution-specific claim before it
+returns. The claim is one-shot even when construction crashes or sends no
+request. Identical authorization is idempotent only before consumption; no API
+deletes, repairs, resets or reissues a claim. The frozen guard identity is
+available as `caseDeadlineCapability` for runner artifact binding.
+
+`withCaseScope({phase, caseId}, operation)` must follow the frozen schedule.
+Generation scopes permit only Cairn and answer routes; scoring scopes permit
+only judge. At most one scope and one paid request are active. Async-local
+identity plus an explicit closed flag prevents a delayed callback from borrowing
+a later scope. The operation includes the runner's own durable artifact and
+checkpoint writes; only its normal completion, settled owned attempts and exact
+ledger reconciliation advance the schedule. An uncaught operation error or
+accounting/binding drift is a sticky global halt. `isHalted()` reports only that
+global halt.
+
+Only the guard's elapsed transport timer or the exact signal branded by core's
+actual 30-second model timer seals a case. The first guard-observed termination
+cause wins. Arbitrary abort reasons, error codes, diagnostics and later timer
+events cannot forge or relabel a deadline. A sealed case retains its full
+`unknown` reservation and cannot send again; its scheduled scoring callback may
+still write a blocked artifact without provider access. `caseTimeouts()` and
+`caseScopeSnapshot()` expose only fixed versions, opaque case IDs, phase/status
+and termination enums. Opt-mode `attempts()` additionally records only case ID,
+phase and the bounded termination enum. It never records raw errors or content.
+
+This is live-process isolation, not provider cancellation proof. A transport
+promise may complete physically after cancellation, but it cannot resettle the
+attempt, reopen the case, change attribution or admit through the already
+settled core operation. All rows must continue to equal the pinned prefix plus
+this guard's exact owned rows. The same single-operator check/reserve race and
+operator-controlled-file threat boundary as the benchmark guard remain: this
+does not protect against a malicious same-user process replacing both expected
+tokens and files. See the [frozen acceptance](plans/case-timeout-isolation.md).
+
+The additional fixed codes are `invalid_capability`, `capability_busy`,
+`capability_consumed`, `case_schedule_mismatch`, `case_scope_busy`,
+`case_scope_required`, `case_scope_violation`, `case_timeout_halted` and
+`case_deadline_exceeded`. Existing `guard_busy` and `paid_work_halted` retain
+their fixed content-free form.
+
 ## Limits that must remain visible
 
 The invariant is a cap on reserved, declared upper bounds, not a guarantee about

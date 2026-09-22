@@ -51,6 +51,26 @@ is non-evidence. These local files share the run directory's ordinary
 filesystem, journal, backup and secure-erasure limitations and grant no
 authority or semantic correctness.
 
+The separate prospective `case-deadline-v1` benchmark capability adds no hosted
+or public core field. Its private operator-controlled files contain only bounded
+authorization/execution IDs, the existing ledger/policy/benchmark configuration,
+opaque source-free case IDs, ordered generation/scoring phases, checkpoint
+counters and a SHA-256 digest of historical accounting rows. The digest is a
+consistency binding, not anonymization; attempt identifiers and cost/outcome
+metadata remain sensitive local experiment data. The one-shot claim grants no
+new allowance and is never automatically removed or reset.
+
+Process-local opt-mode attempt observations add only the opaque case ID, phase
+and a fixed termination enum. Read-only scope/timeout snapshots likewise contain
+only fixed versions and enums. They never contain questions, evidence, answers,
+request/response bodies, headers, keys, raw exceptions, paths, memory/source/
+receipt identifiers or arbitrary diagnostics. Runner-owned failure artifacts
+remain in the private mode-0700 run directory under its existing retention,
+backup and secure-erasure limitations. These fields distinguish case isolation
+from a global safety halt; they do not establish provider cancellation, zero
+cost, semantic correctness, permission to retry or authority to resume an old
+run.
+
 An admitted-reference count describes references accepted by core admission,
 not newly created memories or retained-message coverage. A content-deduplicated
 memory can contribute a reference, partial extraction can omit source messages,
