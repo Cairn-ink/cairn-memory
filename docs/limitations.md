@@ -167,6 +167,30 @@ comparison output, scoring, aggregates or the redacted report. These mechanics
 do not establish answer quality, semantic recall, source sufficiency or a fix
 for any historical result.
 
+## Complementary ranking is an unscored prompt candidate
+
+The explicit source-evidence rank prompt now asks one existing rank call to
+preserve complementary directly relevant evidence for multi-part, temporal and
+changed-reason questions. Offline actual-core tests show that complete retained
+receipts reach that call and valid selected references survive the unchanged
+final read. Scripted outputs do not establish that a provider will select those
+references, improve answers or resist source-embedded instructions.
+
+The twelve-case public fixture is wholly synthetic and its expectations are
+kept outside model input. The exact prior prompt is retained for a future paired
+comparison; no paid call or semantic score is included here. Earlier examples
+where rank reduced several selected references to one only motivate the
+hypothesis. They do not prove ranking caused the missing answer evidence, that
+the selected sources were necessary, or that this candidate repairs an old
+LongMemEval result.
+
+The candidate does not change navigation, the 120-unit query-aware selector
+label, map/fetch traversal, caps, token budgets, current-only ordinary recall or
+answer synthesis. Required evidence can therefore remain outside the rank pool,
+the fixed result limit can still exclude it, additional context can add noise,
+and a final answer can still misread perfectly retained source. See the
+[candidate description](source-coverage-ranking.md).
+
 ## Source-aware candidate navigation is a bounded literal heuristic
 
 Explicit `source-evidence` and `rationale-evidence` recall can now use at most

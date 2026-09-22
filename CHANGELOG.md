@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — complementary source-evidence ranking candidate
+
+- Revise only the explicit source-evidence rank prompt to prefer a nonredundant
+  set that jointly covers directly requested facts, events, scopes and changed
+  reasons, while preserving proposal/adoption and reason/decision distinctions.
+  Empty and unrelated-source behavior, selection, limits, validation, storage,
+  other rank prompts and public wire contracts are unchanged.
+- Retain the exact previous prompt plus twelve wholly synthetic, expectation-
+  separated cases for a future paired comparison. Offline actual-core tests
+  verify receipt/ref plumbing and failure boundaries only; no provider call,
+  semantic improvement, historical benchmark repair or causal claim is included.
+
 ## Unreleased — benchmark request allowance
 
 - Add an explicit operator-only, cap-increase transaction for an existing
