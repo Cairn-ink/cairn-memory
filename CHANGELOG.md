@@ -21,6 +21,15 @@
   keyless tests cover an eight-case cohort without granting budget, requests,
   retries, resume, replacement, transport, or any benchmark-quality claim.
 
+## Unreleased — bounded benchmark monetary extension
+
+- Add one explicit operator-only, same-ledger transition to raise both finite
+  benchmark ceilings while preserving the run identity, complete accounting
+  history, original grants and fixed transport policy.
+- The public-pilot CLI can load an already-issued extension but never creates
+  one. Offline synthetic crash, race and stale-authority tests grant no paid
+  execution, retry, resume or campaign-ledger mutation.
+
 ## Unreleased — benchmark request allowance
 
 - Add an explicit operator-only, cap-increase transaction for an existing

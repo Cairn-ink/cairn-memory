@@ -128,3 +128,37 @@ standalone test script remains available. No new runtime behavior is introduced
 by those conflict resolutions. The final combined candidate needs both Node
 22.16/24 checks and independent non-author Standards/Spec review before paid use.
 Component reviews are not a substitute for this combined review.
+
+## Component review corrections
+
+Independent component review used `gpt-5.6-sol` at high effort; actual token
+cost is unavailable. The Standards review compared budget-extension candidate
+`88b57663562d8b7f27362f737fb95642c9e98e04` with the fixed base and found one
+hard documentation gap plus one judgment-call smell. The missing user-visible
+changelog entry is now present. The duplicated request-allowance/budget-
+extension transaction shapes are deliberately retained for this packet: they
+encode distinct immutable record schemas and trust transitions, and a generic
+permission refactor during a monetary-authority change would widen the review
+surface and risk changing the already reviewed request-allowance behavior.
+Future cleanup requires parity plus crash/recovery tests for both transitions.
+
+The Spec review compared source-ranking candidate
+`1174206acda370e184984a280f03b6751f7ae414` with the same base. Its twelve
+fixture/rubric semantics and unscored documentation matched SCR1–SCR5, but SCR4
+did not mechanically assert the two declared frozen file hashes. The
+architecture test now asserts the exact fixture and rubric SHA-256 values from
+the plan. Final combined Standards and Spec review remains required on the new
+committed integration head.
+
+Pre-commit correction verification passed on Node 22.16.0 and 24.15.0:
+
+- `node --test evaluation/experiment-budget/test/budget-extension-guard.test.mjs`
+  (13/13);
+- `node --test evaluation/architecture/test/source-coverage-ranking.test.mjs`
+  (4/4);
+- `node --test plugins/cairn-memory/test/*.test.mjs evaluation/architecture/test/*.test.mjs`
+  (110/110); and
+- `node scripts/validate-json.mjs` (all JSON and version checks).
+
+These checks used only synthetic temporary state and made no provider call or
+campaign-ledger change.

@@ -44,6 +44,7 @@ test('SCR2 default, qualified and rationale rank prompts retain their fixed byte
 });
 
 test('SCR4 freezes twelve bounded model-facing cases without evaluation labels', () => {
+  assert.equal(hash(fixtureBytes), 'd51fda299c7795049e6926ded0083889dbaa849c6b8ace0bae6a15d2a5a0121e');
   assert.deepEqual(Object.keys(fixture), ['version', 'id', 'cases']);
   assert.equal(fixture.version, 1);
   assert.equal(fixture.id, 'source-coverage-ranking-v1');
@@ -78,6 +79,7 @@ test('SCR4 freezes twelve bounded model-facing cases without evaluation labels',
 });
 
 test('SCR4 keeps frozen expectations separate, ordered, reachable and non-overlapping', () => {
+  assert.equal(hash(rubricBytes), 'f04721dfd198e82fe3b03b811cc52538e57a72dbc0dc59283b096ee15a8b1bca');
   assert.deepEqual(Object.keys(rubric), ['version', 'fixtureId', 'cases']);
   assert.equal(rubric.version, 1);
   assert.equal(rubric.fixtureId, fixture.id);
