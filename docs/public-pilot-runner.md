@@ -6,7 +6,7 @@ and the official-style scorer (`scorePublicComparison`) against real providers
 **only** through the benchmark request guard. It never discovers keys, ledgers
 or datasets: every input is explicit, every paid request is reserved on the
 existing campaign ledger before it is sent, one attempt is made per request,
-and an unknown outcome halts all further paid work. Results are private
+and, by default, an unknown outcome halts all further paid work. Results are private
 artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 
 ## Inputs the operator supplies
@@ -18,11 +18,12 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Benchmark authorization | `--authorization-id <id>` | Provisions or re-verifies `experiment-benchmark-extension.json` beside the ledger (P1) |
 | Prepared v2 pilot | `--prepared /private/prepared` | Four-file directory from `prepareLongMemEval`; digest-checked by `loadPreparedPilot`; never written |
 | Optional reference sidecar | `--sidecar /private/reference-sidecar.json --sidecar-sha256 <hex>` | From `render-reference-sidecar.py`; needed only for non-string references |
-| Output | `--output /private/run-dir` (new, or a previous run directory to resume) | Created 0700; every file 0600 |
+| Output | `--output /private/run-dir` (new, or a previous legacy/default run directory to resume) | Created 0700; every file 0600 |
 | Case subset | `--cases id1,id2` (source or opaque ids; roster order is kept) | Omit to run every prepared case |
 | Batch caps | `--batch-cap-micro-usd N --batch-request-cap N` | This run's own reservations and requests, checked before every case against that case's projected reservation. Size the cap at or above the `totals` that `--dry-run` prints for the selected cases, not at a single case's figure: every case generates before any case scores, so a later generation can consume the headroom an earlier case needs for its three judge calls |
 | Provenance | `--run-commit <sha>`, `--exclusions-file <json array>` | Recorded in `manifest.json` and `report.json` |
 | Answer boundary | `--answer-template-version cairn-longmemeval-public-answer-v2` | Experimental opt-in; omission is v1, and v1/v2 runs and scores are not comparable |
+| Case deadlines | `--case-timeout-policy case-deadline-v1` plus `--case-authorization-id`, `--execution-id`, `--expected-request-count`, and `--expected-reserved-micro-usd` | All five are required. The capability and live session are one-shot: output must be new and the run cannot be resumed, retried or moved to another directory |
 | Merge | `--merge /private/run-a,/private/run-b --output /private/merged` | Offline; no key, no ledger; only `--output` may accompany it |
 
 Safe launch (no request is sent until the ledger, the extension and the
@@ -43,6 +44,10 @@ JSON line, the projected reservation and request count per case, the totals,
 whether they fit the caps and the ledger's remaining allowance, and the ledger
 state. It reserves nothing and does not read the key. Exit codes: 0 done, 1
 refused or failed (a fixed code on stderr, never data), 2 missing key.
+In case-deadline mode it also verifies the complete generation-then-scoring
+schedule, checkpoint, optional sidecar and durable capability binding without
+consuming the execution claim. It reports the policy/execution identity and
+the live-process-only restriction; repeated dry-runs are safe.
 
 ## What is fixed by the runner
 
@@ -73,9 +78,25 @@ refused or failed (a fixed code on stderr, never data), 2 missing key.
   `planLongMemEvalCase` plan. A case whose projection would exceed the caps is
   recorded `blocked: cap_exhausted_projected`; one the ledger cannot cover is
   `blocked: ledger_allowance_insufficient`. Neither sends a request.
-- Halt: once the guard halts (unknown outcome, overrun, foreign unsettled
+- Legacy/default halt: once the guard halts (unknown outcome, overrun, foreign unsettled
   attempt), the current case keeps whatever stage it reached and every
   remaining generation or scoring step is `blocked: paid_work_halted`.
+- Explicit `case-deadline-v1` mode isolates only a deadline proven by the
+  guard's own transport timer or genuine core timer to the active case. Every
+  other unknown outcome remains a sticky global halt. Generation and scoring
+  callbacks include their durable artifacts and checkpoint boundary; a timed-
+  out generation receives no judge calls, while a scoring timeout can retain
+  earlier valid arm judgments without removing the case from fixed denominators.
+  `summary.scored` counts only completed scoring wrappers; separate opt-in
+  counts are `summary.generationTimeouts` (failed generation timeout wrappers),
+  `summary.scoringTimeouts` (failed scoring timeout wrappers), and
+  `summary.partialScoreRecords` (failed scoring-timeout wrappers that retain a
+  valid three-arm score payload, including one whose judgments are all
+  unresolved). Those partial score records contribute genuine per-arm
+  observations even though they are excluded from `summary.scored`, so the
+  official score-record count can exceed that completed-wrapper count.
+  Unresolved or no-score values remain null and the common bucket still
+  requires all three arms resolved.
 
 ## Private artifacts (per run directory)
 
@@ -182,7 +203,7 @@ its session. Work created in an older case remains bound to that closed
 collector, so a late model event or capture settlement is ignored rather than
 attached to the next case. Closing and snapshotting do not claim completeness.
 
-## Resume
+## Legacy/default resume
 
 Running again on the same directory with the same pilot and the same case
 selection re-reads finished cases from disk, never re-sends a request for
@@ -233,7 +254,7 @@ cap, and the paired report is assembled afterwards without any paid call:
    operator fields per source). A source missing any of `manifest.json`,
    `checkpoint.json`, `aggregate.json` or `report.json` is `run_incomplete`.
 
-Recovery note: if the process dies between writing `aggregate.json` and
+Legacy/default recovery note: if the process dies between writing `aggregate.json` and
 `report.json`, resuming fails with `aggregate_without_report`, which is
 distinct from the `output_exists` a genuine overwrite attempt raises.
 `aggregate.json` is derived entirely from the per-case files, so the operator
@@ -246,6 +267,16 @@ reporting a cost it cannot substantiate. A failed generation is the one that
 most needs this, because ingestion and answer calls can have been paid for
 before the failure. Only a blocked case legitimately has its generation record
 alone.
+
+That recovery/resume behavior is legacy/default behavior only. A
+`case-deadline-v1` run is never resumable, even if an operator edits or removes
+its checkpoint or report. Its claim file is authoritative and is not repaired,
+refunded or reset. The bounded identity (policy version, execution and
+authorization IDs, and full-capability digest) is validated through run, case,
+accounting, diagnostics, scoring and merge artifacts. Offline merge may combine
+disjoint executions only when their effective policy versions match; it keeps
+each source identity and places only the effective policy version at merged top
+level.
 
 ## Limitations disclosed with every result
 

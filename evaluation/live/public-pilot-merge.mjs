@@ -7,6 +7,7 @@ import path from 'node:path';
 import { aggregateOfficialScores } from '../longmemeval/official-scoring.mjs';
 import { deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
 import {
+  artifactCaseTimeoutIdentity,
   answerTemplateIdentity,
   canonical,
   caseBlockedReason,
@@ -17,6 +18,7 @@ import {
   PUBLIC_PILOT_LIMITATIONS,
   PUBLIC_PILOT_SCHEMA_VERSION,
   readPrivateJson,
+  requireArtifactCaseTimeoutIdentity,
   resolveDirectory,
   sealPrivateDirectory,
   sumStageTotals,
@@ -75,11 +77,15 @@ async function loadRun(directory) {
     || !isPlainObject(report.models) || !isPlainObject(report.pilot)) fail('invalid_artifact');
   validateStageTotals(report.cost.byStage);
   const answerTemplateVersion = artifactTemplateVersion(manifest);
+  const caseTimeoutIdentity = artifactCaseTimeoutIdentity(manifest);
   for (const artifact of [checkpoint, aggregate, report]) {
     if (artifactTemplateVersion(artifact) !== answerTemplateVersion) fail('invalid_artifact');
+    requireArtifactCaseTimeoutIdentity(artifact, caseTimeoutIdentity);
   }
   if (nestedScoreTemplateVersion(aggregate.official) !== answerTemplateVersion
     || nestedScoreTemplateVersion(report.official) !== answerTemplateVersion) fail('invalid_artifact');
+  requireArtifactCaseTimeoutIdentity(aggregate.official, caseTimeoutIdentity);
+  requireArtifactCaseTimeoutIdentity(report.official, caseTimeoutIdentity);
   if (JSON.stringify(manifest.caseIds) !== JSON.stringify(report.caseIds)
     || JSON.stringify(checkpoint.caseIds) !== JSON.stringify(report.caseIds)) fail('invalid_artifact');
   const caseArtifacts = new Map();
@@ -92,12 +98,39 @@ async function loadRun(directory) {
     const scoring = await readPrivateJson(path.join(directory, 'cases', item.questionId, 'scoring.json'),
       'invalid_artifact');
     if (generation === null || scoring === null) fail('invalid_artifact');
-    validateGenerationIdentity(generation, answerTemplateVersion, item.questionId);
-    validateScoringIdentity(scoring, answerTemplateVersion, item.questionId);
+    validateGenerationIdentity(generation, answerTemplateVersion, item.questionId, caseTimeoutIdentity);
+    validateScoringIdentity(scoring, answerTemplateVersion, item.questionId, caseTimeoutIdentity);
+    requireArtifactCaseTimeoutIdentity(item, caseTimeoutIdentity);
+    requireArtifactCaseTimeoutIdentity(generation, caseTimeoutIdentity);
+    requireArtifactCaseTimeoutIdentity(scoring, caseTimeoutIdentity);
+    for (const nested of [generation.run, scoring.score].filter((value) => value !== undefined)) {
+      requireArtifactCaseTimeoutIdentity(nested, caseTimeoutIdentity);
+    }
+    for (const filename of ['accounting.json', 'diagnostics.json', 'answer-requests.json',
+      'truncation.json', 'timings.json']) {
+      const artifact = await readPrivateJson(path.join(directory, 'cases', item.questionId, filename),
+        'invalid_artifact');
+      if (artifact === null) {
+        if (caseTimeoutIdentity && generation.status !== 'blocked') fail('invalid_artifact');
+      } else requireArtifactCaseTimeoutIdentity(artifact, caseTimeoutIdentity);
+    }
+    if (caseTimeoutIdentity) {
+      const retainedTimeoutScore = scoring.status === 'failed' && scoring.reason === 'case_timeout'
+        && scoring.phase === 'scoring' && ['core_deadline', 'transport_deadline'].includes(scoring.termination);
+      if (scoring.status === 'failed' && scoring.reason === 'case_timeout' && !retainedTimeoutScore) {
+        fail('invalid_artifact');
+      }
+      if (Object.hasOwn(scoring, 'score') && scoring.status !== 'completed' && !retainedTimeoutScore) {
+        fail('invalid_artifact');
+      }
+    }
     if (generation.status !== item.generation.status || scoring.status !== item.scoring.status) fail('invalid_artifact');
+    if (caseTimeoutIdentity && ((generation.reason ?? null) !== (item.generation.reason ?? null)
+      || (scoring.reason ?? null) !== (item.scoring.reason ?? null))) fail('invalid_artifact');
     caseArtifacts.set(item.questionId, { generation, scoring });
   }
-  return { directory, manifest, checkpoint, aggregate, report, answerTemplateVersion, caseArtifacts };
+  return { directory, manifest, checkpoint, aggregate, report, answerTemplateVersion,
+    caseTimeoutIdentity, caseArtifacts };
 }
 
 export async function mergePublicPilotRuns(options) {
@@ -116,6 +149,8 @@ export async function mergePublicPilotRuns(options) {
   const [first] = runs;
   for (const run of runs.slice(1)) {
     if (run.answerTemplateVersion !== first.answerTemplateVersion
+      || (run.caseTimeoutIdentity?.effectivePolicyVersion ?? null)
+        !== (first.caseTimeoutIdentity?.effectivePolicyVersion ?? null)
       || run.manifest.pilot.manifestSha256 !== first.manifest.pilot.manifestSha256
       || canonical(run.manifest.stages) !== canonical(first.manifest.stages)
       || canonical(run.report.models) !== canonical(first.report.models)
@@ -134,14 +169,19 @@ export async function mergePublicPilotRuns(options) {
   const roster = [];
   const records = [];
   const cases = [];
+  let partialScoreRecords = 0;
   for (const run of runs) {
     for (const item of run.report.cases) {
       roster.push({ questionId: item.questionId, sourceQuestionId: item.sourceQuestionId,
         questionType: item.questionType });
       const { scoring } = run.caseArtifacts.get(item.questionId);
-      if (item.scoring.status === 'completed') {
-        if (scoring.status !== 'completed' || !isPlainObject(scoring.score)) fail('invalid_artifact');
+      const retainedTimeoutScore = run.caseTimeoutIdentity && scoring.status === 'failed'
+        && scoring.reason === 'case_timeout' && scoring.phase === 'scoring'
+        && ['core_deadline', 'transport_deadline'].includes(scoring.termination);
+      if (item.scoring.status === 'completed' || retainedTimeoutScore) {
+        if (!isPlainObject(scoring.score)) fail('invalid_artifact');
         records.push(scoring.score);
+        if (retainedTimeoutScore) partialScoreRecords += 1;
       }
       cases.push(item);
     }
@@ -167,6 +207,13 @@ export async function mergePublicPilotRuns(options) {
     generationFailed: cases.filter((item) => item.generation.status === 'failed').length,
     generationBlocked: cases.filter((item) => item.generation.status === 'blocked').length,
     scored: cases.filter((item) => item.scoring.status === 'completed').length,
+    ...(first.caseTimeoutIdentity ? {
+      generationTimeouts: cases.filter((item) => item.generation.status === 'failed'
+        && item.generation.reason === 'case_timeout').length,
+      scoringTimeouts: cases.filter((item) => item.scoring.status === 'failed'
+        && item.scoring.reason === 'case_timeout').length,
+      partialScoreRecords,
+    } : {}),
     blockedReasons: Object.fromEntries(cases.map(caseBlockedReason).filter(Boolean)
       .reduce((map, reason) => map.set(reason, (map.get(reason) ?? 0) + 1), new Map())),
     halted: runs.some((run) => run.report.summary.halted === true),
@@ -185,12 +232,15 @@ export async function mergePublicPilotRuns(options) {
   }
   const merged = {
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(first.answerTemplateVersion),
+    ...(first.caseTimeoutIdentity
+      ? { effectivePolicyVersion: first.caseTimeoutIdentity.effectivePolicyVersion } : {}),
     kind: 'merged', generatedAt: new Date().toISOString(),
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: null, pilot: first.report.pilot, caseIds: [...caseIds],
     models: first.report.models, limits: first.manifest.limits, judgeTimeoutMs: first.manifest.judgeTimeoutMs,
     caps: null, receiptExcerptBoundUtf16: first.manifest.receiptExcerptBoundUtf16,
     limitations: PUBLIC_PILOT_LIMITATIONS, summary, official, cost, latency, truncation, cases,
     sources: runs.map((run) => ({ directory: path.basename(run.directory), generatedAt: run.report.generatedAt,
+      ...(run.caseTimeoutIdentity ? { caseTimeoutIdentity: run.caseTimeoutIdentity } : {}),
       caseIds: run.report.caseIds, caps: run.report.caps ?? null, operator: run.report.operator ?? null,
       halted: run.report.summary.halted === true })),
   };

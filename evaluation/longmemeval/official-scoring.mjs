@@ -153,12 +153,13 @@ const judgeOnce = async (judge, request, timeoutMs) => {
 };
 
 export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeoutMs = 30_000,
-  referenceRendering }) => {
+  referenceRendering, executionStop }) => {
   const fixedRun = snapshot(run, 'invalid_run');
   const answerTemplateVersion = validateRun(fixedRun);
   const fixedEvaluator = snapshot(evaluator, 'invalid_evaluator');
   validateEvaluator(fixedEvaluator, fixedRun);
   if (judge !== undefined && typeof judge !== 'function') fail('invalid_judge');
+  if (executionStop !== undefined && typeof executionStop !== 'function') fail('invalid_execution_stop');
   if (!Number.isSafeInteger(judgeTimeoutMs) || judgeTimeoutMs < 1 || judgeTimeoutMs > 2_147_483_647) {
     fail('invalid_judge_timeout');
   }
@@ -174,6 +175,14 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
   if (!verifiedReference) referenceSerialization = 'unverified-non-string';
   const arms = [];
   let priorJudgeTimeout = false;
+  let paidWorkHalted = false;
+  const stopped = () => {
+    if (executionStop === undefined) return null;
+    let value;
+    try { value = executionStop(); } catch { fail('invalid_execution_stop'); }
+    if (![null, 'case_timeout', 'paid_work_halted'].includes(value)) fail('invalid_execution_stop');
+    return value;
+  };
   for (const name of OFFICIAL_ARM_NAMES) {
     const arm = fixedRun.arms.find((candidate) => candidate.name === name);
     const coverageResult = referenceCoverage(arm, fixedEvaluator);
@@ -197,13 +206,33 @@ export const scorePublicComparison = async ({ run, evaluator, judge, judgeTimeou
         referenceSessionCoverage: coverageResult });
       continue;
     }
+    if (paidWorkHalted) {
+      arms.push({ ...unresolved(name, arm.status, 'paid_work_halted', 'judge'),
+        referenceSessionCoverage: coverageResult });
+      continue;
+    }
+    const before = stopped();
+    if (before !== null) {
+      priorJudgeTimeout = before === 'case_timeout';
+      paidWorkHalted = before === 'paid_work_halted';
+      arms.push({ ...unresolved(name, arm.status,
+        priorJudgeTimeout ? 'prior_judge_timeout' : 'paid_work_halted', 'judge'),
+      referenceSessionCoverage: coverageResult });
+      continue;
+    }
     const prompt = officialPrompt({ questionType: fixedEvaluator.question_type,
       question: fixedRun.question.text, reference: referenceText,
       response: arm.answer.text, abstention });
     const result = await judgeOnce(judge, officialJudgeRequest(prompt), judgeTimeoutMs);
-    if (result.kind === 'timeout') {
+    const after = stopped();
+    if (after === 'case_timeout' || result.kind === 'timeout') {
       priorJudgeTimeout = true;
       arms.push({ ...unresolved(name, arm.status, 'judge_timeout', 'judge', true),
+        referenceSessionCoverage: coverageResult });
+    }
+    else if (after === 'paid_work_halted') {
+      paidWorkHalted = true;
+      arms.push({ ...unresolved(name, arm.status, 'paid_work_halted', 'judge', true),
         referenceSessionCoverage: coverageResult });
     }
     else if (result.kind === 'failure') arms.push({ ...unresolved(name, arm.status, 'judge_failed', 'judge', true),

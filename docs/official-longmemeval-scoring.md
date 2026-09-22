@@ -31,7 +31,7 @@ original verified source bytes; no Python is loaded by the public core.
 
 ## API and unresolved outcomes
 
-`scorePublicComparison({run,evaluator,judge,judgeTimeoutMs,referenceRendering})` consumes the
+`scorePublicComparison({run,evaluator,judge,judgeTimeoutMs,referenceRendering,executionStop})` consumes the
 public-comparison-v1 run and its matching prepared evaluator record. The
 optional `judge({request,signal})` returns `{text}`; omission leaves completed
 arms unresolved as `judge_not_configured`. The callback is invoked serially,
@@ -43,6 +43,15 @@ to the judge. After a timeout, later completed arms are marked
 might still be running. The scorer snapshots inputs before calls and freezes judge
 requests/results. A judge callback can be a scripted test double: these
 records alone do not prove a real request reached the pinned model.
+
+`executionStop` is an optional trusted synchronous runner hook. When supplied,
+it may return only `null`, `case_timeout`, or `paid_work_halted`; it is checked
+before and immediately after judge attempts so later callbacks are not started.
+Throws or any other result fail closed as `invalid_execution_stop`. Omitting the
+hook preserves the existing scorer behavior and callback timing. Source data,
+diagnostics, and arbitrary error strings cannot supply this authority; the
+[public pilot runner](public-pilot-runner.md#what-is-fixed-by-the-runner) binds
+it only to its validated case-deadline guard state.
 
 Generation answer-template identity is validated before a judge call. Legacy
 missing identity means v1 only. V1 preserves the existing scoring shape; v2

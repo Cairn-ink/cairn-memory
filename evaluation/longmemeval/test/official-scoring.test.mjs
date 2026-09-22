@@ -149,6 +149,27 @@ test('OS3: ignored abort still permits only one judge callback after timeout', a
   assert.deepEqual(score.arms.map((arm) => arm.judgment.attempted), [true, false, false]);
 });
 
+test('R4: trusted execution stop prevents a later judge callback', async () => {
+  let calls = 0;
+  const result = await scorePublicComparison({ run: run(), evaluator: evaluator(),
+    judge: async () => { calls += 1; return { text: 'yes' }; },
+    executionStop: () => calls === 1 ? 'case_timeout' : null });
+  assert.equal(calls, 1);
+  assert.deepEqual(result.arms.map((arm) => arm.judgment.reason),
+    ['judge_timeout', 'prior_judge_timeout', 'prior_judge_timeout']);
+  assert.deepEqual(result.arms.map((arm) => arm.judgment.attempted), [true, false, false]);
+});
+
+test('R4: invalid trusted execution stop fails closed before a later callback', async () => {
+  for (const executionStop of [() => 'model_timeout', () => { throw new Error('private'); }]) {
+    let calls = 0;
+    await assert.rejects(scorePublicComparison({ run: run(), evaluator: evaluator(),
+      judge: async () => { calls += 1; return { text: 'yes' }; }, executionStop }),
+    { code: 'invalid_execution_stop' });
+    assert.equal(calls, 0);
+  }
+});
+
 test('OS3: optional opaque retrieval coverage is distinct from judge request', async () => {
   const candidate = run();
   const source = evaluator();

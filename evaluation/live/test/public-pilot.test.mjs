@@ -5,9 +5,12 @@ import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } fr
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { setImmediate as immediate } from 'node:timers/promises';
+import { DatabaseSync } from 'node:sqlite';
 
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
-import { authorizeBenchmarkExtension, createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
+import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability,
+  createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
 import { OFFICIAL_SCORING_SCHEMA_VERSION_V2, scorePublicComparison } from '../../longmemeval/official-scoring.mjs';
 import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
@@ -16,11 +19,13 @@ import { loadReferenceRenderings } from '../../longmemeval/reference-rendering.m
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { loadPreparedPilot, pilotEvaluatorFor } from '../pilot.mjs';
 import { main as cliMain, parseArguments, USAGE } from '../public-pilot-cli.mjs';
+import { mergePublicPilotRuns } from '../public-pilot-merge.mjs';
 import {
   benchmarkStagePolicy,
   CAPTURE_ADMISSION_OBSERVATION_VERSION,
   createCaptureAdmissionCollector,
   createBenchmarkLiveSession,
+  createCaseDeadlineLiveSession,
   evidenceArmGuess,
   labelCapturedArms,
   OWNER_ID,
@@ -135,7 +140,20 @@ async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, re
   const session = (chat, count, generation) => createBenchmarkLiveSession({ ledger, apiKey: KEY,
     fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}),
       ...(generation ? { generation } : {}) }), benchmarkExtension });
-  return { root, inputPath, prepared, ledger, policy, benchmarkExtension, pilot, calls, session,
+  const caseCapability = (caseIds) => {
+    const checkpoint = ledgerState(ledger);
+    const schedule = [...caseIds.map((caseId) => ({ phase: 'generation', caseId })),
+      ...caseIds.map((caseId) => ({ phase: 'scoring', caseId }))];
+    return authorizeCaseDeadlineCapability({ ledger, policy, benchmarkExtension,
+      authorizationId: 'synthetic-case-deadline', executionId: `execution-${randomUUID()}`,
+      checkpoint: { requestCount: checkpoint.requestCount, reservedMicroUsd: checkpoint.reservedMicroUsd }, schedule });
+  };
+  const caseSession = (caseIds, chat, count, generation, capability = caseCapability(caseIds)) => {
+    return createCaseDeadlineLiveSession({ ledger, apiKey: KEY, benchmarkExtension, caseDeadlineCapability: capability,
+      fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}),
+        ...(generation ? { generation } : {}) }) });
+  };
+  return { root, inputPath, prepared, ledger, policy, benchmarkExtension, pilot, calls, session, caseCapability, caseSession,
     output: (name) => path.join(root, name) };
 }
 const readJson = async (...segments) => JSON.parse(await readFile(path.join(...segments), 'utf8'));
@@ -296,6 +314,467 @@ test('PP1-PP5/PP8: end-to-end through real runner, guard, adapter and core on pr
   assert.doesNotMatch(reportText, /official benchmark score/iu);
   assert.equal(reportText.includes('amber'), false);
   assert.ok(reportText.includes('excluded-one'));
+});
+
+test('R1-R3: case-deadline session binds exact schedule, identity, scopes and one-shot run', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  const caseIds = [ids.plain];
+  const session = f.caseSession(caseIds);
+  const output = f.output('case-deadline-run');
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds });
+  assert.equal(report.caseTimeoutIdentity.effectivePolicyVersion, 'case-deadline-v1');
+  assert.equal(report.summary.generated, 1);
+  assert.equal(report.summary.scored, 1);
+  assert.equal(report.summary.generationTimeouts, 0);
+  assert.equal(report.summary.scoringTimeouts, 0);
+  for (const file of ['manifest.json', 'checkpoint.json', 'aggregate.json', 'report.json',
+    path.join('cases', ids.plain, 'generation.json'), path.join('cases', ids.plain, 'scoring.json'),
+    path.join('cases', ids.plain, 'accounting.json'), path.join('cases', ids.plain, 'diagnostics.json')]) {
+    assert.deepEqual((await readJson(output, file)).caseTimeoutIdentity, report.caseTimeoutIdentity, file);
+  }
+  const calls = f.calls.length;
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: f.output('second'), caseIds }),
+    { code: 'case_session_consumed' });
+  assert.equal(f.calls.length, calls);
+  const stripped = f.output('stripped-upper-identity');
+  await cp(output, stripped, { recursive: true });
+  for (const name of ['manifest.json', 'checkpoint.json']) {
+    const artifact = await readJson(stripped, name);
+    delete artifact.caseTimeoutIdentity;
+    await writeFile(path.join(stripped, name), JSON.stringify(artifact), { mode: 0o600 });
+  }
+  const legacy = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: legacy, directory: stripped, caseIds }),
+    { code: 'invalid_artifact' });
+  assert.equal(f.calls.length, calls);
+  legacy.close();
+
+  const identityLayers = [
+    ['manifest.json', []],
+    ['checkpoint.json', []],
+    ['aggregate.json', []],
+    ['aggregate.json', ['official']],
+    ['report.json', []],
+    ['report.json', ['official']],
+    ['report.json', ['cases', 0]],
+    [path.join('cases', ids.plain, 'generation.json'), []],
+    [path.join('cases', ids.plain, 'generation.json'), ['run']],
+    [path.join('cases', ids.plain, 'scoring.json'), []],
+    [path.join('cases', ids.plain, 'scoring.json'), ['score']],
+    [path.join('cases', ids.plain, 'accounting.json'), []],
+    [path.join('cases', ids.plain, 'diagnostics.json'), []],
+    [path.join('cases', ids.plain, 'answer-requests.json'), []],
+    [path.join('cases', ids.plain, 'truncation.json'), []],
+    [path.join('cases', ids.plain, 'timings.json'), []],
+  ];
+  for (const [index, [relative, nested]] of identityLayers.entries()) {
+    const tampered = f.output(`identity-layer-${index}`);
+    await cp(output, tampered, { recursive: true });
+    const filename = path.join(tampered, relative);
+    const artifact = await readJson(filename);
+    const target = nested.reduce((value, key) => value[key], artifact);
+    assert.deepEqual(target.caseTimeoutIdentity, report.caseTimeoutIdentity);
+    if (index % 4 === 0) delete target.caseTimeoutIdentity;
+    else if (index % 4 === 1) target.caseTimeoutIdentity = null;
+    else if (index % 4 === 2) target.caseTimeoutIdentity.executionId = 7;
+    else target.caseTimeoutIdentity.capabilityDigest = '0'.repeat(64);
+    await writeFile(filename, JSON.stringify(artifact), { mode: 0o600 });
+    const mergedOutput = f.output(`identity-layer-${index}-merged`);
+    await assert.rejects(mergePublicPilotRuns({ directories: [tampered], output: mergedOutput }),
+      { code: 'invalid_artifact' });
+    await assert.rejects(lstat(mergedOutput), { code: 'ENOENT' });
+  }
+
+  const companionOnly = f.output('companion-only-identity');
+  await cp(output, companionOnly, { recursive: true });
+  await rm(path.join(companionOnly, 'aggregate.json'));
+  await rm(path.join(companionOnly, 'report.json'));
+  await rm(path.join(companionOnly, 'cases', ids.plain, 'generation.json'));
+  await rm(path.join(companionOnly, 'cases', ids.plain, 'scoring.json'));
+  for (const name of ['manifest.json', 'checkpoint.json']) {
+    const artifact = await readJson(companionOnly, name);
+    delete artifact.caseTimeoutIdentity;
+    if (name === 'checkpoint.json') artifact.cases[ids.plain] = { stage: 'pending', attemptIds: [] };
+    await writeFile(path.join(companionOnly, name), JSON.stringify(artifact), { mode: 0o600 });
+  }
+  const beforeCompanionResume = { calls: f.calls.length, files: await fileSnapshot(companionOnly) };
+  const companionLegacy = f.session();
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session: companionLegacy,
+    directory: companionOnly, caseIds }), { code: 'invalid_artifact' });
+  companionLegacy.close();
+  assert.equal(f.calls.length, beforeCompanionResume.calls);
+  assert.deepEqual(await fileSnapshot(companionOnly), beforeCompanionResume.files);
+  session.close();
+});
+
+test('R2/R4: answer-template v2 retains case identity through a normal run and offline merge', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  const output = f.output('case-deadline-v2');
+  const session = f.caseSession([ids.plain]);
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds: [ids.plain],
+    answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 });
+  session.close();
+  assert.equal(report.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  const generation = await readJson(output, 'cases', ids.plain, 'generation.json');
+  const scoring = await readJson(output, 'cases', ids.plain, 'scoring.json');
+  assert.deepEqual(generation.caseTimeoutIdentity, report.caseTimeoutIdentity);
+  assert.deepEqual(generation.run.caseTimeoutIdentity, report.caseTimeoutIdentity);
+  assert.deepEqual(scoring.caseTimeoutIdentity, report.caseTimeoutIdentity);
+  assert.deepEqual(scoring.score.caseTimeoutIdentity, report.caseTimeoutIdentity);
+  assert.ok(f.calls.length > 0);
+  const merged = await mergePublicPilotRuns({ directories: [output], output: f.output('case-deadline-v2-merged') });
+  assert.equal(merged.answerTemplateVersion, PUBLIC_ANSWER_TEMPLATE_VERSION_V2);
+  assert.equal(merged.effectivePolicyVersion, 'case-deadline-v1');
+  assert.equal(merged.summary.scored, 1);
+  assert.equal(merged.official.common.commonN, 1);
+});
+
+test('R2/R5: merge retains distinct opt execution identities and rejects report reason drift', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const firstOutput = f.output('case-deadline-batch-a');
+  const firstSession = f.caseSession([ids.plain]);
+  const first = await runPublicPilot({ pilot: f.pilot, session: firstSession,
+    directory: firstOutput, caseIds: [ids.plain] });
+  firstSession.close();
+  const secondOutput = f.output('case-deadline-batch-b');
+  const secondSession = f.caseSession([ids.long]);
+  const second = await runPublicPilot({ pilot: f.pilot, session: secondSession,
+    directory: secondOutput, caseIds: [ids.long] });
+  secondSession.close();
+  assert.notEqual(first.caseTimeoutIdentity.executionId, second.caseTimeoutIdentity.executionId);
+  const merged = await mergePublicPilotRuns({ directories: [firstOutput, secondOutput],
+    output: f.output('case-deadline-batches-merged') });
+  assert.equal(merged.effectivePolicyVersion, 'case-deadline-v1');
+  assert.equal(Object.hasOwn(merged, 'caseTimeoutIdentity'), false);
+  assert.equal(Object.hasOwn(merged, 'executionId'), false);
+  assert.deepEqual(merged.sources.map((source) => source.caseTimeoutIdentity),
+    [first.caseTimeoutIdentity, second.caseTimeoutIdentity]);
+  assert.equal(merged.summary.fixedN, 2);
+  assert.equal(merged.summary.scored, 2);
+
+  const reasonDrift = f.output('case-deadline-reason-drift');
+  await cp(firstOutput, reasonDrift, { recursive: true });
+  const report = await readJson(reasonDrift, 'report.json');
+  report.cases[0].generation.reason = 'case_timeout';
+  await writeFile(path.join(reasonDrift, 'report.json'), JSON.stringify(report), { mode: 0o600 });
+  await assert.rejects(mergePublicPilotRuns({ directories: [reasonDrift],
+    output: f.output('case-deadline-reason-drift-merged') }), { code: 'invalid_artifact' });
+  await assert.rejects(lstat(f.output('case-deadline-reason-drift-merged')), { code: 'ENOENT' });
+});
+
+test('R1: schedule mismatch irrevocably consumes the trusted session before output or sends', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const capability = f.caseCapability([ids.plain]);
+  const session = f.caseSession([ids.plain], null, null, null, capability);
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: f.output('wrong-schedule'),
+    caseIds: [ids.plain, ids.long] }), { code: 'case_schedule_mismatch' });
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: f.output('corrected-schedule'),
+    caseIds: [ids.plain] }), { code: 'case_session_consumed' });
+  assert.equal(f.calls.length, 0);
+  await assert.rejects(lstat(f.output('wrong-schedule')), { code: 'ENOENT' });
+  await assert.rejects(lstat(f.output('corrected-schedule')), { code: 'ENOENT' });
+  assert.throws(() => f.caseSession([ids.plain], null, null, null, capability), { code: 'capability_consumed' });
+  assert.equal(f.calls.length, 0);
+  session.close();
+});
+
+test('R2/R5: zero-score nested identity tampering and mixed-policy merges fail closed', async (t) => {
+  const f = await setup(t);
+  const numericOutput = f.output('case-deadline-zero-score');
+  const deadline = f.caseSession([ids.numeric]);
+  const zero = await runPublicPilot({ pilot: f.pilot, session: deadline, directory: numericOutput,
+    caseIds: [ids.numeric] });
+  deadline.close();
+  assert.equal(zero.summary.scored, 1);
+  assert.equal(zero.official.common.commonN, 0);
+  assert.ok(zero.cases[0].arms.every((arm) => arm.judgment.status === 'unresolved'));
+
+  const tampered = f.output('case-deadline-zero-score-tampered');
+  await cp(numericOutput, tampered, { recursive: true });
+  const scoring = await readJson(tampered, 'cases', ids.numeric, 'scoring.json');
+  scoring.score.caseTimeoutIdentity.executionId = 'synthetic-tampered-execution';
+  await writeFile(path.join(tampered, 'cases', ids.numeric, 'scoring.json'), JSON.stringify(scoring), { mode: 0o600 });
+  await assert.rejects(mergePublicPilotRuns({ directories: [tampered], output: f.output('zero-score-tampered-merge') }),
+    { code: 'invalid_artifact' });
+  await assert.rejects(lstat(f.output('zero-score-tampered-merge')), { code: 'ENOENT' });
+
+  const legacyOutput = f.output('legacy-mixed-policy');
+  const legacy = f.session();
+  await runPublicPilot({ pilot: f.pilot, session: legacy, directory: legacyOutput, caseIds: [ids.long] });
+  legacy.close();
+  await assert.rejects(mergePublicPilotRuns({ directories: [numericOutput, legacyOutput],
+    output: f.output('mixed-policy-merge') }), { code: 'merge_mismatch' });
+  await assert.rejects(lstat(f.output('mixed-policy-merge')), { code: 'ENOENT' });
+});
+
+test('R3-R5: genuine core deadline fails one generation and the next case completes and scores', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const caseIds = [ids.plain, ids.long];
+  let countCalls = 0;
+  let generationCalls = 0;
+  let notifyCount;
+  let notifyGeneration;
+  let notifyBCount;
+  let releaseA;
+  const countStarted = new Promise(resolve => { notifyCount = resolve; });
+  const generationStarted = new Promise(resolve => { notifyGeneration = resolve; });
+  const bCountStarted = new Promise(resolve => { notifyBCount = resolve; });
+  const output = f.output('deadline-continuation');
+  const session = f.caseSession(caseIds, null,
+    () => {
+      countCalls += 1;
+      if (countCalls === 2) notifyBCount();
+      if (countCalls !== 1) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+      notifyCount();
+      return new Promise(resolve => setTimeout(() => resolve(Response.json({ object: 'response.input_tokens',
+        input_tokens: 100 })), 1_000));
+    },
+    (body, _record, method) => {
+      if (++generationCalls === 1) {
+        notifyGeneration();
+        return new Promise(resolve => { releaseA = () => resolve(Response.json(responsesEnvelope(body.model,
+          scripted[method](JSON.parse(body.input[0].content[0].text))))); });
+      }
+      return Response.json(responsesEnvelope(body.model,
+        scripted[method](JSON.parse(body.input[0].content[0].text))));
+    });
+  const running = runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds });
+  await countStarted;
+  t.mock.timers.tick(1_000);
+  await generationStarted;
+  t.mock.timers.tick(29_000);
+  await bCountStarted;
+  const caseAAttempts = structuredClone(session.attempts().slice(0, 2));
+  releaseA();
+  await immediate();
+  const report = await running;
+  assert.deepEqual(report.cases.map((item) => [item.generation.status, item.generation.reason,
+    item.scoring.status, item.scoring.reason]), [
+    ['failed', 'case_timeout', 'blocked', 'case_timeout'],
+    ['completed', null, 'completed', null],
+  ]);
+  assert.equal(report.summary.generationTimeouts, 1);
+  assert.equal(report.summary.scoringTimeouts, 0);
+  assert.equal(report.summary.scored, 1);
+  assert.equal(report.summary.halted, false);
+  assert.equal(report.official.fixedCaseCount, 2);
+  assert.equal(report.official.common.commonN, 1);
+  assert.deepEqual(session.attempts().slice(0, 2), caseAAttempts);
+  assert.equal((await readJson(output, 'cases', ids.plain,
+    'generation.json')).termination, 'core_deadline');
+  const counts = caseIds.map((caseId) => {
+    const database = new DatabaseSync(path.join(output, 'cases', caseId, 'memory.sqlite'),
+      { readOnly: true });
+    try { return database.prepare('SELECT count(*) AS count FROM memories WHERE deleted = 0').get().count; }
+    finally { database.close(); }
+  });
+  assert.deepEqual(counts, [0, 1]);
+  assert.equal(chatCalls(f.calls).filter((call) => call.model === JUDGE_MODEL).length, 3);
+  const checkpoint = await readJson(output, 'checkpoint.json');
+  assert.equal(checkpoint.cases[ids.plain].stage, 'blocked');
+  assert.equal(checkpoint.cases[ids.plain].phase, 'scoring');
+  assert.equal(checkpoint.cases[ids.plain].reason, 'case_timeout');
+  assert.equal(session.attempts().some((attempt) => attempt.phase === 'scoring'
+    && attempt.caseId === ids.plain), false);
+
+  const badRunDirectory = f.output('failed-nested-run-id');
+  await cp(output, badRunDirectory, { recursive: true });
+  const badGeneration = await readJson(badRunDirectory, 'cases', ids.plain, 'generation.json');
+  assert.ok(badGeneration.run);
+  badGeneration.run.questionId = ids.long;
+  await writeFile(path.join(badRunDirectory, 'cases', ids.plain, 'generation.json'),
+    JSON.stringify(badGeneration), { mode: 0o600 });
+  await assert.rejects(mergePublicPilotRuns({ directories: [badRunDirectory],
+    output: f.output('failed-nested-run-id-merge') }), { code: 'invalid_artifact' });
+  await assert.rejects(lstat(f.output('failed-nested-run-id-merge')), { code: 'ENOENT' });
+
+  const blockedScoreDirectory = f.output('blocked-fabricated-score');
+  await cp(output, blockedScoreDirectory, { recursive: true });
+  const blockedScoring = await readJson(blockedScoreDirectory, 'cases', ids.plain, 'scoring.json');
+  const completedScoring = await readJson(blockedScoreDirectory, 'cases', ids.long, 'scoring.json');
+  blockedScoring.score = { ...completedScoring.score, questionId: ids.plain };
+  await writeFile(path.join(blockedScoreDirectory, 'cases', ids.plain, 'scoring.json'),
+    JSON.stringify(blockedScoring), { mode: 0o600 });
+  await assert.rejects(mergePublicPilotRuns({ directories: [blockedScoreDirectory],
+    output: f.output('blocked-fabricated-score-merge') }), { code: 'invalid_artifact' });
+  await assert.rejects(lstat(f.output('blocked-fabricated-score-merge')), { code: 'ENOENT' });
+  session.close();
+});
+
+test('R3-R5: scoring deadline retains an earlier judgment and permits the next selected case', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const caseIds = [ids.plain, ids.long];
+  let judgeCalls = 0;
+  let notifyStalled;
+  const stalled = new Promise(resolve => { notifyStalled = resolve; });
+  const session = f.caseSession(caseIds, body => {
+    if (body.model !== JUDGE_MODEL) return defaultChat(body);
+    judgeCalls += 1;
+    if (judgeCalls === 2) { notifyStalled(); return new Promise(() => {}); }
+    return defaultChat(body);
+  });
+  const running = runPublicPilot({ pilot: f.pilot, session, directory: f.output('scoring-deadline'), caseIds });
+  await stalled;
+  t.mock.timers.tick(60_000);
+  await immediate();
+  const report = await running;
+  assert.equal(judgeCalls, 5);
+  assert.equal(report.summary.scored, 1);
+  assert.equal(report.summary.scoringTimeouts, 1);
+  assert.equal(report.summary.partialScoreRecords, 1);
+  assert.deepEqual(report.cases[0].arms.map((arm) => arm.judgment.reason),
+    [null, 'judge_timeout', 'prior_judge_timeout']);
+  assert.ok(report.cases[1].arms.every((arm) => arm.judgment.status === 'resolved'));
+  const scoring = await readJson(f.output('scoring-deadline'), 'cases', ids.plain, 'scoring.json');
+  assert.equal(scoring.status, 'failed');
+  assert.equal(scoring.reason, 'case_timeout');
+  assert.equal(scoring.termination, 'transport_deadline');
+  const merged = await mergePublicPilotRuns({ directories: [f.output('scoring-deadline')],
+    output: f.output('scoring-deadline-merged') });
+  const originalOfficial = structuredClone(report.official);
+  delete originalOfficial.caseTimeoutIdentity;
+  assert.deepEqual(merged.official, originalOfficial);
+  assert.equal(merged.summary.scored, 1);
+  assert.equal(merged.official.common.commonN, 1);
+  assert.equal(merged.official.arms.cairn.overall.resolved, 2);
+  const tampered = f.output('scoring-deadline-tampered');
+  await cp(f.output('scoring-deadline'), tampered, { recursive: true });
+  const badScoring = await readJson(tampered, 'cases', ids.plain, 'scoring.json');
+  badScoring.score.questionId = ids.long;
+  await writeFile(path.join(tampered, 'cases', ids.plain, 'scoring.json'), JSON.stringify(badScoring), { mode: 0o600 });
+  await assert.rejects(mergePublicPilotRuns({ directories: [tampered], output: f.output('tampered-merge') }),
+    { code: 'invalid_artifact' });
+  await assert.rejects(lstat(f.output('tampered-merge')), { code: 'ENOENT' });
+  session.close();
+});
+
+test('R4: an all-unresolved scoring-timeout payload remains a partial score record', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  let notifyStalled;
+  const stalled = new Promise(resolve => { notifyStalled = resolve; });
+  const session = f.caseSession([ids.plain], body => {
+    if (body.model === JUDGE_MODEL) { notifyStalled(); return new Promise(() => {}); }
+    return defaultChat(body);
+  });
+  const output = f.output('all-unresolved-scoring-timeout');
+  const running = runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds: [ids.plain] });
+  await stalled;
+  t.mock.timers.tick(60_000);
+  await immediate();
+  const report = await running;
+  assert.equal(report.summary.scored, 0);
+  assert.equal(report.summary.scoringTimeouts, 1);
+  assert.equal(report.summary.partialScoreRecords, 1);
+  assert.equal(report.official.scoredRecordCount, 1);
+  assert.equal(report.official.common.commonN, 0);
+  assert.ok(report.cases[0].arms.every((arm) => arm.judgment.status === 'unresolved'));
+  const merged = await mergePublicPilotRuns({ directories: [output],
+    output: f.output('all-unresolved-scoring-timeout-merged') });
+  assert.equal(merged.summary.partialScoreRecords, 1);
+  assert.equal(merged.official.scoredRecordCount, 1);
+  session.close();
+});
+
+test('R3: answer transport deadline isolates its case and allows the next generation', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const caseIds = [ids.plain, ids.long];
+  let answers = 0;
+  let notifyStalled;
+  const stalled = new Promise(resolve => { notifyStalled = resolve; });
+  const session = f.caseSession(caseIds, body => {
+    if (body.model === ANSWER_MODEL && ++answers === 1) {
+      notifyStalled();
+      return new Promise(() => {});
+    }
+    return defaultChat(body);
+  });
+  const running = runPublicPilot({ pilot: f.pilot, session, directory: f.output('answer-deadline'), caseIds });
+  await stalled;
+  t.mock.timers.tick(180_000);
+  await immediate();
+  const report = await running;
+  assert.deepEqual(report.cases.map((item) => [item.generation.status, item.generation.reason]),
+    [['failed', 'case_timeout'], ['completed', null]]);
+  assert.equal((await readJson(f.output('answer-deadline'), 'cases', ids.plain,
+    'generation.json')).termination, 'transport_deadline');
+  assert.equal(report.summary.halted, false);
+  session.close();
+});
+
+test('R3/R5: malformed non-timeout response globally halts and prevents the next case send', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const caseIds = [ids.plain, ids.long];
+  let malformed = true;
+  const session = f.caseSession(caseIds, body => {
+    if (malformed && body.model === ANSWER_MODEL) { malformed = false; return new Response('{'); }
+    return defaultChat(body);
+  });
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: f.output('global-malformed'), caseIds });
+  assert.equal(report.summary.halted, true);
+  assert.equal(report.cases[0].generation.status, 'completed');
+  assert.equal(report.cases[0].generation.reason, null);
+  assert.equal(report.cases[0].arms[0].generation.status, 'failed');
+  assert.equal(report.cases[1].generation.status, 'blocked');
+  assert.equal(report.cases[1].generation.reason, 'paid_work_halted');
+  assert.equal(chatCalls(f.calls).filter((call) => call.model === ANSWER_MODEL).length, 1);
+  assert.equal(report.summary.generationTimeouts, 0);
+  session.close();
+});
+
+test('R5: a foreign unsettled ledger row stops the next case before provider work', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const caseIds = [ids.plain, ids.long];
+  const session = f.caseSession(caseIds);
+  let callsAfterA;
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: f.output('foreign-row'), caseIds,
+    onCase: ({ stage, index }) => {
+      if (stage !== 'generation' || index !== 0) return;
+      callsAfterA = f.calls.length;
+      const foreign = reopenExperimentBudget(f.ledger);
+      try { foreign.reserve({ attemptId: randomUUID(), channel: 'host-completion', reservedMicroUsd: 1 }); }
+      finally { foreign.close(); }
+    } }), { code: 'policy_mismatch' });
+  assert.ok(callsAfterA > 0);
+  assert.equal(f.calls.length, callsAfterA);
+  assert.equal(session.isHalted(), true);
+  assert.equal(session.attempts().some((attempt) => attempt.caseId === ids.long), false);
+  await assert.rejects(lstat(path.join(f.output('foreign-row'), 'report.json')), { code: 'ENOENT' });
+  session.close();
+});
+
+test('R3/R5: a post-spend artifact collision stops before the next case sends and cannot resume', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 2) });
+  const caseIds = [ids.plain, ids.long];
+  const output = f.output('boundary-collision');
+  const collision = path.join(output, 'cases', ids.plain, 'diagnostics.json');
+  let planted = false;
+  const session = f.caseSession(caseIds, null, async () => {
+    if (!planted) {
+      planted = true;
+      await writeFile(collision, '{"collision":true}', { mode: 0o600 });
+    }
+    return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+  });
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds }),
+    { code: 'output_exists' });
+  assert.equal(planted, true);
+  assert.ok(f.calls.length > 0);
+  assert.ok(f.calls.every((call) => !call.rawBody.includes('The long color')));
+  assert.deepEqual(await readJson(collision), { collision: true });
+  await readJson(output, 'cases', ids.plain, 'generation.json');
+  await readJson(output, 'cases', ids.plain, 'accounting.json');
+  const retained = ledgerState(f.ledger);
+  assert.equal(retained.requestCount, f.calls.length);
+  assert.ok(retained.reservedMicroUsd > 0);
+  await assert.rejects(lstat(path.join(output, 'report.json')), { code: 'ENOENT' });
+  await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: output, caseIds }),
+    { code: 'case_session_consumed' });
+  assert.deepEqual(ledgerState(f.ledger), retained);
+  session.close();
 });
 
 test('PP6: projected caps and ledger allowance block cases before any paid call', async (t) => {
@@ -731,6 +1210,136 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
   assert.deepEqual(report.operator.exclusionRegistry, ['excluded-one', 'excluded-two']);
   assert.equal(report.operator.authorizationId, 'synthetic-public-pilot');
   assert.equal(ledgerState(f.ledger).requestCount, calls.length);
+});
+
+test('R1: complete case CLI dry-run is keyless, non-consuming and safely repeatable', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  const ledgerFile = f.output('case-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
+  const output = f.output('must-not-exist');
+  const argv = ['--prepared', f.prepared, '--ledger', ledgerFile,
+    '--authorization-id', 'synthetic-public-pilot', '--cases', 'plain', '--dry-run',
+    '--case-timeout-policy', 'case-deadline-v1', '--case-authorization-id', 'synthetic-case-cli',
+    '--execution-id', 'synthetic-cli-execution', '--expected-request-count', '0',
+    '--expected-reserved-micro-usd', '0'];
+  let keyReads = 0;
+  const env = {};
+  Object.defineProperty(env, 'OPENAI_API_KEY', { get() { keyReads += 1; return KEY; } });
+  const outputStream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
+    text() { return chunks.join(''); } }; };
+  for (let index = 0; index < 2; index += 1) {
+    const stdout = outputStream();
+    assert.equal(await cliMain(argv, { env, stdout, stderr: outputStream(),
+      fetchImpl: () => assert.fail('no transport') }), 0);
+    const result = JSON.parse(stdout.text());
+    assert.equal(result.caseTimeoutIdentity.effectivePolicyVersion, 'case-deadline-v1');
+    assert.match(result.caseTimeoutRestriction, /one-shot/u);
+  }
+  assert.equal(keyReads, 0);
+  assert.equal(ledgerState(f.ledger).requestCount, 0);
+  await assert.rejects(lstat(output), { code: 'ENOENT' });
+  await assert.rejects(lstat(path.join(f.ledger.directory,
+    'experiment-case-deadline-synthetic-cli-execution.claim.json')), { code: 'ENOENT' });
+  const incomplete = outputStream();
+  assert.equal(await cliMain([...argv.slice(0, -2)], { env, stdout: outputStream(), stderr: incomplete,
+    fetchImpl: () => assert.fail('no transport') }), 1);
+  assert.equal(incomplete.text(), 'case_flags_incomplete\n');
+  assert.equal(keyReads, 0);
+  const excessive = outputStream();
+  const excessiveArgs = [...argv];
+  excessiveArgs[excessiveArgs.indexOf('--expected-request-count') + 1] = '5001';
+  assert.equal(await cliMain(excessiveArgs, { env, stdout: outputStream(), stderr: excessive,
+    fetchImpl: () => assert.fail('no transport') }), 1);
+  assert.equal(excessive.text(), 'invalid_case_checkpoint\n');
+  const badSidecar = outputStream();
+  assert.equal(await cliMain([...argv, '--sidecar', f.output('missing-sidecar.json'),
+    '--sidecar-sha256', '0'.repeat(64)], { env, stdout: outputStream(), stderr: badSidecar,
+    fetchImpl: () => assert.fail('no transport') }), 1);
+  assert.equal(keyReads, 0);
+  await assert.rejects(lstat(path.join(f.ledger.directory,
+    'experiment-case-deadline-synthetic-cli-execution.claim.json')), { code: 'ENOENT' });
+
+  const freshSidecarExecution = 'fresh-invalid-sidecar';
+  const freshBadSidecarArgs = argv.map((value, index) => argv[index - 1] === '--execution-id'
+    ? freshSidecarExecution : value);
+  const ledgerBeforeFreshFailures = ledgerState(f.ledger);
+  assert.equal(await cliMain([...freshBadSidecarArgs, '--sidecar', f.output('missing-fresh-sidecar.json'),
+    '--sidecar-sha256', '0'.repeat(64)], { env, stdout: outputStream(), stderr: outputStream(),
+    fetchImpl: () => assert.fail('no transport') }), 1);
+  for (const suffix of ['.json', '.claim.json']) {
+    await assert.rejects(lstat(path.join(f.ledger.directory,
+      `experiment-case-deadline-${freshSidecarExecution}${suffix}`)), { code: 'ENOENT' });
+  }
+  const freshCheckpointExecution = 'fresh-invalid-checkpoint';
+  const freshBadCheckpointArgs = argv.map((value, index) => {
+    if (argv[index - 1] === '--execution-id') return freshCheckpointExecution;
+    if (argv[index - 1] === '--expected-request-count') return '5001';
+    return value;
+  });
+  assert.equal(await cliMain(freshBadCheckpointArgs, { env, stdout: outputStream(), stderr: outputStream(),
+    fetchImpl: () => assert.fail('no transport') }), 1);
+  for (const suffix of ['.json', '.claim.json']) {
+    await assert.rejects(lstat(path.join(f.ledger.directory,
+      `experiment-case-deadline-${freshCheckpointExecution}${suffix}`)), { code: 'ENOENT' });
+  }
+  assert.equal(keyReads, 0);
+  assert.deepEqual(ledgerState(f.ledger), ledgerBeforeFreshFailures);
+});
+
+test('R1/R5: opt CLI live run consumes once and edited output cannot resume or reload the key', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1) });
+  const ledgerFile = f.output('case-live-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
+  const output = f.output('case-cli-live');
+  const executionId = 'synthetic-cli-live';
+  const argv = ['--prepared', f.prepared, '--ledger', ledgerFile,
+    '--authorization-id', 'synthetic-public-pilot', '--cases', 'plain', '--output', output,
+    '--case-timeout-policy', 'case-deadline-v1', '--case-authorization-id', 'synthetic-case-cli-live',
+    '--execution-id', executionId, '--expected-request-count', '0', '--expected-reserved-micro-usd', '0'];
+  let keyReads = 0;
+  const env = {};
+  Object.defineProperty(env, 'OPENAI_API_KEY', { get() { keyReads += 1; return KEY; } });
+  const stream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
+    text() { return chunks.join(''); } }; };
+  const calls = [];
+  const stdout = stream();
+  assert.equal(await cliMain(argv, { env, stdout, stderr: stream(), fetchImpl: fakeUpstream({ calls }) }), 0);
+  assert.equal(keyReads, 1);
+  assert.ok(calls.length > 0);
+  const final = JSON.parse(stdout.text().trimEnd().split('\n').at(-1));
+  assert.equal(final.mode, 'run');
+  assert.equal((await readJson(output, 'report.json')).caseTimeoutIdentity.executionId, executionId);
+  const afterFirst = { calls: calls.length, ledger: ledgerState(f.ledger) };
+
+  const repeatedError = stream();
+  assert.equal(await cliMain(argv, { env, stdout: stream(), stderr: repeatedError,
+    fetchImpl: fakeUpstream({ calls }) }), 1);
+  assert.equal(repeatedError.text(), 'capability_consumed\n');
+  assert.equal(keyReads, 1);
+  assert.equal(calls.length, afterFirst.calls);
+  assert.deepEqual(ledgerState(f.ledger), afterFirst.ledger);
+
+  const checkpoint = await readJson(output, 'checkpoint.json');
+  checkpoint.cases[ids.plain] = { stage: 'pending', attemptIds: [] };
+  await writeFile(path.join(output, 'checkpoint.json'), JSON.stringify(checkpoint), { mode: 0o600 });
+  const beforeEditedResume = await fileSnapshot(output);
+  const resumeExecution = 'synthetic-cli-edited-resume';
+  const resumeArgv = argv.map((value, index) => {
+    if (argv[index - 1] === '--execution-id') return resumeExecution;
+    if (argv[index - 1] === '--expected-request-count') return `${afterFirst.ledger.requestCount}`;
+    if (argv[index - 1] === '--expected-reserved-micro-usd') return `${afterFirst.ledger.reservedMicroUsd}`;
+    return value;
+  });
+  const resumeError = stream();
+  assert.equal(await cliMain(resumeArgv, { env, stdout: stream(), stderr: resumeError,
+    fetchImpl: fakeUpstream({ calls }) }), 1);
+  assert.equal(resumeError.text(), 'case_output_must_be_new\n');
+  assert.equal(keyReads, 1);
+  assert.equal(calls.length, afterFirst.calls);
+  assert.deepEqual(ledgerState(f.ledger), afterFirst.ledger);
+  assert.deepEqual(await fileSnapshot(output), beforeEditedResume);
+  await assert.rejects(lstat(path.join(f.ledger.directory,
+    `experiment-case-deadline-${resumeExecution}.claim.json`)), { code: 'ENOENT' });
 });
 
 test('X1: a Cairn arm that packs no receipts is labelled by arm order and counted as a measured zero', async (t) => {

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — one-shot case-deadline public pilot
+
+- Add an explicit complete CLI opt-in that binds the public pilot to a one-shot
+  case-deadline capability, exact generation/scoring roster and identity across
+  private artifacts and offline merge. Trusted case timeouts retain fixed
+  denominators and partial judgments while all other unknowns still halt.
+- Opt-in dry-runs are keyless and non-consuming; live opt-in output is new-only
+  and cannot resume, retry or reset a claim. Verification uses synthetic fake
+  HTTP and temporary ledgers only and makes no provider-result or quality claim.
+
 ## Unreleased — explicit case-deadline request guard
 
 - Add an explicit, one-shot case-deadline capability and request-guard API for

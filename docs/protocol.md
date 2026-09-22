@@ -60,6 +60,15 @@ consistency binding, not anonymization; attempt identifiers and cost/outcome
 metadata remain sensitive local experiment data. The one-shot claim grants no
 new allowance and is never automatically removed or reset.
 
+The public-pilot runner can explicitly bind that capability to one process-
+local session and exact prepared roster. The new fields retain only a bounded
+policy/execution identity and fixed timeout/blocked enums, never the capability
+file, provider key, source text or raw exception; existing private generation
+and answer artifacts retain their documented content. Only a guard-observed
+genuine deadline can isolate one case. Diagnostics grant no authority, while
+every other unknown request outcome halts globally. This opt-in is not resumable
+or retryable.
+
 Process-local opt-mode attempt observations add only the opaque case ID, phase
 and a fixed termination enum. Read-only scope/timeout snapshots likewise contain
 only fixed versions and enums. They never contain questions, evidence, answers,

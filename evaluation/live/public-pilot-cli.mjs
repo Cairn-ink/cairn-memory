@@ -3,12 +3,13 @@
 // Every input is explicit. The provider key is read from OPENAI_API_KEY inside
 // main() only, handed to the session, and never printed or written anywhere.
 import { lstat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import { reopenExperimentBudget } from '../experiment-budget/index.mjs';
-import { authorizeBenchmarkExtension } from '../experiment-budget/request-guard.mjs';
+import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability } from '../experiment-budget/request-guard.mjs';
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { opaqueQuestionId } from '../longmemeval/prepare.mjs';
 import { PUBLIC_ANSWER_TEMPLATE_VERSION,
@@ -19,7 +20,10 @@ import { loadPreparedPilot, readRegularFile } from './pilot.mjs';
 import { mergePublicPilotRuns } from './public-pilot-merge.mjs';
 import {
   benchmarkStagePolicy,
+  canonical,
   createBenchmarkLiveSession,
+  createCaseDeadlineLiveSession,
+  CASE_TIMEOUT_POLICY_VERSION,
   OWNER_ID,
   projectCaseReservation,
   PUBLIC_PILOT_JUDGE_TIMEOUT_MS,
@@ -47,6 +51,12 @@ Optional:
   --answer-template-version <version>
                               experimental answer boundary; cairn-longmemeval-public-answer-v1 (default) or v2
   --dry-run                   verify ledger, extension and prepared input, print projections, reserve nothing
+  --case-timeout-policy <version>
+  --case-authorization-id <id>
+  --execution-id <id>
+  --expected-request-count <n>
+  --expected-reserved-micro-usd <n>
+                              complete one-shot case-deadline opt-in; no resume in this or another process
   --help                      print this text
 
 Merge (offline, no key, no ledger):
@@ -60,6 +70,8 @@ Exit codes: 0 done, 1 refused or failed (code on stderr), 2 missing OPENAI_API_K
 const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output', '--cases', '--sidecar',
   '--sidecar-sha256', '--batch-cap-micro-usd', '--batch-request-cap', '--run-commit', '--exclusions-file',
   '--answer-template-version', '--merge'];
+VALUE_FLAGS.push('--case-timeout-policy', '--case-authorization-id', '--execution-id',
+  '--expected-request-count', '--expected-reserved-micro-usd');
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
 const MAX_INPUT_BYTES = 1024 * 1024;
 
@@ -150,6 +162,19 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     const { values, flags } = parseArguments(argv);
     if (flags['--help']) { stdout.write(USAGE); return 0; }
     const dryRun = flags['--dry-run'] === true;
+    const caseFlags = ['--case-timeout-policy', '--case-authorization-id', '--execution-id',
+      '--expected-request-count', '--expected-reserved-micro-usd'];
+    const suppliedCaseFlags = caseFlags.filter((flag) => Object.hasOwn(values, flag));
+    if (suppliedCaseFlags.length !== 0 && suppliedCaseFlags.length !== caseFlags.length) fail('case_flags_incomplete');
+    const caseTimeoutPolicy = suppliedCaseFlags.length ? values['--case-timeout-policy'] : null;
+    if (caseTimeoutPolicy !== null && caseTimeoutPolicy !== CASE_TIMEOUT_POLICY_VERSION) fail('invalid_case_timeout_policy');
+    for (const flag of ['--case-authorization-id', '--execution-id']) {
+      if (caseTimeoutPolicy && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(values[flag])) fail('invalid_case_identifier');
+    }
+    const expectedRequestCount = caseTimeoutPolicy
+      ? parseCount(values['--expected-request-count'], '--expected-request-count') : null;
+    const expectedReservedMicroUsd = caseTimeoutPolicy
+      ? parseCount(values['--expected-reserved-micro-usd'], '--expected-reserved-micro-usd') : null;
     if (values['--merge'] !== undefined) {
       if (dryRun || Object.keys(values).some((flag) => !['--merge', '--output'].includes(flag))) {
         fail('invalid_merge_arguments');
@@ -183,6 +208,8 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     const runCommit = values['--run-commit'] ?? null;
     if (runCommit !== null && !/^[0-9a-f]{7,64}$/u.test(runCommit)) fail('invalid_run_commit');
     const ledger = validateLedgerConfig(await readPrivateJsonInput(values['--ledger'], { requireMode600: true }));
+    if (caseTimeoutPolicy && (expectedRequestCount > ledger.requestCap
+      || expectedReservedMicroUsd > ledger.limitMicroUsd)) fail('invalid_case_checkpoint');
     let exclusionRegistry = null;
     if (values['--exclusions-file'] !== undefined) {
       exclusionRegistry = await readPrivateJsonInput(values['--exclusions-file']);
@@ -197,6 +224,27 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     const pilot = await loadPreparedPilot({ directory: values['--prepared'] });
     const caseIds = selectCases(pilot, values['--cases']);
     const ledgerState = ledgerSnapshot(ledger);
+    const preflightReferenceRenderings = caseTimeoutPolicy && sidecar !== undefined
+      ? await loadReferenceRenderings({ preparedDirectory: values['--prepared'], sidecarPath: sidecar,
+        expectedSidecarSha256: sidecarSha256 }) : undefined;
+    const caseSchedule = [...caseIds.map((caseId) => ({ phase: 'generation', caseId })),
+      ...caseIds.map((caseId) => ({ phase: 'scoring', caseId }))];
+    if (caseTimeoutPolicy) {
+      const claim = path.join(ledger.directory,
+        `experiment-case-deadline-${values['--execution-id']}.claim.json`);
+      try { await lstat(claim); fail('capability_consumed'); }
+      catch (error) { if (error instanceof PublicPilotCliError || error?.code !== 'ENOENT') throw error; }
+    }
+    const caseDeadlineCapability = caseTimeoutPolicy ? authorizeCaseDeadlineCapability({ ledger, policy,
+      benchmarkExtension, authorizationId: values['--case-authorization-id'], executionId: values['--execution-id'],
+      checkpoint: { requestCount: expectedRequestCount, reservedMicroUsd: expectedReservedMicroUsd },
+      schedule: caseSchedule }) : null;
+    const caseTimeoutIdentity = caseDeadlineCapability ? {
+      effectivePolicyVersion: CASE_TIMEOUT_POLICY_VERSION,
+      executionId: caseDeadlineCapability.executionId,
+      authorizationId: caseDeadlineCapability.authorizationId,
+      capabilityDigest: createHash('sha256').update(canonical([caseDeadlineCapability]), 'utf8').digest('hex'),
+    } : null;
     const projections = caseIds.map((questionId) => {
       const item = pilot.cases.find((candidate) => candidate.question.question_id === questionId);
       const plan = planLongMemEvalCase({ history: item.history,
@@ -216,9 +264,17 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       extension: { authorizationId: benchmarkExtension.authorizationId, checkpoint: benchmarkExtension.checkpoint },
       ledger: ledgerState, projections, totals, fits, runCommit,
       exclusionCount: exclusionRegistry ? exclusionRegistry.length : null };
+    if (caseTimeoutIdentity) {
+      summary.caseTimeoutIdentity = caseTimeoutIdentity;
+      summary.caseTimeoutRestriction = 'live-process-only; one-shot; no resume or retry';
+    }
     if (dryRun) {
       stdout.write(`${JSON.stringify({ mode: 'dry-run', ...summary })}\n`);
       return 0;
+    }
+    if (caseDeadlineCapability) {
+      try { await lstat(path.resolve(values['--output'])); fail('case_output_must_be_new'); }
+      catch (error) { if (error instanceof PublicPilotCliError || error?.code !== 'ENOENT') throw error; }
     }
     const apiKey = env.OPENAI_API_KEY;
     if (typeof apiKey !== 'string' || !apiKey.trim()) {
@@ -226,10 +282,12 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       return 2;
     }
     if (typeof fetchImpl !== 'function') fail('missing_fetch');
-    const referenceRenderings = sidecar === undefined ? undefined
+    const referenceRenderings = preflightReferenceRenderings ?? (sidecar === undefined ? undefined
       : await loadReferenceRenderings({ preparedDirectory: values['--prepared'], sidecarPath: sidecar,
-        expectedSidecarSha256: sidecarSha256 });
-    const session = createBenchmarkLiveSession({ ledger, apiKey, fetchImpl, benchmarkExtension });
+        expectedSidecarSha256: sidecarSha256 }));
+    const session = caseDeadlineCapability
+      ? createCaseDeadlineLiveSession({ ledger, apiKey, fetchImpl, benchmarkExtension, caseDeadlineCapability })
+      : createBenchmarkLiveSession({ ledger, apiKey, fetchImpl, benchmarkExtension });
     let report;
     try {
       report = await runPublicPilot({ pilot, session, directory: values['--output'], limits: PUBLIC_PILOT_LIMITS,

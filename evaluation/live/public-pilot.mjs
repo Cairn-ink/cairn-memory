@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import {
   access,
@@ -17,7 +17,8 @@ import path from 'node:path';
 
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { openMemoryCore } from '../../core/contract.mjs';
-import { createBenchmarkExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
+import { createBenchmarkExperimentRequestGuard,
+  createCaseDeadlineExperimentRequestGuard } from '../experiment-budget/request-guard.mjs';
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { aggregateOfficialScores, OFFICIAL_SCORING_SCHEMA_VERSION,
   OFFICIAL_SCORING_SCHEMA_VERSION_V2, scorePublicComparison } from '../longmemeval/official-scoring.mjs';
@@ -75,6 +76,8 @@ const MODEL_DIAGNOSTIC_REASONS = {
 const RUN_OPTION_KEYS = ['pilot', 'session', 'directory', 'limits', 'judgeTimeoutMs', 'referenceRenderings',
   'caps', 'manifest', 'onCase', 'caseIds', 'answerTemplateVersion'];
 const diagnosticScopes = new WeakMap();
+const caseDeadlineSessions = new WeakMap();
+export const CASE_TIMEOUT_POLICY_VERSION = 'case-deadline-v1';
 
 export function benchmarkStagePolicy() {
   return {
@@ -113,10 +116,29 @@ const safeError = (error, fallback) => ({
 // Sorted-key JSON, so recorded and requested configurations compare by value.
 export const canonical = (value) => JSON.stringify(value, (key, item) => (isPlainObject(item)
   ? Object.fromEntries(Object.keys(item).sort().map((name) => [name, item[name]])) : item));
+export const artifactCaseTimeoutIdentity = (artifact) => {
+  if (!isPlainObject(artifact)) fail('invalid_artifact');
+  if (!Object.hasOwn(artifact, 'caseTimeoutIdentity')) return null;
+  const value = artifact.caseTimeoutIdentity;
+  const keys = ['effectivePolicyVersion', 'executionId', 'authorizationId', 'capabilityDigest'];
+  if (!isPlainObject(value) || Object.keys(value).length !== keys.length
+    || keys.some((key) => !Object.hasOwn(value, key))
+    || value.effectivePolicyVersion !== CASE_TIMEOUT_POLICY_VERSION
+    || typeof value.executionId !== 'string' || typeof value.authorizationId !== 'string'
+    || typeof value.capabilityDigest !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(value.executionId)
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(value.authorizationId)
+    || !/^[0-9a-f]{64}$/u.test(value.capabilityDigest)) fail('invalid_artifact');
+  return value;
+};
+export const requireArtifactCaseTimeoutIdentity = (artifact, expected) => {
+  if (canonical(artifactCaseTimeoutIdentity(artifact)) !== canonical(expected)) fail('invalid_artifact');
+};
 // One reason per case: the generation reason first, otherwise the scoring reason; null when scored.
 export const caseBlockedReason = (entry) => {
   if (entry.generation.status === 'blocked') return entry.generation.reason;
-  if (entry.generation.status === 'failed') return 'generation_failed';
+  if (entry.generation.status === 'failed') return entry.generation.reason === 'case_timeout'
+    ? 'case_timeout' : 'generation_failed';
   if (entry.scoring.status === 'blocked' || entry.scoring.status === 'failed') {
     return entry.scoring.reason ?? 'scoring_failed';
   }
@@ -324,13 +346,7 @@ const createCaseDiagnosticCollector = (available) => {
 // Session: the only place the provider key is used, and only in headers.
 // ---------------------------------------------------------------------------
 
-export function createBenchmarkLiveSession(options = {}) {
-  exactObject(options, ['ledger', 'apiKey', 'fetchImpl', 'benchmarkExtension'], 'invalid_benchmark_session');
-  const { ledger, apiKey, fetchImpl, benchmarkExtension } = options;
-  if (typeof apiKey !== 'string' || !apiKey.trim() || /\s/u.test(apiKey)
-    || typeof fetchImpl !== 'function') fail('invalid_benchmark_session');
-  const guard = createBenchmarkExperimentRequestGuard({ ledger, policy: experimentPolicy(),
-    benchmarkExtension, fetchImpl });
+function createLiveSessionFromGuard(apiKey, guard) {
   const stages = guard.stages;
   const diagnosticContext = new AsyncLocalStorage();
   const emitObservation = (event) => {
@@ -386,6 +402,33 @@ export function createBenchmarkLiveSession(options = {}) {
     const context = Object.freeze({ observe, nextAnswerIndex: () => answerIndex++ });
     return diagnosticContext.run(context, operation);
   });
+  return session;
+}
+
+export function createBenchmarkLiveSession(options = {}) {
+  exactObject(options, ['ledger', 'apiKey', 'fetchImpl', 'benchmarkExtension'], 'invalid_benchmark_session');
+  const { ledger, apiKey, fetchImpl, benchmarkExtension } = options;
+  if (typeof apiKey !== 'string' || !apiKey.trim() || /\s/u.test(apiKey)
+    || typeof fetchImpl !== 'function') fail('invalid_benchmark_session');
+  const guard = createBenchmarkExperimentRequestGuard({ ledger, policy: experimentPolicy(),
+    benchmarkExtension, fetchImpl });
+  return createLiveSessionFromGuard(apiKey, guard);
+}
+
+export function createCaseDeadlineLiveSession(options = {}) {
+  exactObject(options, ['ledger', 'apiKey', 'fetchImpl', 'benchmarkExtension', 'caseDeadlineCapability'],
+    'invalid_case_deadline_session');
+  const { ledger, apiKey, fetchImpl, benchmarkExtension, caseDeadlineCapability } = options;
+  if (typeof apiKey !== 'string' || !apiKey.trim() || /\s/u.test(apiKey)
+    || typeof fetchImpl !== 'function') fail('invalid_case_deadline_session');
+  const guard = createCaseDeadlineExperimentRequestGuard({ ledger, policy: experimentPolicy(),
+    benchmarkExtension, caseDeadlineCapability, fetchImpl });
+  const session = createLiveSessionFromGuard(apiKey, guard);
+  const capability = guard.caseDeadlineCapability;
+  const capabilityDigest = createHash('sha256').update(canonical([capability]), 'utf8').digest('hex');
+  const identity = deepFreeze({ effectivePolicyVersion: CASE_TIMEOUT_POLICY_VERSION,
+    executionId: capability.executionId, authorizationId: capability.authorizationId, capabilityDigest });
+  caseDeadlineSessions.set(session, { guard, identity, used: false });
   return session;
 }
 
@@ -697,15 +740,21 @@ export const nestedScoreTemplateVersion = (score) => {
     && score.answerTemplateVersion === PUBLIC_ANSWER_TEMPLATE_VERSION_V2) return PUBLIC_ANSWER_TEMPLATE_VERSION_V2;
   return fail('invalid_artifact');
 };
-export const validateGenerationIdentity = (generation, expected, questionId) => {
+export const validateGenerationIdentity = (generation, expected, questionId, caseTimeoutIdentity = null) => {
   if (artifactTemplateVersion(generation) !== expected || generation.questionId !== questionId
     || !['completed', 'failed', 'blocked'].includes(generation.status)) fail('invalid_artifact');
-  if (generation.status === 'completed' && nestedRunTemplateVersion(generation.run) !== expected) fail('invalid_artifact');
+  if ((generation.status === 'completed' || caseTimeoutIdentity && Object.hasOwn(generation, 'run'))
+    && nestedRunTemplateVersion(generation.run) !== expected) fail('invalid_artifact');
+  if (caseTimeoutIdentity && Object.hasOwn(generation, 'run')
+    && generation.run.questionId !== questionId) fail('invalid_artifact');
 };
-export const validateScoringIdentity = (scoring, expected, questionId) => {
+export const validateScoringIdentity = (scoring, expected, questionId, caseTimeoutIdentity = null) => {
   if (artifactTemplateVersion(scoring) !== expected || scoring.questionId !== questionId
     || !['completed', 'failed', 'blocked'].includes(scoring.status)) fail('invalid_artifact');
-  if (scoring.status === 'completed' && nestedScoreTemplateVersion(scoring.score) !== expected) fail('invalid_artifact');
+  if ((scoring.status === 'completed' || caseTimeoutIdentity && Object.hasOwn(scoring, 'score'))
+    && nestedScoreTemplateVersion(scoring.score) !== expected) fail('invalid_artifact');
+  if (caseTimeoutIdentity && Object.hasOwn(scoring, 'score')
+    && scoring.score.questionId !== questionId) fail('invalid_artifact');
 };
 
 const casePaths = (directory, questionId) => {
@@ -732,12 +781,13 @@ const requireCaseArtifacts = async (files, generation) => {
   }
 };
 
-const blockedGeneration = (questionId, reason, answerTemplateVersion, extra = {}) => deepFreeze({
+const blockedGeneration = (questionId, reason, answerTemplateVersion, extra = {}, identityFields = {}) => deepFreeze({
   schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
-  questionId, status: 'blocked', reason, ...extra,
+  ...identityFields, questionId, status: 'blocked', reason, ...extra,
 });
 
-async function generateCase({ item, files, session, limits, plan, projected, ledgerBefore, answerTemplateVersion }) {
+async function generateCase({ item, files, session, limits, plan, projected, ledgerBefore, answerTemplateVersion,
+  caseTimeoutIdentity, caseScopeSnapshot }) {
   const questionId = item.question.question_id;
   const namespace = { ownerId: OWNER_ID, scope: 'project', projectId: questionId };
   const captured = [];
@@ -777,13 +827,18 @@ async function generateCase({ item, files, session, limits, plan, projected, led
     const operation = () => runPublicComparison({ history: item.history, question: item.question, namespace, core: observedCore,
       answer, countTokens: session.countTokens, answerModel: session.stages.answer.model, limits, answerTemplateVersion });
     run = await (diagnosticScope ? diagnosticScope(diagnostics.observe, operation) : operation());
+    if (run && caseTimeoutIdentity) run = deepFreeze({ ...run, caseTimeoutIdentity });
   } catch (caught) { error = safeError(caught, 'generation_failed'); }
   finally { captureAdmission.close(); diagnostics.close(); core?.close(); }
+  const timeout = caseScopeSnapshot?.();
+  const timedOut = timeout?.status === 'timed_out';
   const database = await databaseMeasurement(files.database);
   const generation = deepFreeze({
     schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), questionId,
-    status: run ? 'completed' : 'failed', latencyMs: elapsedMs(started), database, projected,
-    ...(run ? { run } : { error }),
+    ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),
+    status: timedOut ? 'failed' : run ? 'completed' : 'failed', latencyMs: elapsedMs(started), database, projected,
+    ...(timedOut ? { reason: 'case_timeout', phase: 'generation', termination: timeout.termination,
+      ...(run ? { run } : { error }) } : run ? { run } : { error }),
   });
   const attempts = session.attempts().slice(attemptStart);
   const ledgerAfter = ledgerSummary(session.getState());
@@ -791,11 +846,15 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   const diagnosticSnapshot = diagnostics.snapshot(questionId, captured, captureAdmission.snapshot());
   await writePrivateJson(files.generation, generation);
   await writePrivateJson(files.answerRequests, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
+    ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),
     requests: captured });
-  await writePrivateJson(files.truncation, truncationRecord({ questionId, plan, run: run ?? null, captured }));
+  await writePrivateJson(files.truncation, { ...truncationRecord({ questionId, plan, run: run ?? null, captured }),
+    ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}) });
   await writePrivateJson(files.accounting, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
+    ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),
     phase: 'generation', ledgerBefore, ledgerAfter, attempts, totals: stageTotals(attempts) });
   await writePrivateJson(files.timings, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
+    ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),
     caseLatencyMs: generation.latencyMs,
     answerRequests: captured.map(({ order, armGuess, armLabelMethod, startedAt, elapsedMs: ms, status }) =>
       ({ order, armGuess, armLabelMethod, startedAt, elapsedMs: ms, status })),
@@ -803,7 +862,8 @@ async function generateCase({ item, files, session, limits, plan, projected, led
       latencyMs: arm.diagnostics?.latencyMs ?? null })) : [] });
   // Optional for old runs, but last for a fresh case: a diagnostic-artifact
   // write refusal cannot strand already-spent work without its accounting.
-  await writePrivateJson(files.diagnostics, diagnosticSnapshot);
+  await writePrivateJson(files.diagnostics, caseTimeoutIdentity
+    ? { ...diagnosticSnapshot, caseTimeoutIdentity } : diagnosticSnapshot);
   return { generation, attemptIds: attempts.map((attempt) => attempt.attemptId) };
 }
 
@@ -815,6 +875,18 @@ export async function runPublicPilot(options) {
   const { pilot, session, limits, judgeTimeoutMs, caps, manifest, caseIds, referenceRenderings, onCase,
     answerTemplateVersion }
     = validateOptions(options);
+  const caseDeadline = caseDeadlineSessions.get(session) ?? null;
+  const caseTimeoutIdentity = caseDeadline?.identity ?? null;
+  if (caseDeadline) {
+    if (caseDeadline.used) fail('case_session_consumed');
+    caseDeadline.used = true;
+    const expectedSchedule = [...caseIds.map((caseId) => ({ phase: 'generation', caseId })),
+      ...caseIds.map((caseId) => ({ phase: 'scoring', caseId }))];
+    if (canonical(caseDeadline.guard.caseDeadlineCapability.schedule) !== canonical(expectedSchedule)) {
+      fail('case_schedule_mismatch');
+    }
+  }
+  const identityFields = caseTimeoutIdentity ? { caseTimeoutIdentity } : {};
   const directory = resolveDirectory(options.directory, 'unsafe_output');
   const directoryHandle = await openPrivateDirectory(directory, 'unsafe_output');
   const checkpointPath = path.join(directory, 'checkpoint.json');
@@ -825,15 +897,18 @@ export async function runPublicPilot(options) {
   let sealed = false;
   try {
     checkpoint = await readPrivateJson(checkpointPath, 'invalid_checkpoint');
+    if (caseDeadline && checkpoint !== null) fail('case_run_not_resumable');
     if (checkpoint === null) {
       const entries = await guarded(() => readdir(directory), 'unsafe_output');
       if (entries.length !== 0) fail('output_not_empty');
       await sealPrivateDirectory(directoryHandle, directory, 'unsafe_output');
       sealed = true;
       checkpoint = { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, pilotManifestSha256: pilot.identity.manifestSha256,
-        ...answerTemplateIdentity(answerTemplateVersion), baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
+        ...answerTemplateIdentity(answerTemplateVersion), ...identityFields,
+        baseline: ledgerSummary(session.getState()), caseIds, halted: false, cases: {} };
       await writePrivateJson(manifestPath, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
-        ...answerTemplateIdentity(answerTemplateVersion), createdAt: new Date(started).toISOString(), pilot: pilot.identity, caseIds,
+        ...answerTemplateIdentity(answerTemplateVersion), ...identityFields,
+        createdAt: new Date(started).toISOString(), pilot: pilot.identity, caseIds,
         stages: session.stages, limits, judgeTimeoutMs, caps,
         receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
         limitations: PUBLIC_PILOT_LIMITATIONS, interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest });
@@ -846,6 +921,8 @@ export async function runPublicPilot(options) {
     } else {
       // The recorded configuration must match, so a resumed run cannot change its own rules.
       const recorded = await readPrivateJson(manifestPath, 'invalid_artifact');
+      if (artifactCaseTimeoutIdentity(checkpoint) !== null
+        || artifactCaseTimeoutIdentity(recorded) !== null) fail('run_directory_mismatch');
       if (!isPlainObject(recorded) || canonical(recorded.limits) !== canonical(limits)
         || recorded.judgeTimeoutMs !== judgeTimeoutMs || canonical(recorded.caps ?? null) !== canonical(caps)
         || canonical(recorded.stages) !== canonical(session.stages)
@@ -856,8 +933,10 @@ export async function runPublicPilot(options) {
       if (existingAggregate !== null && existingReport === null) fail('aggregate_without_report');
       if (existingReport !== null && existingAggregate === null) fail('invalid_artifact');
       for (const artifact of [existingAggregate, existingReport].filter((item) => item !== null)) {
+        if (artifactCaseTimeoutIdentity(artifact) !== null) fail('invalid_artifact');
         if (artifactTemplateVersion(artifact) !== answerTemplateVersion
           || nestedScoreTemplateVersion(artifact.official) !== answerTemplateVersion) fail('invalid_artifact');
+        if (artifactCaseTimeoutIdentity(artifact.official) !== null) fail('invalid_artifact');
       }
       for (const questionId of caseIds) {
         const state = checkpoint.cases[questionId] ?? { stage: 'pending' };
@@ -865,8 +944,22 @@ export async function runPublicPilot(options) {
         const files = casePaths(directory, questionId);
         const generation = await readPrivateJson(files.generation, 'invalid_artifact');
         const scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
-        if (generation !== null) { validateGenerationIdentity(generation, answerTemplateVersion, questionId); await requireCaseArtifacts(files, generation); }
-        if (scoring !== null) validateScoringIdentity(scoring, answerTemplateVersion, questionId);
+        if (generation !== null) {
+          validateGenerationIdentity(generation, answerTemplateVersion, questionId);
+          if (artifactCaseTimeoutIdentity(generation) !== null
+            || generation.run && artifactCaseTimeoutIdentity(generation.run) !== null) fail('invalid_artifact');
+          await requireCaseArtifacts(files, generation);
+        }
+        for (const filename of [files.accounting, files.answerRequests, files.truncation, files.timings,
+          files.diagnostics]) {
+          const companion = await readPrivateJson(filename, 'invalid_artifact');
+          if (companion !== null && artifactCaseTimeoutIdentity(companion) !== null) fail('invalid_artifact');
+        }
+        if (scoring !== null) {
+          validateScoringIdentity(scoring, answerTemplateVersion, questionId);
+          if (artifactCaseTimeoutIdentity(scoring) !== null
+            || scoring.score && artifactCaseTimeoutIdentity(scoring.score) !== null) fail('invalid_artifact');
+        }
         if (state.stage === 'pending' && (generation !== null || scoring !== null)) fail('invalid_checkpoint');
         if (state.stage === 'generating' && scoring !== null) fail('invalid_checkpoint');
         if (state.stage === 'generated' && (generation === null || (scoring !== null
@@ -911,6 +1004,8 @@ export async function runPublicPilot(options) {
   const selected = caseIds.map((id) => pilot.cases.find((item) => item.question.question_id === id));
   let callbackFailures = 0;
   const generations = new Map();
+  const inCaseScope = (phase, caseId, operation) => caseDeadline && !caseDeadline.guard.isHalted()
+    ? caseDeadline.guard.withCaseScope({ phase, caseId }, operation) : operation(null);
 
   // Generation phase: every checkpoint is durable before the evaluator is touched.
   for (let index = 0; index < selected.length; index += 1) {
@@ -919,6 +1014,7 @@ export async function runPublicPilot(options) {
     const files = casePaths(directory, questionId);
     const state = caseState(questionId);
     let generation = null;
+    await inCaseScope('generation', questionId, async (scope) => {
     if (['generated', 'scoring', 'scored', 'blocked'].includes(state.stage)) {
       generation = await readPrivateJson(files.generation, 'invalid_artifact');
       if (generation === null) fail('invalid_checkpoint');
@@ -928,7 +1024,7 @@ export async function runPublicPilot(options) {
       if (generation !== null) await requireCaseArtifacts(files, generation);
       if (generation === null) {
         await ensurePrivateDirectory(files.directory, 'unsafe_output');
-        generation = blockedGeneration(questionId, 'interrupted', answerTemplateVersion);
+        generation = blockedGeneration(questionId, 'interrupted', answerTemplateVersion, {}, identityFields);
         await writePrivateJson(files.generation, generation);
         await setStage(questionId, 'blocked', { reason: 'interrupted', phase: 'generation' });
       } else await setStage(questionId, 'generated');
@@ -942,20 +1038,27 @@ export async function runPublicPilot(options) {
       const reason = halted ? 'paid_work_halted' : capReason(projected);
       if (reason) {
         await ensurePrivateDirectory(files.directory, 'unsafe_output');
-        generation = blockedGeneration(questionId, reason, answerTemplateVersion, { projected });
+        generation = blockedGeneration(questionId, reason, answerTemplateVersion, { projected }, identityFields);
         await writePrivateJson(files.generation, generation);
         await setStage(questionId, 'blocked', { reason, phase: 'generation' });
       } else {
         await setStage(questionId, 'generating');
         const ledgerBefore = ledgerSummary(session.getState());
         const generated = await generateCase({ item, files, session, limits, plan, projected, ledgerBefore,
-          answerTemplateVersion });
+          answerTemplateVersion, caseTimeoutIdentity,
+          ...(scope ? { caseScopeSnapshot: () => {
+            const snapshot = scope.snapshot();
+            const timeout = caseDeadline.guard.caseTimeouts().find((entry) => entry.phase === 'generation'
+              && entry.caseId === questionId);
+            return timeout ? { ...snapshot, termination: timeout.termination } : snapshot;
+          } } : {}) });
         generation = generated.generation;
         await setStage(questionId, 'generated', { attemptIds: generated.attemptIds });
       }
     }
     generations.set(questionId, generation);
     if (session.isHalted() && !checkpoint.halted) { checkpoint.halted = true; await saveCheckpoint(); }
+    });
     if (!await notify(onCase, { stage: 'generation', index, caseCount: selected.length, questionId,
       status: generation.status })) callbackFailures += 1;
   }
@@ -973,6 +1076,7 @@ export async function runPublicPilot(options) {
     roster.push({ questionId, sourceQuestionId: evaluator.source_question_id, questionType: evaluator.question_type });
     const state = caseState(questionId);
     let scoring = null;
+    await inCaseScope('scoring', questionId, async (scope) => {
     if (state.stage === 'scored') {
       scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
       if (scoring === null) fail('invalid_checkpoint');
@@ -980,7 +1084,7 @@ export async function runPublicPilot(options) {
       scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
       if (scoring === null) {
         scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
-          questionId, status: 'blocked',
+          ...identityFields, questionId, status: 'blocked',
           reason: 'interrupted' });
         await writePrivateJson(files.scoring, scoring);
         await setStage(questionId, 'blocked', { reason: 'interrupted', phase: 'scoring' });
@@ -988,10 +1092,13 @@ export async function runPublicPilot(options) {
     } else if (state.stage === 'blocked' || generation.status !== 'completed') {
       scoring = await readPrivateJson(files.scoring, 'invalid_artifact');
       if (scoring === null) {
+        const reason = generation.reason === 'case_timeout' ? 'case_timeout'
+          : generation.status === 'blocked' ? generation.reason : 'generation_failed';
         scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
-          questionId, status: 'blocked',
-          reason: generation.status === 'blocked' ? generation.reason : 'generation_failed' });
+          ...identityFields, questionId, status: 'blocked',
+          reason });
         await writePrivateJson(files.scoring, scoring);
+        if (caseDeadline) await setStage(questionId, 'blocked', { reason, phase: 'scoring' });
       }
     } else {
       const projected = { reservedMicroUsd: 3 * session.stages.judge.reservedMicroUsd, requests: 3 };
@@ -999,7 +1106,7 @@ export async function runPublicPilot(options) {
       const reason = halted ? 'paid_work_halted' : capReason(projected);
       if (reason) {
         scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion),
-          questionId, status: 'blocked', reason });
+          ...identityFields, questionId, status: 'blocked', reason });
         await writePrivateJson(files.scoring, scoring);
         await setStage(questionId, 'blocked', { reason, phase: 'scoring' });
       } else {
@@ -1011,22 +1118,31 @@ export async function runPublicPilot(options) {
         let error;
         try {
           score = await scorePublicComparison({ run: generation.run, evaluator, judge: session.judge,
-            judgeTimeoutMs, ...(referenceRenderings?.has(questionId)
+            judgeTimeoutMs, ...(caseDeadline ? { executionStop: () => {
+              const snapshot = scope.snapshot();
+              if (snapshot.status === 'timed_out') return 'case_timeout';
+              return caseDeadline.guard.isHalted() ? 'paid_work_halted' : null;
+            } } : {}), ...(referenceRenderings?.has(questionId)
               ? { referenceRendering: referenceRenderings.get(questionId) } : {}) });
         } catch (caught) { error = safeError(caught, 'scoring_failed'); }
         const attempts = session.attempts().slice(attemptStart);
         scoring = deepFreeze({ schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
-          ...answerTemplateIdentity(answerTemplateVersion),
-          status: score ? 'completed' : 'failed', latencyMs: elapsedMs(scoringStarted),
+          ...answerTemplateIdentity(answerTemplateVersion), ...identityFields,
+          status: scope?.snapshot().status === 'timed_out' ? 'failed' : score ? 'completed' : 'failed',
+          ...(scope?.snapshot().status === 'timed_out'
+            ? { reason: 'case_timeout', phase: 'scoring', termination: caseDeadline.guard.caseTimeouts()
+              .find((entry) => entry.phase === 'scoring' && entry.caseId === questionId)?.termination } : {}),
+          latencyMs: elapsedMs(scoringStarted),
           accounting: { ledgerBefore, ledgerAfter: ledgerSummary(session.getState()), attempts,
             totals: stageTotals(attempts) },
-          ...(score ? { score } : { error }) });
+          ...(score ? { score: caseTimeoutIdentity ? { ...score, caseTimeoutIdentity } : score } : { error }) });
         await writePrivateJson(files.scoring, scoring);
         await setStage(questionId, 'scored', { attemptIds: attempts.map((attempt) => attempt.attemptId) });
       }
     }
     scorings.set(questionId, scoring);
     if (session.isHalted() && !checkpoint.halted) { checkpoint.halted = true; await saveCheckpoint(); }
+    });
     if (!await notify(onCase, { stage: 'scoring', index, caseCount: selected.length, questionId,
       status: scoring.status })) callbackFailures += 1;
   }
@@ -1040,9 +1156,13 @@ export async function runPublicPilot(options) {
   }
   // aggregate.json is derived from the per-case files; the operator may delete it and resume.
   if (await readPrivateJson(aggregatePath, 'invalid_artifact') !== null) fail('aggregate_without_report');
-  const records = [...scorings.values()].filter((scoring) => scoring.status === 'completed')
+  const records = [...scorings.values()].filter((scoring) => scoring.status === 'completed'
+      || caseDeadline && scoring.status === 'failed' && scoring.reason === 'case_timeout'
+        && scoring.phase === 'scoring' && ['core_deadline', 'transport_deadline'].includes(scoring.termination)
+        && isPlainObject(scoring.score))
     .map((scoring) => scoring.score);
-  const official = aggregateOfficialScores({ roster, records, answerTemplateVersion });
+  const officialResult = aggregateOfficialScores({ roster, records, answerTemplateVersion });
+  const official = caseTimeoutIdentity ? deepFreeze({ ...officialResult, caseTimeoutIdentity }) : officialResult;
   const cost = {};
   const truncation = { turns: 0, turnsOverBound: 0, chunks: 0, chunksOverBound: 0, omittedUnits: 0,
     packedReceipts: 0, packedReceiptsFromTruncatedChunks: 0, packedOmittedUnits: 0 };
@@ -1073,6 +1193,7 @@ export async function runPublicPilot(options) {
     latency.generationMs += generation.latencyMs ?? 0;
     latency.scoringMs += scoring.latencyMs ?? 0;
     cases.push({
+      ...identityFields,
       questionId, sourceQuestionId: rosterItem.sourceQuestionId, questionType: rosterItem.questionType,
       abstention: rosterItem.sourceQuestionId.includes('_abs'),
       generation: { status: generation.status, reason: generation.reason ?? null, latencyMs: generation.latencyMs ?? null,
@@ -1099,13 +1220,21 @@ export async function runPublicPilot(options) {
     generationFailed: cases.filter((item) => item.generation.status === 'failed').length,
     generationBlocked: cases.filter((item) => item.generation.status === 'blocked').length,
     scored: cases.filter((item) => item.scoring.status === 'completed').length,
+    ...(caseDeadline ? {
+      generationTimeouts: cases.filter((item) => item.generation.reason === 'case_timeout').length,
+      scoringTimeouts: cases.filter((item) => item.scoring.status === 'failed'
+        && item.scoring.reason === 'case_timeout').length,
+      partialScoreRecords: [...scorings.values()].filter((item) => item.status === 'failed'
+        && item.reason === 'case_timeout' && isPlainObject(item.score)).length,
+    } : {}),
     blockedReasons: Object.fromEntries(cases.map(caseBlockedReason).filter(Boolean)
       .reduce((map, reason) => map.set(reason, (map.get(reason) ?? 0) + 1), new Map())),
     halted: checkpoint.halted,
     progressCallbackFailures: callbackFailures,
   };
   const aggregate = deepFreeze({
-    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), generatedAt: new Date().toISOString(),
+    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), ...identityFields,
+    generatedAt: new Date().toISOString(),
     interpretation: PUBLIC_PILOT_INTERPRETATION, pilot: pilot.identity, caseIds, limits, judgeTimeoutMs, caps,
     stages: session.stages, summary, official,
     cost: { byStage: cost, reservedMicroUsd: totalReserved, knownActualMicroUsd: totalKnown,
@@ -1115,7 +1244,8 @@ export async function runPublicPilot(options) {
   });
   await writePrivateJson(aggregatePath, aggregate);
   const report = deepFreeze({
-    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), generatedAt: aggregate.generatedAt,
+    schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, ...answerTemplateIdentity(answerTemplateVersion), ...identityFields,
+    generatedAt: aggregate.generatedAt,
     interpretation: PUBLIC_PILOT_INTERPRETATION, operator: manifest, pilot: pilot.identity, caseIds,
     models: { answer: session.stages.answer.model, judge: session.stages.judge.model },
     limits, judgeTimeoutMs, caps, receiptExcerptBoundUtf16: RECEIPT_EXCERPT_BOUND_UTF16,
