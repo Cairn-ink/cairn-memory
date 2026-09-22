@@ -76,6 +76,14 @@ The scorer accepts both older outcomes without `errorStage` and new bounded
 stage-bearing outcomes. The extra field does not change scores or eligibility;
 unknown stages and inconsistent stage/status/error combinations are rejected.
 
+Cairn evidence accepts only the core's exact stored receipt excerpt. Capture
+normalizes and truncates the source view to complete code points; admission then
+canonicalizes that bounded excerpt again, which can trim whitespace exposed at
+the 800-UTF-16-unit boundary. The comparator derives that single stored form
+with the same two bounded operations. It does not accept prefixes, substrings,
+whitespace-insensitive matches or alternate normalizations, and its existing
+event, session, role and namespace checks remain unchanged.
+
 Lexical ranking counts unique overlapping question/turn tokens after NFKC,
 lowercasing and Unicode letter/number tokenization. Zero-overlap turns are not
 candidates. Ties retain source order; `lexicalLimit` bounds the ranked candidates
@@ -89,6 +97,11 @@ Import `scoreLongMemEvalComparison` from `evaluation/longmemeval/scoring.mjs`.
 After generation, call it with exactly `{run, evaluator}`. `evaluator` is the
 matching prepared evaluator record with `question_id`, `source_question_id`,
 `question_type`, `reference_answer`, `answer_session_ids` and `turn_labels`.
+For preparation v2, `answer_session_ids` contains opaque session-occurrence IDs
+matching the prepared history. Raw source labels stay in the private manifest
+map, never in generation. Earlier v1 artifacts need regeneration; a hand-built
+legacy in-memory history can still exercise diagnostic APIs but is not v2
+benchmark evidence.
 Case identity and referenced source coordinates are checked before scoring.
 An in-memory record is not a signed artifact: retain its preparation hashes and
 run provenance separately instead of treating schema validation as authenticity.

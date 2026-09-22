@@ -1,5 +1,94 @@
 # Compatibility protocol v0.1
 
+### Experimental public-pilot answer boundary
+
+The evaluation-only public comparison and pilot accept an explicit
+`cairn-longmemeval-public-answer-v2` opt-in. It changes only the answer user
+message from v1 `{question,evidence}` ordering to
+`{evidence,currentQuestion}` ordering, identically across all three arms.
+The system instruction, provider controls, evidence, scoring rubric, guard,
+limits and retry policy are unchanged. Identity is retained through private
+pilot artifacts, resume and offline merge so v1 and v2 cannot be mixed. This
+does not change the public core, plugin, MCP, HTTP, or telemetry protocol.
+
+### Private public-pilot diagnostic boundary
+
+The optional live public-pilot runner writes a per-case `diagnostics.json` only
+inside its private 0700 run directory. This is benchmark-local observation, not
+a hosted protocol field, telemetry event, model request, public comparison
+response or scoring input. It does not widen HTTP, MCP, core or adapter
+contracts. Ordinary answer callbacks remain exactly `{text,usage}`.
+
+The artifact contains only the opaque case ID; fixed version, stage, layer and
+reason categories already allowed by model diagnostics; runner-owned answer
+order and arm categories; `stop`/`length`; availability markers; fixed limits;
+drop counts; and a separately versioned optional capture-admission subsection.
+That subsection is `cairn-capture-admission-observation-v1`, contains at most 64
+rows, and projects only a batch ordinal, `completed|partial|failed|unavailable`,
+finite admitted-reference and suppression counts, a duplicate-event boolean and
+`skipped|applied|failed` classification status. Unsupported fields are `null`;
+malformed projections are unavailable, not zero.
+
+The artifact never accepts provider/model exception strings, raw responses,
+request bodies, source or answer text, headers, keys, paths, memory/receipt/
+source identifiers or arbitrary observer fields. Every observed field is read
+once, checked against the fixed allowlists and projected into a new object.
+Model and capture events are each capped at 64 per case and answer completion
+rows at the three fixed arms; overflow is counted, not retained. Capture observation wraps the
+runner-owned core call and is available independently of a session's optional
+model-diagnostic hook. It preserves the original capture response, exception,
+call order and request and does not change the public core response or any
+HTTP/MCP/adapter wire contract.
+
+The real benchmark session binds collection to each asynchronous case
+invocation and keeps sessions separate. Work spawned in an earlier case retains
+that earlier collector even if it completes after another case begins; once a
+collector closes, late events are ignored and cannot be reassigned. This avoids
+cross-case attribution but does not prove complete delivery. `available` means
+the hook was installed, not that an empty list proves no error. A missing file,
+an unavailable row, a legacy/custom session or a case blocked before generation
+is non-evidence. These local files share the run directory's ordinary
+filesystem, journal, backup and secure-erasure limitations and grant no
+authority or semantic correctness.
+
+The separate prospective `case-deadline-v1` benchmark capability adds no hosted
+or public core field. Its private operator-controlled files contain only bounded
+authorization/execution IDs, the existing ledger/policy/benchmark configuration,
+opaque source-free case IDs, ordered generation/scoring phases, checkpoint
+counters and a SHA-256 digest of historical accounting rows. The digest is a
+consistency binding, not anonymization; attempt identifiers and cost/outcome
+metadata remain sensitive local experiment data. The one-shot claim grants no
+new allowance and is never automatically removed or reset.
+
+The public-pilot runner can explicitly bind that capability to one process-
+local session and exact prepared roster. The new fields retain only a bounded
+policy/execution identity and fixed timeout/blocked enums, never the capability
+file, provider key, source text or raw exception; existing private generation
+and answer artifacts retain their documented content. Only a guard-observed
+genuine deadline can isolate one case. Diagnostics grant no authority, while
+every other unknown request outcome halts globally. This opt-in is not resumable
+or retryable.
+
+Process-local opt-mode attempt observations add only the opaque case ID, phase
+and a fixed termination enum. Read-only scope/timeout snapshots likewise contain
+only fixed versions and enums. They never contain questions, evidence, answers,
+request/response bodies, headers, keys, raw exceptions, paths, memory/source/
+receipt identifiers or arbitrary diagnostics. Runner-owned failure artifacts
+remain in the private mode-0700 run directory under its existing retention,
+backup and secure-erasure limitations. These fields distinguish case isolation
+from a global safety halt; they do not establish provider cancellation, zero
+cost, semantic correctness, permission to retry or authority to resume an old
+run.
+
+An admitted-reference count describes references accepted by core admission,
+not newly created memories or retained-message coverage. A content-deduplicated
+memory can contribute a reference, partial extraction can omit source messages,
+and an admitted stage can contain zero references. Source retention remains the
+separate prospective opt-in described below. Existing qualified deduplication
+requires identical resolved source anchors; a changed source identity remains
+an intentional `qualification_conflict`. Observation does not weaken either
+boundary or reconstruct old pilot artifacts.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the
@@ -300,6 +389,34 @@ personal fields, provider method, telemetry or hosted wire schema is introduced.
 Source roles and passages remain untrusted; even explicit remember may contain
 an assertion supplied by a client, not an authenticated transcript. Source
 selection remains unassessed and MOC routing labels remain model interpretations.
+For an explicit `source-evidence` or `rationale-evidence` recall only, private
+candidate navigation may score the first four retained receipt excerpts for
+each already current, namespace-owned and published-projection-eligible memory.
+It reads receipts in stable opaque-ID order, which is not event chronology, and
+uses the greatest distinct literal query-token overlap across the generated body
+and those four excerpts. A receipt supplies the existing 120-code-point select
+preview only when it scores strictly above the body; the first stable-ID receipt
+wins a receipt tie, while a body tie keeps the body preview. Internally, across
+the existing 1,024-memory scan, at most 4,096 excerpts of at most 800 UTF-16
+units are read and scored. The selector sees only a winning 120-code-point
+preview for each candidate actually packed into the existing at-most-100-item,
+4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
+metadata. This is bounded navigation, not complete source search or semantic
+relevance. Before any receipt can contribute a score or preview, the core applies
+the same authoritative stored identity, ownership, role, canonical excerpt and
+receipt-key validation used by source output; corrupted rows fail before selector
+invocation.
+
+Default recall and automatic rationale discovery remain body-only; public maps
+and the classification topic catalog remain unchanged. Source-aware cursor
+state binds the explicit mode, query, policy version and four-receipt limit
+separately from body-only cursors. The four-receipt score bound does not change
+map/reference exhaustion or complete-map source ranking: later receipts can
+still be fetched after a memory is selected, but a query term present only in
+receipt five or later cannot help that memory reach selection. Existing epoch,
+revision and final-snapshot checks prevent stale later use and finalization;
+they cannot retract a preview after a model request has already begun.
+
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can
 still expose the original model interpretation. File-access, journals, backups

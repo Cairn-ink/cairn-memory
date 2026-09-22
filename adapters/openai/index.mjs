@@ -3,6 +3,7 @@ import { MemoryStoreError } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
 import { schemasFor } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
+import { classificationWire } from './classification-wire.mjs';
 
 const encoder = get_encoding('o200k_base');
 const fail = (code) => { throw new MemoryStoreError(code); };
@@ -51,6 +52,13 @@ function normalizeQualificationSlots(method, input, output, schema, diagnose) {
     return value;
   });
   return { qualifications };
+}
+
+function normalizeClassificationWire(method, output, schema, wire, diagnose) {
+  if (method !== 'classify') return undefined;
+  const reject = () => { diagnose('output_shape'); fail('invalid_model_output'); };
+  if (!schemaAccepts(schema, output)) reject();
+  try { return wire.decode(output); } catch { reject(); }
 }
 
 function countTokens(text) {
@@ -173,15 +181,22 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let localTokens;
     let schema;
     let snapshot;
+    let wire;
     let instructions;
     try {
       // Validate before JSON serialization can erase sparse/custom fields.
       if (method === 'selectChecklist') schemasFor(method, input);
-      serializedInput = JSON.stringify(input);
-      snapshot = JSON.parse(serializedInput);
+      const originalSerializedInput = JSON.stringify(input);
+      snapshot = JSON.parse(originalSerializedInput);
       schema = schemasFor(method, snapshot);
       instructions = qualificationInstructions(method, system, snapshot);
       localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
+      if (method === 'classify') {
+        wire = classificationWire(snapshot);
+        snapshot = wire.input;
+        schema = schemasFor(method, snapshot);
+      }
+      serializedInput = JSON.stringify(snapshot);
     } catch (error) {
       diagnose('request_invalid');
       if (error instanceof MemoryStoreError) throw error;
@@ -209,8 +224,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     checkAbort(signal, diagnose);
     const response = await post('/responses', generateBody, 262144, signal, diagnose);
     checkAbort(signal, diagnose);
-    return normalizeQualificationSlots(method, snapshot,
-      parseOutput(response, selected.contextWindow, selected.model, diagnose), schema, diagnose);
+    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
+    return normalizeClassificationWire(method, output, schema, wire, diagnose)
+      ?? normalizeQualificationSlots(method, snapshot, output, schema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
