@@ -130,6 +130,33 @@ identity intentionally fails with `qualification_conflict`; the observer does
 not turn that immutable provenance boundary into a successful attach. No source
 archive, staging default, retry or source-bound-v2 benchmark switch is added.
 
+## Recall-stage observations are mechanics, not retrieval quality
+
+Fresh private public-pilot diagnostics can prospectively distinguish visible
+map items followed by empty model selection, selected/fetched candidates followed
+by empty model ranking, and final ranked candidates omitted by whole-item answer
+packing. Old pilot artifacts did not retain these stage observations and cannot
+be reconstructed from storage counts or final `candidateCount`; absence is
+unavailable evidence, not an observed zero.
+
+Selection and rank counts describe bounded adapter-returned shapes before core
+validates membership, duplicates, freshness, namespace limits and output
+budgets. They are not counts of accepted, relevant or correct memories. Final
+`candidateCount` remains post-core-ranking output, and `selectedCount` remains
+answer-packed items. Likewise, core `budget_exhausted` means map/fetch traversal
+did not prove completion under its bounds; it is not evidence that the experiment
+spent its monetary/request allowance or exhausted provider tokens, and it does
+not explain why a model returned no refs.
+
+The private observation contains only bounded counts, booleans, ordinals,
+closed status enums and overflow state. It retains no question, source, label,
+answer or identifier and no source-derived hash; identifiers used to count
+unique model-returned refs remain transient. Malformed fields are null/unavailable,
+late settlements are ignored after case close, and the subsection never enters
+comparison output, scoring, aggregates or the redacted report. These mechanics
+do not establish answer quality, semantic recall, source sufficiency or a fix
+for any historical result.
+
 ## Source-aware candidate navigation is a bounded literal heuristic
 
 Explicit `source-evidence` and `rationale-evidence` recall can now use at most

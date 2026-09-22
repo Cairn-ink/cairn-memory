@@ -22,23 +22,37 @@ contracts. Ordinary answer callbacks remain exactly `{text,usage}`.
 The artifact contains only the opaque case ID; fixed version, stage, layer and
 reason categories already allowed by model diagnostics; runner-owned answer
 order and arm categories; `stop`/`length`; availability markers; fixed limits;
-drop counts; and a separately versioned optional capture-admission subsection.
+drop counts; and separately versioned capture-admission and recall-stage
+subsections.
 That subsection is `cairn-capture-admission-observation-v1`, contains at most 64
 rows, and projects only a batch ordinal, `completed|partial|failed|unavailable`,
 finite admitted-reference and suppression counts, a duplicate-event boolean and
 `skipped|applied|failed` classification status. Unsupported fields are `null`;
 malformed projections are unavailable, not zero.
 
+The `cairn-recall-stage-observation-v1` subsection adds only bounded ordinals,
+counts, booleans, closed status enums and explicit overflow state. It projects
+visible selection-map shape, model-returned select/rank ref counts and the
+existing final core map/fetch exhaustion booleans. Returned ref identities may
+be compared transiently for a cumulative unique count but are neither retained
+nor hashed. Accessors and `toJSON` are not invoked to produce the projection;
+malformed or inaccessible metadata is unavailable/null. These counts precede
+core validation and do not assert that a ref was accepted, relevant or correct.
+The ordinary retrieval `candidateCount` still means final core-returned memories,
+and `selectedCount` still means answer-packed items.
+
 The artifact never accepts provider/model exception strings, raw responses,
 request bodies, source or answer text, headers, keys, paths, memory/receipt/
 source identifiers or arbitrary observer fields. Every observed field is read
 once, checked against the fixed allowlists and projected into a new object.
 Model and capture events are each capped at 64 per case and answer completion
-rows at the three fixed arms; overflow is counted, not retained. Capture observation wraps the
-runner-owned core call and is available independently of a session's optional
-model-diagnostic hook. It preserves the original capture response, exception,
-call order and request and does not change the public core response or any
-HTTP/MCP/adapter wire contract.
+rows at the three fixed arms; overflow is counted, not retained. Recall-stage
+selection retains at most two rows and rank/final recall at most one, with a
+separate bounded invocation counter and explicit overflow uncertainty. Capture
+and recall observations wrap runner-owned core calls and are available
+independently of a session's optional model-diagnostic hook. They preserve the
+original response, exception, call order and request and do not change the
+public core response or any HTTP/MCP/adapter wire contract.
 
 The real benchmark session binds collection to each asynchronous case
 invocation and keeps sessions separate. Work spawned in an earlier case retains

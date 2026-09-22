@@ -11,15 +11,18 @@ import { DatabaseSync } from 'node:sqlite';
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability,
   createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
+import { INGESTION_CLIENT, planLongMemEvalCase } from '../../longmemeval/ingestion.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
 import { OFFICIAL_SCORING_SCHEMA_VERSION_V2, scorePublicComparison } from '../../longmemeval/official-scoring.mjs';
 import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
   runPublicComparison } from '../../longmemeval/public-comparison.mjs';
+import { canonicalStoredReceiptExcerpt } from '../../longmemeval/receipt-canonicalization.mjs';
 import { loadReferenceRenderings } from '../../longmemeval/reference-rendering.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { loadPreparedPilot, pilotEvaluatorFor } from '../pilot.mjs';
 import { main as cliMain, parseArguments, USAGE } from '../public-pilot-cli.mjs';
 import { mergePublicPilotRuns } from '../public-pilot-merge.mjs';
+import { createRecallStageCollector, RECALL_STAGE_OBSERVATION_VERSION } from '../recall-stage-observations.mjs';
 import {
   benchmarkStagePolicy,
   CAPTURE_ADMISSION_OBSERVATION_VERSION,
@@ -1815,6 +1818,12 @@ test('PO3-PO4: observation is bounded and late case callbacks cannot contaminate
   assert.equal(JSON.stringify(first).includes(KEY), false);
   assert.deepEqual(second.memoryModel.records, []);
   assert.equal(second.memoryModel.droppedRecords, 0);
+  assert.equal(first.recallStages.closed, true);
+  assert.equal(second.recallStages.closed, true);
+  assert.equal(first.recallStages.selection.invocationCount, 1);
+  assert.equal(second.recallStages.selection.invocationCount, 1);
+  assert.equal(first.recallStages.ranking.invocationCount, 1);
+  assert.equal(second.recallStages.ranking.invocationCount, 1);
   assert.equal(await readFile(path.join(output, 'cases', caseIds.latefirst, 'diagnostics.json'), 'utf8'), firstSnapshot);
 });
 
@@ -1837,7 +1846,8 @@ test('PO3-PO4: concurrent live sessions keep diagnostic contexts isolated', asyn
   const generationTwo = (body, record, method) => {
     const input = JSON.parse(body.input[0].content[0].text);
     if (method === 'extract') secondStarted();
-    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+    return Response.json(responsesEnvelope(body.model,
+      method === 'select' ? { refs: [] } : scripted[method](input)));
   };
   sessionOne = one.session(null, null, generationOne);
   const sessionTwo = two.session(null, null, generationTwo);
@@ -1849,9 +1859,17 @@ test('PO3-PO4: concurrent live sessions keep diagnostic contexts isolated', asyn
   ]);
   sessionOne.close();
   sessionTwo.close();
-  assert.deepEqual((await readJson(outputOne, 'cases', ids.plain, 'diagnostics.json')).memoryModel.records,
+  const diagnosticsOne = await readJson(outputOne, 'cases', ids.plain, 'diagnostics.json');
+  const diagnosticsTwo = await readJson(outputTwo, 'cases', ids.plain, 'diagnostics.json');
+  assert.deepEqual(diagnosticsOne.memoryModel.records,
     [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'output_json' }]);
-  assert.deepEqual((await readJson(outputTwo, 'cases', ids.plain, 'diagnostics.json')).memoryModel.records, []);
+  assert.deepEqual(diagnosticsTwo.memoryModel.records, []);
+  assert.equal(diagnosticsOne.recallStages.selection.records[0].returnedRefCount, 1);
+  assert.equal(diagnosticsOne.recallStages.ranking.invocationCount, 1);
+  assert.equal(diagnosticsTwo.recallStages.selection.records[0].returnedRefCount, 0);
+  assert.equal(diagnosticsTwo.recallStages.ranking.invocationCount, 0);
+  assert.equal(diagnosticsOne.recallStages.closed, true);
+  assert.equal(diagnosticsTwo.recallStages.closed, true);
 });
 
 test('PO1/PO4: legacy custom sessions stay compatible and explicitly report unavailable observation', async (t) => {
@@ -1976,6 +1994,182 @@ test('CAO4: actual runner and core retain successful empty capture admission cou
     ...(attempt.countDiagnostic ? { countDiagnostic: attempt.countDiagnostic } : {}) });
   assert.deepEqual([...accounting.attempts, ...scored.accounting.attempts].map(attemptShape),
     directAttempts.map(attemptShape));
+  const recallStages = diagnostics.recallStages;
+  assert.equal(recallStages.schemaVersion, RECALL_STAGE_OBSERVATION_VERSION);
+  assert.equal(recallStages.closed, true);
+  assert.equal(recallStages.selection.invocationCount, 1);
+  assert.equal(recallStages.ranking.invocationCount, 0);
+  assert.deepEqual(recallStages.recall.records[0].mapExhausted, [true]);
+  assert.deepEqual(recallStages.recall.records[0].fetchExhausted, [true]);
+  assert.equal(JSON.stringify(generated).includes('recallStages'), false);
+  assert.equal(JSON.stringify(scored).includes('recallStages'), false);
+  assert.equal(JSON.stringify(await readJson(output, 'aggregate.json')).includes('recallStages'), false);
+  assert.equal(JSON.stringify(await readJson(output, 'report.json')).includes('recallStages'), false);
+});
+
+test('O2/O5: actual runner, guarded fake HTTP and core distinguish selection, ranking and packing losses', async t => {
+  const run = async (name, { generation, countTokens, limits } = {}) => {
+    const f = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+    const actual = f.session(null, null, generation);
+    const session = countTokens ? Object.freeze({ ...actual, countTokens }) : actual;
+    const output = f.output(name);
+    const report = await runPublicPilot({ pilot: f.pilot, session, directory: output,
+      ...(limits ? { limits } : {}) });
+    actual.close();
+    return { f, output, report, diagnostics: await readJson(output, 'cases', ids.plain, 'diagnostics.json'),
+      generation: await readJson(output, 'cases', ids.plain, 'generation.json') };
+  };
+  const scriptedGeneration = (overrides = {}) => (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    const output = Object.hasOwn(overrides, method) ? overrides[method](input) : scripted[method](input);
+    return Response.json(responsesEnvelope(body.model, output));
+  };
+
+  const emptyMap = await run('recall-empty-map', { generation: scriptedGeneration({
+    extract: () => ({ items: [] }),
+  }) });
+  const emptyMapStages = emptyMap.diagnostics.recallStages;
+  assert.deepEqual(emptyMapStages.selection.records.map((entry) => ({
+    visibleItemCount: entry.visibleItemCount, returnedRefCount: entry.returnedRefCount,
+  })), [{ visibleItemCount: 0, returnedRefCount: 0 }]);
+  assert.equal(emptyMapStages.ranking.invocationCount, 0);
+  assert.deepEqual(emptyMapStages.recall.records[0].mapExhausted, [true]);
+
+  const emptySelection = await run('recall-empty-selection', { generation: scriptedGeneration({
+    select: () => ({ refs: [] }),
+  }) });
+  const selectionStages = emptySelection.diagnostics.recallStages;
+  assert.ok(selectionStages.selection.records[0].visibleItemCount > 0);
+  assert.equal(selectionStages.selection.records[0].returnedRefCount, 0);
+  assert.equal(selectionStages.selection.records[0].cumulativeUniqueSelectedRefCount, 0);
+  assert.equal(selectionStages.ranking.invocationCount, 0);
+  assert.equal(emptySelection.generation.run.arms[0].diagnostics.retrieval.candidateCount, 0);
+
+  const emptyRanking = await run('recall-empty-ranking', { generation: scriptedGeneration({
+    rank: () => ({ refs: [] }),
+  }) });
+  const rankingStages = emptyRanking.diagnostics.recallStages;
+  assert.ok(rankingStages.selection.records[0].returnedRefCount > 0);
+  assert.equal(rankingStages.ranking.invocationCount, 1);
+  assert.ok(rankingStages.ranking.records[0].inputCandidateCount > 0);
+  assert.equal(rankingStages.ranking.records[0].returnedRefCount, 0);
+  assert.equal(emptyRanking.generation.run.arms[0].diagnostics.retrieval.candidateCount, 0);
+
+  const packing = await run('recall-packing-omission', {
+    countTokens: (text) => text.includes('memoryId') ? 1_000 : 1,
+    limits: { ...PUBLIC_PILOT_LIMITS, contextWindow: 600 },
+  });
+  const packingStages = packing.diagnostics.recallStages;
+  assert.ok(packingStages.ranking.records[0].returnedRefCount > 0);
+  const packingRetrieval = packing.generation.run.arms[0].diagnostics.retrieval;
+  assert.ok(packingRetrieval.candidateCount > 0);
+  assert.equal(packingRetrieval.selectedCount, 0);
+  assert.equal(packingRetrieval.omitted.length, packingRetrieval.candidateCount);
+  assert.equal(JSON.stringify(packing.diagnostics).includes(KEY), false);
+  assert.equal(JSON.stringify(packing.diagnostics).includes(RAW_PHRASE), false);
+
+  const selectError = await run('recall-select-error', { generation: scriptedGeneration({
+    select: () => ({ malformed: true }),
+  }) });
+  assert.equal(selectError.diagnostics.recallStages.selection.records[0].status, 'unavailable');
+  assert.equal(selectError.diagnostics.recallStages.ranking.invocationCount, 0);
+  assert.equal(selectError.diagnostics.recallStages.recall.records[0].status, 'failed');
+  assert.equal(selectError.generation.run.arms[0].status, 'failed');
+
+  const rankError = await run('recall-rank-error', { generation: scriptedGeneration({
+    rank: () => ({ malformed: true }),
+  }) });
+  assert.equal(rankError.diagnostics.recallStages.selection.records[0].status, 'completed');
+  assert.equal(rankError.diagnostics.recallStages.ranking.records[0].status, 'unavailable');
+  assert.equal(rankError.diagnostics.recallStages.recall.records[0].status, 'failed');
+  assert.equal(rankError.generation.run.arms[0].status, 'failed');
+
+  for (const item of [emptyMap, emptySelection, emptyRanking, packing]) {
+    assert.equal(item.report.summary.generated, 1);
+    assert.equal(item.report.summary.scored, 1);
+    assert.equal(item.diagnostics.recallStages.schemaVersion, RECALL_STAGE_OBSERVATION_VERSION);
+    assert.equal(item.diagnostics.recallStages.closed, true);
+    assert.equal(item.diagnostics.recallStages.recall.records[0].status, 'completed');
+    assert.equal(JSON.stringify(item.report).includes('recallStages'), false);
+  }
+  for (const item of [selectError, rankError]) {
+    assert.equal(item.report.summary.generated, 1);
+    assert.equal(item.diagnostics.recallStages.closed, true);
+    assert.equal(JSON.stringify(item.diagnostics).includes('"malformed":true'), false);
+  }
+});
+
+test('O1/O5: nonempty actual-core observation preserves frozen-adapter payloads, output and scoring', async t => {
+  const f = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const item = f.pilot.cases[0];
+  const namespace = { ownerId: OWNER_ID, scope: 'project', projectId: item.question.question_id };
+  const plan = planLongMemEvalCase({ history: item.history, namespace });
+  const source = plan.batches[0].sourceMap[0];
+  const seedPath = path.join(f.root, 'recall-stage-seed.sqlite');
+  const seed = openMemoryCore({ path: seedPath });
+  const admitted = seed.admit({ namespace, memory: { content: 'private generated interpretation', kind: 'fact' },
+    receipts: [{ client: INGESTION_CLIENT, sessionId: plan.batches[0].captureInput.sessionId,
+      eventId: source.messageId, role: source.role,
+      excerpt: canonicalStoredReceiptExcerpt(source.normalizedContent) }] });
+  assert.equal(admitted.ok, true, JSON.stringify(admitted));
+  const memoryRef = admitted.value.memory;
+  seed.close();
+  const observedPath = path.join(f.root, 'observed.sqlite');
+  const baselinePath = path.join(f.root, 'baseline.sqlite');
+  await cp(seedPath, observedPath);
+  await cp(seedPath, baselinePath);
+
+  const observedSession = f.session();
+  const baselineSession = f.session();
+  assert.equal(Object.isFrozen(observedSession.memoryModel), true);
+  assert.equal(Object.isFrozen(baselineSession.memoryModel), true);
+  const collector = createRecallStageCollector();
+  const observedCore = openMemoryCore({ path: observedPath,
+    model: collector.observeModel(observedSession.memoryModel) });
+  const baselineCore = openMemoryCore({ path: baselinePath, model: baselineSession.memoryModel });
+  const captureResponse = { ok: true, value: { duplicate: false,
+    admission: { memories: [{ id: memoryRef.id, revision: memoryRef.revision }], suppressedCount: 0, indexRevision: 1 },
+    classification: { status: 'skipped', reason: 'already_filed' } } };
+  const comparisonCore = (core, observed = false) => ({ ...core,
+    list: () => ({ ok: true, value: { memories: [], exhausted: true, nextCursor: null } }),
+    capture: () => captureResponse,
+    ...(observed ? { recall: (...args) => collector.observeRecall(() => Reflect.apply(core.recall, core, args)) } : {}),
+  });
+  const compare = async (core, session) => {
+    const run = await runPublicComparison({ history: item.history, question: item.question, namespace, core,
+      answer: session.answer, countTokens: session.countTokens, answerModel: session.stages.answer.model,
+      limits: PUBLIC_PILOT_LIMITS });
+    const score = await scorePublicComparison({ run, evaluator: pilotEvaluatorFor(f.pilot, item.question.question_id),
+      judge: session.judge, judgeTimeoutMs: 90_000 });
+    return { run, score };
+  };
+  const observedCallStart = f.calls.length;
+  const observed = await compare(comparisonCore(observedCore, true), observedSession);
+  const observedCalls = f.calls.slice(observedCallStart);
+  collector.close();
+  const baselineCallStart = f.calls.length;
+  const baseline = await compare(comparisonCore(baselineCore), baselineSession);
+  const baselineCalls = f.calls.slice(baselineCallStart);
+  observedCore.close();
+  baselineCore.close();
+  observedSession.close();
+  baselineSession.close();
+
+  const withoutLatency = value => JSON.parse(JSON.stringify(value, (key, entry) =>
+    key === 'latencyMs' ? undefined : entry));
+  assert.deepEqual(withoutLatency(observed.run), withoutLatency(baseline.run));
+  assert.deepEqual(observed.score, baseline.score);
+  assert.deepEqual(observedCalls.map(call => [call.pathname, call.rawBody]),
+    baselineCalls.map(call => [call.pathname, call.rawBody]));
+  assert.equal(observed.run.arms[0].diagnostics.retrieval.candidateCount, 1);
+  const snapshot = collector.snapshot();
+  assert.equal(snapshot.selection.records[0].returnedRefCount, 1);
+  assert.equal(snapshot.ranking.records[0].inputCandidateCount, 1);
+  assert.equal(snapshot.ranking.records[0].returnedRefCount, 1);
+  assert.deepEqual(snapshot.recall.records[0].mapExhausted, [true]);
+  assert.deepEqual(snapshot.recall.records[0].fetchExhausted, [true]);
+  assert.equal(JSON.stringify(snapshot).includes('private generated interpretation'), false);
+  assert.equal(JSON.stringify(snapshot).includes(memoryRef.id), false);
 });
 
 test('CAO2/CAO3: capture projection distinguishes outcomes and rejects malformed or hostile metadata', () => {

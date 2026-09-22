@@ -26,6 +26,7 @@ import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
   runPublicComparison } from '../longmemeval/public-comparison.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from '../longmemeval/validation.mjs';
 import { PILOT_SCHEMA_VERSION, pilotEvaluatorFor, readRegularFile } from './pilot.mjs';
+import { createRecallStageCollector } from './recall-stage-observations.mjs';
 import { experimentPolicy } from './session.mjs';
 
 export const PUBLIC_PILOT_SCHEMA_VERSION = 'cairn-longmemeval-public-pilot-v1';
@@ -313,7 +314,7 @@ const createCaseDiagnosticCollector = (available) => {
     } catch { /* Observation never changes benchmark behavior. */ }
   };
   const close = () => { closed = true; };
-  const snapshot = (questionId, captured, captureAdmission) => {
+  const snapshot = (questionId, captured, captureAdmission, recallStages) => {
     const completions = new Map(answerRecords.map((entry) => [entry.answerIndex, entry.finishReason]));
     return deepFreeze({
       schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION,
@@ -337,6 +338,7 @@ const createCaseDiagnosticCollector = (available) => {
         })),
       },
       captureAdmission,
+      recallStages,
     });
   };
   return Object.freeze({ observe, close, snapshot });
@@ -822,15 +824,18 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   const diagnosticScope = diagnosticScopes.get(session);
   const diagnostics = createCaseDiagnosticCollector(diagnosticScope !== undefined);
   const captureAdmission = createCaptureAdmissionCollector();
+  const recallStages = createRecallStageCollector();
   try {
-    core = openMemoryCore({ path: files.database, model: session.memoryModel });
-    const observedCore = { ...core, capture: input => captureAdmission.capture(() => core.capture(input)) };
+    core = openMemoryCore({ path: files.database, model: recallStages.observeModel(session.memoryModel) });
+    const observedCore = { ...core,
+      capture: input => captureAdmission.capture(() => core.capture(input)),
+      recall: (...args) => recallStages.observeRecall(() => Reflect.apply(core.recall, core, args)) };
     const operation = () => runPublicComparison({ history: item.history, question: item.question, namespace, core: observedCore,
       answer, countTokens: session.countTokens, answerModel: session.stages.answer.model, limits, answerTemplateVersion });
     run = await (diagnosticScope ? diagnosticScope(diagnostics.observe, operation) : operation());
     if (run && caseTimeoutIdentity) run = deepFreeze({ ...run, caseTimeoutIdentity });
   } catch (caught) { error = safeError(caught, 'generation_failed'); }
-  finally { captureAdmission.close(); diagnostics.close(); core?.close(); }
+  finally { captureAdmission.close(); recallStages.close(); diagnostics.close(); core?.close(); }
   const timeout = caseScopeSnapshot?.();
   const timedOut = timeout?.status === 'timed_out';
   const database = await databaseMeasurement(files.database);
@@ -844,7 +849,8 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   const attempts = session.attempts().slice(attemptStart);
   const ledgerAfter = ledgerSummary(session.getState());
   labelCapturedArms(captured, run ?? null);
-  const diagnosticSnapshot = diagnostics.snapshot(questionId, captured, captureAdmission.snapshot());
+  const diagnosticSnapshot = diagnostics.snapshot(questionId, captured, captureAdmission.snapshot(),
+    recallStages.snapshot());
   await writePrivateJson(files.generation, generation);
   await writePrivateJson(files.answerRequests, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
     ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),

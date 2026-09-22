@@ -112,8 +112,8 @@ the live-process-only restriction; repeated dry-runs are safe.
   in send order including packed evidence, each with the arm that sent it in
   `armGuess`, how that label was decided in `armLabelMethod`, timings and the
   guard outcome), `diagnostics.json` (bounded content-free model diagnostics,
-  per-answer `stop`/`length` completion diagnostics and capture-admission
-  observations), `truncation.json`,
+  per-answer `stop`/`length` completion diagnostics, capture-admission
+  observations and content-free recall-stage observations), `truncation.json`,
   `accounting.json` (guard attempts for the case plus ledger state before and
   after), `timings.json`, `scoring.json` (the official-style record plus its own
   judge accounting, or a blocked or failed marker).
@@ -153,6 +153,36 @@ records only `finishReason: stop|length` or `availability: unavailable`.
 The ordinary answer callback remains exactly `{text,usage}`, and neither
 diagnostic changes answer text, score input, request bodies, limits, arm order,
 guard accounting or retry policy.
+
+Fresh generated cases also contain `recallStages`, versioned as
+`cairn-recall-stage-observation-v1`. Its selection section retains at most the
+core's two selection invocations. Each row contains only its ordinal; a closed
+`completed|failed|unavailable` status; visible map, item, filed-ref and unfiled
+counts; per-map exhaustion booleans; model-returned ref count; and cumulative
+unique model-returned ref count. The ranking and final-recall sections retain at
+most one invocation. Ranking records input and model-returned ref counts; recall
+records the existing per-namespace `mapExhausted` and `fetchExhausted` booleans.
+Every section reports its record limit, invocation/drop counts and an overflow
+flag. If the bounded invocation counter itself overflows, exact invocation/drop
+counts become `null` rather than silently capped.
+
+These are observations at different boundaries. A completed selection or rank
+row means its adapter-returned shape supplied observable bounded refs; it is
+recorded before core validates membership, uniqueness, freshness, namespace
+limits or output budgets. It is not a count of core-accepted, correct or relevant
+memories. The existing retrieval `candidateCount` remains the number of memories
+returned after final core ranking and authoritative reread, while
+`selectedCount` remains the number packed into the Cairn answer request. A false
+traversal-exhaustion flag means the bounded traversal did not prove completion;
+`budget_exhausted` does not mean experiment money, requests or provider tokens
+were exhausted.
+
+The observer reads only own data properties needed for the numeric projection;
+it does not invoke request/result getters or `toJSON`. Memory/source identifiers
+are compared only transiently to count unique returned refs and are never
+retained or hashed. Malformed or inaccessible shapes yield `unavailable` and
+`null`, not zero. Closing changes any still-pending retained row to unavailable,
+and later settlement cannot mutate the frozen artifact or another case.
 
 Fresh generated cases also contain the separately versioned optional
 `captureAdmission` subsection:
@@ -197,11 +227,12 @@ benchmark session installed the observation hook; an empty record list does not
 prove that no model failure occurred or that every callback was delivered.
 Legacy/custom sessions report those sections as `unavailable`. Old run
 directories and blocked cases may have no diagnostic file or no
-`captureAdmission` subsection at all, which is also unavailable rather than an
-observed zero. Collection is scoped to the asynchronous case invocation and to
-its session. Work created in an older case remains bound to that closed
-collector, so a late model event or capture settlement is ignored rather than
-attached to the next case. Closing and snapshotting do not claim completeness.
+`captureAdmission` or `recallStages` subsection at all, which is also unavailable
+rather than an observed zero. Collection is scoped to the asynchronous case
+invocation and to its session. Work created in an older case remains bound to
+that closed collector, so a late model event, model result, recall result or
+capture settlement is ignored rather than attached to the next case. Closing
+and snapshotting do not claim completeness.
 
 ## Legacy/default resume
 
