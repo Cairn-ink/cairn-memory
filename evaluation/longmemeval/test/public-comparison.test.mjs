@@ -217,6 +217,64 @@ test('OC3/OI1: real core source-evidence receipts, not generated memory content'
   assert.equal(run.arms[0].diagnostics.retrieval.selectedCount, 1);
 });
 
+test('C1/C2: public comparison matches the actual core canonical stored receipt', async (t) => {
+  const fixtures = [
+    { name: 'short-source', source: 'Short synthetic receipt.', expected: 'Short synthetic receipt.' },
+    { name: 'normalized-whitespace', source: '  Alpha\t\nÅ  ', expected: 'Alpha Å' },
+    { name: 'redacted-source', source: `Credential ${['sk', 'abcdefghijklmnop'].join('-')} stays private.`,
+      expected: 'Credential [REDACTED] stays private.' },
+    { name: 'unicode-at-boundary', source: `${'x'.repeat(798)}😀y`, expected: `${'x'.repeat(798)}😀` },
+    { name: 'unicode-over-boundary', source: `${'x'.repeat(799)}😀y`, expected: 'x'.repeat(799) },
+    { name: 'non-whitespace-boundary', source: `${'x'.repeat(799)}zy`, expected: `${'x'.repeat(799)}z` },
+    { name: 'whitespace-boundary', source: `${'x'.repeat(799)} y`, expected: 'x'.repeat(799) },
+  ];
+  for (const fixture of fixtures) {
+    const root = mkdtempSync(join(tmpdir(), 'cairn-public-receipt-canonical-'));
+    let core;
+    t.after(() => { core?.close(); rmSync(root, { recursive: true, force: true }); });
+    const fixtureId = `${sourceId}-${fixture.name}`;
+    const fixtureQuestionId = opaqueQuestionId(fixtureId);
+    const fixtureNamespace = { ownerId: 'public-comparison-tests', scope: 'project',
+      projectId: fixtureQuestionId };
+    const fixtureHistory = { question_id: fixtureQuestionId, sessions: [{ session_index: 0,
+      session_id: opaqueSessionId(fixtureId, 0), date: 'Tuesday', turns: [{
+        turn_id: stableTurnIdV2(fixtureId, 0, 0), role: 'user', content: fixture.source,
+      }] }] };
+    const model = { contextWindow: 8192, countTokens: () => 1,
+      extract: () => ({ items: [{ content: 'synthetic memory', kind: 'fact', confidence: 1,
+        sourceIndices: [0] }] }),
+      classify: ({ input }) => ({ items: input.memories.map((memory) => ({ memoryId: memory.id,
+        parentIds: [], newL1: { title: 'Synthetic', parentL2Ids: [] } })) }),
+      select: ({ input }) => ({ refs: input.maps.flatMap((page) => page.items.map((item) =>
+        item.type === 'unfiled' ? { namespaceIndex: page.namespaceIndex, ...item.ref }
+          : item.type === 'ref' && item.ref.childType === 'memory'
+            ? { namespaceIndex: page.namespaceIndex, memoryId: item.ref.childId,
+              revision: item.ref.childRevision } : null).filter(Boolean)) }),
+      rank: ({ input }) => ({ refs: input.candidates.slice(0, input.limit).map((item) => ({
+        namespaceIndex: item.namespaceIndex, memoryId: item.memory.id, revision: item.memory.revision,
+      })) }),
+    };
+    core = openMemoryCore({ path: join(root, 'memory.sqlite'), model });
+    const answerRequests = [];
+    const run = await runPublicComparison({ history: fixtureHistory,
+      question: { question_id: fixtureQuestionId, text: 'Synthetic question?', date: 'Saturday' },
+      namespace: fixtureNamespace, core,
+      answer: async ({ request }) => { answerRequests.push(request); return { text: 'synthetic answer' }; },
+      countTokens: () => 1, answerModel: 'synthetic-answer-v1', limits: { ...limits },
+      answerTemplateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2 });
+    assert.equal(run.arms[0].status, 'completed', `${fixture.name}: ${run.arms[0].reason}`);
+    assert.equal(answerRequests.length, 3);
+    const evidence = JSON.parse(answerRequests[0].messages[1].content).evidence;
+    assert.equal(evidence[0].receipts[0].excerpt, fixture.expected);
+    const listed = core.list({ namespace: fixtureNamespace, statuses: ['filed', 'unfiled'], limit: 1 });
+    assert.equal(listed.ok, true);
+    const detail = core.get({ namespace: fixtureNamespace, memoryId: listed.value.memories[0].id,
+      receiptLimit: 100 });
+    assert.equal(detail.ok, true);
+    assert.equal(detail.value.receipts[0].excerpt, fixture.expected);
+  }
+});
+
 const sourceCore = (mutateGet = () => {}, mutateRecall = () => {}) => {
   let firstCapture;
   return fakeCore({
@@ -242,18 +300,34 @@ const sourceCore = (mutateGet = () => {}, mutateRecall = () => {}) => {
   });
 };
 
-test('OC3: authoritative get and recall receipt faults each block Cairn only', async () => {
+test('C3/OC3: authoritative get and recall receipt faults each block Cairn only', async () => {
   const valid = await runPublicComparison(options({ core: sourceCore() }));
   assert.equal(valid.arms[0].status, 'completed');
   const cases = [
+    [(detail) => { detail.memory.id = 'other'; }, () => {}, 'source_get_mismatch'],
     [(detail) => { detail.memory.namespace.ownerId = 'other'; }, () => {}, 'source_get_mismatch'],
     [(detail) => { detail.memory.revision = 2; }, () => {}, 'source_get_mismatch'],
     [(detail) => { detail.memory.state = 'historical'; }, () => {}, 'source_get_mismatch'],
     [(detail) => { detail.receipts[0].excerpt = 'wrong'; }, () => {}, 'unknown_or_mismatched_receipt'],
     [(detail) => { detail.receipts[0].client = 'wrong'; }, () => {}, 'unknown_or_mismatched_receipt'],
+    [(detail) => { detail.receipts[0].sessionId = 'wrong'; }, () => {}, 'unknown_or_mismatched_receipt'],
+    [(detail) => { detail.receipts[0].eventId = 'wrong'; }, () => {}, 'unknown_or_mismatched_receipt'],
+    [(detail) => { detail.receipts[0].role = 'assistant'; }, () => {}, 'unknown_or_mismatched_receipt'],
+    [(detail) => { detail.receipts[0].excerpt += ' '; },
+      (recall) => { recall.memories[0].receipts[0].excerpt += ' '; }, 'unknown_or_mismatched_receipt'],
+    [(detail) => { detail.receipts[0].excerpt = 'The launch color is amber'; },
+      (recall) => { recall.memories[0].receipts[0].excerpt = 'The launch color is amber'; },
+      'unknown_or_mismatched_receipt'],
+    [(detail) => { detail.receipts[0].excerpt = 'The launch color is blue.'; },
+      (recall) => { recall.memories[0].receipts[0].excerpt = 'The launch color is blue.'; },
+      'unknown_or_mismatched_receipt'],
     [(detail) => { detail.exhausted = false; detail.nextReceiptCursor = 'cursor'; }, () => {}, 'source_get_mismatch'],
     [(detail) => { detail.memory.receiptCount = 2; }, () => {}, 'source_get_mismatch'],
     [() => {}, (recall) => { recall.memories[0].receiptCount = 2; }, 'invalid_recall_provenance'],
+    [() => {}, (recall) => { recall.memories[0].receipts[0].id = 'other'; },
+      'unknown_or_mismatched_receipt'],
+    [() => {}, (recall) => { recall.memories[0].receipts[0].role = 'assistant'; },
+      'unknown_or_mismatched_receipt'],
     [() => {}, (recall) => { recall.memories[0].receipts[0].excerpt = 'wrong'; }, 'unknown_or_mismatched_receipt'],
     [(detail) => {
       detail.memory.receiptCount = 2;
@@ -264,10 +338,13 @@ test('OC3: authoritative get and recall receipt faults each block Cairn only', a
     }, 'duplicate_receipt'],
   ];
   for (const [mutateGet, mutateRecall, reason] of cases) {
-    const run = await runPublicComparison(options({ core: sourceCore(mutateGet, mutateRecall) }));
+    const answerCalls = [];
+    const run = await runPublicComparison(options({ core: sourceCore(mutateGet, mutateRecall),
+      answer: async ({ request }) => { answerCalls.push(request); return { text: 'amber' }; } }));
     assert.equal(run.arms[0].status, 'blocked', reason);
     assert.equal(run.arms[0].reason, reason);
     assert.equal(run.arms[0].diagnostics.stage, 'provenance');
+    assert.equal(answerCalls.length, 2, reason);
     assert.deepEqual(run.arms.slice(1).map((item) => item.status), ['completed', 'completed']);
   }
 });

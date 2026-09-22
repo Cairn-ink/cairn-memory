@@ -84,6 +84,12 @@ each receipt by exact ID to the core detail and by exact event ID to the
 ingestion source map. Client, session, role, and normalized bounded excerpt
 must match exactly. Unknown, partial, duplicate, mismatched, or stale
 provenance blocks Cairn. Content similarity is not used as source identity.
+The expected excerpt follows the core's one canonical storage path: capture
+normalizes and truncates the source view to complete code points, then admission
+canonicalizes that bounded excerpt again. That second pass can trim whitespace
+exposed at the 800-UTF-16-unit boundary. The comparison derives that one exact
+stored form with the same two bounded operations; it does not accept a prefix,
+substring, whitespace-insensitive match, or alternate normalization.
 Selected answer evidence consists of whole memory receipt items; packing can
 omit a whole item for context fit, never an individual receipt. Retrieval and
 packing counts, omissions, retrieved and packed opaque session IDs, and

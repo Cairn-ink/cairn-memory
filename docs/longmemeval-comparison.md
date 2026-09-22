@@ -76,6 +76,14 @@ The scorer accepts both older outcomes without `errorStage` and new bounded
 stage-bearing outcomes. The extra field does not change scores or eligibility;
 unknown stages and inconsistent stage/status/error combinations are rejected.
 
+Cairn evidence accepts only the core's exact stored receipt excerpt. Capture
+normalizes and truncates the source view to complete code points; admission then
+canonicalizes that bounded excerpt again, which can trim whitespace exposed at
+the 800-UTF-16-unit boundary. The comparator derives that single stored form
+with the same two bounded operations. It does not accept prefixes, substrings,
+whitespace-insensitive matches or alternate normalizations, and its existing
+event, session, role and namespace checks remain unchanged.
+
 Lexical ranking counts unique overlapping question/turn tokens after NFKC,
 lowercasing and Unicode letter/number tokenization. Zero-overlap turns are not
 candidates. Ties retain source order; `lexicalLimit` bounds the ranked candidates

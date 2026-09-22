@@ -1,5 +1,6 @@
 import { INGESTION_CLIENT, ingestLongMemEvalCase, planLongMemEvalCase,
   projectIngestionFailure } from './ingestion.mjs';
+import { canonicalStoredReceiptExcerpt } from './receipt-canonicalization.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const PUBLIC_COMPARISON_SCHEMA_VERSION = 'cairn-longmemeval-public-comparison-v1';
@@ -108,11 +109,6 @@ const arm = (name, status, reason, diagnostics = {}, answer = null) =>
   deepFreeze({ name, status, reason, answer, diagnostics });
 const blockedArms = (reason, diagnostics) => ARM_NAMES.map((name) =>
   arm(name, 'blocked', reason, { preflight: diagnostics }));
-const receiptExcerpt = (text) => {
-  let value = '';
-  for (const point of text) { if (value.length + point.length > 800) break; value += point; }
-  return value;
-};
 const sessionIds = (items) => [...new Set(items.flatMap((item) =>
   item.receipts.map((receipt) => receipt.source.sessionId)))];
 const sameNamespace = (value, expected) => isPlainObject(value)
@@ -179,7 +175,7 @@ function sourceCandidates(recall, snapshot) {
         || authoritative.client !== INGESTION_CLIENT
         || authoritative.sessionId !== mapped.batch.captureInput.sessionId
         || authoritative.role !== mapped.source.role
-        || authoritative.excerpt !== receiptExcerpt(mapped.source.normalizedContent)
+        || authoritative.excerpt !== canonicalStoredReceiptExcerpt(mapped.source.normalizedContent)
         || sourceReceipt.role !== authoritative.role
         || sourceReceipt.excerpt !== authoritative.excerpt)
         return { error: 'unknown_or_mismatched_receipt' };
