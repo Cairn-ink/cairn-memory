@@ -9,7 +9,8 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import { reopenExperimentBudget } from '../experiment-budget/index.mjs';
-import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability } from '../experiment-budget/request-guard.mjs';
+import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability,
+  loadBenchmarkRequestAllowance } from '../experiment-budget/request-guard.mjs';
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { opaqueQuestionId } from '../longmemeval/prepare.mjs';
 import { PUBLIC_ANSWER_TEMPLATE_VERSION,
@@ -41,6 +42,8 @@ Required:
   --output <dir>              new or resumable private run directory (0700); not needed with --dry-run
 
 Optional:
+  --request-allowance-authorization-id <id>
+                              load an already-issued benchmark request allowance; never increases the cap
   --cases <id,id,...>         source or opaque question ids to run, kept in roster order; default all
   --sidecar <file>            reference-rendering sidecar (render-reference-sidecar.py); needs --sidecar-sha256
   --sidecar-sha256 <hex>      expected sidecar digest
@@ -69,7 +72,7 @@ Exit codes: 0 done, 1 refused or failed (code on stderr), 2 missing OPENAI_API_K
 
 const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output', '--cases', '--sidecar',
   '--sidecar-sha256', '--batch-cap-micro-usd', '--batch-request-cap', '--run-commit', '--exclusions-file',
-  '--answer-template-version', '--merge'];
+  '--answer-template-version', '--request-allowance-authorization-id', '--merge'];
 VALUE_FLAGS.push('--case-timeout-policy', '--case-authorization-id', '--execution-id',
   '--expected-request-count', '--expected-reserved-micro-usd');
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
@@ -219,8 +222,18 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     }
     const policy = experimentPolicy();
     const stages = benchmarkStagePolicy();
-    const benchmarkExtension = authorizeBenchmarkExtension({ ledger, policy,
-      authorizationId: values['--authorization-id'], stages });
+    const requestAllowanceAuthorizationId = values['--request-allowance-authorization-id'];
+    if (requestAllowanceAuthorizationId !== undefined
+      && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(requestAllowanceAuthorizationId)) {
+      fail('invalid_request_allowance_identifier');
+    }
+    const benchmarkExtension = requestAllowanceAuthorizationId === undefined
+      ? authorizeBenchmarkExtension({ ledger, policy, authorizationId: values['--authorization-id'], stages })
+      : loadBenchmarkRequestAllowance({ ledger, policy,
+        benchmarkAuthorizationId: values['--authorization-id'],
+        authorizationId: requestAllowanceAuthorizationId, stages });
+    const benchmarkAuthorizationId = benchmarkExtension.originalBenchmarkExtension?.authorizationId
+      ?? benchmarkExtension.authorizationId;
     const pilot = await loadPreparedPilot({ directory: values['--prepared'] });
     const caseIds = selectCases(pilot, values['--cases']);
     const ledgerState = ledgerSnapshot(ledger);
@@ -261,9 +274,19 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     const summary = { pilot: pilot.identity, caseIds, ...answerTemplateIdentity,
       models: { answer: stages.answer.model, judge: stages.judge.model },
       limits: PUBLIC_PILOT_LIMITS, judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, caps: caps ?? null,
-      extension: { authorizationId: benchmarkExtension.authorizationId, checkpoint: benchmarkExtension.checkpoint },
+      extension: { authorizationId: benchmarkAuthorizationId, checkpoint: benchmarkExtension.checkpoint },
       ledger: ledgerState, projections, totals, fits, runCommit,
       exclusionCount: exclusionRegistry ? exclusionRegistry.length : null };
+    if (requestAllowanceAuthorizationId !== undefined) {
+      summary.requestAllowance = {
+        version: benchmarkExtension.version,
+        authorizationId: benchmarkExtension.authorizationId,
+        priorRequestCap: benchmarkExtension.priorLedger.requestCap,
+        requestCap: benchmarkExtension.ledger.requestCap,
+        checkpoint: benchmarkExtension.checkpoint,
+        historicalDigest: benchmarkExtension.historicalDigest,
+      };
+    }
     if (caseTimeoutIdentity) {
       summary.caseTimeoutIdentity = caseTimeoutIdentity;
       summary.caseTimeoutRestriction = 'live-process-only; one-shot; no resume or retry';
@@ -292,7 +315,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     try {
       report = await runPublicPilot({ pilot, session, directory: values['--output'], limits: PUBLIC_PILOT_LIMITS,
         judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, referenceRenderings, caps, caseIds, answerTemplateVersion,
-        manifest: { runCommit, authorizationId: benchmarkExtension.authorizationId,
+        manifest: { runCommit, authorizationId: benchmarkAuthorizationId,
           extensionCheckpoint: benchmarkExtension.checkpoint, ledgerRunId: ledger.runId,
           sidecarSha256: sidecarSha256 ?? null, exclusionRegistry, projections, totals },
         onCase: (progress) => { stdout.write(`${JSON.stringify({ progress })}\n`); } });

@@ -449,6 +449,39 @@ framing and output bounds before any live use. Prices in synthetic tests are
 test inputs, not current vendor quotes. Unknown usage is not zero, and counted
 input tokens do not by themselves establish a count endpoint's charge.
 
+### Benchmark request allowance
+
+`authorizeBenchmarkRequestAllowance({oldLedger, policy, benchmarkExtension,
+authorizationId, newRequestCap, expectedCheckpoint})` is a separate operator
+transition for an existing benchmark grant. It accepts a strictly higher finite
+request cap while keeping the ledger directory, run ID and micro-USD limit
+identical. The original policy and benchmark files are not replaced. The new
+`benchmark-request-allowance-v1` record embeds both ledger configurations, the
+exact original benchmark grant and unchanged stage policy, the exact settled
+checkpoint, and a SHA-256 digest of the ordered five-field historical attempt
+prefix. Terminal unknown outcomes remain charged; unsettled or overrun history
+is refused.
+
+The derived file is private, create-only and singleton-scoped to the validated
+original benchmark authorization. Under the ledger writer lock it is fsynced,
+including the directory, before a conditional SQLite transaction changes only
+`run_config.request_cap`. A complete durable record with the unchanged old cap
+may finish that same interrupted metadata transition; a partial, unsafe or
+mismatched record is retained and rejected. A committed identical transition is
+idempotent. Equality, reduction, chaining, altered history or a different
+authorization fails closed. This recovery is not a provider retry, refund or
+case resume.
+
+`loadBenchmarkRequestAllowance({ledger, policy, benchmarkAuthorizationId,
+authorizationId, stages})` is read-only. It resolves exactly the deterministic
+file for the named original benchmark authorization, verifies both grants and
+the historical prefix, and returns the frozen derived token. Passing that token
+to the benchmark or case-deadline guard grants only the original answer/judge
+stages and their original models, rates, bounds and halt rules. Older handles
+retain their old ledger configuration and fail before transport after the cap
+transition. Old case capabilities remain cap-bound and consumed claims never
+revive; a new case execution requires a fresh one-shot capability.
+
 All potentially paid routes must actually use this guard. Independent host
 connections, background jobs or a retrying injected transport can bypass its
 accounting. Inject a one-attempt transport, disable hidden SDK retries, and

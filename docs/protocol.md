@@ -74,6 +74,16 @@ consistency binding, not anonymization; attempt identifiers and cost/outcome
 metadata remain sensitive local experiment data. The one-shot claim grants no
 new allowance and is never automatically removed or reset.
 
+The private benchmark request-allowance record changes only the finite request
+cap on that same ledger while preserving its run ID, monetary ceiling, ordered
+attempt history, outcomes and reservations. It contains the old/new ledger
+configuration, existing policy and benchmark grant, authorization IDs,
+checkpoint counters and the same content-free five-field accounting digest.
+The digest and IDs remain sensitive local experiment metadata, not anonymized
+telemetry. The record contains no key, prompt, source, answer, provider body or
+raw error, grants no new model/method/stage, and cannot reset, refund, retry or
+resume an old execution.
+
 The public-pilot runner can explicitly bind that capability to one process-
 local session and exact prepared roster. The new fields retain only a bounded
 policy/execution identity and fixed timeout/blocked enums, never the capability

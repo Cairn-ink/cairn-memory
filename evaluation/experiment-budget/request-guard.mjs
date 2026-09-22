@@ -51,6 +51,7 @@ const BASIS_MODELS_KIND = Object.freeze({
 const BENCHMARK_KIND = Object.freeze({
   filename: 'experiment-benchmark-extension.json', method: 'benchmark',
 });
+const BENCHMARK_REQUEST_ALLOWANCE_VERSION = 'benchmark-request-allowance-v1';
 const CASE_DEADLINE_VERSION = 'case-deadline-v1';
 const CASE_PHASES = Object.freeze(['generation', 'scoring']);
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
@@ -624,6 +625,24 @@ function writeAuthorizationBinding(directory, filename, authorization) {
   try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
 }
 
+function syncAuthorizationBinding(directory, filename, expected) {
+  readBinding(filename, expected);
+  let entry;
+  let descriptor;
+  try {
+    entry = lstatSync(filename);
+    if (entry.isSymbolicLink() || !entry.isFile()
+      || (process.platform !== 'win32' && (entry.mode & 0o777) !== 0o600)) fail('unsafe_policy_binding');
+    descriptor = openSync(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const opened = fstatSync(descriptor);
+    if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino || opened.nlink !== 1
+      || (process.platform !== 'win32' && (opened.mode & 0o777) !== 0o600)) fail('unsafe_policy_binding');
+    fsyncSync(descriptor);
+  } finally { if (descriptor !== undefined) closeSync(descriptor); }
+  const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+  try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+}
+
 // Provisioning is separate from transport construction: existing guards never opt in implicitly.
 export function authorizeExtractionModelExtension(options) {
   exactKeys(options, ['ledger', 'policy', 'authorizationId']);
@@ -1112,7 +1131,7 @@ function benchmarkConfiguration(options) {
   return { version, authorizationId, ledger, policy, method: BENCHMARK_KIND.method, stages: deepFreeze(stages) };
 }
 
-function verifyBenchmarkExtension(extension, ledger, policy) {
+function verifyOriginalBenchmarkExtension(extension, ledger, policy) {
   exactKeys(extension, ['version', 'authorizationId', 'ledger', 'policy', 'method', 'stages', 'checkpoint'],
     'invalid_extension');
   const expected = benchmarkConfiguration({ ledger, policy,
@@ -1124,6 +1143,233 @@ function verifyBenchmarkExtension(extension, ledger, policy) {
     || canonical(extension) !== canonical({ ...expected, checkpoint: extension.checkpoint })) fail('invalid_extension');
   readBinding(path.join(expected.ledger.directory, BINDING_FILENAME), { version: 1, runId: ledger.runId, policy });
   readBinding(path.join(expected.ledger.directory, BENCHMARK_KIND.filename), extension);
+}
+
+function requestAllowanceFilename(directory, benchmarkAuthorizationId) {
+  return path.join(directory, `experiment-benchmark-request-allowance-${benchmarkAuthorizationId}.json`);
+}
+
+function requestAllowanceRecord(configuration, digest) {
+  return {
+    version: BENCHMARK_REQUEST_ALLOWANCE_VERSION,
+    authorizationId: configuration.authorizationId,
+    priorLedger: configuration.priorLedger,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    method: BENCHMARK_KIND.method,
+    stages: configuration.originalBenchmarkExtension.stages,
+    originalBenchmarkExtension: configuration.originalBenchmarkExtension,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+  };
+}
+
+function snapshotRequestAllowanceAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['oldLedger', 'policy', 'benchmarkExtension', 'authorizationId',
+    'newRequestCap', 'expectedCheckpoint'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy, fetchImpl: () => {} });
+  const priorLedger = structuredClone(snapshot.oldLedger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  const originalBenchmarkExtension = snapshotExtension(snapshot.benchmarkExtension);
+  if (typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1)
+    || snapshot.newRequestCap <= priorLedger.requestCap) fail('invalid_extension');
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > priorLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > priorLedger.limitMicroUsd) fail('invalid_extension');
+  verifyOriginalBenchmarkExtension(originalBenchmarkExtension, priorLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < originalBenchmarkExtension.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < originalBenchmarkExtension.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, priorLedger,
+    ledger: { ...priorLedger, requestCap: snapshot.newRequestCap }, policy,
+    originalBenchmarkExtension, checkpoint: snapshot.expectedCheckpoint });
+}
+
+function verifyRequestAllowance(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method', 'stages',
+    'originalBenchmarkExtension', 'checkpoint', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_REQUEST_ALLOWANCE_VERSION
+    || typeof extension.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(extension.authorizationId)
+    || typeof extension.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(extension.historicalDigest)) fail('invalid_extension');
+  try {
+    validateConstructor({ ledger: extension.priorLedger, policy: extension.policy, fetchImpl: () => {} });
+    validateConstructor({ ledger: extension.ledger, policy: extension.policy, fetchImpl: () => {} });
+  } catch { fail('invalid_extension'); }
+  const priorLedger = structuredClone(extension.priorLedger);
+  const currentLedger = structuredClone(extension.ledger);
+  const expectedLedger = structuredClone(ledger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  currentLedger.directory = path.resolve(currentLedger.directory);
+  expectedLedger.directory = path.resolve(expectedLedger.directory);
+  if (canonical(currentLedger) !== canonical(expectedLedger)
+    || canonical(extension.policy) !== canonical(policy)
+    || currentLedger.directory !== priorLedger.directory
+    || currentLedger.runId !== priorLedger.runId
+    || currentLedger.limitMicroUsd !== priorLedger.limitMicroUsd
+    || currentLedger.requestCap <= priorLedger.requestCap
+    || extension.method !== BENCHMARK_KIND.method) fail('invalid_extension');
+  const original = snapshotExtension(extension.originalBenchmarkExtension);
+  verifyOriginalBenchmarkExtension(original, priorLedger, policy);
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount)
+    || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > priorLedger.requestCap
+    || extension.checkpoint.reservedMicroUsd > priorLedger.limitMicroUsd
+    || extension.checkpoint.requestCount < original.checkpoint.requestCount
+    || extension.checkpoint.reservedMicroUsd < original.checkpoint.reservedMicroUsd
+    || canonical(extension.stages) !== canonical(original.stages)
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.benchmarkAuthorizationId !== undefined
+      && original.authorizationId !== expected.benchmarkAuthorizationId)) fail('invalid_extension');
+  readBinding(requestAllowanceFilename(currentLedger.directory, original.authorizationId), extension);
+  return extension;
+}
+
+function verifyBenchmarkExtension(extension, ledger, policy) {
+  if (extension?.version === BENCHMARK_REQUEST_ALLOWANCE_VERSION) {
+    verifyRequestAllowance(extension, ledger, policy);
+    return;
+  }
+  verifyOriginalBenchmarkExtension(extension, ledger, policy);
+}
+
+function verifyBenchmarkCheckpoint(extension, state) {
+  verifyExtensionCheckpoint(extension, state);
+  if (extension.version !== BENCHMARK_REQUEST_ALLOWANCE_VERSION) return;
+  verifyExtensionCheckpoint(extension.originalBenchmarkExtension, state);
+  const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+  if (prefix.length !== extension.checkpoint.requestCount
+    || historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+}
+
+function normalizeRequestAllowanceError(error) {
+  if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) return error;
+  const primaryCode = Number.isInteger(error?.errcode) ? error.errcode & 0xff : null;
+  return new ExperimentRequestGuardError(primaryCode === 5 || primaryCode === 6
+    ? 'extension_busy' : 'unsafe_policy_binding');
+}
+
+// This operator transition preserves the original grant and every historical row.
+// Its singleton-per-original-grant filename prevents a different target from
+// replacing a fully durable intent after a crash but before the SQLite commit.
+export function authorizeBenchmarkRequestAllowance(options) {
+  const configuration = snapshotRequestAllowanceAuthorization(options);
+  let ledger;
+  let prior = true;
+  try { ledger = reopenExperimentBudget(configuration.priorLedger); }
+  catch (error) {
+    if (!(error instanceof ExperimentBudgetError) || error.code !== 'configuration_mismatch') throw error;
+    prior = false;
+    ledger = reopenExperimentBudget(configuration.ledger);
+  }
+  let lock;
+  let transaction = false;
+  let committed = false;
+  let result;
+  let operationError;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    transaction = true;
+    verifyOriginalBenchmarkExtension(configuration.originalBenchmarkExtension,
+      configuration.priorLedger, configuration.policy);
+    const state = ledger.getState();
+    verifyExtensionCheckpoint(configuration.originalBenchmarkExtension, state);
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) fail('extension_busy');
+    if (state.requestCount < configuration.checkpoint.requestCount
+      || state.reservedMicroUsd < configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    const prefix = historicalRows(state).slice(0, configuration.checkpoint.requestCount);
+    if (prefix.length !== configuration.checkpoint.requestCount
+      || prefix.some((attempt) => attempt.outcome === null)
+      || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
+        !== configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    if (prior && (state.requestCount !== configuration.checkpoint.requestCount
+      || state.reservedMicroUsd !== configuration.checkpoint.reservedMicroUsd)) fail('policy_mismatch');
+    const allowance = requestAllowanceRecord(configuration, historicalDigest(prefix));
+    const filename = requestAllowanceFilename(configuration.ledger.directory,
+      configuration.originalBenchmarkExtension.authorizationId);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) syncAuthorizationBinding(configuration.ledger.directory, filename, allowance);
+    else {
+      if (!prior) fail('policy_mismatch');
+      writeAuthorizationBinding(configuration.ledger.directory, filename, allowance);
+      readBinding(filename, allowance);
+    }
+    if (prior) {
+      const update = lock.prepare(`UPDATE run_config SET request_cap = ?
+        WHERE singleton = 1 AND run_id = ? AND limit_micro_usd = ? AND request_cap = ?
+          AND reserved_micro_usd = ? AND request_count = ? AND state = 'open'`).run(
+        configuration.ledger.requestCap,
+        configuration.priorLedger.runId,
+        configuration.priorLedger.limitMicroUsd,
+        configuration.priorLedger.requestCap,
+        configuration.checkpoint.reservedMicroUsd,
+        configuration.checkpoint.requestCount,
+      );
+      if (Number(update.changes) !== 1) fail('policy_mismatch');
+      const changed = lock.prepare(`SELECT run_id, limit_micro_usd, request_cap,
+        reserved_micro_usd, request_count, state FROM run_config WHERE singleton = 1`).get();
+      if (changed.run_id !== configuration.ledger.runId
+        || changed.limit_micro_usd !== configuration.ledger.limitMicroUsd
+        || changed.request_cap !== configuration.ledger.requestCap
+        || changed.reserved_micro_usd !== configuration.checkpoint.reservedMicroUsd
+        || changed.request_count !== configuration.checkpoint.requestCount
+        || changed.state !== 'open') fail('policy_mismatch');
+      lock.exec('COMMIT');
+      transaction = false;
+      committed = true;
+    }
+    result = deepFreeze(allowance);
+  } catch (error) { operationError = normalizeRequestAllowanceError(error); }
+  let cleanupError;
+  if (lock) {
+    if (transaction) {
+      try { lock.exec('ROLLBACK'); } catch (error) { cleanupError = normalizeRequestAllowanceError(error); }
+    }
+    try { lock.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
+  }
+  try { ledger.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
+  if (operationError) throw operationError;
+  if (cleanupError) throw cleanupError;
+  if (prior && !committed) fail('unsafe_policy_binding');
+  return result;
+}
+
+export function loadBenchmarkRequestAllowance(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'benchmarkAuthorizationId', 'authorizationId', 'stages'],
+    'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy, fetchImpl: () => {} });
+  if (typeof snapshot.benchmarkAuthorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.benchmarkAuthorizationId)
+    || typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)) fail('invalid_extension');
+  const ledgerConfiguration = structuredClone(snapshot.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  const expectedStages = benchmarkConfiguration({ ledger: ledgerConfiguration, policy,
+    authorizationId: snapshot.benchmarkAuthorizationId, stages: snapshot.stages }).stages;
+  const extension = snapshotExtension(readBinding(requestAllowanceFilename(ledgerConfiguration.directory,
+    snapshot.benchmarkAuthorizationId)));
+  verifyRequestAllowance(extension, ledgerConfiguration, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(expectedStages)) fail('policy_mismatch');
+  const ledger = reopenExperimentBudget(ledgerConfiguration);
+  try {
+    const state = ledger.getState();
+    verifyBenchmarkCheckpoint(extension, state);
+    return extension;
+  } finally { ledger.close(); }
 }
 
 // A separate operator action. It grants exactly the two chat-completion stages
@@ -1146,7 +1392,7 @@ export function authorizeBenchmarkExtension(options) {
     catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
     if (existing) {
       const extension = readBinding(filename);
-      verifyBenchmarkExtension(extension, configuration.ledger, configuration.policy);
+      verifyOriginalBenchmarkExtension(extension, configuration.ledger, configuration.policy);
       verifyExtensionCheckpoint(extension, state);
       if (extension.authorizationId !== configuration.authorizationId
         || canonical(extension.stages) !== canonical(configuration.stages)) fail('policy_mismatch');
@@ -1155,7 +1401,7 @@ export function authorizeBenchmarkExtension(options) {
     const extension = { ...configuration,
       checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
     writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
-    verifyBenchmarkExtension(extension, configuration.ledger, configuration.policy);
+    verifyOriginalBenchmarkExtension(extension, configuration.ledger, configuration.policy);
     verifyExtensionCheckpoint(extension, state);
     return deepFreeze(extension);
   } catch (error) {
@@ -1475,7 +1721,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
     if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
     const state = ledger.getState();
-    verifyExtensionCheckpoint(benchmark, state);
+    verifyBenchmarkCheckpoint(benchmark, state);
     if (scoped) {
       const expectedAttempts = [...pinnedBaseline, ...records.map((record) => ({
         attemptId: record.attemptId,

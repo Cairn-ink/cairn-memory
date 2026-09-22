@@ -9,7 +9,7 @@ import { setImmediate as immediate } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
-import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability,
+import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance, authorizeCaseDeadlineCapability,
   createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
 import { INGESTION_CLIENT, planLongMemEvalCase } from '../../longmemeval/ingestion.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
@@ -1359,6 +1359,74 @@ test('R1: complete case CLI dry-run is keyless, non-consuming and safely repeata
   }
   assert.equal(keyReads, 0);
   assert.deepEqual(ledgerState(f.ledger), ledgerBeforeFreshFailures);
+});
+
+test('A5 derived allowance CLI is explicit, keyless in dry-run, and runs one fresh synthetic execution', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1), requestCap: 5 });
+  const oldLedger = { ...f.ledger };
+  const allowance = authorizeBenchmarkRequestAllowance({ oldLedger, policy: f.policy,
+    benchmarkExtension: f.benchmarkExtension, authorizationId: 'synthetic-cli-allowance',
+    newRequestCap: 5_000, expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 } });
+  f.ledger.requestCap = 5_000;
+  const ledgerFile = f.output('allowance-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
+  const executionId = 'synthetic-allowance-execution';
+  const base = ['--prepared', f.prepared, '--ledger', ledgerFile,
+    '--authorization-id', 'synthetic-public-pilot',
+    '--request-allowance-authorization-id', 'synthetic-cli-allowance',
+    '--cases', 'plain', '--case-timeout-policy', 'case-deadline-v1',
+    '--case-authorization-id', 'synthetic-allowance-case', '--execution-id', executionId,
+    '--expected-request-count', '0', '--expected-reserved-micro-usd', '0'];
+  const stream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
+    text() { return chunks.join(''); } }; };
+  let keyReads = 0;
+  const env = {};
+  Object.defineProperty(env, 'OPENAI_API_KEY', { get() { keyReads += 1; return KEY; } });
+  for (let index = 0; index < 2; index += 1) {
+    const stdout = stream();
+    assert.equal(await cliMain([...base, '--dry-run'], { env, stdout, stderr: stream(),
+      fetchImpl: () => assert.fail('no dry-run transport') }), 0);
+    const result = JSON.parse(stdout.text());
+    assert.deepEqual(result.requestAllowance, {
+      version: 'benchmark-request-allowance-v1', authorizationId: 'synthetic-cli-allowance',
+      priorRequestCap: 5, requestCap: 5_000, checkpoint: { requestCount: 0, reservedMicroUsd: 0 },
+      historicalDigest: allowance.historicalDigest,
+    });
+    assert.equal(result.ledger.requestCap, 5_000);
+  }
+  assert.equal(keyReads, 0);
+  assert.equal(ledgerState(f.ledger).requestCount, 0);
+  await assert.rejects(lstat(path.join(f.ledger.directory,
+    `experiment-case-deadline-${executionId}.claim.json`)), { code: 'ENOENT' });
+
+  const noOptError = stream();
+  assert.equal(await cliMain([...base.filter((value, index) => value !== '--request-allowance-authorization-id'
+    && base[index - 1] !== '--request-allowance-authorization-id'), '--dry-run'], {
+    env, stdout: stream(), stderr: noOptError, fetchImpl: () => assert.fail('no default transport'),
+  }), 1);
+  assert.equal(noOptError.text(), 'invalid_extension\n');
+  assert.equal(keyReads, 0);
+
+  const wrong = [...base];
+  wrong[wrong.indexOf('--request-allowance-authorization-id') + 1] = 'wrong-allowance';
+  const wrongError = stream();
+  assert.equal(await cliMain([...wrong, '--dry-run'], { env, stdout: stream(), stderr: wrongError,
+    fetchImpl: () => assert.fail('no wrong-grant transport') }), 1);
+  assert.equal(wrongError.text(), 'invalid_extension\n');
+  assert.equal(keyReads, 0);
+
+  const calls = [];
+  const output = f.output('allowance-live');
+  const stdout = stream();
+  assert.equal(await cliMain([...base, '--output', output], { env, stdout, stderr: stream(),
+    fetchImpl: fakeUpstream({ calls }) }), 0);
+  assert.equal(keyReads, 1);
+  assert.ok(calls.length > 0);
+  assert.equal(JSON.parse(stdout.text().trimEnd().split('\n').at(-1)).summary.scored, 1);
+  const report = await readJson(output, 'report.json');
+  assert.equal(report.caseTimeoutIdentity.executionId, executionId);
+  assert.equal(report.operator.authorizationId, 'synthetic-public-pilot');
+  assert.equal(ledgerState(f.ledger).requestCount, calls.length);
 });
 
 test('R1/R5: opt CLI live run consumes once and edited output cannot resume or reload the key', async (t) => {

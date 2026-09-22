@@ -16,6 +16,7 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Provider key | `OPENAI_API_KEY` in the launcher process environment | Read once inside `main()`, used only in the `Authorization` header, never written, printed or returned |
 | Campaign ledger | `--ledger /private/ledger.json` (mode 0600) with exactly `{directory, runId, limitMicroUsd, requestCap}` | Must describe the existing ledger; the runner never creates, resets or replaces one |
 | Benchmark authorization | `--authorization-id <id>` | Provisions or re-verifies `experiment-benchmark-extension.json` beside the ledger (P1) |
+| Existing request allowance | `--request-allowance-authorization-id <id>` | Explicitly loads an already-issued derived benchmark allowance whose original benchmark ID must match `--authorization-id`; the CLI never increases the ledger cap |
 | Prepared v2 pilot | `--prepared /private/prepared` | Four-file directory from `prepareLongMemEval`; digest-checked by `loadPreparedPilot`; never written |
 | Optional reference sidecar | `--sidecar /private/reference-sidecar.json --sidecar-sha256 <hex>` | From `render-reference-sidecar.py`; needed only for non-string references |
 | Output | `--output /private/run-dir` (new, or a previous legacy/default run directory to resume) | Created 0700; every file 0600 |
@@ -48,6 +49,15 @@ In case-deadline mode it also verifies the complete generation-then-scoring
 schedule, checkpoint, optional sidecar and durable capability binding without
 consuming the execution claim. It reports the policy/execution identity and
 the live-process-only restriction; repeated dry-runs are safe.
+
+When `--request-allowance-authorization-id` is present, dry-run and live mode
+use only the read-only allowance loader. The deterministic private grant must
+already exist and the supplied ledger must contain its effective finite cap.
+The summary reports only the allowance version and authorization ID, prior and
+effective caps, checkpoint and historical digest. A missing, malformed, foreign
+or mismatched grant refuses before the provider key, any reservation or a case
+claim. Omitting the flag preserves the original benchmark authorization path;
+the runner never discovers or silently opts into an allowance.
 
 ## What is fixed by the runner
 

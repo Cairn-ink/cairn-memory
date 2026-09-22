@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — benchmark request allowance
+
+- Add an explicit operator-only, cap-increase transaction for an existing
+  benchmark grant. It preserves the campaign's monetary limit and complete
+  charged history, writes a separate immutable derived authorization, and does
+  not replace older policy, benchmark or case-capability files.
+- The public-pilot CLI can explicitly load an already-issued allowance without
+  increasing the cap itself. Keyless dry-run and offline synthetic tests verify
+  the boundary; no paid execution, provider result or retry is included.
+
 ## Unreleased — one-shot case-deadline public pilot
 
 - Add an explicit complete CLI opt-in that binds the public pilot to a one-shot
