@@ -12,6 +12,11 @@ service must use the same public core, not separate engines.
   has passed installed subprocess persistence and actual-model sourced recall.
 - Frozen synthetic evaluation and failures are retained. **Source support still
   fails**, so broad-promotion readiness is not declared.
+- A new [six-case recall-observation pilot](docs/evidence/recall-observation-pilot.md)
+  retained mixed outcomes on a frozen, disjoint cohort: Cairn was correct on two
+  of five resolved cases, wrong on three and unresolved on one after incomplete
+  ingestion. Stage observability is not a semantic-quality improvement or a
+  completed public benchmark gate.
 - The [verified preview consolidation](docs/plans/pr-consolidation.md) selects
   four narrow engineering changes: filing-only rationale preservation, an
   explicit local MCP source-evidence startup default, owned provider response
@@ -38,10 +43,14 @@ reliability work below without declaring older failure gates resolved.
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
    rerun needs scoped authorization; earlier one-shot approvals do not roll over.
-   A public LongMemEval benchmark remains a separate next gate: freeze the
-   dataset, model/configuration, scorer and comparison arms, publish per-case
-   failures and independently review the result. Offline scripted demos are not
-   a measured score, and this baseline authorizes no paid run.
+   First reproduce the pilot's extraction-validation failure offline and test a
+   separate bounded joined-evidence selection/ranking path on fixed synthetic
+   temporal and multi-session controls without weakening unsupported-fact,
+   namespace, stale-revision or forgetting regressions. A public LongMemEval
+   benchmark remains a separate next gate: freeze the dataset,
+   model/configuration, scorer and comparison arms, publish per-case failures
+   and independently review the result. Offline scripted demos are not a
+   measured score, and this baseline authorizes no paid run or pilot retry.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
