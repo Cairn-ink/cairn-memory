@@ -11,8 +11,11 @@ The reviewed runtime is commit
 [`ca9c15c68e4078e8478877bece44d6e83f6a2ad1`](https://github.com/Cairn-ink/cairn-memory/commit/ca9c15c68e4078e8478877bece44d6e83f6a2ad1)
 from [PR #203](https://github.com/Cairn-ink/cairn-memory/pull/203). It is a
 reviewed candidate, not code copied into this documentation branch or a claim
-that the runtime has merged or shipped. The public source fixture is pinned at
-[`1174206acda370e184984a280f03b6751f7ae414`](https://github.com/Cairn-ink/cairn-memory/commit/1174206acda370e184984a280f03b6751f7ae414).
+that the runtime has merged or shipped. The fixture checkout used local candidate
+`1174206acda370e184984a280f03b6751f7ae414`; that local commit is not published.
+The byte-identical [public cases](https://github.com/Cairn-ink/cairn-memory/blob/ca9c15c68e4078e8478877bece44d6e83f6a2ad1/evaluation/architecture/source-coverage-cases.json)
+and [rubric](https://github.com/Cairn-ink/cairn-memory/blob/ca9c15c68e4078e8478877bece44d6e83f6a2ad1/evaluation/architecture/source-coverage-rubric.json)
+are available at the reviewed runtime commit; their hashes are checked below.
 
 | Frozen item | SHA-256 |
 | --- | --- |
