@@ -12,6 +12,11 @@ service must use the same public core, not separate engines.
   has passed installed subprocess persistence and actual-model sourced recall.
 - Frozen synthetic evaluation and failures are retained. **Source support still
   fails**, so broad-promotion readiness is not declared.
+- A separately tested, unmerged candidate completed one frozen six-case
+  [case-deadline engineering pilot](docs/plans/case-deadline-pilot-results.md).
+  Its all-three-resolved paired denominator was only five, one Cairn arm remained
+  unresolved, and no live timeout occurred. This is a retained small measurement,
+  not completion of the broader benchmark, timeout-reliability or promotion gates.
 - The [verified preview consolidation](docs/plans/pr-consolidation.md) selects
   four narrow engineering changes: filing-only rationale preservation, an
   explicit local MCP source-evidence startup default, owned provider response
