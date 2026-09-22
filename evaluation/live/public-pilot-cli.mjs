@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { reopenExperimentBudget } from '../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability,
-  loadBenchmarkRequestAllowance } from '../experiment-budget/request-guard.mjs';
+  loadBenchmarkBudgetExtension, loadBenchmarkRequestAllowance } from '../experiment-budget/request-guard.mjs';
 import { planLongMemEvalCase } from '../longmemeval/ingestion.mjs';
 import { opaqueQuestionId } from '../longmemeval/prepare.mjs';
 import { PUBLIC_ANSWER_TEMPLATE_VERSION,
@@ -44,6 +44,8 @@ Required:
 Optional:
   --request-allowance-authorization-id <id>
                               load an already-issued benchmark request allowance; never increases the cap
+  --budget-extension-authorization-id <id>
+                              load an already-issued benchmark budget extension; never changes allowance
   --cases <id,id,...>         source or opaque question ids to run, kept in roster order; default all
   --sidecar <file>            reference-rendering sidecar (render-reference-sidecar.py); needs --sidecar-sha256
   --sidecar-sha256 <hex>      expected sidecar digest
@@ -72,7 +74,8 @@ Exit codes: 0 done, 1 refused or failed (code on stderr), 2 missing OPENAI_API_K
 
 const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output', '--cases', '--sidecar',
   '--sidecar-sha256', '--batch-cap-micro-usd', '--batch-request-cap', '--run-commit', '--exclusions-file',
-  '--answer-template-version', '--request-allowance-authorization-id', '--merge'];
+  '--answer-template-version', '--request-allowance-authorization-id',
+  '--budget-extension-authorization-id', '--merge'];
 VALUE_FLAGS.push('--case-timeout-policy', '--case-authorization-id', '--execution-id',
   '--expected-request-count', '--expected-reserved-micro-usd');
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
@@ -223,16 +226,25 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     const policy = experimentPolicy();
     const stages = benchmarkStagePolicy();
     const requestAllowanceAuthorizationId = values['--request-allowance-authorization-id'];
-    if (requestAllowanceAuthorizationId !== undefined
-      && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(requestAllowanceAuthorizationId)) {
-      fail('invalid_request_allowance_identifier');
+    const budgetExtensionAuthorizationId = values['--budget-extension-authorization-id'];
+    for (const [identifier, code] of [[requestAllowanceAuthorizationId, 'invalid_request_allowance_identifier'],
+      [budgetExtensionAuthorizationId, 'invalid_budget_extension_identifier']]) {
+      if (identifier !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(identifier)) fail(code);
     }
-    const benchmarkExtension = requestAllowanceAuthorizationId === undefined
+    if (budgetExtensionAuthorizationId !== undefined && requestAllowanceAuthorizationId === undefined) {
+      fail('budget_extension_requires_request_allowance');
+    }
+    const benchmarkExtension = budgetExtensionAuthorizationId !== undefined
+      ? loadBenchmarkBudgetExtension({ ledger, policy,
+        benchmarkAuthorizationId: values['--authorization-id'],
+        requestAllowanceAuthorizationId, authorizationId: budgetExtensionAuthorizationId, stages })
+      : requestAllowanceAuthorizationId === undefined
       ? authorizeBenchmarkExtension({ ledger, policy, authorizationId: values['--authorization-id'], stages })
       : loadBenchmarkRequestAllowance({ ledger, policy,
         benchmarkAuthorizationId: values['--authorization-id'],
         authorizationId: requestAllowanceAuthorizationId, stages });
-    const benchmarkAuthorizationId = benchmarkExtension.originalBenchmarkExtension?.authorizationId
+    const effectiveRequestAllowance = benchmarkExtension.originalRequestAllowance ?? benchmarkExtension;
+    const benchmarkAuthorizationId = effectiveRequestAllowance.originalBenchmarkExtension?.authorizationId
       ?? benchmarkExtension.authorizationId;
     const pilot = await loadPreparedPilot({ directory: values['--prepared'] });
     const caseIds = selectCases(pilot, values['--cases']);
@@ -278,14 +290,25 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       ledger: ledgerState, projections, totals, fits, runCommit,
       exclusionCount: exclusionRegistry ? exclusionRegistry.length : null };
     const requestAllowance = requestAllowanceAuthorizationId === undefined ? null : {
-        version: benchmarkExtension.version,
-        authorizationId: benchmarkExtension.authorizationId,
-        priorRequestCap: benchmarkExtension.priorLedger.requestCap,
-        requestCap: benchmarkExtension.ledger.requestCap,
-        checkpoint: benchmarkExtension.checkpoint,
-        historicalDigest: benchmarkExtension.historicalDigest,
+        version: effectiveRequestAllowance.version,
+        authorizationId: effectiveRequestAllowance.authorizationId,
+        priorRequestCap: effectiveRequestAllowance.priorLedger.requestCap,
+        requestCap: effectiveRequestAllowance.ledger.requestCap,
+        checkpoint: effectiveRequestAllowance.checkpoint,
+        historicalDigest: effectiveRequestAllowance.historicalDigest,
       };
+    const budgetExtension = budgetExtensionAuthorizationId === undefined ? null : {
+      version: benchmarkExtension.version,
+      authorizationId: benchmarkExtension.authorizationId,
+      priorLimitMicroUsd: benchmarkExtension.priorLedger.limitMicroUsd,
+      limitMicroUsd: benchmarkExtension.ledger.limitMicroUsd,
+      priorRequestCap: benchmarkExtension.priorLedger.requestCap,
+      requestCap: benchmarkExtension.ledger.requestCap,
+      checkpoint: benchmarkExtension.checkpoint,
+      historicalDigest: benchmarkExtension.historicalDigest,
+    };
     if (requestAllowance) summary.requestAllowance = requestAllowance;
+    if (budgetExtension) summary.budgetExtension = budgetExtension;
     if (caseTimeoutIdentity) {
       summary.caseTimeoutIdentity = caseTimeoutIdentity;
       summary.caseTimeoutRestriction = 'live-process-only; one-shot; no resume or retry';
@@ -317,12 +340,14 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
         manifest: { runCommit, authorizationId: benchmarkAuthorizationId,
           extensionCheckpoint: benchmarkExtension.checkpoint, ledgerRunId: ledger.runId,
           sidecarSha256: sidecarSha256 ?? null, exclusionRegistry, projections, totals,
-          ...(requestAllowance ? { requestAllowance } : {}) },
+          ...(requestAllowance ? { requestAllowance } : {}),
+          ...(budgetExtension ? { budgetExtension } : {}) },
         onCase: (progress) => { stdout.write(`${JSON.stringify({ progress })}\n`); } });
     } finally { session.close(); }
     stdout.write(`${JSON.stringify({ mode: 'run', directory: path.resolve(values['--output']), ...answerTemplateIdentity,
       summary: report.summary, common: report.official.common, cost: report.cost, latency: report.latency,
-      ...(requestAllowance ? { requestAllowance } : {}) })}\n`);
+      ...(requestAllowance ? { requestAllowance } : {}),
+      ...(budgetExtension ? { budgetExtension } : {}) })}\n`);
     return 0;
   } catch (error) {
     const detail = typeof error?.detail === 'string' ? ` ${error.detail}` : '';

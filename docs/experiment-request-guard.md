@@ -482,6 +482,34 @@ retain their old ledger configuration and fail before transport after the cap
 transition. Old case capabilities remain cap-bound and consumed claims never
 revive; a new case execution requires a fresh one-shot capability.
 
+### Benchmark monetary-budget extension
+
+`authorizeBenchmarkBudgetExtension({oldLedger, policy, requestAllowance,
+authorizationId, newLimitMicroUsd, newRequestCap, expectedCheckpoint})` is a
+second, narrow operator transition. It accepts explicit strictly higher positive
+safe-integer monetary and request ceilings. This campaign's operator invocation
+is separately pinned to the approved cumulative US$50 to US$100 change
+(`50_000_000` to `100_000_000` micro-USD). The supplied
+`benchmark-request-allowance-v1` record must be the exact current grant. Run ID,
+directory, policy, stages, models, rates, deadlines and all accounting rows are
+unchanged.
+
+The operator path uses the same writer exclusion and create-only 0600/fsync
+discipline as the request allowance. It verifies the settled exact checkpoint
+and ordered-history digest before conditionally changing only
+`run_config.limit_micro_usd` and `run_config.request_cap`. Exact durable metadata
+can finish one interrupted transition; partial, different, chained, unsettled,
+overrun or tampered state fails closed. Recovery is not case or provider retry.
+
+`loadBenchmarkBudgetExtension({ledger, policy, benchmarkAuthorizationId,
+requestAllowanceAuthorizationId, authorizationId, stages})` is read-only and
+resolves only the deterministic file named by explicit validated identity. The
+public-pilot CLI exposes the corresponding explicit loader flag but never calls
+the operator transition. Old v1 handles and capabilities retain their old
+ledger configuration and fail before transport. The operator must separately
+freeze a disjoint roster before issuing any fresh one-shot case capability; the
+budget grant is intentionally not a cross-execution case registry.
+
 All potentially paid routes must actually use this guard. Independent host
 connections, background jobs or a retrying injected transport can bypass its
 accounting. Inject a one-attempt transport, disable hidden SDK retries, and

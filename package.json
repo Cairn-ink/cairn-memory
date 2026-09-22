@@ -37,6 +37,7 @@
     "test:openai": "npm test --prefix adapters/openai",
     "validate": "node scripts/validate-json.mjs",
     "test:experiment-budget": "node --test evaluation/experiment-budget/test/ledger.test.mjs",
+    "test:benchmark-budget-extension": "node --test evaluation/experiment-budget/test/budget-extension-guard.test.mjs",
     "demo:experiment-budget": "node evaluation/experiment-budget/example.mjs",
     "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs evaluation/experiment-budget/test/reconciliation-guard.test.mjs evaluation/experiment-budget/test/qualification-denial.test.mjs evaluation/experiment-budget/test/qualification-guard.test.mjs evaluation/experiment-budget/test/candidate-qualification-denial.test.mjs evaluation/experiment-budget/test/candidate-qualification-guard.test.mjs evaluation/experiment-budget/test/rationale-guard.test.mjs evaluation/experiment-budget/test/rationale-models-guard.test.mjs evaluation/experiment-budget/test/basis-models-guard.test.mjs evaluation/experiment-budget/test/checklist-selection-guard.test.mjs evaluation/experiment-budget/test/benchmark-guard.test.mjs evaluation/experiment-budget/test/case-deadline-guard.test.mjs evaluation/experiment-budget/test/request-allowance-guard.test.mjs",
     "demo:experiment-request-guard": "node evaluation/experiment-budget/request-guard-example.mjs"

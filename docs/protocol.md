@@ -88,6 +88,17 @@ telemetry. The record contains no key, prompt, source, answer, provider body or
 raw error, grants no new model/method/stage, and cannot reset, refund, retry or
 resume an old execution.
 
+The private `benchmark-budget-extension-v1` record is a single explicit
+monetary transition on the same run to strictly higher finite monetary and
+request ceilings. This campaign separately pins those parameters to cumulative
+`50_000_000` → `100_000_000` micro-USD. The record embeds and re-verifies the exact request-allowance
+grant, unchanged policy/stages, settled checkpoint, and five-field history
+digest. Its create-only private file is durable before a conditional transaction
+changes only the two ceilings. Original bindings and attempt history remain
+unchanged; unknown outcomes stay charged. Loading is explicit and read-only.
+The record cannot create/reset a ledger, refund, retry/resume a case, revive an
+older capability, or grant another model, method, rate, stage or deadline.
+
 The public-pilot runner can explicitly bind that capability to one process-
 local session and exact prepared roster. The new fields retain only a bounded
 policy/execution identity and fixed timeout/blocked enums, never the capability

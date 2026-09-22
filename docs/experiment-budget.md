@@ -11,6 +11,12 @@ Use one new ledger per separately approved experiment, never a new ledger per
 session, subprocess or retry. All participating adapters must eventually open
 that same ledger with the same immutable run identity, limit and request cap.
 Creating a fresh ledger is not permission to refill historical spending authority.
+The benchmark's separately audited budget extension is the sole exception to
+immutable ceilings: its explicit campaign invocation conditionally changes the
+existing run from the fixed cumulative US$50 ceiling to US$100 while retaining
+every row and binding. It is
+not exposed by these ordinary constructors; see
+[the guarded benchmark contract](experiment-request-guard.md#benchmark-monetary-budget-extension).
 
 ## Accounting contract
 

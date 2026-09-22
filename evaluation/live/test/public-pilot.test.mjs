@@ -9,8 +9,8 @@ import { setImmediate as immediate } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
-import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance, authorizeCaseDeadlineCapability,
-  createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
+import { authorizeBenchmarkBudgetExtension, authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
+  authorizeCaseDeadlineCapability, createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
 import { INGESTION_CLIENT, planLongMemEvalCase } from '../../longmemeval/ingestion.mjs';
 import { opaqueQuestionId, prepareLongMemEval } from '../../longmemeval/prepare.mjs';
 import { OFFICIAL_SCORING_SCHEMA_VERSION_V2, scorePublicComparison } from '../../longmemeval/official-scoring.mjs';
@@ -1445,6 +1445,84 @@ test('A5 derived allowance CLI is explicit, keyless in dry-run, and runs one fre
   assert.equal(report.operator.authorizationId, 'synthetic-public-pilot');
   assert.deepEqual(manifest.operator.requestAllowance, expectedAllowance);
   assert.deepEqual(report.operator.requestAllowance, expectedAllowance);
+  assert.equal(ledgerState(f.ledger).requestCount, calls.length);
+});
+
+test('B5 budget-extension CLI only loads explicit authority and keeps dry-run keyless/non-consuming', async (t) => {
+  const f = await setup(t, { source: sourceCases().slice(0, 1), requestCap: 5 });
+  const baseLedger = { ...f.ledger };
+  const allowance = authorizeBenchmarkRequestAllowance({ oldLedger: baseLedger, policy: f.policy,
+    benchmarkExtension: f.benchmarkExtension, authorizationId: 'synthetic-cli-allowance-budget',
+    newRequestCap: 20, expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 } });
+  f.ledger.requestCap = 20;
+  const allowanceLedger = { ...f.ledger };
+  const budget = authorizeBenchmarkBudgetExtension({ oldLedger: allowanceLedger, policy: f.policy,
+    requestAllowance: allowance, authorizationId: 'synthetic-cli-budget-extension',
+    newLimitMicroUsd: 100_000_000, newRequestCap: 5_000,
+    expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 } });
+  f.ledger.limitMicroUsd = 100_000_000;
+  f.ledger.requestCap = 5_000;
+  const ledgerFile = f.output('budget-extension-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
+  const executionId = 'synthetic-budget-extension-execution';
+  const base = ['--prepared', f.prepared, '--ledger', ledgerFile,
+    '--authorization-id', 'synthetic-public-pilot',
+    '--request-allowance-authorization-id', allowance.authorizationId,
+    '--budget-extension-authorization-id', budget.authorizationId,
+    '--cases', 'plain', '--case-timeout-policy', 'case-deadline-v1',
+    '--case-authorization-id', 'synthetic-budget-extension-case', '--execution-id', executionId,
+    '--expected-request-count', '0', '--expected-reserved-micro-usd', '0'];
+  const stream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
+    text() { return chunks.join(''); } }; };
+  let keyReads = 0;
+  const env = {};
+  Object.defineProperty(env, 'OPENAI_API_KEY', { get() { keyReads += 1; return KEY; } });
+  const expectedBudget = { version: 'benchmark-budget-extension-v1',
+    authorizationId: budget.authorizationId, priorLimitMicroUsd: 50_000_000,
+    limitMicroUsd: 100_000_000, priorRequestCap: 20, requestCap: 5_000,
+    checkpoint: { requestCount: 0, reservedMicroUsd: 0 }, historicalDigest: budget.historicalDigest };
+
+  const keylessEnv = { ...process.env, NODE_NO_WARNINGS: '1' };
+  delete keylessEnv.OPENAI_API_KEY;
+  const processDry = spawnSync(process.execPath,
+    [new URL('../public-pilot-cli.mjs', import.meta.url).pathname, ...base, '--dry-run'],
+    { encoding: 'utf8', env: keylessEnv });
+  assert.equal(processDry.status, 0, processDry.stderr);
+  const processResult = JSON.parse(processDry.stdout);
+  assert.deepEqual(processResult.budgetExtension, expectedBudget);
+  assert.equal(processResult.ledger.limitMicroUsd, 100_000_000);
+  assert.equal(processResult.ledger.requestCount, 0);
+  await assert.rejects(lstat(path.join(f.ledger.directory,
+    `experiment-case-deadline-${executionId}.claim.json`)), { code: 'ENOENT' });
+
+  const dry = stream();
+  assert.equal(await cliMain([...base, '--dry-run'], { env, stdout: dry, stderr: stream(),
+    fetchImpl: () => assert.fail('no dry-run transport') }), 0);
+  assert.deepEqual(JSON.parse(dry.text()).budgetExtension, expectedBudget);
+  assert.equal(keyReads, 0);
+  assert.equal(ledgerState(f.ledger).requestCount, 0);
+
+  const missingAllowance = base.filter((value, index) => value !== '--request-allowance-authorization-id'
+    && base[index - 1] !== '--request-allowance-authorization-id');
+  const missingError = stream();
+  assert.equal(await cliMain([...missingAllowance, '--dry-run'], { env, stdout: stream(), stderr: missingError,
+    fetchImpl: () => assert.fail('no missing-allowance transport') }), 1);
+  assert.equal(missingError.text(), 'budget_extension_requires_request_allowance\n');
+  assert.equal(keyReads, 0);
+
+  const calls = [];
+  const output = f.output('budget-extension-live');
+  const stdout = stream();
+  assert.equal(await cliMain([...base, '--output', output], { env, stdout, stderr: stream(),
+    fetchImpl: fakeUpstream({ calls }) }), 0);
+  assert.equal(keyReads, 1);
+  assert.ok(calls.length > 0);
+  const finalOutput = JSON.parse(stdout.text().trimEnd().split('\n').at(-1));
+  assert.deepEqual(finalOutput.budgetExtension, expectedBudget);
+  const manifest = await readJson(output, 'manifest.json');
+  const report = await readJson(output, 'report.json');
+  assert.deepEqual(manifest.operator.budgetExtension, expectedBudget);
+  assert.deepEqual(report.operator.budgetExtension, expectedBudget);
   assert.equal(ledgerState(f.ledger).requestCount, calls.length);
 });
 
