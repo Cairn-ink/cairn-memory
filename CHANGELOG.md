@@ -1,5 +1,164 @@
 # Changelog
 
+## Unreleased — explicit case-deadline request guard
+
+- Add an explicit, one-shot case-deadline capability and request-guard API for
+  prospective benchmark evaluation. It is verified offline with synthetic data;
+  existing guard defaults and live runners remain unchanged, with no provider-
+  result or quality claim.
+
+## Unreleased — explicit answer boundary v2
+
+- Add an experimental, explicit `cairn-longmemeval-public-answer-v2` option to
+  the offline public comparison and guarded private pilot. It places quoted
+  evidence before a separate current question/date for all three arms while
+  preserving v1 as the byte- and shape-compatible default.
+- Scoring, aggregation, resume, CLI, and offline merge retain and validate v2
+  identity, including failed, blocked, and zero-score runs. V1 and v2 results
+  are intentionally non-comparable; no provider result or quality claim is
+  included.
+
+## Unreleased — private capture-admission observation
+
+- Fresh public-pilot cases now retain a separately versioned, bounded private
+  capture-admission subsection that distinguishes completed empty admission,
+  suppression, accepted references, duplicate replay, failure and partial
+  classification. It contains primitive counts/categories only, caps records at
+  64 with explicit drops, and treats malformed projections as unavailable.
+- The admitted-reference count is neither newly created memories nor retained-
+  message coverage. Observation preserves capture responses, exceptions,
+  requests, accounting, scoring and aggregate/report output. Missing new
+  observations in legacy artifacts remain unavailable; no source retention,
+  retry, capture policy, benchmark mode or public core/wire contract changes.
+
+## Unreleased — public pilot rejection diagnostics
+
+- Public-pilot cases now write a bounded private `diagnostics.json` with fixed
+  categorical adapter/core stage, layer and reason observations plus per-answer
+  `stop`/`length` completion diagnostics. Overflow and unavailable states are
+  explicit; no raw provider/model text or case context is retained.
+- Ordinary answer objects, scoring inputs and outputs, provider payloads,
+  models, policy, limits, reservations, accounting and halt behavior remain
+  unchanged. Legacy artifacts without diagnostics remain unavailable; offline
+  synthetic evidence does not establish a historical rejection cause or score
+  improvement.
+
+## Unreleased — classification request-local wire aliases
+
+- The optional OpenAI adapter now sends deterministic request-local,
+  role-separated aliases for classification target-memory IDs and catalog-MOC
+  IDs, validates provider output against the exact alias schema, then decodes
+  authoritative reference fields before existing core validation and storage.
+- Classification candidate/card/MOC content, order, titles, metadata,
+  `mapExhausted`, durable IDs and MOC policy are unchanged. Unknown, cross-role
+  and raw UUID output references fail closed. Other adapter methods keep their
+  prior wire formats.
+- Original core/adapter 6,000-local-token preflights, the 7,024 provider-input
+  ceiling, 1,024 output cap, model policy, reservations, no-retry/no-truncation
+  behavior and benchmark halt policy remain unchanged. Offline fake-HTTP/local-
+  tokenizer tests show transport reduction only; aliases are not anonymization,
+  and no historical provider count, failure cause or benchmark score is claimed.
+
+## Unreleased — benchmark count diagnostics
+
+- Benchmark-guard count attempts now retain a finite private diagnostic for an
+  HTTP-2xx body that reaches parsing: exact structurally validated counts record
+  `within_limit` or `input_limit_exceeded` with the configured limit, while
+  malformed or structurally invalid bodies record `invalid_count_response`
+  without an observed count. Duplicate top-level keys are invalid for this
+  diagnostic path.
+- The 7,024 ceiling, unknown/null settlement and whole-run halt remain unchanged;
+  successful count cost is still unknown. Ordinary adapter/core errors, generic
+  guard behavior, ledger schema, reservations and retry policy are unchanged.
+  The public pilot's existing private per-case accounting preserves the new
+  record without raw provider data. Offline fake-HTTP evidence only: no paid
+  call, new score or historical failure reconstruction.
+
+## Unreleased — public pilot runner and paired report
+
+- Add `evaluation/live/public-pilot.mjs`: a benchmark live session that binds
+  the real OpenAI adapter and the answer/judge stages to the P1 benchmark
+  guard, and `runPublicPilot`, which runs the public comparison and the
+  official-style scorer per prepared v2 case with a fresh private store,
+  per-case 0600 artifacts (run record, exact answer requests, truncation and
+  evidence accounting, guard accounting, timings, scoring), projected-cap and
+  ledger-allowance checks before every case, a halt on any guard halt, an
+  atomic checkpoint with no replay on resume, and a redacted `report.json`.
+- Add `evaluation/live/public-pilot-cli.mjs` with `--dry-run` projections and
+  explicit operator inputs only; the key is read from `OPENAI_API_KEY` inside
+  `main()` and used solely in the Authorization header. A resume is refused
+  (`run_directory_mismatch`) when limits, judge timeout, caps or stage policy
+  differ from what the directory's manifest recorded; blocked reasons are
+  counted once per case.
+- Add `evaluation/live/public-pilot-merge.mjs` (`mergePublicPilotRuns`, CLI
+  `--merge dir,dir --output dir`): an offline merge of completed batch
+  directories into one paired report, refusing mismatched configurations,
+  overlapping case lists, incomplete sources, non-integer run and per-stage
+  totals, and an output directory that is or sits inside a source, with no
+  key, ledger or call.
+- Answer requests are labelled by the run's own arm order rather than by the
+  evidence shape, so a Cairn arm that retrieved nothing is no longer recorded
+  as the no-memory arm and contributes an all-zero packed truncation row. A
+  resumed run refuses a completed or failed case whose accounting, request or
+  truncation file is missing (`invalid_checkpoint`), since both can follow real
+  spend and only a blocked case legitimately has its generation record alone,
+  and an `aggregate.json` left without a `report.json` is reported as
+  `aggregate_without_report`.
+- `aggregateOfficialScores` additionally reports a `common` bucket (cases in
+  which all three arms resolved, per arm, per type and abstention overlay,
+  `null` accuracy at zero); existing buckets are unchanged. `pilotEvaluatorFor`
+  exposes a loaded pilot's private evaluator read-only. Offline synthetic tests
+  only; no paid call, key discovery or ledger change is added.
+
+## Unreleased — guarded benchmark answer/judge transport
+
+- The experiment request guard gains an immutable benchmark extension
+  (`experiment-benchmark-extension.json`) that binds a separate answer stage
+  (`gpt-4.1-mini-2025-04-14`) and official judge stage (`gpt-4o-2024-08-06`)
+  with their own prices, bounds and per-request reservations. Both stages
+  reserve on the existing ledger's fixed `host-completion` channel before every
+  send; the ledger schema, history and allowance are unchanged.
+- `createBenchmarkExperimentRequestGuard` exposes `answerFetch`, `judgeFetch`
+  and baseline `cairnFetch`, denies the host channel, passes stage bodies
+  through with an explicit allowlist (`temperature: 0`, `n: 1`, `max_tokens`,
+  `store: false`, `stream: false`), records each attempt's stage, model, rate
+  assumptions and priced usage without bodies or keys, and halts all further
+  paid work after any unknown outcome, overrun or any unsettled attempt not in
+  flight on this guard. Offline synthetic tests only; no live command, key
+  discovery or paid call is added.
+
+## Unreleased — evaluator-only Python reference rendering
+
+- Add an opt-in offline reference-rendering sidecar from checksum-bound raw
+  JSON, preserving official Python number and array formatting without
+  changing preparation v2 or model-facing history/question files.
+- Scoring may consume loader-issued evaluator-bound rendering capabilities;
+  absent a verified capability, non-string references remain unresolved.
+  This is scoring infrastructure, not a measured accuracy result.
+
+## Unreleased — offline public benchmark infrastructure
+
+- Add a separately versioned Cairn/source-evidence, full-history and no-memory
+  comparison API, with source dates, provenance checks and whole-request
+  context preflight. Legacy comparison and live-pilot behavior are unchanged.
+- Add pinned upstream LongMemEval judge prompts, string-reference parity
+  fixtures and fixed-roster scoring with unresolved cases retained. Numeric
+  and array references remain unverified; no real-model score is claimed.
+- Add `npm run demo:longmemeval-public`: synthetic actual-core integration
+  with scripted answer/judge callbacks, no keys or provider calls.
+
+## Unreleased — LongMemEval session-label blinding
+
+- Preparation v2 replaces raw model-facing session labels with deterministic
+  opaque occurrence IDs and uses label-independent turn IDs. The private
+  manifest holds the raw-to-opaque map; evaluator evidence IDs use opaque
+  labels so retrieved/packed coverage remains joinable without changing the
+  strict evaluator record shape.
+- The live-pilot loader accepts v2, validates the map and derived IDs, and
+  rejects old v1 artifacts. Old preparations require regeneration from a
+  reviewed pinned source. Synthetic offline regression checks do not measure
+  real-model answer quality or authorize a paid benchmark run.
+
 ## Unreleased — direct premise challenges in decision context
 
 - The local rationale decision-context read now includes a stored direct
@@ -534,6 +693,25 @@ reliability.
   the required index is missing. No new migration, public-map change or scoring
   change is included. Frozen v1 evidence remains unchanged; offline tests do not
   establish model-quality or latency improvements.
+
+## Unreleased — bounded source-aware recall candidates
+
+- For explicit `source-evidence` and `rationale-evidence` recall only, rank
+  private navigation candidates by the maximum literal overlap of the generated
+  body and first four stable-ID retained receipt excerpts. A strictly winning
+  receipt supplies the existing 120-code-point query preview; body and receipt
+  ties keep the body, and receipt ties keep the first stable ID.
+- Keep the 1,024-memory scan, two select calls, page/token/reference limits,
+  public maps, classification, default recall and automatic rationale discovery
+  unchanged. Source cursors bind mode, policy and the four-receipt limit; existing
+  epoch/revision/final-read fences cover later use. A fifth-receipt-only match
+  remains a documented heuristic miss, not invented incomplete map coverage.
+- Validate every bounded candidate receipt against its authoritative stored
+  identity, memory binding, canonical excerpt and receipt key before it can reach
+  selection; corrupted rows fail closed even when the selector would return empty.
+- This widens opt-in selector exposure to bounded retained personal source text.
+  Offline synthetic and local-tokenizer checks establish reachability and bounds,
+  not semantic relevance, provider cost, latency or answer quality.
 
 ## Unreleased — bounded query-aware candidates
 
