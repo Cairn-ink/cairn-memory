@@ -478,6 +478,78 @@ test('R1: schedule mismatch irrevocably consumes the trusted session before outp
   session.close();
 });
 
+test('R1: an invalid opt runner invocation irrevocably consumes its process session', async (t) => {
+  const invalidCases = [
+    ['caps', { caps: { reservedMicroUsd: -1, requests: 1 } }, 'invalid_caps'],
+    ['limits', { limits: { ...PUBLIC_PILOT_LIMITS, recallLimit: 0 } }, 'invalid_limits'],
+    ['case-ids', { caseIds: [] }, 'invalid_case_selection'],
+    ['manifest', { manifest: [] }, 'invalid_manifest'],
+    ['reference-map', { referenceRenderings: {} }, 'invalid_options'],
+    ['judge-timeout', { judgeTimeoutMs: 0 }, 'invalid_options'],
+    ['answer-template', { answerTemplateVersion: 'untrusted-template' }, 'invalid_answer_template_version'],
+  ];
+  for (const [label, invalid, code] of invalidCases) {
+    const f = await setup(t, { source: sourceCases().slice(0, 1) });
+    const capability = f.caseCapability([ids.plain]);
+    const session = f.caseSession([ids.plain], null, null, null, capability);
+    const before = ledgerState(f.ledger);
+    await assert.rejects(runPublicPilot({ pilot: f.pilot, session, directory: f.output(`invalid-opt-${label}`),
+      caseIds: [ids.plain], ...invalid }), { code });
+    await assert.rejects(runPublicPilot({ pilot: f.pilot, session,
+      directory: f.output(`invalid-opt-${label}-corrected`), caseIds: [ids.plain] }),
+    { code: 'case_session_consumed' });
+    assert.throws(() => f.caseSession([ids.plain], null, null, null, capability),
+      { code: 'capability_consumed' });
+    assert.equal(f.calls.length, 0);
+    assert.deepEqual(ledgerState(f.ledger), before);
+    await assert.rejects(lstat(f.output(`invalid-opt-${label}`)), { code: 'ENOENT' });
+    await assert.rejects(lstat(f.output(`invalid-opt-${label}-corrected`)), { code: 'ENOENT' });
+    session.close();
+  }
+
+  const nonplain = await setup(t, { source: sourceCases().slice(0, 1) });
+  const nonplainSession = nonplain.caseSession([ids.plain]);
+  const arrayOptions = Object.assign([], { pilot: nonplain.pilot, session: nonplainSession,
+    directory: nonplain.output('nonplain-invalid'), caseIds: [ids.plain] });
+  await assert.rejects(runPublicPilot(arrayOptions), { code: 'invalid_options' });
+  await assert.rejects(runPublicPilot({ pilot: nonplain.pilot, session: nonplainSession,
+    directory: nonplain.output('nonplain-corrected'), caseIds: [ids.plain] }),
+  { code: 'case_session_consumed' });
+  assert.equal(nonplain.calls.length, 0);
+  assert.equal(ledgerState(nonplain.ledger).requestCount, 0);
+  await assert.rejects(lstat(nonplain.output('nonplain-invalid')), { code: 'ENOENT' });
+  await assert.rejects(lstat(nonplain.output('nonplain-corrected')), { code: 'ENOENT' });
+  nonplainSession.close();
+
+  const accessor = await setup(t, { source: sourceCases().slice(0, 1) });
+  const opt = accessor.caseSession([ids.plain]);
+  const legacy = accessor.session();
+  let reads = 0;
+  const accessorOptions = { pilot: accessor.pilot, directory: accessor.output('accessor-invalid'),
+    caseIds: [ids.plain], caps: { reservedMicroUsd: -1, requests: 1 } };
+  Object.defineProperty(accessorOptions, 'session', { enumerable: true, configurable: true,
+    get() { reads += 1; return reads === 1 ? opt : legacy; } });
+  await assert.rejects(runPublicPilot(accessorOptions), { code: 'invalid_caps' });
+  assert.equal(reads, 1);
+  await assert.rejects(runPublicPilot({ pilot: accessor.pilot, session: opt,
+    directory: accessor.output('accessor-corrected'), caseIds: [ids.plain] }),
+  { code: 'case_session_consumed' });
+  assert.equal(accessor.calls.length, 0);
+  opt.close();
+  legacy.close();
+
+  const ordinary = await setup(t, { source: sourceCases().slice(0, 1) });
+  const ordinarySession = ordinary.session();
+  await assert.rejects(runPublicPilot({ pilot: ordinary.pilot, session: ordinarySession,
+    directory: ordinary.output('legacy-invalid'), caps: { reservedMicroUsd: -1, requests: 1 } }),
+  { code: 'invalid_caps' });
+  const report = await runPublicPilot({ pilot: ordinary.pilot, session: ordinarySession,
+    directory: ordinary.output('legacy-corrected'), caseIds: [ids.plain] });
+  assert.equal(report.summary.scored, 1);
+  assert.ok(ordinary.calls.length > 0);
+  ordinarySession.close();
+});
+
 test('R2/R5: zero-score nested identity tampering and mixed-policy merges fail closed', async (t) => {
   const f = await setup(t);
   const numericOutput = f.output('case-deadline-zero-score');

@@ -675,9 +675,10 @@ const validateSession = (session) => {
     || !session.memoryModel || typeof session.memoryModel !== 'object') fail('invalid_session');
 };
 
-const validateOptions = (options) => {
+const validateOptions = (options, sessionSnapshot, sessionCaptured = false) => {
   if (!isPlainObject(options) || Object.keys(options).some((key) => !RUN_OPTION_KEYS.includes(key))
     || ['pilot', 'session', 'directory'].some((key) => !Object.hasOwn(options, key))) fail('invalid_options');
+  const session = sessionCaptured ? sessionSnapshot : options.session;
   const { pilot } = options;
   const answerTemplateVersion = Object.hasOwn(options, 'answerTemplateVersion')
     ? options.answerTemplateVersion : PUBLIC_ANSWER_TEMPLATE_VERSION;
@@ -687,7 +688,7 @@ const validateOptions = (options) => {
   if (!pilot || typeof pilot !== 'object' || pilot.schemaVersion !== PILOT_SCHEMA_VERSION
     || !Array.isArray(pilot.cases) || pilot.cases.length < 1 || !isPlainObject(pilot.identity)
     || !validString(pilot.identity.manifestSha256) || !Array.isArray(pilot.identity.questionIds)) fail('invalid_pilot');
-  validateSession(options.session);
+  validateSession(session);
   const limits = options.limits ?? PUBLIC_PILOT_LIMITS;
   exactObject(limits, ['contextWindow', 'outputTokens', 'answerTimeoutMs', 'recallLimit'], 'invalid_limits');
   if (Object.values(limits).some((value) => !safeInteger(value, 1))) fail('invalid_limits');
@@ -711,7 +712,7 @@ const validateOptions = (options) => {
       || new Set(options.caseIds).size !== options.caseIds.length) fail('invalid_case_selection');
     caseIds = caseIds.filter((id) => options.caseIds.includes(id));
   }
-  return { pilot, session: options.session, limits: structuredClone(limits), judgeTimeoutMs,
+  return { pilot, session, limits: structuredClone(limits), judgeTimeoutMs,
     caps: options.caps ? structuredClone(options.caps) : null, manifest, caseIds,
     referenceRenderings: options.referenceRenderings, onCase: options.onCase, answerTemplateVersion };
 };
@@ -872,14 +873,29 @@ const summarizeArm = (arm) => arm ? { name: arm.name, status: arm.status, reason
   latencyMs: arm.diagnostics?.latencyMs ?? null } : null;
 
 export async function runPublicPilot(options) {
+  let sessionSnapshot;
+  let sessionCaptured = false;
+  let caseDeadline = null;
+  if (options !== null && typeof options === 'object' && Object.hasOwn(options, 'session')) {
+    const plain = isPlainObject(options);
+    const descriptor = Object.getOwnPropertyDescriptor(options, 'session');
+    if (plain || descriptor && Object.hasOwn(descriptor, 'value')) {
+      sessionSnapshot = plain ? options.session : descriptor.value;
+      sessionCaptured = true;
+    }
+  }
+  if (sessionCaptured) {
+    caseDeadline = caseDeadlineSessions.get(sessionSnapshot) ?? null;
+    if (caseDeadline) {
+      if (caseDeadline.used) fail('case_session_consumed');
+      caseDeadline.used = true;
+    }
+  }
   const { pilot, session, limits, judgeTimeoutMs, caps, manifest, caseIds, referenceRenderings, onCase,
     answerTemplateVersion }
-    = validateOptions(options);
-  const caseDeadline = caseDeadlineSessions.get(session) ?? null;
+    = validateOptions(options, sessionSnapshot, sessionCaptured);
   const caseTimeoutIdentity = caseDeadline?.identity ?? null;
   if (caseDeadline) {
-    if (caseDeadline.used) fail('case_session_consumed');
-    caseDeadline.used = true;
     const expectedSchedule = [...caseIds.map((caseId) => ({ phase: 'generation', caseId })),
       ...caseIds.map((caseId) => ({ phase: 'scoring', caseId }))];
     if (canonical(caseDeadline.guard.caseDeadlineCapability.schedule) !== canonical(expectedSchedule)) {
