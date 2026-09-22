@@ -86,9 +86,11 @@ test('diagnostics: namespace selection bounds remain strict', async (t) => {
 });
 
 test('diagnostics: extraction and classification validation preserve admitted-but-unfiled capture', async (t) => {
-  const extraction = fixture(t, { extract: () => ({ items: [{ content: secret, sourceIndices: [99] }] }) });
+  const extraction = fixture(t, { extract: () => ({ items: [{ content: secret, kind: 'fact', confidence: 0.8,
+    sourceIndices: [99] }] }) });
   assert.deepEqual(await capture(extraction.core), failed('invalid_model_output'));
-  event(extraction.events.at(-1), 'extract', 'core_validation', 'invalid_extraction');
+  event(extraction.events.at(-1), 'extract', 'core_validation', 'invalid_extraction_source_range');
+  assert.deepEqual(ok(extraction.core.list({ namespace })).memories, []);
   const classification = fixture(t, { classify: () => ({ items: [] }) });
   const value = ok(await capture(classification.core));
   assert.equal(value.admission.memories.length, 1);
@@ -96,6 +98,26 @@ test('diagnostics: extraction and classification validation preserve admitted-bu
   event(classification.events.at(-1), 'classify', 'core_validation', 'invalid_classification');
   const stored = ok(classification.core.get({ namespace, memoryId: value.admission.memories[0].id }));
   assert.equal(stored.memory.filing.status, 'unfiled');
+});
+
+test('diagnostics: extraction validation reports fixed content-free rejection categories', async (t) => {
+  const valid = { content: secret, kind: 'fact', confidence: 0.8, sourceIndices: [0] };
+  const cases = [
+    [null, 'invalid_extraction_output_shape'],
+    [{ items: [{ ...valid, extra: true }] }, 'invalid_extraction_item_shape'],
+    [{ items: [{ ...valid, content: ' ' }] }, 'invalid_extraction_text'],
+    [{ items: [{ ...valid, confidence: 2 }] }, 'invalid_extraction_value'],
+    [{ items: [{ ...valid, sourceIndices: [] }] }, 'invalid_extraction_source_shape'],
+    [{ items: [{ ...valid, sourceIndices: [0, 0] }] }, 'invalid_extraction_source_duplicate'],
+    [{ items: [{ ...valid, sourceIndices: [1] }] }, 'invalid_extraction_source_range'],
+  ];
+  for (const [output, reason] of cases) {
+    const current = fixture(t, { extract: () => output });
+    assert.deepEqual(await capture(current.core), failed('invalid_model_output'), reason);
+    assert.equal(current.events.length, 1, reason);
+    event(current.events[0], 'extract', 'core_validation', reason);
+    assert.deepEqual(ok(current.core.list({ namespace })).memories, [], reason);
+  }
 });
 
 test('diagnostics: successful capture and recall emit nothing, including after final evidence read', async (t) => {
@@ -141,6 +163,11 @@ test('diagnostics: throwing and rejecting observers preserve byte-identical publ
     admit(core);
     assert.equal(JSON.stringify(await recall(core)), JSON.stringify(failed('invalid_model_output')));
     await setImmediate();
+
+    const extraction = fixture(t, { extract: () => ({ items: [{ content: secret, kind: 'fact', confidence: 0.8,
+      sourceIndices: [1] }] }), onDiagnostic });
+    assert.equal(JSON.stringify(await capture(extraction.core)), JSON.stringify(failed('invalid_model_output')));
+    assert.deepEqual(ok(extraction.core.list({ namespace })).memories, []);
   }
 });
 

@@ -9,7 +9,8 @@ import { recallMemories } from './recall.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
-import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from './query-candidates.mjs';
+import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
+  SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
@@ -504,6 +505,8 @@ export function openMemoryCore(input) {
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
         policy: QUERY_CANDIDATE_VERSION, scan: QUERY_SCAN_LIMIT });
+      if (navigation?.sourceMode) Object.assign(binding, { sourceMode: navigation.sourceMode,
+        sourcePolicy: SOURCE_QUERY_CANDIDATE_VERSION, sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
@@ -513,7 +516,8 @@ export function openMemoryCore(input) {
         const key = namespaceBinding(ns);
         let snapshot = navigation.pages.get(key);
         if (!snapshot) {
-          snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt });
+          snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
+            ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}) });
           navigation.pages.set(key, snapshot);
         }
         if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
@@ -610,6 +614,7 @@ export function openMemoryCore(input) {
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
+        ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
