@@ -79,6 +79,21 @@ direct MCP `remember_memory` certification, full-benchmark accuracy,
 per-type reliability, competitor quality or promotion readiness. It does not
 pool with or revise [PR #198](https://github.com/Cairn-ink/cairn-memory/pull/198).
 
+## Source-ranking screen showed equality, not improvement
+
+The [public source-ranking screen](evidence/source-ranking-screen.md) retained
+all 23 required source groups in both frozen arms across 12 authored synthetic
+cases, with no irrelevant or redundant selections. The candidate tied the
+baseline; passing an equality-permitting provisional gate does not establish a
+ranking improvement, answer quality, a LongMemEval score or promotion readiness.
+
+A separate frozen 30-case LongMemEval launch stopped with `unsafe_output`
+before any API request. All 30 cases remain not run and no score exists. The
+confirmed cause was an operator/output-setup bug: preflight omitted a
+parent-directory check before non-recursive output creation. It was not a model
+or product-memory quality result, and this documentation does not authorize or
+promise a relaunch.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)
@@ -88,4 +103,5 @@ pool with or revise [PR #198](https://github.com/Cairn-ink/cairn-memory/pull/198
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [Recall-observation pilot](evidence/recall-observation-pilot.md)
+- [Public source-ranking screen](evidence/source-ranking-screen.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
