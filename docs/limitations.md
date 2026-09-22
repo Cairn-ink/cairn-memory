@@ -130,6 +130,16 @@ identity intentionally fails with `qualification_conflict`; the observer does
 not turn that immutable provenance boundary into a successful attach. No source
 archive, staging default, retry or source-bound-v2 benchmark switch is added.
 
+## Historical extraction rejection remains unattributed
+
+The retained six-case public pilot records one legacy `invalid_extraction`
+event, but not the rejected extraction object or provider response. Its exact
+validation branch is therefore unproven. Prospective fixed extraction reasons
+can distinguish shape, text/value and source-selection checks without retaining
+returned values or indices; they cannot refine that old event, repair the old
+case or justify a paid retry. This is an observability change, not evidence of
+better extraction, recall or answer quality.
+
 ## Recall-stage observations are mechanics, not retrieval quality
 
 Fresh private public-pilot diagnostics can prospectively distinguish visible

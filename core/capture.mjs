@@ -63,9 +63,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
     const output = await callModel(model, 'extract', retained ? retainedSystem : system, {
       messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })),
     }, { failureCode: 'extraction_failed' });
-    let items;
-    try { items = extractedItems(output, snapshot, retained?.messages); }
-    catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
+    let items = extractedItems(output, snapshot, retained?.messages,
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason));
     // Do not start another interpretation stage after explicit discard/forget.
     // A provider request already in flight cannot be recalled by local deletion.
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));

@@ -1723,7 +1723,8 @@ test('A3: the evidence-shape fallback labels requests when no run record backs t
 test('PO1-PO4: case artifacts distinguish adapter and core rejection without changing generation', async (t) => {
   const source = [
     fixture({ id: 'adapterbad', answerTurn: 'The adapterbad color is amber.' }),
-    fixture({ id: 'corebad', answerTurn: 'The corebad color is amber.' }),
+    fixture({ id: 'corebadrange', answerTurn: 'The corebadrange color is amber.' }),
+    fixture({ id: 'corebadduplicate', answerTurn: 'The corebadduplicate color is amber.' }),
     fixture({ id: 'partial', answerTurn: 'The partial color is amber.' }),
     fixture({ id: 'clean', answerTurn: 'The clean color is amber.' }),
   ];
@@ -1737,9 +1738,13 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
       response.output[0].content[0].text = '{not-json';
       return Response.json(response);
     }
-    if (method === 'extract' && serialized.includes('corebad')) {
+    if (method === 'extract' && serialized.includes('corebadrange')) {
       return Response.json(responsesEnvelope(body.model, { items: [{ content: 'synthetic invalid item',
-        kind: 'fact', confidence: 2, sourceIndices: [0] }] }));
+        kind: 'fact', confidence: 0.5, sourceIndices: [99] }] }));
+    }
+    if (method === 'extract' && serialized.includes('corebadduplicate')) {
+      return Response.json(responsesEnvelope(body.model, { items: [{ content: 'synthetic invalid item',
+        kind: 'fact', confidence: 0.5, sourceIndices: [0, 0] }] }));
     }
     if (method === 'extract' && serialized.includes('partial')) {
       return Response.json(responsesEnvelope(body.model, { items: [{ content: 'partial classification marker',
@@ -1758,22 +1763,26 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
   session.close();
 
   const adapter = await readJson(output, 'cases', caseIds.adapterbad, 'diagnostics.json');
-  const core = await readJson(output, 'cases', caseIds.corebad, 'diagnostics.json');
+  const coreRange = await readJson(output, 'cases', caseIds.corebadrange, 'diagnostics.json');
+  const coreDuplicate = await readJson(output, 'cases', caseIds.corebadduplicate, 'diagnostics.json');
   const partial = await readJson(output, 'cases', caseIds.partial, 'diagnostics.json');
   const clean = await readJson(output, 'cases', caseIds.clean, 'diagnostics.json');
   assert.deepEqual(adapter.memoryModel.records, [
     { version: 1, stage: 'extract', layer: 'adapter', reason: 'output_json' },
     { version: 1, stage: 'extract', layer: 'core_call', reason: 'adapter_output_invalid' },
   ]);
-  assert.deepEqual(core.memoryModel.records,
-    [{ version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction' }]);
+  assert.deepEqual(coreRange.memoryModel.records,
+    [{ version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction_source_range' }]);
+  assert.deepEqual(coreDuplicate.memoryModel.records,
+    [{ version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction_source_duplicate' }]);
   assert.ok(partial.memoryModel.records.some(record => record.stage === 'classify'));
   assert.deepEqual(clean.memoryModel.records, []);
-  assert.ok([adapter, core, partial, clean].every((item) => item.questionId
+  assert.ok([adapter, coreRange, coreDuplicate, partial, clean].every((item) => item.questionId
     && item.memoryModel.availability === 'available' && item.memoryModel.recordLimit === 64
     && item.memoryModel.droppedRecords === 0));
   assert.deepEqual(adapter.captureAdmission.records.map(record => record.status), ['failed']);
-  assert.deepEqual(core.captureAdmission.records.map(record => record.status), ['failed']);
+  assert.deepEqual(coreRange.captureAdmission.records.map(record => record.status), ['failed']);
+  assert.deepEqual(coreDuplicate.captureAdmission.records.map(record => record.status), ['failed']);
   assert.deepEqual(partial.captureAdmission.records.map(record => [record.status,
     record.admittedReferenceCount, record.classificationStatus]), [['partial', 1, 'failed']]);
   assert.ok(clean.captureAdmission.records.every(record => record.status === 'completed'));
@@ -1784,17 +1793,17 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
   ]);
   assert.deepEqual(clean.answerCompletions.records.map((item) => item.diagnostic.finishReason),
     ['stop', 'stop', 'stop']);
-  assert.equal(report.summary.generated, 4);
+  assert.equal(report.summary.generated, 5);
   assert.equal(report.summary.generationFailed, 0);
   assert.equal(Object.hasOwn(report, 'diagnostics'), false);
   assert.ok(report.cases.every((item) => Object.hasOwn(item, 'diagnostics') === false));
 
   const memoryGenerations = f.calls.filter((call) => call.pathname === URLS.generation);
-  for (const marker of ['adapterbad', 'corebad']) {
+  for (const marker of ['adapterbad', 'corebadrange', 'corebadduplicate']) {
     assert.equal(memoryGenerations.filter((call) => call.rawBody.includes(marker)).length, 1,
       `${marker} must stop memory generation after failed extraction`);
   }
-  for (const diagnostic of [adapter, core, partial, clean]) {
+  for (const diagnostic of [adapter, coreRange, coreDuplicate, partial, clean]) {
     const filename = path.join(output, 'cases', diagnostic.questionId, 'diagnostics.json');
     assert.equal((await lstat(filename)).mode & 0o777, 0o600);
     const text = await readFile(filename, 'utf8');

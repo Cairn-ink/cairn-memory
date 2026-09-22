@@ -62,6 +62,11 @@
   unchanged. Legacy artifacts without diagnostics remain unavailable; offline
   synthetic evidence does not establish a historical rejection cause or score
   improvement.
+- Prospective extraction validation now distinguishes fixed output/item shape,
+  text/value, source-shape, duplicate-source and source-range categories in the
+  same private observer. Public errors, admission, fail-stop ingestion and
+  retry behavior are unchanged; legacy `invalid_extraction` events cannot be
+  attributed retroactively.
 
 ## Unreleased — classification request-local wire aliases
 

@@ -58,23 +58,30 @@ export function retainedSourceView(snapshot) {
 }
 
 /** The extractor chooses indices; all receipt identity and text comes from the trusted source view. */
-export function extractedItems(output, snapshot, retainedMessages) {
+export function extractedItems(output, snapshot, retainedMessages, onInvalid = () => {}) {
+  let reason = 'invalid_extraction_output_shape';
   try {
     const sourceMessages = retainedMessages ?? snapshot.messages;
     object(output, ['items']);
     return denseArray(output.items, 0, 5).map((item) => {
+      reason = 'invalid_extraction_item_shape';
       object(item, ['content', 'kind', 'confidence', 'sourceIndices']);
+      reason = 'invalid_extraction_text';
       if (snapshot.captureQualification && (typeof item.content !== 'string' || !item.content.isWellFormed())) {
         fail('invalid_model_output');
       }
       const content = boundedText(item.content, 600);
+      reason = 'invalid_extraction_value';
       if (!kinds.includes(item.kind) || typeof item.confidence !== 'number' ||
           !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1) {
         fail('invalid_model_output');
       }
+      reason = 'invalid_extraction_source_shape';
       const indices = denseArray(item.sourceIndices, 1, 4);
-      if (new Set(indices).size !== indices.length || indices.some((index) =>
-          !Number.isInteger(index) || index < 0 || index >= sourceMessages.length)) {
+      reason = 'invalid_extraction_source_duplicate';
+      if (new Set(indices).size !== indices.length) fail('invalid_model_output');
+      reason = 'invalid_extraction_source_range';
+      if (indices.some((index) => !Number.isInteger(index) || index < 0 || index >= sourceMessages.length)) {
         fail('invalid_model_output');
       }
       const receipts = indices.map((index) => {
@@ -86,5 +93,8 @@ export function extractedItems(output, snapshot, retainedMessages) {
       return { content, kind: item.kind, confidence: item.confidence, receipts,
         ...(snapshot.causal ? { sourceIndices: [...indices] } : {}) };
     });
-  } catch { fail('invalid_model_output'); }
+  } catch {
+    try { onInvalid(reason); } catch { /* Diagnostics never change validation. */ }
+    fail('invalid_model_output');
+  }
 }

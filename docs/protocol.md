@@ -45,6 +45,10 @@ The artifact never accepts provider/model exception strings, raw responses,
 request bodies, source or answer text, headers, keys, paths, memory/receipt/
 source identifiers or arbitrary observer fields. Every observed field is read
 once, checked against the fixed allowlists and projected into a new object.
+Prospective core extraction validation uses fixed output-shape, item-shape,
+text, value, source-shape, duplicate-source and source-range reason categories.
+These categories retain neither returned values nor indices and do not recover
+the branch behind an older `invalid_extraction` catchall.
 Model and capture events are each capped at 64 per case and answer completion
 rows at the three fixed arms; overflow is counted, not retained. Recall-stage
 selection retains at most two rows and rank/final recall at most one, with a
