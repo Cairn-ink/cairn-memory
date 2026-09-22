@@ -144,6 +144,26 @@ fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
 
+Classification alone uses deterministic request-local short aliases for the
+target-memory IDs and visible catalog-MOC IDs sent in the input and strict output
+schema. Memory and MOC aliases use separate roles. The adapter validates output
+against that exact aliased schema, then decodes only `memoryId`, `parentIds` and
+`newL1.parentL2Ids` through private per-invocation maps before returning to core.
+Unknown, wrong-role and raw UUID references fail closed. No reverse table is sent,
+persisted or reported, and count/generation share one frozen aliased snapshot;
+concurrent requests do not share mappings. Core inputs, durable IDs, catalog
+selection/order, content, titles, metadata and `mapExhausted` are unchanged.
+The original unaliased input still has to pass both existing 6,000-local-token
+checks before transport; the provider ceiling and output allowance remain 7,024
+and 1,024. Other adapter methods keep their existing wire formats.
+
+These aliases compress repeated opaque identifiers; they are not anonymization.
+Card content, titles and metadata still cross the same external-provider boundary,
+and an identifier copied into content or a title is not rewritten. The offline
+reduction evidence uses the pinned local tokenizer and fake HTTP. It is neither a
+provider count nor proof of the interrupted pilot's unknown historical count or
+cause; see the [classification wire acceptance](plans/classification-wire-aliases.md).
+
 Classification instructions distinguish an empty complete map from uncertainty:
 a clear subject without a suitable visible L1 group should propose a precise
 new topic. Existing-parent arrays remain empty when no such groups exist.
