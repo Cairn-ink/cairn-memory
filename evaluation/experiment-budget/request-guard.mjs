@@ -1309,6 +1309,13 @@ function verifyPinnedBaseline(capability, state) {
     || historicalDigest(historicalRows(state)) !== capability.historicalDigest) fail('policy_mismatch');
 }
 
+function normalizeCaseClaimError(error) {
+  if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) return error;
+  const primaryCode = Number.isInteger(error?.errcode) ? error.errcode & 0xff : null;
+  return new ExperimentRequestGuardError(primaryCode === 5 || primaryCode === 6
+    ? 'capability_busy' : 'unsafe_policy_binding');
+}
+
 // Provisioning pins the whole settled historical prefix. It does not consume the
 // one-shot execution claim and therefore is safe for a future dry-run verifier.
 export function authorizeCaseDeadlineCapability(options) {
@@ -1354,9 +1361,12 @@ export function authorizeCaseDeadlineCapability(options) {
 }
 
 function consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, benchmarkExtension) {
-  const ledger = reopenExperimentBudget(ledgerConfiguration);
+  let ledger;
   let lock;
+  let result;
+  let operationError;
   try {
+    ledger = reopenExperimentBudget(ledgerConfiguration);
     lock = new DatabaseSync(path.join(ledgerConfiguration.directory, 'experiment-budget.sqlite'));
     lock.exec('BEGIN IMMEDIATE');
     verifyCaseCapability(capability, ledgerConfiguration, policy, benchmarkExtension);
@@ -1371,22 +1381,41 @@ function consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, bench
       if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
       fail('unsafe_policy_binding');
     }
+    let claimError;
     try {
       const claimRecord = { version: 'case-deadline-claim-v1', executionId: capability.executionId,
         capabilityDigest: historicalDigest([capability]) };
       writeFileSync(descriptor, `${canonical(claimRecord)}\n`, { encoding: 'utf8' });
       fsyncSync(descriptor);
-    } catch {
-      // Never unlink a partial claim: its existence is irrevocable consumption.
-      fail('unsafe_policy_binding');
-    } finally { try { closeSync(descriptor); } catch { /* Preserve the authoritative failure. */ } }
-    const directoryDescriptor = openSync(ledgerConfiguration.directory, constants.O_RDONLY);
-    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
-    return deepFreeze(historicalRows(state));
-  } finally {
-    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* Claim is a separate durable file. */ } lock.close(); }
-    ledger.close();
+    } catch (error) { claimError = error; }
+    try { closeSync(descriptor); } catch (error) { claimError ??= error; }
+    // Never unlink a partial claim: its existence is irrevocable consumption.
+    if (claimError) throw claimError;
+    let directoryDescriptor;
+    let directoryError;
+    try {
+      directoryDescriptor = openSync(ledgerConfiguration.directory, constants.O_RDONLY);
+      fsyncSync(directoryDescriptor);
+    } catch (error) { directoryError = error; }
+    if (directoryDescriptor !== undefined) {
+      try { closeSync(directoryDescriptor); } catch (error) { directoryError ??= error; }
+    }
+    if (directoryError) throw directoryError;
+    result = deepFreeze(historicalRows(state));
+  } catch (error) {
+    operationError = normalizeCaseClaimError(error);
   }
+  let cleanupError;
+  if (lock) {
+    try { lock.exec('ROLLBACK'); } catch (error) { cleanupError = normalizeCaseClaimError(error); }
+    try { lock.close(); } catch (error) { cleanupError ??= normalizeCaseClaimError(error); }
+  }
+  if (ledger) {
+    try { ledger.close(); } catch (error) { cleanupError ??= normalizeCaseClaimError(error); }
+  }
+  if (operationError) throw operationError;
+  if (cleanupError) throw cleanupError;
+  return result;
 }
 
 export function createBenchmarkExperimentRequestGuard(options) {

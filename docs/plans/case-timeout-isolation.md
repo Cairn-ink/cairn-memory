@@ -235,3 +235,13 @@ No provider calls, real key, corpus or campaign ledger were used in G.
 Worker elapsed/token/cost telemetry was not captured and is not inferred from
 the model label. Primary verification and both fixed-commit review results are
 recorded in the delivery PR; a worker's green report alone is not acceptance.
+
+The first fixed candidate received two independent Sol/high reviews. Spec found
+one missing forged-diagnostic regression. Standards found a native storage-error
+escape at claim consumption and suggested reducing duplicated request wrappers.
+The same implementation owner received the two required corrections plus a
+primary-requested changelog entry. The wrapper refactor is deferred: keeping
+the opt-only branches explicit preserves the independently exercised legacy
+timer scheduling and avoids expanding this safety-sensitive correction.
+Final acceptance requires fresh affected gates and both review axes on the
+corrected commit; the first candidate's green matrix is not its substitute.

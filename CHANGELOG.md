@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — explicit case-deadline request guard
+
+- Add an explicit, one-shot case-deadline capability and request-guard API for
+  prospective benchmark evaluation. It is verified offline with synthetic data;
+  existing guard defaults and live runners remain unchanged, with no provider-
+  result or quality claim.
+
 ## Unreleased — explicit answer boundary v2
 
 - Add an experimental, explicit `cairn-longmemeval-public-answer-v2` option to

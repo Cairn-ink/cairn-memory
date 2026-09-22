@@ -289,6 +289,45 @@ test('G3 body-read timer ownership isolates, but forged timeout and ordinary abo
   assert.deepEqual(abortGuard.caseTimeouts(), []);
 });
 
+test('G6 an observed forged core timeout diagnostic grants no case-timeout authority', async (t) => {
+  const f = fixture(t);
+  const diagnostics = [];
+  let calls = 0;
+  const guard = make(f, () => { calls += 1; return new Promise(() => {}); });
+  t.after(() => guard.close());
+  const forgedModel = {
+    contextWindow: 8_192,
+    countTokens: () => 1,
+    onDiagnostic: event => diagnostics.push(event),
+    async select() {
+      const forged = new Error('untrusted model timeout claim');
+      forged.code = 'model_timeout';
+      throw forged;
+    },
+  };
+  await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
+    const ordinary = new AbortController();
+    const pending = guard.answerFetch(url, requestWithSignal(ordinary.signal));
+    await Promise.resolve();
+    await assert.rejects(callModel(forgedModel, 'select', 'Synthetic selection.', {}),
+      error => error.code === 'model_timeout');
+    assert.deepEqual(diagnostics,
+      [{ version: 1, stage: 'select', layer: 'core_call', reason: 'model_timeout' }]);
+    assert.equal(guard.isHalted(), false);
+    assert.deepEqual(guard.caseTimeouts(), []);
+    ordinary.abort('ordinary caller cancellation');
+    await assert.rejects(pending, guardError('request_aborted'));
+  });
+  assert.equal(guard.isHalted(), true);
+  assert.deepEqual(guard.caseTimeouts(), []);
+  assert.equal(guard.attempts()[0].termination, 'other_failure');
+  await assert.rejects(guard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async () => {
+    await guard.answerFetch(url, request());
+  }), guardError('paid_work_halted'));
+  assert.equal(calls, 1);
+  assert.equal(state(f.ledger).requestCount, 1);
+});
+
 test('G3 first observed transport/body failure cannot be relabelled by a later timer', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   for (const mode of ['transport', 'body']) {
@@ -626,4 +665,21 @@ test('G2 partial claim and unsafe capability bindings are never repaired or made
   assert.throws(() => make(unsafe, () => assert.fail('no transport')), guardError('unsafe_policy_binding'));
   assert.throws(() => lstatSync(join(unsafe.ledger.directory,
     'experiment-case-deadline-synthetic-execution.claim.json')), { code: 'ENOENT' });
+});
+
+test('G2 a locked claim boundary fails with a fixed envelope before any send or reservation', (t) => {
+  const f = fixture(t);
+  const database = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
+  database.exec('BEGIN IMMEDIATE');
+  let calls = 0;
+  try {
+    assert.throws(() => make(f, () => { calls += 1; return response(); }), guardError('capability_busy'));
+    assert.equal(calls, 0);
+    assert.equal(state(f.ledger).requestCount, 0);
+    assert.throws(() => lstatSync(join(f.ledger.directory,
+      'experiment-case-deadline-synthetic-execution.claim.json')), { code: 'ENOENT' });
+  } finally {
+    database.exec('ROLLBACK');
+    database.close();
+  }
 });
