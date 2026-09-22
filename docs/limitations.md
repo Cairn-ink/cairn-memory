@@ -60,6 +60,43 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 
+## Case-deadline engineering pilot
+
+A separately tested but unmerged candidate completed one frozen six-case
+LongMemEval-S engineering pilot under a one-shot case-deadline policy. The
+[retained evidence contract](plans/case-deadline-pilot-results.md) pins the
+candidate, answer-v2 template, two model revisions, official scorer revision,
+metadata-only selection, fixed roster and order, cumulative budget and
+no-retry/no-resume rule. Read-only reconciliation matched all 1,218 new attempts
+to private accounting with no unsettled row or new `unknown` outcome.
+
+All six outer generation and scoring wrappers completed, but Cairn produced only
+five completed answer arms: one temporal-reasoning arm was unresolved at generation
+because of `unknown_or_mismatched_receipt`. On fixed N=6, the scorer resolved and
+marked correct 3/5 Cairn judgments, 4/6 full-history judgments and 0/6 no-memory
+judgments. The fair all-three-resolved comparison is common N=5: Cairn 3/5,
+full history 4/5 and no memory 0/5. These are pinned machine judgments, not
+independent human validation. No live case timeout occurred, so timeout
+continuation still has only offline synthetic evidence.
+
+The roster has one case from each official base type but no abstention case. It
+is not a representative 500-case sample, independent blind holdout, leaderboard
+submission, competitor comparison or production guarantee. The Cairn arm sees
+bounded receipt prefixes with recall limit 6 through the legacy public-core
+capture path; the full-history arm has a different evidence boundary, and the
+no-memory arm receives empty evidence under the same instruction to abstain when
+the available information is insufficient. It is not an unrestricted zero-shot
+baseline or an unconditional abstention instruction. The candidate has not merged
+or shipped, and this pilot does not verify installed Hermes behavior. Earlier
+answer-v1 and globally halted answer-v2 runs remain separate evidence and are
+not retroactively relabeled under the case-deadline policy.
+
+The run added 1,218 requests, US$6.960740 in conservative reservations and
+US$1.183850 in known token-priced usage; 592 count requests retain unknown
+billing. Cumulative use is 4,849/5,000 requests and US$41.514820/US$50 reserved.
+The remainder is not a refund or new authorization, and none of these figures
+is a provider invoice.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)
@@ -68,4 +105,5 @@ paid evaluation or broad promotion is authorized by this consolidation.
 - [Source-only context](source-evidence-context.md)
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
+- [Case-deadline pilot evidence contract](plans/case-deadline-pilot-results.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
