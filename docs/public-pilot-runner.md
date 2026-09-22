@@ -18,6 +18,7 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Benchmark authorization | `--authorization-id <id>` | Provisions or re-verifies `experiment-benchmark-extension.json` beside the ledger (P1) |
 | Existing request allowance | `--request-allowance-authorization-id <id>` | Explicitly loads an already-issued derived benchmark allowance whose original benchmark ID must match `--authorization-id`; the CLI never increases the ledger cap |
 | Prepared v2 pilot | `--prepared /private/prepared` | Four-file directory from `prepareLongMemEval`; digest-checked by `loadPreparedPilot`; never written |
+| Prepared cohort bound | `--max-prepared-cases N` | Optional loader-only ceiling from 1 through 500; omission remains 7. It grants no budget, request, retry, resume, replacement, or resource-limit authority |
 | Optional reference sidecar | `--sidecar /private/reference-sidecar.json --sidecar-sha256 <hex>` | From `render-reference-sidecar.py`; needed only for non-string references |
 | Output | `--output /private/run-dir` (new, or a previous legacy/default run directory to resume) | Created 0700; every file 0600 |
 | Case subset | `--cases id1,id2` (source or opaque ids; roster order is kept) | Omit to run every prepared case |
@@ -43,7 +44,9 @@ OPENAI_API_KEY='<operator secret>' node evaluation/live/public-pilot-cli.mjs \
 re-verification, prepared-pilot digests, case selection) and prints, as one
 JSON line, the projected reservation and request count per case, the totals,
 whether they fit the caps and the ledger's remaining allowance, and the ledger
-state. It reserves nothing and does not read the key. Exit codes: 0 done, 1
+state. It also prints the effective `maxPreparedCases`; a prepared manifest
+above that bound refuses before provider-key access or a case claim. It
+reserves nothing and does not read the key. Exit codes: 0 done, 1
 refused or failed (a fixed code on stderr, never data), 2 missing key.
 In case-deadline mode it also verifies the complete generation-then-scoring
 schedule, checkpoint, optional sidecar and durable capability binding without

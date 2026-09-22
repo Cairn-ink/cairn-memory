@@ -31,6 +31,13 @@ protocol record does not prove that a real provider ran. Dataset exposure,
 configuration freeze, guarded transport and independently reviewed paid results
 remain separate gates; no competitor comparison or promotion readiness follows.
 
+The private public-pilot loader defaults to seven prepared cases. Its explicit
+`--max-prepared-cases` opt-in can raise only that manifest-count ceiling, up to
+500; it neither enlarges the fixed artifact byte limits nor proves that a
+larger cohort fits them. It also grants no monetary or request authority and
+does not establish benchmark quality. Current coverage is synthetic and
+offline; any paid larger-cohort run remains separately gated.
+
 The public-comparison provenance adapter previously expected only capture's
 first 800-unit normalized source prefix. When that prefix ended in whitespace,
 admission's existing second canonicalization trimmed it before storage and the

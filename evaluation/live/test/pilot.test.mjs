@@ -7,6 +7,7 @@ import {
   readFile,
   rm,
   stat,
+  truncate,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,8 +17,11 @@ import test from 'node:test';
 import { prepareLongMemEval } from '../../longmemeval/prepare.mjs';
 import {
   loadPreparedPilot,
+  pilotEvaluatorFor,
+  PILOT_DEFAULT_MAX_CASES,
   PILOT_GENERATION_CONCURRENCY,
   PILOT_LIMITS,
+  PILOT_MAX_CASES,
   runPilot,
 } from '../pilot.mjs';
 
@@ -52,6 +56,26 @@ const prepare = async (root) => {
     datasetRevision: 'synthetic-pilot-revision',
     datasetVariant: 's-cleaned',
     questionIds: ['working-case', 'capture-failure-case'],
+    outputDirectory: prepared,
+  });
+  return prepared;
+};
+
+const prepareEight = async (root, suffix = '') => {
+  const cases = Array.from({ length: 8 }, (_, index) => caseFixture({
+    id: `cohort-case-${index + 1}`,
+    fact: `tone${index + 1}`,
+  }));
+  const source = JSON.stringify(cases);
+  const inputPath = path.join(root, `source-eight${suffix}.json`);
+  const prepared = path.join(root, `prepared-eight${suffix}`);
+  await writeFile(inputPath, source);
+  await prepareLongMemEval({
+    inputPath,
+    expectedSha256: digest(source),
+    datasetRevision: 'synthetic-eight-case-revision',
+    datasetVariant: 's-cleaned',
+    questionIds: cases.map((item) => item.question_id),
     outputDirectory: prepared,
   });
   return prepared;
@@ -237,6 +261,70 @@ test('artifact digest mismatch fails before a model callback or output mutation'
     { code: 'artifact_digest_mismatch' });
   assert.deepEqual(calls, { extract: 0, answer: [], judge: [] });
   await assert.rejects(stat(path.join(root, 'output')), { code: 'ENOENT' });
+});
+
+test('prepared cohort expansion is explicit, bounded, private, and fail-closed', async (t) => {
+  assert.equal(PILOT_DEFAULT_MAX_CASES, 7);
+  assert.equal(PILOT_MAX_CASES, 500);
+  const root = await mkdtemp(path.join(tmpdir(), 'cairn-live-pilot-cohort-limit-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const prepared = await prepareEight(root);
+  const manifestBytes = await readFile(path.join(prepared, 'manifest.json'));
+  const manifest = JSON.parse(manifestBytes);
+
+  await assert.rejects(loadPreparedPilot({ directory: prepared }), { code: 'invalid_manifest' });
+  for (const maxCases of [1, 7]) {
+    await assert.rejects(loadPreparedPilot({ directory: prepared, maxCases }),
+      { code: 'invalid_manifest' });
+  }
+  for (const maxCases of [8, 36, 500]) {
+    const pilot = await loadPreparedPilot({ directory: prepared, maxCases });
+    assert.deepEqual(pilot.identity, {
+      manifestSha256: digest(manifestBytes),
+      historySha256: manifest.artifacts.history.sha256,
+      questionsSha256: manifest.artifacts.questions.sha256,
+      evaluatorSha256: manifest.artifacts.evaluator.sha256,
+      questionIds: manifest.selection.question_ids,
+      count: 8,
+    });
+    assert.equal(pilot.cases.length, 8);
+    assert.doesNotMatch(JSON.stringify(pilot), /reference_answer|answer_session_ids|turn_labels/u);
+    assert.equal(pilotEvaluatorFor(pilot, pilot.identity.questionIds[0]).question_id,
+      pilot.identity.questionIds[0]);
+  }
+
+  for (const maxCases of [0, -1, 501, 1.5, '8', null, undefined]) {
+    await assert.rejects(loadPreparedPilot({ directory: prepared, maxCases }),
+      { code: 'invalid_options' });
+  }
+  await assert.rejects(loadPreparedPilot({ directory: prepared, maxCases: 8, extra: true }),
+    { code: 'invalid_options' });
+  let accessorReads = 0;
+  const accessorOptions = { directory: prepared };
+  Object.defineProperty(accessorOptions, 'maxCases', { enumerable: true,
+    get() { accessorReads += 1; return 8; } });
+  await assert.rejects(loadPreparedPilot(accessorOptions), { code: 'invalid_options' });
+  assert.equal(accessorReads, 0);
+
+  const digestPrepared = await prepareEight(root, '-digest');
+  const historyPath = path.join(digestPrepared, 'history.jsonl');
+  await chmod(historyPath, 0o600);
+  await writeFile(historyPath, (await readFile(historyPath, 'utf8')).replace('tone1', 'shade'));
+  await assert.rejects(loadPreparedPilot({ directory: digestPrepared, maxCases: 8 }),
+    { code: 'artifact_digest_mismatch' });
+
+  const oversizedPrepared = await prepareEight(root, '-oversized');
+  await truncate(path.join(oversizedPrepared, 'history.jsonl'), (32 * 1024 * 1024) + 1);
+  await assert.rejects(loadPreparedPilot({ directory: oversizedPrepared, maxCases: 8 }),
+    { code: 'invalid_artifact' });
+
+  const identityPrepared = await prepareEight(root, '-identity');
+  const identityManifestPath = path.join(identityPrepared, 'manifest.json');
+  const identityManifest = JSON.parse(await readFile(identityManifestPath, 'utf8'));
+  identityManifest.selection.question_ids[0] = 'malformed-opaque-question-id';
+  await writeFile(identityManifestPath, `${JSON.stringify(identityManifest)}\n`);
+  await assert.rejects(loadPreparedPilot({ directory: identityPrepared, maxCases: 8 }),
+    { code: 'invalid_manifest' });
 });
 
 test('v1 artifacts and self-consistent legacy turn IDs fail closed before generation', async () => {

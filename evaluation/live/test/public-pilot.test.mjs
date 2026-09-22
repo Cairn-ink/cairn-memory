@@ -19,7 +19,7 @@ import { PUBLIC_ANSWER_TEMPLATE_VERSION, PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
 import { canonicalStoredReceiptExcerpt } from '../../longmemeval/receipt-canonicalization.mjs';
 import { loadReferenceRenderings } from '../../longmemeval/reference-rendering.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { loadPreparedPilot, pilotEvaluatorFor } from '../pilot.mjs';
+import { loadPreparedPilot, pilotEvaluatorFor, PILOT_DEFAULT_MAX_CASES } from '../pilot.mjs';
 import { main as cliMain, parseArguments, USAGE } from '../public-pilot-cli.mjs';
 import { mergePublicPilotRuns } from '../public-pilot-merge.mjs';
 import { createRecallStageCollector, RECALL_STAGE_OBSERVATION_VERSION } from '../recall-stage-observations.mjs';
@@ -70,6 +70,10 @@ const sourceCases = () => [
     answer: 'The color is never stated.' }),
   fixture({ id: 'numeric', answerTurn: 'The numeric count is 3.', answer: 3 }),
 ];
+const expandedSourceCases = () => Array.from({ length: 8 }, (_, index) => fixture({
+  id: `expanded-${index + 1}`,
+  answerTurn: `The expanded-${index + 1} color is amber.`,
+}));
 const ids = Object.fromEntries(['plain', 'long', 'abstain_abs', 'numeric'].map((id) => [id, opaqueQuestionId(id)]));
 
 const selectedRefs = (input) => input.maps.flatMap((page) => page.items.map((item) =>
@@ -123,7 +127,8 @@ const fakeUpstream = ({ calls, chat = defaultChat, count = null, generation = nu
 };
 const chatCalls = (calls) => calls.filter((call) => call.pathname === URLS.chat);
 
-async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, requestCap = 5_000 } = {}) {
+async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, requestCap = 5_000,
+  maxCases = PILOT_DEFAULT_MAX_CASES } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'cairn-public-pilot-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const inputPath = path.join(root, 'source.json');
@@ -138,7 +143,7 @@ async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, re
   createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('no setup transport') }).close();
   const benchmarkExtension = authorizeBenchmarkExtension({ ledger, policy,
     authorizationId: 'synthetic-public-pilot', stages: benchmarkStagePolicy() });
-  const pilot = await loadPreparedPilot({ directory: prepared });
+  const pilot = await loadPreparedPilot({ directory: prepared, maxCases });
   const calls = [];
   const session = (chat, count, generation) => createBenchmarkLiveSession({ ledger, apiKey: KEY,
     fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}),
@@ -1240,6 +1245,7 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
     fetchImpl: () => assert.fail('no transport') }), 0);
   const projection = JSON.parse(dry.text());
   assert.equal(projection.mode, 'dry-run');
+  assert.equal(projection.maxPreparedCases, PILOT_DEFAULT_MAX_CASES);
   assert.deepEqual(projection.caseIds, [ids.plain, ids.abstain_abs]);
   assert.equal(projection.projections.length, 2);
   assert.deepEqual(projection.fits, { caps: true, ledger: true });
@@ -1284,7 +1290,58 @@ test('CLI: help, dry run without reservation, missing key, unknown flag, and a g
   assert.equal(report.operator.runCommit, 'abcdef1');
   assert.deepEqual(report.operator.exclusionRegistry, ['excluded-one', 'excluded-two']);
   assert.equal(report.operator.authorizationId, 'synthetic-public-pilot');
+  assert.equal(report.operator.maxPreparedCases, PILOT_DEFAULT_MAX_CASES);
   assert.equal(ledgerState(f.ledger).requestCount, calls.length);
+});
+
+test('CLI: an eight-case prepared cohort requires explicit bounded keyless opt-in', async (t) => {
+  const f = await setup(t, { source: expandedSourceCases(), maxCases: 8 });
+  const ledgerFile = f.output('expanded-ledger.json');
+  await writeFile(ledgerFile, JSON.stringify(f.ledger), { mode: 0o600 });
+  const beforeState = ledgerState(f.ledger);
+  const beforeFiles = await fileSnapshot(f.ledger.directory);
+  const stream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
+    text() { return chunks.join(''); } }; };
+  let keyReads = 0;
+  const env = {};
+  Object.defineProperty(env, 'OPENAI_API_KEY', { get() { keyReads += 1; return KEY; } });
+  let transportCalls = 0;
+  const noTransport = () => { transportCalls += 1; return assert.fail('no dry-run transport'); };
+  const base = ['--prepared', f.prepared, '--ledger', ledgerFile,
+    '--authorization-id', 'synthetic-public-pilot', '--dry-run'];
+
+  for (const argv of [base, [...base, '--max-prepared-cases', '7']]) {
+    const stdout = stream();
+    const stderr = stream();
+    assert.equal(await cliMain(argv, { env, stdout, stderr, fetchImpl: noTransport }), 1);
+    assert.equal(stdout.text(), '');
+    assert.equal(stderr.text(), 'invalid_manifest\n');
+  }
+
+  const stdout = stream();
+  const stderr = stream();
+  assert.equal(await cliMain([...base, '--max-prepared-cases', '8'], {
+    env, stdout, stderr, fetchImpl: noTransport,
+  }), 0);
+  assert.equal(stderr.text(), '');
+  const projection = JSON.parse(stdout.text());
+  assert.equal(projection.mode, 'dry-run');
+  assert.equal(projection.maxPreparedCases, 8);
+  assert.equal(projection.pilot.count, 8);
+  assert.equal(projection.caseIds.length, 8);
+  assert.equal(projection.projections.length, 8);
+
+  const launched = spawnSync(process.execPath,
+    [new URL('../public-pilot-cli.mjs', import.meta.url).pathname,
+      ...base, '--max-prepared-cases', '8'],
+    { encoding: 'utf8', env: { NODE_NO_WARNINGS: '1' } });
+  assert.equal(launched.status, 0, launched.stderr);
+  assert.equal(launched.stderr, '');
+  assert.equal(JSON.parse(launched.stdout).maxPreparedCases, 8);
+  assert.equal(keyReads, 0);
+  assert.equal(transportCalls, 0);
+  assert.deepEqual(ledgerState(f.ledger), beforeState);
+  assert.deepEqual(await fileSnapshot(f.ledger.directory), beforeFiles);
 });
 
 test('R1: complete case CLI dry-run is keyless, non-consuming and safely repeatable', async (t) => {
@@ -1698,6 +1755,10 @@ test('N12: every CLI refusal exits 1 with a fixed code and no transport call', a
     { code: 'cap_flags_incomplete', argv: [...base, '--batch-cap-micro-usd', '1000'] },
     { code: 'invalid_number --batch-cap-micro-usd',
       argv: [...base, '--batch-cap-micro-usd', 'abc', '--batch-request-cap', '600'] },
+    { code: 'invalid_number --max-prepared-cases',
+      argv: [...base, '--max-prepared-cases', 'abc'] },
+    { code: 'invalid_max_prepared_cases', argv: [...base, '--max-prepared-cases', '0'] },
+    { code: 'invalid_max_prepared_cases', argv: [...base, '--max-prepared-cases', '501'] },
     { code: 'invalid_run_commit', argv: [...base, '--run-commit', 'ZZZZZZZ'] },
     { code: 'input_unreadable',
       argv: ['--prepared', f.prepared, '--ledger', f.output('missing.json'),

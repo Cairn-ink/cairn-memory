@@ -30,6 +30,8 @@ import { deepFreeze, isPlainObject, validString } from '../longmemeval/validatio
 
 export const PILOT_SCHEMA_VERSION = 'cairn-longmemeval-live-pilot-v1';
 export const PILOT_GENERATION_CONCURRENCY = 3;
+export const PILOT_DEFAULT_MAX_CASES = 7;
+export const PILOT_MAX_CASES = 500;
 export const PILOT_LIMITS = deepFreeze({
   evidenceTokens: 6_000,
   requestTokens: 8_000,
@@ -153,7 +155,7 @@ const validateArtifactMetadata = (value, expectedFilename) => {
   }
 };
 
-const validateManifest = (manifest) => {
+const validateManifest = (manifest, maxCases) => {
   exactObject(manifest, ['schema_version', 'preparation_kind', 'dataset', 'selection',
     'session_id_map', 'artifacts', 'sizes', 'compatibility', 'boundaries'], 'invalid_manifest');
   if (manifest.schema_version !== PREPARATION_SCHEMA_VERSION || manifest.preparation_kind !== 'pilot') {
@@ -173,7 +175,7 @@ const validateManifest = (manifest) => {
   denseArray(manifest.selection.source_question_ids, 1, 'invalid_manifest');
   denseArray(manifest.selection.question_ids, 1, 'invalid_manifest');
   if (manifest.selection.kind !== 'pilot' || !safeInteger(manifest.selection.count, 1)
-    || manifest.selection.count > 7
+    || manifest.selection.count > maxCases
     || manifest.selection.count !== manifest.selection.question_ids.length
     || manifest.selection.count !== manifest.selection.source_question_ids.length
     || manifest.selection.question_ids.some((id) => !validString(id))
@@ -272,7 +274,18 @@ const loadArtifacts = async (directory, manifest) => {
 };
 
 export async function loadPreparedPilot(options) {
-  exactObject(options, ['directory'], 'invalid_options');
+  if (!isPlainObject(options)) fail('invalid_options');
+  const hasMaxCases = Object.hasOwn(options, 'maxCases');
+  exactObject(options, hasMaxCases ? ['directory', 'maxCases'] : ['directory'], 'invalid_options');
+  let maxCases = PILOT_DEFAULT_MAX_CASES;
+  if (hasMaxCases) {
+    const descriptor = Object.getOwnPropertyDescriptor(options, 'maxCases');
+    if (!descriptor || !Object.hasOwn(descriptor, 'value')
+      || !safeInteger(descriptor.value, 1) || descriptor.value > PILOT_MAX_CASES) {
+      fail('invalid_options');
+    }
+    maxCases = descriptor.value;
+  }
   const directory = resolveDirectory(options.directory, 'invalid_prepared_directory');
   await validateDirectory(directory, 'invalid_prepared_directory');
   const entries = (await readdir(directory)).sort();
@@ -283,7 +296,7 @@ export async function loadPreparedPilot(options) {
   const manifestBytes = await readRegularFile(path.join(directory, 'manifest.json'), 'invalid_manifest',
     MAX_MANIFEST_BYTES);
   const manifest = decodeJson(manifestBytes, 'invalid_manifest');
-  validateManifest(manifest);
+  validateManifest(manifest, maxCases);
   const records = await loadArtifacts(directory, manifest);
   const cases = [];
   const evaluators = new Map();

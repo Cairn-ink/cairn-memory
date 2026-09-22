@@ -17,7 +17,12 @@ import { PUBLIC_ANSWER_TEMPLATE_VERSION,
   PUBLIC_ANSWER_TEMPLATE_VERSION_V2 } from '../longmemeval/public-comparison.mjs';
 import { loadReferenceRenderings } from '../longmemeval/reference-rendering.mjs';
 import { isPlainObject } from '../longmemeval/validation.mjs';
-import { loadPreparedPilot, readRegularFile } from './pilot.mjs';
+import {
+  loadPreparedPilot,
+  PILOT_DEFAULT_MAX_CASES,
+  PILOT_MAX_CASES,
+  readRegularFile,
+} from './pilot.mjs';
 import { mergePublicPilotRuns } from './public-pilot-merge.mjs';
 import {
   benchmarkStagePolicy,
@@ -46,6 +51,7 @@ Optional:
                               load an already-issued benchmark request allowance; never increases the cap
   --budget-extension-authorization-id <id>
                               load an already-issued benchmark budget extension; never changes allowance
+  --max-prepared-cases <n>    prepared cohort ceiling, 1..500; default 7; grants no spending authority
   --cases <id,id,...>         source or opaque question ids to run, kept in roster order; default all
   --sidecar <file>            reference-rendering sidecar (render-reference-sidecar.py); needs --sidecar-sha256
   --sidecar-sha256 <hex>      expected sidecar digest
@@ -75,7 +81,7 @@ Exit codes: 0 done, 1 refused or failed (code on stderr), 2 missing OPENAI_API_K
 const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output', '--cases', '--sidecar',
   '--sidecar-sha256', '--batch-cap-micro-usd', '--batch-request-cap', '--run-commit', '--exclusions-file',
   '--answer-template-version', '--request-allowance-authorization-id',
-  '--budget-extension-authorization-id', '--merge'];
+  '--budget-extension-authorization-id', '--max-prepared-cases', '--merge'];
 VALUE_FLAGS.push('--case-timeout-policy', '--case-authorization-id', '--execution-id',
   '--expected-request-count', '--expected-reserved-micro-usd');
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
@@ -202,6 +208,11 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     for (const required of ['--prepared', '--ledger', '--authorization-id', ...(dryRun ? [] : ['--output'])]) {
       if (!Object.hasOwn(values, required)) fail('missing_required_flag', required);
     }
+    const maxPreparedCases = values['--max-prepared-cases'] === undefined
+      ? PILOT_DEFAULT_MAX_CASES
+      : parseCount(values['--max-prepared-cases'], '--max-prepared-cases');
+    if (!Number.isSafeInteger(maxPreparedCases) || maxPreparedCases < 1
+      || maxPreparedCases > PILOT_MAX_CASES) fail('invalid_max_prepared_cases');
     const sidecar = values['--sidecar'];
     const sidecarSha256 = values['--sidecar-sha256'];
     if ((sidecar === undefined) !== (sidecarSha256 === undefined)) fail('sidecar_flags_incomplete');
@@ -246,7 +257,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     const effectiveRequestAllowance = benchmarkExtension.originalRequestAllowance ?? benchmarkExtension;
     const benchmarkAuthorizationId = effectiveRequestAllowance.originalBenchmarkExtension?.authorizationId
       ?? benchmarkExtension.authorizationId;
-    const pilot = await loadPreparedPilot({ directory: values['--prepared'] });
+    const pilot = await loadPreparedPilot({ directory: values['--prepared'], maxCases: maxPreparedCases });
     const caseIds = selectCases(pilot, values['--cases']);
     const ledgerState = ledgerSnapshot(ledger);
     const preflightReferenceRenderings = caseTimeoutPolicy && sidecar !== undefined
@@ -283,7 +294,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       ledger: ledgerState.limitMicroUsd - ledgerState.reservedMicroUsd >= totals.reservedMicroUsd
         && ledgerState.requestCap - ledgerState.requestCount >= totals.requests,
     };
-    const summary = { pilot: pilot.identity, caseIds, ...answerTemplateIdentity,
+    const summary = { pilot: pilot.identity, caseIds, maxPreparedCases, ...answerTemplateIdentity,
       models: { answer: stages.answer.model, judge: stages.judge.model },
       limits: PUBLIC_PILOT_LIMITS, judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, caps: caps ?? null,
       extension: { authorizationId: benchmarkAuthorizationId, checkpoint: benchmarkExtension.checkpoint },
@@ -337,7 +348,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     try {
       report = await runPublicPilot({ pilot, session, directory: values['--output'], limits: PUBLIC_PILOT_LIMITS,
         judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, referenceRenderings, caps, caseIds, answerTemplateVersion,
-        manifest: { runCommit, authorizationId: benchmarkAuthorizationId,
+        manifest: { runCommit, authorizationId: benchmarkAuthorizationId, maxPreparedCases,
           extensionCheckpoint: benchmarkExtension.checkpoint, ledgerRunId: ledger.runId,
           sidecarSha256: sidecarSha256 ?? null, exclusionRegistry, projections, totals,
           ...(requestAllowance ? { requestAllowance } : {}),

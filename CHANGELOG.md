@@ -12,6 +12,15 @@
   verify receipt/ref plumbing and failure boundaries only; no provider call,
   semantic improvement, historical benchmark repair or causal claim is included.
 
+## Unreleased — explicit prepared benchmark cohort bound
+
+- Add an explicit `maxCases`/`--max-prepared-cases` loader ceiling for the
+  private public pilot, capped at 500 while preserving the seven-case default,
+  artifact byte limits, digest and identity checks, and evaluator separation.
+- Dry-run and durable operator metadata record the effective ceiling. Synthetic
+  keyless tests cover an eight-case cohort without granting budget, requests,
+  retries, resume, replacement, transport, or any benchmark-quality claim.
+
 ## Unreleased — benchmark request allowance
 
 - Add an explicit operator-only, cap-increase transaction for an existing
