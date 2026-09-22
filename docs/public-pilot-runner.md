@@ -53,11 +53,14 @@ the live-process-only restriction; repeated dry-runs are safe.
 When `--request-allowance-authorization-id` is present, dry-run and live mode
 use only the read-only allowance loader. The deterministic private grant must
 already exist and the supplied ledger must contain its effective finite cap.
-The summary reports only the allowance version and authorization ID, prior and
-effective caps, checkpoint and historical digest. A missing, malformed, foreign
-or mismatched grant refuses before the provider key, any reservation or a case
-claim. Omitting the flag preserves the original benchmark authorization path;
-the runner never discovers or silently opts into an allowance.
+The bounded allowance identity contains only its version and authorization ID,
+prior and effective caps, checkpoint and historical digest. Dry-run prints it;
+live mode also records it in the durable manifest/report operator metadata and
+the final run summary so later audits can bind the execution to the same grant.
+A missing, malformed, foreign or mismatched grant refuses before the provider
+key, any reservation or a case claim. Omitting the flag preserves the original
+benchmark authorization path and adds none of these fields; the runner never
+discovers or silently opts into an allowance.
 
 ## What is fixed by the runner
 

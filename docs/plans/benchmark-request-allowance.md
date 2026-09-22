@@ -124,3 +124,18 @@ model label. Private corpus preparation is a separate concurrent worker packet.
   flag as optional. Two private read-only operator-audit helper expectation/
   canonicalization defects were also corrected before any live mutation; they
   caused no repository or money change.
+- The first formal Spec review reported two medium findings and one low
+  finding. The correction round now retains derived-allowance identity in the
+  live manifest, report operator metadata and final stdout; validates canonical
+  binding bytes and fsyncs them on the same verified descriptor; and rechecks
+  the binding path identity after directory fsync before the cap transaction.
+  Deterministic file-fsync and directory-fsync replacement injections prove
+  denial without a cap change. An actual keyless CLI subprocess dry-run also
+  proves zero attempts and claims with the exact derived identity.
+- After those corrections, focused allowance tests passed 20/20 and the actual
+  CLI subprocess target passed 1/1 on both Node 22.16 and 24.15. Primary's final
+  12-gate matrix passed on both runtimes with unchanged frozen hashes: generic
+  106, budget 15, final guard 150 (the earlier 148 count above is historical),
+  LongMemEval 75, live-offline 301 pass/30 documented skips, JSON, strict
+  plugin, both budget/guard demos, and all three LongMemEval demos. No provider
+  call or real campaign mutation occurred.

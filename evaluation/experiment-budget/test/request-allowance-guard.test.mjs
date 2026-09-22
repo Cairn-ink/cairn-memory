@@ -100,6 +100,9 @@ function faultedAuthorization(authorization, mode) {
     let syncCount = 0;
     const originalWriteFileSync = fs.writeFileSync.bind(fs);
     const originalFsyncSync = fs.fsyncSync.bind(fs);
+    const binding = authorization.oldLedger.directory
+      + '/experiment-benchmark-request-allowance-'
+      + authorization.benchmarkExtension.authorizationId + '.json';
     fs.writeFileSync = (...args) => {
       if (mode === 'file_write') {
         originalWriteFileSync(args[0], '{', { encoding: 'utf8' });
@@ -109,6 +112,12 @@ function faultedAuthorization(authorization, mode) {
     };
     fs.fsyncSync = (...args) => {
       syncCount += 1;
+      if ((mode === 'replace_before_fsync' && syncCount === 1)
+        || (mode === 'replace_at_directory_fsync' && syncCount === 2)) {
+        fs.renameSync(binding, binding + '.verified-inode');
+        originalWriteFileSync(binding, ${JSON.stringify('{}\n')},
+          { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+      }
       if ((mode === 'file_fsync' && syncCount === 1) || (mode === 'directory_fsync' && syncCount === 2)) {
         throw new Error('synthetic_fsync_failure');
       }
@@ -240,6 +249,19 @@ test('A3 recovery re-fsyncs an existing complete binding before updating the cap
     f.authorization.authorizationId);
   assert.deepEqual(state(f.ledger).attempts, f.before.attempts);
 });
+
+for (const mode of ['replace_before_fsync', 'replace_at_directory_fsync']) {
+  test(`A3 recovery denies a binding path replaced at ${mode}`, (t) => {
+    const f = fixture(t);
+    assert.deepEqual(faultedAuthorization(f.authorization, 'update'), { code: 'unsafe_policy_binding' });
+    assert.equal(state(f.oldLedger).requestCap, f.oldLedger.requestCap);
+    assert.deepEqual(faultedAuthorization(f.authorization, mode), { code: 'unsafe_policy_binding' });
+    assert.equal(readFileSync(f.filename, 'utf8'), '{}\n');
+    assert.equal(state(f.oldLedger).requestCap, f.oldLedger.requestCap);
+    assert.throws(() => authorizeBenchmarkRequestAllowance(f.authorization), error('policy_mismatch'));
+    assert.deepEqual(state(f.oldLedger).attempts, f.before.attempts);
+  });
+}
 
 test('A1/A3 malformed, equal, unsettled, overrun and locked transitions mutate no allowance', (t) => {
   const equal = fixture(t);

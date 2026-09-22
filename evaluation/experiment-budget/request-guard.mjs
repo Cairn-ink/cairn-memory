@@ -201,7 +201,7 @@ function validateConstructor(options) {
   return snapshotPolicy(options.policy);
 }
 
-function readBinding(filename, expected) {
+function readBinding(filename, expected, { syncFile = false } = {}) {
   let entry;
   try { entry = lstatSync(filename); } catch { fail('unsafe_policy_binding'); }
   if (entry.isSymbolicLink() || !entry.isFile()
@@ -226,8 +226,31 @@ function readBinding(filename, expected) {
       size += read;
     }
     if (size > 1_000_000) fail('unsafe_policy_binding');
-    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size)));
+    const content = bytes.subarray(0, size);
+    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(content));
     if (expected !== undefined && canonical(parsed) !== canonical(expected)) fail('policy_mismatch');
+    if (syncFile) {
+      fsyncSync(descriptor);
+      const verified = Buffer.alloc(1_000_001);
+      let verifiedSize = 0;
+      while (verifiedSize < verified.length) {
+        const read = readSync(descriptor, verified, verifiedSize,
+          verified.length - verifiedSize, verifiedSize);
+        if (read === 0) break;
+        verifiedSize += read;
+      }
+      const after = fstatSync(descriptor);
+      const current = lstatSync(filename);
+      if (verifiedSize !== size || !content.equals(verified.subarray(0, verifiedSize))
+        || after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size
+        || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+        || current.isSymbolicLink() || !current.isFile()
+        || current.dev !== opened.dev || current.ino !== opened.ino || current.size !== opened.size
+        || current.nlink !== 1 || realpathSync(filename) !== filename
+        || (process.platform !== 'win32' && (current.mode & 0o777) !== 0o600)) {
+        fail('unsafe_policy_binding');
+      }
+    }
     return parsed;
   } catch (error) {
     if (error instanceof ExperimentRequestGuardError) throw error;
@@ -626,21 +649,20 @@ function writeAuthorizationBinding(directory, filename, authorization) {
 }
 
 function syncAuthorizationBinding(directory, filename, expected) {
-  readBinding(filename, expected);
-  let entry;
-  let descriptor;
-  try {
-    entry = lstatSync(filename);
-    if (entry.isSymbolicLink() || !entry.isFile()
-      || (process.platform !== 'win32' && (entry.mode & 0o777) !== 0o600)) fail('unsafe_policy_binding');
-    descriptor = openSync(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const opened = fstatSync(descriptor);
-    if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino || opened.nlink !== 1
-      || (process.platform !== 'win32' && (opened.mode & 0o777) !== 0o600)) fail('unsafe_policy_binding');
-    fsyncSync(descriptor);
-  } finally { if (descriptor !== undefined) closeSync(descriptor); }
+  const before = lstatSync(filename);
+  // Recovery validates, syncs, and re-reads the same descriptor, then retains
+  // that inode identity across the directory durability boundary.
+  readBinding(filename, expected, { syncFile: true });
   const directoryDescriptor = openSync(directory, constants.O_RDONLY);
   try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+  const after = lstatSync(filename);
+  if (after.isSymbolicLink() || !after.isFile()
+    || after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size
+    || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs || after.nlink !== 1
+    || realpathSync(filename) !== filename
+    || (process.platform !== 'win32' && (after.mode & 0o777) !== 0o600)) {
+    fail('unsafe_policy_binding');
+  }
 }
 
 // Provisioning is separate from transport construction: existing guards never opt in implicitly.
@@ -1264,11 +1286,11 @@ function normalizeRequestAllowanceError(error) {
 export function authorizeBenchmarkRequestAllowance(options) {
   const configuration = snapshotRequestAllowanceAuthorization(options);
   let ledger;
-  let prior = true;
+  let usingPriorLedgerConfiguration = true;
   try { ledger = reopenExperimentBudget(configuration.priorLedger); }
   catch (error) {
     if (!(error instanceof ExperimentBudgetError) || error.code !== 'configuration_mismatch') throw error;
-    prior = false;
+    usingPriorLedgerConfiguration = false;
     ledger = reopenExperimentBudget(configuration.ledger);
   }
   let lock;
@@ -1292,7 +1314,7 @@ export function authorizeBenchmarkRequestAllowance(options) {
       || prefix.some((attempt) => attempt.outcome === null)
       || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
         !== configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
-    if (prior && (state.requestCount !== configuration.checkpoint.requestCount
+    if (usingPriorLedgerConfiguration && (state.requestCount !== configuration.checkpoint.requestCount
       || state.reservedMicroUsd !== configuration.checkpoint.reservedMicroUsd)) fail('policy_mismatch');
     const allowance = requestAllowanceRecord(configuration, historicalDigest(prefix));
     const filename = requestAllowanceFilename(configuration.ledger.directory,
@@ -1302,11 +1324,11 @@ export function authorizeBenchmarkRequestAllowance(options) {
     catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
     if (existing) syncAuthorizationBinding(configuration.ledger.directory, filename, allowance);
     else {
-      if (!prior) fail('policy_mismatch');
+      if (!usingPriorLedgerConfiguration) fail('policy_mismatch');
       writeAuthorizationBinding(configuration.ledger.directory, filename, allowance);
       readBinding(filename, allowance);
     }
-    if (prior) {
+    if (usingPriorLedgerConfiguration) {
       const update = lock.prepare(`UPDATE run_config SET request_cap = ?
         WHERE singleton = 1 AND run_id = ? AND limit_micro_usd = ? AND request_cap = ?
           AND reserved_micro_usd = ? AND request_count = ? AND state = 'open'`).run(
@@ -1342,7 +1364,7 @@ export function authorizeBenchmarkRequestAllowance(options) {
   try { ledger.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
   if (operationError) throw operationError;
   if (cleanupError) throw cleanupError;
-  if (prior && !committed) fail('unsafe_policy_binding');
+  if (usingPriorLedgerConfiguration && !committed) fail('unsafe_policy_binding');
   return result;
 }
 

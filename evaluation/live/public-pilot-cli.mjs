@@ -277,8 +277,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       extension: { authorizationId: benchmarkAuthorizationId, checkpoint: benchmarkExtension.checkpoint },
       ledger: ledgerState, projections, totals, fits, runCommit,
       exclusionCount: exclusionRegistry ? exclusionRegistry.length : null };
-    if (requestAllowanceAuthorizationId !== undefined) {
-      summary.requestAllowance = {
+    const requestAllowance = requestAllowanceAuthorizationId === undefined ? null : {
         version: benchmarkExtension.version,
         authorizationId: benchmarkExtension.authorizationId,
         priorRequestCap: benchmarkExtension.priorLedger.requestCap,
@@ -286,7 +285,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
         checkpoint: benchmarkExtension.checkpoint,
         historicalDigest: benchmarkExtension.historicalDigest,
       };
-    }
+    if (requestAllowance) summary.requestAllowance = requestAllowance;
     if (caseTimeoutIdentity) {
       summary.caseTimeoutIdentity = caseTimeoutIdentity;
       summary.caseTimeoutRestriction = 'live-process-only; one-shot; no resume or retry';
@@ -317,11 +316,13 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
         judgeTimeoutMs: PUBLIC_PILOT_JUDGE_TIMEOUT_MS, referenceRenderings, caps, caseIds, answerTemplateVersion,
         manifest: { runCommit, authorizationId: benchmarkAuthorizationId,
           extensionCheckpoint: benchmarkExtension.checkpoint, ledgerRunId: ledger.runId,
-          sidecarSha256: sidecarSha256 ?? null, exclusionRegistry, projections, totals },
+          sidecarSha256: sidecarSha256 ?? null, exclusionRegistry, projections, totals,
+          ...(requestAllowance ? { requestAllowance } : {}) },
         onCase: (progress) => { stdout.write(`${JSON.stringify({ progress })}\n`); } });
     } finally { session.close(); }
     stdout.write(`${JSON.stringify({ mode: 'run', directory: path.resolve(values['--output']), ...answerTemplateIdentity,
-      summary: report.summary, common: report.official.common, cost: report.cost, latency: report.latency })}\n`);
+      summary: report.summary, common: report.official.common, cost: report.cost, latency: report.latency,
+      ...(requestAllowance ? { requestAllowance } : {}) })}\n`);
     return 0;
   } catch (error) {
     const detail = typeof error?.detail === 'string' ? ` ${error.detail}` : '';

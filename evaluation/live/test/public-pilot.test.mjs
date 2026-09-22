@@ -1379,19 +1379,33 @@ test('A5 derived allowance CLI is explicit, keyless in dry-run, and runs one fre
     '--expected-request-count', '0', '--expected-reserved-micro-usd', '0'];
   const stream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
     text() { return chunks.join(''); } }; };
+  const expectedAllowance = {
+    version: 'benchmark-request-allowance-v1', authorizationId: 'synthetic-cli-allowance',
+    priorRequestCap: 5, requestCap: 5_000, checkpoint: { requestCount: 0, reservedMicroUsd: 0 },
+    historicalDigest: allowance.historicalDigest,
+  };
   let keyReads = 0;
   const env = {};
   Object.defineProperty(env, 'OPENAI_API_KEY', { get() { keyReads += 1; return KEY; } });
+
+  const keylessEnv = { ...process.env, NODE_NO_WARNINGS: '1' };
+  delete keylessEnv.OPENAI_API_KEY;
+  const processDry = spawnSync(process.execPath,
+    [new URL('../public-pilot-cli.mjs', import.meta.url).pathname, ...base, '--dry-run'],
+    { encoding: 'utf8', env: keylessEnv });
+  assert.equal(processDry.status, 0, processDry.stderr);
+  assert.equal(processDry.stderr, '');
+  assert.deepEqual(JSON.parse(processDry.stdout).requestAllowance, expectedAllowance);
+  assert.equal(ledgerState(f.ledger).requestCount, 0);
+  await assert.rejects(lstat(path.join(f.ledger.directory,
+    `experiment-case-deadline-${executionId}.claim.json`)), { code: 'ENOENT' });
+
   for (let index = 0; index < 2; index += 1) {
     const stdout = stream();
     assert.equal(await cliMain([...base, '--dry-run'], { env, stdout, stderr: stream(),
       fetchImpl: () => assert.fail('no dry-run transport') }), 0);
     const result = JSON.parse(stdout.text());
-    assert.deepEqual(result.requestAllowance, {
-      version: 'benchmark-request-allowance-v1', authorizationId: 'synthetic-cli-allowance',
-      priorRequestCap: 5, requestCap: 5_000, checkpoint: { requestCount: 0, reservedMicroUsd: 0 },
-      historicalDigest: allowance.historicalDigest,
-    });
+    assert.deepEqual(result.requestAllowance, expectedAllowance);
     assert.equal(result.ledger.requestCap, 5_000);
   }
   assert.equal(keyReads, 0);
@@ -1422,10 +1436,15 @@ test('A5 derived allowance CLI is explicit, keyless in dry-run, and runs one fre
     fetchImpl: fakeUpstream({ calls }) }), 0);
   assert.equal(keyReads, 1);
   assert.ok(calls.length > 0);
-  assert.equal(JSON.parse(stdout.text().trimEnd().split('\n').at(-1)).summary.scored, 1);
+  const finalOutput = JSON.parse(stdout.text().trimEnd().split('\n').at(-1));
+  assert.equal(finalOutput.summary.scored, 1);
+  assert.deepEqual(finalOutput.requestAllowance, expectedAllowance);
+  const manifest = await readJson(output, 'manifest.json');
   const report = await readJson(output, 'report.json');
   assert.equal(report.caseTimeoutIdentity.executionId, executionId);
   assert.equal(report.operator.authorizationId, 'synthetic-public-pilot');
+  assert.deepEqual(manifest.operator.requestAllowance, expectedAllowance);
+  assert.deepEqual(report.operator.requestAllowance, expectedAllowance);
   assert.equal(ledgerState(f.ledger).requestCount, calls.length);
 });
 
