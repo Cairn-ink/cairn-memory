@@ -129,6 +129,42 @@ by those conflict resolutions. The final combined candidate needs both Node
 22.16/24 checks and independent non-author Standards/Spec review before paid use.
 Component reviews are not a substitute for this combined review.
 
+## Combined-gate correction acceptance
+
+- **I1 — Combined executable dry-run.** An actual keyless CLI subprocess must
+  load an independently prepared eight-case synthetic cohort with
+  `--max-prepared-cases 8`, the exact v1 request-allowance authorization ID and
+  `--budget-extension-authorization-id` together. It must exit successfully,
+  report all three effective identities/bounds, and leave the synthetic ledger
+  counters unchanged with no case claim, reservation, key or transport path.
+- **I2 — Combined fresh live boundary.** A fresh one-shot selected-case run from
+  that same eight-case preparation must use fake HTTP with both expansion flags
+  and record the cohort bound, request-allowance identity, budget-extension
+  identity and case-timeout identity durably in both manifest and report. It
+  must score exactly the selected case and must not access any provider,
+  private corpus or real campaign ledger.
+- **I3 — Operator contract.** The public runner guide must name the budget-
+  extension flag, require its original request-allowance authorization ID, and
+  state that both paths only load an already-issued grant; neither authorizes
+  or performs a ceiling increase.
+
+This bounded correction is owned by the integration worker using Sol/high.
+Only the existing live test, public runner guide and this plan may change. No
+runtime behavior change is permitted unless the combined observable test first
+demonstrates a real failure that requires one.
+
+Correction evidence: the first Node 22.16 public-pilot test-file run passed
+every existing case but failed the new assertion that *all* ledger-directory
+files remain unchanged. The dry-run correctly created only the durable, unclaimed
+one-shot capability metadata; it did not create its `.claim.json`, read a key,
+reserve funds or change ledger counters. Because I1 requires those latter
+observable boundaries rather than absence of the existing capability record,
+the assertion and acceptance text were narrowed and no runtime code changed.
+The combined B5 case then passed on Node 22.16.0 and 24.15.0. On both runtimes,
+the full `evaluation/live/test/*.test.mjs` suite, the 110-test plugin plus
+architecture suite, and `scripts/validate-json.mjs` completed successfully.
+All fixtures, ledgers and HTTP responses were synthetic and temporary.
+
 ## Component review corrections
 
 Independent component review used `gpt-5.6-sol` at high effort; actual token

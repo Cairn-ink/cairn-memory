@@ -1506,7 +1506,7 @@ test('A5 derived allowance CLI is explicit, keyless in dry-run, and runs one fre
 });
 
 test('B5 budget-extension CLI only loads explicit authority and keeps dry-run keyless/non-consuming', async (t) => {
-  const f = await setup(t, { source: sourceCases().slice(0, 1), requestCap: 5 });
+  const f = await setup(t, { source: expandedSourceCases(), requestCap: 5, maxCases: 8 });
   const baseLedger = { ...f.ledger };
   const allowance = authorizeBenchmarkRequestAllowance({ oldLedger: baseLedger, policy: f.policy,
     benchmarkExtension: f.benchmarkExtension, authorizationId: 'synthetic-cli-allowance-budget',
@@ -1526,7 +1526,7 @@ test('B5 budget-extension CLI only loads explicit authority and keeps dry-run ke
     '--authorization-id', 'synthetic-public-pilot',
     '--request-allowance-authorization-id', allowance.authorizationId,
     '--budget-extension-authorization-id', budget.authorizationId,
-    '--cases', 'plain', '--case-timeout-policy', 'case-deadline-v1',
+    '--max-prepared-cases', '8', '--cases', 'expanded-1', '--case-timeout-policy', 'case-deadline-v1',
     '--case-authorization-id', 'synthetic-budget-extension-case', '--execution-id', executionId,
     '--expected-request-count', '0', '--expected-reserved-micro-usd', '0'];
   const stream = () => { const chunks = []; return { write(value) { chunks.push(value); return true; },
@@ -1538,24 +1538,41 @@ test('B5 budget-extension CLI only loads explicit authority and keeps dry-run ke
     authorizationId: budget.authorizationId, priorLimitMicroUsd: 50_000_000,
     limitMicroUsd: 100_000_000, priorRequestCap: 20, requestCap: 5_000,
     checkpoint: { requestCount: 0, reservedMicroUsd: 0 }, historicalDigest: budget.historicalDigest };
+  const expectedAllowance = {
+    version: 'benchmark-request-allowance-v1', authorizationId: allowance.authorizationId,
+    priorRequestCap: 5, requestCap: 20, checkpoint: { requestCount: 0, reservedMicroUsd: 0 },
+    historicalDigest: allowance.historicalDigest,
+  };
 
   const keylessEnv = { ...process.env, NODE_NO_WARNINGS: '1' };
   delete keylessEnv.OPENAI_API_KEY;
+  const beforeDryState = ledgerState(f.ledger);
+  assert.equal(Object.hasOwn(keylessEnv, 'OPENAI_API_KEY'), false);
   const processDry = spawnSync(process.execPath,
     [new URL('../public-pilot-cli.mjs', import.meta.url).pathname, ...base, '--dry-run'],
     { encoding: 'utf8', env: keylessEnv });
   assert.equal(processDry.status, 0, processDry.stderr);
+  assert.equal(processDry.stderr, '');
   const processResult = JSON.parse(processDry.stdout);
+  assert.equal(processResult.maxPreparedCases, 8);
+  assert.equal(processResult.pilot.count, 8);
+  assert.deepEqual(processResult.caseIds, [opaqueQuestionId('expanded-1')]);
+  assert.deepEqual(processResult.requestAllowance, expectedAllowance);
   assert.deepEqual(processResult.budgetExtension, expectedBudget);
   assert.equal(processResult.ledger.limitMicroUsd, 100_000_000);
   assert.equal(processResult.ledger.requestCount, 0);
+  assert.equal(processResult.ledger.reservedMicroUsd, 0);
+  assert.deepEqual(ledgerState(f.ledger), beforeDryState);
   await assert.rejects(lstat(path.join(f.ledger.directory,
     `experiment-case-deadline-${executionId}.claim.json`)), { code: 'ENOENT' });
 
   const dry = stream();
   assert.equal(await cliMain([...base, '--dry-run'], { env, stdout: dry, stderr: stream(),
     fetchImpl: () => assert.fail('no dry-run transport') }), 0);
-  assert.deepEqual(JSON.parse(dry.text()).budgetExtension, expectedBudget);
+  const dryResult = JSON.parse(dry.text());
+  assert.equal(dryResult.maxPreparedCases, 8);
+  assert.deepEqual(dryResult.requestAllowance, expectedAllowance);
+  assert.deepEqual(dryResult.budgetExtension, expectedBudget);
   assert.equal(keyReads, 0);
   assert.equal(ledgerState(f.ledger).requestCount, 0);
 
@@ -1575,11 +1592,21 @@ test('B5 budget-extension CLI only loads explicit authority and keeps dry-run ke
   assert.equal(keyReads, 1);
   assert.ok(calls.length > 0);
   const finalOutput = JSON.parse(stdout.text().trimEnd().split('\n').at(-1));
+  assert.equal(finalOutput.summary.scored, 1);
+  assert.deepEqual(finalOutput.requestAllowance, expectedAllowance);
   assert.deepEqual(finalOutput.budgetExtension, expectedBudget);
   const manifest = await readJson(output, 'manifest.json');
   const report = await readJson(output, 'report.json');
+  assert.equal(manifest.operator.maxPreparedCases, 8);
+  assert.equal(report.operator.maxPreparedCases, 8);
+  assert.deepEqual(manifest.operator.requestAllowance, expectedAllowance);
+  assert.deepEqual(report.operator.requestAllowance, expectedAllowance);
   assert.deepEqual(manifest.operator.budgetExtension, expectedBudget);
   assert.deepEqual(report.operator.budgetExtension, expectedBudget);
+  assert.equal(manifest.caseTimeoutIdentity.executionId, executionId);
+  assert.equal(report.caseTimeoutIdentity.executionId, executionId);
+  assert.deepEqual(manifest.caseIds, [opaqueQuestionId('expanded-1')]);
+  assert.deepEqual(report.cases.map((item) => item.sourceQuestionId), ['expanded-1']);
   assert.equal(ledgerState(f.ledger).requestCount, calls.length);
 });
 

@@ -17,6 +17,7 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Campaign ledger | `--ledger /private/ledger.json` (mode 0600) with exactly `{directory, runId, limitMicroUsd, requestCap}` | Must describe the existing ledger; the runner never creates, resets or replaces one |
 | Benchmark authorization | `--authorization-id <id>` | Provisions or re-verifies `experiment-benchmark-extension.json` beside the ledger (P1) |
 | Existing request allowance | `--request-allowance-authorization-id <id>` | Explicitly loads an already-issued derived benchmark allowance whose original benchmark ID must match `--authorization-id`; the CLI never increases the ledger cap |
+| Existing budget extension | `--budget-extension-authorization-id <id>` together with `--request-allowance-authorization-id <id>` | Explicitly loads an already-issued budget extension derived from that exact v1 request allowance. The CLI never issues the grant or increases either ceiling |
 | Prepared v2 pilot | `--prepared /private/prepared` | Four-file directory from `prepareLongMemEval`; digest-checked by `loadPreparedPilot`; never written |
 | Prepared cohort bound | `--max-prepared-cases N` | Optional loader-only ceiling from 1 through 500; omission remains 7. It grants no budget, request, retry, resume, replacement, or resource-limit authority |
 | Optional reference sidecar | `--sidecar /private/reference-sidecar.json --sidecar-sha256 <hex>` | From `render-reference-sidecar.py`; needed only for non-string references |
@@ -64,6 +65,14 @@ A missing, malformed, foreign or mismatched grant refuses before the provider
 key, any reservation or a case claim. Omitting the flag preserves the original
 benchmark authorization path and adds none of these fields; the runner never
 discovers or silently opts into an allowance.
+
+`--budget-extension-authorization-id` is also loader-only and is invalid unless
+the original `--request-allowance-authorization-id` is supplied in the same
+command. Dry-run and live mode verify that exact allowance-to-extension chain
+and the ledger's already-effective cumulative monetary and request ceilings;
+they do not call the operator transition, create authority or increase either
+ceiling. Dry-run reports both immutable identities, and live mode preserves
+both in the manifest/report operator metadata and final run summary.
 
 ## What is fixed by the runner
 
