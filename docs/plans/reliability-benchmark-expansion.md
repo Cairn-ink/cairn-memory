@@ -110,3 +110,21 @@ launch prefix is **30 questions**, five per type, with **6,236 requests** and
 loader's acceptance, a paid result or permission to launch. Independent roster
 review, the repaired loader, the budget extension and integrated verification
 remain required before execution.
+
+## Integration ownership and verification
+
+The primary combined four isolated worker candidates on base
+`4bc8892f3699e24191331f75c64483f42f45fde9`: extraction diagnostics
+`3a7cb44936517e544704a3b03a8f2743460b5faf`, explicit budget extension
+`88b57663562d8b7f27362f737fb95642c9e98e04`, source-coverage ranking
+`1174206acda370e184984a280f03b6751f7ae414`, and explicit cohort bound
+`4c23a75d89d975a13ccc249dc1cc29218701e1df`. Each implementation worker
+used Sol/high; actual worker token cost is unavailable.
+
+Primary takeover is limited to integration: preserving both adjacent CLI flags
+and changelog entries during cherry-pick conflicts, and adding the new budget
+extension tests to the existing request-guard test script used by CI. The
+standalone test script remains available. No new runtime behavior is introduced
+by those conflict resolutions. The final combined candidate needs both Node
+22.16/24 checks and independent non-author Standards/Spec review before paid use.
+Component reviews are not a substitute for this combined review.
