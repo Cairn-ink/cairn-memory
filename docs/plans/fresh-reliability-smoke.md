@@ -154,6 +154,28 @@ remain separately measured, not an excuse to postpone this first measurement.
 
 ## Implementation evidence checkpoint
 
+### First-review correction contract (before implementation)
+
+Both reviews inspected `a30f256` over the original fixed base. Standards found
+one low naming heuristic: the output collector called `capture` can be confused
+with memory capture. Rename it to reveal its bounded-output purpose. Spec found
+an F4 retention gap: a delegate preflight failure after the outer launch marker
+can precede creation of its output directory, losing the captured diagnostic.
+Primary accepts both findings. No paid launch has happened.
+
+Within the same allowed wrapper/tests/technical docs, preserve terminal
+post-marker failures in a new create-only private 0600 artifact in the plan's
+0700 directory. Retain bounded phase/exit/diagnostic information even when the
+delegate created no output; retain the marker and prohibit relaunch. Redact the
+actual provided credential from retained diagnostics as well as public output;
+do not persist raw arbitrary exception messages. Dry-run and pre-marker
+rejections remain read-only and must not create failure artifacts. A collision
+or failure to persist must remain an explicit terminal error, never overwrite
+an artifact, reissue authority or retry. Verify these boundaries with fake
+delegate failures, thrown errors, missing output, synthetic credentials and
+duplicate launch, then rerun affected gates on both runtimes and both full-base
+independent review axes. No core, model, scorer, ledger or provider change.
+
 Owner: GPT-6 Sol/high bounded maintainer worker; fixed base
 `2b2467400c68a8cc8c1601044deda350efc87718`. The candidate commit is the
 worktree `HEAD` handed to primary after freeze; independent review and a paid
