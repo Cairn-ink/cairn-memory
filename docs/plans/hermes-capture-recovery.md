@@ -3,7 +3,8 @@
 Fixed base: `2f343e33ab37117d3d21dc055be2465508161e88` (MCP deadline).
 Freeze this contract before implementation. Do not start implementation before
 dependency reviews and exact-head CI pass. If the dependency changes, rebase
-this plan-only branch and record its actual base before implementation. Primary owns the contract; implementation uses
+this plan-only branch and record its actual base before implementation.
+Primary owns the contract; implementation uses
 GPT-6 Sol/high because configuration, credentials and cross-process state are
 in scope. Branch: `feat/hermes-capture-recovery`.
 
@@ -20,7 +21,7 @@ trusted profile settings. Defaults, passive hooks and ordinary tools stay as-is.
   leading zero, signs, fractions, exponent notation, non-ASCII digits and
   out-of-range values. The 110000 maximum leaves a nominal 10-second margin
   under the existing capture SDK 120-second envelope, not a return-time SLA.
-  Use `when` in the wizard to offer it only with v2 capture; no default.
+  Use `when` in the wizard to offer it only with v2 capture; no fresh-setup default.
 - `classification_recovery: guarded-v1`: independent explicit opt-in adding
   `cairn_inspect_capture_admission` and `cairn_classify_unfiled_memories`, with
   schemas from installed MCP. This enables a read tool AND an explicit
@@ -45,8 +46,13 @@ merely because a later response fails.
 - N1 Configuration and setup: real pinned wizard collects optional strings,
   omits fresh blanks, preserves existing values on blank reconfiguration and
   stores no key. Conditional deadline prompt works. Strict rejection occurs
-  before saving configuration or accessing profile memory; prior valid config
-  remains intact. Removing capture requires removing its dependent deadline;
+  before saving Cairn's `cairn.json` or accessing profile memory; prior valid
+  Cairn configuration remains intact. The pinned host writes its activation
+  `config.yaml` before calling provider validation and can write separately
+  collected secrets afterward; do not claim whole-wizard atomicity or modify
+  upstream Hermes. Document this boundary and retain a full `cmd_setup` test
+  with synthetic paths/secrets, not only the field collector.
+  Removing capture requires removing its dependent deadline;
   recovery can remain independently enabled. Restart is required for changes.
 - N2 Discovery and authority: exact inventories 5 default / 6 capture / 7
   recovery / 8 both; deadline adds no tool. Schemas match installed MCP and are
@@ -81,6 +87,22 @@ merely because a later response fails.
   paid explicit classification, uncertain-response inspection, no auto retry,
   no spend cap, no hard latency promise and no semantic-quality/S1-complete
   claim. Keep historical evidence dated; don't rewrite earlier paid results.
+
+### Preimplementation wizard clarification
+
+Source inspection of pinned Hermes found `cmd_setup` seeds its field collector
+from `config.yaml` rather than the provider's separately persisted `cairn.json`.
+Earlier direct field-collector tests cannot establish actual reconfiguration
+retention. Have `get_config_schema` offer defaults only from a valid existing
+configuration in the active profile (paths and recognized non-secret settings).
+The real `_prompt` returns its default on blank input. Fresh or invalid prior
+configuration supplies no optional defaults; never read memory or credentials
+for schema creation. Keep `save_config` strict replacement, not an implicit
+merge that would mask omitted/removed settings. Test full native setup with no
+preseeded `memory.cairn`, actual blank/default prompt behavior, conditional field
+visibility, valid retention and invalid-value preservation of `cairn.json`.
+This adjustment is frozen before implementation; all actual profiles are out of
+scope and tests use only temporary homes.
 
 ## Scope and verification
 
