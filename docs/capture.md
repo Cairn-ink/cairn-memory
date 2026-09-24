@@ -39,7 +39,10 @@ an expired worker cannot commit or release its successor's lease.
 Trusted embedded callers may opt in with
 `openMemoryCore({ path, model, captureDeadlineMs: 120000 })`. The setting is
 snapshotted at construction, accepts an integer from 1 through 120000, and is
-not a capture-message or MCP option. Omission retains the existing behavior.
+not a capture-message field. The local MCP host now accepts the same trusted
+constructor setting or `--capture-deadline-ms` with an explicitly enabled v1/v2
+capture qualification mode. Omission retains the existing behavior; the native
+Hermes provider does not yet forward this option.
 Each capture then has one monotonic budget starting before input normalization
 and spanning extraction, optional qualification/reconciliation, admission,
 initial classification and automatic rationale. Every model call still has its

@@ -10,6 +10,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID]
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2
+  cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-deadline-ms 120000
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
@@ -51,6 +52,13 @@ charges; no account spending cap is enforced. Inspection (including source
 qualification), explicit remember, correction and forgetting remain keyless.
 V2 uses core-owned source candidates; v1 retains model-written source anchors.
 Neither mode proves meaning, resolves currentness or grants update authority.
+--capture-deadline-ms 1..120000 requires --capture-qualification
+source-bound-v1 or source-bound-v2.
+It applies one cooperative monotonic budget to each submitted capture, not to
+other tools or server lifetime. It is not a hard return guarantee or API spend cap.
+Admission can commit before classification. Opt into --classification-recovery
+guarded-v1 to inspect the batch before any explicit classification request.
+No capture, classification or rationale stage is automatically retried.
 --capture-evidence staged-v1 requires --capture-qualification source-bound-v2.
 It retains bounded submitted sources locally for 24 hours, including failed capture:
 up to 24 messages of 800 UTF-16 units, 128KiB per event, 64 payloads/1MiB per namespace.
@@ -78,7 +86,7 @@ It cannot verify database permissions, credentials or model availability.
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
-    '--classification-recovery']);
+    '--classification-recovery', '--capture-deadline-ms']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -93,6 +101,17 @@ export function parseConfiguration(args) {
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
     throw new Error('invalid_mcp_configuration');
+  }
+  let captureDeadlineMs;
+  if (values.has('--capture-deadline-ms')) {
+    const raw = values.get('--capture-deadline-ms');
+    if (!values.has('--capture-qualification') || !/^[1-9][0-9]*$/u.test(raw)) {
+      throw new Error('invalid_mcp_configuration');
+    }
+    captureDeadlineMs = Number(raw);
+    if (!Number.isSafeInteger(captureDeadlineMs) || captureDeadlineMs > 120_000) {
+      throw new Error('invalid_mcp_configuration');
+    }
   }
   if (values.has('--capture-rationale') && (values.get('--capture-rationale') !== 'source-bound-v1' ||
       values.get('--capture-qualification') !== 'source-bound-v2')) throw new Error('invalid_mcp_configuration');
@@ -113,6 +132,7 @@ export function parseConfiguration(args) {
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
+    ...(values.has('--capture-deadline-ms') ? { captureDeadlineMs } : {}),
     ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
     ...(values.has('--capture-evidence') ? { captureEvidence: values.get('--capture-evidence') } : {}),
     ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}),
@@ -142,6 +162,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       ...(config.captureQualification ? { captureQualification: config.captureQualification,
         capture: key ? 'configured-not-verified' : 'model_not_configured',
         qualificationModel: key ? DEFAULT_MODEL : null } : {}),
+      ...(Object.hasOwn(config, 'captureDeadlineMs') ? { captureDeadlineMs: config.captureDeadlineMs } : {}),
       ...(config.classificationRecovery ? { classificationRecovery: config.classificationRecovery,
         classification: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
       databaseOpened: false, providerContacted: false,

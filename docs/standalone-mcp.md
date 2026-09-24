@@ -195,8 +195,9 @@ change receipts, review rationale, prove a failed capture batch or treat
 remembered consent as authority. Capture duplicate behavior is unchanged.
 The initial capture attempt has a durable bounded journal, but it is not a
 recovery queue or durable history of explicit retries. There is still no
-whole-capture 30-second deadline; this is a bounded explicit operation, not
-S1 completion. The native Hermes provider does not currently forward the
+default whole-capture 30-second deadline; the optional invocation budget below
+is separate from this explicit classification tool and does not make S1 complete.
+The native Hermes provider does not currently forward the
 classification-recovery opt-in; this interface is the local core/MCP path.
 
 If a trusted local caller uses [core supersession](supersession.md), inspection
@@ -303,6 +304,42 @@ extraction uses those same retained prefixes; tail-only facts are unavailable.
 Full-text changes still conflict with an existing batch ID. This field describes
 source retention, not semantic completeness or how an older duplicate was
 originally extracted. The client cannot override the source window.
+
+### Optional capture invocation deadline
+
+To bound one explicitly submitted capture across its stages, configure the
+local server with `--capture-qualification source-bound-v2` and
+`--capture-deadline-ms 120000` (`source-bound-v1` is also accepted), or set both
+`captureQualification` and the integer `captureDeadlineMs` (1–120000) on
+`createCairnServer`. Append the flag
+and value to an installed executable's MCP startup arguments; this is not an
+`install:preview` option or a `capture_memory` argument. `--check-config`
+reports the number only when configured, without opening storage or contacting
+a provider. Omitting it leaves the tool inventory, schemas and default capture
+behavior unchanged. It does not enable capture, inspection or recovery by
+itself; capture qualification must be selected explicitly.
+
+The shared core uses one monotonic cooperative budget per capture, including
+extraction, qualification, admission, initial classification and any configured
+automatic rationale. Each model call keeps its 30-second ceiling. An expiry
+before admission returns `model_timeout` without committing new memories or
+receipts; after admission it preserves committed receipts and reports downstream
+classification or rationale failure separately. A response timeout is not
+proof of rollback. For an uncertain response, enable the separate
+`--classification-recovery guarded-v1` inspection and explicit classification
+tools. Inspect the exact original batch keylessly, then explicitly classify only
+fresh current unfiled refs if
+appropriate. No extraction, admission or classification is automatically
+retried. A successful empty-parent classification may still leave a memory
+unfiled; later explicit filing changes its revision and makes the original
+initial-attempt status publicly unknown without rewriting that journal row.
+
+Synchronous token counting and SQLite work are checked cooperatively, not
+preempted mid-instruction. Leave a suitable client transport timeout margin for
+startup, synchronous work and cleanup; the existing longer-client-timeout advice
+still applies. This option is neither a hard wall-clock return guarantee nor an
+API spending cap. The native Hermes provider does not yet forward it, and these
+mechanical checks do not establish semantic capture quality or S1 completion.
 
 ### Optional staged source inspection
 
