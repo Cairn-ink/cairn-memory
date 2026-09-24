@@ -1,0 +1,37 @@
+{
+  "version": "incremental-candidate-index-v1",
+  "sizes": [100, 1000, 10000],
+  "topK": 5,
+  "materializationCap": 24,
+  "scanCap": 20000,
+  "matchingDocumentCap": 20000,
+  "queryTermCap": 5,
+  "repeats": 3,
+  "sizeTimeoutMs": 120000,
+  "special": [
+    { "key": "exact", "content": "Cobalt astrolabe rests in the observatory cabinet.", "receipt": "Cobalt astrolabe confirmed in the observatory cabinet." },
+    { "key": "receipt", "content": "A plain inventory note.", "receipt": "The saffron ledger token is in the archive drawer." },
+    { "key": "fifth", "content": "A second plain inventory note.", "receipt": "The vermilion compass token is in the fifth receipt only." },
+    { "key": "corrected", "content": "The outdated copper timetable is obsolete.", "receipt": "The outdated copper timetable is obsolete." },
+    { "key": "forgotten", "content": "The erased garnet schedule is obsolete.", "receipt": "The erased garnet schedule is obsolete." },
+    { "key": "historical", "content": "The former indigo rota is obsolete.", "receipt": "The former indigo rota is obsolete." },
+    { "key": "tail", "content": "Zirconium sextant is stored in the tail cabinet.", "receipt": "Zirconium sextant confirmed in the tail cabinet." },
+    { "key": "chinese", "content": "青銅羅盤保存在觀測站。", "receipt": "青銅羅盤保存在觀測站。" },
+    { "key": "accent", "content": "The café register stays on the shelf.", "receipt": "The café register stays on the shelf." }
+  ],
+  "queries": [
+    { "name": "exact_body", "query": "cobalt astrolabe", "expected": ["exact"] },
+    { "name": "tail_beyond_1024", "query": "zirconium sextant", "expected": ["tail"] },
+    { "name": "receipt_only", "query": "saffron ledger", "expected": ["receipt"] },
+    { "name": "fifth_receipt_boundary", "query": "vermilion compass", "expected": [] },
+    { "name": "corrected_old", "query": "outdated copper", "expected": [] },
+    { "name": "corrected_new", "query": "updated bronze timetable", "expected": ["corrected"] },
+    { "name": "forgotten", "query": "erased garnet", "expected": [] },
+    { "name": "historical", "query": "former indigo", "expected": [] },
+    { "name": "foreign", "query": "private lilac charter", "expected": [] },
+    { "name": "chinese_partial_negative", "query": "銅羅", "expected": [] },
+    { "name": "accent_fold_negative", "query": "cafe register", "expected": [] },
+    { "name": "literal_operator_negative", "query": "NEAR/3 OR *", "expected": [] },
+    { "name": "no_match", "query": "platinum heliograph", "expected": [] }
+  ]
+}
