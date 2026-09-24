@@ -17,7 +17,7 @@ const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
 export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts,
-  assertIndexAvailable, rationaleStorage, receiptKey }) {
+  assertIndexAvailable, rationaleStorage, receiptKey, classificationJournal }) {
   // Read authority is generation-owned; writes below continue targeting declarations.
   // Title validity deliberately consults every original source binding.
   function projectPrepare(sql) {
@@ -131,9 +131,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     return result;
   }
 
-  function applyPlacement(ns, proposal, guards, expectedIndex) {
+  function applyPlacement(ns, proposal, guards, expectedIndex, initialClassification) {
     return transaction(db, () => {
       assertEpochValue(ns, expectedIndex);
+      if (initialClassification) classificationJournal.assertPlacement(ns, initialClassification,
+        initialClassification.token, guards);
       const items = proposal.items;
       const expected = guardsMap(guards);
       if (expected.size !== items.length || items.some((item) => !expected.has(item.memoryId))) {
@@ -218,6 +220,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (!changed) {
         const resultMemories = items.map(({ memoryId }) => memoryDto(memories.get(memoryId), true));
         const refs = items.flatMap(({ memoryId }) => currentMemoryRefs(ns, memoryId).map(memoryRef));
+        if (initialClassification) classificationJournal.completePlacement(ns, initialClassification,
+          initialClassification.token);
         return { memories: resultMemories, createdMocs: [], refs, indexRevision: expectedIndex };
       }
 
@@ -289,6 +293,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         .map(({ id }) => mocDto(db.prepare("SELECT * FROM mocs WHERE id = ?").get(id)));
       const refs = items.flatMap(({ memoryId }) => currentMemoryRefs(ns, memoryId).map(memoryRef));
       refs.push(...writtenEdges.map(edgeRef));
+      if (initialClassification) classificationJournal.completePlacement(ns, initialClassification,
+        initialClassification.token);
       return { memories: items.map(({ memoryId }) => memoryDto(memories.get(memoryId), true)),
         createdMocs: created, refs, indexRevision };
     });

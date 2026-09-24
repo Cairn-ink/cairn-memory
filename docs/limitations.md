@@ -294,8 +294,14 @@ from an existing admission claim after a lost response, with fresh current refs
 and a bounded suppression count. It reports classification as unknown even for
 empty or fully filed membership, and closed historical/deleted members have no
 actionable refs. It does not recover source text or infer missing extracted
-items. There is still no durable classification outcome or incomplete-work
-journal for lost capture responses and crashes. A whole capture may run several separately bounded model
+items. A v14 opt-in read can now report the exact initial capture attempt's
+bounded, source-free journal status after a cold restart. It can distinguish
+failed from an applied no-op that left members unfiled; it cannot certify model
+quality, current filing, later explicit recovery or whether an in-flight
+attempt is still running. A changed, deleted, historical, missing or foreign
+original member makes that initial status unknown. Manual and older batches
+also remain unknown. There is no persistent retry queue or durable history of
+later classification attempts. A whole capture may run several separately bounded model
 stages, so it has no single 30-second deadline. Concurrent explicit requests
 may duplicate provider work. Stale guards prevent a second conflicting change,
 but no-op proposals can both succeed. An applied empty-parent proposal can

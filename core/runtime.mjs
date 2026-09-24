@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { openDatabase, transaction } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
+import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
 import { createStagedEvidenceStorage } from './staged-evidence-storage.mjs';
 import { createConflictStorage } from "./conflict-storage.mjs";
 import { createIndexStorage } from "./index-storage.mjs";
@@ -470,9 +471,10 @@ export function createMemoryRuntime(input) {
   const qualificationStorage = createQualificationStorage({ db, receiptKey });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
+  const classificationJournal = createClassificationJournalStorage({ db });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable,
-    rationaleStorage, receiptKey });
+    rationaleStorage, receiptKey, classificationJournal });
   const supersessionStorage = createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
@@ -480,6 +482,7 @@ export function createMemoryRuntime(input) {
   const stagedEvidence = createStagedEvidenceStorage({ db });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
+    classificationJournal,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -511,6 +514,19 @@ export function createMemoryRuntime(input) {
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input) { ready(); return admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
+    finishCapturedAdmission(ns, input) {
+      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true });
+    },
+    beginInitialClassification(ns, input, admitted, selected) {
+      ready(); return classificationJournal.begin(ns, input, admitted, selected);
+    },
+    failInitialClassification(ns, input, token) {
+      ready(); return classificationJournal.failAttempt(ns, input, token);
+    },
+    applyInitialPlacement(ns, input, token, proposal, guards, index) {
+      ready(); return mocStorage.applyPlacement(ns, proposal, guards, index,
+        { client: input.client, eventId: input.eventId, token });
+    },
     abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
     applyPlacement(ns, proposal, guards, index) {
       ready(); return mocStorage.applyPlacement(ns, proposal, guards, index);

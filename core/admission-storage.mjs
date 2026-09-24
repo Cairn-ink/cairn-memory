@@ -7,7 +7,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence }) {
+  conflictStorage, stagedEvidence, classificationJournal }) {
   const read = (ns, input) => db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
     .get(...key(ns, input));
   const live = (row, input, now) => row?.state === "pending" &&
@@ -42,6 +42,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         result = { status: 'completed', classification: { status: 'unknown' },
           suppressedCount: row.suppressed_count, members };
       }
+      if (input.includeInitialClassification === true) result.initialClassification =
+        row?.state === 'completed' ? classificationJournal.inspect(ns, input) : { status: 'unknown' };
       db.exec('COMMIT');
       return result;
     } catch (error) {
@@ -91,9 +93,9 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       if (closed) return { closed };
       if (!live(row, input, now)) fail("stale_admission");
       // The public manual finish cannot bypass ordered capture's private proof.
-      if (!hooks && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
+      if (!hooks?.validate && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
         .get(...key(ns, input))) fail('stale_admission');
-      hooks?.validate();
+      hooks?.validate?.();
       const ids = new Set();
       let suppressedCount = 0;
       const activeItems = [];
@@ -114,7 +116,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           insertedReceiptIds: result.insertedReceiptIds };
       });
       conflictStorage.insertBatch(ns, entries, "inferred-hint");
-      const extra = hooks?.admitted(entries);
+      const extra = hooks?.admitted?.(entries);
       const memoryIds = [...ids];
       // Resolve revisions after the entire batch: later exact matches can attach
       // receipts to an earlier result while preserving its first occurrence order.
@@ -122,8 +124,9 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       db.prepare(`UPDATE admission_claims SET state = 'completed', token = NULL,
         lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${where}`)
         .run(JSON.stringify(memoryIds), suppressedCount, ...key(ns, input));
-      hooks?.complete();
+      hooks?.complete?.();
       stagedEvidence.mark(ns, input, 'admitted');
+      if (hooks?.initialClassification) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
     });
     if (result.closed) fail(result.closed);

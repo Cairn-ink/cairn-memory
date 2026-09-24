@@ -31,7 +31,8 @@ test('installed cold admission inspection then explicit classification uses one 
     command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
       artifact.artifactPath], root, artifact.userconfig);
     const packageRoot = join(root, 'node_modules', packageName);
-    for (const path of ['core/admission-storage.mjs', 'core/contract.mjs', 'adapters/mcp/server.mjs']) {
+    for (const path of ['core/admission-storage.mjs', 'core/classification-journal-schema.mjs',
+      'core/classification-journal-storage.mjs', 'core/contract.mjs', 'adapters/mcp/server.mjs']) {
       assert.equal(createHash('sha256').update(readFileSync(join(packageRoot, path))).digest('hex'),
         artifact.sourceHashes[path]);
     }
@@ -48,6 +49,26 @@ test('installed cold admission inspection then explicit classification uses one 
     }] }));
     core.close(); // No capture response or classification is available to the installed host.
     assert.equal(admission.memories.length, 1);
+    const steps = ['throw', 'empty'];
+    const installedModel = { contextWindow: 8192, countTokens: () => 1,
+      extract: ({ input }) => ({ items: [{ content: input.messages[0].content, kind: 'fact',
+        confidence: 0.8, sourceIndices: [0] }] }),
+      classify: ({ input }) => {
+        const step = steps.shift();
+        if (step === 'throw') throw new Error('synthetic installed classifier failure');
+        assert.equal(step, 'empty');
+        return { items: input.memories.map(({ id }) => ({ memoryId: id, parentIds: [] })) };
+      } };
+    const captureCore = openMemoryCore({ path: dbPath, model: installedModel });
+    const captureInput = (eventId) => ({ namespace, client: 'cairn-local-mcp', eventId,
+      sessionId: 'installed-session', messages: [{ id: `message-${eventId}`, role: 'user',
+        content: `Synthetic installed ${eventId} source.` }] });
+    const failedCapture = ok(await captureCore.capture(captureInput('installed-failed')));
+    const noOpCapture = ok(await captureCore.capture(captureInput('installed-no-op')));
+    assert.equal(failedCapture.classification.status, 'failed');
+    assert.equal(noOpCapture.classification.status, 'applied');
+    const noOpBefore = ok(captureCore.get({ namespace, memoryId: noOpCapture.admission.memories[0].id }));
+    captureCore.close();
     let requests = 0;
     const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
       requests++;
@@ -90,6 +111,19 @@ test('installed cold admission inspection then explicit classification uses one 
     assert.equal(inspected.members[0].filing.status, 'unfiled');
     assert.equal(JSON.stringify(inspected).includes('Synthetic retained'), false);
     assert.equal(requests, 0);
+    for (const [batchId, status] of [['installed-failed', 'failed'], ['installed-no-op', 'applied']]) {
+      const defaultView = await call(cold, 'inspect_capture_admission', { batchId });
+      assert.equal(Object.hasOwn(defaultView, 'initialClassification'), false);
+      const initialView = await call(cold, 'inspect_capture_admission',
+        { batchId, includeInitialClassification: true });
+      assert.deepEqual(initialView.initialClassification, { status });
+      assert.deepEqual(initialView.classification, { status: 'unknown' });
+      assert.equal(initialView.members[0].filing.status, 'unfiled');
+    }
+    const noOpAfter = await call(cold, 'inspect_memory',
+      { memoryId: noOpCapture.admission.memories[0].id });
+    assert.equal(noOpAfter.memory.content, noOpBefore.memory.content);
+    assert.deepEqual(noOpAfter.receipts, noOpBefore.receipts);
     const before = await call(cold, 'inspect_memory', { memoryId: admission.memories[0].id });
     await cold.close();
     const recovery = await start(keyedEnv);

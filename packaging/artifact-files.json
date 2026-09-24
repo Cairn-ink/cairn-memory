@@ -9,6 +9,8 @@
   "core/claim-qualification-input.mjs",
   "core/claim-qualification-schema.mjs",
   "core/claim-qualification-storage.mjs",
+  "core/classification-journal-schema.mjs",
+  "core/classification-journal-storage.mjs",
   "core/classification.mjs",
   "core/conflict-storage.mjs",
   "core/contract.mjs",

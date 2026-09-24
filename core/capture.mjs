@@ -12,8 +12,9 @@ const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta
 const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
-async function classifyAdmission(model, namespace, admission, operations) {
+async function classifyAdmission(model, namespace, admission, operations, key) {
   if (!admission.memories.length) return { status: 'skipped', reason: 'empty' };
+  let attemptToken;
   try {
     const guards = [];
     for (const admitted of admission.memories) {
@@ -21,7 +22,11 @@ async function classifyAdmission(model, namespace, admission, operations) {
       if (memory.revision !== admitted.revision) fail('revision_conflict');
       if (memory.filing.status === 'unfiled') guards.push({ memoryId: admitted.id, revision: admitted.revision });
     }
-    if (!guards.length) return { status: 'skipped', reason: 'already_filed' };
+    const started = unwrap(operations.beginInitialClassification({ ...key,
+      admitted: admission.memories.map(({ id, revision }) => ({ memoryId: id, revision })),
+      selected: guards }));
+    if (started.skipped) return { status: 'skipped', reason: 'already_filed' };
+    attemptToken = started.token;
     if (typeof model?.classify !== 'function') {
       emitDiagnostic(model, 'classify', 'core_call', 'model_not_configured');
       fail('model_not_configured');
@@ -30,12 +35,17 @@ async function classifyAdmission(model, namespace, admission, operations) {
     const classified = unwrap(await operations.classifyPlacement({ namespace,
       memoryIds: guards.map((guard) => guard.memoryId), expectedMemoryRevisions: guards,
       mapRevision: mapped.indexRevision }));
-    const placed = unwrap(operations.applyPlacement({ namespace, proposal: classified.proposal,
+    const placed = unwrap(operations.applyInitialPlacement({ ...key, token: attemptToken,
+      proposal: classified.proposal,
       expectedMemoryRevisions: classified.basedOn.memoryRevisions,
       expectedIndexRevision: classified.basedOn.indexRevision }));
     return { status: 'applied', memoryRevisions: placed.memories.map((memory) =>
       ({ memoryId: memory.id, revision: memory.revision })), indexRevision: placed.indexRevision };
   } catch (error) {
+    if (attemptToken) {
+      try { unwrap(operations.failInitialClassification({ ...key, token: attemptToken })); }
+      catch { /* A failed receipt write cannot replace the original failure. */ }
+    }
     const code = error instanceof MemoryStoreError ? error.code : 'classification_failed';
     return { status: 'failed', error: { code, retryable: code === 'storage_busy' } };
   }
@@ -85,7 +95,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
   }
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };
-  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations);
+  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key);
   const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
     classification, sourceMessages, operations }) : undefined;
   return { duplicate: false, admission, classification,
