@@ -17,7 +17,10 @@ is changed.
   special keys occupy positions 0–7 and `size` (tail). Correct keeps one row,
   forget removes one current row, and supersede trades one current predecessor
   for one current successor, yielding exactly `size` current rows. Tail is
-  beyond the first 1,024 only at 10,000. Foreign-volume control adds 10,000
+  beyond the first 1,024 in **ID-ordered** memory scans only at 10,000 because
+  setup assigns ascending synthetic UUIDs
+  `00000000-0000-4000-8000-{12-digit insertion ordinal}`; this is setup-only,
+  not an evaluator feature or query input. Foreign-volume control adds 10,000
   rows with fixed text `Private lilac charter for foreign record {ordinal}.`
   in a separate same-owner project; neither its hits nor its size may change
   authorized ranking or output caps.
@@ -54,16 +57,21 @@ the supersession replacement `Current indigo rota is adopted.`, four neutral
 receipts `Neutral receipt {1..4}.` and fifth target receipt, and a new
 generation/exclusion mutation `Fresh onyx compass is present.` with no query
   label tuning. Fixture setup inserts fixed ascending experiment-only
-  `ci-receipt-{six-digit memory ordinal}-{1..5}` receipt IDs directly into the
+  ascending UUID-format receipt IDs
+  `20000000-0000-4000-8000-{12-digit global receipt ordinal}` directly into the
   fresh synthetic DB. This is setup instrumentation, **not** a public API
   capability or proof of public receipt-ID control; later public core mutation
   tests run separately and add their own UUIDs.
 Expected
 positives: exact body, >1,024 tail at 10,000, receipt-only first-four hit,
-corrected replacement, new generation after rebuild. Expected negatives:
-foreign namespace/volume, deleted, historical, superseded, excluded active
-generation, fifth-receipt-only, CJK partial, accent folding, literal operator
-and no-match. Reports never include raw source/query/answer, IDs, paths or
+corrected replacement, new generation after rebuild. Query labels also include
+zero-target expectations for foreign, deleted, historical, superseded,
+fifth-receipt-only, CJK partial, accent folding, literal operator and no-match.
+These are **diagnostic** labels, not safety gates that force empty results:
+`former indigo` may retrieve the *current* replacement by one lexical term.
+Safety checks separately forbid the historical predecessor ID, deleted ID,
+foreign ID and fifth-only document from the authorized candidate set. Reports
+never include raw source/query/answer, IDs, paths or
 hashes. Labels remain evaluator-private and cannot enter retrieval input.
 
 ## Mechanism and safety acceptance
