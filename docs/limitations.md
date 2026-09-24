@@ -26,7 +26,18 @@ reconstruction showed severe foreign-volume growth for that old query, while
 the replacement per-term posting query completed the frozen full cell within
 the bound on both Node 22.16 and 24.15. These shared-host, three-repeat
 timings are diagnostic means, not percentiles, causal speedups or provider
-latency. ASCII-only comparison does not establish Unicode/CJK/tokenizer
+latency. Independent acceptance of runtime commit `08e82c7` measured Node
+22.16 size 100/1,000/10,000 total times of 277.595/954.177/8,553.183 ms
+and Node 24.15 totals of 309.443/1,112.080/10,721.180 ms. In the Node 24
+10,000-row cell, the accent-fold negative query averaged 224.595 ms indexed
+versus 148.175 ms scanning over three repeats, although other ordinary
+queries were roughly 57–72 ms indexed versus 147–155 ms scanning. This is
+not a uniform speedup or a basis to select a product index. The full cell had
+10,000 authorized and 10,000 foreign current rows and 30,005 sidecar
+documents; the database grew from 21,581,824 to 34,250,752 bytes. That delta
+includes generation and lifecycle work, not just sidecar overhead. WAL bytes
+were zero under the observed default journal mode, not proof that WAL has no
+overhead. ASCII-only comparison does not establish Unicode/CJK/tokenizer
 equivalence; `unicode61` and JavaScript word categories can differ. Frozen
 zero-target labels can still return a *different current* lexical overlap
 without leaking a historical or fifth-only source. The experiment neither

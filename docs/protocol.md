@@ -2,8 +2,10 @@
 
 ### Offline incremental candidate-index experiment boundary
 
-The maintainer-only incremental-index experiment creates and destroys its own
-fresh private 0700 temporary directory and 0600 synthetic core SQLite file.
+The maintainer-only incremental-index experiment creates a fresh private 0700
+temporary directory and 0600 synthetic core SQLite file, then removes them on
+normal completion. A hard timeout or process kill can leave the private
+synthetic directory behind; cleanup is not a forensic-erasure guarantee.
 It does not accept a user database path, install a product schema, change the
 core API, contact a provider or emit hosted telemetry. Experiment-prefixed
 tables, FTS5 and persistent SQL triggers are installed only in that file with

@@ -166,5 +166,21 @@ label repair or semantic win. Before the final commit, `npm test` passed
 127/127 on each Node 22.16 and 24.15; `npm run validate`, strict plugin
 validation, and `npm run demo:incremental-candidate-index` passed on both.
 The explicit 10,000-row `npm run measure:incremental-candidate-index` passed
-on both. The final candidate SHA is reported in the handoff after commit;
-these timings are not official performance benchmarks.
+on both. The tested runtime candidate was `08e82c7`; these timings are not
+official performance benchmarks.
+
+Independent primary acceptance then reran the unchanged runtime at commit
+`08e82c7` on both supported Node versions. Observed total milliseconds for
+sizes 100/1,000/10,000 were 277.595/954.177/8,553.183 on Node 22.16 and
+309.443/1,112.080/10,721.180 on Node 24.15. The full cell had 10,000
+authorized plus 10,000 foreign current rows and 30,005 sidecar documents.
+Database bytes before sidecar build were 21,581,824 and final bytes were
+34,250,752 on both versions, a 12,668,928-byte delta that also includes
+generation and lifecycle changes rather than pure index overhead. Observed
+WAL bytes were zero under the default journal mode; this does not establish
+zero WAL overhead in other modes. Node 24's accent-fold negative indexed mean
+was 224.595 ms versus 148.175 ms scanned over three repeats, while other
+ordinary queries were roughly 57–72 ms indexed versus 147–155 ms scanned.
+Thus the experiment does not show uniform speedup or justify product index
+selection. This docs-only acceptance update does not rerun the full cell or
+change the runtime tested at `08e82c7`.
