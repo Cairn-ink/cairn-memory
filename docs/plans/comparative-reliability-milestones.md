@@ -54,63 +54,63 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after PR #211)
+## Latest checkpoint — 2026-09-25 (after PR #212)
 
-Fixed as-of checkpoint; the prior checkpoint below preserves older PR heads and
-CI, which were not rechecked here. PR [#211](https://github.com/Cairn-ink/cairn-memory/pull/211)
-is ready and unmerged at `632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`; CI run
-`36051396331`, attempt 1, passed 17/17. Separate Standards/Spec reviews
-(GPT-6 Sol/high) passed with zero findings. No merge, release, deployment, new
-paid request, ledger edit, old-cohort rerun, new semantic score or S1–S5 pass
-is recorded.
+Fixed as-of checkpoint; earlier checkpoints below retain their own heads,
+results and failures and were not rechecked here. PR [#212](https://github.com/Cairn-ink/cairn-memory/pull/212)
+is ready, open, unmerged and mergeable at `a6f8bfc3176f9ca8f64ebbcd888e58a920b5e3da`,
+based on `c118c0f0fd70af01c63ea1339305de03eeb84c94`. CI run `36056945007`,
+attempt 1, passed 17/17. Separate full-base Standards and Spec reviews
+(GPT-6 Sol/high) passed with zero findings. On runtime-identical candidate
+`08e82c7` (differing only in three documentation files), primary generic checks
+passed 127/127 on Node 22.16 and 24.15; JSON and strict plugin validation also
+passed on both. This documentation checkpoint passed `npm test` (106/106),
+`npm run validate` and `npm run validate --prefix tools/plugin-validation` on
+Node 22.16.0 and 24.15.0, plus `git diff --check`. No merge, release, deployment,
+paid request, ledger edit, old-cohort rerun, semantic score or S1–S5 milestone
+pass is recorded.
 
-Primary verification reports 168 request-guard checks passed and generic tests
-112/112; JSON and strict plugin validation passed on Node 22.16 and 24.15. On
-the prior runtime-identical candidate, live-evidence-offline had 335 total
-(305 passed, 30 pre-existing opt-in skips); the budget suite passed 15/15 on
-both runtimes. These suites were not rerun after the final test/docs delta.
-Diagnostics do not establish provider billing, wire-level transport or semantic
-core success.
+### Latest completed S2 offline diagnostic: incremental candidate index (PR #212)
 
-### Latest completed S1 packet: transport phase diagnostics (PR #211)
+Both CLI runs passed the frozen 100/1,000/10,000 synthetic-size checks. At 10,000
+rows, whole-cell elapsed time was 8.553 s on Node 22.16 and 10.721 s on 24.15,
+versus the retained earlier 120 s timeout. Later reconstructions of that old
+query are not the exact red source (no red-source SHA was saved), so they do not
+prove a unique cause. The index is not a uniform speedup: on Node 24, the
+accented negative-index query took 224.595 ms indexed versus 148.175 ms for the
+scan. Two lexical false positives and unsupported CJK cases remain. Full-text
+copies remain in the sidecar; the 10,000-authorized plus 10,000-foreign database
+grew from 21,581,824 to 34,250,752 bytes, including lifecycle/generation costs,
+not a pure index-overhead measure. This is synthetic retrieval evidence, not a
+production selector, semantic QA result, production promotion or S2 answer-stage
+pass. Retained PR #208 failures and older results below are unchanged.
 
-Owner `recovery_design6`, actual GPT-6 Sol/high; base `9ac117671a0ba714d427fe1129823bfcfebe19a3`.
-Opt-in `bounded-v1` private-generation diagnostics use a per-case ring capped
-at 256 attempt records, each with closed numeric/enumerated milestones: fetch
-entry, valid-response availability, body-read completion, settlement attempt
-and accounting outcome. No source text, case IDs, URLs, model identifiers or
-usage are persisted. No timeout, retry, cap, scoring or ledger behavior changes.
-CLI diagnostics require the complete `case-deadline` flags; generation-level
-details remain private-generation-only. These observations do not prove network
-transmission, provider receipt/billing or semantic success.
-S1 recovery and durable-classification-journal requirements remain open.
+### Next S1 packet: initial capture classification journal (assigned, not started)
 
-### Next packet: incremental candidate index (no accepted result claimed)
+The frozen assignment is in the local, unpublished `capture-classification-journal`
+worktree: freeze `c4dd8850e435bf3752b52f6a72154ef56aeed100` plus preimplementation
+manifest clarification `6ea5b90`, fixed to PR #211 base
+`632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`. Branch
+`feat/capture-classification-journal`; implementation owner GPT-6 Sol/high.
+The frozen plan is `docs/plans/capture-classification-journal.md` in that
+worktree. Its CJ1–CJ6 contract covers one source-free initial-classification
+journal row per newly admitted batch, transactional admission and placement,
+v13-to-v14 migration, and opt-in `includeInitialClassification` inspection.
+Default inspection remains unchanged and unknown; legacy/manual admissions
+stay unknown. The journal is not a recovery queue, replay mechanism or new
+classification attribution path. Whole-capture deadline and explicit-recovery
+semantics remain later work.
 
-Owner GPT-6 Sol/high; fixed base `c118c0f0fd70af01c63ea1339305de03eeb84c94`,
-branch `experiment/incremental-candidate-index`. Plan and fixtures were frozen
-before results at local unpublished commit `67815fe6db4fdd249a6c597d0804d733646eb509`,
-`docs/plans/incremental-candidate-index.md`; earlier preflight revisions
-`09995...` and `c5f...` are retained. There were no result runs at assignment
-freeze. Implementation is active; any later results need their own verification.
-
-Frozen scope compares a synthetic SQLite FTS5 sidecar with a same-projection,
-ID-keyset scan, using `trusted_schema=OFF`, namespace/current-generation/
-revision/epoch guards, bounded materialization, first-four-receipt scoring and
-lifecycle/rollback checks at post-mutation sizes 100/1,000/10,000. There are no
-public core or schema-version changes and no production-DB changes; sidecar
-tables/triggers install only in a fresh synthetic DB. No default-selection, provider,
-user-data or ledger changes; no accepted result, QA result, production promotion
-or S1/S2 pass is claimed. Resume by checking real worktree/branch/head/dirty
-state, then `git diff c118c0f0fd70af01c63ea1339305de03eeb84c94...HEAD` against
-the frozen plan before its ordered Node 22.16/24.15 gates; run the 10,000-row
-measure only after smaller safety and test gates pass.
-
-S1 recovery/journal, the later S2 answer-stage, S3 matched Mem0, S4 installed
-growth and S5 cold-context onboarding remain open. Budget was not reread:
-last-recorded authority is US$200 cumulative, operational ledger US$100 pending
-review, and reserved spend US$79.389500. Verify the actual ledger and guard
-before any paid phase.
+No implementation or runtime gate is accepted for this packet. Resume by
+checking the frozen assignment and current branch state against that plan; the
+primary is accepting migration and crash-probe work. Do not claim an S1 pass.
+After this journal slice, interruption/recovery and deadline work, then fresh
+frozen semantic-comparison gates, remain required. S1, the later S2 answer-stage,
+S3 matched Mem0, S4 installed growth and S5 cold-context onboarding remain
+open. Budget was not reread: last-recorded authority is US$200 cumulative,
+operational ledger US$100 pending review, and reserved spend US$79.389500.
+Verify the actual ledger and guard before any paid phase. No new paid call,
+ledger change, old-cohort rerun, merge or release is authorized by this checkpoint.
 
 ## Previous checkpoint — 2026-09-25 (retained; not refreshed here)
 

@@ -36,25 +36,33 @@ claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-records the latest fixed checkpoint and the earlier evidence snapshots. PR #211
-is ready at `632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`; CI run `36051396331`
-passed 17/17, and separate Standards/Spec reviews passed with zero findings.
-Its opt-in bounded transport diagnostics do not change timeout, retry, cap,
-scoring or ledger behavior and do not establish provider billing or semantic
-quality. S1 remains incomplete; the later S2 answer-stage, S3 matched Mem0, S4
-installed-growth and S5 onboarding gates also remain open.
+records the latest fixed checkpoint and earlier evidence snapshots. PR #212 is
+ready, open, unmerged and mergeable at `a6f8bfc3176f9ca8f64ebbcd888e58a920b5e3da`;
+CI run `36056945007`, attempt 1, passed 17/17, and full-base Standards/Spec
+reviews passed with zero findings. Primary generic (127/127), JSON and strict
+plugin checks passed on Node 22.16 and 24.15 on a runtime-identical candidate.
+The synthetic incremental-index CLI passed at 100/1,000/10,000; its mixed query
+performance, lexical false positives, unsupported CJK, copied full text and
+inclusive database growth do not establish a production selector, semantic QA
+or S2 answer-stage pass. S1, S2 answer-stage, S3 matched Mem0, S4 installed
+growth and S5 onboarding remain open.
 
-The next assigned offline packet is `experiment/incremental-candidate-index`,
-fixed to base `c118c0f0fd70af01c63ea1339305de03eeb84c94`. Its plan and fixtures
-were frozen before results at local, unpublished commit
-`67815fe6db4fdd249a6c597d0804d733646eb509`
-(`docs/plans/incremental-candidate-index.md`). No result-producing run is
-recorded at assignment freeze; implementation is active, and any later result
-requires its own verification record. It tests a synthetic bounded SQLite FTS5
-sidecar against an authorized ID-keyset scan at 100/1,000/10,000 records; it is
-not an accepted production selector or QA result. Verify the actual branch and
-candidate diff against the frozen plan before running its ordered Node
-22.16/24.15 gates.
+The next assigned S1 packet is `feat/capture-classification-journal`, fixed to
+PR #211 base `632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`, owner GPT-6 Sol/high.
+Its frozen contract lives at
+`docs/plans/capture-classification-journal.md` in the local, unpublished
+`capture-classification-journal` worktree (freeze
+`c4dd8850e435bf3752b52f6a72154ef56aeed100`, plus manifest clarification
+`6ea5b90`). CJ1–CJ6 cover a source-free initial-classification journal,
+transactional admission/placement, v13-to-v14 migration and opt-in cold
+inspection; default and legacy/manual records remain unknown. It is assigned,
+not implemented or verified. Do not claim an S1 pass. Deadline/recovery and
+fresh frozen semantic-comparison gates remain later work.
+
+Budget was not reread: last-recorded authority is US$200 cumulative, operational
+ledger US$100 pending review, and reserved spend US$79.389500. Verify the actual
+ledger and request guard before any paid phase. No new paid call, ledger edit,
+old-cohort rerun, merge, release or deployment is recorded.
 
 The earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
 40,000-space tokenizer check at 5,048 ms against the unchanged 5-second gate.
