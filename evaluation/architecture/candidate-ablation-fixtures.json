@@ -1,5 +1,5 @@
 {
-  "version": "candidate-retrieval-ablation-v1",
+  "version": "candidate-retrieval-ablation-v2",
   "bankCount": 1030,
   "topK": 5,
   "materializationCap": 24,
@@ -17,6 +17,7 @@
     { "key": "alias", "content": "The automobile permit is in the transport ledger.", "topic": "transport" },
     { "key": "chinese", "content": "青銅羅盤保存在觀測站的東側抽屜。", "topic": "observatory" },
     { "key": "ambiguous", "content": "The wax seal is in the archives case.", "topic": "archives" },
+    { "key": "animal_seal", "content": "A harbor seal rests near the transport dock.", "topic": "transport" },
     { "key": "wrong_branch", "content": "The polar telescope calibration is recorded here.", "topic": "operations" },
     { "key": "multi_a", "content": "The eastern beacon code is amber.", "topic": "operations" },
     { "key": "multi_b", "content": "The western beacon code is violet.", "topic": "operations" },
@@ -29,6 +30,7 @@
     { "name": "exact_lexical", "query": "Where is the cobalt astrolabe?", "expected": ["exact"] },
     { "name": "past_prefix", "query": "Where is the zirconium sextant?", "expected": ["tail"] },
     { "name": "alias_paraphrase", "query": "Where is the car permit?", "expected": ["alias"] },
+    { "name": "alias_pure", "query": "car", "expected": ["alias"] },
     { "name": "chinese_exact", "query": "青銅羅盤", "expected": ["chinese"] },
     { "name": "chinese_partial", "query": "銅羅", "expected": ["chinese"] },
     { "name": "ambiguous_alias", "query": "Where is the stamp?", "expected": ["ambiguous"] },

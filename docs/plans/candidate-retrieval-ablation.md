@@ -1,9 +1,11 @@
 # Frozen offline candidate retrieval ablation
 
 This packet fixes the synthetic corpus, query labels, caps and comparison before
-the first result-producing run. It diagnoses candidate reachability; it does not
+the first result-producing run. The initial v1 commit was corrected in a second
+preflight commit: a pure-alias query and second, animal sense of `seal` make
+those two controls valid. No result-producing run used v1. It diagnoses candidate reachability; it does not
 change public recall or measure answer accuracy. The fixture is
-`evaluation/architecture/candidate-ablation-fixtures.json` version v1. Case
+`evaluation/architecture/candidate-ablation-fixtures.json` version v2. Case
 names and expected keys are evaluator-only and may never enter a strategy query.
 Do not revise expected answers or tune the cases after observing results. Retain
 negative cases in `docs/limitations.md`.
