@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — extraction source-index domain
+
+- Bind the optional OpenAI extract response schema to canonical batch-local
+  source indices. Empty direct adapter requests permit only empty extraction;
+  malformed source snapshots fail before HTTP. Count and generation share the
+  detached request schema. Core source validation and receipt construction,
+  prompts, models, budgets, retry policy and admission are unchanged.
+- Fake-HTTP regression proves the previous schema admitted a nonexistent index.
+  The three retained range failures have no saved offending indices, so their
+  exact cause and any historical or semantic repair remain unproven.
+
 ## Unreleased — complementary source-evidence ranking candidate
 
 - Revise only the explicit source-evidence rank prompt to prefer a nonredundant
