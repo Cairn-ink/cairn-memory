@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — initial capture classification journal
+
+- Add a v14 source-free, exact-batch journal for the initial classification of
+  newly captured admissions. Admission and its initial row commit atomically;
+  successful placement and its status commit together, including no-op
+  placement. A crash can remain in-flight, and applied does not imply filed.
+- Opt-in `includeInitialClassification: true` on core and local MCP admission
+  inspection reports only the original attempt's bounded status. Default
+  responses are unchanged; manual/legacy or changed-member claims remain
+  unknown. Explicit recovery never rewrites the initial result. Synthetic
+  core, SDK and installed-artifact checks cover cold reads and source receipts.
+  This is not a retry queue, whole-capture deadline or semantic-quality claim.
+
 ## Unreleased — bounded transport observations
 
 - Add optional `bounded-v1` transport milestones to the one-shot case-deadline

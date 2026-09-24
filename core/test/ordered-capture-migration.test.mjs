@@ -37,7 +37,7 @@ function preserved(db) {
 
 test('O2 v8→v9 preserves every old value, history, replay, signed cursors and staged rebuild; old receipts stay unordered', (t) => {
   const { path, db } = fixture(t); const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
   for (const table of ['capture_streams', 'capture_events', 'receipt_causality'])
     assert.equal(db.prepare(`SELECT count(*) n FROM ${table}`).get().n, 0);
   assert.deepEqual(ok(core.get({ namespace: saved.namespace, memoryId: saved.history.memory.id })), saved.history);
@@ -55,7 +55,7 @@ test('current candidate partial index survives v8 migration and runtime reopen w
   for (let round = 0; round < 2; round++) {
     const runtime = createMemoryRuntime({ path });
     try {
-      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13);
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14);
       const definition = db.prepare("SELECT sql FROM sqlite_master WHERE name='capture_current_memories'").get().sql;
       assert.match(definition, /ON memories\(owner_id,scope,project_id,id\)\s+WHERE deleted = 0 AND currentness = 'current'/);
       const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
@@ -85,7 +85,7 @@ test('O2 migration collision leaves v8 schema and data unchanged and permits a c
   assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema); preserved(db);
   assert.equal(db.prepare('SELECT preserve_me FROM capture_streams').get().preserve_me, 'synthetic survivor');
   db.exec('DROP TABLE capture_streams'); const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
 });
 
 test('O2 competing writer prevents upgrade without touching v8 state', (t) => {
@@ -96,5 +96,5 @@ test('O2 competing writer prevents upgrade without touching v8 state', (t) => {
     assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema); preserved(db);
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
 });

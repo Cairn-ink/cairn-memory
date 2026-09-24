@@ -89,6 +89,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
   function finish(ns, s, token, order, snapshot, items, decisions, reason) {
     let reconciliation;
     return admissionStorage.finishAdmission(ns, { ...s, token, items }, {
+      initialClassification: true,
       validate() {
         validate(ns, s, order);
         for (const candidate of snapshot.candidates) {

@@ -50,6 +50,18 @@ post-filing revisions, not the earlier admission snapshot. Concurrent correction
 or forgetting rejects stale filing. Retry classification explicitly from fresh
 state; capture replay does not rerun extraction or classification.
 
+New captures also commit a bounded, source-free **initial classification
+attempt** journal with their admission. Its status is `not_started` before
+model work, `in_flight_or_interrupted` while work is outstanding, then
+`applied`, `skipped_already_filed` or `failed`; empty admission records
+`skipped_empty`. A crash can leave the in-flight status indefinitely. The
+`applied` status is committed with placement, including a valid no-op with no
+parent, so it does not mean every member is filed or the model was correct.
+The journal is visible only through opt-in
+[admission inspection](admission-claims.md#read-committed-admission-membership).
+It does not retry capture or provide a classification task queue. Manual and
+pre-v14 admission claims have no recorded initial attempt.
+
 Pending replay returns `{processing:true}`. Completed replay returns
 `{duplicate:true,memoryIds,suppressedCount}`, even without a model/counter. IDs
 may refer to subsequently forgotten records but expose no forgotten content.

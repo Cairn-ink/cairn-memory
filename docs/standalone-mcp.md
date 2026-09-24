@@ -113,7 +113,7 @@ someone who can edit your process configuration or read your database file.
 | recall_memory | query, optional limit (1–12), includeQualification, contextMode, selectionMode | Same bounded model-driven core recall; source qualification defaults on with qualified capture unless source context is resolved |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
-| inspect_capture_admission (opt-in only) | batchId | Keyless admission-only status and bounded fresh member refs; classification always unknown |
+| inspect_capture_admission (opt-in only) | batchId, optional includeInitialClassification boolean | Keyless admission status, bounded fresh member refs and optional initial capture-attempt status; overall classification stays unknown |
 | classify_unfiled_memories (opt-in only) | refs: 1–5 unique memoryId/revision pairs | Explicit, guarded model classification and placement of current unfiled memories |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
@@ -154,6 +154,18 @@ Classification remains `{"status":"unknown"}` even when every member is
 filed or an empty-parent proposal leaves a member unfiled. Neither state
 proves classification succeeded or failed.
 
+For batches created by the current capture path, pass
+`{"batchId":"the-original-batch-id","includeInitialClassification":true}`
+to read only the initial attempt's durable status. It can be `not_started`,
+`in_flight_or_interrupted`, `applied`, `skipped_already_filed`, `failed`,
+`skipped_empty` or `unknown`. The last covers old/manual claims and batches
+whose original members changed, were forgotten, became historical or are no
+longer available. The in-flight state is not proof a process is still running;
+an applied no-parent proposal can remain unfiled. The default response is
+unchanged. This read never supplies an old revision or provider error and
+does not authorize a retry. The separate general-ref classification tool
+does not rewrite the original batch outcome.
+
 Inspect each memory first, then explicitly submit its current reference:
 
 ```json
@@ -181,8 +193,11 @@ with the same refs can classify it again. Applied does not certify filing qualit
 or source truth. This tool does not extract, admit, recapture,
 change receipts, review rationale, prove a failed capture batch or treat
 remembered consent as authority. Capture duplicate behavior is unchanged.
-There is no durable incomplete-classification journal or whole-capture 30-second
-deadline; this is a bounded explicit operation, not S1 completion.
+The initial capture attempt has a durable bounded journal, but it is not a
+recovery queue or durable history of explicit retries. There is still no
+whole-capture 30-second deadline; this is a bounded explicit operation, not
+S1 completion. The native Hermes provider does not currently forward the
+classification-recovery opt-in; this interface is the local core/MCP path.
 
 If a trusted local caller uses [core supersession](supersession.md), inspection
 also includes labeled historical memories. List pages remain metadata-only;

@@ -72,10 +72,12 @@ test('opt-in read tool is strict, keyless and bound to the configured namespace/
   const tool = tools.find(({ name }) => name === 'inspect_capture_admission');
   assert.ok(tool); assert.equal(tool.annotations.readOnlyHint, true);
   assert.equal(tool.annotations.openWorldHint, false);
-  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['batchId']);
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['batchId', 'includeInitialClassification']);
   for (const args of [{}, { batchId: '' }, { batchId: 'x', ownerId: 'other' },
     { batchId: 'x', client: 'other' }, { batchId: 'x', namespace },
-    { batchId: 'x', path }, { batchId: 'x', payloadDigest: 'a'.repeat(64) }]) await invalid(h.client, args);
+    { batchId: 'x', path }, { batchId: 'x', payloadDigest: 'a'.repeat(64) },
+    { batchId: 'x', includeInitialClassification: 'true' },
+    { batchId: 'x', includeInitialClassification: null }]) await invalid(h.client, args);
   const other = openMemoryCore({ path }); t.after(() => other.close());
   const digest = 'a'.repeat(64);
   for (const [ns, client] of [[namespace, 'other-client'],
@@ -87,6 +89,10 @@ test('opt-in read tool is strict, keyless and bound to the configured namespace/
   }
   assert.deepEqual(ok(await call(h.client, 'inspect_capture_admission', { batchId: 'foreign' })),
     { status: 'absent', classification: { status: 'unknown' } });
+  assert.deepEqual(ok(await call(h.client, 'inspect_capture_admission',
+    { batchId: 'foreign', includeInitialClassification: true })),
+  { status: 'absent', classification: { status: 'unknown' },
+    initialClassification: { status: 'unknown' } });
 });
 
 test('completed capture with failed or empty-parent classification remains admission-only on cold inspection', async (t) => {
@@ -107,6 +113,12 @@ test('completed capture with failed or empty-parent classification remains admis
   const cold = await host(t, path, coldModel);
   const a = ok(await call(cold.client, 'inspect_capture_admission', { batchId: failedBatch.batchId }));
   const b = ok(await call(cold.client, 'inspect_capture_admission', { batchId: emptyBatch.batchId }));
+  const aInitial = ok(await call(cold.client, 'inspect_capture_admission',
+    { batchId: failedBatch.batchId, includeInitialClassification: true }));
+  const bInitial = ok(await call(cold.client, 'inspect_capture_admission',
+    { batchId: emptyBatch.batchId, includeInitialClassification: true }));
+  assert.deepEqual(aInitial.initialClassification, { status: 'failed' });
+  assert.deepEqual(bInitial.initialClassification, { status: 'applied' });
   assert.deepEqual(a.classification, { status: 'unknown' });
   assert.deepEqual(b.classification, { status: 'unknown' });
   assert.equal(a.status, 'completed'); assert.equal(b.status, 'completed');
@@ -126,6 +138,9 @@ test('completed capture with failed or empty-parent classification remains admis
   const inspected = ok(await call(cold.client, 'inspect_capture_admission', { batchId: failedBatch.batchId }));
   assert.equal(inspected.members[0].filing.status, 'filed');
   assert.deepEqual(inspected.classification, { status: 'unknown' });
+  assert.deepEqual(ok(await call(cold.client, 'inspect_capture_admission',
+    { batchId: failedBatch.batchId, includeInitialClassification: true })).initialClassification,
+  { status: 'unknown' });
   assert.deepEqual(coldModel.calls, ['classify']);
 });
 

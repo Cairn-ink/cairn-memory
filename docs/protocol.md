@@ -213,7 +213,7 @@ event bound payload retention, not content-free replay metadata or total file
 size. Expired/discarded/forgotten fences remain; replay does not renew retention.
 SQLite journals, backups, local-file authority, best-effort redaction and opaque
 identifier limitations still apply. Stop older runtime connections before the
-v13 migration; an already-open old process is not retroactively fenced. See
+v14 migration; an already-open old process is not retroactively fenced. See
 [staged evidence](staged-capture-evidence.md) for the threat model and limits.
 
 ### Embedded proposed-rationale boundary
@@ -438,14 +438,31 @@ with `classificationRecovery: 'guarded-v1'` or
 `inspect_capture_admission` reads the existing exact-namespace claim and up to
 five committed distinct member IDs in one read transaction. Its fixed local
 MCP client and server namespace cannot be supplied by the caller. It reports
-only absent, pending, or completed **admission**, always with unknown
-classification. Completed results include the stored bounded suppression
+only absent, pending, or completed **admission**, always with unknown overall
+classification by default. Completed results include the stored bounded suppression
 count and fresh current active member refs with per-member filing status;
 historical, deleted, or missing members are closed without actionable refs or
 old text. An expired pending claim remains pending. The read does not change a
 lease, clock, memory, claim, or source, contact a provider, or retry capture.
 Empty membership and fully filed membership still cannot certify that
 classification finished.
+
+An optional strict boolean `includeInitialClassification: true` adds only
+`initialClassification:{status}`. This reads a v14 source-free journal for
+the exact batch's **initial capture attempt**; omitted/false keeps the prior
+response unchanged. A new capture commits `not_started` or `skipped_empty`
+atomically with admission, changes to `in_flight_or_interrupted` before model
+interpretation, and can finish as `applied`, `skipped_already_filed` or
+`failed`. In-flight may mean interruption, not current progress. Applied can
+be a valid empty-parent no-op with unfiled members. Manual/legacy batches
+and a batch with any corrected, deleted, historical, missing, foreign or
+revision-changed original member yield `unknown`; no old refs, tokens,
+errors, source text or provider output are returned. Placement and success
+status commit in one transaction, including no-op placement. Later explicit
+classification never rewrites the initial journal. Journal identifiers and
+revision guards persist with the local SQLite file, are not encryption, and
+do not create a retention/pruning policy. Older open runtimes must stop before
+the v14 upgrade; it cannot retroactively fence an already-open process.
 
 `classify_unfiled_memories`
 accepts only one to five unique memory ID/revision pairs. Its namespace is
@@ -463,10 +480,11 @@ can be classified again by another explicit call with the same reference.
 
 Classification does not replay capture, alter source receipts, infer whether a
 batch failed classification, settle currentness or authenticate remembered
-consent. Admission inspection reads committed membership without making a
-classification claim. This adds no hosted HTTP, plugin, telemetry, or database
-field. Incomplete classification is not durably journaled, and no old
-evaluation is retried. See
+consent. Admission inspection reads committed membership without inferring
+current classification from filing; the optional journal reports only the
+original attempt. This adds no hosted HTTP, plugin or telemetry field, and
+no old evaluation is retried. Explicit recovery attempts have no durable
+history or automatic replay. See
 [the local MCP tool](standalone-mcp.md#explicit-classification-of-unfiled-memories).
 
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.

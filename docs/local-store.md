@@ -4,15 +4,16 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12 data now upgrades it to v13 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13 data now upgrades it to v14 for
 [opt-in staged capture evidence](staged-capture-evidence.md),
 [source-backed proposed rationale](source-backed-rationale.md),
 [trusted-manual qualified transitions](qualified-transition.md),
 [manual claim qualification](claim-qualification.md),
 [ordered capture](capture.md#opt-in-source-ordered-reconciliation) and
 [historical currentness](supersession.md), preserving index generations,
-[conflict hints](conflicts.md) and [admission claims](admission-claims.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v13.
+[conflict hints](conflicts.md), [admission claims](admission-claims.md) and
+the bounded [initial capture classification journal](capture.md).
+Draft-v2 and unknown formats are rejected; older binaries cannot open v14.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.

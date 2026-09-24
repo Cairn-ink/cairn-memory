@@ -431,7 +431,7 @@ function version12Fixture(t) {
 
 test('v12 migration adds empty staging tables while preserving old memories, receipts and replay identities', async t => {
   const f = version12Fixture(t); const core = reopen(t, f.path);
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 13);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 14);
   f.preserved();
   for (const table of ['staged_capture_evidence', 'staged_capture_clocks']) {
     assert.equal(f.db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0);
@@ -451,5 +451,5 @@ test('v12 migration collision rolls back all staging DDL and keeps the old schem
   assert.deepEqual(f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), before); f.preserved();
   f.db.exec('DROP TABLE staged_capture_clocks');
   reopen(t, f.path);
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 13); f.preserved();
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 14); f.preserved();
 });

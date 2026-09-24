@@ -378,9 +378,13 @@ export function openMemoryCore(input) {
   function inspectAdmission(input) {
     return invoke(() => {
       runtime.ready();
-      exactFields(input, ['namespace', 'client', 'eventId']);
+      object(input, ['namespace', 'client', 'eventId', 'includeInitialClassification']);
+      if (['namespace', 'client', 'eventId'].some(field => !Object.hasOwn(input, field)) ||
+          Object.hasOwn(input, 'includeInitialClassification') &&
+          typeof input.includeInitialClassification !== 'boolean') throw new MemoryStoreError('invalid_input');
       return runtime.inspectAdmission(contractNamespace(input.namespace), {
         client: contractId(input.client), eventId: contractId(input.eventId),
+        ...(input.includeInitialClassification === true ? { includeInitialClassification: true } : {}),
       });
     });
   }
@@ -399,7 +403,7 @@ export function openMemoryCore(input) {
     });
   }
 
-  function finishAdmission(input) {
+  function finishAdmissionValidated(input, captureInitial) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -407,7 +411,41 @@ export function openMemoryCore(input) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items);
-      return runtime.finishAdmission(ns, { ...key, token, items });
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }) :
+        runtime.finishAdmission(ns, { ...key, token, items });
+    });
+  }
+
+  function finishAdmission(input) { return finishAdmissionValidated(input, false); }
+
+  function beginInitialClassification(input) {
+    return invoke(() => {
+      runtime.ready();
+      const ns = contractNamespace(input.namespace);
+      const key = admissionKey(input);
+      return runtime.beginInitialClassification(ns, key, input.admitted, input.selected);
+    });
+  }
+
+  function failInitialClassification(input) {
+    return invoke(() => {
+      runtime.ready();
+      const ns = contractNamespace(input.namespace);
+      const key = admissionKey(input);
+      return runtime.failInitialClassification(ns, key, contractId(input.token));
+    });
+  }
+
+  function applyInitialPlacement(input) {
+    return invoke(() => {
+      runtime.ready();
+      const ns = contractNamespace(input.namespace);
+      const key = admissionKey(input);
+      const proposal = placementProposal(input.proposal);
+      const guards = memoryGuards(input.expectedMemoryRevisions,
+        proposal.items.map(item => item.memoryId));
+      return runtime.applyInitialPlacement(ns, key, contractId(input.token), proposal, guards,
+        contractRevision(input.expectedIndexRevision));
     });
   }
 
@@ -716,7 +754,10 @@ export function openMemoryCore(input) {
       const namespace = publicNamespace(ns);
       if (captureEvidence && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await captureMessages({ model, captureQualification, captureRationale, captureEvidence, input: { ...input, namespace },
-        operations: { claimAdmission, finishAdmission, abandonAdmission, get, map,
+        operations: { claimAdmission,
+          finishAdmission: value => finishAdmissionValidated(value, true),
+          abandonAdmission, get, map, beginInitialClassification,
+          failInitialClassification, applyInitialPlacement,
           claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: 125000, view: value.view,
           })),

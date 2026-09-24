@@ -67,8 +67,24 @@ returned. An empty member list can mean zero items or all suppressed; consult
 the count. Unfiled does not prove classification failed, and fully filed or
 empty membership does not prove it succeeded. A read transaction keeps claim
 membership and current member states together without writing or model calls.
+
+Passing `includeInitialClassification: true` adds only
+`initialClassification: {status}` to that response. The closed statuses are
+`unknown`, `not_started`, `in_flight_or_interrupted`, `applied`,
+`skipped_already_filed`, `failed` and `skipped_empty`. Omitted or false keeps
+the earlier response shape byte-for-byte; its overall
+`classification: {status:'unknown'}` is unchanged. This journal records only
+the **initial capture attempt**, not the current filing state or any later
+explicit classification. Manual and migrated claims return `unknown`.
+Inspection also returns `unknown` if any original batch member has changed
+revision, been forgotten, become historical or cannot be found in the exact
+namespace. It never discloses stored attempt tokens, old revision guards,
+source text or provider errors. `in_flight_or_interrupted` cannot distinguish
+a live process from a crash; `applied` may leave an empty-parent memory
+unfiled. No read retries model work or changes the admission lease.
 The [opt-in local MCP view](standalone-mcp.md#explicit-classification-of-unfiled-memories)
-fixes client and namespace at server startup and accepts only a batch ID.
+fixes client and namespace at server startup and accepts only a batch ID plus
+that optional boolean.
 
 ## Retention, trust and boundaries
 

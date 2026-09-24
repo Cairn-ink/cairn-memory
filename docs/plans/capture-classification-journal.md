@@ -125,3 +125,13 @@ Implementation starts only after prior PR #212's exact-head CI passes. Next
 S1 work is bounded interruption/recovery semantics and a whole-capture
 deadline, followed by newly frozen development smoke tests; this journal alone
 cannot establish improved accuracy or completion on real-model tasks.
+
+## Implementation verification note
+
+The first full core run on each supported Node version reached 667 tests with
+666 passing. The single failure was an older synthetic v11 downgrade test that
+removed v12/v13 tables but retained the new v14 journal table, so its reopen
+correctly rejected a table collision. The fixture now removes that table when
+reconstructing v11; the affected 21-test rationale file passes on both Node
+versions. This was a test-fixture correction, not a migration fallback or an
+acceptance change. Final full-suite results are recorded at delivery.
