@@ -36,44 +36,41 @@ claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-sets proposed completion, held-out comparison, installed-host, growth and preview
-onboarding gates within the existing cumulative ceiling. All statuses below are
-checkpointed 2026-09-25; earlier PR #202–#207 state is retained in the plan and
-was not refreshed in this pass. Current verified open heads: PR #205 at
-`ad45cd1` (run `36045084989`, 21/21 green), PR #208 at `c118c0f` (run
-`36045232556`, 17/17 green), PR #209 at `328052a` (run `36045345343`, 17/17
-green), and PR #210 at `9ac1176` (run `36047442942`, 17/17 green). PR #205's
-CI applies to its remote `ad45cd1` head only; this plan update remains local
-until separately reviewed and published. PR #210 is marked ready; none of these
-four candidates is merged or released.
+records the latest fixed checkpoint and the earlier evidence snapshots. PR #211
+is ready at `632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`; CI run `36051396331`
+passed 17/17, and separate Standards/Spec reviews passed with zero findings.
+Its opt-in bounded transport diagnostics do not change timeout, retry, cap,
+scoring or ledger behavior and do not establish provider billing or semantic
+quality. S1 remains incomplete; the later S2 answer-stage, S3 matched Mem0, S4
+installed-growth and S5 onboarding gates also remain open.
+
+The next assigned offline packet is `experiment/incremental-candidate-index`,
+fixed to base `c118c0f0fd70af01c63ea1339305de03eeb84c94`. Its plan and fixtures
+were frozen before results at local, unpublished commit
+`67815fe6db4fdd249a6c597d0804d733646eb509`
+(`docs/plans/incremental-candidate-index.md`). No result-producing run is
+recorded at assignment freeze; implementation is active, and any later result
+requires its own verification record. It tests a synthetic bounded SQLite FTS5
+sidecar against an authorized ID-keyset scan at 100/1,000/10,000 records; it is
+not an accepted production selector or QA result. Verify the actual branch and
+candidate diff against the frozen plan before running its ordered Node
+22.16/24.15 gates.
 
 The earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
 40,000-space tokenizer check at 5,048 ms against the unchanged 5-second gate.
-The failure is retained with cause unknown; the later green `c118c0f` run does
-not establish a tokenizer runtime fix. Retrieval evidence remains diagnostic:
-the measured candidate reaches its target in both indexed paths, alias
-expansion helps pure-alias queries, both indexed paths miss CJK controls and
-MOC-first shows no observed gain. The separate red-base 1,025-admit control
-still misses its target. None of this attributes the eight historical errors
-or establishes QA/product quality.
+The failure is retained with cause unknown; later green run `36045232556` does
+not establish a tokenizer runtime fix. The measured retrieval candidate is
+diagnostic only: target reachability in both indexed paths, alias benefit for
+pure-alias queries, CJK misses and no observed MOC-first gain do not attribute
+the eight historical errors or establish QA/product quality. The separate
+red-base 1,025-admit control still misses its target.
 
-PR #210's bounded S1 slice adds read-only exact-batch admission inspection with
-unknown classification and fresh current refs; it reports no old content and
-adds no durable classification journal. Worker/primary checks and independent
-Standards/Spec review passed on the exact 14-file candidate. S1 remains
-incomplete. The next assigned, not-started packet is
-`test/transport-phase-diagnostics` from base `9ac1176`: bounded opt-in
-transport-phase diagnostics only, with no deadline, retry, ledger or scorer
-change. It does not waive S1 or later live-benchmark, host-readiness or preview
-gates.
-
-Research remains proposal-only: 3/2,604 retained generation attempts ended in
-`core_deadline` (not a scorer timeout); recorded guard durations are not
-provider latency. A process-local FTS index and Mem0 source candidate still need
-the preflight described in the plan; neither is a production default or
-comparison result. No new semantic score, paid request or ledger change is
-recorded. Budget figures were not reread for this docs update; verify the actual
-ledger and request guard before any paid phase.
+No new semantic score, paid request, ledger edit, merge, release or deployment
+is recorded in this checkpoint. Budget figures were not reread: last recorded
+authority is US$200 cumulative, the operational ledger US$100 pending review,
+and reserved spend US$79.389500. Verify the actual ledger and request guard
+before any paid phase. Earlier PR #205/#208/#209/#210 head and CI details remain
+in the plan and were not rechecked in this refresh.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
