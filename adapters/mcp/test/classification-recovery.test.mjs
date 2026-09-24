@@ -115,7 +115,7 @@ test('opt-in inventory, strict config and syntax-only keyless check', async (t) 
   await plain.close();
   const recovery = await host(t, path);
   const tools = (await recovery.client.listTools()).tools;
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 7);
   const tool = tools.find((entry) => entry.name === 'classify_unfiled_memories');
   assert.ok(tool); assert.equal(tool.annotations.readOnlyHint, false);
   assert.equal(tool.annotations.openWorldHint, true);

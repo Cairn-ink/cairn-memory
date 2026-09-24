@@ -113,6 +113,7 @@ someone who can edit your process configuration or read your database file.
 | recall_memory | query, optional limit (1–12), includeQualification, contextMode, selectionMode | Same bounded model-driven core recall; source qualification defaults on with qualified capture unless source context is resolved |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
+| inspect_capture_admission (opt-in only) | batchId | Keyless admission-only status and bounded fresh member refs; classification always unknown |
 | classify_unfiled_memories (opt-in only) | refs: 1–5 unique memoryId/revision pairs | Explicit, guarded model classification and placement of current unfiled memories |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
@@ -131,10 +132,27 @@ or an authenticated transcript of what a human said.
 
 Add `--classification-recovery guarded-v1`, or set
 `classificationRecovery: 'guarded-v1'` on `createCairnServer`, to expose
-`classify_unfiled_memories`. The option is independent of capture. A keyless
+`inspect_capture_admission` and `classify_unfiled_memories`. The option is
+independent of capture and adds two tools to the five-tool default. A keyless
 server still offers inspection; calling classification without a model returns
 `model_not_configured`. `--check-config` reports the option and whether a model
 key is present without opening the database or contacting a provider.
+
+To recover a lost capture response, call
+`inspect_capture_admission` with `{"batchId":"the-original-batch-id"}`. The
+read uses the server's fixed namespace and local MCP client; it does not call
+capture or a provider, claim an expired lease, or retry anything. `absent` and
+`pending` return no members. `completed` means admission committed, not that
+classification succeeded. It returns the existing bounded `suppressedCount`
+and at most five committed distinct members in stored order. A current member
+contains only `status: "current"`, `memoryId`, its **fresh** `revision`, and
+per-member `filing.status`; a historical, forgotten or missing member is
+`status: "closed"` with no actionable ref. No content, receipts, digest,
+lease token or submitted source text is returned. Empty members can mean an
+empty completion or all inputs suppressed; the count distinguishes these.
+Classification remains `{"status":"unknown"}` even when every member is
+filed or an empty-parent proposal leaves a member unfiled. Neither state
+proves classification succeeded or failed.
 
 Inspect each memory first, then explicitly submit its current reference:
 

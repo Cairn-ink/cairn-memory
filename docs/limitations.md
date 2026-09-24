@@ -288,9 +288,14 @@ boundaries to test separately from the pilot's whole-run stop policy.
 
 The opt-in local MCP `classify_unfiled_memories` tool can explicitly place
 retained current unfiled references under core revision guards. It is a general
-placement action, not verification of a failed capture batch. There is still no
-durable classification outcome or incomplete-work journal for lost capture
-responses and crashes. A whole capture may run several separately bounded model
+placement action, not verification of a failed capture batch. The accompanying
+keyless `inspect_capture_admission` can now recover committed batch membership
+from an existing admission claim after a lost response, with fresh current refs
+and a bounded suppression count. It reports classification as unknown even for
+empty or fully filed membership, and closed historical/deleted members have no
+actionable refs. It does not recover source text or infer missing extracted
+items. There is still no durable classification outcome or incomplete-work
+journal for lost capture responses and crashes. A whole capture may run several separately bounded model
 stages, so it has no single 30-second deadline. Concurrent explicit requests
 may duplicate provider work. Stale guards prevent a second conflicting change,
 but no-op proposals can both succeed. An applied empty-parent proposal can

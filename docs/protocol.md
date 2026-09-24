@@ -422,9 +422,23 @@ introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-
 
 ### Opt-in local MCP classification placement
 
-The separate local stdio MCP server can opt into `classify_unfiled_memories`
+The separate local stdio MCP server can opt into
+`inspect_capture_admission` and `classify_unfiled_memories`
 with `classificationRecovery: 'guarded-v1'` or
-`--classification-recovery guarded-v1`, independently of capture. The tool
+`--classification-recovery guarded-v1`, independently of capture.
+`inspect_capture_admission` reads the existing exact-namespace claim and up to
+five committed distinct member IDs in one read transaction. Its fixed local
+MCP client and server namespace cannot be supplied by the caller. It reports
+only absent, pending, or completed **admission**, always with unknown
+classification. Completed results include the stored bounded suppression
+count and fresh current active member refs with per-member filing status;
+historical, deleted, or missing members are closed without actionable refs or
+old text. An expired pending claim remains pending. The read does not change a
+lease, clock, memory, claim, or source, contact a provider, or retry capture.
+Empty membership and fully filed membership still cannot certify that
+classification finished.
+
+`classify_unfiled_memories`
 accepts only one to five unique memory ID/revision pairs. Its namespace is
 bound at server startup; it rejects missing, deleted, historical, stale or
 filed records before model work. A correction invalidates the old revision,
@@ -438,10 +452,12 @@ No-op proposals may both succeed. The response reports the actual placement
 and filing status, including a valid applied result that remains unfiled and
 can be classified again by another explicit call with the same reference.
 
-This operation does not replay capture, alter source receipts, infer batch
-membership, settle currentness or authenticate remembered consent. It adds no
-hosted HTTP, plugin, telemetry, core or database field. Incomplete classification
-is not durably journaled, and no old evaluation is retried. See
+Classification does not replay capture, alter source receipts, infer whether a
+batch failed classification, settle currentness or authenticate remembered
+consent. Admission inspection reads committed membership without making a
+classification claim. This adds no hosted HTTP, plugin, telemetry, or database
+field. Incomplete classification is not durably journaled, and no old
+evaluation is retried. See
 [the local MCP tool](standalone-mcp.md#explicit-classification-of-unfiled-memories).
 
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
