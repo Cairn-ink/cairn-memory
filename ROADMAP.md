@@ -40,12 +40,16 @@ sets proposed completion, held-out comparison, installed-host, growth and previe
 onboarding gates within the existing cumulative ceiling. PRs #202–#207 remain
 open. The seven scripted capture-to-public-packing cases and offline checks at
 PR #207 do not pass S1 or establish semantic quality; recovery and timeout work
-remain incomplete. The active next gate is a reproducible capacity-boundary
-check followed by a frozen core-versus-flat-versus-MOC retrieval ablation;
-independent offline diagnostics may proceed while S1 is open. S1 still gates
-product promotion, live benchmark, host readiness and preview. No new semantic
-score or paid request is recorded; follow the plan's resume protocol to re-check
-live state before continuing.
+remain incomplete. The capacity-boundary miss has since been reproduced. The
+offline core/flat/MOC ablation is committed locally at `e928fea`; it found the
+capacity target in both indexed paths, alias gains on pure-alias queries, CJK
+misses in both indexed paths, and no observed MOC gain. This is candidate
+reachability evidence, not a QA score or product fix. Independent review and CI
+are pending; no PR has been opened. S1 recovery and product-candidate design are
+next after those gates. Independent offline diagnostics may proceed while S1 is
+open, but S1 still gates product promotion, live benchmark, host readiness and
+preview. No new semantic score or paid request is recorded; follow the plan's
+resume protocol to re-check live state before continuing.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid

@@ -78,10 +78,40 @@ classification guards are candidate changes, not proof of a reliability fix.
 | Milestone | Current state and evidence | Next acceptance work |
 | --- | --- | --- |
 | S1 — bounded recovery | Active, incomplete. Candidate runtime stack #203/#204/#206/#207 remains open; partial-classification recovery and timeout handling are not complete. No S1 pass is claimed. | Finish observable, repeat-safe recovery from retained evidence; verify incomplete receipts, corrected/deleted content, namespace/privacy and no resurrection. |
-| S2 — tracing and navigation | Active, incomplete. The eight historical wrong outcomes remain fixed-N and read-only; finer fact-stage causes are unknown. A synthetic 1,025-memory direct-admission control misses the unique target at the max sorted ID; removing one lower-ID row makes it visible and returned at 1,024. Root reproduced the red-base miss against public `core.recall` in 0.76 seconds with an expected failing assertion. This shows a capacity-boundary effect only; it does not explain a historical wrong answer or establish a fix. | Offline packet assigned to GPT-6 Sol/high on branch `experiment/candidate-retrieval-ablation`, based on PR #207 head `038f0acbe2ac281d1fd599a1199aa921782ca5e5`. No candidate SHA or PR number is recorded yet. Freeze fixtures before output runs. The active experiment and separate later answer-stage gate are defined under S2 below. |
+| S2 — tracing and navigation | Active, incomplete. The eight historical wrong outcomes remain fixed-N and read-only; finer fact-stage causes are unknown. The red-base capacity miss was reproduced and is no longer an unfinished gate. The committed offline candidate finds the target in both indexed paths, alias expansion helps pure-alias queries, both indexed paths miss the CJK controls, and MOC-first shows no observed gain. These are candidate-retrieval diagnostics only, not an attribution for the historical errors, QA results or a product fix. | Independent candidate review and CI are pending. After those gates, return to S1 recovery and product-candidate design; do not rerun the red-base reproduction as an open task. The committed packet, acceptance command and separate later answer-stage gate are recorded below. |
 | S3 — matched comparator | Pending; no fresh matched Mem0 OSS score exists. | Preflight and pin the actual engine, dependencies and model configuration; reconcile harness filters and denominators; freeze a new holdout before any scoring. |
 | S4 — installed path and growth | Pending; installed Hermes/MCP cold-restart and 100/1,000/10,000-memory growth gates remain. | Freeze host/runtime/resources/repeats, then complete each required synthetic workflow and measurement while retaining failures and cap breaches. |
 | S5 — preview and onboarding | Pending; no cold-context onboarding pass is recorded. | Run the documented clean-environment flow through sourced write, new-session recall, inspect, correct, forget and restart/no-result; record receipt-backed pass/fail at every step. |
+
+### Active S2 candidate packet
+
+The offline candidate is committed at `e928fea80e3da4f0eff759100d41666ee35b6dc9`
+on branch `experiment/candidate-retrieval-ablation` (worktree basename
+`candidate-retrieval-ablation`), based on PR #207 head
+`038f0acbe2ac281d1fd599a1199aa921782ca5e5`. Owner: root-supervised GPT-6
+Sol/high. No PR has been opened. Its seven allowed files are
+`evaluation/architecture/candidate-ablation.mjs`,
+`evaluation/architecture/candidate-ablation-cli.mjs`,
+`evaluation/architecture/candidate-ablation-fixtures.json`,
+`evaluation/architecture/test/candidate-ablation.test.mjs`,
+`docs/plans/candidate-retrieval-ablation.md`, `docs/limitations.md` and
+`package.json`.
+
+The fixture reports candidate reachability, not public packing or answer
+correctness: the capacity target is reachable in both indexed paths; aliases
+help pure-alias queries; both indexed paths miss CJK controls; MOC-first shows
+no observed gain. These results do not resolve the historical eight wrong
+answers or pass S2. Root and worker report generic 117/117 on Node 22.16 and
+24.15; the worker reports LongMemEval 75/75 on each, and root independently
+reports 75/75 on Node 24.15. The worker passed both candidate demos and JSON
+validation; root passed the plugin validator on both runtimes. Independent
+ablation reviews and CI are pending.
+
+Next acceptance commands, from the candidate worktree: inspect the fixed base
+diff with `git diff 038f0acbe2ac281d1fd599a1199aa921782ca5e5 e928fea80e3da4f0eff759100d41666ee35b6dc9`,
+then run `npm run demo:candidate-ablation` on Node 22.16 or newer using synthetic
+data only. After independent review and CI, resume S1 recovery and product
+candidate design; the earlier capacity-boundary reproduction is complete.
 
 No new semantic score or paid request is recorded in this status update. At the
 last recorded checkpoint (not re-read for this documentation update), the
