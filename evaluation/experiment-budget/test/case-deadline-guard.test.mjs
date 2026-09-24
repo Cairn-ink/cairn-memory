@@ -538,6 +538,67 @@ test('G6 real capture persists timeout boundary, continues next case, and never 
   assert.equal(guard.isHalted(), false);
 });
 
+test('D6 invocation deadline reaches the real adapter guard as a core abort, not a transport failure', async t => {
+  const f = fixture(t, { stageTimeoutMs: 60_000 });
+  let releaseLate;
+  let notifyStalled;
+  const stalled = new Promise(resolve => { notifyStalled = resolve; });
+  let generationOrdinal = 0;
+  const calls = [];
+  const guard = make(f, async (requestUrl, options) => {
+    const payload = JSON.parse(options.body);
+    const pathname = new URL(requestUrl).pathname;
+    if (pathname.endsWith('/input_tokens')) {
+      calls.push('count');
+      return countResponse();
+    }
+    const method = payload.text.format.name.replace(/^cairn_/u, '');
+    calls.push(method);
+    generationOrdinal++;
+    const reply = generationResponseFor(payload, generatedOutput(payload, generationOrdinal));
+    if (generationOrdinal === 1) {
+      notifyStalled();
+      return new Promise(resolve => { releaseLate = () => resolve(reply); });
+    }
+    return reply;
+  }, 'bounded-v1');
+  const databasePath = join(f.root, 'invocation-memory.sqlite');
+  const core = openMemoryCore({ path: databasePath,
+    model: createOpenAIModel({ apiKey: 'synthetic', fetchImpl: guard.cairnFetch }),
+    captureDeadlineMs: 1_000 });
+  t.after(() => { core.close(); guard.close(); });
+
+  await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async scope => {
+    const first = core.capture(captureInput(11));
+    assert.equal(await Promise.race([stalled.then(() => true), first.then(() => false)]), true,
+      'the fake generation request must begin before the invocation expires');
+    assert.deepEqual(await first, { ok: false, error: { code: 'model_timeout', retryable: false } });
+    assert.equal(scope.snapshot().status, 'timed_out');
+  });
+  assert.equal(memoryCount(databasePath), 0);
+  const afterFirst = structuredClone(guard.attempts());
+  assert.deepEqual(afterFirst.map(row => row.outcome), ['succeeded', 'unknown']);
+  assert.equal(afterFirst[1].termination, 'core_deadline');
+  const unknownCharge = state(f.ledger).attempts[1];
+  assert.equal(unknownCharge.actualMicroUsd, null);
+  assert.equal(unknownCharge.reservedMicroUsd, 5_000);
+  assert.equal(state(f.ledger).reservedMicroUsd >= unknownCharge.reservedMicroUsd, true);
+  await guard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async scope => {
+    releaseLate();
+    await setImmediate();
+    assert.equal(memoryCount(databasePath), 0);
+    assert.deepEqual(guard.attempts().slice(0, 2), afterFirst);
+    const second = await core.capture(captureInput(12));
+    assert.equal(second.ok, true, JSON.stringify(second));
+    assert.equal(second.value.admission.memories.length, 1);
+    assert.equal(scope.snapshot().status, 'active');
+  });
+  assert.equal(memoryCount(databasePath), 1);
+  assert.deepEqual(calls, ['count', 'extract', 'count', 'extract', 'count', 'classify']);
+  assert.equal(guard.caseTimeouts()[0].termination, 'core_deadline');
+  assert.equal(guard.isHalted(), false);
+});
+
 test('G3/G5 malformed, oversized, count-overlimit and usage-bound failures are global', async (t) => {
   const scenarios = [
     ['malformed', () => new Response('{'), request, 'invalid_response'],

@@ -32,6 +32,14 @@ does not change the public core, plugin, MCP, HTTP, or telemetry protocol.
 
 ### Private public-pilot diagnostic boundary
 
+The source-only embedded core may opt in to `captureDeadlineMs` at trusted
+construction. It is not a hosted HTTP or MCP field, provider request parameter,
+benchmark capability, or diagnostic payload. The monotonic budget belongs to
+one capture invocation; its core-created abort signal retains private provenance
+so a provider error string or external abort cannot authorize case-deadline
+isolation. The current native Hermes and local MCP hosts do not enable this
+constructor option. Its cooperative checks are not a hard response-time SLA.
+
 The optional live public-pilot runner writes a per-case `diagnostics.json` only
 inside its private 0700 run directory. This is benchmark-local observation, not
 a hosted protocol field, telemetry event, model request, public comparison

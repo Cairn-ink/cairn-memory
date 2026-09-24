@@ -9,32 +9,57 @@ export const isCoreModelDeadlineSignal = (signal) => coreDeadlineSignals.has(sig
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, failureCode = 'recall_failed' } = {}) {
+  { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
+  let controller;
+  let deadlineReported = false;
+  const check = () => {
+    if (!deadline?.expired()) return;
+    if (controller) {
+      coreDeadlineSignals.add(controller.signal);
+      controller.abort();
+    }
+    if (!deadlineReported) {
+      deadlineReported = true;
+      reject('model_timeout');
+    }
+    fail('model_timeout');
+  };
   const tokens = (text) => {
+    check();
     try { return countTokens(model, text); }
     catch (error) { emitDiagnostic(model, method, 'core_call', 'token_count_unavailable'); throw error; }
+    finally { check(); }
   };
+  check();
   if (typeof model?.[method] !== 'function') reject('model_not_configured');
   if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
   const request = { system, input, maxOutputTokens: 1024 };
   if (tokens(JSON.stringify(request)) > 6000) reject('context_budget_exceeded');
+  check();
   validateFresh();
-  const controller = new AbortController();
+  check();
+  controller = new AbortController();
   let timer;
   let output;
   try {
     output = await Promise.race([
-      Promise.resolve().then(() => model[method]({ ...structuredClone(request), signal: controller.signal })),
+      Promise.resolve().then(() => {
+        check();
+        const detached = structuredClone(request);
+        check();
+        return model[method]({ ...detached, signal: controller.signal });
+      }),
       new Promise((_, reject) => {
         timer = setTimeout(() => {
           coreDeadlineSignals.add(controller.signal);
           controller.abort();
           reject(new MemoryStoreError('model_timeout'));
-        }, 30_000);
+        }, deadline ? deadline.remainingMs() : 30_000);
       }),
     ]);
   } catch (error) {
+    check();
     if (controller.signal.aborted || error?.code === 'model_timeout') reject('model_timeout');
     if (error?.name === 'AbortError') reject('model_cancelled');
     // Trusted adapters can reject exact provider framing or malformed output.
@@ -47,11 +72,17 @@ export async function callModel(model, method, system, input,
     }
     reject(failureCode, 'provider_failure');
   } finally { clearTimeout(timer); }
+  check();
   validateFresh();
+  check();
   let text;
-  try { text = JSON.stringify(output); } catch { reject('invalid_model_output', 'output_serialization'); }
+  try { text = JSON.stringify(output); }
+  catch { check(); reject('invalid_model_output', 'output_serialization'); }
+  check();
   if (typeof text !== 'string' || text.length > 40_000) reject('invalid_model_output', 'output_bounds');
   if (tokens(text) > 1024) reject('invalid_model_output', 'output_bounds');
+  check();
   validateFresh();
+  check();
   return output;
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — opt-in capture invocation deadline
+
+- Add a trusted embedded-core `captureDeadlineMs` constructor option for one
+  monotonic, invocation-local budget across capture stages, retaining the
+  existing 30-second per-model ceiling. Precommit checks roll back late
+  capture-owned writes; post-admission expiry preserves receipts and reports
+  classification or rationale failure. Defaults and host configuration are
+  unchanged. This is cooperative, not a hard response-time or quality claim.
+
 ## Unreleased — initial capture classification journal
 
 - Add a v14 source-free, exact-batch journal for the initial classification of

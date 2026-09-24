@@ -52,7 +52,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     }
   }
 
-  function claimAdmission(ns, input, hooks, stagedView) {
+  function claimAdmission(ns, input, hooks, stagedView, deadline) {
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
     const result = transaction(db, () => {
       const now = stagedEvidence.admissionTime(ns, input, serialized !== null);
@@ -80,12 +80,12 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       }
       if (serialized) stagedEvidence.insert(ns, input, serialized, now);
       return { token, ...prepared };
-    });
+    }, deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
   }
 
-  function finishAdmission(ns, input, hooks) {
+  function finishAdmission(ns, input, hooks, deadline) {
     const result = transaction(db, () => {
       const now = stagedEvidence.admissionTime(ns, input);
       const row = read(ns, input);
@@ -128,7 +128,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
-    });
+    }, deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
   }

@@ -492,40 +492,45 @@ export function createMemoryRuntime(input) {
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot, sourceSnapshot,
     rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
-    commitRationale(ns, refs, snapshot, proposals) { ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals); },
+    commitRationale(ns, refs, snapshot, proposals, deadline) {
+      ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);
+    },
     getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },
-    claimOrdered(ns, snapshot) { ready(); return orderedStorage.claim(ns, snapshot); },
+    claimOrdered(ns, snapshot, deadline) { ready(); return orderedStorage.claim(ns, snapshot, deadline); },
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
     },
-    finishOrdered(ns, snapshot, token, order, prepared, judged) {
+    finishOrdered(ns, snapshot, token, order, prepared, judged, deadline) {
       ready(); return orderedStorage.finish(ns, snapshot, token, order, prepared.discovery,
-        prepared.items, judged.decisions, judged.reason);
+        prepared.items, judged.decisions, judged.reason, deadline);
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    claimCaptureEvidence(ns, input) {
+    claimCapturedAdmission(ns, input, deadline) {
+      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline);
+    },
+    claimCaptureEvidence(ns, input, deadline) {
       ready();
       if (input.view === undefined) fail('invalid_input');
-      return admissionStorage.claimAdmission(ns, input, undefined, input.view);
+      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline);
     },
     inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input) { ready(); return admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
-    finishCapturedAdmission(ns, input) {
-      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true });
+    finishCapturedAdmission(ns, input, deadline) {
+      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true }, deadline);
     },
-    beginInitialClassification(ns, input, admitted, selected) {
-      ready(); return classificationJournal.begin(ns, input, admitted, selected);
+    beginInitialClassification(ns, input, admitted, selected, deadline) {
+      ready(); return classificationJournal.begin(ns, input, admitted, selected, deadline);
     },
     failInitialClassification(ns, input, token) {
       ready(); return classificationJournal.failAttempt(ns, input, token);
     },
-    applyInitialPlacement(ns, input, token, proposal, guards, index) {
+    applyInitialPlacement(ns, input, token, proposal, guards, index, deadline) {
       ready(); return mocStorage.applyPlacement(ns, proposal, guards, index,
-        { client: input.client, eventId: input.eventId, token });
+        { client: input.client, eventId: input.eventId, token, deadline });
     },
     abandonAdmission(ns, input) { ready(); return admissionStorage.abandonAdmission(ns, input); },
     applyPlacement(ns, proposal, guards, index) {
