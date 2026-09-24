@@ -37,31 +37,43 @@ reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
 sets proposed completion, held-out comparison, installed-host, growth and preview
-onboarding gates within the existing cumulative ceiling. PRs #202–#208 are open
-at the latest check. The seven scripted capture-to-public-packing cases and
-offline checks at PR #207 do not pass S1 or establish semantic quality; recovery
-and timeout work remain incomplete.
+onboarding gates within the existing cumulative ceiling. All statuses below are
+checkpointed 2026-09-25; earlier PR #202–#207 state is retained in the plan and
+was not refreshed in this pass. Current verified open heads: PR #205 at
+`ad45cd1` (run `36045084989`, 21/21 green), PR #208 at `c118c0f` (run
+`36045232556`, 17/17 green), PR #209 at `328052a` (run `36045345343`, 17/17
+green), and PR #210 at `9ac1176` (run `36047442942`, 17/17 green). PR #205's
+CI applies to its remote `ad45cd1` head only; this plan update remains local
+until separately reviewed and published. PR #210 is marked ready; none of these
+four candidates is merged or released.
 
-The candidate-retrieval experiment's measured checkpoint is `e928fea`; PR #208
-head `f25050d` adds a two-file shared filed/unfiled reference guard that fixes a
-mixed-reference regression, without changing fixtures or measured results. It
-reaches the capacity target in both indexed paths, improves pure-alias
-reachability with aliases, misses CJK controls in both indexed paths and shows
-no MOC gain. A separate red-base 1,025-admit control at PR #207's base still
-misses its target; the `f25050d` correction does not fix that boundary. These
-results remain candidate-retrieval evidence, not QA or a product fix. Two
-independent reviews passed with zero findings, while CI run `36042861159` failed
-the Node 22 tokenizer performance gate (40,000 spaces timed out at 5,048 ms
-against 5 seconds); root is diagnosing it separately, and no rerun or
-transient-resolution claim has been made.
+The earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
+40,000-space tokenizer check at 5,048 ms against the unchanged 5-second gate.
+The failure is retained with cause unknown; the later green `c118c0f` run does
+not establish a tokenizer runtime fix. Retrieval evidence remains diagnostic:
+the measured candidate reaches its target in both indexed paths, alias
+expansion helps pure-alias queries, both indexed paths miss CJK controls and
+MOC-first shows no observed gain. The separate red-base 1,025-admit control
+still misses its target. None of this attributes the eight historical errors
+or establishes QA/product quality.
 
-The next S1 packet is in progress on `feat/mcp-classification-recovery` at base
-`038f0ac`: an opt-in MCP classifier for explicitly supplied current unfiled
-memories. Batch membership provenance and a durable classification journal
-remain absent, so S1 is incomplete. Independent offline work may continue while
-S1 is open, but S1 still gates product promotion, live benchmark, host readiness
-and preview. No new semantic score or paid request is recorded; follow the
-plan's resume protocol to re-check live state before continuing.
+PR #210's bounded S1 slice adds read-only exact-batch admission inspection with
+unknown classification and fresh current refs; it reports no old content and
+adds no durable classification journal. Worker/primary checks and independent
+Standards/Spec review passed on the exact 14-file candidate. S1 remains
+incomplete. The next assigned, not-started packet is
+`test/transport-phase-diagnostics` from base `9ac1176`: bounded opt-in
+transport-phase diagnostics only, with no deadline, retry, ledger or scorer
+change. It does not waive S1 or later live-benchmark, host-readiness or preview
+gates.
+
+Research remains proposal-only: 3/2,604 retained generation attempts ended in
+`core_deadline` (not a scorer timeout); recorded guard durations are not
+provider latency. A process-local FTS index and Mem0 source candidate still need
+the preflight described in the plan; neither is a production default or
+comparison result. No new semantic score, paid request or ledger change is
+recorded. Budget figures were not reread for this docs update; verify the actual
+ledger and request guard before any paid phase.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid

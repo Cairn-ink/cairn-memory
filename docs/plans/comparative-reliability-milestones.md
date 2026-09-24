@@ -1,8 +1,9 @@
 # Comparative reliability and lightweight product milestones
 
 Status: proposed sequence; S1 is active but incomplete, and no S1–S5 milestone
-has passed as a whole. See the execution snapshot and resume protocol below for
-the state checked 2026-09-25; re-check live PR and CI state before resuming.
+has passed as a whole. See the latest checkpoint and resume protocol below;
+older execution snapshots are explicitly historical. Re-check live PR and CI
+state before resuming.
 Goal: a lightweight, source-backed memory layer for Hermes and other agent
 harnesses, evaluated against existing solutions under matched conditions.
 
@@ -23,9 +24,9 @@ harnesses, evaluated against existing solutions under matched conditions.
 
 The [audited 30-case cohort](https://github.com/Cairn-ink/cairn-memory/blob/fcfd2b349ce20c6def46ed4815fa6de6b5404308/docs/evidence/reliability-cohort-30.md)
 has five cases per question type: a small pilot, not the 500-case benchmark or a
-competitor-parity result. As checked 2026-09-25, its documentation candidate
-`fcfd2b3` (PR #202) and runtime candidate `ca9c15c` (PR #203) remain open and
-unmerged; neither is shipped.
+competitor-parity result. At the earlier check on 2026-09-25, the documentation
+candidate `fcfd2b3` (PR #202) and runtime candidate `ca9c15c` (PR #203) remained
+open and unmerged; neither is shipped.
 
 | Arm | Correct | Wrong | Unresolved | Complete | Correct among complete |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -53,10 +54,123 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Execution snapshot and resume protocol (checked 2026-09-25)
+## Latest checkpoint — 2026-09-25
 
-This is a dated handoff, not a milestone pass. The public PR state and head SHAs
-were checked directly; all listed candidates were open and unmerged:
+This checkpoint was refreshed after checking the remote PR heads and workflow
+runs below. The four listed PRs are open and unmerged; no merge, release,
+deployment, new paid request, ledger change or old-cohort rerun is recorded.
+PRs #202–#204 and #206–#207 remain in the earlier snapshot below and were not
+rechecked in this refresh.
+Budget numbers were not reread: the last-recorded cumulative ceiling is
+US$200, the operational ledger is US$100 pending review, and reserved spend is
+US$79.389500. Verify the actual ledger and guard before any paid phase.
+
+| PR | Verified remote head | CI at that head |
+| --- | --- | --- |
+| [#205](https://github.com/Cairn-ink/cairn-memory/pull/205) | `ad45cd10e52983471c0c5229275f772e1a989dba` | Run `36045084989`, attempt 1, 21/21 passed. |
+| [#208](https://github.com/Cairn-ink/cairn-memory/pull/208) | `c118c0f0fd70af01c63ea1339305de03eeb84c94` | Run `36045232556`, attempt 1, 17/17 passed; earlier `f25050d` failure remains retained below with cause unknown. |
+| [#209](https://github.com/Cairn-ink/cairn-memory/pull/209) | `328052a1782afa50f82c5dfcc8600397320c00e5` | Run `36045345343`, attempt 1, 17/17 passed. |
+| [#210](https://github.com/Cairn-ink/cairn-memory/pull/210) | `9ac117671a0ba714d427fe1129823bfcfebe19a3` | Run `36047442942`, attempt 1, 17/17 passed. This completes the check that was pending in the preceding handoff. |
+
+PR #205's green run applies to its current remote head `ad45cd1`. This
+checkpoint update is local and unpushed; any later remote head needs its own
+CI and final independent review. A green later PR #208 run does not establish
+that the earlier tokenizer failure was fixed: the 40,000-space/5-second gate
+is unchanged, and its cause remains unknown.
+
+### Latest completed S1 packet: capture admission inspection (PR #210)
+
+Owner: `recovery_design6`, actual model GPT-6 Sol/high. Fixed base
+`328052a1782afa50f82c5dfcc8600397320c00e5`; candidate head
+`9ac117671a0ba714d427fe1129823bfcfebe19a3`, branch
+`feat/capture-admission-inspection`, worktree basename
+`capture-admission-inspection`. Its 14-file allowlist is:
+
+`CHANGELOG.md`, `adapters/mcp/server.mjs`,
+`adapters/mcp/test/capture-admission-inspection.test.mjs`,
+`adapters/mcp/test/classification-recovery.test.mjs`,
+`core/admission-storage.mjs`, `core/contract.mjs`, `core/runtime.mjs`,
+`core/test/capture-admission-inspection.test.mjs`, `docs/admission-claims.md`,
+`docs/limitations.md`, `docs/plans/capture-admission-inspection.md`,
+`docs/protocol.md`, `docs/standalone-mcp.md`, and
+`packaging/test/capture-admission-inspection.test.mjs`.
+
+This bounded slice adds a schema-free, read-only exact-batch admission view;
+it distinguishes absent, pending and completed admission without asserting
+classification. Completed records report `classification: unknown`, a bounded
+suppression count of 0–5 and fresh current refs or closed noncurrent members;
+it does not return source text or old revisions. The opt-in keeps five default
+tools, adding admission inspection plus the existing explicit classifier for
+seven total when opted in. An actual installed-artifact test covers keyless
+inspection followed by explicit fake classification with unchanged receipts.
+This is inspectable admission membership, not batch provenance for
+classification or a durable journal.
+
+At this candidate head, worker and primary generic checks passed 112/112 on
+Node 22.16 and 24.15; the packet reports core 655/655, MCP 86/86 and artifact
+69/69 on both runtimes. The primary also reports the Node 22 core run exiting
+0 with the dot reporter. JSON, plugin and applicable synthetic demo checks
+passed. Independent Standards and Spec reviews (GPT-6 Sol/high) passed the full
+14-file range with zero findings. CI run `36047442942` is tied to this exact
+head and passed all 17 jobs; the PR is marked ready. At resumption, verify
+`gh pr checks 210 --repo Cairn-ink/cairn-memory` still applies to this head;
+do not repeat already completed test suites or boundary reproductions by
+default.
+
+The packet does not add batch-membership provenance for classification, a
+durable classification journal, or a whole-capture timeout. S1 remains active
+and incomplete; these results do not satisfy its full repair/recovery gate.
+
+### Next active packet: transport phase diagnostics (assigned, not started)
+
+Owner: `recovery_design6`, actual model GPT-6 Sol/high. Fixed base
+`9ac117671a0ba714d427fe1129823bfcfebe19a3`; branch
+`test/transport-phase-diagnostics`, worktree basename
+`transport-phase-diagnostics`. Its packet plan is
+`docs/plans/transport-phase-diagnostics.md` on that branch. This is a new
+bounded assignment, not an implementation or quality result; read its exact
+allowlist and frozen acceptance before resuming.
+
+TD1–TD6 scope is an opt-in `bounded-v1` per-case transport-event ring capped at
+256 records, with fetch-entered, response-available, body-complete and ledger
+settlement milestones; CLI output is limited to `case-deadline`, with private
+generation diagnostics only. No deadline, retry, ledger or scorer behavior is
+to change. Acceptance includes fake-HTTP equivalence with diagnostics off/on,
+privacy, late-callback handling, validation before claim, and required checks on
+both Node runtimes. Until that packet is implemented and reviewed, phase-level
+transport observations remain a proposal, not an available capability.
+
+### Additional research checkpoint — design inputs only
+
+Retained guarded-generation aggregates show 3 of 2,604 generation attempts
+ending in `core_deadline`, intersecting 3 of the original 30 cases. For 2,601
+successful guarded attempts, the observed guard durations were median 2,502 ms,
+p95 4,891 ms, p99 6,584 ms and maximum 24,138 ms. These are guard durations, not
+provider latency or proof of core success; method, headers and body phase are
+unknown. Existing deadline, hung-body and late-reply tests cover those
+mechanics; another generic repeat matrix is not the next task. Narrow,
+privacy-safe phase milestones may be designed before any new scoped
+calibration, but a proposed observer is not an implemented capability. Do not
+waive S1 or live-benchmark gates.
+
+A process-local FTS index built only from an already-authorized map remains a
+future MOC-navigation proposal, not a selected production default. Before
+selection, measure build cost with the actual tokenizer at 100/1,000/10,000
+memories, plus freshness and namespace behavior. Mem0's candidate engine is
+[main commit `989c7da`](https://github.com/mem0ai/mem0/commit/989c7da0fc8e4df6342dbb8c448af9816d60d24c)
+(2.2.0 main, five commits ahead of the
+[v2.2.0 tag](https://github.com/mem0ai/mem0/tree/47a69e1e72dc562b6fdd49a9ef892229afc7508a));
+the candidate is not pinned for comparison and is not a result. Before any
+paid comparison, decide release versus main, lock dependencies and BM25
+availability, disable telemetry, isolate `MEM0_DIR` and stores, use fake
+providers for preflight, and freeze evidence packing and time cutoff.
+
+## Earlier execution snapshot — 2026-09-25 (historical)
+
+This dated snapshot is retained as historical evidence, not a current PR table
+or milestone pass. The latest checked heads and active packet are above. At the
+time of this earlier snapshot, the listed public PR states and head SHAs were
+checked directly; listed candidates were open and unmerged:
 
 | Candidate | Head | State at check |
 | --- | --- | --- |
@@ -89,10 +203,11 @@ classification guards are candidate changes, not proof of a reliability fix.
 | S4 — installed path and growth | Pending; installed Hermes/MCP cold-restart and 100/1,000/10,000-memory growth gates remain. | Freeze host/runtime/resources/repeats, then complete each required synthetic workflow and measurement while retaining failures and cap breaches. |
 | S5 — preview and onboarding | Pending; no cold-context onboarding pass is recorded. | Run the documented clean-environment flow through sourced write, new-session recall, inspect, correct, forget and restart/no-result; record receipt-backed pass/fail at every step. |
 
-### Active S2 candidate packet
+### Retained S2 packet evidence — earlier PR #208 head `f25050d`
 
-The original measured checkpoint is `e928fea80e3da4f0eff759100d41666ee35b6dc9`.
-The final reviewed candidate is [PR #208](https://github.com/Cairn-ink/cairn-memory/pull/208),
+At that earlier checkpoint, the original measured baseline was
+`e928fea80e3da4f0eff759100d41666ee35b6dc9` and the reviewed candidate was
+[PR #208](https://github.com/Cairn-ink/cairn-memory/pull/208),
 head `f25050d36a91be6aef3033dadeba52082c62f789`, based on PR #207 head
 `038f0acbe2ac281d1fd599a1199aa921782ca5e5`, on branch
 `experiment/candidate-retrieval-ablation` (worktree basename
@@ -120,13 +235,14 @@ shows no observed gain. These results do not resolve the historical eight wrong
 answers or pass S2. Independent Standards and Spec reviewers (GPT-6 Sol/high)
 passed the full final range with zero findings.
 
-Candidate PR #208 verification is separate from this documentation PR. The
-candidate work reports generic 117/117 on each of Node 22.16 and 24.15; worker
-LongMemEval checks are 75/75 on both runtimes, with root independently reporting
-75/75 on Node 24.15. The worker passed both candidate demos and JSON validation;
-primary focused checks passed 5/5 on each runtime; root passed plugin validation
-on both runtimes. This plan branch's own generic count is 106/106 on each
-runtime, not 117/117; its JSON and plugin validation pass on both runtimes too.
+At the earlier `f25050d` candidate checkpoint, PR #208 verification was
+separate from this documentation PR. The candidate work reported generic
+117/117 on each of Node 22.16 and 24.15; worker LongMemEval checks were 75/75
+on both runtimes, with root independently reporting 75/75 on Node 24.15. The
+worker passed both candidate demos and JSON validation; primary focused checks
+passed 5/5 on each runtime; root passed plugin validation on both runtimes.
+This plan branch's own generic count was 106/106 on each runtime, not 117/117;
+its JSON and plugin validation passed on both runtimes too.
 
 CI run `36042861159` is tied to PR #208's exact final head and is complete with
 16/17 jobs passing. The sole failure is OpenAI offline on Node 22.16, job
@@ -136,30 +252,30 @@ tests passed. The matching Node 24 OpenAI offline job passed and is among the 16
 passing jobs. Root is diagnosing exact counter performance on a separate branch;
 no rerun has been made and the cause is not declared transient or confirmed. The
 current tokenizer's repetition cost is a known concern, but it is not yet the
-confirmed cause. Preserve the 5-second gate. Next status command:
-`gh pr checks 208 --repo Cairn-ink/cairn-memory`; verify it still applies to
-head `f25050d36a91be6aef3033dadeba52082c62f789`. Do not enable auto-merge.
+confirmed cause. Preserve the 5-second gate. The next PR #208 head,
+`c118c0f0fd70af01c63ea1339305de03eeb84c94`, later passed 17/17 in run
+`36045232556`; that later result does not explain the old timeout or show a
+runtime fix. The 40,000-space/5-second gate remains unchanged and the cause is
+unknown. Recheck current head and CI before resuming; do not enable auto-merge.
 
-### Next S1 packet
+### Earlier S1 packet: explicit MCP classification (PR #209)
 
-Classification recovery is assigned to `recovery_design6` (GPT-6 Sol/high) on
-branch `feat/mcp-classification-recovery`, worktree basename
-`mcp-classification-recovery`, at fixed base
-`038f0acbe2ac281d1fd599a1199aa921782ca5e5`. Its working plan is
-`docs/plans/mcp-classification-recovery.md` on that branch. The worktree is at
-candidate head `8e5a5003dd6dbd3df7fb34ae1929b036d91d066b` at this checkpoint.
-Recheck its current head, PR and CI state before resuming. The opt-in MCP tool
-`classify_unfiled_memories` classifies explicitly supplied current unfiled refs
-through existing `core.classifyPlacement` and `core.applyPlacement` guards; it
-is not proof that a capture batch failed. Batch membership provenance and a
-durable classification journal remain absent, so S1 remains incomplete. Scope
-is limited to MCP server/CLI, tests and technical documentation; no
-core/schema, live or paid work is in scope.
+The explicit classifier is PR #209, open at
+`328052a1782afa50f82c5dfcc8600397320c00e5`, based on PR #207's
+`038f0acbe2ac281d1fd599a1199aa921782ca5e5`; its CI run `36045345343` passed
+17/17. Owner: `recovery_design6`, GPT-6 Sol/high. It exposes
+`classify_unfiled_memories` for caller-supplied current unfiled refs through
+existing `core.classifyPlacement` and `core.applyPlacement` guards. It is not
+proof that a capture batch failed. PR #210 builds on this candidate with
+read-only admission inspection. Batch membership provenance for classification
+and a durable classification journal remain absent, so S1 remains incomplete.
+Scope of PR #209 was MCP server/CLI, tests and technical documentation; no
+core/schema, live or paid work was in scope.
 
-No new semantic score or paid request is recorded in this status update. At the
-last recorded checkpoint (not re-read for this documentation update), the
-cumulative API ceiling was US$200, with US$79.389500 reserved and US$120.610500
-headroom; the operational ledger was US$100 pending separate review and
+No semantic score or paid request is recorded in these checkpoints. At the last
+recorded budget checkpoint (not reread during this documentation update), the
+cumulative API ceiling was US$200, US$79.389500 was reserved with US$120.610500
+headroom, and the operational ledger was US$100 pending separate review and
 enforcement. Check the actual ledger and request guard before any paid phase.
 Preserve the cap, freeze each phase's request/cost limit, and never reset/refund
 or automatically relaunch a consumed run. No prior 30-case failure may be
