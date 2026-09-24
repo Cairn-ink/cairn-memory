@@ -60,6 +60,14 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 
+The [comparative reliability plan](plans/comparative-reliability-milestones.md)
+preserves the audited 30-case pilot: Cairn had 15 correct, 8 wrong and 7
+unresolved; full history had 19 correct, 8 wrong and 3 unresolved. That small
+fixed-N cohort is neither a competing-product comparison nor a newly measured
+score. The plan's MemPalace figures are retrieval-only, project-reported metrics
+with a different scorer and denominator; they cannot establish answer accuracy
+or product parity for Cairn. The old cases remain read-only for stage tracing.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)
