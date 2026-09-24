@@ -1,13 +1,27 @@
 # Changelog
 
+## Unreleased — explicit local MCP capture deadline
+
+- Accept trusted `captureDeadlineMs` on the local MCP server and canonical
+  `--capture-deadline-ms` (1–120000) only with opted-in v1/v2 capture. The host
+  forwards the existing core invocation budget; omitted defaults, tool schemas
+  and non-capture operations are unchanged. Check-config remains keyless and
+  syntax-only.
+- Offline SDK stdio and installed-CLI/fake-HTTP tests cover entered-stage
+  pre-admission timeout, durable post-admission partial success, cold keyless
+  inspection and explicit classification without source replay. The original
+  journal is not recovery history. This is cooperative, not a hard return or
+  API spending cap, and Hermes forwarding and semantic quality remain separate.
+
 ## Unreleased — opt-in capture invocation deadline
 
 - Add a trusted embedded-core `captureDeadlineMs` constructor option for one
   monotonic, invocation-local budget across capture stages, retaining the
   existing 30-second per-model ceiling. Precommit checks roll back late
   capture-owned writes; post-admission expiry preserves receipts and reports
-  classification or rationale failure. Defaults and host configuration are
-  unchanged. This is cooperative, not a hard response-time or quality claim.
+  classification or rationale failure. Core defaults remain unchanged; local
+  MCP exposure is tracked above. This is cooperative, not a hard response-time
+  or quality claim.
 
 ## Unreleased — initial capture classification journal
 

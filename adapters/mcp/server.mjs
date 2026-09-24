@@ -39,7 +39,8 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
 
 export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
-    'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery']);
+    'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
+    'captureDeadlineMs']);
   const { path, namespace, model } = options;
   const recoveryConfigured = Object.hasOwn(options, 'classificationRecovery');
   if (recoveryConfigured && options.classificationRecovery !== 'guarded-v1') throw new Error('invalid_mcp_configuration');
@@ -52,6 +53,10 @@ export function createCairnServer(options = {}) {
   }
   const configured = Object.hasOwn(options, 'captureQualification');
   const captureQualification = configured ? options.captureQualification : undefined;
+  const deadlineConfigured = Object.hasOwn(options, 'captureDeadlineMs');
+  const captureDeadlineMs = deadlineConfigured ? options.captureDeadlineMs : undefined;
+  if (deadlineConfigured && (!configured || !Number.isSafeInteger(captureDeadlineMs) ||
+      captureDeadlineMs < 1 || captureDeadlineMs > 120_000)) throw new Error('invalid_mcp_configuration');
   const rationaleConfigured = Object.hasOwn(options, 'captureRationale');
   if (rationaleConfigured && (options.captureRationale !== 'source-bound-v1' || captureQualification !== 'source-bound-v2')) {
     throw new Error('invalid_mcp_configuration');
@@ -72,6 +77,7 @@ export function createCairnServer(options = {}) {
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
   const core = openMemoryCore({ path, model, ...(configured ? { captureQualification } : {}),
+    ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
   if (!core.list({ namespace: binding, limit: 1 }).ok) {

@@ -306,7 +306,9 @@ separately bounded model stages, so it has no single 30-second deadline. Trusted
 embedded callers can configure an opt-in monotonic `captureDeadlineMs` of 1–120000
 for the whole invocation. It does not preempt synchronous SQLite or token
 accounting mid-instruction, guarantee a wall-clock return bound, or change
-native Hermes/MCP defaults. Before admission it fails with `model_timeout`;
+native Hermes or MCP defaults. Local MCP can opt in through trusted startup
+configuration only; Hermes does not yet forward this setting. Before admission
+it fails with `model_timeout`;
 after admission it preserves receipts and reports downstream failure. This
 mechanical boundary does not establish semantic quality or repair older cases.
 Concurrent explicit requests
