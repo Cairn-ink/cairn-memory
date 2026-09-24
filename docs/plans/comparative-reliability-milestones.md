@@ -189,6 +189,100 @@ misses justify it. Test the current MOC design against a strong flat lexical
 fallback first. Add typed links or local vector search only as later ablations
 with separately reported write cost, query cost, index size and failure cases.
 
+## Research appendix — 2026-09-25
+
+These are design inputs for S2 and later scoped work, not evidence that Cairn
+has gained a capability or that a biological memory mechanism runs in software.
+The two proposed experiments below require a separately frozen synthetic
+development set and a fresh held-out set. The earlier 30 paid cases are available
+only for read-only stage tracing; never rerun, tune on, or relabel them.
+
+### MemPalace: implementation and measurement boundary
+
+At inspected commit
+[`c4d3711`](https://github.com/MemPalace/mempalace/tree/c4d3711ee2478bb4062085fa075597af897d3a6d),
+the official [README](https://github.com/MemPalace/mempalace/blob/c4d3711ee2478bb4062085fa075597af897d3a6d/README.md)
+describes verbatim storage, wings/rooms/drawers, and an embedded ChromaDB
+default; its [license](https://github.com/MemPalace/mempalace/blob/c4d3711ee2478bb4062085fa075597af897d3a6d/LICENSE)
+is MIT. Its separate [palace graph](https://github.com/MemPalace/mempalace/blob/c4d3711ee2478bb4062085fa075597af897d3a6d/mempalace/palace_graph.py)
+builds navigation from room/wing/hall metadata. The published LongMemEval raw
+[runner](https://github.com/MemPalace/mempalace/blob/c4d3711ee2478bb4062085fa075597af897d3a6d/benchmarks/longmemeval_bench.py)
+instead concatenates user turns into one document per session and directly
+queries ChromaDB. Its reported raw score therefore does not isolate the effect
+of palace navigation, nor does that benchmark path retain assistant turns.
+
+The [MemPalace benchmark record](https://github.com/MemPalace/mempalace/blob/c4d3711ee2478bb4062085fa075597af897d3a6d/benchmarks/BENCHMARKS.md)
+reports 96.6% raw `R@5`, 89.4% room-mode `R@5`, and lower LoCoMo recall when
+index-time and query-time room routing disagree. These are project-reported
+results, not Cairn comparisons. The [runner](https://github.com/MemPalace/mempalace/blob/c4d3711ee2478bb4062085fa075597af897d3a6d/benchmarks/longmemeval_bench.py)
+prints session `recall_any@5`: any one labeled evidence session in the top five
+counts, with no generated answer. The LongMemEval authors' [retrieval scorer](https://github.com/xiaowu0162/LongMemEval/blob/main/src/evaluation/print_retrieval_metrics.py)
+prints `recall_all@5` and excludes abstention questions; their [metric code](https://github.com/xiaowu0162/LongMemEval/blob/main/src/retrieval/eval_utils.py)
+defines both, and their [README](https://github.com/xiaowu0162/LongMemEval)
+separates retrieval from judged answer accuracy. No self-reported MemPalace
+retrieval score is a comparable end-to-end QA or product-reliability score.
+No third-party rescore is adopted here without independent reproduction.
+
+### Bounded analogies and library practice
+
+The [hippocampal indexing theory](https://pubmed.ncbi.nlm.nih.gov/17696170/)
+(Teyler and Rudy, 2007) suggests a cue can retrieve features of an episode.
+[Human imaging](https://pmc.ncbi.nlm.nih.gov/articles/PMC2829853/) (Bakker et al.,
+2008) found activity consistent with distinguishing similar experiences in
+CA3/dentate gyrus; [rat recordings](https://pmc.ncbi.nlm.nih.gov/articles/PMC3904133/)
+(Neunuebel and Knierim, 2014) support dentate-gyrus separation and CA3
+completion from degraded cues. These motivate testing alias disambiguation,
+cross-links, and partial-cue recall. They do not establish that MOC routing,
+automatic consolidation, or replay improves Cairn.
+
+Library organization gives implementable distinctions: [MARC authority 4XX](https://www.loc.gov/marc/authority/ad4xx.html)
+records variant headings and [5XX](https://www.loc.gov/marc/authority/ad5xx.html)
+records see-also headings; [SKOS](https://www.w3.org/TR/skos-primer/) distinguishes
+preferred/alternate labels from broader, narrower and related concepts;
+[FAST](https://www.oclc.org/en/fast.html) demonstrates facets usable together
+or independently. [BIBFRAME](https://www.loc.gov/bibframe/faqs/) distinguishes
+conceptual works from instances, while [PROV-O](https://www.w3.org/TR/prov-o/)
+defines source, derivation and revision links. These suggest stable concept
+identities, typed relationships and pointers to original evidence spans. Such
+metadata must remain verifiable against source text and respect correction,
+deletion, namespace, current/history and unadopted-proposal eligibility.
+
+### Two near-term experiments, subject to existing S1–S3 gates
+
+1. **Navigation and aliases.** On newly frozen synthetic development cases,
+   compare a full-corpus flat FTS5/BM25 candidate path and MOC-first navigation
+   in a 2-by-2 design with alias expansion off/on in each path. Give both paths
+   identical source text, alias vocabulary, answer/judge settings and final
+   context cap. Charge indexing, candidate scans, ranking calls, tokens, storage
+   and latency to both arms; charge MOC routing and cross-branch fallback to the
+   MOC arm. Include exact name,
+   paraphrase, CJK, ambiguous alias and wrong-branch controls. Record evidence
+   visible, selected and packed; `recall_any` and `recall_all` at the same K;
+   fixed-N answer correctness, source-span fidelity and abstention. Freeze
+   configurations, resource ceilings and pass/stop thresholds before any scored
+   calls, then evaluate once on a fresh held-out roster without oracle labels in
+   model input. Reject a navigation gain that comes from extra work or loses
+   required evidence through routing. No external vector DB is needed.
+2. **Typed decision/version relations.** In a separate small synthetic set,
+   compare a relation path using existing explicit supersession and source-bound,
+   model-proposed `supports-decision` links against flat notes containing the
+   same decision, version and support information in words, with the same source
+   pointers. Proposals stay labeled unverified, not authoritative. Ask current
+   and historical questions with dated changes, wrong scope, conflicting sources,
+   corrected/deleted evidence and unadopted proposals. Keep answer/judge,
+   source eligibility, context and candidate
+   budgets matched; account for relation-creation cost and errors. Hand-checked
+   links may set a diagnostic ceiling only; the scored product path creates its
+   own relations without oracle edge annotations in held-out model inputs.
+   Freeze development and held-out rosters, metrics and thresholds before calls.
+   Score correct version, supported citation, false merges, stale or out-of-scope
+   answers, abstention,
+   completion and total cost. Promote only if source fidelity and safety gates
+   hold and the prespecified paired decision rule supports a benefit.
+
+Replay or autonomous maintenance is deferred; neither experiment authorizes
+new write autonomy, provider calls, a production path or a budget increase.
+
 ## Stop rules and handoff
 
 - Preserve negative safety cases; all finite deletion, namespace and permission
