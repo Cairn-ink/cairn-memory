@@ -145,26 +145,33 @@ unadopted proposal, current/history questions, correction, deletion, restart and
 real-model sourced recall within the frozen cap. Check receipts, qualifiers,
 correction/deletion persistence and separate host permission from memory.
 
-Measure synthetic stores at 100, 1,000 and 10,000 memories: database size,
-startup, write/cold-query latency, candidate/receipt counts, model/embedding calls
-and resource limits. Growth curves are local measures, not provider speed or user
-reliability. Make no scale claim without them; stop if bounded work or deletion/
-privacy checks fail.
+Before measuring, freeze Node version, hardware, configuration, explicit resource
+and model-input/candidate ceilings, and repeat count for each size. At 100, 1,000
+and 10,000 synthetic memories, complete every frozen repeat of cold start, write,
+recall, correct and delete; record database size, operation latencies, candidate/
+receipt counts and model/embedding calls. Growth curves are local measures, not
+provider speed or user reliability. Pass only if all sizes/repeats complete, all
+metrics are recorded, model-input/candidate caps stay bounded and privacy/deletion
+checks pass. Retain any failed run, missing metric or cap breach; block scale
+claims and host expansion until corrected and rerun within the frozen design.
 
 The DRI freezes each real-model phase and verifies guard/credentials before use.
 Never rerun cohort failures; this plan adds no budget to the US$200 authority.
 
 ### S5 — Professional developer preview, onboarding and PLG
 
-Prepare a clean-environment walkthrough for Hermes and compatible MCP: install,
-configure, save sourced memory, restart, inspect current/history, correct and
-delete. Label shipped, proposed and evidence-limited behavior. Test with
-synthetic content before proposing publication.
+Pass when a cold-context tester follows the docs only from a clean environment
+and synthetic profile through install, first sourced write, new-session recall,
+inspect, correct, forget and restart/no-result. Record a receipt-backed expected
+state and pass/fail at every step. Docs and installed behavior must agree; no
+undocumented manual repair is allowed. Any failed step or unsupported claim blocks
+launch/promotion until fixed and reverified.
 
-Use the [14-day adoption plan](local-memory-plg.md) only after its approval and
-release prerequisites. Keep feedback voluntary/content-free; no hidden telemetry, raw
-uploads or unapproved outreach. Activation/useful recall are learning signals,
-not guarantees. Private/commercial use of a pinned public core remains separate.
+The [14-day adoption plan](local-memory-plg.md) is optional PLG learning after
+approval/release, not a preview or 10-user prerequisite. Keep feedback voluntary
+and content-free; no hidden telemetry, raw uploads or unapproved outreach.
+Activation/useful recall are learning signals, not guarantees. Private/commercial
+use of a pinned public core remains separate.
 
 ## Lightweight design inputs and limits
 
