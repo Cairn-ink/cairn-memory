@@ -6,6 +6,7 @@
   "core/automatic-rationale.mjs",
   "core/capture-input.mjs",
   "core/capture.mjs",
+  "core/capture-deadline.mjs",
   "core/claim-qualification-input.mjs",
   "core/claim-qualification-schema.mjs",
   "core/claim-qualification-storage.mjs",

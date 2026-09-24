@@ -83,7 +83,7 @@ export function createClassificationJournalStorage({ db }) {
     return { status: row.status };
   }
 
-  function begin(ns, input, admitted, selected) {
+  function begin(ns, input, admitted, selected, deadline) {
     const all = refs(admitted);
     const chosen = refs(selected);
     return transaction(db, () => {
@@ -105,7 +105,7 @@ export function createClassificationJournalStorage({ db }) {
         SET status='in_flight_or_interrupted',selected_refs=?,attempt_token=?
         WHERE ${claimWhere}`).run(JSON.stringify(chosen), token, ...key(ns, input));
       return { token };
-    });
+    }, deadline?.check);
   }
 
   function failAttempt(ns, input, token) {

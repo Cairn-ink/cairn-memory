@@ -12,10 +12,11 @@ const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta
 const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
-async function classifyAdmission(model, namespace, admission, operations, key) {
+async function classifyAdmission(model, namespace, admission, operations, key, deadline) {
   if (!admission.memories.length) return { status: 'skipped', reason: 'empty' };
   let attemptToken;
   try {
+    deadline?.check();
     const guards = [];
     for (const admitted of admission.memories) {
       const { memory } = unwrap(operations.get({ namespace, memoryId: admitted.id }));
@@ -27,14 +28,17 @@ async function classifyAdmission(model, namespace, admission, operations, key) {
       selected: guards }));
     if (started.skipped) return { status: 'skipped', reason: 'already_filed' };
     attemptToken = started.token;
+    deadline?.check();
     if (typeof model?.classify !== 'function') {
       emitDiagnostic(model, 'classify', 'core_call', 'model_not_configured');
       fail('model_not_configured');
     }
     const mapped = unwrap(operations.map({ namespace, purpose: 'classification' }));
+    deadline?.check();
     const classified = unwrap(await operations.classifyPlacement({ namespace,
       memoryIds: guards.map((guard) => guard.memoryId), expectedMemoryRevisions: guards,
       mapRevision: mapped.indexRevision }));
+    deadline?.check();
     const placed = unwrap(operations.applyInitialPlacement({ ...key, token: attemptToken,
       proposal: classified.proposal,
       expectedMemoryRevisions: classified.basedOn.memoryRevisions,
@@ -52,9 +56,13 @@ async function classifyAdmission(model, namespace, admission, operations, key) {
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations, captureQualification, captureRationale, captureEvidence }) {
+export async function captureMessages({ model, input, operations, captureQualification,
+  captureRationale, captureEvidence, deadline }) {
+  deadline?.check();
   const snapshot = captureSnapshot(input, captureQualification);
+  deadline?.check();
   const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  deadline?.check();
   const sourceMessages = retained?.messages ?? snapshot.messages;
   // Retention coverage of this submitted snapshot, not an attestation of which
   // extraction policy executed an earlier duplicate batch.
@@ -70,21 +78,26 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const owned = { ...key, token: claim.token };
   let finished;
   try {
+    deadline?.check();
     const output = await callModel(model, 'extract', retained ? retainedSystem : system, {
       messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })),
-    }, { failureCode: 'extraction_failed' });
+    }, { failureCode: 'extraction_failed', deadline });
     let items = extractedItems(output, snapshot, retained?.messages,
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason));
+    deadline?.check();
     // Do not start another interpretation stage after explicit discard/forget.
     // A provider request already in flight cannot be recalled by local deletion.
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
-      ? await qualifyCandidateItems(model, items) : await qualifyExtractedItems(model, items);
+      ? await qualifyCandidateItems(model, items, deadline) : await qualifyExtractedItems(model, items, deadline);
+    deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
+      deadline?.check();
       const judged = captureQualification
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
-        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery });
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline });
+      deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
   } catch (error) {
@@ -95,9 +108,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
   }
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };
-  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key);
+  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline);
   const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
-    classification, sourceMessages, operations }) : undefined;
+    classification, sourceMessages, operations, deadline }) : undefined;
   return { duplicate: false, admission, classification,
     ...(captureRationale ? { rationale } : {}),
     ...coverage,

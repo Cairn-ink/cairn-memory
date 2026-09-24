@@ -143,6 +143,13 @@ increment the revision, so callers must re-read after a conflict rather than
 blindly retry a stale correction/deletion. Storage deduplication is not an
 extraction-job lease or a promise of exactly-once model calls.
 
+The optional embedded [capture invocation deadline](capture.md) checks the
+same capture-owned transaction immediately before commit, so work that
+overruns the budget rolls back rather than leaving partial receipts, filing or
+rationale. It does not interrupt an individual SQLite instruction or apply to
+standalone manual mutations. The existing 125-second admission lease remains a
+separate ownership fence.
+
 ## Correction, forgetting, and retention
 
 When [staged capture evidence](staged-capture-evidence.md) exists, successful

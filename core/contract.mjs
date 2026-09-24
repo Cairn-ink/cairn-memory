@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
+import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
@@ -138,7 +139,12 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model', 'captureQualification', 'captureRationale', 'captureEvidence']);
+  object(input, ['path', 'model', 'captureQualification', 'captureRationale', 'captureEvidence',
+    'captureDeadlineMs']);
+  const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
+  const captureDeadlineMs = hasCaptureDeadline ? input.captureDeadlineMs : undefined;
+  if (hasCaptureDeadline && (!Number.isSafeInteger(captureDeadlineMs) ||
+      captureDeadlineMs < 1 || captureDeadlineMs > 120_000)) throw new MemoryStoreError('invalid_input');
   const captureQualification = Object.hasOwn(input, 'captureQualification') ? input.captureQualification : undefined;
   if (Object.hasOwn(input, 'captureQualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
     throw new MemoryStoreError('invalid_input');
@@ -403,7 +409,7 @@ export function openMemoryCore(input) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial) {
+  function finishAdmissionValidated(input, captureInitial, deadline) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -411,19 +417,19 @@ export function openMemoryCore(input) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items);
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
 
   function finishAdmission(input) { return finishAdmissionValidated(input, false); }
 
-  function beginInitialClassification(input) {
+  function beginInitialClassification(input, deadline) {
     return invoke(() => {
       runtime.ready();
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
-      return runtime.beginInitialClassification(ns, key, input.admitted, input.selected);
+      return runtime.beginInitialClassification(ns, key, input.admitted, input.selected, deadline);
     });
   }
 
@@ -436,7 +442,7 @@ export function openMemoryCore(input) {
     });
   }
 
-  function applyInitialPlacement(input) {
+  function applyInitialPlacement(input, deadline) {
     return invoke(() => {
       runtime.ready();
       const ns = contractNamespace(input.namespace);
@@ -445,7 +451,7 @@ export function openMemoryCore(input) {
       const guards = memoryGuards(input.expectedMemoryRevisions,
         proposal.items.map(item => item.memoryId));
       return runtime.applyInitialPlacement(ns, key, contractId(input.token), proposal, guards,
-        contractRevision(input.expectedIndexRevision));
+        contractRevision(input.expectedIndexRevision), deadline);
     });
   }
 
@@ -685,7 +691,7 @@ export function openMemoryCore(input) {
     } catch (error) { return failure(error); }
   }
 
-  async function reviewRationale(input) {
+  async function reviewRationaleValidated(input, deadline) {
     try {
       runtime.ready();
       object(input, ['namespace', 'refs', 'inputMode']);
@@ -700,11 +706,15 @@ export function openMemoryCore(input) {
           throw new MemoryStoreError('revision_conflict');
         }
       };
-      const proposals = await proposeRationale(model, snapshot.sources, validateFresh);
-      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals),
+      deadline?.check();
+      const proposals = await proposeRationale(model, snapshot.sources, validateFresh, deadline);
+      deadline?.check();
+      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals, deadline),
         ...(inputMode ? { inputMode } : {}) });
     } catch (error) { return failure(error); }
   }
+
+  async function reviewRationale(input) { return reviewRationaleValidated(input); }
 
   async function reviewDecisionBasis(input) {
     try {
@@ -748,23 +758,29 @@ export function openMemoryCore(input) {
 
   async function capture(input) {
     try {
+      const deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       if (captureEvidence && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
-      return success(await captureMessages({ model, captureQualification, captureRationale, captureEvidence, input: { ...input, namespace },
-        operations: { claimAdmission,
-          finishAdmission: value => finishAdmissionValidated(value, true),
-          abandonAdmission, get, map, beginInitialClassification,
-          failInitialClassification, applyInitialPlacement,
+      return success(await captureMessages({ model, captureQualification, captureRationale, captureEvidence,
+        deadline, input: { ...input, namespace },
+        operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
+          ...admissionKey(value), leaseMs: 125000,
+        }, deadline)),
+          finishAdmission: value => finishAdmissionValidated(value, true, deadline),
+          abandonAdmission, get, map,
+          beginInitialClassification: value => beginInitialClassification(value, deadline),
+          failInitialClassification,
+          applyInitialPlacement: value => applyInitialPlacement(value, deadline),
           claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: 125000, view: value.view,
-          })),
+          }, deadline)),
           assertCaptureEvidence: value => invoke(() => runtime.assertCaptureEvidence(ns, {
             ...admissionKey(value), token: contractId(value.token),
           })),
-          reviewRationale,
+          reviewRationale: value => reviewRationaleValidated(value, deadline),
           discoverRationale: ({ refs, query }) => invoke(() => {
             runtime.rationaleSnapshot(ns, refs);
             const page = runtime.queryCandidateRows(ns, { score: createQueryScore(query), memoryLabel: () => '' });
@@ -776,9 +792,9 @@ export function openMemoryCore(input) {
             runtime.assertEpoch(ns, page.epoch);
             return { refs: found.slice(0, 6), scanExhausted: page.scanExhausted, candidatesTruncated: found.length > 6 };
           }),
-          classifyPlacement, applyPlacement,
+          classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
           ordered: {
-            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot)),
+            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot, deadline)),
             prepare(snapshot, order, extracted) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
@@ -786,12 +802,12 @@ export function openMemoryCore(input) {
               });
             },
             finish: (snapshot, token, order, prepared, judged) =>
-              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged)),
+              invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline)),
           } } }));
     } catch (error) { return failure(error); }
   }
 
-  async function classifyPlacement(input) {
+  async function classifyPlacementValidated(input, deadline) {
     try {
       runtime.ready();
       object(input, ['namespace', 'memoryIds', 'expectedMemoryRevisions', 'mapRevision']);
@@ -809,10 +825,14 @@ export function openMemoryCore(input) {
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
       const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
-      const value = await classify({ model, snapshot, map: mapped.value, validateFresh });
+      deadline?.check();
+      const value = await classify({ model, snapshot, map: mapped.value, validateFresh, deadline });
+      deadline?.check();
       return success(value);
     } catch (error) { return failure(error); }
   }
+
+  async function classifyPlacement(input) { return classifyPlacementValidated(input); }
 
   return Object.freeze({
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,

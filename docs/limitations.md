@@ -301,8 +301,15 @@ quality, current filing, later explicit recovery or whether an in-flight
 attempt is still running. A changed, deleted, historical, missing or foreign
 original member makes that initial status unknown. Manual and older batches
 also remain unknown. There is no persistent retry queue or durable history of
-later classification attempts. A whole capture may run several separately bounded model
-stages, so it has no single 30-second deadline. Concurrent explicit requests
+later classification attempts. By default, a whole capture may run several
+separately bounded model stages, so it has no single 30-second deadline. Trusted
+embedded callers can configure an opt-in monotonic `captureDeadlineMs` of 1–120000
+for the whole invocation. It does not preempt synchronous SQLite or token
+accounting mid-instruction, guarantee a wall-clock return bound, or change
+native Hermes/MCP defaults. Before admission it fails with `model_timeout`;
+after admission it preserves receipts and reports downstream failure. This
+mechanical boundary does not establish semantic quality or repair older cases.
+Concurrent explicit requests
 may duplicate provider work. Stale guards prevent a second conflicting change,
 but no-op proposals can both succeed. An applied empty-parent proposal can
 remain unfiled and be classified again by another explicit call. These limits

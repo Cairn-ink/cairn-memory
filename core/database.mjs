@@ -238,10 +238,12 @@ function migrateVersion7(db) {
   installIndexReaders(db, true);
 }
 
-export function transaction(db, work) {
+export function transaction(db, work, check) {
+  check?.();
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = work();
+    check?.();
     db.exec("COMMIT");
     return result;
   } catch (error) {

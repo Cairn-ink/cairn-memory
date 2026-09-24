@@ -297,7 +297,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         initialClassification.token);
       return { memories: items.map(({ memoryId }) => memoryDto(memories.get(memoryId), true)),
         createdMocs: created, refs, indexRevision };
-    });
+    }, initialClassification?.deadline?.check);
   }
 
   function linkMocs(ns, input) {

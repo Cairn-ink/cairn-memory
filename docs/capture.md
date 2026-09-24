@@ -36,6 +36,21 @@ Fresh work claims a fixed 125-second lease. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
 
+Trusted embedded callers may opt in with
+`openMemoryCore({ path, model, captureDeadlineMs: 120000 })`. The setting is
+snapshotted at construction, accepts an integer from 1 through 120000, and is
+not a capture-message or MCP option. Omission retains the existing behavior.
+Each capture then has one monotonic budget starting before input normalization
+and spanning extraction, optional qualification/reconciliation, admission,
+initial classification and automatic rationale. Every model call still has its
+own 30-second ceiling; the smaller remaining limit applies. Deadline checks
+before capture-owned transaction commits roll back late admission, placement or
+rationale writes. This is cooperative for synchronous token counting and SQLite,
+not a hard wall-clock response guarantee. Failure cleanup may run after expiry.
+Before admission, expiry returns `model_timeout`; after admission, committed
+receipts stay committed and classification or rationale reports failure honestly.
+No automatic retry, new provider allowance, or host default is implied.
+
 Successful new capture returns `{ duplicate: false, admission, classification }`.
 Admission contains `{ memories: [{id,revision}], suppressedCount,indexRevision }`.
 Classification is one of:
