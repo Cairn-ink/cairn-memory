@@ -132,6 +132,14 @@ model's context window. This is an absolute ceiling, not a requirement that
 schema/framing overhead be at most 1,024 above each request's local count.
 Oversize fails before generation, without truncation.
 
+Extract response schemas bind `sourceIndices` to the canonical positions of the
+current message batch (`0..messages.length - 1`, at most 24 messages). A direct
+zero-message adapter request permits only an empty `items` array. Missing,
+sparse, reordered or noncanonical source messages fail before HTTP. Count and
+generation use the same detached snapshot and schema. Core independently checks
+source bounds and duplicate citations before constructing receipts from its
+original messages; schema-valid citations alone do not prove source support.
+
 Classify/select/rank response schemas constrain references to the request's
 snapshot: classification uses visible L1/L2 group IDs and supplied memory IDs;
 recall uses the supplied namespace indices, memory IDs and revisions. An empty

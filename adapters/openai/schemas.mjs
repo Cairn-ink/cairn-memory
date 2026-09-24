@@ -244,7 +244,20 @@ export function schemasFor(method, input) {
     }), transitionMaximum) });
   }
   if (!Object.hasOwn(schemas, method)) invalid();
-  if (method === 'extract') return structuredClone(schemas.extract);
+  if (method === 'extract') {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+    const messages = list(input.messages);
+    if (messages.length > 24) invalid();
+    for (let position = 0; position < messages.length; position++) {
+      const message = messages[position];
+      if (!Object.hasOwn(messages, position) || index(message?.index) !== position ||
+          !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') invalid();
+    }
+    const schema = structuredClone(schemas.extract);
+    if (messages.length) schema.properties.items.items.properties.sourceIndices.items.maximum = messages.length - 1;
+    else schema.properties.items.maxItems = 0;
+    return schema;
+  }
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
   if (method === 'classify') {
     const memoryIds = sorted(list(input.memories).map((memory) => id(memory?.id)));

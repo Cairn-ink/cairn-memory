@@ -139,6 +139,16 @@ archive, staging default, retry or source-bound-v2 benchmark switch is added.
 
 ## Historical extraction rejection remains unattributed
 
+Three retained cohort failures are categorized as
+`invalid_extraction_source_range`, but the offending indices and provider
+objects are unavailable. The optional OpenAI adapter now limits its outgoing
+extract schema to the current canonical message indices, closing a demonstrated
+request-schema gap in synthetic fake-HTTP tests. This does not identify why the
+three earlier requests failed, repair an invalid historical output, prevent
+semantic misinterpretation, or establish a new benchmark result. Core still
+rejects invalid and duplicate references independently. See the
+[bounded repair plan](plans/extraction-source-domain.md).
+
 The retained six-case public pilot records one legacy `invalid_extraction`
 event, but not the rejected extraction object or provider response. Its exact
 validation branch is therefore unproven. Prospective fixed extraction reasons
