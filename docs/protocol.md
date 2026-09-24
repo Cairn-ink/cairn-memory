@@ -426,8 +426,10 @@ The separate local stdio MCP server can opt into `classify_unfiled_memories`
 with `classificationRecovery: 'guarded-v1'` or
 `--classification-recovery guarded-v1`, independently of capture. The tool
 accepts only one to five unique memory ID/revision pairs. Its namespace is
-bound at server startup; it rejects missing, deleted, historical, corrected,
-stale or filed records before model work. It then uses the existing public core
+bound at server startup; it rejects missing, deleted, historical, stale or
+filed records before model work. A correction invalidates the old revision,
+but a freshly inspected corrected memory remains eligible if active and
+unfiled. It then uses the existing public core
 classification and atomic placement revision guards. The selected current
 memory content and topic catalog may be sent to the configured provider and
 incur charges. Two concurrent explicit requests may both consume a model call;

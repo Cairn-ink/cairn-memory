@@ -151,7 +151,7 @@ test('failed capture admits once, cold explicit classification files unchanged s
   assert.deepEqual(coldModel.calls, ['classify']);
 });
 
-test('all refs preflight before model: stale, corrected, deleted, historical, foreign and mixed', async (t) => {
+test('all refs preflight before model: pre-correction, deleted, historical, foreign and mixed', async (t) => {
   const path = pathFor(t); const m = model(); const h = await host(t, path, { suppliedModel: m });
   const core = openMemoryCore({ path }); t.after(() => core.close());
   const admit = (text, ns = namespace) => ok(core.admit({ namespace: ns, memory: { content: text,
@@ -175,6 +175,16 @@ test('all refs preflight before model: stale, corrected, deleted, historical, fo
   errorCode(await call(h.client, 'classify_unfiled_memories', { refs: [ref(valid), ref(deleted)] }), 'memory_not_found');
   assert.deepEqual(m.calls, []);
   assert.equal(ok(core.get({ namespace, memoryId: valid.id })).memory.filing.status, 'unfiled');
+  const before = ok(await call(h.client, 'inspect_memory', { memoryId: corrected.id }));
+  assert.equal(before.memory.content, 'Corrected synthetic memory');
+  assert.equal(before.memory.filing.status, 'unfiled');
+  const placed = ok(await call(h.client, 'classify_unfiled_memories', { refs: [ref(before.memory)] }));
+  assert.equal(placed.status, 'applied');
+  assert.equal(placed.memories[0].filing.status, 'filed');
+  assert.deepEqual(m.calls, ['classify']);
+  const after = ok(await call(h.client, 'inspect_memory', { memoryId: corrected.id }));
+  assert.equal(after.memory.content, before.memory.content);
+  assert.deepEqual(after.receipts, before.receipts);
 });
 
 test('strict malformed input and keyless model never cause placement', async (t) => {

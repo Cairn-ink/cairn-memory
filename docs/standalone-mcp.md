@@ -149,8 +149,12 @@ content, classification metadata and the existing topic catalog; this may incur 
 charges, and this host has no account spending cap. The core checks revisions
 again during classification and atomic placement. Concurrent calls may both
 spend model requests. If one changes placement, the other's stale guards stop
-a conflicting change; no-op proposals can both succeed. A stale or already
-filed reference must be inspected again; the tool never retries it automatically.
+a conflicting change; no-op proposals can both succeed. A stale reference must
+be inspected again; an already filed memory is ineligible. The tool never
+retries automatically.
+A correction invalidates its old reference, while a fresh inspected reference
+to the corrected active unfiled memory can be classified without changing its
+corrected content or source receipts.
 
 The result reports `status: "applied"` for the placement operation and returns
 actual memory revisions, filing statuses and placement metadata. An applied

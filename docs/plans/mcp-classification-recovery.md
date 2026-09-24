@@ -25,9 +25,11 @@ receipts or reviews rationale.
   batches before a model call. Snapshot the bounded refs before awaiting.
 - CR3: Preflight all refs through `core.get` in the configured namespace and
   require exact revision, `active` state and `unfiled` filing. Missing, foreign,
-  deleted, historical, corrected, stale or filed refs reject the whole request
+  deleted, historical, stale or filed refs (including a pre-correction ref)
+  reject the whole request
   before model work or placement. One invalid ref cannot partially apply the
   rest. No source text from a failed preflight reaches a provider.
+  A fresh inspected ref to an active unfiled corrected memory remains eligible.
 - CR4: Read the classification map, classify the original refs using its index
   revision and the existing `core.classifyPlacement`, then apply exactly the
   returned proposal and `basedOn` guards through `core.applyPlacement`. Never

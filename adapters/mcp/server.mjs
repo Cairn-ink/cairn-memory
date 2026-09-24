@@ -135,7 +135,7 @@ export function createCairnServer(options = {}) {
       messages: messages.map(({ role, content }, index) => ({ role, content,
         id: createHash('sha256').update(JSON.stringify(['cairn.mcp.submitted-message.v1', batchId, index])).digest('hex') })) }));
   if (recoveryConfigured) tool('classify_unfiled_memories',
-    'Explicitly classify one to five inspected current unfiled memories at their exact revisions in this server namespace. Sends bounded memory content to the configured model and may incur provider charges. Uses revision guards for placement. No extraction, admission, capture replay, automatic retry, rationale review or source change. This does not establish failed-batch provenance, truth, currentness or that every item will become filed.',
+    'Explicitly classify one to five inspected current unfiled memories at their exact revisions in this server namespace. A correction invalidates an old ref; a fresh ref to the corrected active unfiled memory is eligible. Sends bounded memory content to the configured model and may incur provider charges. Uses revision guards for placement. No extraction, admission, capture replay, automatic retry, rationale review or source change. This does not establish failed-batch provenance, truth, currentness or that every item will become filed.',
     z.strictObject({ refs: z.array(z.strictObject({ memoryId: id, revision })).min(1).max(5)
       .refine((refs) => new Set(refs.map(({ memoryId }) => memoryId)).size === refs.length) }),
     ({ refs }) => classifyUnfiledMemories({ core, namespace: binding, model, refs }));
