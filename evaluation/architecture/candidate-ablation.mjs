@@ -106,6 +106,11 @@ export function buildSyntheticCore(config = FIXTURE) {
 export function projectCurrent(core) {
   const began = performance.now();
   const refs = new Map();
+  const recordRef = (id, revision) => {
+    const previous = refs.get(id);
+    assert.ok(previous === undefined || previous === revision, 'conflicting map revisions');
+    refs.set(id, revision);
+  };
   const mocs = new Map();
   const topicById = new Map();
   let cursor;
@@ -121,11 +126,9 @@ export function projectCurrent(core) {
     assert.ok(mapRows <= LIMITS.mapRows, 'map row cap exhausted');
     for (const item of page.items) {
       if (item.type === 'moc') mocs.set(item.moc.id, item.moc);
-      else if (item.type === 'unfiled') refs.set(item.ref.memoryId, item.ref.revision);
+      else if (item.type === 'unfiled') recordRef(item.ref.memoryId, item.ref.revision);
       else if (item.type === 'ref' && item.ref.childType === 'memory') {
-        const previous = refs.get(item.ref.childId);
-        assert.ok(previous === undefined || previous === item.ref.childRevision, 'conflicting map revisions');
-        refs.set(item.ref.childId, item.ref.childRevision);
+        recordRef(item.ref.childId, item.ref.childRevision);
         const parents = topicById.get(item.ref.childId) ?? new Set();
         parents.add(item.ref.parentId);
         topicById.set(item.ref.childId, parents);

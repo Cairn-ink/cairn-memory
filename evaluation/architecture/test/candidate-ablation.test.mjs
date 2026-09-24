@@ -111,6 +111,15 @@ test('projection fails closed on stale, historical, incomplete and invalid publi
       return page;
     })), /map\/get revision mismatch/);
     assert.throws(() => projectCurrent(changedMap((page) => {
+      const unfiledIndex = page.items.findIndex((item) => item.type === 'unfiled');
+      const filed = page.items.find((item) => item.type === 'ref' && item.ref.childType === 'memory');
+      assert.ok(unfiledIndex >= 0 && filed);
+      const current = page.items[unfiledIndex].ref;
+      page.items.splice(unfiledIndex, 0, { type: 'ref', ref: { ...filed.ref,
+        childId: current.memoryId, childRevision: current.revision + 1 } });
+      return page;
+    })), /conflicting map revisions/);
+    assert.throws(() => projectCurrent(changedMap((page) => {
       const historical = core.get({ namespace: { ownerId: 'candidate-ablation', scope: 'personal', projectId: null },
         memoryId: ids.get('historical') });
       assert.equal(historical.ok, true);
