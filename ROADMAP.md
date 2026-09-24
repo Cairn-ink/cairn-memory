@@ -25,9 +25,10 @@ service must use the same public core, not separate engines.
   passed an offline pinned-Hermes MemoryManager and scripted AIAgent dispatch
   gate on Node 22.16 and 24.15 against a hash-checked installed archive with
   fake provider responses. Capture's invocation deadline and admission
-  inspection/classification are explicit profile opt-ins. This candidate is
-  pending review and merge; no paid model, natural tool selection, semantic
-  reliability or full S1 acceptance follows from the offline gate.
+  inspection/classification are explicit profile opt-ins. Independent review
+  and all 17 exact-head CI checks passed for the candidate. The finite S1
+  mechanical gate is accepted; the PR remains unmerged. No paid model,
+  natural tool selection or semantic reliability follows from that gate.
 
 These are development candidates, not a claim that every PR has merged or a new
 package has been published. The released v0.1 hosted plugin remains available;
@@ -80,9 +81,11 @@ reliability work below without declaring older failure gates resolved.
    architecture work.
    Preserve the original failed run and spending; offline tests are not scores.
 2. Review/merge the verified native-provider candidate and its dependent
-   native deadline/recovery candidate; separately freeze a fresh real-model
-   development smoke under the shared budget before execution, and evaluate
-   interactive Hermes chat and additional host/platform coverage.
+   native deadline/recovery candidate. The separately frozen
+   [six-case development smoke](docs/fresh-reliability-smoke.md) now has a
+   synthetic, guarded wrapper; its fresh real-model result remains pending.
+   Evaluate interactive Hermes chat and additional host/platform coverage
+   separately.
 3. Complete independent onboarding and propose publication with honest limits.
 4. Run the [14-day adoption experiment](docs/plans/local-memory-plg.md) only after
    approval: activation and useful sourced recall first; stars are secondary.

@@ -3,8 +3,8 @@
 Fixed base: `2b2467400c68a8cc8c1601044deda350efc87718` (native Hermes recovery).
 Branch: `test/fresh-reliability-smoke`. Primary owns scope, acceptance and any
 paid launch; a GPT-6 Sol/high worker owns the bounded maintainer implementation.
-No implementation or launch before the dependency's reviews and exact-head CI
-pass. Planning and read-only preparation may proceed while that CI runs.
+Implementation began only after the dependency's reviews and exact-head CI
+passed. Paid launch remains a separate primary-owned one-shot step.
 
 Official model pages checked on 2026-09-25: [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini)
 lists standard text input/output US$0.40/1.60 per million tokens and snapshot
@@ -24,12 +24,14 @@ repair (S1), trace/navigation (S2), matched comparator (S3), installed growth
 (S4), and honest preview/onboarding (S5).
 
 The native candidate passed independent Standards and Spec review and primary
-22-case installed pinned-Hermes tests on Node 22.16 and 24.15. Exact-head CI
-is still pending at this plan freeze. The separate read-only S1 audit mapped
+22-case installed pinned-Hermes tests on Node 22.16 and 24.15. Dependency PR
+#216 at `2b2467400c68a8cc8c1601044deda350efc87718` passed all 17 exact-head
+CI checks (run `36072917284`, attempt 1); the primary accepted the finite S1
+mechanical gate. The separate read-only S1 audit mapped
 canonical source refs, observable partial admission, initial classification
 journal, explicit bounded recovery, repeat/stale/correct/delete/namespace guards
-and late-write fencing to existing core/MCP/native tests. Once final CI passes,
-accept that finite mechanical gate, not semantic truth or all S1–S5 milestones.
+and late-write fencing to existing core/MCP/native tests. This accepts only
+that finite mechanical gate, not semantic truth or all S1–S5 milestones.
 Repeat-safe means stored-state safety, not exactly-once provider cost; explicit
 no-op classification can cost another request. The raw initial journal stays
 unchanged while its public view becomes unknown after a revision change.
@@ -90,6 +92,13 @@ its own fully guarded path; this packet does not claim that flow.
   memory after all gates, forward no unrelated environment, and sanitize CLI
   output. Keep corpus IDs/text, answers, private paths and credentials out of
   public docs/reports. Private artifacts retain all results and failure details.
+  The wrapper's dry-run omits case-deadline and transport-diagnostic delegate
+  flags, because the existing delegate can provision a missing capability with
+  those flags. It independently verifies the new capability, claim and launch
+  marker are absent and compares ledger and grant names before and after
+  delegation. This read-only dry-run does not prove capability issuance. Launch
+  supplies the complete one-shot case-deadline flags and bounded diagnostics;
+  synthetic fake-HTTP tests must verify the actual delegate schedule/checkpoint.
 - F5 Offline proof: use synthetic prepared inputs/ledgers and fake transport to
   test deterministic/disjoint selection, wrong hash/roster/checkpoint/runtime,
   projection over cap, duplicate/consumed launch, symlinks/permissions, no-key
@@ -142,3 +151,51 @@ Next after the smoke: diagnose observed stages without rerunning its cases;
 advance to matched fresh comparator preparation if completion permits, or
 repair the specific failure under a new frozen contract. S2 navigation proposals
 remain separately measured, not an excuse to postpone this first measurement.
+
+## Implementation evidence checkpoint
+
+Owner: GPT-6 Sol/high bounded maintainer worker; fixed base
+`2b2467400c68a8cc8c1601044deda350efc87718`. The candidate commit is the
+worktree `HEAD` handed to primary after freeze; independent review and a paid
+launch have not yet occurred. The primary privately audited the six-case
+source/preparation/evaluator/sidecar mapping and an open, settled shared ledger;
+no private IDs, paths or source-derived digests are recorded here. The frozen
+six-case reservation projection is 1,172 requests and 6,781,960 micro-USD,
+within the US$12/2,000 phase ceiling and remaining recorded operational
+allowance. Projection is a bound, not an invoice or score.
+
+The worker's synthetic fake-HTTP tests prove actual public-pilot CLI
+delegation, read-only keyless dry-run, closed selection and hashes, phase
+projection refusal, one-shot marker and case claim, 0644 authorized-key file
+preservation, fixed output redaction, global unknown halt and genuine core
+deadline isolation with later-case continuation. The default embedded path
+has at most extract plus initial classify per batch, two selects plus one rank
+per recall, three answers and three judges; each Cairn model method makes at
+most one count and one generation request. Thus `4b+12` requests and the
+existing reservation formula bound a case with `b` capture batches. The
+public runner's phase projection check and cumulative ledger guard remain in
+force; no new guard or model path was added.
+
+Node 22.16 and 24.15 each passed the final focused eight-case synthetic test
+file. On each runtime, the broader live-evidence-offline suite passed at the
+preceding candidate state (342 tests: 312 passed, 30 existing skips); the
+later changes were confined to focused test assertions and fixture coverage.
+Generic tests passed 112/112, LongMemEval passed 75/75, JSON and strict
+marketplace/plugin validation passed, and the synthetic public comparison
+demo completed. One intermediate focused assertion used a nonexistent
+`summary.blocked` field; it was corrected to the actual `generationBlocked`
+and `halted` fields before the full gates. No unresolved gate failure remains.
+The only allowed next delivery step is the primary's direct diff acceptance,
+fixed-base independent Standards/Spec reviews and affected-gate rerun on the
+frozen candidate. The primary owns the private launch-plan generation and any
+eventual paid launch after those gates.
+
+Executed on Node 22.16: `npm test`, `npm run validate`,
+`npm run validate --prefix tools/plugin-validation`,
+`npm run test:longmemeval`, `npm run demo:longmemeval-public`,
+`npm run test:live-evidence-offline`, and
+`node --test evaluation/live/test/reliability-smoke.test.mjs`. Node 24.15 ran
+the same underlying scripts through its absolute `node` binary, and strict
+validation through its own `npm-cli.js`. Offline `npm ci --prefix` installed
+the isolated OpenAI, MCP and plugin-validation tooling; no dependency manifests
+or locks changed.
