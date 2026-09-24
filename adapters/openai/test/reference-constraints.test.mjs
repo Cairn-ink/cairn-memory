@@ -9,6 +9,9 @@ const emptyMap = () => ({ memories: [{ id: 'harbor', content: 'Harbor uses Go.',
   { id: 'juniper', content: 'Juniper uses Python.', revision: 1 }],
   map: [{ type: 'unfiled', ref: { memoryId: 'harbor', revision: 1 } },
     { type: 'unfiled', ref: { memoryId: 'juniper', revision: 1 } }], mapExhausted: true });
+const allTargets = (wire, first = {}) => ({ items: wire.memories.map((memory, index) => ({
+  memoryId: memory.id, parentIds: [], ...(index === 0 ? first : {}),
+})) });
 
 // Small validator for the emitted schema vocabulary only; no network/dependency.
 function accepts(schema, value) {
@@ -46,11 +49,11 @@ const outgoingSchema = async (method, input) => (await outgoingRequest(method, i
 
 test('R01 actual outgoing classify schema rejects observed invented group on an unfiled-only map', async () => {
   const { schema, wire } = await outgoingRequest('classify', emptyMap());
-  const baseline = { items: [{ memoryId: wire.memories[0].id, parentIds: [],
-    newL1: { title: 'programming_languages', parentL2Ids: [] } }] };
+  const baseline = allTargets(wire, {
+    newL1: { title: 'programming_languages', parentL2Ids: [] } });
   assert.equal(accepts(schema, baseline), true);
-  const fabricated = { items: [{ memoryId: wire.memories[0].id, parentIds: ['programming_languages'],
-    newL1: { title: 'programming_languages', parentL2Ids: [] } }] };
+  const fabricated = allTargets(wire, { parentIds: ['programming_languages'],
+    newL1: { title: 'programming_languages', parentL2Ids: [] } });
   assert.equal(accepts(schema, fabricated), false,
     'A generated topic title is not an existing authorized group ID');
   assert.equal(schema.properties.items.items.anyOf[0].properties.parentIds.maxItems, 0);
@@ -58,8 +61,8 @@ test('R01 actual outgoing classify schema rejects observed invented group on an 
 
 test('empty group maps permit new titles but never invented L1 or L2 authority', async () => {
   const { schema, wire } = await outgoingRequest('classify', emptyMap());
-  const proposed = { items: [{ memoryId: wire.memories[0].id, parentIds: [],
-    newL1: { title: 'Programming languages', parentL2Ids: [], newL2Title: 'Engineering' } }] };
+  const proposed = allTargets(wire, {
+    newL1: { title: 'Programming languages', parentL2Ids: [], newL2Title: 'Engineering' } });
   assert.equal(accepts(schema, proposed), true);
   for (const parent of ['Engineering', 'Programming languages', 'foreign-id']) {
     const wrong = structuredClone(proposed); wrong.items[0].newL1.parentL2Ids = [parent];
@@ -72,8 +75,8 @@ test('classify accepts only snapshot memories and visible groups of the correct 
   input.map.push({ type: 'moc', moc: { id: 'visible-l1', level: 'L1' } },
     { type: 'moc', moc: { id: 'visible-l2', level: 'L2' } });
   const { schema, wire } = await outgoingRequest('classify', input);
-  const good = { items: [{ memoryId: wire.memories[0].id, parentIds: [wire.map.at(-2).moc.id],
-    newL1: { title: 'New topic', parentL2Ids: [wire.map.at(-1).moc.id] } }] };
+  const good = allTargets(wire, { parentIds: [wire.map.at(-2).moc.id],
+    newL1: { title: 'New topic', parentL2Ids: [wire.map.at(-1).moc.id] } });
   assert.equal(accepts(schema, good), true);
   for (const mutate of [
     (value) => { value.items[0].memoryId = 'foreign-memory'; },
@@ -97,9 +100,9 @@ test('empty classification snapshot permits only zero proposed placements', asyn
 test('an incomplete classification map cannot propose new groups', async () => {
   const input = emptyMap(); input.mapExhausted = false;
   const { schema, wire } = await outgoingRequest('classify', input);
-  assert.equal(accepts(schema, { items: [{ memoryId: wire.memories[0].id, parentIds: [] }] }), true);
-  assert.equal(accepts(schema, { items: [{ memoryId: wire.memories[0].id, parentIds: [],
-    newL1: { title: 'Undiscovered topic', parentL2Ids: [] } }] }), false);
+  assert.equal(accepts(schema, allTargets(wire)), true);
+  assert.equal(accepts(schema, allTargets(wire, {
+    newL1: { title: 'Undiscovered topic', parentL2Ids: [] } })), false);
 });
 
 test('single project read set uses namespace index zero and excludes foreign memory IDs/revisions', async () => {
@@ -156,7 +159,7 @@ test('count and generation share exactly one frozen schema despite asynchronous 
       return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
     }
     const wire = JSON.parse(body.input[0].content[0].text);
-    return Response.json(envelope(body, { items: [{ memoryId: wire.memories[0].id, parentIds: [] }] }));
+    return Response.json(envelope(body, allTargets(wire)));
   } });
   await model.classify(request(input));
   assert.equal(bodies.length, 2);
@@ -164,9 +167,9 @@ test('count and generation share exactly one frozen schema despite asynchronous 
   assert.deepEqual(bodies[0].input, bodies[1].input);
   const schema = bodies[1].text.format.schema;
   const wire = JSON.parse(bodies[1].input[0].content[0].text);
-  assert.equal(accepts(schema, { items: [{ memoryId: wire.memories[0].id, parentIds: [] }] }), true);
-  assert.equal(accepts(schema, { items: [{ memoryId: 'mutated-memory', parentIds: [] }] }), false);
-  assert.equal(accepts(schema, { items: [{ memoryId: wire.memories[0].id, parentIds: ['late-group'] }] }), false);
+  assert.equal(accepts(schema, allTargets(wire)), true);
+  assert.equal(accepts(schema, allTargets(wire, { memoryId: 'mutated-memory' })), false);
+  assert.equal(accepts(schema, allTargets(wire, { parentIds: ['late-group'] })), false);
 });
 
 test('dynamic schemas retain the absolute provider input budget and issue no generation after overflow', async () => {
@@ -186,10 +189,11 @@ test('live guard accepts the derived classify schema while preserving reservatio
     const payload = JSON.parse(options.body);
     if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
     const wire = JSON.parse(payload.input[0].content[0].text);
-    return Response.json(envelope(payload, { items: [{ memoryId: wire.memories[0].id, parentIds: [] }] }));
+    return Response.json(envelope(payload, allTargets(wire)));
   } });
   const model = createOpenAIModel({ apiKey: 'synthetic-reference-key', fetchImpl: guard.fetchImpl });
-  assert.deepEqual(await model.classify(request(emptyMap())), { items: [{ memoryId: 'harbor', parentIds: [] }] });
+  assert.deepEqual(await model.classify(request(emptyMap())), { items: [
+    { memoryId: 'harbor', parentIds: [] }, { memoryId: 'juniper', parentIds: [] }] });
   assert.equal(guard.snapshot().requestCount, 2);
   assert.equal(guard.snapshot().rejection, null);
   assert.equal(guard.snapshot().reservedUsd, 0.008896);

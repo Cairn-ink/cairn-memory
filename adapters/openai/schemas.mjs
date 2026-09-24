@@ -260,7 +260,10 @@ export function schemasFor(method, input) {
   }
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
   if (method === 'classify') {
-    const memoryIds = sorted(list(input.memories).map((memory) => id(memory?.id)));
+    const memories = list(input.memories);
+    if (memories.length > 5 || Object.keys(memories).length !== memories.length) invalid();
+    const memoryIds = memories.map((memory) => id(memory?.id));
+    if (new Set(memoryIds).size !== memoryIds.length) invalid();
     const l1 = []; const l2 = [];
     if (typeof input.mapExhausted !== 'boolean') invalid();
     for (const item of list(input.map)) {
@@ -273,8 +276,8 @@ export function schemasFor(method, input) {
     const variants = [object(existing)];
     if (input.mapExhausted) variants.push(object({ ...existing,
       newL1: { anyOf: [object(topic), object({ ...topic, newL2Title: { ...string } })] } }));
-    return object({ items: { ...array({ anyOf: variants }, Math.min(5, memoryIds.length)),
-      minItems: memoryIds.length ? 1 : 0 } });
+    return object({ items: { ...array({ anyOf: variants }, memoryIds.length),
+      minItems: memoryIds.length } });
   }
   const namespaces = []; const memoryIds = []; const revisions = [];
   let maximum;

@@ -102,6 +102,45 @@ function modelForOutput(input, outputForWire) {
     maxOutputTokens: 1024, signal: new AbortController().signal } };
 }
 
+test('classification outgoing schema requires one item per distinct target, including the empty direct request', async () => {
+  for (let count = 0; count <= 5; count++) {
+    const input = { memories: Array.from({ length: count }, (_, index) => ({
+      id: uuid('memory', 100 + index), revision: 1,
+    })), map: [], mapExhausted: true };
+    const { model, bodies, request } = modelForOutput(input, (wire) => ({
+      items: wire.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })),
+    }));
+    assert.deepEqual((await model.classify(request)).items.map((item) => item.memoryId),
+      input.memories.map((memory) => memory.id));
+    assert.equal(bodies.length, 2);
+    for (const body of bodies) {
+      assert.equal(body.text.format.schema.properties.items.minItems, count);
+      assert.equal(body.text.format.schema.properties.items.maxItems, count);
+    }
+    assert.deepEqual(bodies[0].text.format.schema, bodies[1].text.format.schema);
+    assert.deepEqual(bodies[0].input, bodies[1].input);
+  }
+});
+
+test('classification rejects duplicate and oversized target lists before HTTP', async () => {
+  const target = { id: uuid('memory', 200), revision: 1 };
+  const sparse = Array(2);
+  sparse[0] = target;
+  for (const memories of [
+    [target, { ...target }],
+    Array.from({ length: 6 }, (_, index) => ({ id: uuid('memory', 210 + index), revision: 1 })),
+    sparse,
+    null,
+    { 0: target, length: 1 },
+    [{ revision: 1 }],
+  ]) {
+    const { model, bodies, request } = modelForOutput({ memories, map: [], mapExhausted: true },
+      () => ({ items: [] }));
+    await assert.rejects(model.classify(request), /invalid_openai_request/u);
+    assert.equal(bodies.length, 0);
+  }
+});
+
 test('CWA1/CWA2: classification wire preserves literal content and decodes existing/new parent roles', async () => {
   const input = smallInput();
   const { model, bodies, request } = modelForOutput(input, (wire) => ({ items: [
@@ -176,6 +215,8 @@ test('CWA1/CWA4: interleaved calls keep private frozen aliases despite caller mu
   await Promise.resolve();
   assert.equal(pendingCounts.length, 2);
   inputs[0].memories[0].id = 'mutated-after-count';
+  inputs[0].memories.push({ id: 'extra-after-count', revision: 1 });
+  inputs[1].memories.pop();
   inputs[1].map[0].moc.id = 'mutated-after-count';
   pendingCounts[1](Response.json({ object: 'response.input_tokens', input_tokens: 100 }));
   await Promise.resolve();
@@ -189,6 +230,8 @@ test('CWA1/CWA4: interleaved calls keep private frozen aliases despite caller mu
       candidate.input[0].content[0].text === body.input[0].content[0].text);
     assert.ok(matchingCount);
     assert.deepEqual(matchingCount.text, body.text);
+    assert.equal(matchingCount.text.format.schema.properties.items.minItems, 2);
+    assert.equal(matchingCount.text.format.schema.properties.items.maxItems, 2);
   }
 });
 

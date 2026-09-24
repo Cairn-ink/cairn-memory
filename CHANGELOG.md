@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — classification batch cardinality
+
+- Bind the optional OpenAI classification response schema to exactly the
+  distinct zero-to-five target memories in its detached request snapshot.
+  Duplicate or oversized direct adapter target lists fail before HTTP.
+  Existing ID, topic-level and core exact-coverage validation still rejects
+  malformed outputs; failed filing retains admitted memories as unfiled.
+- Synthetic fake-HTTP and core regressions prove the outgoing cardinality and
+  preserved partial-capture boundary. No benchmark result, ingestion halt,
+  provider profile, prompt, budget or retry behavior changes; the historical
+  malformed output is not attributed to this gap.
+
 ## Unreleased — extraction source-index domain
 
 - Bind the optional OpenAI extract response schema to canonical batch-local
