@@ -68,6 +68,8 @@ Optional:
   --expected-request-count <n>
   --expected-reserved-micro-usd <n>
                               complete one-shot case-deadline opt-in; no resume in this or another process
+  --transport-diagnostics <version>
+                              bounded-v1, only with complete case-deadline opt-in; private generation diagnostics
   --help                      print this text
 
 Merge (offline, no key, no ledger):
@@ -83,7 +85,7 @@ const VALUE_FLAGS = ['--prepared', '--ledger', '--authorization-id', '--output',
   '--answer-template-version', '--request-allowance-authorization-id',
   '--budget-extension-authorization-id', '--max-prepared-cases', '--merge'];
 VALUE_FLAGS.push('--case-timeout-policy', '--case-authorization-id', '--execution-id',
-  '--expected-request-count', '--expected-reserved-micro-usd');
+  '--expected-request-count', '--expected-reserved-micro-usd', '--transport-diagnostics');
 const BOOLEAN_FLAGS = ['--dry-run', '--help'];
 const MAX_INPUT_BYTES = 1024 * 1024;
 
@@ -180,6 +182,9 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     if (suppliedCaseFlags.length !== 0 && suppliedCaseFlags.length !== caseFlags.length) fail('case_flags_incomplete');
     const caseTimeoutPolicy = suppliedCaseFlags.length ? values['--case-timeout-policy'] : null;
     if (caseTimeoutPolicy !== null && caseTimeoutPolicy !== CASE_TIMEOUT_POLICY_VERSION) fail('invalid_case_timeout_policy');
+    const transportDiagnostics = values['--transport-diagnostics'];
+    if (transportDiagnostics !== undefined && transportDiagnostics !== 'bounded-v1') fail('invalid_transport_diagnostics');
+    if (transportDiagnostics !== undefined && caseTimeoutPolicy === null) fail('transport_diagnostics_requires_case_deadline');
     for (const flag of ['--case-authorization-id', '--execution-id']) {
       if (caseTimeoutPolicy && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(values[flag])) fail('invalid_case_identifier');
     }
@@ -324,6 +329,7 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       summary.caseTimeoutIdentity = caseTimeoutIdentity;
       summary.caseTimeoutRestriction = 'live-process-only; one-shot; no resume or retry';
     }
+    if (transportDiagnostics) summary.transportDiagnostics = transportDiagnostics;
     if (dryRun) {
       stdout.write(`${JSON.stringify({ mode: 'dry-run', ...summary })}\n`);
       return 0;
@@ -342,7 +348,8 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       : await loadReferenceRenderings({ preparedDirectory: values['--prepared'], sidecarPath: sidecar,
         expectedSidecarSha256: sidecarSha256 }));
     const session = caseDeadlineCapability
-      ? createCaseDeadlineLiveSession({ ledger, apiKey, fetchImpl, benchmarkExtension, caseDeadlineCapability })
+      ? createCaseDeadlineLiveSession({ ledger, apiKey, fetchImpl, benchmarkExtension, caseDeadlineCapability,
+        ...(transportDiagnostics ? { transportDiagnostics } : {}) })
       : createBenchmarkLiveSession({ ledger, apiKey, fetchImpl, benchmarkExtension });
     let report;
     try {

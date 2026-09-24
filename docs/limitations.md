@@ -357,6 +357,13 @@ identify a provider, network, HTTP or model-quality cause, and no fix is
 claimed. No automatic retry or new session is implied, and a longer timeout is
 not a proven remedy.
 
+Optional `bounded-v1` transport milestones can localize a future synthetic
+case-deadline attempt to fetch wait versus response-body wait at the guard.
+They cannot distinguish provider processing from network buffering or prove
+provider cancellation, billing, model quality, or a remedy for the old pilot.
+The collector does not authorize rerunning that pilot; only generation
+observations are persisted in private diagnostics, not scoring observations.
+
 This is a selected engineering packet without population, representativeness,
 blindness or contamination guarantees. It is not an official benchmark,
 competitiveness, production-reliability, installed-real-host or Hermes-quality

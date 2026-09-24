@@ -58,6 +58,8 @@ const countBody = () => ({ model: DEFAULT_MODEL, instructions: 'Synthetic extrac
   truncation: 'disabled', text: { format: { name: 'cairn_extract', type: 'json_schema', strict: true,
     schema: schemasFor('extract', extractInput()) } } });
 const countRequest = () => ({ ...request(), body: JSON.stringify(countBody()) });
+const generationRequest = () => ({ ...request(), body: JSON.stringify({ ...countBody(),
+  max_output_tokens: 1024, store: false, stream: false }) });
 const namespace = { ownerId: 'case-deadline', scope: 'project', projectId: 'synthetic' };
 const captureInput = index => ({ namespace, client: 'synthetic', eventId: `event-${index}`,
   sessionId: 'session', messages: [{ id: `message-${index}`, role: 'user', content: `Preference ${index}.` }] });
@@ -83,10 +85,11 @@ const persistBoundary = (root, name, value) => {
   return filename;
 };
 
-function fixture(t, { historicalUnknown = false, stageTimeoutMs = 10, answerReservation = 50_000 } = {}) {
+function fixture(t, { historicalUnknown = false, stageTimeoutMs = 10, answerReservation = 50_000,
+  limitMicroUsd = 1_000_000, requestCap = 20 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-case-deadline-red-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 1_000_000, requestCap: 20 };
+  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd, requestCap };
   createExperimentBudget(ledger).close();
   const policy = experimentPolicy();
   createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('no transport') }).close();
@@ -113,9 +116,10 @@ function fixture(t, { historicalUnknown = false, stageTimeoutMs = 10, answerRese
   return { root, ledger, policy, benchmarkExtension, caseDeadlineCapability, schedule };
 }
 
-const make = (f, fetchImpl) => createCaseDeadlineExperimentRequestGuard({ ledger: f.ledger,
+const make = (f, fetchImpl, transportDiagnostics = null) => createCaseDeadlineExperimentRequestGuard({ ledger: f.ledger,
   policy: f.policy, benchmarkExtension: f.benchmarkExtension,
-  caseDeadlineCapability: f.caseDeadlineCapability, fetchImpl });
+  caseDeadlineCapability: f.caseDeadlineCapability, fetchImpl,
+  ...(transportDiagnostics ? { transportDiagnostics } : {}) });
 const state = (ledger) => { const handle = reopenExperimentBudget(ledger);
   try { return handle.getState(); } finally { handle.close(); } };
 const guardError = code => error => error instanceof ExperimentRequestGuardError
@@ -128,7 +132,7 @@ test('G3/G4 an explicitly scoped transport timeout seals one case and permits th
   const guard = make(f, (_url, options) => {
     calls += 1;
     return calls === 1 ? new Promise(() => {}) : response(JSON.parse(options.body).model);
-  });
+  }, 'bounded-v1');
   t.after(() => guard.close());
   const first = guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
     const pending = assert.rejects(guard.answerFetch(url, request()), { code: 'case_deadline_exceeded' });
@@ -137,6 +141,13 @@ test('G3/G4 an explicitly scoped transport timeout seals one case and permits th
     await pending;
   });
   await first;
+  const fetchWait = guard.transportDiagnostics().observations[0];
+  assert.equal(fetchWait.route, 'answer');
+  assert.equal(fetchWait.fetchEnteredMs !== null, true);
+  assert.equal(fetchWait.responseAvailableMs, null);
+  assert.equal(fetchWait.bodyCompleteMs, null);
+  assert.equal(fetchWait.termination, 'transport_deadline');
+  assert.equal(fetchWait.accountingOutcome, 'unknown');
   await guard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async () => {
     const received = await guard.answerFetch(url, request());
     assert.equal(received.status, 200);
@@ -252,14 +263,18 @@ test('G3 body-read timer ownership isolates, but forged timeout and ordinary abo
     calls += 1;
     if (calls === 1) return new Response(new ReadableStream({ pull: () => new Promise(() => {}) }));
     return response();
-  });
+  }, 'bounded-v1');
   t.after(() => bodyGuard.close());
   await bodyGuard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
     const pending = assert.rejects(bodyGuard.answerFetch(url, request()), guardError('case_deadline_exceeded'));
-    await Promise.resolve();
+    await setImmediate();
     t.mock.timers.tick(10);
     await pending;
   });
+  const bodyWait = bodyGuard.transportDiagnostics().observations[0];
+  assert.equal(bodyWait.responseAvailableMs !== null, true);
+  assert.equal(bodyWait.bodyCompleteMs, null);
+  assert.equal(bodyWait.termination, 'transport_deadline');
   await bodyGuard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async () => {
     await bodyGuard.answerFetch(url, request());
   });
@@ -275,7 +290,7 @@ test('G3 body-read timer ownership isolates, but forged timeout and ordinary abo
   assert.deepEqual(forged.caseTimeouts(), []);
 
   const abortFixture = fixture(t);
-  const abortGuard = make(abortFixture, () => new Promise(() => {}));
+  const abortGuard = make(abortFixture, () => new Promise(() => {}), 'bounded-v1');
   t.after(() => abortGuard.close());
   const external = new AbortController();
   await abortGuard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
@@ -287,6 +302,7 @@ test('G3 body-read timer ownership isolates, but forged timeout and ordinary abo
   });
   assert.equal(abortGuard.isHalted(), true);
   assert.deepEqual(abortGuard.caseTimeouts(), []);
+  assert.equal(abortGuard.transportDiagnostics().observations[0].termination, 'external_abort');
 });
 
 test('G6 an observed forged core timeout diagnostic grants no case-timeout authority', async (t) => {
@@ -335,7 +351,7 @@ test('G3 first observed transport/body failure cannot be relabelled by a later t
     const guard = make(f, () => mode === 'transport'
       ? new Promise((_, reject) => setTimeout(() => reject(new Error('synthetic failure')), 5))
       : new Response(new ReadableStream({ pull: () => new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('synthetic body failure')), 5)) })));
+        setTimeout(() => reject(new Error('synthetic body failure')), 5)) })), 'bounded-v1');
     const operation = guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
       const pending = assert.rejects(guard.answerFetch(url, request()), guardError('transport_failed'));
       await setImmediate();
@@ -348,6 +364,10 @@ test('G3 first observed transport/body failure cannot be relabelled by a later t
     assert.equal(guard.isHalted(), true, mode);
     assert.deepEqual(guard.caseTimeouts(), [], mode);
     assert.equal(guard.attempts()[0].termination, 'other_failure', mode);
+    const observation = guard.transportDiagnostics().observations[0];
+    assert.equal(observation.termination, mode === 'transport' ? 'transport_failure' : 'body_failure');
+    assert.equal(observation.responseAvailableMs !== null, mode === 'body');
+    assert.equal(observation.bodyCompleteMs, null);
     guard.close();
   }
   const hostileFixture = fixture(t);
@@ -390,7 +410,7 @@ test('G3/G6 real core -> OpenAI adapter -> guard brands only the core timer and 
     }
     if (calls.length === 2) return new Promise(resolve => { lateReply = resolve; });
     return generationResponse();
-  });
+  }, 'bounded-v1');
   t.after(() => guard.close());
   const adapter = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: guard.cairnFetch });
   const input = { messages: [{ index: 0, role: 'user', content: 'Synthetic source.' }] };
@@ -408,10 +428,20 @@ test('G3/G6 real core -> OpenAI adapter -> guard brands only the core timer and 
     persisted.push(scope.snapshot());
   });
   assert.equal(persisted[0].status, 'timed_out');
+  const coreTimeout = guard.transportDiagnostics();
+  const frozenTimeout = JSON.stringify(coreTimeout);
+  assert.equal(Object.isFrozen(coreTimeout), true);
+  assert.equal(Object.isFrozen(coreTimeout.observations), true);
+  assert.equal(Object.isFrozen(coreTimeout.observations.at(-1)), true);
+  assert.throws(() => { coreTimeout.observations.at(-1).termination = 'response'; }, TypeError);
+  assert.equal(coreTimeout.observations.at(-1).termination, 'core_deadline');
+  assert.equal(coreTimeout.observations.at(-1).accountingOutcome, 'unknown');
   await guard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async () => {
     lateReply(generationResponse());
     await setImmediate();
     assert.equal(admittedA, false);
+    assert.equal(guard.transportDiagnostics().total, 0);
+    assert.equal(JSON.stringify(coreTimeout), frozenTimeout);
     const completed = callModel(adapter, 'extract', 'Synthetic extraction.', input);
     await setImmediate();
     t.mock.timers.tick(5);
@@ -419,6 +449,9 @@ test('G3/G6 real core -> OpenAI adapter -> guard brands only the core timer and 
   });
   assert.equal(admittedA, false);
   assert.equal(calls.length, 4);
+  assert.equal(JSON.stringify(coreTimeout), frozenTimeout);
+  assert.deepEqual(guard.transportDiagnostics().observations.map(row => [row.scopeOrdinal, row.route]),
+    [[1, 'count'], [1, 'generation']]);
   assert.equal(guard.caseTimeouts()[0].termination, 'core_deadline');
   assert.deepEqual(guard.attempts().map(attempt => attempt.outcome),
     ['succeeded', 'unknown', 'succeeded', 'succeeded']);
@@ -590,7 +623,7 @@ test('G5 settlement failure leaves the exact reservation unsettled and boundary 
     lock = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
     lock.exec('BEGIN IMMEDIATE');
     return response();
-  });
+  }, 'bounded-v1');
   let persisted = false;
   await assert.rejects(guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
     await assert.rejects(guard.answerFetch(url, request()),
@@ -601,6 +634,10 @@ test('G5 settlement failure leaves the exact reservation unsettled and boundary 
   assert.equal(guard.isHalted(), true);
   assert.equal(guard.attempts()[0].outcome, null);
   assert.equal(state(f.ledger).attempts[0].outcome, null);
+  const unsettledObservation = guard.transportDiagnostics().observations[0];
+  assert.equal(unsettledObservation.termination, 'response');
+  assert.equal(unsettledObservation.settledMs !== null, true);
+  assert.equal(unsettledObservation.accountingOutcome, null);
   lock.exec('ROLLBACK');
   lock.close();
   guard.close();
@@ -682,4 +719,105 @@ test('G2 a locked claim boundary fails with a fixed envelope before any send or 
     database.exec('ROLLBACK');
     database.close();
   }
+});
+
+test('TD1 invalid diagnostics options reject before consuming a one-shot claim; accessor reads once', (t) => {
+  const f = fixture(t);
+  const claimPath = join(f.ledger.directory,
+    `experiment-case-deadline-${f.caseDeadlineCapability.executionId}.claim.json`);
+  const base = { ledger: f.ledger, policy: f.policy, benchmarkExtension: f.benchmarkExtension,
+    caseDeadlineCapability: f.caseDeadlineCapability, fetchImpl: () => response() };
+  for (const value of [null, undefined, 7]) {
+    assert.throws(() => createCaseDeadlineExperimentRequestGuard(value), guardError('invalid_options'));
+  }
+  for (const value of [null, undefined, 'other']) {
+    assert.throws(() => createCaseDeadlineExperimentRequestGuard({ ...base,
+      transportDiagnostics: value }), guardError('invalid_options'));
+    assert.throws(() => lstatSync(claimPath), { code: 'ENOENT' });
+    assert.equal(state(f.ledger).requestCount, 0);
+  }
+  assert.throws(() => createBenchmarkExperimentRequestGuard({ ledger: f.ledger,
+    policy: f.policy, benchmarkExtension: f.benchmarkExtension,
+    fetchImpl: () => response(), transportDiagnostics: 'bounded-v1' }), guardError('invalid_options'));
+  assert.throws(() => createExperimentRequestGuard({ ledger: f.ledger,
+    policy: f.policy, fetchImpl: () => response(), transportDiagnostics: 'bounded-v1' }),
+  guardError('invalid_options'));
+  let reads = 0;
+  const options = { ...base };
+  Object.defineProperty(options, 'transportDiagnostics', { enumerable: true,
+    get() { reads++; return 'bounded-v1'; } });
+  const guard = createCaseDeadlineExperimentRequestGuard(options);
+  assert.equal(reads, 1);
+  assert.equal(typeof guard.transportDiagnostics, 'function');
+  guard.close();
+});
+
+test('TD2 opt-in count and validated generation methods preserve request and ledger outcomes', async (t) => {
+  const exercise = async (enabled) => {
+    const f = fixture(t);
+    const routes = [];
+    const guard = make(f, (requestUrl, options) => {
+      routes.push({ url: requestUrl, method: options.method, redirect: options.redirect,
+        headers: { ...options.headers }, body: options.body, signalAborted: options.signal.aborted });
+      return requestUrl === f.policy.cairnCount.endpoint ? countResponse() : generationResponse();
+    }, enabled ? 'bounded-v1' : null);
+    let results;
+    await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
+      const counted = await guard.cairnFetch(f.policy.cairnCount.endpoint, countRequest());
+      const generated = await guard.cairnFetch(f.policy.cairnGeneration.endpoint, generationRequest());
+      results = [await counted.json(), await generated.json()];
+    });
+    const diagnostic = guard.transportDiagnostics?.();
+    const attempts = guard.attempts().map(({ stage, outcome, actualMicroUsd, termination }) =>
+      ({ stage, outcome, actualMicroUsd, termination }));
+    const ledger = state(f.ledger).attempts.map(({ channel, reservedMicroUsd, outcome, actualMicroUsd }) =>
+      ({ channel, reservedMicroUsd, outcome, actualMicroUsd }));
+    assert.equal(Object.hasOwn(guard, 'transportDiagnostics'), enabled);
+    guard.close();
+    return { results, attempts, ledger, routes, diagnostic };
+  };
+  const off = await exercise(false);
+  const on = await exercise(true);
+  assert.deepEqual(on.results, off.results);
+  assert.deepEqual(on.attempts, off.attempts);
+  assert.deepEqual(on.ledger, off.ledger);
+  assert.deepEqual(on.routes, off.routes);
+  assert.equal(on.routes.length, 2);
+  assert.deepEqual(on.diagnostic.observations.map(({ route, method, accountingOutcome }) =>
+    [route, method, accountingOutcome]), [
+    ['count', 'unknown', 'succeeded'], ['generation', 'extract', 'succeeded']]);
+  assert.equal(off.diagnostic, undefined);
+});
+
+test('TD2/TD5 real guard ring retains the 257th failed fake-HTTP attempt and its reservation', async (t) => {
+  const f = fixture(t, { stageTimeoutMs: 60_000, limitMicroUsd: 20_000_000, requestCap: 300 });
+  let calls = 0;
+  const guard = make(f, () => {
+    calls += 1;
+    if (calls === 257) throw new Error('synthetic transport failure');
+    return response();
+  }, 'bounded-v1');
+  t.after(() => guard.close());
+  await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
+    for (let index = 0; index < 256; index += 1) {
+      const result = await guard.answerFetch(url, request());
+      assert.equal(result.status, 200);
+    }
+    await assert.rejects(guard.answerFetch(url, request()), guardError('transport_failed'));
+  });
+  const snapshot = guard.transportDiagnostics();
+  assert.equal(calls, 257);
+  assert.equal(snapshot.scopeOrdinal, 0);
+  assert.equal(snapshot.phase, 'generation');
+  assert.equal(snapshot.total, 257);
+  assert.equal(snapshot.dropped, 1);
+  assert.equal(snapshot.observations.length, 256);
+  assert.equal(snapshot.observations[0].attemptOrdinal, 1);
+  assert.equal(snapshot.observations.at(-1).attemptOrdinal, 256);
+  assert.equal(snapshot.observations.at(-1).termination, 'transport_failure');
+  assert.equal(snapshot.observations.at(-1).accountingOutcome, 'unknown');
+  assert.equal(snapshot.observations.at(-1).responseAvailableMs, null);
+  assert.equal(guard.isHalted(), true);
+  assert.equal(state(f.ledger).requestCount, 257);
+  assert.equal(state(f.ledger).attempts.at(-1).outcome, 'unknown');
 });

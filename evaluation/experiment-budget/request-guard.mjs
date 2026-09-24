@@ -27,6 +27,7 @@ import {
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { schemasFor } from '../../adapters/openai/schemas.mjs';
 import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
+import { createTransportDiagnosticsCollector } from './transport-diagnostics.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
@@ -1920,12 +1921,17 @@ export function createBenchmarkExperimentRequestGuard(options) {
 }
 
 export function createCaseDeadlineExperimentRequestGuard(options) {
-  exactKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'caseDeadlineCapability', 'fetchImpl']);
+  const required = ['ledger', 'policy', 'benchmarkExtension', 'caseDeadlineCapability', 'fetchImpl'];
+  if (!isPlainObject(options)) fail('invalid_options');
+  const transportPresent = own(options, 'transportDiagnostics');
+  exactKeys(options, transportPresent ? [...required, 'transportDiagnostics'] : required);
   // Read each caller-owned field once, then use only detached snapshots. In
   // particular no accessor can swap the ledger or capability after claiming.
   const caller = { ledger: options.ledger, policy: options.policy,
     benchmarkExtension: options.benchmarkExtension, caseDeadlineCapability: options.caseDeadlineCapability };
   const fetchImpl = options.fetchImpl;
+  const transportDiagnostics = transportPresent ? options.transportDiagnostics : null;
+  if (transportPresent && transportDiagnostics !== 'bounded-v1') fail('invalid_options');
   if (typeof fetchImpl !== 'function') fail('invalid_options');
   let detached;
   try { detached = structuredClone(caller); } catch { fail('invalid_options'); }
@@ -1937,10 +1943,11 @@ export function createCaseDeadlineExperimentRequestGuard(options) {
   verifyCaseCapability(capability, ledgerConfiguration, policy, benchmark);
   const baseline = consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, benchmark);
   return constructBenchmarkGuard({ ledger: ledgerConfiguration, policy, fetchImpl }, benchmark,
-    capability, baseline);
+    capability, baseline, transportDiagnostics);
 }
 
-function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null) {
+function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null,
+  transportDiagnostics = null) {
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
@@ -1955,6 +1962,11 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   let inFlight = 0;
   let halted = false;
   const scoped = caseCapability !== null;
+  const transportCollector = transportDiagnostics === 'bounded-v1'
+    ? createTransportDiagnosticsCollector() : null;
+  const observeTransport = (operation) => {
+    try { return operation(); } catch { return null; }
+  };
   const scopeStorage = scoped ? new AsyncLocalStorage() : null;
   const sealedCases = new Set();
   const timeoutRecords = [];
@@ -2020,7 +2032,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     lastScopeSnapshot = scopeSnapshot(scope);
   };
 
-  const send = async (stage, kind, channel, snapshot, requestedOutputTokens, caseScope = null) => {
+  const send = async (stage, kind, channel, snapshot, requestedOutputTokens, caseScope = null,
+    diagnosticMethod = 'unknown') => {
     if (closed) fail('guard_closed');
     if (halted) fail('paid_work_halted');
     if (scoped) requireScope(stage === 'judge' ? 'judge' : stage === 'answer' ? 'answer' : 'cairn');
@@ -2039,6 +2052,13 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       ...(scoped ? { phase: caseScope.phase, caseId: caseScope.caseId, termination: null } : {}) };
     records.push(record);
     inFlight += 1;
+    const route = kind === 'cairnCount' ? 'count' : kind === 'cairnGeneration'
+      ? 'generation' : stage;
+    const transportAttempt = transportCollector
+      ? observeTransport(() => transportCollector.start(route, diagnosticMethod)) : null;
+    const markTransport = (method, ...args) => {
+      if (transportAttempt) observeTransport(() => transportAttempt[method](...args));
+    };
     const controller = new AbortController();
     let terminationCause = null;
     const externalAbort = scoped ? () => {
@@ -2054,7 +2074,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     }, channel.timeoutMs) : setTimeout(() => controller.abort('request_timeout'), channel.timeoutMs);
     let settled = false;
     const settle = (outcome, actualMicroUsd, usage = null, diagnostic = null,
-      termination = 'other_failure', isolatedDeadline = false) => {
+      termination = 'other_failure', isolatedDeadline = false, observedTermination = termination) => {
       if (settled) return;
       settled = true;
       if ((outcome === 'unknown' && !isolatedDeadline)
@@ -2066,14 +2086,18 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       record.usage = usage;
       if (scoped) record.termination = termination;
       if (diagnostic !== null) record.countDiagnostic = diagnostic;
+      let accountingAccepted = false;
       try {
         ledger.recordOutcome(actualMicroUsd === null
           ? { attemptId, outcome }
           : { attemptId, outcome, actualMicroUsd });
+        accountingAccepted = true;
       } catch (error) {
         // The attempt stays unsettled in the ledger; no later paid work may proceed.
         halted = true;
         throw error;
+      } finally {
+        markTransport('settle', observedTermination, accountingAccepted ? outcome : null);
       }
       record.outcome = outcome;
       record.actualMicroUsd = actualMicroUsd;
@@ -2086,6 +2110,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       try {
         let pending = Promise.resolve().then(() => {
           if (controller.signal.aborted) fail(abortError(controller.signal));
+          markTransport('fetchEntered');
           return fetchImpl(channel.endpoint, {
             method: 'POST',
             redirect: 'error',
@@ -2106,7 +2131,10 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
         response = await raceAbort(pending, controller.signal);
       } catch (error) {
         const deadline = scoped && ['core_deadline', 'transport_deadline'].includes(terminationCause);
-        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline);
+        const observed = deadline ? terminationCause
+          : terminationCause === 'external_abort' ? 'external_abort'
+            : terminationCause === 'transport_failure' ? 'transport_failure' : 'other_failure';
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline, observed);
         if (deadline) {
           sealDeadline(caseScope, terminationCause);
           fail('case_deadline_exceeded');
@@ -2115,18 +2143,23 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
         fail('transport_failed');
       }
       if (!(response instanceof Response)) {
-        settle('unknown', null, null, null, 'other_failure');
+        settle('unknown', null, null, null, 'other_failure', false, 'invalid_response');
         fail('transport_failed');
       }
+      markTransport('responseAvailable');
       let bytes;
       try {
         bytes = await readBounded(response, channel.maxResponseBytes, controller.signal, scoped ? () => {
           if (terminationCause === null) terminationCause = 'body_failure';
         } : null);
+        markTransport('bodyComplete');
       }
       catch (error) {
         const deadline = scoped && ['core_deadline', 'transport_deadline'].includes(terminationCause);
-        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline);
+        const observed = deadline ? terminationCause
+          : terminationCause === 'external_abort' ? 'external_abort'
+            : terminationCause === 'body_failure' ? 'body_failure' : 'other_failure';
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline, observed);
         if (deadline) {
           sealDeadline(caseScope, terminationCause);
           fail('case_deadline_exceeded');
@@ -2173,6 +2206,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       snapshot.signal.removeEventListener('abort', externalAbort);
       inFlightIds.delete(attemptId);
       inFlight -= 1;
+      markTransport('finalize');
     }
   };
 
@@ -2192,8 +2226,11 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       const channel = policy[kind];
       const snapshot = requestSnapshot(url, requestOptions, channel);
       validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
+      const method = kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
+        cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank' })[
+        snapshot.body.text.format.name] ?? 'unknown';
       return await send(CHANNELS[kind], kind, channel, snapshot,
-        kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope);
+        kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope, method);
     } catch (error) { fatalizeRouteError(error); }
   };
   const scopedStageFetch = (name) => async (url, requestOptions) => {
@@ -2245,6 +2282,10 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       const scope = { phase: expected.phase, caseId: expected.caseId, open: true,
         status: sealedCases.has(expected.caseId) ? 'blocked' : 'active' };
       activeScope = scope;
+      if (transportCollector) {
+        try { transportCollector.openScope(scheduleIndex, expected.phase); }
+        catch { transportCollector.invalidate(); }
+      }
       lastScopeSnapshot = scopeSnapshot(scope);
       const handle = Object.freeze({ snapshot: () => scopeSnapshot(scope) });
       let value;
@@ -2254,6 +2295,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       catch (error) { operationError = error; operationFailed = true; halted = true; }
       // Fence descendants before any boundary check can authorize the next entry.
       scope.open = false;
+      if (transportCollector) observeTransport(() => transportCollector.closeScope());
       activeScope = null;
       if (scope.status === 'active') scope.status = 'completed';
       lastScopeSnapshot = scopeSnapshot(scope);
@@ -2273,6 +2315,9 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       return lastScopeSnapshot === null ? null : deepFreeze(structuredClone(lastScopeSnapshot));
     },
     caseDeadlineCapability: caseCapability,
+    ...(transportCollector ? { transportDiagnostics() {
+      return observeTransport(() => transportCollector.snapshot());
+    } } : {}),
   } : {};
 
   return Object.freeze({
@@ -2297,6 +2342,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       if (closed) return;
       if (inFlight !== 0 || activeScope !== null) fail('guard_busy');
       closed = true;
+      if (transportCollector) observeTransport(() => transportCollector.closeScope());
       ledger.close();
     },
     policy,
