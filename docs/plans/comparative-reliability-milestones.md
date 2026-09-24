@@ -1,8 +1,10 @@
 # Comparative reliability and lightweight product milestones
 
-Status: proposed sequence; no milestone is reported complete here. Goal: a
-lightweight, source-backed memory layer for Hermes and other agent harnesses,
-evaluated against existing solutions under matched conditions.
+Status: proposed sequence; S1 is active but incomplete, and no S1–S5 milestone
+has passed as a whole. See the execution snapshot and resume protocol below for
+the state checked 2026-09-25; re-check live PR and CI state before resuming.
+Goal: a lightweight, source-backed memory layer for Hermes and other agent
+harnesses, evaluated against existing solutions under matched conditions.
 
 ## Acceptance for this plan
 
@@ -21,8 +23,9 @@ evaluated against existing solutions under matched conditions.
 
 The [audited 30-case cohort](https://github.com/Cairn-ink/cairn-memory/blob/fcfd2b349ce20c6def46ed4815fa6de6b5404308/docs/evidence/reliability-cohort-30.md)
 has five cases per question type: a small pilot, not the 500-case benchmark or a
-competitor-parity result. At review, its documentation candidate `fcfd2b3` (PR
-#202) and runtime `ca9c15c` (PR #203) were open and unmerged; neither is shipped.
+competitor-parity result. As checked 2026-09-25, its documentation candidate
+`fcfd2b3` (PR #202) and runtime candidate `ca9c15c` (PR #203) remain open and
+unmerged; neither is shipped.
 
 | Arm | Correct | Wrong | Unresolved | Complete | Correct among complete |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -49,6 +52,68 @@ Preserve wrapper failure, reservations, unknown prices/outcomes and case results
 do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
+
+## Execution snapshot and resume protocol (checked 2026-09-25)
+
+This is a dated handoff, not a milestone pass. The public PR state and head SHAs
+were checked directly; all listed candidates were open and unmerged:
+
+| Candidate | Head | State at check |
+| --- | --- | --- |
+| [PR #202](https://github.com/Cairn-ink/cairn-memory/pull/202) | `fcfd2b3` | Open; audited 30-case documentation. |
+| [PR #203](https://github.com/Cairn-ink/cairn-memory/pull/203) | `ca9c15c` | Open; reliability runtime integration. |
+| [PR #204](https://github.com/Cairn-ink/cairn-memory/pull/204) | `7c7e8b3` | Open; extraction source-domain bound. |
+| [PR #205](https://github.com/Cairn-ink/cairn-memory/pull/205) | `285e7ff` | Open; this plan. |
+| [PR #206](https://github.com/Cairn-ink/cairn-memory/pull/206) | `aaa44da` | Open; classification batch cardinality. |
+| [PR #207](https://github.com/Cairn-ink/cairn-memory/pull/207) | `038f0ac` | Open; synthetic evidence lineage coverage. |
+
+At PR #207's recorded head, seven fixed scripted capture-to-recall cases reach
+actual public evidence packing. Generic checks passed 112/112 and LongMemEval
+checks 75/75 on each of Node 22.16 and 24.15; CI run `36035308315` passed 17/17.
+The implementation worker and both independent Standards/Spec reviewers were
+GPT-6 Sol/high; both reviews passed with zero findings. These checks cover
+scripted pipeline mechanics, not live semantic quality. The source/ref and
+classification guards are candidate changes, not proof of a reliability fix.
+
+| Milestone | Current state and evidence | Next acceptance work |
+| --- | --- | --- |
+| S1 — bounded recovery | Active, incomplete. Candidate runtime stack #203/#204/#206/#207 remains open; partial-classification recovery and timeout handling are not complete. No S1 pass is claimed. | Finish observable, repeat-safe recovery from retained evidence; verify incomplete receipts, corrected/deleted content, namespace/privacy and no resurrection. |
+| S2 — tracing and navigation | Active, incomplete. The eight historical wrong outcomes remain fixed-N and read-only; finer fact-stage causes are unknown. A synthetic 1,025-memory direct-admission control misses the unique target at the max sorted ID; removing one lower-ID row makes it visible and returned at 1,024. Root reproduced the red-base miss against public `core.recall` in 0.76 seconds with an expected failing assertion. This shows a capacity-boundary effect only; it does not explain a historical wrong answer or establish a fix. | Offline packet assigned to GPT-6 Sol/high on branch `experiment/candidate-retrieval-ablation`, based on PR #207 head `038f0acbe2ac281d1fd599a1199aa921782ca5e5`. No candidate SHA or PR number is recorded yet. Freeze fixtures before output runs. The active experiment and separate later answer-stage gate are defined under S2 below. |
+| S3 — matched comparator | Pending; no fresh matched Mem0 OSS score exists. | Preflight and pin the actual engine, dependencies and model configuration; reconcile harness filters and denominators; freeze a new holdout before any scoring. |
+| S4 — installed path and growth | Pending; installed Hermes/MCP cold-restart and 100/1,000/10,000-memory growth gates remain. | Freeze host/runtime/resources/repeats, then complete each required synthetic workflow and measurement while retaining failures and cap breaches. |
+| S5 — preview and onboarding | Pending; no cold-context onboarding pass is recorded. | Run the documented clean-environment flow through sourced write, new-session recall, inspect, correct, forget and restart/no-result; record receipt-backed pass/fail at every step. |
+
+No new semantic score or paid request is recorded in this status update. At the
+last recorded checkpoint (not re-read for this documentation update), the
+cumulative API ceiling was US$200, with US$79.389500 reserved and US$120.610500
+headroom; the operational ledger was US$100 pending separate review and
+enforcement. Check the actual ledger and request guard before any paid phase.
+Preserve the cap, freeze each phase's request/cost limit, and never reset/refund
+or automatically relaunch a consumed run. No prior 30-case failure may be
+rerun or tuned on. Scoped offline synthetic work within this authority needs no
+redundant approval; request user direction before exceeding the cumulative
+ceiling, accessing new sensitive data, or changing production scope.
+
+On resumption after compaction:
+
+1. Re-read this plan, the relevant milestone specification, `CONTEXT.md`,
+   `CONTRIBUTING.md` and `docs/limitations.md`; treat their definitions and
+   safety gates as binding.
+2. Inspect the real worktree list, branch, dirty state and merge base. Then check
+   each active PR's current head, state and CI against that head. This snapshot
+   is not a substitute for live state and must not be assumed current.
+3. Resume the active authorized packet, or its next independent unblocked task.
+   Independent offline diagnostics and research may proceed while S1 is open;
+   this does not pass S1 or waive any dependency for product promotion, a live
+   benchmark, host readiness or preview. Record the packet's exact base/candidate
+   SHA, owner and actual model/effort when available, allowed files, frozen
+   inputs, next command, pass/fail criteria, unknowns and blocker. Never infer
+   missing ownership or relaunch a run that may already have spent its budget.
+   Update this existing plan after every gate before proceeding.
+4. Keep all historical cohort outcomes fixed. Before any paid request, verify
+   the real ledger, guard, credentials and remaining authority; stop at the
+   frozen cap or any accounting anomaly. Retain failures, unknowns and not-run
+   cases, and do not turn pipeline completion into an accuracy claim.
 
 ## Milestones
 
@@ -77,11 +142,31 @@ MOC filing, visibility, selection, fetch, evidence packing, answering and judgin
 Attribute causes only from recorded evidence; unknown is valid. Do not publish
 source data or rerun cases.
 
-Run a bounded synthetic MOC ablation against a strong flat candidate path on a
-frozen corpus/query set, with shared answer model, cutoff and final context cap.
-Include exact lexical, paraphrase and CJK controls. Record visible-to-packed
-evidence stages; hide target IDs/answer labels and report candidate work as well
-as accuracy (equal answer context is not equal compute).
+First reproduce the synthetic 1,025-memory capacity-boundary miss against the
+actual `core.recall` path; the 1,024-memory control should expose the target.
+This is a retrieval diagnostic, not an explanation for any of the eight
+historical wrong answers and not a claim that runtime behavior is fixed. The
+active offline packet compares actual `core.recall` with flat FTS5/BM25 and
+MOC-first navigation with bounded shared fallback on a frozen synthetic
+corpus/query set. Run alias expansion off/on for the flat and MOC paths, with
+matched source information and top-K; account for index/build and query work.
+Include exact lexical, paraphrase, CJK, wrong-branch, unfiled, unknown and
+multi-source controls. Every path must preserve bounded retrieval, namespace,
+current/history and forget behavior. Record candidate visibility/materialization,
+selected IDs/counts and resource use; hide target IDs/answer labels. This
+preflight does not measure public evidence packing and is offline retrieval
+evidence, not a QA score or product runtime fix claim.
+
+The preflight does not replace the later end-to-end S2 answer-stage gate. After
+S1's repair and safety conditions pass and the candidate path is frozen, use a
+shared answer model, judge/scorer, prompt, cutoff and final context cap on a
+frozen development set and then a fresh held-out roster. Report visible-to-
+packed stages, candidate work, fixed-N correct/wrong/unresolved outcomes,
+source-span fidelity and abstention; preserve every failure and unresolved
+case. Freeze thresholds and resource limits before scored calls, and do not
+tune on the revealed holdout. A candidate-path diagnostic or oracle ceiling is
+not a product score. Promotion still requires improvement at equal resource
+budget without safety regression.
 
 Trace completion means eight supported records or explicit unknowns, not progress.
 Promote an ablated path only if a frozen development check improves at equal
@@ -249,20 +334,24 @@ deletion, namespace, current/history and unadopted-proposal eligibility.
 
 ### Two near-term experiments, subject to existing S1–S3 gates
 
-1. **Navigation and aliases.** On newly frozen synthetic development cases,
-   compare a full-corpus flat FTS5/BM25 candidate path and MOC-first navigation
-   in a 2-by-2 design with alias expansion off/on in each path. Give both paths
-   identical source text, alias vocabulary, answer/judge settings and final
-   context cap. Charge indexing, candidate scans, ranking calls, tokens, storage
-   and latency to both arms; charge MOC routing and cross-branch fallback to the
-   MOC arm. Include exact name,
-   paraphrase, CJK, ambiguous alias and wrong-branch controls. Record evidence
-   visible, selected and packed; `recall_any` and `recall_all` at the same K;
-   fixed-N answer correctness, source-span fidelity and abstention. Freeze
-   configurations, resource ceilings and pass/stop thresholds before any scored
-   calls, then evaluate once on a fresh held-out roster without oracle labels in
-   model input. Reject a navigation gain that comes from extra work or loses
-   required evidence through routing. No external vector DB is needed.
+1. **Navigation and aliases.** For the later full S2 evaluation, beyond the
+   current candidate-only preflight, on newly frozen synthetic development cases,
+   keep actual `core.recall` as a baseline, then compare a full-corpus flat
+   FTS5/BM25 candidate path and MOC-first navigation in a 2-by-2 design with
+   alias expansion off/on in each navigation path. Give the navigation paths
+   identical source information, alias vocabulary, top-K and final context cap.
+   Charge index/build, candidate scans, ranking calls, tokens, storage and
+   latency to each path; charge MOC routing and cross-branch fallback to the MOC
+   path. Include exact name, paraphrase, CJK, ambiguous alias, wrong-branch,
+   unfiled, unknown and multi-source controls. Record evidence visible, selected
+   and packed; `recall_any` and `recall_all` at the same K; candidate work,
+   source-span fidelity and safety behavior. Freeze fixtures and resource
+   ceilings before inspecting output runs. An ablation that stops at candidate
+   retrieval is offline diagnostic evidence, not a semantic QA or product
+   reliability result. A later scored answer comparison still requires its own
+   frozen model/scorer, pass/stop rules and fresh held-out roster without oracle
+   labels in model input. Reject a navigation gain that comes from extra work
+   or loses required evidence through routing. No external vector DB is needed.
 2. **Typed decision/version relations.** In a separate small synthetic set,
    compare a relation path using existing explicit supersession and source-bound,
    model-proposed `supports-decision` links against flat notes containing the
@@ -297,7 +386,8 @@ new write autonomy, provider calls, a production path or a budget increase.
 - Stop a comparison at its reviewed request/cost cap, any accounting anomaly,
   missing credentials/configuration, or a result whose scorer/data cutoff
   differs across arms. Report the stop as incomplete.
-- Advance one milestone at a time after its recorded pass conditions. The
-  implementation worker is GPT-6; root owns candidate acceptance and two
-  independent Standards/Spec reviews. No plan assumes all stages finish in one
-  delivery or authorizes production deployment.
+- Advance one milestone at a time after its recorded pass conditions. Record
+  actual implementation owner/model/effort when available; never infer effort
+  from a model label. Root owns candidate acceptance and two independent
+  Standards/Spec reviews. No plan assumes all stages finish in one delivery or
+  authorizes production deployment.

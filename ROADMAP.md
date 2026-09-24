@@ -35,10 +35,17 @@ distinguishes main from pending PRs and proposed behavior; it is not a release
 claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
-Dated 2026-09-24: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
 sets proposed completion, held-out comparison, installed-host, growth and preview
-onboarding gates within the existing cumulative ceiling. No calls were made for
-this documentation update.
+onboarding gates within the existing cumulative ceiling. PRs #202–#207 remain
+open. The seven scripted capture-to-public-packing cases and offline checks at
+PR #207 do not pass S1 or establish semantic quality; recovery and timeout work
+remain incomplete. The active next gate is a reproducible capacity-boundary
+check followed by a frozen core-versus-flat-versus-MOC retrieval ablation;
+independent offline diagnostics may proceed while S1 is open. S1 still gates
+product promotion, live benchmark, host readiness and preview. No new semantic
+score or paid request is recorded; follow the plan's resume protocol to re-check
+live state before continuing.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
