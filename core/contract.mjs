@@ -375,6 +375,16 @@ export function openMemoryCore(input) {
     });
   }
 
+  function inspectAdmission(input) {
+    return invoke(() => {
+      runtime.ready();
+      exactFields(input, ['namespace', 'client', 'eventId']);
+      return runtime.inspectAdmission(contractNamespace(input.namespace), {
+        client: contractId(input.client), eventId: contractId(input.eventId),
+      });
+    });
+  }
+
   function admissionItems(input) {
     return denseArray(input, 0, 5).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification']);
@@ -765,7 +775,8 @@ export function openMemoryCore(input) {
 
   return Object.freeze({
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
-    claimAdmission, finishAdmission, abandonAdmission, inspectCaptureEvidence, discardCaptureEvidence,
+    claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
+    inspectCaptureEvidence, discardCaptureEvidence,
     applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {

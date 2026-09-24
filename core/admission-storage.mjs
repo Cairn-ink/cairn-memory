@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
-import { fail } from "./validation.mjs";
+import { fail, identifier } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?";
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
@@ -13,6 +13,42 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
   const live = (row, input, now) => row?.state === "pending" &&
     row.payload_digest === input.payloadDigest && row.token === input.token &&
     row.lease_expires_at > now;
+
+  function inspectAdmission(ns, input) {
+    // A deferred read transaction gives claim state and every member one
+    // consistent snapshot without acquiring an admission lease or write lock.
+    db.exec('BEGIN');
+    try {
+      const row = db.prepare(`SELECT state, memory_ids, suppressed_count FROM admission_claims WHERE ${where}`)
+        .get(...key(ns, input));
+      let result;
+      if (!row) result = { status: 'absent', classification: { status: 'unknown' } };
+      else if (row.state === 'pending') result = { status: 'pending', classification: { status: 'unknown' } };
+      else {
+        let ids;
+        try { ids = JSON.parse(row.memory_ids); } catch { fail('storage_error'); }
+        if (!Array.isArray(ids) || ids.length > 5 ||
+          !Number.isInteger(row.suppressed_count) || row.suppressed_count < 0 ||
+          row.suppressed_count > 5 || new Set(ids).size !== ids.length) fail('storage_error');
+        try { ids.forEach(identifier); } catch { fail('storage_error'); }
+        const findCurrent = db.prepare(`SELECT revision, filing_status FROM memories
+          WHERE owner_id = ? AND scope = ? AND project_id = ? AND id = ?
+            AND deleted = 0 AND currentness = 'current'`);
+        const members = ids.map((id) => {
+          const current = findCurrent.get(ns.ownerId, ns.scope, ns.projectId, id);
+          return current ? { status: 'current', memoryId: id, revision: current.revision,
+            filing: { status: current.filing_status } } : { status: 'closed' };
+        });
+        result = { status: 'completed', classification: { status: 'unknown' },
+          suppressedCount: row.suppressed_count, members };
+      }
+      db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
 
   function claimAdmission(ns, input, hooks, stagedView) {
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
@@ -120,5 +156,5 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     return null;
   }
 
-  return { claimAdmission, finishAdmission, abandonAdmission, assertCaptureEvidence };
+  return { claimAdmission, finishAdmission, abandonAdmission, assertCaptureEvidence, inspectAdmission };
 }

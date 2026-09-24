@@ -48,6 +48,28 @@ items can commit. An invalid item rejects the entire batch, not just itself.
 matching live owner. A stale attempt returns `{abandoned:false}` and cannot
 cancel a successor. A successful abandon permits a fresh same-digest claim.
 
+## Read committed admission membership
+
+`inspectAdmission({namespace,client,eventId})` is a model-free, read-only public
+core call using the same exact namespace/client/event key. It needs no digest or
+lease token. The usual success envelope contains `status: 'absent' | 'pending' |
+'completed'` and `classification: {status:'unknown'}`. Pending remains pending
+even if its lease has expired; inspection neither renews it nor retries work.
+Absent and pending have no member list or count.
+
+Completed returns the existing bounded `suppressedCount` (0–5) and `members`
+for at most five committed distinct IDs, in stored first-occurrence order. A
+member still active/current in the exact namespace has only `status:'current'`,
+its fresh `memoryId` and `revision`, and `filing:{status}`. Historical, deleted,
+missing, or foreign members become `{status:'closed'}` with no actionable ref.
+No content, receipts, payload digest, lease token, or submitted source text is
+returned. An empty member list can mean zero items or all suppressed; consult
+the count. Unfiled does not prove classification failed, and fully filed or
+empty membership does not prove it succeeded. A read transaction keeps claim
+membership and current member states together without writing or model calls.
+The [opt-in local MCP view](standalone-mcp.md#explicit-classification-of-unfiled-memories)
+fixes client and namespace at server startup and accepts only a batch ID.
+
 ## Retention, trust and boundaries
 
 Completed outcomes retain only identifiers/counts and key/digest state, not a

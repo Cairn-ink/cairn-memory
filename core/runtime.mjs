@@ -500,6 +500,7 @@ export function createMemoryRuntime(input) {
         prepared.items, judged.decisions, judged.reason);
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
+    inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     claimCaptureEvidence(ns, input) {
       ready();

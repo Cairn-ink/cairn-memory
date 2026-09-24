@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — capture admission inspection
+
+- Add keyless `core.inspectAdmission` and an opt-in local MCP
+  `inspect_capture_admission` read of existing committed admission membership.
+  It reports admission-only absent/pending/completed state, bounded suppression
+  count and fresh current member refs or closed non-actionable positions; the
+  classification outcome remains unknown. No capture replay, lease mutation,
+  new schema or automatic provider request is introduced.
+- Synthetic core, SDK-MCP and actual installed-artifact regressions cover cold
+  interruption before classification and explicit guarded classification with
+  unchanged source receipts. Durable classification journaling, whole-capture
+  timeout and semantic quality remain unresolved.
+
 ## Unreleased — explicit local MCP classification
 
 - Add an opt-in `classify_unfiled_memories` tool for one to five inspected,
