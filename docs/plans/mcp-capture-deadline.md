@@ -1,6 +1,9 @@
 # Explicit MCP capture deadline and cold-state recovery acceptance
 
-Fixed base: `580537fda322e58d5ccc9172ca169873dd896ece`.
+Fixed base: `d58935f77a6b54dab4f650b04826657a9fce5150`.
+The plan-only branch was rebased from the original `580537f` candidate after
+its independent review added a test-only ordered-retirement rollback assertion.
+No MCP implementation preceded this corrected-base freeze.
 Branch: `feat/mcp-capture-deadline`. Primary owns this preimplementation contract;
 implementation owner GPT-6 Sol/high. Do not begin implementation until the
 dependency's independent reviews and exact-head CI pass. If its head changes,
