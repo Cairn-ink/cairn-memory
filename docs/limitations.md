@@ -60,6 +60,51 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 
+## Recall-observation pilot retains mixed results
+
+The [recall-observation pilot](evidence/recall-observation-pilot.md) used a new,
+disjoint six-case cohort. All generation and scoring wrappers completed, but
+that is not six successful arms: Cairn resolved five cases with two correct and
+three wrong, while one natural-abstention case was unresolved after incomplete
+ingestion. Full history was 4/6 and no memory 1/6; on the five common resolved
+cases they were respectively 3/5 and 0/5 versus Cairn's 2/5. The no-memory
+success was the abstention case, not retrieval value.
+
+One extraction-validation failure left 286 capture observations against 287
+planned batches. The other five cases reached recall, but all five map traversals
+were incomplete. Session representation, selector/ranker counts and planned
+source-prefix exposure do not prove relevant-fact coverage or the cause of a
+wrong answer. This automatic evaluation is not an interactive Hermes user trial,
+direct MCP `remember_memory` certification, full-benchmark accuracy,
+per-type reliability, competitor quality or promotion readiness. It does not
+pool with or revise [PR #198](https://github.com/Cairn-ink/cairn-memory/pull/198).
+
+## Source-ranking screen showed equality, not improvement
+
+The [public source-ranking screen](evidence/source-ranking-screen.md) retained
+all 23 required source groups in both frozen arms across 12 authored synthetic
+cases, with no irrelevant or redundant selections. The candidate tied the
+baseline; passing an equality-permitting provisional gate does not establish a
+ranking improvement, answer quality, a LongMemEval score or promotion readiness.
+
+The first launch of a frozen 30-case LongMemEval cohort stopped with
+`unsafe_output` before any API request. In that original attempt, all 30 cases
+were `not_run` and no score existed. The confirmed cause was an
+operator/output-setup bug: preflight omitted a parent-directory check before
+non-recursive output creation. It was not a model or product-memory quality
+result, and that initial record did not authorize a relaunch.
+
+On 2026-09-24, the user authorized exactly one zero-request startup exception
+for the same 30 previously unattempted cases, preserving the failed attempt's
+marker, cap and claim state. It used the existing shared cumulative US$100
+ceiling, not a new allowance, and completed at 10:48:56 UTC. The live wrapper
+exited 1 with `postrun_accounting_anomaly`; separately, the private-artifact
+auditor v4 exited 0 with `cohort_audit_ok` and emitted redacted aggregate
+results. The wrapper did not exit cleanly. See the
+[audited 30-case reliability result](evidence/reliability-cohort-30.md).
+This result does not revise the separate six-case score or establish
+reliability, improvement, full-benchmark accuracy or competitor performance.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)
@@ -68,4 +113,7 @@ paid evaluation or broad promotion is authorized by this consolidation.
 - [Source-only context](source-evidence-context.md)
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
+- [Recall-observation pilot](evidence/recall-observation-pilot.md)
+- [Public source-ranking screen](evidence/source-ranking-screen.md)
+- [30-case reliability cohort result](evidence/reliability-cohort-30.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
