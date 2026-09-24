@@ -1,5 +1,31 @@
 # Compatibility protocol v0.1
 
+### Offline incremental candidate-index experiment boundary
+
+The maintainer-only incremental-index experiment creates a fresh private 0700
+temporary directory and 0600 synthetic core SQLite file, then removes them on
+normal completion. A hard timeout or process kill can leave the private
+synthetic directory behind; cleanup is not a forensic-erasure guarantee.
+It does not accept a user database path, install a product schema, change the
+core API, contact a provider or emit hosted telemetry. Experiment-prefixed
+tables, FTS5 and persistent SQL triggers are installed only in that file with
+`trusted_schema=OFF`. Both `ci_documents.content` and contentful `ci_fts` hold
+**full synthetic memory and receipt text copies**, not just token postings;
+`fts5vocab` holds lexical derivatives. Thus an analogous product mechanism
+would expand the sensitive local storage and backup surface. Logical forget
+removes queryable current documents in the same transaction, but neither
+SQLite free pages, journal/WAL remnants nor backups are proven forensically
+erased. The experiment does not make such a promise.
+
+The CLI report contains only frozen case names, aggregate counts, closed
+status/incomplete markers and finite timing observations. It excludes raw
+source, query and answer text, identifiers, database paths, hashes and raw
+exceptions. The test's private key-to-memory-ID map is never passed into the
+index query or serialized in the report. An active-generation, namespace,
+physical-current and revision JOIN precedes index ranking; `core.get` is not
+treated as proof of active-generation membership. Internal SQLite FTS posting
+visits remain unknown even when emitted row counts are capped.
+
 ### Offline synthetic evidence-lineage boundary
 
 The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through

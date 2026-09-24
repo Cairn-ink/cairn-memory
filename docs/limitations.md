@@ -6,6 +6,44 @@ The README links here from its first screen and stays short. A PR that adds or
 revises evidence appends to or edits this file rather than the README; see
 [CONTRIBUTING](../CONTRIBUTING.md#where-to-record-evaluation-limitations).
 
+## Incremental candidate-index experiment is not a product retrieval claim
+
+The [frozen offline packet](plans/incremental-candidate-index.md) probes a
+maintained FTS5 sidecar on fresh synthetic stores only. Its SQL setup timing
+is not public-core admission throughput; the index duplicates full synthetic
+memory and receipt text as well as lexical postings. Logical deletion does not
+prove forensic erasure from free pages, journal/WAL files or backups. Memory
+updates refresh all that memory's receipt documents, so write amplification
+grows with receipt fan-out; high fan-out maintenance is not bounded by the
+top-five query result. The query and scan report capped authorized rows, not
+SQLite's internal posting visits or total disk I/O. A matching-document count
+of cap+1 on an incomplete query is a lower bound, not the exact total.
+
+The first full 10,000-row Node 24 run of an uncommitted vocabulary-based query
+timed out at the explicit 120-second watchdog; there is no saved red source
+SHA, and the exact whole-cell cause remains unproven. Controlled same-DB
+reconstruction showed severe foreign-volume growth for that old query, while
+the replacement per-term posting query completed the frozen full cell within
+the bound on both Node 22.16 and 24.15. These shared-host, three-repeat
+timings are diagnostic means, not percentiles, causal speedups or provider
+latency. Independent acceptance of runtime commit `08e82c7` measured Node
+22.16 size 100/1,000/10,000 total times of 277.595/954.177/8,553.183 ms
+and Node 24.15 totals of 309.443/1,112.080/10,721.180 ms. In the Node 24
+10,000-row cell, the accent-fold negative query averaged 224.595 ms indexed
+versus 148.175 ms scanning over three repeats, although other ordinary
+queries were roughly 57–72 ms indexed versus 147–155 ms scanning. This is
+not a uniform speedup or a basis to select a product index. The full cell had
+10,000 authorized and 10,000 foreign current rows and 30,005 sidecar
+documents; the database grew from 21,581,824 to 34,250,752 bytes. That delta
+includes generation and lifecycle work, not just sidecar overhead. WAL bytes
+were zero under the observed default journal mode, not proof that WAL has no
+overhead. ASCII-only comparison does not establish Unicode/CJK/tokenizer
+equivalence; `unicode61` and JavaScript word categories can differ. Frozen
+zero-target labels can still return a *different current* lexical overlap
+without leaking a historical or fifth-only source. The experiment neither
+changes public fixed retrieval nor establishes an MOC, model/QA or past-pilot
+improvement, and it does not complete S1/S2/S4 gates.
+
 The section below is the text that opened the README until 2026-09-18, moved
 here unchanged apart from link paths and the bold lead-in becoming this section's heading.
 
