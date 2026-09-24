@@ -8,6 +8,12 @@
   "queryTermCap": 5,
   "repeats": 3,
   "sizeTimeoutMs": 120000,
+  "ordinaryTemplate": "Synthetic bank record {ordinal} stores slate marker {ordinal} on a neutral shelf.",
+  "foreignTemplate": "Private lilac charter for foreign record {ordinal}.",
+  "correctedReplacement": "Updated bronze timetable is current.",
+  "supersessionReplacement": "Current indigo rota is adopted.",
+  "generationMutation": "Fresh onyx compass is present.",
+  "neutralReceipts": ["Neutral receipt 1.", "Neutral receipt 2.", "Neutral receipt 3.", "Neutral receipt 4."],
   "special": [
     { "key": "exact", "content": "Cobalt astrolabe rests in the observatory cabinet.", "receipt": "Cobalt astrolabe confirmed in the observatory cabinet." },
     { "key": "receipt", "content": "A plain inventory note.", "receipt": "The saffron ledger token is in the archive drawer." },
@@ -30,7 +36,7 @@
     { "name": "historical", "query": "former indigo", "expected": [] },
     { "name": "foreign", "query": "private lilac charter", "expected": [] },
     { "name": "chinese_partial_negative", "query": "銅羅", "expected": [] },
-    { "name": "accent_fold_negative", "query": "cafe register", "expected": [] },
+    { "name": "accent_fold_negative", "query": "cafe", "expected": [] },
     { "name": "literal_operator_negative", "query": "NEAR/3 OR *", "expected": [] },
     { "name": "no_match", "query": "platinum heliograph", "expected": [] }
   ]
