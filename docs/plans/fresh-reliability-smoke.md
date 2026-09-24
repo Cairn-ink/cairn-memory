@@ -6,6 +6,14 @@ paid launch; a GPT-6 Sol/high worker owns the bounded maintainer implementation.
 No implementation or launch before the dependency's reviews and exact-head CI
 pass. Planning and read-only preparation may proceed while that CI runs.
 
+Official model pages checked on 2026-09-25: [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini)
+lists standard text input/output US$0.40/1.60 per million tokens and snapshot
+`gpt-4.1-mini-2025-04-14`; [GPT-4o](https://developers.openai.com/api/docs/models/gpt-4o)
+lists US$2.50/10.00 and snapshot `gpt-4o-2024-08-06`. These match the existing
+guard's memory/answer and judge rates. Cache discounts are not assumed; count
+requests with unknown billed cost remain conservatively reserved. Documentation
+does not establish account access, remaining provider credits or actual billing.
+
 ## Goal and checkpoint
 
 The goal remains a lightweight, source-backed memory layer usable by Hermes
