@@ -4,9 +4,9 @@ Status: implementation contract; synthetic offline verification only.
 
 Base: `7c7e8b39212de6bb2188ebf6ca63d1a1cb4dc65a`, dependent on PR 204.
 The fixed benchmark reported 15 correct, eight wrong and seven unresolved cases,
-with one classification partial result. The observed malformed value `UNKNOWN`
-does not establish why the provider produced it or whether item count was
-involved. This change does not recover or replace that result.
+with one classification partial result. The offending model value was not
+retained in that cohort's reported evidence, so this change cannot establish
+whether item count was involved. It does not recover or replace that result.
 
 ## Failure signal
 
