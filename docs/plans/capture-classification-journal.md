@@ -97,6 +97,9 @@ not just returned strings, and preserve default behavior assertions.
 
 Implementation allowlist: core capture/contract/runtime/admission/MOC storage,
 new classification-journal storage/schema modules, database migration wiring;
+the two new core module paths in `packaging/artifact-files.json` solely so the
+installed archive contains those modules (primary-approved dependency
+clarification before manifest edit);
 new focused core tests plus existing tests whose schema version assertions or
 strict option expectations change; MCP server and focused SDK test; focused
 installed-artifact test; technical docs (capture, admission claims, local
