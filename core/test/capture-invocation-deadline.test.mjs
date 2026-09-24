@@ -37,16 +37,18 @@ function fixture(t, { model = scripted(), captureDeadlineMs, ...options } = {}) 
   return { core, db, path };
 }
 const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
-function delayAfterSql(fragment, milliseconds) {
+function delayAfterSql(fragment, milliseconds, observe) {
   const prepare = DatabaseSync.prototype.prepare;
   let reached = 0;
   DatabaseSync.prototype.prepare = function(sql) {
+    const connection = this;
     const statement = prepare.call(this, sql);
     if (!sql.includes(fragment)) return statement;
     return new Proxy(statement, { get(target, property) {
       if (property === 'run') return (...args) => {
         const result = target.run(...args);
         reached++;
+        observe?.(connection, args);
         pause(milliseconds);
         return result;
       };
@@ -232,14 +234,41 @@ test('D3 ordered high-water and predecessor retirement roll back after actual in
   const first = ok(await core.capture(input('ordered-first', friday, causal(1))));
   const prior = first.admission.memories[0];
   const before = count(db, 'receipts');
-  const delayed = delayAfterSql('UPDATE capture_streams SET high_water', 900);
+  const priorBefore = { ...db.prepare('SELECT currentness,revision FROM memories WHERE id=?').get(prior.id) };
+  assert.deepEqual(priorBefore, { currentness: 'current', revision: prior.revision });
+  assert.equal(count(db, 'memory_supersessions'), 0);
+  let inside;
+  const delayed = delayAfterSql('UPDATE capture_streams SET high_water', 900, connection => {
+    const supersession = connection.prepare(`SELECT previous_memory_id,previous_revision,
+      replacement_memory_id,replacement_revision,receipt_ids FROM memory_supersessions
+      WHERE previous_memory_id=?`).get(prior.id);
+    const receiptIds = supersession ? JSON.parse(supersession.receipt_ids) : [];
+    inside = {
+      highWater: connection.prepare(`SELECT high_water FROM capture_streams
+        WHERE stream_id='synthetic-stream'`).get()?.high_water,
+      previous: { ...connection.prepare('SELECT currentness,revision FROM memories WHERE id=?').get(prior.id) },
+      supersession,
+      evidenceOwners: receiptIds.map(id => connection.prepare('SELECT memory_id FROM receipts WHERE id=?').get(id)?.memory_id),
+    };
+  });
   try {
     const result = await core.capture(input('ordered-second', monday, causal(2)));
     assert.equal(delayed.reached(), 1, 'ordered high-water advanced before precommit check');
     assert.equal(judgments, 1);
+    assert.equal(inside.highWater, 2, 'new stream progress was visible inside the write transaction');
+    assert.deepEqual(inside.previous, { currentness: 'historical', revision: prior.revision + 1 },
+      'predecessor retirement was visible inside the write transaction');
+    assert.equal(inside.supersession.previous_memory_id, prior.id);
+    assert.equal(inside.supersession.previous_revision, prior.revision);
+    assert.notEqual(inside.supersession.replacement_memory_id, prior.id);
+    assert.equal(inside.evidenceOwners.length, 1);
+    assert.deepEqual(inside.evidenceOwners, [inside.supersession.replacement_memory_id],
+      'the uncommitted successor receipt was bound as supersession evidence');
     assert.equal(result.error.code, 'model_timeout');
     assert.equal(db.prepare("SELECT high_water FROM capture_streams WHERE stream_id='synthetic-stream'")
       .get().high_water, 1);
+    assert.deepEqual({ ...db.prepare('SELECT currentness,revision FROM memories WHERE id=?').get(prior.id) }, priorBefore);
+    assert.equal(count(db, 'memory_supersessions'), 0);
     assert.equal(ok(core.get({ namespace, memoryId: prior.id })).memory.state, 'active');
     assert.equal(count(db, 'memories'), 1);
     assert.equal(count(db, 'receipts'), before);
