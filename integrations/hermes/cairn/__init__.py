@@ -240,7 +240,7 @@ class CairnMemoryProvider(MemoryProvider):
             request = {"operation": operation, "database": str(database), "owner": owner,
                        **self._config, **fields}
             environment = {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
-            extended = operation == "call" and fields.get("name") in {"capture_memory", "classify_unfiled_memories"}
+            uses_extended_timeout = operation == "call" and fields.get("name") in {"capture_memory", "classify_unfiled_memories"}
             if operation == "call" and fields.get("name") in {"recall_memory", "capture_memory", "classify_unfiled_memories"}:
                 environment["OPENAI_API_KEY"] = os.environ.get("CAIRN_MEMORY_OPENAI_API_KEY", "")
             process = subprocess.Popen([sys.executable, "-I", str(Path(__file__).with_name("bridge.py"))],
@@ -249,7 +249,7 @@ class CairnMemoryProvider(MemoryProvider):
             self._process = process
         try:
             output, _ = process.communicate(json.dumps(request).encode(),
-                                            timeout=CAPTURE_TIMEOUT_SECONDS if extended else TIMEOUT_SECONDS)
+                                            timeout=CAPTURE_TIMEOUT_SECONDS if uses_extended_timeout else TIMEOUT_SECONDS)
             if process.returncode or len(output) > 262144:
                 raise ValueError("cairn_transport_failed")
             return json.loads(output)

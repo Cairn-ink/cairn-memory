@@ -181,6 +181,20 @@ scope above and accepted renaming local `extended` variables to
 changes. Rerun native host/generic/validation checks on both runtimes, freeze a
 new candidate, then review both axes again against the original fixed base.
 
+Correction changed only ROADMAP's native offline gate/status and the local
+timeout-selector name in the provider and bridge. The earlier failed semantic
+evaluation, unmerged-candidate status and paid-model gate remain explicit;
+runtime conditions and timeout constants are unchanged. Against the same
+offline-installed, hash-checked `f77d837d...` archive, the canonical pinned
+Hermes five-file runner with `--file-retries 0` passed **22/22** on Node 22.16.0
+and **22/22** on Node 24.15.0. `npm test` passed **112/112** on each; JSON and
+strict plugin validation passed on each. The unchanged MCP, artifact and
+synthetic demo gates retain their prior both-runtime results above. The
+runner's optional missing-`.git` precompile notice remains nonblocking; no
+new failed test or provider request was observed. Independent fixed-diff
+reviews and primary final-candidate acceptance are still pending for the
+corrected commit.
+
 This closes the native offline adoption gap, not all reliability work. Next
 freeze a small fresh real-model development smoke and reconcile existing shared
 budget before execution; use inspected actual installed paths and no old30

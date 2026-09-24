@@ -21,6 +21,13 @@ service must use the same public core, not separate engines.
 - Hermes MCP discovery is verified. The separate [native-provider candidate](https://github.com/Cairn-ink/cairn-memory/pull/25)
   passed MemoryManager lifecycle and actual-model recall on Linux CLI; interactive
   chat tool selection is not implied.
+- The dependent [native deadline and recovery candidate](docs/plans/hermes-capture-recovery.md)
+  passed an offline pinned-Hermes MemoryManager and scripted AIAgent dispatch
+  gate on Node 22.16 and 24.15 against a hash-checked installed archive with
+  fake provider responses. Capture's invocation deadline and admission
+  inspection/classification are explicit profile opt-ins. This candidate is
+  pending review and merge; no paid model, natural tool selection, semantic
+  reliability or full S1 acceptance follows from the offline gate.
 
 These are development candidates, not a claim that every PR has merged or a new
 package has been published. The released v0.1 hosted plugin remains available;
@@ -72,7 +79,9 @@ reliability work below without declaring older failure gates resolved.
    ready. Then run a separately frozen and authorized fixed pilot before broader
    architecture work.
    Preserve the original failed run and spending; offline tests are not scores.
-2. Review/merge the verified native-provider candidate; separately evaluate
+2. Review/merge the verified native-provider candidate and its dependent
+   native deadline/recovery candidate; separately freeze a fresh real-model
+   development smoke under the shared budget before execution, and evaluate
    interactive Hermes chat and additional host/platform coverage.
 3. Complete independent onboarding and propose publication with honest limits.
 4. Run the [14-day adoption experiment](docs/plans/local-memory-plg.md) only after

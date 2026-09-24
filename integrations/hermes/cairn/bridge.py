@@ -32,15 +32,15 @@ async def exchange(request):
         if request["classification_recovery"] != "guarded-v1":
             raise ValueError("invalid_recovery_configuration")
         args += ["--classification-recovery", "guarded-v1"]
-    extended = request["operation"] == "call" and request.get("name") in {"capture_memory", "classify_unfiled_memories"}
+    uses_extended_timeout = request["operation"] == "call" and request.get("name") in {"capture_memory", "classify_unfiled_memories"}
     parameters = StdioServerParameters(command=request["node_path"],
         args=args,
         env={"OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", "")})
     with open(os.devnull, "w", encoding="utf-8") as errors:
-        with anyio.fail_after(CAPTURE_HELPER_TIMEOUT_SECONDS if extended else HELPER_TIMEOUT_SECONDS):
+        with anyio.fail_after(CAPTURE_HELPER_TIMEOUT_SECONDS if uses_extended_timeout else HELPER_TIMEOUT_SECONDS):
             async with stdio_client(parameters, errlog=errors) as streams:
                 async with ClientSession(*streams,
-                                         read_timeout_seconds=CAPTURE_SDK_TIMEOUT_SECONDS if extended else SDK_TIMEOUT_SECONDS) as session:
+                                         read_timeout_seconds=CAPTURE_SDK_TIMEOUT_SECONDS if uses_extended_timeout else SDK_TIMEOUT_SECONDS) as session:
                     await session.initialize()
                     if request["operation"] == "list":
                         result = await session.list_tools()
