@@ -60,7 +60,7 @@ unchanged. The resulting cumulative checkpoint is 6,099 requests and
 48,635,560 micro-USD reserved under the 100,000,000-micro-USD cumulative
 ceiling. The screen did not reset, refund or rewrite prior evidence.
 
-## Separate 30-case launch did not run
+## Original 30-case launch did not run
 
 A fresh LongMemEval cohort was frozen with 30 cases, balanced at five cases for
 each of six question types. It was drawn from 36 selected candidates after
@@ -77,15 +77,17 @@ the exact error, zero HTTP requests, unchanged ledger state and the missing
 parent/output condition on Node 22. This is not a model or product-memory quality
 failure.
 
-There were zero API calls, zero new reservations and no ledger-hash change. The
-launch marker, cap and consumed claim state remain preserved. All 30 cases are
-`not_run`; no score exists. The retained private launch metadata has
+In that first attempt, there were zero API calls, zero new reservations and no
+ledger-hash change. The launch marker, cap and consumed claim state remain
+preserved. All 30 cases were `not_run`; that attempt had no score. The retained
+private launch metadata has
 SHA-256 `424f1dc0ba214b758b209e03437db9b261ababd8737f289724d7ef67606f743e`.
 That digest identifies retained bytes without publishing them or proving the
 cause of failure.
 
-A zero-call relaunch exception has been requested and awaits explicit
-authorization. This record does not grant it or promise a rerun.
+At the time of this original screen record, a zero-call relaunch exception had
+been requested and awaited authorization. The later decision and execution are
+recorded below.
 
 The subsequent private preflight correction checks the existing real `0700`
 output parent before importing the original wrapper, consuming a marker or
@@ -103,7 +105,15 @@ comparison, promotion readiness or runtime-default decision. Required-group
 coverage is rubric-relative; it does not authenticate truth or corpus
 provenance. Hashes establish checked byte identity only.
 
-The next gate is an explicit decision on the zero-request launch exception.
-Any later launch must preserve the
-frozen 30-case denominator and all not-run history; no such launch is authorized
-here.
+At the time of this original screen record, the next gate was an explicit
+decision on a zero-request launch exception. On 2026-09-24, the user authorized
+exactly one such startup exception for the same frozen 30 unattempted cases,
+preserving the original failed marker, cap and claim state. It used the
+existing shared cumulative US$100 ceiling, not a new US$100 allowance. The
+execution completed at 10:48:56 UTC. Its live wrapper exited 1 with
+`postrun_accounting_anomaly`; the separate private-artifact auditor v4 exited 0
+with `cohort_audit_ok` and emitted redacted aggregates. The wrapper did not
+exit cleanly. See the [audited 30-case reliability result](reliability-cohort-30.md).
+This update does not revise the 12-case source-ranking screen or the prior
+six-case result, authorize another launch, or establish a broader quality
+outcome.

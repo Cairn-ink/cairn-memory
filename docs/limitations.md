@@ -87,12 +87,23 @@ cases, with no irrelevant or redundant selections. The candidate tied the
 baseline; passing an equality-permitting provisional gate does not establish a
 ranking improvement, answer quality, a LongMemEval score or promotion readiness.
 
-A separate frozen 30-case LongMemEval launch stopped with `unsafe_output`
-before any API request. All 30 cases remain not run and no score exists. The
-confirmed cause was an operator/output-setup bug: preflight omitted a
-parent-directory check before non-recursive output creation. It was not a model
-or product-memory quality result, and this documentation does not authorize or
-promise a relaunch.
+The first launch of a frozen 30-case LongMemEval cohort stopped with
+`unsafe_output` before any API request. In that original attempt, all 30 cases
+were `not_run` and no score existed. The confirmed cause was an
+operator/output-setup bug: preflight omitted a parent-directory check before
+non-recursive output creation. It was not a model or product-memory quality
+result, and that initial record did not authorize a relaunch.
+
+On 2026-09-24, the user authorized exactly one zero-request startup exception
+for the same 30 previously unattempted cases, preserving the failed attempt's
+marker, cap and claim state. It used the existing shared cumulative US$100
+ceiling, not a new allowance, and completed at 10:48:56 UTC. The live wrapper
+exited 1 with `postrun_accounting_anomaly`; separately, the private-artifact
+auditor v4 exited 0 with `cohort_audit_ok` and emitted redacted aggregate
+results. The wrapper did not exit cleanly. See the
+[audited 30-case reliability result](evidence/reliability-cohort-30.md).
+This result does not revise the separate six-case score or establish
+reliability, improvement, full-benchmark accuracy or competitor performance.
 
 ## Where the evidence lives
 
@@ -104,4 +115,5 @@ promise a relaunch.
 - [First live evidence](evidence/first-live-evidence.md)
 - [Recall-observation pilot](evidence/recall-observation-pilot.md)
 - [Public source-ranking screen](evidence/source-ranking-screen.md)
+- [30-case reliability cohort result](evidence/reliability-cohort-30.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
