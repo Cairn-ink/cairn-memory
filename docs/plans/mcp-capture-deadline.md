@@ -62,7 +62,13 @@ This is cooperative rather than a hard response-time SLA or a billing cap.
   Then explicitly classify inspected current unfiled refs with scripted/fake
   responses: exactly classification work, no capture/extraction replay, no
   receipt changes. The original initial status is not rewritten as recovery
-  history. Repeated/stale/corrected/forgotten refs preserve existing guards.
+  history. Existing revision guards still apply: after explicit filing changes
+  a member revision, public initial-classification inspection becomes unknown;
+  the original stored journal row remains unchanged. This clarifies the prior
+  journal contract, not a new status or relaxed acceptance criterion. The
+  primary's first installed probe incorrectly expected public failed after
+  that revision change; retain that probe-assumption failure. Repeated/stale/
+  corrected/forgotten refs preserve existing guards.
 - H5 — Installed path: build and inspect the local archive, offline-install
   into a fresh temporary project, and exercise the actual installed CLI flag
   and core through stdio with fake provider HTTP. Test at least pre-admission
