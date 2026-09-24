@@ -1,9 +1,10 @@
 # Comparative reliability and lightweight product milestones
 
-Status: proposed sequence; S1 is active but incomplete, and no S1–S5 milestone
-has passed as a whole. See the latest checkpoint and resume protocol below;
-older execution snapshots are explicitly historical. Re-check live PR and CI
-state before resuming.
+Status: proposed sequence; the finite S1 mechanical repair/recovery gate is
+accepted on the current candidate. Semantic reliability and the S2–S5 product
+milestones remain open; the S1–S5 sequence has not passed as a whole. See the
+latest checkpoint and resume protocol below; older execution snapshots are
+explicitly historical. Re-check live PR and CI state before resuming.
 Goal: a lightweight, source-backed memory layer for Hermes and other agent
 harnesses, evaluated against existing solutions under matched conditions.
 
@@ -54,7 +55,59 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after PR #212)
+## Latest checkpoint — 2026-09-25 (after PR #216)
+
+This checkpoint supersedes the execution status of older snapshots below; their
+recorded heads, results and failures remain historical evidence. The following
+candidate PRs are ready, open and unmerged. PR #216's exact-head CI was
+confirmed at this checkpoint; the #213–#215 runs are earlier recorded results,
+not newly rerun checks.
+
+| PR | Candidate head | Recorded exact-head CI |
+| --- | --- | --- |
+| [#213](https://github.com/Cairn-ink/cairn-memory/pull/213) | `709c8f0` | Run `36061875638`, 17/17 passed. |
+| [#214](https://github.com/Cairn-ink/cairn-memory/pull/214) | `d58935f` | Run `36066913111`, 17/17 passed. |
+| [#215](https://github.com/Cairn-ink/cairn-memory/pull/215) | `2f343e3` | Run `36069686325`, 17/17 passed. |
+| [#216](https://github.com/Cairn-ink/cairn-memory/pull/216) | `2b24674` | Run `36072917284`, 17/17 passed. |
+
+The primary accepted S1's finite mechanical gate on the current candidate
+after independent Standards and Spec reviews, a read-only acceptance audit,
+and 22 installed pinned-Hermes tests on each of Node 22.16 and 24.15. Core,
+MCP and native evidence covers bounded canonical source references, observable
+partial admission and initial-classification state, explicit bounded recovery,
+current/stale reference guards, correction and deletion fencing, exact
+namespace privacy and late-write prevention. Repeat-safe recovery protects
+stored state, not exactly-once provider cost: an explicit no-op classification
+can consume another request. The initial journal row stays unchanged after
+later classification; its public view can become `unknown` when a member's
+revision changes through filing or correction. This is synthetic mechanical
+evidence, not a new semantic score, installed real-model reliability result or
+completion of S2–S5. The historical 30-case Cairn outcomes remain 15 correct,
+8 wrong and 7 unresolved.
+
+The next packet is a separately frozen six-case development plumbing smoke,
+one case per existing question type, selected from the retained source after
+excluding 82 previously reserved or used cases. Its plan is in the local,
+unpublished `fresh-reliability-smoke` worktree at freeze `6287e1e` plus
+pricing record `658b3ba`, fixed to `2b24674`; GPT-6 Sol/high owns the bounded
+implementation. No paid run has started. The phase ceiling is US$12 and 2,000
+requests. A source-only projection is 1,172 requests and US$6.781960; it is
+neither actual spending nor a wall-clock prediction. This smoke uses embedded
+default-core capture and recall. It does not exercise native v2 qualification,
+the opt-in whole-capture deadline or explicit recovery as a live model flow.
+It is development plumbing evidence, not a held-out competitor comparison.
+
+The fresh read-only accounting checkpoint recorded US$79.389500 reserved
+against the unchanged US$100 operational ledger limit and US$200 user
+cumulative ceiling, with 11,461 requests terminal. No ledger change, paid
+request, old-cohort rerun, merge, release or deployment follows from this
+documentation update. The S2 matched answer-stage gate, S3 matched Mem0
+comparison, S4 installed growth profile and S5 cold-context onboarding remain
+pending. Recheck the actual ledger, grants, runner and current PR heads before
+any paid phase; no source text, case IDs or private artifact paths belong in
+public reports.
+
+## Previous checkpoint — 2026-09-25 (after PR #212; retained)
 
 Fixed as-of checkpoint; earlier checkpoints below retain their own heads,
 results and failures and were not rechecked here. PR [#212](https://github.com/Cairn-ink/cairn-memory/pull/212)
