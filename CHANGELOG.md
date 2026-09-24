@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — native Hermes capture deadline and explicit recovery
+
+- Add optional `capture_deadline_ms` as a canonical decimal profile string
+  (1–110000) for v2 capture and independent
+  `classification_recovery: guarded-v1`. Native discovery exposes five tools
+  by default, six with capture, seven with recovery or eight with both. The
+  installed MCP owns schemas and operations; passive hooks and defaults stay
+  unchanged.
+- Native classification alone joins capture in the extended 120/125/135-second
+  SDK/helper/provider transport envelope. Only explicit capture, recall and
+  classification receive the dedicated Cairn model key. Pinned Hermes tests
+  exercise setup, guarded discovery, installed deadline/partial-admission
+  lifecycle, cold keyless inspection and scripted explicit recovery with fake
+  provider responses. These checks do not establish a hard return deadline,
+  spending cap, natural model tool choice or semantic quality.
+
 ## Unreleased — explicit local MCP capture deadline
 
 - Accept trusted `captureDeadlineMs` on the local MCP server and canonical
@@ -11,7 +27,8 @@
   pre-admission timeout, durable post-admission partial success, cold keyless
   inspection and explicit classification without source replay. The original
   journal is not recovery history. This is cooperative, not a hard return or
-  API spending cap, and Hermes forwarding and semantic quality remain separate.
+  API spending cap. Native Hermes forwarding is covered separately above;
+  semantic quality remains separate.
 
 ## Unreleased — opt-in capture invocation deadline
 

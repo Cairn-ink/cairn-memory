@@ -40,8 +40,10 @@ parameter, benchmark capability, or diagnostic payload. The monotonic budget
 belongs to one capture invocation; its core-created abort signal retains private
 provenance so a provider error string or external abort cannot authorize case-deadline
 isolation. MCP omission retains the previous default and tool schemas. The
-native Hermes provider still does not forward this option. Its cooperative
-checks are not a hard response-time SLA or API spending cap.
+native Hermes provider also forwards a validated profile-local
+`capture_deadline_ms` string from 1 through 110000 only with v2 capture. It
+adds no model-controlled field or default. Its cooperative checks are not a
+hard response-time SLA or API spending cap.
 
 The optional live public-pilot runner writes a per-case `diagnostics.json` only
 inside its private 0700 run directory. This is benchmark-local observation, not
