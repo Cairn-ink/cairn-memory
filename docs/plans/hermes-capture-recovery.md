@@ -110,7 +110,9 @@ Allow `integrations/hermes/cairn/__init__.py`, `bridge.py`, README and focused
 tests under `integrations/hermes/test/`; technical updates to
 `docs/hermes-memory-provider.md`, `docs/hermes-agent-loop.md`,
 `docs/standalone-mcp.md`, `docs/capture.md`, `docs/limitations.md`,
-`docs/protocol.md`, CHANGELOG and this plan. No core/MCP runtime, prompts,
+`docs/protocol.md`, CHANGELOG, ROADMAP and this plan. ROADMAP is limited to
+the native offline gate/status update required by CONTRIBUTING; preserve
+historical evaluation and pending merge/semantic boundaries. No core/MCP runtime, prompts,
 manifest/dependency changes, Hermes upstream edits, real profile/key/ledger,
 benchmark cases, background queue, package release or deployment.
 
@@ -165,6 +167,19 @@ guarantee. Primary final-candidate acceptance and both independent fixed-diff
 reviews remain required before delivery.
 
 ## Next checkpoint
+
+### First independent review correction
+
+Candidate `d5ffc8f78bebbe70538f591ae70b5dd3eb54678b` passed primary full
+pinned-host acceptance (22/22 on both runtimes), generic and validation gates.
+Independent Spec (GPT-6 Sol/high) passed N1–N6 with no findings. Independent
+Standards (GPT-6 Sol/high) required synchronizing the new native offline gate
+in ROADMAP under CONTRIBUTING, and suggested a clearer name for the timeout
+selector. Before correction implementation, primary added that narrow roadmap
+scope above and accepted renaming local `extended` variables to
+`uses_extended_timeout` in provider/bridge. No behavior, bound or semantic gate
+changes. Rerun native host/generic/validation checks on both runtimes, freeze a
+new candidate, then review both axes again against the original fixed base.
 
 This closes the native offline adoption gap, not all reliability work. Next
 freeze a small fresh real-model development smoke and reconcile existing shared
