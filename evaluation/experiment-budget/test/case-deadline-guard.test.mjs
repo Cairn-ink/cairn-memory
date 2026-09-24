@@ -85,10 +85,11 @@ const persistBoundary = (root, name, value) => {
   return filename;
 };
 
-function fixture(t, { historicalUnknown = false, stageTimeoutMs = 10, answerReservation = 50_000 } = {}) {
+function fixture(t, { historicalUnknown = false, stageTimeoutMs = 10, answerReservation = 50_000,
+  limitMicroUsd = 1_000_000, requestCap = 20 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-case-deadline-red-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 1_000_000, requestCap: 20 };
+  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd, requestCap };
   createExperimentBudget(ledger).close();
   const policy = experimentPolicy();
   createExperimentRequestGuard({ ledger, policy, fetchImpl: () => assert.fail('no transport') }).close();
@@ -428,12 +429,19 @@ test('G3/G6 real core -> OpenAI adapter -> guard brands only the core timer and 
   });
   assert.equal(persisted[0].status, 'timed_out');
   const coreTimeout = guard.transportDiagnostics();
+  const frozenTimeout = JSON.stringify(coreTimeout);
+  assert.equal(Object.isFrozen(coreTimeout), true);
+  assert.equal(Object.isFrozen(coreTimeout.observations), true);
+  assert.equal(Object.isFrozen(coreTimeout.observations.at(-1)), true);
+  assert.throws(() => { coreTimeout.observations.at(-1).termination = 'response'; }, TypeError);
   assert.equal(coreTimeout.observations.at(-1).termination, 'core_deadline');
   assert.equal(coreTimeout.observations.at(-1).accountingOutcome, 'unknown');
   await guard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async () => {
     lateReply(generationResponse());
     await setImmediate();
     assert.equal(admittedA, false);
+    assert.equal(guard.transportDiagnostics().total, 0);
+    assert.equal(JSON.stringify(coreTimeout), frozenTimeout);
     const completed = callModel(adapter, 'extract', 'Synthetic extraction.', input);
     await setImmediate();
     t.mock.timers.tick(5);
@@ -441,6 +449,9 @@ test('G3/G6 real core -> OpenAI adapter -> guard brands only the core timer and 
   });
   assert.equal(admittedA, false);
   assert.equal(calls.length, 4);
+  assert.equal(JSON.stringify(coreTimeout), frozenTimeout);
+  assert.deepEqual(guard.transportDiagnostics().observations.map(row => [row.scopeOrdinal, row.route]),
+    [[1, 'count'], [1, 'generation']]);
   assert.equal(guard.caseTimeouts()[0].termination, 'core_deadline');
   assert.deepEqual(guard.attempts().map(attempt => attempt.outcome),
     ['succeeded', 'unknown', 'succeeded', 'succeeded']);
@@ -776,4 +787,37 @@ test('TD2 opt-in count and validated generation methods preserve request and led
     [route, method, accountingOutcome]), [
     ['count', 'unknown', 'succeeded'], ['generation', 'extract', 'succeeded']]);
   assert.equal(off.diagnostic, undefined);
+});
+
+test('TD2/TD5 real guard ring retains the 257th failed fake-HTTP attempt and its reservation', async (t) => {
+  const f = fixture(t, { stageTimeoutMs: 60_000, limitMicroUsd: 20_000_000, requestCap: 300 });
+  let calls = 0;
+  const guard = make(f, () => {
+    calls += 1;
+    if (calls === 257) throw new Error('synthetic transport failure');
+    return response();
+  }, 'bounded-v1');
+  t.after(() => guard.close());
+  await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
+    for (let index = 0; index < 256; index += 1) {
+      const result = await guard.answerFetch(url, request());
+      assert.equal(result.status, 200);
+    }
+    await assert.rejects(guard.answerFetch(url, request()), guardError('transport_failed'));
+  });
+  const snapshot = guard.transportDiagnostics();
+  assert.equal(calls, 257);
+  assert.equal(snapshot.scopeOrdinal, 0);
+  assert.equal(snapshot.phase, 'generation');
+  assert.equal(snapshot.total, 257);
+  assert.equal(snapshot.dropped, 1);
+  assert.equal(snapshot.observations.length, 256);
+  assert.equal(snapshot.observations[0].attemptOrdinal, 1);
+  assert.equal(snapshot.observations.at(-1).attemptOrdinal, 256);
+  assert.equal(snapshot.observations.at(-1).termination, 'transport_failure');
+  assert.equal(snapshot.observations.at(-1).accountingOutcome, 'unknown');
+  assert.equal(snapshot.observations.at(-1).responseAvailableMs, null);
+  assert.equal(guard.isHalted(), true);
+  assert.equal(state(f.ledger).requestCount, 257);
+  assert.equal(state(f.ledger).attempts.at(-1).outcome, 'unknown');
 });

@@ -3,7 +3,7 @@
 ## Unreleased — bounded transport observations
 
 - Add optional `bounded-v1` transport milestones to the one-shot case-deadline
-  guard and `--transport-diagnostics bounded-v1` to the offline public-pilot
+  guard and `--transport-diagnostics bounded-v1` to the guarded public-pilot
   runner. Only private generation diagnostics gain bounded, content-free rows;
   default output, scoring and request/accounting rules are unchanged. This is
   not a provider-root-cause finding or a core timeout/quality fix.

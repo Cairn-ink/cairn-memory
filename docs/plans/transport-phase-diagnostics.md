@@ -51,7 +51,8 @@ path, not provider-root-cause evidence or a new paid authority.
   overflow retaining the final failure. Actual public-pilot fake-HTTP tests
   show absent/default versus enabled private transport, unchanged score
   results and no sensitive literal leakage. CLI tests cover invalid opt-in and
-  dry-run safety. Existing deadline tests remain unchanged.
+  dry-run safety. Existing deadline semantics and assertions are retained;
+  relevant tests add observation assertions.
 - TD6: Both Node 22.16 and 24.15 pass generic tests, JSON and strict plugin
   validation, experiment-budget suite/demo, request-guard suite/demo, and
   live-evidence-offline suite with isolated adapters installed. Focused tests
