@@ -274,9 +274,11 @@ deletion, namespace, current/history and unadopted-proposal eligibility.
    relation-creation cost and errors. Hand-checked links may set a diagnostic
    ceiling only; the scored product path creates its own relations without
    oracle edge annotations in held-out model inputs.
-   Before held-out scoring, freeze the relation-generation model/version,
-   prompt, acceptance rules and configuration, plus the flat baseline's exact
-   retrieval configuration, roster, metrics and thresholds.
+   Before each scored development or held-out run, freeze both arms' rosters,
+   relation-generation model/version, prompt, acceptance rules and configuration,
+   the flat retrieval configuration, metrics, thresholds and resource ceilings.
+   Development revisions may inform a later fresh holdout; never tune on a
+   revealed holdout.
    Score correct version, supported citation, false merges, stale or out-of-scope
    answers, abstention, completion and total cost. Promote only if source
    fidelity and safety gates hold and the prespecified paired decision rule
