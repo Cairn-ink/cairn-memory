@@ -131,6 +131,39 @@ base/head using Sol6/high; correct findings with affected rechecks and both
 reviews. Open a dependent draft PR against feat/mcp-capture-deadline, monitor
 exact-head CI and current mergeability before ready; do not merge.
 
+## Implementation and verification record
+
+GPT-6 Sol/high implemented the bounded native provider and bridge changes in
+the isolated `feat/hermes-capture-recovery` worktree from the fixed base above.
+The only production code changes are `integrations/hermes/cairn/__init__.py`
+and `bridge.py`; no core, MCP, prompt, manifest or Hermes upstream runtime was
+changed. Full pinned-host call-site tracing covered native setup, schema
+discovery, MemoryManager registration and dispatch, AIAgent tool routing,
+SDK/helper envelopes, credential forwarding and session/profile fencing.
+
+The independently built private archive SHA-256 is
+`f77d837dc8940e94535d227e27e272863ffc47c5af0397d21a7e6e4398a5b8ad`.
+It was offline installed into a fresh temporary project; all 72 listed
+packaged source-file hashes matched. On **each** of Node 22.16.0 and 24.15.0:
+
+| Gate | Result |
+| --- | --- |
+| Pinned Hermes canonical `scripts/run_tests.sh` on all five native test files, `--file-retries 0` | 22 passed, 0 failed |
+| Generic `npm test`; `npm run validate`; strict plugin validation | 112 passed; JSON and strict plugin validation passed |
+| Full `npm run test:mcp`; full `npm run test:artifact` | 91 passed; 70 passed |
+| `demo:store`, `demo:admission`, `demo:moc`, `demo:capture` | All passed with synthetic temporary databases |
+
+Hermes's source archive lacks `.git`, so its optional bytecode-precompile
+step prints a warning; the canonical test runner still executes and exits
+successfully. The deadline test observed the intended fake model stages and
+actual late completion before checking that no late writes appeared. Cold
+inspection made no provider request. Synthetic credentials were removed before
+non-fake launches. No real key, paid request, production profile, ledger,
+release, push or merge was used by the implementation worker. These results
+are mechanical integration evidence, not semantic quality or a hard latency
+guarantee. Primary final-candidate acceptance and both independent fixed-diff
+reviews remain required before delivery.
+
 ## Next checkpoint
 
 This closes the native offline adoption gap, not all reliability work. Next

@@ -197,8 +197,8 @@ The initial capture attempt has a durable bounded journal, but it is not a
 recovery queue or durable history of explicit retries. There is still no
 default whole-capture 30-second deadline; the optional invocation budget below
 is separate from this explicit classification tool and does not make S1 complete.
-The native Hermes provider does not currently forward the
-classification-recovery opt-in; this interface is the local core/MCP path.
+The native Hermes provider can expose these two installed MCP tools through
+its independent `classification_recovery: guarded-v1` profile setting.
 
 If a trusted local caller uses [core supersession](supersession.md), inspection
 also includes labeled historical memories. List pages remain metadata-only;
@@ -318,6 +318,10 @@ reports the number only when configured, without opening storage or contacting
 a provider. Omitting it leaves the tool inventory, schemas and default capture
 behavior unchanged. It does not enable capture, inspection or recovery by
 itself; capture qualification must be selected explicitly.
+The separate [native Hermes provider](../integrations/hermes/cairn/README.md)
+accepts a profile string from 1 through 110000 with v2 capture, leaving a
+nominal margin below its SDK timeout. Its recovery setting is also an explicit
+profile opt-in; these MCP flags do not configure a Hermes profile.
 
 The shared core uses one monotonic cooperative budget per capture, including
 extraction, qualification, admission, initial classification and any configured
@@ -338,8 +342,9 @@ Synchronous token counting and SQLite work are checked cooperatively, not
 preempted mid-instruction. Leave a suitable client transport timeout margin for
 startup, synchronous work and cleanup; the existing longer-client-timeout advice
 still applies. This option is neither a hard wall-clock return guarantee nor an
-API spending cap. The native Hermes provider does not yet forward it, and these
-mechanical checks do not establish semantic capture quality or S1 completion.
+API spending cap. The native Hermes provider forwards its separately validated
+v2-only profile string up to 110000 milliseconds; these mechanical checks do
+not establish semantic capture quality or S1 completion.
 
 ### Optional staged source inspection
 
