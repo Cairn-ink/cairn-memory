@@ -61,14 +61,15 @@ results and failures and were not rechecked here. PR [#212](https://github.com/C
 is ready, open, unmerged and mergeable at `a6f8bfc3176f9ca8f64ebbcd888e58a920b5e3da`,
 based on `c118c0f0fd70af01c63ea1339305de03eeb84c94`. CI run `36056945007`,
 attempt 1, passed 17/17. Separate full-base Standards and Spec reviews
-(GPT-6 Sol/high) passed with zero findings. On runtime-identical candidate
-`08e82c7` (differing only in three documentation files), primary generic checks
-passed 127/127 on Node 22.16 and 24.15; JSON and strict plugin validation also
-passed on both. This documentation checkpoint passed `npm test` (106/106),
-`npm run validate` and `npm run validate --prefix tools/plugin-validation` on
-Node 22.16.0 and 24.15.0, plus `git diff --check`. No merge, release, deployment,
-paid request, ledger edit, old-cohort rerun, semantic score or S1–S5 milestone
-pass is recorded.
+(GPT-6 Sol/high) passed with zero findings. Primary verification of final head
+`a6f8bfc` passed `npm test` (127/127), JSON validation and strict plugin
+validation on Node 22.16 and 24.15. Full CLI and focused runtime measurements
+used runtime-identical candidate `08e82c7` (the final head differs only in
+documentation). In this documentation worktree, `npm test` passed 106/106;
+`npm run validate` and `npm run validate --prefix tools/plugin-validation`
+also passed on Node 22.16.0 and 24.15.0, along with `git diff --check`. No
+merge, release, deployment, paid request, ledger edit, old-cohort rerun,
+semantic score or S1–S5 milestone pass is recorded.
 
 ### Latest completed S2 offline diagnostic: incremental candidate index (PR #212)
 
@@ -85,7 +86,7 @@ not a pure index-overhead measure. This is synthetic retrieval evidence, not a
 production selector, semantic QA result, production promotion or S2 answer-stage
 pass. Retained PR #208 failures and older results below are unchanged.
 
-### Next S1 packet: initial capture classification journal (assigned, not started)
+### Next S1 packet: initial capture classification journal (implementation in progress)
 
 The frozen assignment is in the local, unpublished `capture-classification-journal`
 worktree: freeze `c4dd8850e435bf3752b52f6a72154ef56aeed100` plus preimplementation
@@ -101,9 +102,10 @@ stay unknown. The journal is not a recovery queue, replay mechanism or new
 classification attribution path. Whole-capture deadline and explicit-recovery
 semantics remain later work.
 
-No implementation or runtime gate is accepted for this packet. Resume by
-checking the frozen assignment and current branch state against that plan; the
-primary is accepting migration and crash-probe work. Do not claim an S1 pass.
+Implementation is in progress; no implementation or runtime gate is accepted
+for this packet. Resume by checking the frozen assignment and current branch
+state against that plan; the primary is accepting migration and crash-probe
+work. Do not claim an S1 pass.
 After this journal slice, interruption/recovery and deadline work, then fresh
 frozen semantic-comparison gates, remain required. S1, the later S2 answer-stage,
 S3 matched Mem0, S4 installed growth and S5 cold-context onboarding remain
@@ -112,7 +114,28 @@ operational ledger US$100 pending review, and reserved spend US$79.389500.
 Verify the actual ledger and guard before any paid phase. No new paid call,
 ledger change, old-cohort rerun, merge or release is authorized by this checkpoint.
 
-## Previous checkpoint — 2026-09-25 (retained; not refreshed here)
+## Previous checkpoint — 2026-09-25 (after PR #211; retained)
+
+This prior fixed checkpoint recorded PR [#211](https://github.com/Cairn-ink/cairn-memory/pull/211)
+ready and unmerged at `632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`; CI run
+`36051396331`, attempt 1, passed 17/17. Separate Standards/Spec reviews
+(GPT-6 Sol/high) passed with zero findings. Primary gates reported 168
+request-guard checks, generic tests 112/112, JSON and strict plugin validation
+on Node 22.16 and 24.15. On the prior runtime-identical candidate,
+live-evidence-offline had 335 total (305 passed, 30 existing opt-in skips), and
+the budget suite passed 15/15 on both runtimes; these suites were not rerun
+after its final test/docs delta.
+
+PR #211 added opt-in `bounded-v1` private-generation diagnostics: a per-case
+ring capped at 256 records for fetch entry, response availability, body-read
+completion, settlement attempt and accounting outcome. It persists no source
+text, case IDs, URLs, model identifiers or usage; it changes no timeout, retry,
+cap, scoring or ledger behavior. CLI output requires complete `case-deadline`
+flags; generation detail remains private-generation-only. The milestones do
+not prove network transmission, provider receipt/billing or semantic success.
+S1 recovery and the durable classification journal remained open.
+
+## Earlier checkpoint — 2026-09-25 (after PR #210; retained)
 
 This checkpoint was refreshed after checking the remote PR heads and workflow
 runs below. The four listed PRs are open and unmerged; no merge, release,

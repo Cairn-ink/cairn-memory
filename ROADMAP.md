@@ -39,8 +39,9 @@ Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-re
 records the latest fixed checkpoint and earlier evidence snapshots. PR #212 is
 ready, open, unmerged and mergeable at `a6f8bfc3176f9ca8f64ebbcd888e58a920b5e3da`;
 CI run `36056945007`, attempt 1, passed 17/17, and full-base Standards/Spec
-reviews passed with zero findings. Primary generic (127/127), JSON and strict
-plugin checks passed on Node 22.16 and 24.15 on a runtime-identical candidate.
+reviews passed with zero findings. Primary `npm test` (127/127), JSON and strict
+plugin checks passed on Node 22.16 and 24.15 on final head `a6f8bfc`. The full
+CLI and focused runtime checks used runtime-identical candidate `08e82c7`.
 The synthetic incremental-index CLI passed at 100/1,000/10,000; its mixed query
 performance, lexical false positives, unsupported CJK, copied full text and
 inclusive database growth do not establish a production selector, semantic QA
@@ -55,9 +56,10 @@ Its frozen contract lives at
 `c4dd8850e435bf3752b52f6a72154ef56aeed100`, plus manifest clarification
 `6ea5b90`). CJ1–CJ6 cover a source-free initial-classification journal,
 transactional admission/placement, v13-to-v14 migration and opt-in cold
-inspection; default and legacy/manual records remain unknown. It is assigned,
-not implemented or verified. Do not claim an S1 pass. Deadline/recovery and
-fresh frozen semantic-comparison gates remain later work.
+inspection; default and legacy/manual records remain unknown. This active
+assignment is in progress; no implementation/runtime gate is accepted.
+Do not claim an S1 pass. Deadline/recovery and fresh frozen semantic-comparison
+gates remain later work.
 
 Budget was not reread: last-recorded authority is US$200 cumulative, operational
 ledger US$100 pending review, and reserved spend US$79.389500. Verify the actual
