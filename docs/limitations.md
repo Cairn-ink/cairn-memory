@@ -351,6 +351,71 @@ combined with this v2 roster or identity. Any future score requires a new
 prospectively frozen and independently reviewed protocol and separate
 authorization.
 
+## Offline candidate retrieval ablation (synthetic v2)
+
+The [frozen packet](plans/candidate-retrieval-ablation.md) compares actual public
+`core.recall` (first-visible scripted selection/ranking) with two independent
+in-memory SQLite FTS5 candidate indexes: flat BM25 and MOC-title routing plus
+bounded global fallback, each with global alias expansion off/on. No provider,
+answer model or paid call was used. The v1 fixture was corrected before any
+result run to add a pure alias query and an animal sense of `seal`; v2 was then
+frozen. The local run on Node 22.16 projected 1,040 current source-backed rows
+through 11 public map pages (1,044 map items, 1,040 `get` reads) and built four
+L1 MOC branches. No L2 navigation was measured. Each indexed query materialized
+at most 24 rows and returned at most five. The MOC arm also has eight-row
+branch/global query caps, which may bind before the combined 24-row cap;
+reaching a cap means more matches may be unseen. Index build and query timings
+in the report are local diagnostics;
+admission setup, SQLite's internal posting work and provider token use were
+not measured. The core's two-map, 200-visible and 24-scripted-fetch work is not
+compute-equivalent to indexed retrieval.
+
+The late-prefix query missed in scripted `core.recall` (`any@5=false`,
+`coverage=budget_exhausted`) and was reached by both indexed methods with or
+without aliases. The pure `car` query was missed by baseline and both no-alias
+indexes; both alias-on indexes found its automobile source. The mixed
+`car permit` query was already reachable without alias expansion, so it cannot
+isolate the alias effect. Exact lexical, ambiguous-seal, wrong-branch and
+two-source queries were reached by both indexed methods. The wrong-branch MOC
+case used its reserved global fallback to reach the source; the route itself
+selected an unrelated branch. This is a fallback control, not evidence that
+hierarchical routing improved retrieval. Most queries did not match a MOC title
+and used the global path; this packet offers no observed MOC advantage over the
+flat index. The two-source case happened to retrieve both passages; the
+evaluator separately verifies that one of two would mean `any@5=true` and
+`all@5=false`.
+
+Both Chinese query cases missed in all indexed cells and the scripted baseline.
+The exact human phrase is embedded within a longer continuous Chinese run, and
+the partial phrase is still shorter. FTS5 `unicode61` and the core's whole-run
+lexical policy do not segment them at those internal boundaries. No Chinese
+retrieval capability is established. The `stamp` alias can expand to `seal`,
+which applies to both the intended wax seal and the animal distractor; reaching
+the expected source does not disambiguate the sense. The no-answer query
+returned five non-target candidates in each arm. Returning a source candidate
+is not evidence that a system would answer correctly or abstain.
+
+Public forget, correction, supersession and foreign-namespace controls were
+applied before the independent indexes were rebuilt from the fully paginated
+current map projection. Deleted, historical and foreign target IDs were absent;
+the corrected row's obsolete text and receipt were absent. Queries for old
+correction and supersession terms still retrieved one *other/current* row each
+through broad OR matching. The evaluator records those as one false positive,
+not as a lifecycle leak. The scripted baseline returned five unrelated
+candidates for every zero-target control. These local controls do not establish
+privacy or deletion properties of a future product index, incremental update
+path, concurrent writer or old pilot data.
+
+The packet is a capacity and source-reachability diagnostic with fixed synthetic
+placements, scripted selection, no held-out cases and no semantic judge. It does
+not complete S1/S2 retrieval quality, classifier quality, integration or live
+latency gates. A product candidate path would need bounded current-source
+index maintenance and explicit freshness/namespace checks; this experiment
+does not authorize changing default recall. The immediately supported design
+direction is to prototype a flat, source-aware bounded candidate index with
+explicit lifecycle rebuild/freshness rules, while leaving MOC routing and CJK
+segmentation as separate hypotheses for new frozen tests.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

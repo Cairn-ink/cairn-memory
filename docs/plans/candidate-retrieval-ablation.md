@@ -28,9 +28,10 @@ offline search indexes from that current projection. This is a fresh experiment
 index, not an incremental product index or a general snapshot API.
 
 Compare (1) real `core.recall` with deterministic first-visible selection and
-ranking, (2) an independent SQLite FTS5/BM25 flat index, and (3) a two-level
-MOC-title route followed by branch-local FTS5/BM25 plus a global fallback. The
-two indexed arms share the same projected memory/source/topic text. The four
+ranking, (2) an independent SQLite FTS5/BM25 flat index, and (3) an L1
+MOC-title route followed by branch-local FTS5/BM25 plus a global fallback.
+No L2 navigation is built in this packet. The two indexed arms share the same
+projected memory/source/topic text. The four
 indexed cells cross flat/MOC-first with alias expansion off/on. The predeclared
 aliases are global query expansions for both arms, never per-case target keys.
 MOC titles and memberships are hand placed diagnostic inputs, not measured
@@ -58,8 +59,9 @@ indexed row count, indexed build/query time, rows indexed, and local model-call
 count. No provider call or paid request is allowed. Source and memory lengths
 remain bounded by their public API. A local millisecond measurement is not a
 latency or token-cost estimate; SQLite's internal posting work and token usage
-are unknown. FTS5 `unicode61` has limited CJK word segmentation; report exact
-and partial-Chinese cases separately.
+are unknown. SQLite's [FTS5 `unicode61` tokenizer](https://www.sqlite.org/fts5.html#unicode61_tokenizer)
+treats a continuous run of letters as one token, limiting these CJK matches;
+report exact and partial-Chinese cases separately.
 
 Reports may contain only frozen names, finite counts, caps, booleans and closed
 statuses, with no source/question/answer text, generated IDs, paths or hashes.
