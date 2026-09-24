@@ -11,6 +11,23 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
+uses scripted model callbacks and fresh temporary stores to show where fixed
+source receipts stop moving through capture, recall and answer packing. It adds
+no quality score and measures no semantic accuracy. A source-to-receipt link
+does not prove that the needed fact, qualification or meaning was retained.
+An unobserved downstream stage is unknown, including when classification
+failure stops the public comparison before recall. The harness cannot diagnose
+the historical eight wrong questions or support a product reliability claim.
+Its small capture-based fixtures do not test candidate discovery beyond the
+index scan prefix. A separate direct-admit synthetic capacity diagnostic put
+1,025 current unfiled memories in one namespace; a query for the memory beyond
+the first 1,024 scanned IDs was not visible in two map pages and recall reported
+`budget_exhausted`. After one different low-ID memory was forgotten, the same
+target became visible and returned with 1,024 current rows. This demonstrates
+a scan-prefix boundary, not a diagnosis of past wrong answers. A positive
+beyond-prefix regression is needed before changing candidate retrieval.
+
 The optional [Python reference sidecar](official-reference-rendering.md)
 preserves number/array rendering from original JSON for official-style judging.
 It is evaluator-only and requires an independently pinned sidecar digest.
