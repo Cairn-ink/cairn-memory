@@ -95,6 +95,12 @@ one small private deadline helper if needed and only its path in the artifact
 manifest; new focused core tests and directly affected compatibility tests;
 focused MCP/installed integration tests without exposing a new host option;
 technical capture/local-store/protocol/limitations docs, CHANGELOG and this plan.
+Primary-approved pre-edit clarification: the existing
+`evaluation/experiment-budget/test/case-deadline-guard.test.mjs` may add a
+synthetic whole-capture-deadline regression proving real core -> OpenAI adapter
+-> fake-HTTP guard abort provenance and conservative settlement. This is test
+coverage of D2/D6, not a guard/policy/ledger implementation change. Its existing
+inclusion in `test:experiment-request-guard` needs no script change.
 No schema migration, dependencies, model prompts, retrieval/query strategy,
 scorer, old cohort, real ledger, host timeout/default, hosted API or product-copy
 change. Any additional shared file needs primary rescoping before modification.
