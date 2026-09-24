@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — explicit local MCP classification
+
+- Add an opt-in `classify_unfiled_memories` tool for one to five inspected,
+  current unfiled references in the configured namespace. It composes existing
+  core classification and placement guards, reports actual resulting filing
+  state, and leaves capture and receipts untouched.
+- Synthetic SDK, stdio and race checks cover cold recovery and stale or deleted
+  references. No batch journal, automatic retry, provider-quality claim or
+  repair of historical evaluation outcomes is included.
+
 ## Unreleased — classification batch cardinality
 
 - Bind the optional OpenAI classification response schema to exactly the

@@ -286,6 +286,17 @@ currently reads one catalog page, with no public continuation for that private
 catalog cursor; an incomplete map cannot propose new topics. These are product
 boundaries to test separately from the pilot's whole-run stop policy.
 
+The opt-in local MCP `classify_unfiled_memories` tool can explicitly place
+retained current unfiled references under core revision guards. It is a general
+placement action, not verification of a failed capture batch. There is still no
+durable classification outcome or incomplete-work journal for lost capture
+responses and crashes. A whole capture may run several separately bounded model
+stages, so it has no single 30-second deadline. Concurrent explicit requests
+may duplicate provider work. Stale guards prevent a second conflicting change,
+but no-op proposals can both succeed. An applied empty-parent proposal can
+remain unfiled and be classified again by another explicit call. These limits
+leave S1 incomplete and do not repair or rerun any historical pilot result.
+
 The optional OpenAI adapter now requires the response array length to equal
 the distinct target count for zero through five classification targets, and
 rejects duplicate or oversized direct target lists before HTTP. Core still

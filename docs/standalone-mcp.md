@@ -113,6 +113,7 @@ someone who can edit your process configuration or read your database file.
 | recall_memory | query, optional limit (1–12), includeQualification, contextMode, selectionMode | Same bounded model-driven core recall; source qualification defaults on with qualified capture unless source context is resolved |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
+| classify_unfiled_memories (opt-in only) | refs: 1–5 unique memoryId/revision pairs | Explicit, guarded model classification and placement of current unfiled memories |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
@@ -125,6 +126,45 @@ Tool results carry the core success/error envelope as JSON text. Memory content
 and receipts are explicitly untrusted data, not instructions for the client.
 Tool receipt text is the supplied assertion, not proof that the assertion is true
 or an authenticated transcript of what a human said.
+
+### Explicit classification of unfiled memories
+
+Add `--classification-recovery guarded-v1`, or set
+`classificationRecovery: 'guarded-v1'` on `createCairnServer`, to expose
+`classify_unfiled_memories`. The option is independent of capture. A keyless
+server still offers inspection; calling classification without a model returns
+`model_not_configured`. `--check-config` reports the option and whether a model
+key is present without opening the database or contacting a provider.
+
+Inspect each memory first, then explicitly submit its current reference:
+
+```json
+{"refs":[{"memoryId":"id-from-inspection","revision":1}]}
+```
+
+The tool accepts one to five distinct references in the server's configured
+namespace. It checks all are present, active, at those exact revisions and
+unfiled before contacting the model. The model sees bounded current memory
+content, classification metadata and the existing topic catalog; this may incur provider
+charges, and this host has no account spending cap. The core checks revisions
+again during classification and atomic placement. Concurrent calls may both
+spend model requests. If one changes placement, the other's stale guards stop
+a conflicting change; no-op proposals can both succeed. A stale reference must
+be inspected again; an already filed memory is ineligible. The tool never
+retries automatically.
+A correction invalidates its old reference, while a fresh inspected reference
+to the corrected active unfiled memory can be classified without changing its
+corrected content or source receipts.
+
+The result reports `status: "applied"` for the placement operation and returns
+actual memory revisions, filing statuses and placement metadata. An applied
+proposal with no parent can leave a memory unfiled. Another explicit request
+with the same refs can classify it again. Applied does not certify filing quality
+or source truth. This tool does not extract, admit, recapture,
+change receipts, review rationale, prove a failed capture batch or treat
+remembered consent as authority. Capture duplicate behavior is unchanged.
+There is no durable incomplete-classification journal or whole-capture 30-second
+deadline; this is a bounded explicit operation, not S1 completion.
 
 If a trusted local caller uses [core supersession](supersession.md), inspection
 also includes labeled historical memories. List pages remain metadata-only;

@@ -420,6 +420,30 @@ adopted label is not execution authority. No telemetry,
 hosted plugin/HTTP schema change, account authority or execution consent is
 introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-capture).
 
+### Opt-in local MCP classification placement
+
+The separate local stdio MCP server can opt into `classify_unfiled_memories`
+with `classificationRecovery: 'guarded-v1'` or
+`--classification-recovery guarded-v1`, independently of capture. The tool
+accepts only one to five unique memory ID/revision pairs. Its namespace is
+bound at server startup; it rejects missing, deleted, historical, stale or
+filed records before model work. A correction invalidates the old revision,
+but a freshly inspected corrected memory remains eligible if active and
+unfiled. It then uses the existing public core
+classification and atomic placement revision guards. The selected current
+memory content and topic catalog may be sent to the configured provider and
+incur charges. Two concurrent explicit requests may both consume a model call;
+if one changes placement, stale guards prevent a second conflicting change.
+No-op proposals may both succeed. The response reports the actual placement
+and filing status, including a valid applied result that remains unfiled and
+can be classified again by another explicit call with the same reference.
+
+This operation does not replay capture, alter source receipts, infer batch
+membership, settle currentness or authenticate remembered consent. It adds no
+hosted HTTP, plugin, telemetry, core or database field. Incomplete classification
+is not durably journaled, and no old evaluation is retried. See
+[the local MCP tool](standalone-mcp.md#explicit-classification-of-unfiled-memories).
+
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
 
 ### Opt-in local source evidence context
