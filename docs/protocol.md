@@ -1,5 +1,21 @@
 # Compatibility protocol v0.1
 
+### Offline synthetic evidence-lineage boundary
+
+The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through
+the embedded core and the existing public comparison. It uses a fresh temporary
+store, scripted callbacks and no provider credentials or historical data. The
+report contains only fixed scenario names, fixture-local source ordinals, counts,
+closed statuses and explicit unknown/overflow markers. Source, question and
+answer text, identifiers, paths, raw errors and source-derived hashes are excluded;
+transient identifiers are used only to join capture receipts to later refs and
+answer-packed receipts while the case runs. The observer wrappers do not change
+model requests, return values or call order. This local diagnostic adds no core,
+MCP, HTTP or hosted telemetry field, and captured metadata must never enter
+hosted telemetry. Linked evidence proves provenance plumbing, not semantic
+truth or answer correctness. An unobserved stage is unknown, not a measured
+zero or loss.
+
 ### Experimental public-pilot answer boundary
 
 The evaluation-only public comparison and pilot accept an explicit
