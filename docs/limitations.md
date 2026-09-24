@@ -269,6 +269,14 @@ currently reads one catalog page, with no public continuation for that private
 catalog cursor; an incomplete map cannot propose new topics. These are product
 boundaries to test separately from the pilot's whole-run stop policy.
 
+The optional OpenAI adapter now requires the response array length to equal
+the distinct target count for zero through five classification targets, and
+rejects duplicate or oversized direct target lists before HTTP. Core still
+validates exact target coverage, including repeated IDs, after the model call.
+This prospective schema constraint does not explain why the pilot produced
+malformed `UNKNOWN`, or change its partial result, stop policy or score
+denominators.
+
 The rejected provider response and its exact token count were not retained.
 Database size and a matching synthetic rejection do not establish that the
 historical response exceeded the token ceiling. Neither a deterministic repeat

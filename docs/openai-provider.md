@@ -152,6 +152,16 @@ fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
 
+Classification also requires exactly one output item per distinct target memory
+in the detached zero-to-five-target request. Duplicate or oversized direct
+adapter target lists fail before HTTP. The array schema constrains length and
+individual IDs; core still rejects omitted, repeated or forged target coverage
+and invalid topic relationships. A failed classification after capture admission
+leaves the admitted source memory inspectable and unfiled; replaying its event
+does not retry classification. This reduces one avoidable malformed-output path
+but does not establish the cause of any historical provider failure or improve
+measured memory quality.
+
 Classification alone uses deterministic request-local short aliases for the
 target-memory IDs and visible catalog-MOC IDs sent in the input and strict output
 schema. Memory and MOC aliases use separate roles. The adapter validates output
