@@ -107,6 +107,14 @@ pending. Recheck the actual ledger, grants, runner and current PR heads before
 any paid phase; no source text, case IDs or private artifact paths belong in
 public reports.
 
+Review correction scope, frozen before edits: independent Standards and Spec
+reviews of `55e2b3b` both found that ROADMAP still presented the #212 checkpoint
+as current. The primary's initial checkpoint assignment was too narrow. Update
+ROADMAP's current status to this after-#216 checkpoint, preserving the prior
+index diagnostic and unexplained tokenizer failure as historical evidence.
+No runtime or paid-work change is included. Reverify contributor checks on
+both runtimes and rerun both full original-base review axes on the new head.
+
 ## Previous checkpoint — 2026-09-25 (after PR #212; retained)
 
 Fixed as-of checkpoint; earlier checkpoints below retain their own heads,
