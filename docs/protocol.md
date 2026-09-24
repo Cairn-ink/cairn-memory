@@ -138,6 +138,15 @@ from a global safety halt; they do not establish provider cancellation, zero
 cost, semantic correctness, permission to retry or authority to resume an old
 run.
 
+Explicit case-deadline transport observations add only bounded ordinals,
+closed route/method/termination/accounting enums and monotonic elapsed
+milestones to the private generation diagnostics. They contain no case or
+attempt identifiers, provider/model IDs, payloads, URLs, headers, usage or raw
+errors. The response milestone is availability to the guard, not a provider
+processing timestamp; a settlement milestone is not evidence of a successful
+ledger write unless its accounting outcome is non-null. Observation failure
+cannot grant a request or change the original fail-closed guard outcome.
+
 An admitted-reference count describes references accepted by core admission,
 not newly created memories or retained-message coverage. A content-deduplicated
 memory can contribute a reference, partial extraction can omit source messages,

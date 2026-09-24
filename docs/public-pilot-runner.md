@@ -27,6 +27,7 @@ artifacts of a small plumbing pilot; nothing here is a leaderboard result.
 | Provenance | `--run-commit <sha>`, `--exclusions-file <json array>` | Recorded in `manifest.json` and `report.json` |
 | Answer boundary | `--answer-template-version cairn-longmemeval-public-answer-v2` | Experimental opt-in; omission is v1, and v1/v2 runs and scores are not comparable |
 | Case deadlines | `--case-timeout-policy case-deadline-v1` plus `--case-authorization-id`, `--execution-id`, `--expected-request-count`, and `--expected-reserved-micro-usd` | All five are required. The capability and live session are one-shot: output must be new and the run cannot be resumed, retried or moved to another directory |
+| Transport observations | `--transport-diagnostics bounded-v1` | Optional only with the complete case-deadline opt-in. Dry-run reports the request without claiming or sending. A live run adds a bounded, content-free `transport` subsection only to private per-case generation `diagnostics.json`; no scoring artifact is added. |
 | Merge | `--merge /private/run-a,/private/run-b --output /private/merged` | Offline; no key, no ledger; only `--output` may accompany it |
 
 Safe launch (no request is sent until the ledger, the extension and the
@@ -178,6 +179,16 @@ records only `finishReason: stop|length` or `availability: unavailable`.
 The ordinary answer callback remains exactly `{text,usage}`, and neither
 diagnostic changes answer text, score input, request bodies, limits, arm order,
 guard accounting or retry policy.
+
+In explicitly enabled case-deadline runs, `transport` records only the latest
+generation scope (including answer requests), up to 256 recent attempt rows
+with total/dropped counts. Elapsed milestones are monotonic guard observations,
+not a provider/network trace or evidence of provider cancellation. A valid
+response becoming available to the guard does not prove wire/provider timing;
+`settledMs` can mark a failed ledger write, in which case
+`accountingOutcome` stays null. It is omitted for default, legacy and custom
+sessions. The runner still writes `diagnostics.json` last, after accounting and
+timings; aggregate scores and public report shape stay unchanged.
 
 Fresh generated cases also contain `recallStages`, versioned as
 `cairn-recall-stage-observation-v1`. Its selection section retains at most the

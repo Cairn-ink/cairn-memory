@@ -441,6 +441,23 @@ The additional fixed codes are `invalid_capability`, `capability_busy`,
 `case_deadline_exceeded`. Existing `guard_busy` and `paid_work_halted` retain
 their fixed content-free form.
 
+An optional `transportDiagnostics: 'bounded-v1'` is accepted only by
+`createCaseDeadlineExperimentRequestGuard` (and its trusted live session).
+Invalid or explicitly null values fail before the one-shot claim. Omission
+adds no getter or observations. The enabled guard's read-only
+`transportDiagnostics()` returns the current/latest schedule scope, with at
+most the last 256 attempt rows and explicit total/dropped counts. Rows contain
+only schedule/attempt ordinals, phase, closed route and validated method enums,
+monotonic elapsed `fetchEnteredMs`, `responseAvailableMs`, `bodyCompleteMs`,
+`settledMs` milestones (null if unreached), termination and accounting outcome.
+`responseAvailableMs` means a valid `Response` reached the guard, not that a
+provider completed work at that instant. `settledMs` marks the accounting
+settlement attempt; `accountingOutcome: null` means settlement did not confirm
+an outcome. An unavailable observation returns null rather than stale scope
+data. No caller callback, raw request or provider text enters the collector.
+This changes no deadline, retry, reservation or halt rule. See the
+[bounded diagnostic plan](plans/transport-phase-diagnostics.md).
+
 ## Limits that must remain visible
 
 The invariant is a cap on reserved, declared upper bounds, not a guarantee about

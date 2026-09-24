@@ -421,13 +421,21 @@ export function createBenchmarkLiveSession(options = {}) {
 }
 
 export function createCaseDeadlineLiveSession(options = {}) {
-  exactObject(options, ['ledger', 'apiKey', 'fetchImpl', 'benchmarkExtension', 'caseDeadlineCapability'],
-    'invalid_case_deadline_session');
+  if (!isPlainObject(options)) fail('invalid_case_deadline_session');
+  const transportPresent = Object.hasOwn(options, 'transportDiagnostics');
+  exactObject(options, ['ledger', 'apiKey', 'fetchImpl', 'benchmarkExtension', 'caseDeadlineCapability',
+    ...(transportPresent ? ['transportDiagnostics'] : [])], 'invalid_case_deadline_session');
   const { ledger, apiKey, fetchImpl, benchmarkExtension, caseDeadlineCapability } = options;
+  const transportDiagnostics = transportPresent
+    ? options.transportDiagnostics : null;
+  if (transportPresent && transportDiagnostics !== 'bounded-v1') {
+    fail('invalid_case_deadline_session');
+  }
   if (typeof apiKey !== 'string' || !apiKey.trim() || /\s/u.test(apiKey)
     || typeof fetchImpl !== 'function') fail('invalid_case_deadline_session');
   const guard = createCaseDeadlineExperimentRequestGuard({ ledger, policy: experimentPolicy(),
-    benchmarkExtension, caseDeadlineCapability, fetchImpl });
+    benchmarkExtension, caseDeadlineCapability, fetchImpl,
+    ...(transportDiagnostics ? { transportDiagnostics } : {}) });
   const session = createLiveSessionFromGuard(apiKey, guard);
   const capability = guard.caseDeadlineCapability;
   const capabilityDigest = createHash('sha256').update(canonical([capability]), 'utf8').digest('hex');
@@ -854,6 +862,7 @@ async function generateCase({ item, files, session, limits, plan, projected, led
   labelCapturedArms(captured, run ?? null);
   const diagnosticSnapshot = diagnostics.snapshot(questionId, captured, captureAdmission.snapshot(),
     recallStages.snapshot());
+  const transport = caseDeadlineSessions.get(session)?.guard.transportDiagnostics?.() ?? null;
   await writePrivateJson(files.generation, generation);
   await writePrivateJson(files.answerRequests, { schemaVersion: PUBLIC_PILOT_SCHEMA_VERSION, questionId,
     ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),
@@ -872,8 +881,11 @@ async function generateCase({ item, files, session, limits, plan, projected, led
       latencyMs: arm.diagnostics?.latencyMs ?? null })) : [] });
   // Optional for old runs, but last for a fresh case: a diagnostic-artifact
   // write refusal cannot strand already-spent work without its accounting.
-  await writePrivateJson(files.diagnostics, caseTimeoutIdentity
-    ? { ...diagnosticSnapshot, caseTimeoutIdentity } : diagnosticSnapshot);
+  await writePrivateJson(files.diagnostics, {
+    ...diagnosticSnapshot,
+    ...(transport ? { transport } : {}),
+    ...(caseTimeoutIdentity ? { caseTimeoutIdentity } : {}),
+  });
   return { generation, attemptIds: attempts.map((attempt) => attempt.attemptId) };
 }
 

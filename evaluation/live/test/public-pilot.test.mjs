@@ -156,8 +156,9 @@ async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, re
       authorizationId: 'synthetic-case-deadline', executionId: `execution-${randomUUID()}`,
       checkpoint: { requestCount: checkpoint.requestCount, reservedMicroUsd: checkpoint.reservedMicroUsd }, schedule });
   };
-  const caseSession = (caseIds, chat, count, generation, capability = caseCapability(caseIds)) => {
+  const caseSession = (caseIds, chat, count, generation, capability = caseCapability(caseIds), transportDiagnostics) => {
     return createCaseDeadlineLiveSession({ ledger, apiKey: KEY, benchmarkExtension, caseDeadlineCapability: capability,
+      ...(transportDiagnostics ? { transportDiagnostics } : {}),
       fetchImpl: fakeUpstream({ calls, ...(chat ? { chat } : {}), ...(count ? { count } : {}),
         ...(generation ? { generation } : {}) }) });
   };
@@ -413,6 +414,48 @@ test('R1-R3: case-deadline session binds exact schedule, identity, scopes and on
   assert.equal(f.calls.length, beforeCompanionResume.calls);
   assert.deepEqual(await fileSnapshot(companionOnly), beforeCompanionResume.files);
   session.close();
+});
+
+test('TD4: opted-in case-deadline pilot writes only private generation transport observations', async (t) => {
+  const defaultRun = await setup(t, { source: sourceCases().slice(0, 1) });
+  const enabledRun = await setup(t, { source: sourceCases().slice(0, 1) });
+  const defaultOutput = defaultRun.output('default');
+  const enabledOutput = enabledRun.output('enabled');
+  const capability = enabledRun.caseCapability([ids.plain]);
+  for (const value of [null, undefined, 'other']) {
+    assert.throws(() => createCaseDeadlineLiveSession({ ledger: enabledRun.ledger, apiKey: KEY,
+      benchmarkExtension: enabledRun.benchmarkExtension, caseDeadlineCapability: capability,
+      fetchImpl: () => assert.fail('no transport'), transportDiagnostics: value }),
+    { code: 'invalid_case_deadline_session' });
+  }
+  const defaultSession = defaultRun.caseSession([ids.plain]);
+  const enabledSession = enabledRun.caseSession([ids.plain], null, null, null, capability, 'bounded-v1');
+  t.after(() => { defaultSession.close(); enabledSession.close(); });
+  const defaultReport = await runPublicPilot({ pilot: defaultRun.pilot,
+    session: defaultSession, directory: defaultOutput, caseIds: [ids.plain] });
+  const enabledReport = await runPublicPilot({ pilot: enabledRun.pilot,
+    session: enabledSession,
+    directory: enabledOutput, caseIds: [ids.plain] });
+  assert.deepEqual(enabledReport.summary, defaultReport.summary);
+  const { caseTimeoutIdentity: _defaultIdentity, ...defaultScore } = defaultReport.official;
+  const { caseTimeoutIdentity: _enabledIdentity, ...enabledScore } = enabledReport.official;
+  assert.deepEqual(enabledScore, defaultScore);
+  const defaultDiagnostics = await readJson(defaultOutput, 'cases', ids.plain, 'diagnostics.json');
+  const enabledDiagnostics = await readJson(enabledOutput, 'cases', ids.plain, 'diagnostics.json');
+  assert.equal(Object.hasOwn(defaultDiagnostics, 'transport'), false);
+  assert.equal(enabledDiagnostics.transport.schemaVersion, 'cairn-transport-phase-diagnostics-v1');
+  assert.equal(enabledDiagnostics.transport.phase, 'generation');
+  assert.equal(enabledDiagnostics.transport.total, enabledDiagnostics.transport.observations.length);
+  assert.equal(enabledDiagnostics.transport.dropped, 0);
+  assert.ok(enabledDiagnostics.transport.observations.some((row) => row.route === 'count' && row.method === 'unknown'));
+  assert.ok(enabledDiagnostics.transport.observations.some((row) => row.route === 'generation' && row.method === 'extract'));
+  assert.ok(enabledDiagnostics.transport.observations.some((row) => row.route === 'answer'));
+  for (const filename of ['aggregate.json', 'report.json']) {
+    assert.equal(JSON.stringify(await readJson(enabledOutput, filename)).includes('transport'), false);
+  }
+  const serialized = JSON.stringify(enabledDiagnostics.transport);
+  assert.equal(serialized.includes(KEY), false);
+  assert.equal(serialized.includes(RAW_PHRASE), false);
 });
 
 test('R2/R4: answer-template v2 retains case identity through a normal run and offline merge', async (t) => {
@@ -1366,6 +1409,22 @@ test('R1: complete case CLI dry-run is keyless, non-consuming and safely repeata
     const result = JSON.parse(stdout.text());
     assert.equal(result.caseTimeoutIdentity.effectivePolicyVersion, 'case-deadline-v1');
     assert.match(result.caseTimeoutRestriction, /one-shot/u);
+  }
+  const optedDryRun = outputStream();
+  assert.equal(await cliMain([...argv, '--transport-diagnostics', 'bounded-v1'], { env,
+    stdout: optedDryRun, stderr: outputStream(), fetchImpl: () => assert.fail('no transport') }), 0);
+  assert.equal(JSON.parse(optedDryRun.text()).transportDiagnostics, 'bounded-v1');
+  for (const [badArgs, expected] of [
+    [[...argv, '--transport-diagnostics', 'other'], 'invalid_transport_diagnostics\n'],
+    [[...argv, '--transport-diagnostics', 'bounded-v1', '--transport-diagnostics', 'bounded-v1'],
+      'invalid_flag_value --transport-diagnostics\n'],
+    [[...argv.slice(0, 8), '--transport-diagnostics', 'bounded-v1'],
+      'transport_diagnostics_requires_case_deadline\n'],
+  ]) {
+    const stderr = outputStream();
+    assert.equal(await cliMain(badArgs, { env, stdout: outputStream(), stderr,
+      fetchImpl: () => assert.fail('no transport') }), 1);
+    assert.equal(stderr.text(), expected);
   }
   assert.equal(keyReads, 0);
   assert.equal(ledgerState(f.ledger).requestCount, 0);
