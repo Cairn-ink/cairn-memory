@@ -6,6 +6,33 @@ The README links here from its first screen and stays short. A PR that adds or
 revises evidence appends to or edits this file rather than the README; see
 [CONTRIBUTING](../CONTRIBUTING.md#where-to-record-evaluation-limitations).
 
+## Incremental candidate-index experiment is not a product retrieval claim
+
+The [frozen offline packet](plans/incremental-candidate-index.md) probes a
+maintained FTS5 sidecar on fresh synthetic stores only. Its SQL setup timing
+is not public-core admission throughput; the index duplicates full synthetic
+memory and receipt text as well as lexical postings. Logical deletion does not
+prove forensic erasure from free pages, journal/WAL files or backups. Memory
+updates refresh all that memory's receipt documents, so write amplification
+grows with receipt fan-out; high fan-out maintenance is not bounded by the
+top-five query result. The query and scan report capped authorized rows, not
+SQLite's internal posting visits or total disk I/O. A matching-document count
+of cap+1 on an incomplete query is a lower bound, not the exact total.
+
+The first full 10,000-row Node 24 run of an uncommitted vocabulary-based query
+timed out at the explicit 120-second watchdog; there is no saved red source
+SHA, and the exact whole-cell cause remains unproven. Controlled same-DB
+reconstruction showed severe foreign-volume growth for that old query, while
+the replacement per-term posting query completed the frozen full cell within
+the bound on both Node 22.16 and 24.15. These shared-host, three-repeat
+timings are diagnostic means, not percentiles, causal speedups or provider
+latency. ASCII-only comparison does not establish Unicode/CJK/tokenizer
+equivalence; `unicode61` and JavaScript word categories can differ. Frozen
+zero-target labels can still return a *different current* lexical overlap
+without leaking a historical or fifth-only source. The experiment neither
+changes public fixed retrieval nor establishes an MOC, model/QA or past-pilot
+improvement, and it does not complete S1/S2/S4 gates.
+
 The section below is the text that opened the README until 2026-09-18, moved
 here unchanged apart from link paths and the bold lead-in becoming this section's heading.
 

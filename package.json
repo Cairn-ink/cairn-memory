@@ -12,6 +12,8 @@
     "test": "node --test plugins/cairn-memory/test/*.test.mjs evaluation/architecture/test/*.test.mjs",
     "demo:architecture-boundaries": "node evaluation/architecture/cli.mjs",
     "demo:synthetic-lineage": "node evaluation/architecture/synthetic-lineage-cli.mjs",
+    "demo:incremental-candidate-index": "node evaluation/architecture/incremental-candidate-index-cli.mjs --demo",
+    "measure:incremental-candidate-index": "node evaluation/architecture/incremental-candidate-index-cli.mjs --measure-full",
     "demo:candidate-ablation": "node evaluation/architecture/candidate-ablation-cli.mjs",
     "test:longmemeval": "node --test evaluation/longmemeval/test/*.test.mjs",
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",

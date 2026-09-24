@@ -49,7 +49,10 @@ is changed.
   shared-host observations without percentiles, speedup confidence or model
   quality claims. Include per-write/correct/forget maintenance, DB/WAL bytes,
   document and active-row counts. Full 10,000 is an explicit measure command;
-  CI tests use small sizes.
+  The measured full 10,000-row, 13-query cell is an explicit command, not an
+  ordinary CI measurement. Ordinary CI also includes large functional boundary
+  fixtures (10,000 foreign/tail rows and a >20,000-row cap test); these are
+  safety checks, not growth measurements.
 
 The fixture separates `query` from private `expected` labels/keys. The fixture
 also freezes the corrected content `Updated bronze timetable is current.`,
@@ -96,11 +99,20 @@ hashes. Labels remain evaluator-private and cannot enter retrieval input.
    scanned and incomplete state. Test rollback, cold reopen, namespace and
    foreign-volume invariance, active-generation exclusion, correction,
    logical forget, supersession, fifth-only receipt, race and literal syntax.
-5. No source/snapshot/receipt text leaves the synthetic private DB or report.
-   Sidecar FTS stores sensitive lexical derivatives and is not forensic
+5. Source/snapshot/receipt text stays inside the synthetic private process/store
+   and never enters the report.
+   Sidecar document and contentful FTS tables copy full synthetic source text
+   as well as lexical derivatives and are not forensic
    erasure; update `docs/protocol.md` and `docs/limitations.md` accordingly.
    This experiment neither changes fixed public retrieval nor demonstrates
    MOC/model/QA advantage or S1/S2/S4 completion.
+
+Implementation safeguard recorded after the frozen inputs (not a measurement
+parameter or label change): public `get` receipt pagination uses pages of four
+and fails incomplete before a 27th page. This prevents unbounded paging but
+can also reject a legitimate memory with more than 104 receipts; it is not a
+completeness claim for high fan-out and does not imply SQLite scanned only
+104 rows.
 
 ## Entrypoints and gates
 
@@ -111,3 +123,48 @@ plugin validation, small-size demo and explicit full-size measure. Run core
 tests/demos if integration reveals a core defect. Record exact candidate SHA,
 commands, raw failures and meaningful counts here after the result-producing
 work. No push, PR, merge or provider call in this packet.
+
+## Retained diagnostic evidence (post-freeze, no label changes)
+
+The first Node 24.15 full-size invocation of
+`npm run measure:incremental-candidate-index` emitted `size_timeout` after
+the CLI's 120-second child-process watchdog. That uncommitted WIP query used
+`ci_vocab` `instance` rows, `v.term IN (wanted terms)`, authorized/current
+joins and `COUNT(DISTINCT v.term)` per document. There is **no saved SHA for
+that red implementation**; the tool transcript retains the original WIP
+source and command output. A later same-DB, query-only reconstruction on the
+first eight frozen 10,000-row queries measured 0.2–64 ms for old vocabulary
+counts versus about 55–60 ms for the replacement posting query, with equal
+authorized document counts. The reconstruction stalled at the ninth, foreign-
+volume query for over 30 seconds and was interrupted (exit 130). This is
+evidence of a foreign-volume sensitivity in that reconstructed query, not
+proof of the whole original timeout's unique cause. No fixture/label was
+changed in response. The replacement counts distinct per-term FTS5 postings
+in SQL, then SQL max-score/top-five refs; the `fts5vocab` table remains
+installed and preflighted. SQLite internal posting work remains unknown.
+
+Independent controlled profiling on one frozen 1,000-authorized-row DB varied
+only the number of synthetic foreign rows (1/100/1,000). The reconstructed old
+vocabulary count for the fixed foreign query took 3.805/248.276/2,535.487 ms;
+the replacement full count-and-rank took 5.665/5.172/12.650 ms, while the
+unchanged scan comparator took 17.962/14.073/27.151 ms. Authorized matches
+and returned refs were zero in every cell. A sparse fixed query on the same
+1,000-row DB had old count 5.426 ms plus rank 4.988 ms, replacement 5.382 ms,
+scan 16.584 ms, with three document matches and equal refs. The controlled
+foreign growth supports an old-query foreign-posting/projection-join
+amplification hypothesis; it does not establish the unique cause of the
+original whole-cell timeout. No internal SQLite visit count was measured.
+
+The replacement full 10,000-row CLI completed within the 120-second bound on
+Node 24.15 (~10.75 seconds shared-host wall time) and Node 22.16 (~8.59
+seconds). Both had 10,000 current authorized plus 10,000 foreign current rows,
+30,005 sidecar documents, and 13 fixed queries repeated three times. The
+frozen historical and literal-operator zero-target labels each returned one
+other current lexical match; no forbidden historical predecessor, forgotten
+memory or fifth-only source was returned. This is diagnostic mismatch, not a
+label repair or semantic win. Before the final commit, `npm test` passed
+127/127 on each Node 22.16 and 24.15; `npm run validate`, strict plugin
+validation, and `npm run demo:incremental-candidate-index` passed on both.
+The explicit 10,000-row `npm run measure:incremental-candidate-index` passed
+on both. The final candidate SHA is reported in the handoff after commit;
+these timings are not official performance benchmarks.
