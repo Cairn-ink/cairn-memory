@@ -63,8 +63,10 @@ gates remain later work.
 
 Budget was not reread: last-recorded authority is US$200 cumulative, operational
 ledger US$100 pending review, and reserved spend US$79.389500. Verify the actual
-ledger and request guard before any paid phase. No new paid call, ledger edit,
-old-cohort rerun, merge, release or deployment is recorded.
+ledger and request guard before any paid phase. No new semantic score, paid
+request, ledger edit, old-cohort rerun, merge, release or deployment is recorded.
+Earlier PR #205/#208/#209/#210 head and CI details remain in the plan and were
+not rechecked in this refresh.
 
 The earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
 40,000-space tokenizer check at 5,048 ms against the unchanged 5-second gate.
@@ -74,13 +76,6 @@ diagnostic only: target reachability in both indexed paths, alias benefit for
 pure-alias queries, CJK misses and no observed MOC-first gain do not attribute
 the eight historical errors or establish QA/product quality. The separate
 red-base 1,025-admit control still misses its target.
-
-No new semantic score, paid request, ledger edit, merge, release or deployment
-is recorded in this checkpoint. Budget figures were not reread: last recorded
-authority is US$200 cumulative, the operational ledger US$100 pending review,
-and reserved spend US$79.389500. Verify the actual ledger and request guard
-before any paid phase. Earlier PR #205/#208/#209/#210 head and CI details remain
-in the plan and were not rechecked in this refresh.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
