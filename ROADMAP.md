@@ -37,19 +37,31 @@ reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
 sets proposed completion, held-out comparison, installed-host, growth and preview
-onboarding gates within the existing cumulative ceiling. PRs #202–#207 remain
-open. The seven scripted capture-to-public-packing cases and offline checks at
-PR #207 do not pass S1 or establish semantic quality; recovery and timeout work
-remain incomplete. The capacity-boundary miss has since been reproduced. The
-offline core/flat/MOC ablation is committed locally at `e928fea`; it found the
-capacity target in both indexed paths, alias gains on pure-alias queries, CJK
-misses in both indexed paths, and no observed MOC gain. This is candidate
-reachability evidence, not a QA score or product fix. Independent review and CI
-are pending; no PR has been opened. S1 recovery and product-candidate design are
-next after those gates. Independent offline diagnostics may proceed while S1 is
-open, but S1 still gates product promotion, live benchmark, host readiness and
-preview. No new semantic score or paid request is recorded; follow the plan's
-resume protocol to re-check live state before continuing.
+onboarding gates within the existing cumulative ceiling. PRs #202–#208 are open
+at the latest check. The seven scripted capture-to-public-packing cases and
+offline checks at PR #207 do not pass S1 or establish semantic quality; recovery
+and timeout work remain incomplete.
+
+The candidate-retrieval experiment's measured checkpoint is `e928fea`; PR #208
+head `f25050d` adds a two-file shared filed/unfiled reference guard that fixes a
+mixed-reference regression, without changing fixtures or measured results. It
+reaches the capacity target in both indexed paths, improves pure-alias
+reachability with aliases, misses CJK controls in both indexed paths and shows
+no MOC gain. A separate red-base 1,025-admit control at PR #207's base still
+misses its target; the `f25050d` correction does not fix that boundary. These
+results remain candidate-retrieval evidence, not QA or a product fix. Two
+independent reviews passed with zero findings, while CI run `36042861159` failed
+the Node 22 tokenizer performance gate (40,000 spaces timed out at 5,048 ms
+against 5 seconds); root is diagnosing it separately, and no rerun or
+transient-resolution claim has been made.
+
+The next S1 packet is in progress on `feat/mcp-classification-recovery` at base
+`038f0ac`: an opt-in MCP classifier for explicitly supplied current unfiled
+memories. Batch membership provenance and a durable classification journal
+remain absent, so S1 is incomplete. Independent offline work may continue while
+S1 is open, but S1 still gates product promotion, live benchmark, host readiness
+and preview. No new semantic score or paid request is recorded; follow the
+plan's resume protocol to re-check live state before continuing.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid

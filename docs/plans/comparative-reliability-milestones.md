@@ -63,9 +63,15 @@ were checked directly; all listed candidates were open and unmerged:
 | [PR #202](https://github.com/Cairn-ink/cairn-memory/pull/202) | `fcfd2b3` | Open; audited 30-case documentation. |
 | [PR #203](https://github.com/Cairn-ink/cairn-memory/pull/203) | `ca9c15c` | Open; reliability runtime integration. |
 | [PR #204](https://github.com/Cairn-ink/cairn-memory/pull/204) | `7c7e8b3` | Open; extraction source-domain bound. |
-| [PR #205](https://github.com/Cairn-ink/cairn-memory/pull/205) | `285e7ff` | Open; this plan. |
+| [PR #205](https://github.com/Cairn-ink/cairn-memory/pull/205) | `285e7ff` | Open; last verified remote head. This local refresh is not pushed. |
 | [PR #206](https://github.com/Cairn-ink/cairn-memory/pull/206) | `aaa44da` | Open; classification batch cardinality. |
 | [PR #207](https://github.com/Cairn-ink/cairn-memory/pull/207) | `038f0ac` | Open; synthetic evidence lineage coverage. |
+| [PR #208](https://github.com/Cairn-ink/cairn-memory/pull/208) | `f25050d` | Open; candidate retrieval ablation; CI has one failure. |
+
+PR #205's last recorded local review was on `0b882e6`: Standards passed with
+zero findings, and the Spec stale-head concern is addressed by this refresh.
+Rerun both review axes on the final checkpoint before publishing. PR #205's
+remote head remains `285e7ff`; these status changes are local and unpushed.
 
 At PR #207's recorded head, seven fixed scripted capture-to-recall cases reach
 actual public evidence packing. Generic checks passed 112/112 and LongMemEval
@@ -77,41 +83,78 @@ classification guards are candidate changes, not proof of a reliability fix.
 
 | Milestone | Current state and evidence | Next acceptance work |
 | --- | --- | --- |
-| S1 — bounded recovery | Active, incomplete. Candidate runtime stack #203/#204/#206/#207 remains open; partial-classification recovery and timeout handling are not complete. No S1 pass is claimed. | Finish observable, repeat-safe recovery from retained evidence; verify incomplete receipts, corrected/deleted content, namespace/privacy and no resurrection. |
-| S2 — tracing and navigation | Active, incomplete. The eight historical wrong outcomes remain fixed-N and read-only; finer fact-stage causes are unknown. The red-base capacity miss was reproduced and is no longer an unfinished gate. The committed offline candidate finds the target in both indexed paths, alias expansion helps pure-alias queries, both indexed paths miss the CJK controls, and MOC-first shows no observed gain. These are candidate-retrieval diagnostics only, not an attribution for the historical errors, QA results or a product fix. | Independent candidate review and CI are pending. After those gates, return to S1 recovery and product-candidate design; do not rerun the red-base reproduction as an open task. The committed packet, acceptance command and separate later answer-stage gate are recorded below. |
+| S1 — bounded recovery | Active, incomplete. Candidate runtime stack #203/#204/#206/#207 remains open; partial-classification recovery and timeout handling are not complete. The current MCP recovery packet is in progress on a separate branch; see below. No S1 pass is claimed. | Finish observable, repeat-safe recovery from retained evidence; verify incomplete receipts, corrected/deleted content, namespace/privacy and no resurrection. |
+| S2 — tracing and navigation | Active, incomplete. The eight historical wrong outcomes remain fixed-N and read-only; finer fact-stage causes are unknown. The independent red-base 1,025-admit capacity control misses its target at PR #207 base `038f0ac`; PR #208's separate indexed candidate fixture reaches its target. Alias expansion helps pure-alias queries, both indexed paths miss CJK controls, and MOC-first shows no observed gain. These are retrieval diagnostics only, not an attribution for historical errors, QA results or a product fix. | Independent reviews passed; CI run #36042861159 is complete with 16/17 jobs passing and one Node 22 OpenAI offline failure. Preserve and diagnose the failure without rerunning it or calling CI green. The later matched answer-stage gate remains required. |
 | S3 — matched comparator | Pending; no fresh matched Mem0 OSS score exists. | Preflight and pin the actual engine, dependencies and model configuration; reconcile harness filters and denominators; freeze a new holdout before any scoring. |
 | S4 — installed path and growth | Pending; installed Hermes/MCP cold-restart and 100/1,000/10,000-memory growth gates remain. | Freeze host/runtime/resources/repeats, then complete each required synthetic workflow and measurement while retaining failures and cap breaches. |
 | S5 — preview and onboarding | Pending; no cold-context onboarding pass is recorded. | Run the documented clean-environment flow through sourced write, new-session recall, inspect, correct, forget and restart/no-result; record receipt-backed pass/fail at every step. |
 
 ### Active S2 candidate packet
 
-The offline candidate is committed at `e928fea80e3da4f0eff759100d41666ee35b6dc9`
-on branch `experiment/candidate-retrieval-ablation` (worktree basename
-`candidate-retrieval-ablation`), based on PR #207 head
-`038f0acbe2ac281d1fd599a1199aa921782ca5e5`. Owner: root-supervised GPT-6
-Sol/high. No PR has been opened. Its seven allowed files are
+The original measured checkpoint is `e928fea80e3da4f0eff759100d41666ee35b6dc9`.
+The final reviewed candidate is [PR #208](https://github.com/Cairn-ink/cairn-memory/pull/208),
+head `f25050d36a91be6aef3033dadeba52082c62f789`, based on PR #207 head
+`038f0acbe2ac281d1fd599a1199aa921782ca5e5`, on branch
+`experiment/candidate-retrieval-ablation` (worktree basename
+`candidate-retrieval-ablation`). The original implementation was by
+`candidate_ablation6` (GPT-6 Sol/high); a bounded two-file correction was by
+`recovery_design6` (GPT-6 Sol/high) after the original thread could not be
+reactivated. The correction fixes a mixed-reference regression in the shared
+filed/unfiled reference guard in `evaluation/architecture/candidate-ablation.mjs`
+and its test; it does not alter fixtures or measured results. The capacity
+red-boundary result was already present at measured checkpoint `e928fea`; the
+`f25050d` correction is unrelated to that result.
+
+The packet's seven-file allowlist was:
 `evaluation/architecture/candidate-ablation.mjs`,
 `evaluation/architecture/candidate-ablation-cli.mjs`,
 `evaluation/architecture/candidate-ablation-fixtures.json`,
 `evaluation/architecture/test/candidate-ablation.test.mjs`,
-`docs/plans/candidate-retrieval-ablation.md`, `docs/limitations.md` and
+`docs/plans/candidate-retrieval-ablation.md`, `docs/limitations.md`, and
 `package.json`.
 
-The fixture reports candidate reachability, not public packing or answer
-correctness: the capacity target is reachable in both indexed paths; aliases
-help pure-alias queries; both indexed paths miss CJK controls; MOC-first shows
-no observed gain. These results do not resolve the historical eight wrong
-answers or pass S2. Root and worker report generic 117/117 on Node 22.16 and
-24.15; the worker reports LongMemEval 75/75 on each, and root independently
-reports 75/75 on Node 24.15. The worker passed both candidate demos and JSON
-validation; root passed the plugin validator on both runtimes. Independent
-ablation reviews and CI are pending.
+The measured fixture reports candidate reachability, not public packing or
+answer correctness: the capacity target is reachable in both indexed paths;
+aliases help pure-alias queries; both indexed paths miss CJK controls; MOC-first
+shows no observed gain. These results do not resolve the historical eight wrong
+answers or pass S2. Independent Standards and Spec reviewers (GPT-6 Sol/high)
+passed the full final range with zero findings.
 
-Next acceptance commands, from the candidate worktree: inspect the fixed base
-diff with `git diff 038f0acbe2ac281d1fd599a1199aa921782ca5e5 e928fea80e3da4f0eff759100d41666ee35b6dc9`,
-then run `npm run demo:candidate-ablation` on Node 22.16 or newer using synthetic
-data only. After independent review and CI, resume S1 recovery and product
-candidate design; the earlier capacity-boundary reproduction is complete.
+Candidate PR #208 verification is separate from this documentation PR. The
+candidate work reports generic 117/117 on each of Node 22.16 and 24.15; worker
+LongMemEval checks are 75/75 on both runtimes, with root independently reporting
+75/75 on Node 24.15. The worker passed both candidate demos and JSON validation;
+primary focused checks passed 5/5 on each runtime; root passed plugin validation
+on both runtimes. This plan branch's own generic count is 106/106 on each
+runtime, not 117/117; its JSON and plugin validation pass on both runtimes too.
+
+CI run `36042861159` is tied to PR #208's exact final head and is complete with
+16/17 jobs passing. The sole failure is OpenAI offline on Node 22.16, job
+`107779060947`: `adapters/openai/test/tokenizer-performance.test.mjs` timed out
+the 40,000-space child at 5,048 ms against its 5-second limit; 205/206 adapter
+tests passed. The matching Node 24 OpenAI offline job passed and is among the 16
+passing jobs. Root is diagnosing exact counter performance on a separate branch;
+no rerun has been made and the cause is not declared transient or confirmed. The
+current tokenizer's repetition cost is a known concern, but it is not yet the
+confirmed cause. Preserve the 5-second gate. Next status command:
+`gh pr checks 208 --repo Cairn-ink/cairn-memory`; verify it still applies to
+head `f25050d36a91be6aef3033dadeba52082c62f789`. Do not enable auto-merge.
+
+### Next S1 packet
+
+Classification recovery is assigned to `recovery_design6` (GPT-6 Sol/high) on
+branch `feat/mcp-classification-recovery`, worktree basename
+`mcp-classification-recovery`, at fixed base
+`038f0acbe2ac281d1fd599a1199aa921782ca5e5`. Its working plan is
+`docs/plans/mcp-classification-recovery.md` on that branch. The worktree is at
+candidate head `8e5a5003dd6dbd3df7fb34ae1929b036d91d066b` at this checkpoint.
+Recheck its current head, PR and CI state before resuming. The opt-in MCP tool
+`classify_unfiled_memories` classifies explicitly supplied current unfiled refs
+through existing `core.classifyPlacement` and `core.applyPlacement` guards; it
+is not proof that a capture batch failed. Batch membership provenance and a
+durable classification journal remain absent, so S1 remains incomplete. Scope
+is limited to MCP server/CLI, tests and technical documentation; no
+core/schema, live or paid work is in scope.
 
 No new semantic score or paid request is recorded in this status update. At the
 last recorded checkpoint (not re-read for this documentation update), the
