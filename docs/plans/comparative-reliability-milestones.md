@@ -66,10 +66,11 @@ is recorded.
 
 Primary verification reports 168 request-guard checks passed and generic tests
 112/112; JSON and strict plugin validation passed on Node 22.16 and 24.15. On
-the prior runtime-identical candidate, live-evidence-offline passed 335 tests
-with 30 pre-existing opt-in skips and the budget suite passed 15/15 on both
-runtimes; these were not rerun after the final test/docs delta. Diagnostics do
-not establish provider billing, wire-level transport or semantic core success.
+the prior runtime-identical candidate, live-evidence-offline had 335 total
+(305 passed, 30 pre-existing opt-in skips); the budget suite passed 15/15 on
+both runtimes. These suites were not rerun after the final test/docs delta.
+Diagnostics do not establish provider billing, wire-level transport or semantic
+core success.
 
 ### Latest completed S1 packet: transport phase diagnostics (PR #211)
 
@@ -79,11 +80,12 @@ at 256 attempt records, each with closed numeric/enumerated milestones: fetch
 entry, valid-response availability, body-read completion, settlement attempt
 and accounting outcome. No source text, case IDs, URLs, model identifiers or
 usage are persisted. No timeout, retry, cap, scoring or ledger behavior changes.
-CLI output remains limited to `case-deadline`. These observations do not prove
-network transmission, provider receipt/billing or semantic success.
+CLI diagnostics require the complete `case-deadline` flags; generation-level
+details remain private-generation-only. These observations do not prove network
+transmission, provider receipt/billing or semantic success.
 S1 recovery and durable-classification-journal requirements remain open.
 
-### Next active packet: incremental candidate index (assigned; no results yet)
+### Next packet: incremental candidate index (no accepted result claimed)
 
 Owner GPT-6 Sol/high; fixed base `c118c0f0fd70af01c63ea1339305de03eeb84c94`,
 branch `experiment/incremental-candidate-index`. Plan and fixtures were frozen
@@ -95,12 +97,14 @@ freeze. Implementation is active; any later results need their own verification.
 Frozen scope compares a synthetic SQLite FTS5 sidecar with a same-projection,
 ID-keyset scan, using `trusted_schema=OFF`, namespace/current-generation/
 revision/epoch guards, bounded materialization, first-four-receipt scoring and
-lifecycle/rollback checks at post-mutation sizes 100/1,000/10,000. No public-core,
-default-selection, schema, provider, user-data or ledger changes; no QA result or
-S1/S2 pass is claimed. Resume by checking real worktree/branch/head/dirty state,
-then `git diff c118c0f0fd70af01c63ea1339305de03eeb84c94...HEAD` against the
-frozen plan before its ordered Node 22.16/24.15 gates; run the 10,000-row measure
-only after smaller safety and test gates pass.
+lifecycle/rollback checks at post-mutation sizes 100/1,000/10,000. There are no
+public core or schema-version changes and no production-DB changes; sidecar
+tables/triggers install only in a fresh synthetic DB. No default-selection, provider,
+user-data or ledger changes; no accepted result, QA result, production promotion
+or S1/S2 pass is claimed. Resume by checking real worktree/branch/head/dirty
+state, then `git diff c118c0f0fd70af01c63ea1339305de03eeb84c94...HEAD` against
+the frozen plan before its ordered Node 22.16/24.15 gates; run the 10,000-row
+measure only after smaller safety and test gates pass.
 
 S1 recovery/journal, the later S2 answer-stage, S3 matched Mem0, S4 installed
 growth and S5 cold-context onboarding remain open. Budget was not reread:
