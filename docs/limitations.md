@@ -101,6 +101,23 @@ shipped security work, developer-preview changes and unfinished reliability goal
 
 ## Verified preview baseline is not a semantic benchmark
 
+### Tokenizer performance gate is isolated; prior CI failure remains unresolved
+
+PR #208 CI run `36042861159`, attempt 1, failed the OpenAI Node 22 job
+`107779060947` when the existing child-process test counting 40,000 spaces hit
+its unchanged 5-second timeout at 5,048 ms; 205/206 tests passed, and the Node
+24 job passed. The CI resource cause is unknown. Local Node 22 measurements were
+about 115 ms startup plus 89 ms at 10,000 spaces, 278 ms at 20,000 and 1,108 ms
+at 40,000, returning 79, 157 and 313 tokens. These observations do not attribute
+the CI failure to test-file loading. The package now runs ordinary tests first
+and the same performance test in a separate phase, preserving its exact input,
+5-second process guard and success assertion. Isolation protects this
+measurement from concurrent test-file loading; it does not change the runtime
+counter, fix its repetitive-input cost or establish why CI timed out. It is not
+a semantic-quality or product-promotion result. The
+[performance gate plan](plans/tokenizer-performance-gate.md) records the
+acceptance contract and local verification.
+
 The [consolidation baseline](plans/pr-consolidation.md) combines a narrow
 filing-only rationale preservation fix, a bounded direct premise-challenge
 read fix extracted from #136, an explicit local MCP source-evidence recall
