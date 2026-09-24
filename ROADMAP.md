@@ -35,6 +35,11 @@ distinguishes main from pending PRs and proposed behavior; it is not a release
 claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
+Dated 2026-09-24: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+sets proposed completion, held-out comparison, installed-host, growth and preview
+onboarding gates within the existing cumulative ceiling. No calls were made for
+this documentation update.
+
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
    rerun needs scoped authorization; earlier one-shot approvals do not roll over.
