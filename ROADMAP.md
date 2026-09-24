@@ -36,39 +36,39 @@ claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-records the latest fixed checkpoint and earlier evidence snapshots. PR #212 is
-ready, open, unmerged and mergeable at `a6f8bfc3176f9ca8f64ebbcd888e58a920b5e3da`;
-CI run `36056945007`, attempt 1, passed 17/17, and full-base Standards/Spec
-reviews passed with zero findings. Primary `npm test` (127/127), JSON and strict
-plugin checks passed on Node 22.16 and 24.15 on final head `a6f8bfc`. The full
-CLI and focused runtime checks used runtime-identical candidate `08e82c7`.
-The synthetic incremental-index CLI passed at 100/1,000/10,000; its mixed query
-performance, lexical false positives, unsupported CJK, copied full text and
-inclusive database growth do not establish a production selector, semantic QA
-or S2 answer-stage pass. S1, S2 answer-stage, S3 matched Mem0, S4 installed
-growth and S5 onboarding remain open.
+records the current after-#216 checkpoint and retains older evidence snapshots
+as historical. PRs #213–#216 are ready, open and unmerged; PR #216 at `2b24674`
+passed 17/17 exact-head CI checks in run `36072917284`. The finite S1 mechanical
+repair/recovery gate is accepted on the current candidate after independent
+Standards/Spec review, read-only acceptance audit and 22 installed pinned-Hermes
+tests on each of Node 22.16 and 24.15. This covers observable partial admission,
+bounded source refs, explicit guarded recovery and correction/deletion/namespace
+fences. It does not establish semantic reliability or an S1–S5 sequence pass.
+Repeat-safe recovery protects stored state, not exactly-once provider cost.
 
-The next assigned S1 packet is `feat/capture-classification-journal`, fixed to
-PR #211 base `632c0d8b1ad0e79ea5c9ccc8c4bbfee022d8ab9b`, owner GPT-6 Sol/high.
-Its frozen contract lives at
-`docs/plans/capture-classification-journal.md` in the local, unpublished
-`capture-classification-journal` worktree (freeze
-`c4dd8850e435bf3752b52f6a72154ef56aeed100`, plus manifest clarification
-`6ea5b90`). CJ1–CJ6 cover a source-free initial-classification journal,
-transactional admission/placement, v13-to-v14 migration and opt-in cold
-inspection; default and legacy/manual records remain unknown. This active
-assignment is in progress; no implementation/runtime gate is accepted.
-Do not claim an S1 pass. Deadline/recovery and fresh frozen semantic-comparison
-gates remain later work.
+The next packet is a separately frozen six-case development plumbing smoke,
+one case per question type after excluding 82 previously reserved or used cases.
+Its local, unpublished plan is frozen at `6287e1e` with pricing record
+`658b3ba`, fixed to `2b24674`; GPT-6 Sol/high owns implementation. No paid run
+has started. The phase cap is US$12 and 2,000 requests; the source-only projection
+of 1,172 requests and US$6.781960 is neither spending nor a wall-clock estimate.
+The smoke uses embedded default-core capture/recall, not the native v2,
+whole-capture-deadline or explicit-recovery live-model path. S2 answer-stage,
+S3 matched Mem0, S4 installed growth and S5 cold-context onboarding remain
+pending; the historical 30-case Cairn outcomes stay 15 correct, 8 wrong and
+7 unresolved.
 
-Budget was not reread: last-recorded authority is US$200 cumulative, operational
-ledger US$100 pending review, and reserved spend US$79.389500. Verify the actual
-ledger and request guard before any paid phase. No new semantic score, paid
-request, ledger edit, old-cohort rerun, merge, release or deployment is recorded.
-Earlier PR #205/#208/#209/#210 head and CI details remain in the plan and were
-not rechecked in this refresh.
+The latest read-only accounting checkpoint recorded US$79.389500 reserved and
+11,461 requests terminal, with the US$100 operational ledger limit and US$200
+user cumulative ceiling unchanged. Verify the actual ledger and request guard
+before any paid phase. No new semantic score, paid request, ledger edit, old-cohort
+rerun, merge, release or deployment is recorded. PR #212's earlier synthetic
+incremental-index result remains a diagnostic: its mixed query performance,
+lexical false positives, unsupported CJK, copied full text and inclusive
+database growth do not establish a production selector or S2 answer-stage pass.
+Earlier PR heads and CI details remain in the plan as dated records.
 
-The earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
+Historically, the earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
 40,000-space tokenizer check at 5,048 ms against the unchanged 5-second gate.
 The failure is retained with cause unknown; later green run `36045232556` does
 not establish a tokenizer runtime fix. The measured retrieval candidate is
