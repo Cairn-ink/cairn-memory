@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=22.16.0" },
-  "scripts": { "test": "node --test test/*.test.mjs" },
+  "scripts": { "test": "node --test test/*.test.mjs && node --test test/tokenizer-performance.perf.mjs" },
   "dependencies": { "tiktoken": "1.0.22" }
 }

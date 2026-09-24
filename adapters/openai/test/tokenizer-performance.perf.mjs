@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
+// Keep this process-bound measurement in its own package-script phase, apart
+// from concurrent ordinary test-file loading. This isolates the measurement;
+// it does not establish the cause of any CI timeout.
 test('A01 regression: maximum-length whitespace cannot monopolize synchronous counting', () => {
   // A process timeout can interrupt a blocked synchronous tokenizer; an in-process
   // setTimeout cannot. Synthetic text only, no provider or credentials.

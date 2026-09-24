@@ -1,0 +1,45 @@
+{
+  "version": "candidate-retrieval-ablation-v2",
+  "bankCount": 1030,
+  "topK": 5,
+  "materializationCap": 24,
+  "branchCap": 2,
+  "branchSlots": 3,
+  "fallbackSlots": 2,
+  "aliases": [
+    ["automobile", "car"],
+    ["orbital", "celestial"],
+    ["seal", "stamp"]
+  ],
+  "topics": ["observatory", "transport", "archives", "operations"],
+  "special": [
+    { "key": "exact", "content": "Cobalt astrolabe is stored in the observatory cabinet.", "topic": "observatory" },
+    { "key": "alias", "content": "The automobile permit is in the transport ledger.", "topic": "transport" },
+    { "key": "chinese", "content": "青銅羅盤保存在觀測站的東側抽屜。", "topic": "observatory" },
+    { "key": "ambiguous", "content": "The wax seal is in the archives case.", "topic": "archives" },
+    { "key": "animal_seal", "content": "A harbor seal rests near the transport dock.", "topic": "transport" },
+    { "key": "wrong_branch", "content": "The polar telescope calibration is recorded here.", "topic": "operations" },
+    { "key": "multi_a", "content": "The eastern beacon code is amber.", "topic": "operations" },
+    { "key": "multi_b", "content": "The western beacon code is violet.", "topic": "operations" },
+    { "key": "deleted", "content": "The erased garnet schedule is obsolete.", "topic": "archives" },
+    { "key": "corrected", "content": "The old copper timetable is obsolete.", "topic": "transport" },
+    { "key": "historical", "content": "The former indigo rota is obsolete.", "topic": "operations" },
+    { "key": "foreign", "content": "The private saffron charter is restricted.", "topic": "archives" }
+  ],
+  "queries": [
+    { "name": "exact_lexical", "query": "Where is the cobalt astrolabe?", "expected": ["exact"] },
+    { "name": "past_prefix", "query": "Where is the zirconium sextant?", "expected": ["tail"] },
+    { "name": "alias_paraphrase", "query": "Where is the car permit?", "expected": ["alias"] },
+    { "name": "alias_pure", "query": "car", "expected": ["alias"] },
+    { "name": "chinese_exact", "query": "青銅羅盤", "expected": ["chinese"] },
+    { "name": "chinese_partial", "query": "銅羅", "expected": ["chinese"] },
+    { "name": "ambiguous_alias", "query": "Where is the stamp?", "expected": ["ambiguous"] },
+    { "name": "wrong_branch", "query": "observatory polar telescope calibration", "expected": ["wrong_branch"] },
+    { "name": "multiple_evidence", "query": "What are the eastern and western beacon codes?", "expected": ["multi_a", "multi_b"] },
+    { "name": "unknown", "query": "Where is the nonexistent platinum compass?", "expected": [] },
+    { "name": "deleted_control", "query": "erased garnet schedule", "expected": [] },
+    { "name": "corrected_control", "query": "old copper timetable", "expected": [] },
+    { "name": "historical_control", "query": "former indigo rota", "expected": [] },
+    { "name": "foreign_control", "query": "private saffron charter", "expected": [] }
+  ]
+}
