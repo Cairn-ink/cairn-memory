@@ -11,6 +11,16 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The optional [indexed source-window experiment](retained-source-windows.md)
+can retain a scripted passage beyond the ordinary first-800-unit receipt
+prefix in synthetic actual-core and installed fake-HTTP tests. It does not
+measure real-model selection, semantic support, answer accuracy, installed
+Hermes behavior or matched Mem0 performance. Window selection can still omit
+the needed context; four receipts, five items, existing token ceilings and
+bounded recall remain. Rationale and staged-evidence integration are not
+supported. The current public comparison verifies prefix receipts and must
+reject window receipts that differ; no prior result is relabeled.
+
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed
 source receipts stop moving through capture, recall and answer packing. It adds

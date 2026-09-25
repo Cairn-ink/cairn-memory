@@ -7,9 +7,11 @@ import { reconcileCapture } from './ordered-capture.mjs';
 import { qualifyExtractedItems } from './automatic-qualification.mjs';
 import { qualifyCandidateItems } from './qualification-candidates.mjs';
 import { reviewCapturedRationale } from './automatic-rationale.mjs';
+import { extractedWindowItems, sourceWindowCatalog } from './source-windows.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
+const windowSystem = readFileSync(new URL('./prompts/extract-source-windows.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
 async function classifyAdmission(model, namespace, admission, operations, key, deadline) {
@@ -57,16 +59,17 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureRationale, captureEvidence, deadline }) {
+  captureSourcePolicy, captureRationale, captureEvidence, deadline }) {
   deadline?.check();
-  const snapshot = captureSnapshot(input, captureQualification);
+  const snapshot = captureSnapshot(input, captureQualification, captureSourcePolicy);
   deadline?.check();
-  const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  const catalog = captureSourcePolicy ? sourceWindowCatalog(snapshot) : null;
+  const retained = !catalog && captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
   deadline?.check();
   const sourceMessages = retained?.messages ?? snapshot.messages;
   // Retention coverage of this submitted snapshot, not an attestation of which
   // extraction policy executed an earlier duplicate batch.
-  const coverage = retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {};
+  const coverage = catalog?.coverage ?? (retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {});
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
@@ -79,10 +82,11 @@ export async function captureMessages({ model, input, operations, captureQualifi
   let finished;
   try {
     deadline?.check();
-    const output = await callModel(model, 'extract', retained ? retainedSystem : system, {
-      messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })),
-    }, { failureCode: 'extraction_failed', deadline });
-    let items = extractedItems(output, snapshot, retained?.messages,
+    const output = await callModel(model, 'extract', catalog ? windowSystem : retained ? retainedSystem : system,
+      catalog?.input ?? { messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })) },
+      { failureCode: 'extraction_failed', deadline });
+    let items = catalog ? extractedWindowItems(output, snapshot, catalog,
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot, retained?.messages,
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason));
     deadline?.check();
     // Do not start another interpretation stage after explicit discard/forget.

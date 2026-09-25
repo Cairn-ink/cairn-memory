@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — opt-in indexed source windows
+
+- Add a trusted embedded-core `captureSourcePolicy: 'indexed-windows-v1'`
+  option only with v2 qualification. Canonical source windows can bind a
+  scripted selected tail passage to the original message receipt; the default
+  first-prefix path and provider/model/token limits remain unchanged.
+- Add narrow OpenAI adapter indexed-envelope validation and synthetic core,
+  fake-HTTP and installed-artifact regressions. This is not semantic-quality,
+  benchmark, hosted-host or comparator evidence. Staged evidence and rationale
+  integration remain unsupported.
+
 ## Unreleased — native Hermes capture deadline and explicit recovery
 
 - Add optional `capture_deadline_ms` as a canonical decimal profile string
