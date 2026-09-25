@@ -185,3 +185,37 @@ CI, and latest recorded checkpoint. Do not infer paid work has not happened from
 a missing report; check durable markers and ledger at the later authorized
 operational stage. Record ownership, candidate, verification, retained failures
 and next action after each gate. This packet itself is synthetic/offline only.
+
+## Offline implementation checkpoint (candidate not frozen)
+
+The assigned GPT-6 Sol/high author added the scoped pure selector/projection,
+five focused pure tests, one installed-dependency-suite actual adapter control,
+technical preparation documentation, changelog and retained limitations.
+Node 22.16 and 24.15 focused commands ran all six tests successfully. The
+adapter control uses two real temporary cores, 25 synthetic turns/two batches
+per arm, scripted fake HTTP, both source policies, all five core model methods,
+nonempty source-only answer receipts and both judge callbacks. Its observed
+routes remain within the independently calculated full-reservation bound;
+this is no semantic answer-quality evidence. The independent primary selection/
+projection oracle also passed on both runtimes against the current helper bytes.
+One later test-only strengthening asserts that the actual prefix plan retains
+only the first 800 units while the indexed catalog includes the synthetic tail;
+both keep the same capture batch count and projected ceiling. It changed no
+runtime behavior, grant or source policy.
+
+An earlier *test fixture* failed after reusing identical generated content in
+the second batch (`qualification_conflict`). Varying that content then exposed
+a fixture classification proposal that created a new L1 even though an existing
+L1 was visible (`classification_failed`). The corrected fixture reuses that
+existing L1 and passes. Neither failure established a helper/runtime defect;
+both are retained here rather than silently converted into product evidence.
+Primary personally reran the final offline matrix on Node 22.16 and 24.15:
+budget 25, guard 227, live 361 total (331 passed and 30 existing explicit
+opt-in skips), LongMemEval 128, generic 112, all five prescribed demos, JSON
+validation and locally pinned Claude 2.1.260 strict plugin validation all
+passed. After the tail assertion was added, primary reran the full LongMemEval
+suite on both versions (128/128 each); the tested module and focused test
+hashes matched the pending candidate bytes. The primary's independent
+selection/projection oracle passed on both versions. Clean archive, fixed-diff
+independent reviews, exact-head CI and any operational audit remain pending.
+No real cohort, ledger, key, corpus or provider was accessed.

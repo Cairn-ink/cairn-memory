@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — offline qualified source-pair cohort preparation
+
+- Add pure ID/type-only development and reserved-holdout allocation with a new
+  fixed seed and reproducibility digests, plus source-derived two-arm request
+  and full-reservation ceilings. Synthetic planners and a fake-HTTP actual-core
+  control establish only bounded mechanics; no corpus, ledger, key or paid run
+  is used. Old fresh-smoke selection and three-arm projection are unchanged.
+
 ## Unreleased — offline installed qualified source-pair launcher
 
 - Add a private, closed-plan installed two-arm launcher with read-only monetary
