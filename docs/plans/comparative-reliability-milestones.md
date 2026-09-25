@@ -49,7 +49,7 @@ compatibility attempt: three fresh synthetic cases, one inline and two catalog;
 all three compiled exact original anchors. Local count-body estimates were
 2084/4739/4707 and observed provider counts1630/3985/3951. Supplied candidates
 were1/80/80; selected anchors/receipts1/5/5, all user-role. Mixed roles were
-present in the third request, but the provider did not select assistant anchors;
+present in the third fixture, but the provider did not select assistant anchors;
 do not imply all-role selection or semantic correctness. Separate fake-HTTP
 controls verified exact selected assistant mapping and source identity.
 
@@ -232,7 +232,7 @@ one inline and two text-catalog. All three provider count, generation and
 installed-core compilation paths completed with exact original source anchors.
 Local count-body estimates were 2,084/4,739/4,707; provider counts were
 1,630/3,985/3,951. Supplied candidates were 1/80/80, while the provider
-selected 1/5/5 anchors and distinct receipts, all user-role. The third request
+selected 1/5/5 anchors and distinct receipts, all user-role. The third fixture
 contained mixed roles, but the provider did not select an assistant anchor.
 Separate fake-HTTP controls proved exact assistant-source mapping. Neither
 the actual nor fake path establishes all-role selection, semantic correctness,

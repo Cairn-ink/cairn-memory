@@ -45,7 +45,7 @@ synthetic cases: one inline and two catalog. All three count, generation and
 installed-core compilation paths completed with exact original anchors. Local
 count-body estimates were 2,084/4,739/4,707; observed provider counts were
 1,630/3,985/3,951. The provider selected 1/5/5 user-role anchors and distinct
-receipts from 1/80/80 supplied candidates. The third request contained mixed
+receipts from 1/80/80 supplied candidates. The third fixture contained mixed
 roles, but did not receive an assistant selection. Separate fake-HTTP checks
 proved assistant-source mapping. This is narrow wire/compiler compatibility,
 not semantic quality, retrieval, all-role selection, capacity or a new score.

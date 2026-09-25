@@ -78,7 +78,7 @@ generation and exact-source installed-core compilation. Local count-body
 estimates were 2,084/4,739/4,707, versus provider counts of
 1,630/3,985/3,951. The provider selected 1/5/5 user-role anchors and distinct
 receipts from 1/80/80 supplied candidates. Mixed roles were present in the
-third request, but no assistant anchor was selected by the provider; separate
+third fixture, but no assistant anchor was selected by the provider; separate
 fake-HTTP controls verified assistant-source mapping. This is wire/compiler
 compatibility only, not semantic correctness, retrieval, all-role selection,
 general capacity or a new benchmark score.
