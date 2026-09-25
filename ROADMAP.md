@@ -35,46 +35,54 @@ distinguishes main from pending PRs and proposed behavior; it is not a release
 claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
-Dated 2026-09-25: [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-records the current after-#221 checkpoint and retains older evidence snapshots
-as historical. PRs #217–#221 are ready, open and unmerged; their recorded exact-head CI runs
-passed 17/17: #217 `45eca226` / `36076692945`, #218 `330ecb1` /
-`36082430474`, #219 `3bd876f` / `36083139820`, #220 `dbfe5d8` /
-`36087301218` attempt 1, and #221 `a9c00a5` / `36086514751`. PR #220 is
-reported ready and mergeable after both runtime matrices and independent
-full-base Standards/Spec reviews passed; it is not merged. Only the finite S1
-mechanical gate is accepted. This does not pass the S1–S5 sequence or establish
-semantic reliability.
+Dated 2026-09-25: the [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+records the latest after-#229/R5 checkpoint and preserves earlier results as
+history. PR #228 (`a5d76b3`, CI run `36109490910`) and PR #229 (`d302abe`, CI
+run `36112167726`) each have a recorded exact-head 17/17 pass and were open,
+unmerged at last check. This is not a fresh audit of every earlier PR. Finite
+S1 mechanics are accepted within their bounded scope; S2–S5 remain open. No
+S1–S5 sequence pass is claimed.
 
-The terminal fresh-six development smoke on PR #217's runtime completed and
-was judged 6/6 in all arms: Cairn 2 correct/4 wrong/0 unresolved, full history
-3/3/0, and no memory 0/6/0. It meets only the predeclared 95% completion
-checkpoint at this six-case N; it is not semantic quality, improvement,
-comparator parity or installed-host evidence. The historical 30-case Cairn
-outcomes remain 15 correct, 8 wrong and 7 unresolved; they were not rerun. PR
-#218's Mem0 2.2.0 preflight is 16 synthetic fake-HTTP cases, not a quality
-comparison. PR #220 adds opt-in indexed source windows beyond the ordinary
-first-800-unit receipt prefix; the default is unchanged and synthetic mechanics
-show no semantic gain. Its request-guard regression is denial-only, not a new
-paid capability or request. PR #221 proves a synthetic existing-only v1→v2
-embedding-ledger migration preserves history; the actual ledger did not change
-and that migration establishes no paid request guard.
+The R5 run stopped before scoring: seven requests, US$0.035 conservatively
+reserved, zero scored and six unresolved cases per arm. Unresolved is not a 0%
+accuracy score. Its global halt followed an observed indexed count of 8,701
+exceeding the 7,024 bounded dispatch limit. A separate earlier prefix-capture
+record is labeled `invalid_model_output` / `ingestion_incomplete`; no output or
+subreason was retained, so that prefix failure's exact cause is unknown. Do not
+retry this consumed six-case roster or prior cohorts; the reserved 30-case set
+remains untouched. The historical audited 30-case results remain 15 correct,
+8 wrong and 7 unresolved.
 
-The last read-only accounting audit recorded US$86.171460 conservatively
-reserved and 12,633 requests terminal, against the unchanged US$100 operational
-cap and US$200 user ceiling. This documentation update did not inspect the
-ledger or make a paid call. Verify the actual ledger and request guard before
-any future paid phase; no budget increase or old-cohort rerun is authorized.
-S2 answer-stage quality, S3 matched Mem0 scoring, S4 installed growth and S5
-cold-context onboarding remain open. A separately versioned indexed-window
-provenance plan is frozen at `3cd37a5` against PR #220; implementation has
-started but is not accepted and has no public PR link yet. Versioned ingestion
-and verifier work must precede scoring. Later paired fresh comparison, guarded
-Mem0 routes, same-budget MOC ablation and installed growth/onboarding remain
-separately gated. PR #212's incremental-index result remains a diagnostic only:
-mixed query performance, lexical false positives, unsupported CJK, copied full
-text and inclusive database growth do not establish a production selector or
-S2 answer-stage pass. Earlier PR heads and CI details remain in the plan.
+The latest independent read-only accounting audit recorded 12,640 terminal
+requests, US$86.206460 conservatively reserved and zero pending. The cumulative
+user ceiling remains US$200; the operational cap has been atomically extended
+from US$100 to US$200 with a 50,000-request cap. This is not the separate
+embedding-ledger migration, which remains incomplete. Keep at least US$70 for
+comparator work and US$10 for host work. No additional paid request, cohort
+retry, merge or release is authorized by this status update.
+
+A primary offline budget-boundary control through the real core, adapter and
+fake-HTTP guard produced one pass and one red on both Node 22.16 and 24.15. In
+each of four source turns, source text length increased from 113 to 114 UTF-16
+units. For the 114-unit fixture, the local partial preflight counted
+2,379 while full wire serialization was 7,032. This demonstrates an analogous
+schema-budget gap; it does not explain R5's distinct 8,701-over-7,024 global
+halt or the earlier prefix failure. The budget repair is in progress but not
+accepted; source-free observability is not implemented. Next: finish and accept
+the offline fix/diagnostic, separately freeze and pass a small synthetic
+real-API compatibility/count check within the existing authority, freeze a separate
+fresh development cohort without old retries, run a matched Mem0 comparison,
+then measure installed growth and onboarding. Protect the comparator and host
+reserves; none of these steps is a result yet. This documentation update makes
+no provider call and does not itself establish API compatibility.
+
+The older after-#221 accounting, smoke completion, synthetic Mem0/index-window
+results and embedding-migration mechanics remain in the plan as historical
+evidence, not current status or quality claims. PR #212's incremental-index
+result remains diagnostic only; its mixed query performance, lexical false
+positives, unsupported CJK, copied full text and inclusive database growth do
+not establish a production selector or S2 answer-stage pass. Earlier PR heads
+and CI details remain in the plan.
 
 Historically, the earlier PR #208 run `36042861159` at `f25050d` failed its Node 22
 40,000-space tokenizer check at 5,048 ms against the unchanged 5-second gate.

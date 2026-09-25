@@ -21,6 +21,23 @@ harnesses, evaluated against existing solutions under matched conditions.
 - P5: Keep source text, case IDs and private artifact paths out of public docs;
   this plan does not change production, private scope or the ledger.
 
+### Latest-checkpoint acceptance checklist
+
+- Preserve all earlier scores, failures, unresolved cases and exact-head CI as
+  dated historical evidence; do not imply older PRs were rechecked.
+- Distinguish synthetic mechanics, completion and budget tests from semantic
+  quality. No R5 arm reached scoring, so unresolved is not an accuracy rate.
+- Record the unchanged US$200 user ceiling, the completed US$100→US$200
+  operational-cap transition, its separate 50,000-request cap, and the latest
+  dated read-only accounting audit without implying embedding-ledger migration.
+- Keep the consumed fresh roster and prior cohorts closed, the reserved 30-case
+  set untouched, and the comparator/host reserves protected.
+- State the next gated sequence, including a separately frozen synthetic
+  real-API compatibility/count check before fresh development; label the budget
+  repair in progress but unaccepted, and source-free diagnosis unimplemented.
+- Publish no raw case/source data, IDs, credentials, private paths or ledger
+  contents. This checkpoint authorizes no new paid call, rerun, merge or release.
+
 ## Baseline and authority
 
 The [audited 30-case cohort](https://github.com/Cairn-ink/cairn-memory/blob/fcfd2b349ce20c6def46ed4815fa6de6b5404308/docs/evidence/reliability-cohort-30.md)
@@ -40,29 +57,89 @@ reference, not a competing product. The old 70% target is no longer primary and
 is not a threshold retrofitted to new systems.
 
 The authorized API ceiling is US$200 cumulative. The original audit recorded
-US$79.389500 reserved and US$120.610500 remaining; that is a historical
+US$79.389500 reserved and US$120.610500 remaining; this is a historical
 baseline, not the latest accounting checkpoint below. The original tentative
 phase allocations ($15 fresh smoke, $75 paired comparison, $20 targeted
-architecture, $10 installed workflow and $0.610500 buffer) remain planning
-inputs, not current reservations. Before freezing a phase, the DRI may rebalance
-within remaining headroom and reduce N/arms; freeze its cap before calls and
-honor that stop. The operational ledger remains capped at US$100 unless the
-authorized limit is separately reviewed and enforced. This docs-only task
-makes no calls or ledger changes; verify the frozen plan, ledger and guard
-before each phase. No reset/refund/retry of prior failures; new authority is
-needed only above the ceiling or for new sensitive data access. Replanning
-within the cap needs no further user approval.
+architecture, $10 installed workflow and $0.610500 buffer) are superseded
+planning inputs, not current reservations. The operational cap was then US$100;
+the latest checkpoint below records its subsequent authorized extension. Before
+freezing any phase, verify its frozen cap against the live ledger and guard,
+reduce N/arms if needed and honor the stop. No reset/refund/retry of prior
+failures; new authority is needed only above the ceiling or for new sensitive
+data access. Replanning within the cap needs no further user approval.
 
 Preserve wrapper failure, reservations, unknown prices/outcomes and case results;
 do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after PR #221)
+## Latest checkpoint — 2026-09-25 (after PR #229 / R5)
 
-This concise status supersedes the execution status of older snapshots; their
-heads, results and failures remain historical. PRs #217–#221 are ready, open
-and unmerged. The recorded candidate/CI state is:
+This checkpoint supersedes older execution status only; their heads, results
+and failures remain historical. At the last check, PR #228 (launch candidate)
+and PR #229 (cohort preparation) were open and unmerged. These exact-head CI
+records are retained here, not a fresh audit of every earlier PR:
+
+| PR | Candidate head | Recorded exact-head CI |
+| --- | --- | --- |
+| [#228](https://github.com/Cairn-ink/cairn-memory/pull/228) | `a5d76b3` | Run `36109490910`, 17/17 passed. |
+| [#229](https://github.com/Cairn-ink/cairn-memory/pull/229) | `d302abe` | Run `36112167726`, 17/17 passed. |
+
+The finite S1 mechanical gate is accepted. S2–S5 remain open; no S1–S5
+sequence pass is claimed. The terminal R5 run stopped before scoring: seven
+requests, US$0.035 conservatively reserved, zero scored and six unresolved
+cases per arm. This is not a 0% accuracy result. Its global halt followed an
+observed indexed count of 8,701 exceeding the 7,024 bounded dispatch limit. A
+separate earlier prefix-capture record is labeled `invalid_model_output` /
+`ingestion_incomplete`, but retained evidence has no subreason or model output;
+that prefix failure's exact cause remains unknown. Do not retry the consumed
+six-case roster or prior cohorts; the separately reserved 30-case set remains
+untouched.
+
+A primary offline budget-boundary control exercised the real core, adapter and
+fake-HTTP guard. In each of four source turns, source text length increased
+from 113 to 114 UTF-16 units. For the 114-unit fixture, the local partial
+preflight counted 2,379 while the full wire serialization was 7,032. The
+control was one pass and one red on both Node 22.16 and 24.15. This demonstrates
+an analogous schema-budget gap; it does not explain R5's distinct 8,701-over-
+7,024 global halt or the earlier prefix failure. The budget-boundary repair is
+in progress but not accepted; source-free observability is not implemented.
+These synthetic mechanics establish no semantic result.
+
+The cumulative user ceiling remains US$200. The operational cap has been
+atomically extended from US$100 to US$200 with a 50,000-request cap; this does
+not mean the separate embedding-ledger migration is done. The latest
+independent, read-only accounting audit recorded 12,640 terminal requests,
+US$86.206460 conservatively reserved and zero pending. The R5 terminal record
+above is not permission for more calls. Preserve at least US$70 for comparator
+work and US$10 for host work; no new paid call is authorized here.
+
+Next, complete and accept an offline budget-boundary fix plus source-free
+observability; separately freeze and pass a small synthetic real-API
+compatibility/count check within the existing authority; then freeze a fresh
+development cohort without retries of consumed or old cases; then run the
+matched Mem0 comparison; then measure installed growth and onboarding. S2
+semantic answer-stage quality, S3 matched comparison, S4 installed growth and
+S5 cold-context onboarding remain open.
+The audited 30-case result remains 15 correct, 8 wrong and 7 unresolved. No
+source text, case IDs, credentials, private paths or ledger contents belong in
+public documentation.
+
+This checkpoint itself makes no provider call. A real-API compatibility pass
+requires actual count and generation observations after its separate frozen
+plan, allocation and safety checks; offline success cannot substitute for it.
+Checkpoint implementation owner: `checkpoint212`, GPT-6 Sol/high. Primary
+personally inspected all three changed documents and reran 106/106 generic
+tests, JSON validation and pinned Claude 2.1.260 validations on both Node 22.16
+and 24.15. Primary made a narrow final integration clarification separating
+this no-call documentation update from the future paid compatibility check.
+The original review base remains `83a10c3`; independent review and exact-head CI
+must pass on the new candidate before this PR update is declared ready.
+
+## Historical checkpoint — 2026-09-25 (after PR #221)
+
+This prior fixed status is retained as history. The following were its recorded
+candidate/CI state; they were not rechecked in this refresh:
 
 | PR | Candidate head | Recorded exact-head CI |
 | --- | --- | --- |
@@ -72,40 +149,32 @@ and unmerged. The recorded candidate/CI state is:
 | [#220](https://github.com/Cairn-ink/cairn-memory/pull/220) | `dbfe5d8` | Run `36087301218`, attempt 1, 17/17 passed. |
 | [#221](https://github.com/Cairn-ink/cairn-memory/pull/221) | `a9c00a5` | Run `36086514751`, 17/17 passed. |
 
-PR #220 is reported ready and mergeable, with both local runtime matrices and
-independent full-base Standards/Spec reviews passing; it is not merged. The
-finite S1 mechanical gate alone is accepted. No S1–S5 sequence pass is claimed.
+At that checkpoint, PR #220 was reported ready and mergeable, with both local
+runtime matrices and independent full-base Standards/Spec reviews passing; it
+was not merged. The finite S1 mechanical gate alone was accepted. No S1–S5
+sequence pass was claimed.
 
-PR #219 records the terminal fresh-six development smoke on PR #217's runtime:
-all three arms completed and were judged 6/6. Cairn scored 2 correct, 4 wrong,
-0 unresolved; full history 3/3/0; no memory 0/6/0. This clears only the tiny
-run's predeclared 95% completion checkpoint at 6/6 in every arm, not semantic
-quality, improvement, comparator parity or an installed-host gate. The audited
-30-case result remains 15 correct, 8 wrong and 7 unresolved; that cohort was
-not rerun. PR #218's
-Mem0 2.2.0 preflight covers 16 synthetic fake-HTTP cases only, not a quality
-comparison. PR #220 adds an optional indexed-window path for passages beyond
-the ordinary first-800-unit receipt prefix; the default is unchanged and the
-synthetic mechanics establish no semantic gain. Its W10 request-guard regression
-is denial-only, not a new paid capability or paid request. PR #221 proves a
-synthetic existing-only v1→v2 embedding-ledger migration preserves history; the
-actual ledger was unchanged, and that migration establishes no paid request
-guard.
+PR #219's terminal fresh-six development smoke on PR #217's runtime had all
+three arms complete and judged 6/6: Cairn 2 correct, 4 wrong, 0 unresolved;
+full history 3/3/0; no memory 0/6/0. This cleared only that run's predeclared
+95% completion checkpoint, not semantic quality, improvement, comparator parity
+or an installed-host gate. The audited 30-case result remained 15 correct, 8
+wrong and 7 unresolved; it was not rerun. PR #218's Mem0 2.2.0 preflight covered
+16 synthetic fake-HTTP cases only. PR #220 added an optional indexed-window
+path beyond the ordinary first-800-unit receipt prefix; its default stayed
+unchanged and synthetic mechanics established no semantic gain. Its W10
+request-guard regression was denial-only. PR #221 proved a synthetic
+existing-only v1→v2 embedding-ledger migration preserved history; the actual
+ledger was unchanged, and this did not establish a paid request guard.
 
-The last read-only accounting audit recorded US$86.171460 conservatively
-reserved and 12,633 requests terminal, against the unchanged US$100 operational
-cap and US$200 user ceiling. This documentation checkpoint did not inspect the
-ledger or make a paid call. Verify the actual ledger, grants and guard before
-any future paid phase; no old-cohort rerun or budget increase is authorized.
-
-S2 semantic answer-stage quality, S3 matched Mem0 scoring, S4 installed growth
-and S5 cold-context onboarding remain open. A separately versioned
-indexed-window provenance plan is frozen at `3cd37a5` against PR #220; its
-implementation has started but is not accepted and has no public PR link yet.
-Ingestion and verifier versioning must precede scoring. Later paired fresh
-comparison, guarded Mem0 routes, same-budget MOC ablation and installed growth /
-onboarding remain separately gated proposals, not results. No source text, case
-IDs or private artifact paths belong in public documentation.
+The after-#221 read-only accounting audit recorded US$86.171460 conservatively
+reserved and 12,633 terminal requests, against the then-US$100 operational cap
+and US$200 user ceiling. The after-#221 checkpoint did not inspect the ledger or
+make a paid call. Its S2 semantic answer-stage, S3 matched Mem0, S4 installed
+growth and S5 cold-context onboarding gates remained open. The separately
+versioned indexed-window provenance plan was frozen at `3cd37a5` against PR
+#220; implementation had started but was not accepted. These figures, status
+and open-gate list are historical, not the current accounting or project state.
 
 ## Historical checkpoint — 2026-09-25 (after PR #216)
 

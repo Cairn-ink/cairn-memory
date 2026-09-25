@@ -68,19 +68,49 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
-The latest fixed-six development smoke completed and was judged 6/6 in each
-arm, but completion is not a semantic-quality result: Cairn was 2 correct, 4
-wrong, 0 unresolved; full history 3/3/0; and no memory 0/6/0. The audited
-30-case result remains unchanged at 15/8/7; it was not rerun. Recent synthetic
-work also includes a Mem0 fake-HTTP preflight, optional indexed source-window
-capture mechanics, and an existing-only embedding-ledger migration. None is a
-matched answer-quality comparison, semantic improvement, installed-growth
-result or onboarding pass. PR #220's synthetic guard regression is denial-only;
-no new paid capability or paid request is established. Indexed windows leave
-the default first-prefix behavior unchanged and do not prove that a model
-selects or answers correctly from a later passage. S2 answer-stage quality,
-S3 matched comparison, S4 installed growth and S5 cold-context onboarding
-remain open; see the [current milestone checkpoint](plans/comparative-reliability-milestones.md).
+The earlier fixed-six development smoke completed and was judged 6/6 in each
+arm, but completion is not semantic quality: Cairn was 2 correct, 4 wrong,
+0 unresolved; full history 3/3/0; and no memory 0/6/0. A later R5 run stopped
+before scoring: seven requests, US$0.035 conservatively reserved, zero scored
+and six unresolved cases per arm. That is not a 0% accuracy result. The global
+halt followed an observed indexed count of 8,701 exceeding the 7,024 bounded
+dispatch limit. A separate earlier prefix-capture record is labeled
+`invalid_model_output` / `ingestion_incomplete`; no subreason or model output
+was retained, so that prefix failure's exact cause is unknown. The consumed
+roster and prior cohorts must not be retried; the separately reserved 30-case
+set remains untouched. The audited 30-case result remains 15/8/7 and was not
+rerun.
+
+At the latest independent read-only accounting audit, 12,640 requests were
+terminal, US$86.206460 was conservatively reserved and zero were pending. The
+US$200 user ceiling is unchanged; the operational cap was atomically extended
+from US$100 to US$200 with a 50,000-request cap. This does not mean the separate
+embedding-ledger migration is complete. An offline budget-boundary control
+through the real core, adapter and fake-HTTP guard produced one pass and one red
+on each of Node 22.16 and 24.15. In each of four source turns, source text
+length increased from 113 to 114 UTF-16 units; for the 114-unit fixture, local
+partial preflight counted 2,379 while full wire serialization was 7,032. This
+demonstrates an analogous schema-budget gap, not an explanation of R5's distinct
+global halt or prefix failure. The budget repair is in progress but unaccepted;
+source-free observability is not implemented. These are synthetic mechanics,
+not provider-exact usage or semantic evidence.
+
+Recent synthetic work also includes a Mem0 fake-HTTP preflight, optional
+indexed-window capture mechanics and an existing-only embedding-ledger
+migration. None is a matched answer-quality comparison, semantic improvement,
+installed-growth result or onboarding pass. PR #220's synthetic guard
+regression is denial-only; no new paid capability or paid request is
+established. Indexed windows leave the default first-prefix behavior unchanged
+and do not prove that a model selects or answers correctly from a later
+passage. Next gates remain a bounded offline budget-boundary fix and
+source-free diagnostic, a separately frozen synthetic real-API
+compatibility/count check within the existing authority, a separately frozen fresh
+development cohort with no old retries, matched Mem0 scoring, then installed
+growth and onboarding. S2
+answer-stage quality, S3 matched comparison, S4 installed growth and S5
+cold-context onboarding remain open. This documentation update makes no
+provider call or compatibility claim; see the [current milestone
+checkpoint](plans/comparative-reliability-milestones.md).
 
 ## Where the evidence lives
 
