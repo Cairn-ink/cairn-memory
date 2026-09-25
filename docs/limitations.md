@@ -442,6 +442,21 @@ combined with this v2 roster or identity. Any future score requires a new
 prospectively frozen and independently reviewed protocol and separate
 authorization.
 
+## Offline chained benchmark budget is not a transport grant
+
+The separately versioned US$100→US$200 benchmark chain has only
+synthetic temporary-ledger evidence. It has not been applied to the operator
+ledger and does not select a fresh roster, a request schedule, source-policy
+transport, retries, models, provider prices or any paid request. Unknown
+historical costs and reservations remain charged; the prior experiment ledger
+must not be reset. Old benchmark and scoped capabilities do not inherit the
+chain, although the generic baseline guard can still be explicitly configured
+with a valid new ledger configuration for its unchanged routes. Existing-only
+SQLite opening and path/inode checks cover named synthetic races, not a
+privileged same-user process repeatedly swapping paths: Node SQLite does not
+expose its opened file descriptor for independent inode verification. The
+synthetic SIGKILL cases are crash-boundary tests, not a power-loss guarantee.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

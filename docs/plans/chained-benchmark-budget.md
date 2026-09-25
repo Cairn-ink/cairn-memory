@@ -138,8 +138,14 @@ Loader verifies exact record, immutable full parent chain, expected stages,
 current target config and unchanged bound prefix, with no mutation. No missing
 parent fallback or weaker acceptance for old files. Ordinary later settled rows
 are allowed; deleted/edited prefix rows or rolled-back totals are not.
-All old factories still refuse the new configuration or chain. No provider
-route, source policy, retry policy, deadline, model or price change in B.
+Prior-configuration handles and prior benchmark/scoped capabilities must not
+resume after the cap change, and old benchmark factories must reject the new
+chain record. The generic baseline factory has no benchmark-capability input:
+an operator explicitly supplying the new valid configuration may still create
+its unchanged baseline guard. That is not reuse of an old benchmark grant and
+must not permit indexed extraction or candidate qualification. Test this
+positive legacy behavior as well as those denials. No provider route, source
+policy, retry policy, deadline, model or price change in B.
 
 ## B4 — Observable synthetic acceptance
 
@@ -150,7 +156,10 @@ Actual temporary ledgers must establish:
 2. Exact replay is idempotent; checkpoint/cap/policy/stage/parent/identity
    mismatch, pending/overrun and historical tampering are refused.
 3. Competing writers cannot both authorize different transitions; old consumed
-   and unused capabilities cannot regain transport access under 200.
+   and unused benchmark/scoped capabilities cannot regain transport access
+   under 200. Prior-configuration live handles are fenced. A generic baseline
+   guard explicitly constructed with the target configuration retains only
+   its existing routes, not the new pair routes or a benchmark grant.
 4. Failures at partial file write, file fsync, directory fsync, update and commit
    retain the proper ledger/record state. Include child-process termination
    before/after commit, exact recovery and conflicting-record refusal.
@@ -184,3 +193,44 @@ proposals. The scorer's exact-head CI is accepted. Next: one bounded Sol/high
 implementation, primary actual verification, two independent full-base reviews
 and exact-head CI. No actual cap change follows from this release.
 Read this checkpoint and the current tracked diff, not conversation memory.
+
+## Offline implementation checkpoint (not operational acceptance)
+
+The new ledger APIs own an existing-only `mode=rw` SQLite writer transaction
+and a separate read-only snapshot; the new guard functions bind one valid v1
+monetary parent to a create-only chain record. Existing create/reopen and old
+guard dispatch paths are unchanged. The dependency-free budget suite retains
+pure helper tests; the actual adapter/guard chain regressions are registered
+in the existing installed request-guard suite, not in the isolated budget or
+LongMemEval job. No CI workflow, lockfile or dependency changed.
+
+Author synthetic tests on both Node 22.16.0 and 24.15.0 pass focused 40/40,
+complete budget 18/18, request guard 192/192, live-offline 351 total (321
+passed, 30 opt-in skips), generic 112/112, budget and guard demos, JSON and
+verified locally pinned Claude Code 2.1.260 strict plugin validation. An
+isolated no-adapter tracked snapshot passes budget 18/18 and LongMemEval
+123/123 on both runtimes; the chain test stays in the already-installed guard
+suite. The synthetic tests include
+50→100→200 history with nonzero unknown reservations and null actual cost,
+later settled replay, full parent/prefix refusal, consumed and unused old
+capability denials, explicit-target generic baseline route denial for indexed
+and candidate wire requests with zero forwarding, child SIGKILL before/after
+COMMIT, partial file and fsync failures, URI missing-file race, hard-link/mode/
+identity changes under lock, and two competing child writers. These checks do
+not authenticate injected callbacks, prove power-loss durability, establish
+model quality or permit the actual operator ledger transition. Primary
+acceptance, independent review and exact-head CI remain required.
+
+## Contract clarification discovered during synthetic implementation
+
+The original B3 sentence said all old factories reject the new configuration.
+The author flagged a conflict with the requirement to leave old dispatch
+unchanged. A primary synthetic probe confirmed the generic baseline factory
+can be constructed with an explicit valid target configuration; this API never
+accepted a benchmark capability. Existing monetary-extension tests fence old
+benchmark/scoped grants and old configuration handles, not every invocation of
+the baseline constructor. The primary therefore clarified B3/B4 above before
+acceptance, rather than adding an unrequested global transport policy, a magic
+200 ceiling or a second activation file. This is a documented correction to
+the plan, not a runtime fix or a claim that the original broad condition passed.
+No operational permission or paid route is expanded by this clarification.

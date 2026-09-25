@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — offline chained benchmark budget prerequisite
+
+- Add an existing-only ledger-owned cap transition and read-only snapshot,
+  plus a separately bound US$100→US$200 benchmark chain token.
+  Synthetic persistence, crash, race and old-capability tests preserve prior
+  history and denials. This does not grant a paid comparison, indexed capture
+  transport, new roster or actual operator-ledger transition.
+
 ## Unreleased — qualified source-pair official-style scoring
 
 - Add a separate strict offline scorer and fixed-roster aggregate for the

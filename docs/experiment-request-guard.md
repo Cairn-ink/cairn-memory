@@ -527,6 +527,39 @@ ledger configuration and fail before transport. The operator must separately
 freeze a disjoint roster before issuing any fresh one-shot case capability; the
 budget grant is intentionally not a cross-execution case registry.
 
+### Chained benchmark budget prerequisite (offline only)
+
+`authorizeChainedBenchmarkBudgetExtension({oldLedger, policy,
+parentBudgetExtension, authorizationId, newLimitMicroUsd, newRequestCap,
+expectedCheckpoint})` accepts exactly one complete, file-bound
+`benchmark-budget-extension-v1` parent at the historical 100,000,000-micro-USD
+configuration and targets exactly 200,000,000 micro-USD with an explicit
+strictly higher finite request cap. It is a separate immutable
+`benchmark-budget-chain-v1` record, not a second invocation of the old
+single-transition API. Its private create-only filename is keyed by the
+validated parent authorization ID. Directory, run ID, policy, method and
+answer/judge stages remain fixed; all attempt rows, unknown reservations,
+actual-cost nulls and original authorization files remain intact.
+
+The ledger-owned existing-only writer transaction verifies the settled
+ordered checkpoint, syncs the complete 0600 record and directory before the
+conditional two-cap update, and checks state and path identity again before
+commit. A complete matching record can recover a rolled-back transition and
+exact replay is idempotent. Partial, conflicting, unsafe, edited-prefix,
+pending or overrun state fails closed without repair or refund. The separate
+`loadChainedBenchmarkBudgetExtension({ledger, policy,
+parentBudgetAuthorizationId, authorizationId, stages})` is read-only and
+requires the entire bound parent chain, exact target configuration, unchanged
+historical prefix and settled current rows. Later settled attempts remain
+visible without changing the bound prefix.
+
+This chain token is deliberately **not** accepted by the older benchmark or
+case-deadline factories. Prior-configuration handles and capabilities remain
+fenced. A generic baseline guard explicitly given the new configuration can
+still use its unchanged original routes; it receives no benchmark, indexed
+extraction or candidate-qualification grant from this metadata. No live
+transport, new roster, provider price or retry policy is selected here.
+
 All potentially paid routes must actually use this guard. Independent host
 connections, background jobs or a retrying injected transport can bypass its
 accounting. Inject a one-attempt transport, disable hidden SDK retries, and
