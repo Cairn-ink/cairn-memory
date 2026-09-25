@@ -86,5 +86,55 @@ the smoke's frozen completion gate and the later comparator guards pass.
 
 ## Evidence record
 
-Pending implementation and actual-engine checks. Initial research proposed the
-pin and identified timestamp/retry risks; source reading alone is not acceptance.
+GPT-6 Sol/high implemented the isolated packet on branch
+`test/mem0-engine-preflight` from fixed base
+`45eca22639836e8035c3ccbbe6403a9f5c076b1d`. Candidate review and primary
+acceptance are still pending. Initial research proposed the pin and identified
+timestamp/retry risks; the checks below add actual-engine evidence, not S3.
+
+Preparation: `uv pip compile --python 3.11 --generate-hashes` resolved 34
+packages into the isolated lock, then `uv pip sync --require-hashes --strict`
+installed them in `/tmp/cairn-mem0-preflight.vDNO3z/venv` using Python 3.11.12.
+The installed environment was 149 MiB by `du -sh`; `site-packages` was
+139,116,242 bytes and Mem0's package tree 2,084,155 bytes. These trees include
+13,141,486 and 720,927 bytes of generated Python bytecode cache respectively.
+The 57 MiB source checkout, download/wheel cache and test-time stores are
+separate, not runtime dependency measurements. No relative lightweight claim
+is made.
+The official tag checkout at that commit and installed distribution `mem0ai
+2.2.0` had identical 149 packaged Python/config files, SHA-256 tree fingerprint
+`6884f0109e5ef418c58972e12b95e1a5480293a14b0f35ee3be6e2ef7d3a0fcd`.
+The focused child verified all 34 installed versions against the hash lock,
+including OpenAI SDK 3.19.2.
+No optional FastEmbed, spaCy or reranker package was installed.
+
+Focused run:
+`/tmp/cairn-mem0-preflight.vDNO3z/venv/bin/python evaluation/comparators/mem0-preflight/run.py`
+passed. The child used a synthetic credential and seven-field allowlisted
+environment, rejected one deliberate non-loopback socket attempt before Mem0
+import, observed 16 fake loopback HTTP requests and no other socket attempt,
+and kept config/Qdrant/SQLite paths temporary. An early Python audit hook and
+disabled bytecode writes recorded 30 temporary write events, one exact
+`/dev/null` write and one deliberately refused unique off-root write; no
+other off-root Python-audited write occurred. Native code and existing file
+descriptors are outside this proof. Ordinary fake calls now have a five-second
+timeout; only the deliberate timeout probe uses 0.1 seconds. Ordered roles survived into
+the actual LLM request; the post-cutoff sentinel did not. The prompt used the
+2026-09-25 run date instead of the synthetic 2024 source date. Same-store user
+namespaces and separate stores returned only their own synthetic facts;
+returned evidence had call-level source metadata but no source span.
+`add(timestamp)` and `search(reference_date)` explicitly rejected use.
+Installed OpenAI SDK clients reported default retries 2/2; controlled clients
+used 0/0. A fake 429 and timeout each caused one observed attempt. A failed
+two-input embedding batch produced request sizes `1, 2, 1, 1` including query
+embedding and two one-input fallbacks. The local cap denied one next request.
+FastEmbed BM25 and reranker were absent. These are plumbing assertions with
+fake vectors/facts, not retrieval quality, cost, or parity results.
+The two temporary Qdrant/SQLite pairs measured 45,658/20,480 and
+62,043/20,480 bytes after the synthetic run; this is not a growth profile.
+
+Changed call path: `run.py` launches one isolated child with an explicit env;
+`child.py` installs socket checks, verifies installed engine identity, then
+invokes real `Memory.add`/`Memory.search` against fake HTTP and local Qdrant.
+No product entrypoint, core, scorer, ledger, packaging or CI caller changed.
+Primary owns final gate reruns, original-base independent review, PR and CI.
