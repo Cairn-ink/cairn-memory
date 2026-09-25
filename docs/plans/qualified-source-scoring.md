@@ -1,6 +1,6 @@
 # Qualified source-pair scoring and fixed-roster aggregation
 
-Fixed base: `7ceee9b379bf89514f5acdd3b6baa143641ee0b5` (qualified source-pair).
+Fixed base: `9402ae702b3b8836c6684db4a889acef34ee4b60` (qualified source-pair).
 Branch/worktree: `test/qualified-source-scoring` / `qualified-source-scoring`.
 Primary owns this contract. One GPT-6 Sol/high worker implements; two separate
 nonauthor agents review Standards and Spec at the full original base.
