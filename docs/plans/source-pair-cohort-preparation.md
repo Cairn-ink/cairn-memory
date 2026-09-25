@@ -24,7 +24,9 @@ The prior terminal30 and fresh6 cohorts remain immutable and are not rerun.
 Primary product choice, before new answers: select six development cases, one
 per existing question type, and reserve thirty disjoint holdout IDs, five/type,
 for a later matched comparator. Holdout membership is not permission to evaluate
-it or tune against it. Source-pair development may use at mostUS$30 later,
+it or tune against it. This is an explicitly stratified sample, not the full
+500-case benchmark or its natural question-type distribution. Source-pair
+development may use at mostUS$30 later,
 subject to actual audited headroom and a complete conservative projection;
 preserve at leastUS$70for matched Mem0 andUS$10for installed host work. These
 are prospective allocation ceilings, not reservations or a live launch grant.
@@ -66,7 +68,7 @@ insufficient type rather than substitute another type or shorten the roster.
 
 Export `projectSourcePairCase(options)` in the same module. Exact options:
 `history, question, namespace, answerModel, limits, armOrder, reservations`.
-The first seven fields reuse the existing N protocol helper's exact validation
+The first six fields reuse the existing N protocol helper's exact validation
 and semantics. `reservations` is exactly `{cairnCount, cairnGeneration, answer,
 judge}`, each a positive safe integer in microUSD. These are full guarded-route
 reservations, not current provider prices, known usage or a discount assumption.
