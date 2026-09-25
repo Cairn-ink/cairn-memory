@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — offline qualified source-pair guarded transport
+
+- Add a separately claimed, compact two-arm capability and one-connection
+  bound ledger witness for synthetic qualified-prefix versus indexed-window
+  generation and official-style scoring. Actual adapter wire, local cores,
+  fail-closed accounting, races and deadline behavior are tested without a
+  provider. Old guards and protocols remain unchanged. This is not a paid
+  launch, frozen roster, installed host grant or quality claim.
+
 ## Unreleased — offline chained benchmark budget prerequisite
 
 - Add an existing-only ledger-owned cap transition and read-only snapshot,

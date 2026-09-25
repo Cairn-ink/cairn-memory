@@ -457,6 +457,22 @@ privileged same-user process repeatedly swapping paths: Node SQLite does not
 expose its opened file descriptor for independent inode verification. The
 synthetic SIGKILL cases are crash-boundary tests, not a power-loss guarantee.
 
+## Qualified source-pair guard is an offline transport prerequisite
+
+The separately versioned qualified-prefix versus indexed-window guard has
+only synthetic temporary-ledger, fake-HTTP and real local-core evidence. Its
+compact roster and one-shot claim do not themselves supply trusted full
+protocol preimages, a frozen case population, operator approval, credentials,
+or an installed host launcher. N/P backup deadlines must be configured with
+explicit margin after the guard's stage deadlines; no timer setting proves
+remote cancellation or billing. The ledger witness closes named races inside
+reservation but not direct network bypass, hostile privileged same-user file
+replacement after the last check, or unreported provider retries. A halted or
+unknown-cost row retains its full reservation, not a refund. No answer-quality
+gain, semantic coverage, fair Mem0 comparison, paid readiness or product
+reliability is inferred from these transport tests. The actual operator ledger
+and historical cohort remain untouched.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

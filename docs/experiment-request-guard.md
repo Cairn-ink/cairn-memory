@@ -560,6 +560,43 @@ still use its unchanged original routes; it receives no benchmark, indexed
 extraction or candidate-qualification grant from this metadata. No live
 transport, new roster, provider price or retry policy is selected here.
 
+### Qualified source-pair guarded transport (offline only)
+
+`authorizeQualifiedSourcePairCapability` accepts an exact, independently
+prepared 1–250-question roster, either the complete bound v1 budget grant at
+US$100 or the complete chained grant at US$200, and an exact fully settled
+ledger checkpoint. Each entry holds only the opaque question ID, expected
+protocol digest, two-arm order and canonical derived scope IDs. It validates
+and derives the generation-then-scoring schedule, binds the whole historical
+prefix, and durably provisions a create-only private capability file under
+the ledger writer lock. Replaying identical authorization does not consume a
+claim. The launcher must separately verify the full expected N protocol;
+the guard cannot reconstruct a protocol from its digest.
+
+`createQualifiedSourcePairExperimentRequestGuard` validates that file and
+parent chain, then creates and syncs one irrevocable claim while holding the
+same existing-only ledger connection. Partial claims remain consumed, and two
+constructors cannot both own the execution. The returned guard exposes the
+existing case-scope snapshot contract and `qualifiedSourcePairCapability`,
+not the old `caseDeadlineCapability`. A single instance follows every
+generation scope in roster/arm order before every scoring scope. Its bound
+ledger witness is checked inside reservation, including after request
+snapshot callbacks, so an intervening foreign row cannot be silently charged
+to this execution.
+
+Only the active arm may send its source-policy extraction and the common
+classify/select/rank/candidate-qualification Cairn wire shapes. Qualified
+prefix extraction has no indexed input mode; indexed extraction requires
+`indexed-windows-v1`; qualification has no input mode. Answer is restricted
+to generation, judge to scoring, and hostFetch remains unsupported. The
+existing model, schema, local-token, framed-input and output limits still
+apply; model/protocol semantics are not attested by body shape. Recognized
+core/transport deadlines isolate one scope; external abort, HTTP failure,
+invalid response and accounting anomalies halt subsequent sends. There is no
+hidden retry or per-arm ledger reset. This synthetic transport interface is
+not an installed launcher, a fresh roster, a paid grant or proof of answer
+quality; old factories and their denials are unchanged.
+
 All potentially paid routes must actually use this guard. Independent host
 connections, background jobs or a retrying injected transport can bypass its
 accounting. Inject a one-attempt transport, disable hidden SDK retries, and

@@ -154,13 +154,36 @@ it never hands the callback a database handle. A callback is not a sandbox or
 operator authorization. The [benchmark chain](experiment-request-guard.md)
 owns the only intended campaign binding; direct helper use grants no transport.
 
-These two new APIs reject hard-linked database files and check path identity
+The snapshot and transition APIs reject hard-linked database files and check path identity
 and private modes under the transaction. The transition uses an encoded
 `mode=rw` SQLite file URL, so disappearance before open cannot create a new
 database; special-character paths remain encoded. This is a bounded race
 defense, not isolation from a privileged same-user actor repeatedly swapping
 paths: Node SQLite does not expose the opened database file descriptor for an
 independent inode check. Older create/reopen paths are unchanged.
+
+`openBoundExperimentBudget({configuration, authorize})` is a separate
+maintainer-only existing-ledger path for one prospective guard. It takes the
+same exact four-field configuration and one synchronous trusted callback. A
+single existing-only writable connection owns `BEGIN IMMEDIATE`, validates a
+fully settled exact state, passes a frozen detached snapshot to `authorize`,
+and checks unchanged state and private path identity before committing. The
+callback must return `undefined`; it is neither a sandbox nor permission to
+make a request. It may durably create an authorization file or claim, which is
+never removed merely because a later step fails.
+
+The returned handle has the usual `reserve`, `recordOutcome`, `getState` and
+`close` signatures. Unlike ordinary reopened handles, it witnesses the whole
+initial ledger history and accepts only the exact changes committed by its own
+reserve/settlement calls. It checks that witness within every transaction,
+including reservation, and checks the intended post-state and path before
+commit. Foreign rows, edits, mode/link/path changes and schema failures fence
+it before further transport. Any failed bound transaction, including an
+exhausted cap, also fences it conservatively; subsequent operations return
+`ledger_closed`. No balance is refunded or adopted, and old create/reopen
+behavior is unchanged. The bound
+handle still cannot police direct network egress or hostile privileged writes
+after the final path check.
 
 `ExperimentBudgetError` has `name: 'ExperimentBudgetError'`, a fixed `code`, and
 the same code as `message`. The fixed code set is:

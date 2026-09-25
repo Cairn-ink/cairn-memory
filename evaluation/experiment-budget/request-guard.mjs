@@ -17,6 +17,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   ExperimentBudgetError,
   inspectExperimentBudgetSnapshot,
+  openBoundExperimentBudget,
   reopenExperimentBudget,
   transitionExperimentBudgetCaps,
 } from './index.mjs';
@@ -58,6 +59,11 @@ const BENCHMARK_REQUEST_ALLOWANCE_VERSION = 'benchmark-request-allowance-v1';
 const BENCHMARK_BUDGET_EXTENSION_VERSION = 'benchmark-budget-extension-v1';
 const BENCHMARK_BUDGET_CHAIN_VERSION = 'benchmark-budget-chain-v1';
 const CASE_DEADLINE_VERSION = 'case-deadline-v1';
+const SOURCE_PAIR_VERSION = 'qualified-source-pair-case-v1';
+const SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-v1';
+const SOURCE_PAIR_NAMES = Object.freeze(['qualified-prefix', 'indexed-windows']);
+const SOURCE_PAIR_QUESTION = /^lme-case-[0-9a-f]{64}$/u;
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const CASE_PHASES = Object.freeze(['generation', 'scoring']);
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const BENCHMARK_STAGES = Object.freeze(['answer', 'judge']);
@@ -406,7 +412,7 @@ function validateHostBody(body, channel, byteLength) {
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
 function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
-  modelControl = false) {
+  modelControl = false, pairArm = null) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -443,7 +449,15 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   // The optional indexed-window adapter schema is not a live budget grant.
-  if (match?.[1] === 'extract' && input?.inputMode === 'indexed-windows-v1') fail('unsupported_request');
+  if (pairArm !== null) {
+    if (!isPlainObject(input)) fail('unsupported_request');
+    if (match?.[1] === 'extract'
+      && (pairArm === 'indexed-windows' ? input?.inputMode !== 'indexed-windows-v1'
+        : own(input, 'inputMode'))) fail('unsupported_request');
+    if (match?.[1] === 'qualifyCandidates' && own(input, 'inputMode')) fail('unsupported_request');
+  } else if (match?.[1] === 'extract' && input?.inputMode === 'indexed-windows-v1') {
+    fail('unsupported_request');
+  }
   let expectedSchema;
   try { expectedSchema = match ? schemasFor(match[1], input) : null; }
   catch { fail('unsupported_request'); }
@@ -1890,6 +1904,217 @@ function historicalDigest(attempts) {
   return createHash('sha256').update(canonical(attempts), 'utf8').digest('hex');
 }
 
+function pairHash(domain, value) {
+  return createHash('sha256').update(canonical([domain, value]), 'utf8').digest('hex');
+}
+
+function denseArray(value, minimum, maximum, code = 'invalid_capability') {
+  if (!Array.isArray(value) || value.length < minimum || value.length > maximum
+    || Object.keys(value).length !== value.length
+    || Object.keys(value).some((key, index) => key !== String(index))) fail(code);
+  return value;
+}
+
+function pairRoster(value) {
+  denseArray(value, 1, 250);
+  const questions = new Set();
+  const scopes = new Set();
+  const roster = value.map((entry) => {
+    exactKeys(entry, ['questionId', 'protocolDigest', 'armOrder', 'arms'], 'invalid_capability');
+    if (typeof entry.questionId !== 'string' || !SOURCE_PAIR_QUESTION.test(entry.questionId)
+      || questions.has(entry.questionId) || typeof entry.protocolDigest !== 'string'
+      || !SHA256_HEX.test(entry.protocolDigest)) fail('invalid_capability');
+    questions.add(entry.questionId);
+    denseArray(entry.armOrder, 2, 2);
+    if (new Set(entry.armOrder).size !== 2
+      || SOURCE_PAIR_NAMES.some((name) => !entry.armOrder.includes(name))) fail('invalid_capability');
+    denseArray(entry.arms, 2, 2);
+    const arms = entry.arms.map((arm, index) => {
+      exactKeys(arm, ['name', 'scopeId'], 'invalid_capability');
+      const name = SOURCE_PAIR_NAMES[index];
+      const scopeId = `lme-case-${pairHash('cairn.lme.source-pair.scope.v1', [entry.questionId, name])}`;
+      if (arm.name !== name || arm.scopeId !== scopeId || scopes.has(scopeId)) fail('invalid_capability');
+      scopes.add(scopeId);
+      return { name, scopeId };
+    });
+    return { questionId: entry.questionId, protocolDigest: entry.protocolDigest,
+      armOrder: [...entry.armOrder], arms };
+  });
+  return deepFreeze(roster);
+}
+
+function pairSchedule(roster) {
+  const ordered = roster.flatMap((entry) => entry.armOrder.map((name) => ({
+    caseId: entry.arms.find((arm) => arm.name === name).scopeId,
+  })));
+  return deepFreeze([...ordered.map(({ caseId }) => ({ phase: 'generation', caseId })),
+    ...ordered.map(({ caseId }) => ({ phase: 'scoring', caseId }))]);
+}
+
+function pairFilenames(directory, executionId) {
+  const stem = path.join(directory, `experiment-qualified-source-pair-${executionId}`);
+  return { binding: `${stem}.json`, claim: `${stem}.claim.json` };
+}
+
+function verifyPairParent(extension, ledger, policy, state) {
+  if (extension?.version === BENCHMARK_BUDGET_EXTENSION_VERSION
+    && ledger.limitMicroUsd === 100_000_000) {
+    verifyBudgetExtension(extension, ledger, policy);
+    verifyBenchmarkCheckpoint(extension, state);
+    return;
+  }
+  if (extension?.version === BENCHMARK_BUDGET_CHAIN_VERSION
+    && ledger.limitMicroUsd === 200_000_000) {
+    verifyChainedBudgetExtension(extension, ledger, policy);
+    const parent = extension.parentBudgetExtension;
+    verifyBenchmarkCheckpoint(parent, state);
+    verifyExtensionCheckpoint(extension, state);
+    const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+    if (historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+    return;
+  }
+  fail('invalid_capability');
+}
+
+function pairConfiguration(options, authorization) {
+  const keys = authorization
+    ? ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint', 'roster']
+    : ['ledger', 'policy', 'benchmarkExtension', 'qualifiedSourcePairCapability', 'fetchImpl'];
+  let optionalTransport;
+  let detached;
+  let fetchImpl;
+  let transportDiagnostics = null;
+  try {
+    optionalTransport = !authorization && own(options, 'transportDiagnostics');
+    exactKeys(options, optionalTransport ? [...keys, 'transportDiagnostics'] : keys,
+      authorization ? 'invalid_capability' : 'invalid_options');
+    const raw = Object.fromEntries(keys.filter((key) => key !== 'fetchImpl')
+      .map((key) => [key, options[key]]));
+    fetchImpl = authorization ? null : options.fetchImpl;
+    transportDiagnostics = optionalTransport ? options.transportDiagnostics : null;
+    detached = structuredClone(raw);
+  } catch { fail(authorization ? 'invalid_capability' : 'invalid_options'); }
+  if (!authorization && (typeof fetchImpl !== 'function'
+    || (optionalTransport && transportDiagnostics !== 'bounded-v1'))) fail('invalid_options');
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: fetchImpl ?? (() => {}) });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
+  if (!authorization) return { ledger, policy, benchmarkExtension,
+    capability: detached.qualifiedSourcePairCapability, fetchImpl, transportDiagnostics };
+  const { authorizationId, executionId, checkpoint } = detached;
+  if (typeof authorizationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(authorizationId)
+    || typeof executionId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(executionId)) {
+    fail('invalid_capability');
+  }
+  exactKeys(checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_capability');
+  if (!safeInteger(checkpoint.requestCount) || !safeInteger(checkpoint.reservedMicroUsd)
+    || checkpoint.requestCount > ledger.requestCap
+    || checkpoint.reservedMicroUsd > ledger.limitMicroUsd) fail('invalid_capability');
+  const roster = pairRoster(detached.roster);
+  return { ledger, policy, benchmarkExtension, authorizationId, executionId,
+    checkpoint: deepFreeze(checkpoint), roster, fetchImpl, transportDiagnostics };
+}
+
+function pairCapabilityRecord(configuration, digest) {
+  return { version: SOURCE_PAIR_VERSION, authorizationId: configuration.authorizationId,
+    executionId: configuration.executionId, ledger: configuration.ledger,
+    policy: configuration.policy, benchmarkExtension: configuration.benchmarkExtension,
+    checkpoint: configuration.checkpoint, historicalDigest: digest,
+    roster: configuration.roster,
+    rosterDigest: pairHash('cairn.lme.source-pair.roster.v1', configuration.roster),
+    schedule: pairSchedule(configuration.roster), methodProfile: SOURCE_PAIR_METHOD_PROFILE };
+}
+
+function verifyPairCapability(capability, ledger, policy, benchmarkExtension) {
+  exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
+    'benchmarkExtension', 'checkpoint', 'historicalDigest', 'roster', 'rosterDigest',
+    'schedule', 'methodProfile'], 'invalid_capability');
+  const config = pairConfiguration({ ledger, policy, benchmarkExtension,
+    authorizationId: capability.authorizationId, executionId: capability.executionId,
+    checkpoint: capability.checkpoint, roster: capability.roster }, true);
+  if (capability.version !== SOURCE_PAIR_VERSION
+    || typeof capability.historicalDigest !== 'string'
+    || !SHA256_HEX.test(capability.historicalDigest)
+    || canonical(capability) !== canonical(pairCapabilityRecord(config, capability.historicalDigest))) {
+    fail('invalid_capability');
+  }
+  readBinding(pairFilenames(ledger.directory, capability.executionId).binding, capability);
+  return config;
+}
+
+function verifyPairBaseline(capability, state) {
+  if (state.state !== 'open' || state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.attempts.some((attempt) => attempt.outcome === null)
+    || historicalDigest(historicalRows(state)) !== capability.historicalDigest) fail('policy_mismatch');
+}
+
+export function authorizeQualifiedSourcePairCapability(options) {
+  const config = pairConfiguration(options, true);
+  let callbackFailure;
+  let capability;
+  let handle;
+  let operationError;
+  try {
+    handle = openBoundExperimentBudget({ configuration: config.ledger, authorize(state) {
+      try {
+        verifyPairParent(config.benchmarkExtension, config.ledger, config.policy, state);
+        if (state.requestCount !== config.checkpoint.requestCount
+          || state.reservedMicroUsd !== config.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+        const files = pairFilenames(config.ledger.directory, config.executionId);
+        assertPairClaimUnused(files.claim);
+        capability = pairCapabilityRecord(config, historicalDigest(historicalRows(state)));
+        if (Buffer.byteLength(`${canonical(capability)}\n`) > 1_000_000) fail('invalid_capability');
+        let existing;
+        try { existing = lstatSync(files.binding); }
+        catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+        if (existing) syncAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        else writeAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        readBinding(files.binding, capability);
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+  } catch (error) { operationError = callbackFailure ?? error; }
+  try { handle?.close(); } catch (error) { operationError ??= error; }
+  if (operationError) throw operationError;
+  return deepFreeze(capability);
+}
+
+function assertPairClaimUnused(filename) {
+  try { lstatSync(filename); fail('capability_consumed'); }
+  catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    if (error?.code !== 'ENOENT') fail('capability_consumed');
+  }
+}
+
+function writePairClaim(directory, capability) {
+  const { claim } = pairFilenames(directory, capability.executionId);
+  let descriptor;
+  try {
+    descriptor = openSync(claim,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  } catch (error) {
+    if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+    fail('unsafe_policy_binding');
+  }
+  let error;
+  try {
+    writeFileSync(descriptor, `${canonical({ version: 'qualified-source-pair-claim-v1',
+      executionId: capability.executionId, capabilityDigest: historicalDigest([capability]) })}\n`,
+    { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } catch (caught) { error = caught; }
+  try { closeSync(descriptor); } catch (caught) { error ??= caught; }
+  if (error) throw error;
+  const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+  try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+}
+
 function validateCaseSchedule(value) {
   if (!Array.isArray(value) || value.length < 2 || value.length > 1_000 || value.length % 2 !== 0) {
     fail('invalid_capability');
@@ -2117,12 +2342,42 @@ export function createCaseDeadlineExperimentRequestGuard(options) {
     capability, baseline, transportDiagnostics);
 }
 
+export function createQualifiedSourcePairExperimentRequestGuard(options) {
+  const configuration = pairConfiguration(options, false);
+  const { ledger, policy, benchmarkExtension, fetchImpl, transportDiagnostics } = configuration;
+  const capability = snapshotExtension(configuration.capability);
+  verifyPairCapability(capability, ledger, policy, benchmarkExtension);
+  let callbackFailure;
+  let bound;
+  let baseline;
+  try {
+    bound = openBoundExperimentBudget({ configuration: ledger, authorize(state) {
+      try {
+        verifyPairCapability(capability, ledger, policy, benchmarkExtension);
+        verifyPairParent(benchmarkExtension, ledger, policy, state);
+        verifyPairBaseline(capability, state);
+        writePairClaim(ledger.directory, capability);
+        baseline = deepFreeze(historicalRows(state));
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+    return constructBenchmarkGuard({ ledger, policy, fetchImpl }, benchmarkExtension,
+      capability, baseline, transportDiagnostics, { bound, pair: true });
+  } catch (error) {
+    try { bound?.close(); } catch { /* Preserve first failure; claim remains consumed. */ }
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+}
+
 function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null,
-  transportDiagnostics = null) {
+  transportDiagnostics = null, pairProfile = null) {
   const policy = validateConstructor(options);
   const ledgerConfiguration = structuredClone(options.ledger);
   let ledger;
-  try { ledger = reopenExperimentBudget(ledgerConfiguration); }
+  try { ledger = pairProfile?.bound ?? reopenExperimentBudget(ledgerConfiguration); }
   catch (error) {
     if (error instanceof ExperimentBudgetError) throw error;
     fail('ledger_failed');
@@ -2149,10 +2404,15 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   const unsettled = (state) => state.attempts.some((attempt) =>
     attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
   const verify = () => {
-    verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
-    if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
+    if (pairProfile?.pair) {
+      verifyPairCapability(caseCapability, ledgerConfiguration, policy, benchmark);
+    } else {
+      verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
+      if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
+    }
     const state = ledger.getState();
-    verifyBenchmarkCheckpoint(benchmark, state);
+    if (pairProfile?.pair) verifyPairParent(benchmark, ledgerConfiguration, policy, state);
+    else verifyBenchmarkCheckpoint(benchmark, state);
     if (scoped) {
       const expectedAttempts = [...pinnedBaseline, ...records.map((record) => ({
         attemptId: record.attemptId,
@@ -2178,6 +2438,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   try { if (unsettled(scoped ? guardedVerify() : verify())) halted = true; }
   catch (error) { ledger.close(); throw error; }
   const stages = benchmark.stages;
+  const pairArms = pairProfile?.pair ? new Map(caseCapability.roster.flatMap((entry) =>
+    entry.arms.map((arm) => [arm.scopeId, arm.name]))) : null;
   const fetchImpl = options.fetchImpl;
 
   const scopeSnapshot = (scope, status = scope.status) => deepFreeze({
@@ -2396,9 +2658,12 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       guardedVerify();
       const channel = policy[kind];
       const snapshot = requestSnapshot(url, requestOptions, channel);
-      validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
+      validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
+        pairProfile?.pair ? CANDIDATE_QUALIFICATION_KIND.method : null, false,
+        pairProfile?.pair ? pairArms.get(caseScope.caseId) : null);
       const method = kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
-        cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank' })[
+        cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank',
+        cairn_qualifyCandidates: 'qualifyCandidates' })[
         snapshot.body.text.format.name] ?? 'unknown';
       return await send(CHANNELS[kind], kind, channel, snapshot,
         kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope, method);
@@ -2485,7 +2750,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     caseScopeSnapshot() {
       return lastScopeSnapshot === null ? null : deepFreeze(structuredClone(lastScopeSnapshot));
     },
-    caseDeadlineCapability: caseCapability,
+    ...(pairProfile?.pair ? { qualifiedSourcePairCapability: caseCapability }
+      : { caseDeadlineCapability: caseCapability }),
     ...(transportCollector ? { transportDiagnostics() {
       return observeTransport(() => transportCollector.snapshot());
     } } : {}),
