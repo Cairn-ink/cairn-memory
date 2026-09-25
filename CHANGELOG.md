@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — qualified-prefix ingestion control
+
+- Add separately versioned offline LongMemEval planning and ingestion using
+  source-bound-v2's actual retained first-800-unit view and v3 replay digest.
+  It is a control prerequisite, not a scored comparison or new core/default,
+  live, paid or provider path.
+
 ## Unreleased — opt-in indexed source windows
 
 - Add a trusted embedded-core `captureSourcePolicy: 'indexed-windows-v1'`
