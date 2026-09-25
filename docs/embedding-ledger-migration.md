@@ -30,6 +30,10 @@ be used to distinguish and recover either durable state.
 After an abrupt pre-commit process loss, SQLite may need writable hot-journal
 recovery; the bound upgrade is the recovery path. Read-only inspection never
 repairs the file and can report a fixed failure until that recovery occurs.
+The upgrade and explicit v2 reopen use existing-only writable SQLite opens:
+if the checked file disappears before open, neither API creates a replacement.
+This does not resolve every hostile same-user inode swap or filesystem race.
+Legacy v1 opening behavior is unchanged.
 
 `reopenEmbeddingExperimentBudget(config)` requires an existing exact v2 file.
 Its handle has the original reserve, record-outcome, get-state and close

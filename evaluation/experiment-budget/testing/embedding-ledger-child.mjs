@@ -7,7 +7,7 @@ import path from 'node:path';
 const [mode, configText, requestText] = process.argv.slice(2);
 assert.ok(['upgrade', 'reserve-crash', 'crash-before-commit', 'crash-after-commit',
   'kill-before-commit', 'kill-after-commit', 'fail-copy', 'legacy-reserve',
-  'chmod-after-begin'].includes(mode));
+  'chmod-after-begin', 'rename-upgrade-open', 'rename-reopen-open'].includes(mode));
 const config = JSON.parse(configText);
 
 const replacements = {
@@ -35,6 +35,14 @@ const replacements = {
     "  return closeAfter(db, () => withTransaction(db, 'write', () => {",
     "  return closeAfter(db, () => withTransaction(db, 'write', () => {\n      chmodSync(config.filename, 0o644);",
   ],
+  'rename-upgrade-open': [
+    "  inspectExistingLocation(config);\n  const db = constructExistingWritableDatabase(config.filename);\n  return closeAfter(db, () => withTransaction(db, 'write', () => {",
+    "  inspectExistingLocation(config);\n  syntheticRenameSync(config.filename, config.filename + '.moved');\n  const db = constructExistingWritableDatabase(config.filename);\n  return closeAfter(db, () => withTransaction(db, 'write', () => {",
+  ],
+  'rename-reopen-open': [
+    "  const db = constructExistingWritableDatabase(config.filename);\n  try {\n    withTransaction(db, 'read', () => {\n      const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION);",
+    "  syntheticRenameSync(config.filename, config.filename + '.moved');\n  const db = constructExistingWritableDatabase(config.filename);\n  try {\n    withTransaction(db, 'read', () => {\n      const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION);",
+  ],
 };
 if (replacements[mode]) {
   registerHooks({ load(url, context, nextLoad) {
@@ -43,8 +51,9 @@ if (replacements[mode]) {
     const source = String(loaded.source);
     const [target, replacement] = replacements[mode];
     assert.equal(source.split(target).length, 2, `unique fault seam for ${mode}`);
-    return { ...loaded, source: `${mode === 'chmod-after-begin'
-      ? "import { chmodSync } from 'node:fs';\n" : ''}${source.replace(target, replacement)}` };
+    const imports = mode === 'chmod-after-begin' ? "import { chmodSync } from 'node:fs';\n"
+      : mode.startsWith('rename-') ? "import { renameSync as syntheticRenameSync } from 'node:fs';\n" : '';
+    return { ...loaded, source: `${imports}${source.replace(target, replacement)}` };
   } });
 }
 
@@ -65,6 +74,12 @@ try {
       ledger.close();
     }
     process.stdout.write('reserved\n');
+    process.exit(0);
+  }
+  if (mode === 'rename-reopen-open') {
+    const ledger = reopenEmbeddingExperimentBudget(config);
+    ledger.close();
+    process.stdout.write('reopened\n');
     process.exit(0);
   }
   const result = upgradeExperimentBudgetForEmbeddings(JSON.parse(requestText));

@@ -2,6 +2,7 @@ import { closeSync, lstatSync, mkdirSync, openSync, realpathSync } from 'node:fs
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
 
 const APPLICATION_ID = 0x43454247;
 const SCHEMA_VERSION = 1;
@@ -485,6 +486,12 @@ function constructDatabase(filename, options = {}) {
   }
 }
 
+function constructExistingWritableDatabase(filename) {
+  const url = pathToFileURL(filename);
+  url.searchParams.set('mode', 'rw');
+  return constructDatabase(url);
+}
+
 export function createExperimentBudget(options) {
   const config = validateConfiguration(options);
   createLocation(config);
@@ -587,7 +594,7 @@ export function upgradeExperimentBudgetForEmbeddings(options) {
   const expected = detachedUpgradeOptions(options);
   const config = expected.config;
   inspectExistingLocation(config);
-  const db = constructDatabase(config.filename);
+  const db = constructExistingWritableDatabase(config.filename);
   return closeAfter(db, () => withTransaction(db, 'write', () => {
       inspectExistingLocation(config);
       const version = embeddingVersion(db);
@@ -622,7 +629,7 @@ export function reopenEmbeddingExperimentBudget(options) {
       assertConfiguration(state, config);
       embeddingHistorySha256(state);
     }));
-  const db = constructDatabase(config.filename);
+  const db = constructExistingWritableDatabase(config.filename);
   try {
     withTransaction(db, 'read', () => {
       const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION);

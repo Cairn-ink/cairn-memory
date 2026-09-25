@@ -155,7 +155,7 @@ Report any interface mismatch to primary before expanding scope.
 ## Acceptance and next step
 
 Worker candidate and offline gates complete; independent review and dependent
-CI remain pending. Passing L1–L8 establishes an
+CI remain pending. Passing L1–L9 establishes an
 explicit synthetic-tested accounting transition, not a usable competitor
 transport. Next S3b must freeze a separate Mem0 stage grant, bounded chat and
 embedding requests/usage, every-attempt accounting including fallback,
@@ -166,7 +166,7 @@ cumulative ceiling. Never infer authority to migrate the real ledger here.
 
 ## Worker evidence (synthetic only)
 
-The new 15-case focused suite uses only new temporary SQLite files. It covers
+The new 17-case focused suite uses only new temporary SQLite files. It covers
 mixed and empty histories, rowid gaps, exact and safe-integer limits, changed
 binding, default-v1 compatibility, v2 accounting, real child races, post-copy
 rollback, and both process-exit and abrupt SIGKILL seams before/after COMMIT.
@@ -184,8 +184,16 @@ temporary v1 ledger: a real `host-embedding` reservation failed
 and embedding reservation tests pass on the candidate; this red/green evidence
 does not use an operator ledger.
 
-On each of Node 22.16.0 and 24.15.0, the updated budget command passed 30/30
-(15 legacy plus 15 new), request-guard 169/169, generic tests 112/112, and
+L9's standalone synthetic probe on candidate `9200ed2` showed both actual
+upgrade and explicit v2-reopen race seams created a new zero-byte file after
+the inspected file was renamed, despite returning a fixed error. The corrected
+existing-only URL opens reject both races without a replacement or sidecar;
+the moved original bytes, row history, schema version and digest remain intact.
+Positive special-character-path and direct missing-file tests also pass on
+both supported Node runtimes. This is not a claim against all inode swaps.
+
+On each of Node 22.16.0 and 24.15.0, the updated budget command passed 32/32
+(15 legacy plus 17 new), request-guard 169/169, generic tests 112/112, and
 live-evidence-offline 320 passed/30 skipped/0 failed. Both synthetic demos,
 JSON validation and isolated locked Claude Code 2.1.260 strict plugin
 validation passed. No actual operator ledger, provider or credential was used.

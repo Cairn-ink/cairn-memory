@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdtempSync, readFileSync, renameSync,
+  rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -368,6 +369,54 @@ test('L3/L7 file privacy changing after BEGIN refuses migration without changing
   assert.deepEqual(rows(f.file), beforeRows);
   assert.equal(inspectExperimentBudgetForEmbeddingUpgrade(f.config).historySha256,
     request.expectedHistorySha256);
+});
+
+test('L9 raced upgrade and explicit v2 reopen never create a missing replacement file', async t => {
+  for (const [mode, migrated] of [['rename-upgrade-open', false], ['rename-reopen-open', true]]) {
+    const f = fixture(t);
+    const ledger = reopenExperimentBudget(f.config);
+    reserve(ledger, 'host-completion', 5, 'succeeded', 3);
+    ledger.close();
+    if (migrated) upgradeExperimentBudgetForEmbeddings(bound(f.config));
+    const beforeRows = rows(f.file);
+    const beforeVersion = version(f.file);
+    const beforeBytes = readFileSync(f.file);
+    const beforeHistory = inspectExperimentBudgetForEmbeddingUpgrade(f.config).historySha256;
+    const request = bound(f.config);
+    const attempted = await spawned(mode, f.config, request);
+    assert.equal(attempted.code, 2, attempted.stderr + attempted.stdout);
+    assert.equal(attempted.stdout, 'ledger_failed\n');
+    const moved = `${f.file}.moved`;
+    assert.equal(existsSync(moved), true);
+    assert.equal(existsSync(f.file), false);
+    for (const suffix of ['-journal', '-wal', '-shm']) assert.equal(existsSync(`${f.file}${suffix}`), false);
+    assert.deepEqual(readFileSync(moved), beforeBytes);
+    assert.deepEqual(rows(moved), beforeRows);
+    assert.equal(version(moved), beforeVersion);
+    renameSync(moved, f.file);
+    assert.equal(inspectExperimentBudgetForEmbeddingUpgrade(f.config).historySha256, beforeHistory);
+  }
+});
+
+test('L9 existing-only URL opens special-character paths and leaves direct missing files absent', t => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cairn-embedding-ledger-url-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const config = { directory: path.join(root, 'budget space # fragment'), runId: randomUUID(),
+    limitMicroUsd: 100, requestCap: 2 };
+  createExperimentBudget(config).close();
+  upgradeExperimentBudgetForEmbeddings(bound(config));
+  const v2 = reopenEmbeddingExperimentBudget(config);
+  reserve(v2, 'host-embedding', 1, 'succeeded', 1);
+  v2.close();
+  const file = path.join(config.directory, 'experiment-budget.sqlite');
+  assert.equal(inspectExperimentBudgetForEmbeddingUpgrade(config).schemaVersion, 2);
+  renameSync(file, `${file}.moved`);
+  assert.throws(() => reopenEmbeddingExperimentBudget(config), error('ledger_missing'));
+  assert.throws(() => upgradeExperimentBudgetForEmbeddings({ ...config,
+    expectedCheckpoint: { requestCount: 1, reservedMicroUsd: 1 },
+    expectedHistorySha256: '0'.repeat(64) }), error('ledger_missing'));
+  assert.equal(existsSync(file), false);
+  for (const suffix of ['-journal', '-wal', '-shm']) assert.equal(existsSync(`${file}${suffix}`), false);
 });
 
 test('L5/L7 concurrent actual child upgrades serialize; stale v1 handle rejects after migration', async t => {
