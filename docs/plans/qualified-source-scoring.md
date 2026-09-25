@@ -6,8 +6,7 @@ Primary owns this contract. One GPT-6 Sol/high worker implements; two separate
 nonauthor agents review Standards and Spec at the full original base.
 Implementation is held until the dependency's exact-head CI is accepted.
 
-This packet
-is offline only: no actual corpus, keys, operator ledger, paid calls, merge,
+This packet is offline only: no actual corpus, keys, operator ledger, paid calls, merge,
 release or deployment. User's cumulative US$200 authority is unchanged.
 
 ## P1 — Separate API and trusted binding
@@ -77,6 +76,12 @@ wrapper exit, including nonawaiting wrappers and late callback entry. Exactly
 one operation invocation. Any wrapper exception halts remaining scoring with
 finite reason; never expose error text or resume/retry. Already-running arbitrary
 callbacks cannot be sandboxed. Future guard owns reservation/settlement/late HTTP.
+
+The complete status-observation envelope is fail-closed: acquiring snapshot,
+calling it, inspecting object shape and reading each returned field once all
+belong inside contract-failure handling. A throwing getter/proxy or status
+that changes when reread cannot be downgraded to ordinary judge failure and
+permit another arm. Regression-test handle getters and returned-field getters.
 
 Call judge once with request and AbortSignal; backup timeout aborts and yields
 unresolved judge_timeout. Ordinary failure or malformed response yields
@@ -192,4 +197,3 @@ operational cap extension belongs here. Before a later paid phase, independently
 verify remaining budget and any safe US$100→200 immutable chained transition;
 never reuse/overwrite the old single-transition capability. Passing this scorer
 is not paid-run authorization. Keep old terminal six/30-case experiments closed.
-
