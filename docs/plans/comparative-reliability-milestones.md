@@ -55,6 +55,13 @@ provider compatibility pass, a semantic score or complete maximum-input support.
 Synchronize only this plan, ROADMAP and limitations; no runtime, actual data,
 ledger, model, provider call, scorer or other workflow change in this checkpoint.
 
+Review correction requirement: S2's answer-stage tuning/evaluation uses frozen
+development cases only. The original reserved30 is revealed/scored once under
+S3's jointly frozen Cairn/comparator protocol, never during S2 or in a second
+regenerated Cairn run. Reports may reuse the retained paired outputs; that does
+not authorize rerunning them. Make this sequencing explicit in the active S2/S3
+milestones while retaining historical checkpoint wording.
+
 ## Baseline and authority
 
 The [audited 30-case cohort](https://github.com/Cairn-ink/cairn-memory/blob/fcfd2b349ce20c6def46ed4815fa6de6b5404308/docs/evidence/reliability-cohort-30.md)
@@ -734,14 +741,13 @@ evidence, not a QA score or product runtime fix claim.
 The preflight does not replace the later end-to-end S2 answer-stage gate. After
 S1's repair and safety conditions pass and the candidate path is frozen, use a
 shared answer model, judge/scorer, prompt, cutoff and final context cap on a
-frozen development set and then the already-reserved 30-case holdout; do not
-reselect or replace it. Report visible-to-
-packed stages, candidate work, fixed-N correct/wrong/unresolved outcomes,
-source-span fidelity and abstention; preserve every failure and unresolved
-case. Freeze thresholds and resource limits before scored calls, and do not
-tune on the revealed holdout. A candidate-path diagnostic or oracle ceiling is
-not a product score. Promotion still requires improvement at equal resource
-budget without safety regression.
+frozen development set only. Do not reveal or score the already-reserved
+30-case holdout during S2. Report visible-to-packed stages, candidate work,
+fixed-N correct/wrong/unresolved outcomes, source-span fidelity and abstention;
+preserve every failure and unresolved case. Freeze thresholds and resource
+limits before scored calls, and do not tune on a revealed holdout. A candidate-
+path diagnostic or oracle ceiling is not a product score. Promotion still
+requires improvement at equal resource budget without safety regression.
 
 Trace completion means eight supported records or explicit unknowns, not progress.
 Promote an ablated path only if a frozen development check improves at equal
@@ -750,13 +756,16 @@ an oracle diagnostic is not a product score.
 
 ### S3 — Fresh matched comparison against one existing solution
 
-Use the already-reserved 30-case roster as the fixed holdout: do not reselect or
-replace it. Freeze configurations before revealing/scoring it; run Cairn and
-one comparator on the same cases, ordered histories, timestamps and question
-cutoffs. Keep this holdout out of tuning and never rerun it. Tune only on
-development cases. A genuinely new holdout may be predeclared only after this
-one is inconclusive and only within the remaining authorized resources; it
-cannot substitute for the reserved 30-case roster.
+Use the original reserved 30-case roster as the fixed holdout; do not reselect
+or replace it. Freeze the complete S3 protocol and both arm configurations
+before revealing or scoring the roster, then run Cairn and one comparator once
+on the same cases, ordered histories, timestamps and question cutoffs. Do not
+run a separate Cairn-only holdout evaluation under S2. Any later reporting must
+reuse the retained paired outputs, not regenerate either arm. Keep this holdout
+out of tuning and never rerun it. Tune only on development cases. A genuinely
+new holdout may be predeclared only after this one is inconclusive and only
+within remaining authorized resources; it cannot substitute for the reserved
+30-case roster.
 
 Mem0 OSS is prospective, pending a synthetic preflight of its actual engine
 version, dependencies and model config. Its
