@@ -1,7 +1,8 @@
 # Qualified source-pair guarded execution
 
-Status: frozen contract, implementation held until dependency B passes its
-independent reviews and exact-head CI. Planning is not a paid-run grant.
+Status: frozen contract; implementation released after dependency B #226 passed
+both independent reviews and all17 exact-head CI jobs (run36100091549).
+This release is not a paid-run grant or authorization to merge.
 Fixed review base: `1c667299adf3a4273c6e47c81a72c6f7cb0b9582`.
 Branch/worktree: `feat/qualified-source-pair-guard` / `qualified-source-pair-guard`.
 Primary owns design and acceptance; one GPT-6 Sol/high author implements and
@@ -208,7 +209,10 @@ required gates, verifies final candidate bytes. Independent Standards and Spec
 review original base through final commit; correction repeats both axes.
 Exact-head all CI and mergeability precede ready status. No merge/paid transition.
 
-Current checkpoint: planning only, B independent review/CI pending. Do not start
-implementation from a chat summary that omits this release gate. After acceptance
-record actual commands/results, findings, tested SHA, open limitations and next
-task here and in the PR; never equate a transport gate with semantic reliability.
+Current checkpoint: B at the fixed base is accepted offline after primary full
+two-runtime gates, independent Standards/Spec and exact-head all CI. Its actual
+operator ledger was not changed. G implementation is released to one bounded
+Sol6/high author; no G runtime evidence exists yet. Primary prepared independent
+bound-handle and compact-grant acceptance probes. After each checkpoint record
+actual commands/results, findings, tested SHA, open limitations and next task
+here and in the PR; never equate a transport gate with semantic reliability.
