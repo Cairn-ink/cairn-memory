@@ -160,3 +160,14 @@ On each of Node 22.16.0 and 24.15.0, `npm test` passed 112/112, `npm run
 validate` passed, and strict plugin validation passed. This is a maintenance
 correction only; primary acceptance and both full original-base reviews of the
 new candidate remain pending.
+
+### Exact-head CI follow-up
+
+The final `d41f233` packet passed primary reruns and both independent review
+axes, then PR #218's first CI run failed an unchanged case-guard concurrency
+test with an unhandled deadline rejection; its Node 24 sibling was cancelled.
+The PR stays draft. The narrowly expanded delivery scope is frozen in
+[case-guard concurrency test isolation](case-guard-concurrency-test.md) C1–C5:
+one existing test file and its plan only, with no runtime or deadline-policy
+change. Diagnose and preserve the failure before choosing a fix. Earlier
+Mem0 preflight passes do not waive this gate.
