@@ -150,3 +150,13 @@ Python-only proof boundaries. Record the correction here; rerun the focused
 actual-engine path and contributor gates on both Node runtimes, then both
 original-base independent reviews on the new committed candidate. No broader
 socket sandbox, paid guard or engine behavior change is in scope.
+
+Correction outcome: `child.py` now uses one `refuse_non_loopback` helper for the
+same refusal/logging check in `connect` and `connect_ex`; each still calls its
+own original socket method on allowed addresses. The actual-engine fake-HTTP
+run passed with the prior 16 local requests, one deliberate socket denial,
+429/timeout one attempt each, batch sizes `1, 2, 1, 1`, and one cap denial.
+On each of Node 22.16.0 and 24.15.0, `npm test` passed 112/112, `npm run
+validate` passed, and strict plugin validation passed. This is a maintenance
+correction only; primary acceptance and both full original-base reviews of the
+new candidate remain pending.

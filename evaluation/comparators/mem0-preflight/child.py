@@ -46,16 +46,17 @@ def install_socket_denial():
         except (ValueError, TypeError):
             return False
 
-    def connect(sock, address):
+    def refuse_non_loopback(address):
         if not allowed_address(address):
             rejected.append(repr(address))
             raise OSError("synthetic preflight denied non-loopback socket")
+
+    def connect(sock, address):
+        refuse_non_loopback(address)
         return original_connect(sock, address)
 
     def connect_ex(sock, address):
-        if not allowed_address(address):
-            rejected.append(repr(address))
-            raise OSError("synthetic preflight denied non-loopback socket")
+        refuse_non_loopback(address)
         return original_connect_ex(sock, address)
 
     def getaddrinfo(host, *args, **kwargs):
