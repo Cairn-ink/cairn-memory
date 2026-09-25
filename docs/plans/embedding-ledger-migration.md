@@ -106,6 +106,35 @@ cap remains USD 100 and the user ceiling USD 200. This packet changes none.
 
 ## Allowed scope
 
+### Review correction L9 — no creation at a raced writable open
+
+The independent Spec review of `9200ed2` identified an L2 violation: the
+default writable `DatabaseSync` constructor can create a blank replacement if
+the existing file disappears after precheck/read-only probe. Primary and worker
+reproduced both actual upgrade and v2-reopen seams with synthetic rename hooks;
+both rejected accounting but left a zero-byte replacement file. Keep that red
+evidence. No operator ledger was used or changed.
+
+Freeze this minimal correction before implementation: ONLY the new upgrade and
+explicit v2-reopen writable connections use an internal existing-only opener.
+Build a file URL with `pathToFileURL(filename)`, set `mode=rw` using searchParams,
+and pass that URL to DatabaseSync through the existing configured/error-mapped
+connection mechanism. Both supported Node runtimes were independently probed
+by primary and researcher: existing files are writable, missing files are not
+created, including spaces and `#` in paths. Node's tagged source enables
+SQLITE_OPEN_URI and SQLite specifies rw without create. Do not concatenate
+unescaped URIs or change legacy v1 opens, public arguments, caps, authority,
+schemas, errors, retries, default behavior or dependencies.
+
+Add actual upgrade AND v2-reopen race regressions: rename after precheck/probe
+at the writable-open seam, assert a fixed failure and no replacement/sidecars,
+and verify moved original bytes/history remain unchanged. Include a special-
+character path positive migration/reopen and missing-file negatives. These
+tests join the already CI-integrated focused suite. All original L1–L8 gates,
+primary reruns, both full original-base reviews and exact-head CI still apply.
+This fixes missing-file creation, not every hostile same-user inode swap or
+filesystem race. Document that boundary without weakening the no-create rule.
+
 This plan; `evaluation/experiment-budget/index.mjs`; focused new tests under
 `evaluation/experiment-budget/test/` and synthetic child helpers under its
 `testing/` directory; technical `docs/embedding-ledger-migration.md`; a narrow
