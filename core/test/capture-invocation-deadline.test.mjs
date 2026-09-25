@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { openMemoryCore } from '../contract.mjs';
 import { createCaptureDeadline } from '../capture-deadline.mjs';
 import { callModel, isCoreModelDeadlineSignal } from '../model-call.mjs';
@@ -386,30 +388,19 @@ test('D3 staged final admission rolls back qualified evidence when receipt work 
   } finally { delayed.restore(); }
 });
 
-test('D2/D3 cumulative extraction plus v1/v2 qualification exhausts one budget before admission', async t => {
+test('D2/D3 cumulative extraction plus v1/v2 qualification exhausts one budget before admission', () => {
+  const child = fileURLToPath(new URL('../testing/capture-deadline-clock-child.mjs', import.meta.url));
   for (const mode of ['source-bound-v1', 'source-bound-v2']) {
-    const calls = [];
-    const original = mode === 'source-bound-v1' ? scripted() : rationaleModel();
-    const model = { ...original,
-      extract: async request => { calls.push('extract'); await wait(600); return original.extract(request); },
-      [mode === 'source-bound-v1' ? 'qualify' : 'qualifyCandidates']: async request => {
-        calls.push('qualify'); await wait(600);
-        return mode === 'source-bound-v1' ? { qualifications: request.input.items.map(
-          ({ itemIndex, sources }) => ({ itemIndex, qualification: { version: 1,
-            slot: { subject: null, property: null, scope: null, applies: null }, value: null,
-            attribution: 'unknown', commitment: 'unknown', anchors: [{ receiptIndex: 0,
-              start: 0, end: sources[0].excerpt.length, text: sources[0].excerpt, fields: ['value'] }] } })) }
-          : original.qualifyCandidates(request);
-      } };
-    const { core, db } = fixture(t, { model, captureDeadlineMs: 1_000,
-      captureQualification: mode,
-      ...(mode === 'source-bound-v2' ? { captureEvidence: 'staged-v1' } : {}) });
-    const result = await core.capture(input(`cumulative-${mode}`));
-    assert.equal(result.error.code, 'model_timeout', mode);
-    assert.deepEqual(calls, ['extract', 'qualify'], mode);
-    assert.equal(count(db, 'memories'), 0, mode);
-    assert.equal(count(db, 'receipts'), 0, mode);
-    assert.equal(count(db, 'capture_initial_classification'), 0, mode);
+    const run = mutation => spawnSync(process.execPath, [child, mode, ...(mutation ? [mutation] : [])],
+      { encoding: 'utf8', env: {}, timeout: 10_000 });
+    const actual = run();
+    assert.equal(actual.status, 0, `${mode}: ${actual.stderr}`);
+    assert.deepEqual(JSON.parse(actual.stdout), { mode, calls: ['extract', 'qualify'],
+      extractionEndedMs: 600, qualificationStartedMs: 600, qualificationEndedMs: 1_200,
+      errorCode: 'model_timeout' });
+    const resetPerStage = run('reset-stage-deadline');
+    assert.equal(resetPerStage.status, 2, `${mode}: reset-per-stage mutant must fail the assertion`);
+    assert.match(resetPerStage.stderr, /shared deadline must abort the qualification call/u);
   }
 });
 
