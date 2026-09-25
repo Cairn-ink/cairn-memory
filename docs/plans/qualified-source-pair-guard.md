@@ -209,10 +209,46 @@ required gates, verifies final candidate bytes. Independent Standards and Spec
 review original base through final commit; correction repeats both axes.
 Exact-head all CI and mergeability precede ready status. No merge/paid transition.
 
-Current checkpoint: B at the fixed base is accepted offline after primary full
+Historical pre-implementation checkpoint: B at the fixed base was accepted offline after primary full
 two-runtime gates, independent Standards/Spec and exact-head all CI. Its actual
 operator ledger was not changed. G implementation is released to one bounded
 Sol6/high author; no G runtime evidence exists yet. Primary prepared independent
 bound-handle and compact-grant acceptance probes. After each checkpoint record
 actual commands/results, findings, tested SHA, open limitations and next task
 here and in the PR; never equate a transport gate with semantic reliability.
+
+### Author implementation checkpoint (pre-review candidate, 2026-09-25)
+
+The preceding checkpoint describes the pre-implementation state. G1–G3 now
+have a local implementation and G4 has synthetic temporary-ledger,
+fake-HTTP tests. Primary independently exercised the same bound-ledger code
+with named races, before/after real COMMIT, and actual N/P 100/200 parent
+flows on both Node runtimes; this is acceptance input, not a completed review.
+The author-focused current Node24 runs pass bound-ledger 7/7, installed guard
+30/30, and live-offline 4/4. The live positive covers two cases, opposed arm
+orders, four fresh real cores, adapter-generated source methods, source-only
+receipt differences and all generation before scoring. The separate live
+deadline/429 negatives use N/P with synthetic empty-core source metadata;
+primary separately exercised failure modes through real cores. Claim-write,
+fsync, pre/post constructor COMMIT, cleanup, competing ready children, late
+body, pending settlement, and a foreign row exactly at reserve BEGIN are
+asserted without modifying the actual operator ledger. A provisional live
+fixture initially sent raw N/P chat request objects without the guard's
+required `store:false`/`stream:false`; adding that synthetic wire envelope
+made the actual flow pass. A later cap test expected the scope wrapper to
+return after `request_cap_exceeded`, but the bound handle conservatively fences
+and the wrapper then returns `ledger_closed`; the corrected test inspects
+durable rows using a separate observer handle. A brief author experiment
+to keep a clean cap denial reusable was reverted before freeze; current
+runtime bytes match the primary-probed conservative fence. Primary's full G5
+matrix on the frozen runtime, test and package bytes above passed on Node
+22.16 and 24.15 (`/tmp/cairn-g5-offline-matrix.mjs`, sessions 91390/3357):
+budget 25, request-guard 222, live-offline 355 total (325 passed, 30 explicit
+opt-in skips), LongMemEval 123, generic 112, all five budget/guard/LongMemEval
+demos, JSON, and isolated pinned Claude 2.1.260 strict plugin validation.
+The author ran the focused Node24 tests reported above; the full two-runtime
+matrix is primary-run evidence, not an author-run claim. G5 is accepted locally
+for this pre-review candidate. Clean no-adapter archive checks, fixed-SHA
+independent reviews, exact-head CI and mergeability remain pending. No
+provider request, private corpus, operator-ledger operation or paid grant
+occurred.
