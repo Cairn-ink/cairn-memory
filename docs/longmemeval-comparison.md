@@ -166,3 +166,6 @@ See [acceptance and verification](plans/longmemeval-comparison.md).
 An [offline indexed-window provenance path](indexed-window-provenance.md) is
 separate from the default prefix-receipt comparison and is not accepted by the
 official scorer or the live paid runner.
+The [qualified source-pair generator](qualified-source-pair.md) separately
+compares qualified prefix and indexed source exposure in two offline generation
+arms. It does not relabel or score either three-arm public report.

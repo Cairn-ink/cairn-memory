@@ -30,6 +30,13 @@ the retained first-prefix view. It is offline ingestion mechanics, not a
 matched answer comparison or proof that either treatment improves QA. An
 injected callback must be the intended trusted core; response metadata alone
 does not attest its origin.
+The [qualified source-pair generator](qualified-source-pair.md) now places that
+prefix control beside indexed windows under one source-bound-v2 offline
+protocol. It verifies deterministic binding, isolated synthetic capture/recall
+and source-only answer requests, not a balanced scored campaign, semantic
+support, model configuration, provider context fit or matched Mem0 performance.
+Its digests are not signatures. A future scorer, shared guarded transport,
+frozen roster and resource caps are separate gates; no new paid grant follows.
 
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed
