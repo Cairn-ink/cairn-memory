@@ -33,10 +33,16 @@ does not attest its origin.
 The [qualified source-pair generator](qualified-source-pair.md) now places that
 prefix control beside indexed windows under one source-bound-v2 offline
 protocol. It verifies deterministic binding, isolated synthetic capture/recall
-and source-only answer requests, not a balanced scored campaign, semantic
-support, model configuration, provider context fit or matched Mem0 performance.
-Its digests are not signatures. A future scorer, shared guarded transport,
-frozen roster and resource caps are separate gates; no new paid grant follows.
+and source-only answer requests. Its separate offline two-arm official-style
+scorer checks a separately supplied trusted protocol, runs matching scoring
+scopes and counts unresolved cases against a fixed roster. Synthetic request,
+sidecar and fake-HTTP guard tests verify compatibility and accounting, not a
+balanced scored campaign, semantic support, model configuration, provider
+context fit or matched Mem0 performance. The reported fixed-N ranges are
+best/worst unresolved bounds, not confidence intervals. Digests are not
+signatures; an arbitrary injected callback is not authenticated. A fresh
+roster, fully guarded capture and answer transports, resource caps and reviewed
+paid authorization remain separate gates. No new paid grant follows.
 
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed

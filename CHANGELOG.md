@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — qualified source-pair official-style scoring
+
+- Add a separate strict offline scorer and fixed-roster aggregate for the
+  qualified two-arm protocol. It reuses the pinned official judge semantics,
+  binds reports to a separately supplied trusted protocol, schedules both
+  scoring scopes, and preserves unresolved cases in fixed denominators.
+  Synthetic N reports, evaluator-bound Python sidecar and fake-HTTP scoped
+  guard tests do not establish model accuracy or authorize a paid comparison.
+  The legacy three-arm scorer, core, guard and live routes remain unchanged.
+
 ## Unreleased — qualified source-pair generation protocol
 
 - Add a separate deterministic, two-arm offline generation protocol for
