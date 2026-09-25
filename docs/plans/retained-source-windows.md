@@ -130,6 +130,34 @@ MOC navigation, semantic entailment and matched Mem0 scoring remain separate.
 
 ## Allowed files and exclusions
 
+### Review correction W10 — existing paid grants stay closed
+
+Independent follow-on consumer inspection withdrew the initial Spec PASS for
+`2a13107`: `validateCairnBody` delegates to the shared adapter `schemasFor`, so
+the optional indexed schema can become accepted under a preexisting extract
+grant. No actual provider request was made. Freeze this correction before
+runtime edits: explicitly reject the indexed extraction envelope under EVERY
+existing Cairn count/generation grant before reservation or forwarding. Do not
+authorize a new source policy or change ordinary extraction bodies/schemas,
+qualification methods, prices, token bounds, retries or ledger accounting.
+
+For this correction only, extend the allowlist to the narrow validation in
+`evaluation/experiment-budget/request-guard.mjs` and focused regression cases
+in its existing `test/request-guard.test.mjs` (already included in CI). Use the
+actual adapter's indexed request body/schema and actual synthetic budget guard
+with fake HTTP, covering both count and generation routes. Exercise applicable
+legacy/reconciliation/qualification grants through their real public factories;
+prove zero forwarded requests and zero reservations on denial, and preserve
+ordinary accepted extraction controls. A test that merely invokes schemasFor
+is not a guard regression. Retain a red result at the published candidate and
+green at the corrected candidate. No operator ledger, provider key or corpus.
+
+Worker and primary rerun the full request-guard/budget suites and demos plus
+the W runtime/adapter/artifact/contributor gates on both runtimes. Reinspect
+the full original-base diff and rerun BOTH independent review axes on the new
+SHA; old PASS reports do not apply. Keep PR #220 draft until the corrected
+exact-head CI passes. This is a denial boundary, not a new paid capability.
+
 Allowed: this plan; `core/contract.mjs`, `core/capture.mjs`,
 `core/capture-input.mjs`; one focused `core/source-windows.mjs` helper if useful;
 one `core/prompts/extract-source-windows.md` prompt; focused new tests under
