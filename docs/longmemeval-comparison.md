@@ -162,3 +162,7 @@ seven-case pilot must never be presented as the full dataset. This package
 neither downloads a corpus nor discovers credentials or runs a provider by default.
 
 See [acceptance and verification](plans/longmemeval-comparison.md).
+
+An [offline indexed-window provenance path](indexed-window-provenance.md) is
+separate from the default prefix-receipt comparison and is not accepted by the
+official scorer or the live paid runner.

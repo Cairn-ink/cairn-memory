@@ -1,9 +1,12 @@
-import { INGESTION_CLIENT, ingestLongMemEvalCase, planLongMemEvalCase,
+import { INGESTION_CLIENT, INDEXED_WINDOW_CAPTURE_QUALIFICATION, INDEXED_WINDOW_CAPTURE_SOURCE_POLICY,
+  ingestIndexedWindowLongMemEvalCase, ingestLongMemEvalCase,
+  planIndexedWindowLongMemEvalCase, planLongMemEvalCase,
   projectIngestionFailure } from './ingestion.mjs';
 import { canonicalStoredReceiptExcerpt } from './receipt-canonicalization.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const PUBLIC_COMPARISON_SCHEMA_VERSION = 'cairn-longmemeval-public-comparison-v1';
+export const INDEXED_WINDOW_PUBLIC_COMPARISON_SCHEMA_VERSION = 'cairn-longmemeval-indexed-window-public-comparison-v1';
 export const PUBLIC_ANSWER_TEMPLATE_VERSION = 'cairn-longmemeval-public-answer-v1';
 export const PUBLIC_ANSWER_TEMPLATE_VERSION_V2 = 'cairn-longmemeval-public-answer-v2';
 export const PUBLIC_ANSWER_INSTRUCTION = [
@@ -27,6 +30,12 @@ const SAFE_ERROR_CODES = new Set([
   'model_timeout', 'recall_failed', 'revision_conflict', 'stale_admission',
   'storage_busy', 'storage_error', 'token_count_unavailable',
 ]);
+const POLICIES = Object.freeze({
+  legacy: Object.freeze({ indexed: false, plan: planLongMemEvalCase, ingest: ingestLongMemEvalCase,
+    reportSchema: PUBLIC_COMPARISON_SCHEMA_VERSION }),
+  indexed: Object.freeze({ indexed: true, plan: planIndexedWindowLongMemEvalCase,
+    ingest: ingestIndexedWindowLongMemEvalCase, reportSchema: INDEXED_WINDOW_PUBLIC_COMPARISON_SCHEMA_VERSION }),
+});
 
 export class PublicComparisonError extends Error {
   constructor(code) { super(code); this.name = 'PublicComparisonError'; this.code = code; }
@@ -36,7 +45,7 @@ const elapsed = (start) => Math.max(0, Date.now() - start);
 const errorCode = (error, fallback) => SAFE_ERROR_CODES.has(error?.code) ? error.code : fallback;
 const clone = (value) => structuredClone(value);
 
-function snapshotOptions(options) {
+function snapshotOptions(options, policy) {
   const hasAnswerTemplateVersion = isPlainObject(options) && Object.hasOwn(options, 'answerTemplateVersion');
   exactObject(options, hasAnswerTemplateVersion ? [...OPTION_KEYS, 'answerTemplateVersion'] : OPTION_KEYS,
     'invalid_options');
@@ -69,9 +78,9 @@ function snapshotOptions(options) {
     !V2_SESSION_ID.test(session?.session_id))
     || new Set(history.sessions.map((session) => session.session_id)).size !== history.sessions.length)
     fail('invalid_history');
-  try { plan = planLongMemEvalCase({ history, namespace }); }
+  try { plan = policy.plan({ history, namespace }); }
   catch { fail('invalid_history'); }
-  return deepFreeze({ history, question, namespace, limits, plan,
+  return deepFreeze({ history, question, namespace, limits, plan, policy,
     answerModel: options.answerModel, answerTemplateVersion,
     callbacks: { list: options.core.list.bind(options.core), capture: options.core.capture.bind(options.core),
       recall: options.core.recall.bind(options.core), get: options.core.get.bind(options.core),
@@ -133,8 +142,12 @@ function sourceCandidates(recall, snapshot) {
   if (!validateRecallShape(recall, snapshot.namespace, snapshot.limits.recallLimit))
     return { error: 'malformed_recall_response' };
   const byEvent = new Map(snapshot.plan.batches.flatMap((batch) => batch.sourceMap.map((source) =>
-    [source.messageId, { source, batch }])));
+    [source.messageId, { source, batch, windows: snapshot.policy.indexed
+      ? new Set(batch.indexedWindows.filter((entry) => entry.id === source.messageId
+        && entry.messageIndex === source.messageIndex && entry.role === source.role)
+        .map((entry) => entry.content)) : null }])));
   const usedMemoryIds = new Set();
+  const usedGlobalReceiptIds = new Set();
   const candidates = [];
   for (const item of recall.memories) {
     const memory = item?.memory;
@@ -171,15 +184,18 @@ function sourceCandidates(recall, snapshot) {
     for (const sourceReceipt of item.receipts) {
       const authoritative = detailById.get(sourceReceipt?.id);
       const mapped = byEvent.get(authoritative?.eventId);
-      if (!authoritative || usedReceiptIds.has(sourceReceipt.id) || !mapped
+      if (!authoritative || usedReceiptIds.has(sourceReceipt.id)
+        || snapshot.policy.indexed && usedGlobalReceiptIds.has(sourceReceipt.id) || !mapped
         || authoritative.client !== INGESTION_CLIENT
         || authoritative.sessionId !== mapped.batch.captureInput.sessionId
         || authoritative.role !== mapped.source.role
-        || authoritative.excerpt !== canonicalStoredReceiptExcerpt(mapped.source.normalizedContent)
+        || !(snapshot.policy.indexed ? mapped.windows.has(authoritative.excerpt)
+          : authoritative.excerpt === canonicalStoredReceiptExcerpt(mapped.source.normalizedContent))
         || sourceReceipt.role !== authoritative.role
         || sourceReceipt.excerpt !== authoritative.excerpt)
         return { error: 'unknown_or_mismatched_receipt' };
       usedReceiptIds.add(sourceReceipt.id);
+      if (snapshot.policy.indexed) usedGlobalReceiptIds.add(sourceReceipt.id);
       evidenceReceipts.push({ source: { sessionIndex: mapped.source.sessionIndex,
         sessionId: mapped.source.sourceSessionId, turnId: mapped.source.turnId,
         chunkIndex: mapped.source.chunkIndex }, date: mapped.source.sourceDate,
@@ -252,11 +268,13 @@ async function cairnArm(snapshot) {
   const dirty = pristine(snapshot);
   if (dirty) return arm('cairn', 'blocked', dirty, { stage: 'namespace-check' });
   let ingestion;
-  try { ingestion = await ingestLongMemEvalCase({ history: snapshot.history,
-    namespace: snapshot.namespace, capture: (input) => snapshot.callbacks.capture(input) }); }
+  try { ingestion = await snapshot.policy.ingest({ history: snapshot.history,
+      namespace: snapshot.namespace, capture: (input) => snapshot.callbacks.capture(input) }); }
   catch (error) { return arm('cairn', 'failed', errorCode(error, 'ingestion_failed'), { stage: 'ingestion' }); }
   const outcomes = ingestion.outcomes.map((outcome) => ({ batchIndex: outcome.batchIndex,
-    status: outcome.status, ...projectIngestionFailure(outcome) }));
+    status: outcome.status, ...projectIngestionFailure(outcome),
+    ...(snapshot.policy.indexed && outcome.sourceWindowCatalog
+      ? { sourceWindowCatalog: outcome.sourceWindowCatalog } : {}) }));
   const ingestionDiagnostics = { executable: ingestion.plan.executable, outcomes };
   if (!ingestion.plan.executable || outcomes.some((item) => item.status !== 'completed'))
     return arm('cairn', 'failed', 'ingestion_incomplete', { stage: 'ingestion', ingestion: ingestionDiagnostics });
@@ -285,8 +303,8 @@ async function cairnArm(snapshot) {
       retrievedSessionIds: sessionIds(mapped.candidates), packedSessionIds: sessionIds(selected) } });
 }
 
-export async function runPublicComparison(options) {
-  const snapshot = snapshotOptions(options);
+async function runComparison(options, policy) {
+  const snapshot = snapshotOptions(options, policy);
   const started = Date.now();
   const full = fullEvidence(snapshot.history);
   let fullMeasured, emptyMeasured;
@@ -319,11 +337,25 @@ export async function runPublicComparison(options) {
       } else arms.push(await execute[index]());
     }
   }
-  return deepFreeze({ schemaVersion: PUBLIC_COMPARISON_SCHEMA_VERSION,
+  return deepFreeze({ schemaVersion: policy.reportSchema,
     questionId: snapshot.question.question_id,
     question: { text: snapshot.question.text, date: snapshot.question.date },
     answerModel: snapshot.answerModel, templateVersion: snapshot.answerTemplateVersion,
     limits: clone(snapshot.limits), preflight, arms, latencyMs: elapsed(started),
+    ...(policy.indexed ? { captureSourcePolicy: INDEXED_WINDOW_CAPTURE_SOURCE_POLICY,
+      captureQualification: INDEXED_WINDOW_CAPTURE_QUALIFICATION,
+      semanticCoverage: 'unassessed' } : {}),
     sourceTimePolicy: 'source-date-metadata-only-capture-is-source-time-unaware',
-    interpretation: 'offline-comparison-record-not-an-official-or-semantic-score' });
+    interpretation: policy.indexed
+      ? 'offline-indexed-window-provenance-not-a-balanced-paid-comparator-or-semantic-score'
+      : 'offline-comparison-record-not-an-official-or-semantic-score' });
+}
+
+
+export function runPublicComparison(options) {
+  return runComparison(options, POLICIES.legacy);
+}
+
+export function runIndexedWindowPublicComparison(options) {
+  return runComparison(options, POLICIES.indexed);
 }

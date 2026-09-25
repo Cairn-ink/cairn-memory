@@ -10,6 +10,9 @@
   fake-HTTP and installed-artifact regressions. This is not semantic-quality,
   benchmark, hosted-host or comparator evidence. Staged evidence and rationale
   integration remain unsupported.
+- Add separately versioned offline LongMemEval planning, ingestion and public
+  comparison for exact indexed-window receipt provenance. The default evaluator,
+  scorer and live/paid routes remain unchanged and reject the new report.
 
 ## Unreleased — native Hermes capture deadline and explicit recovery
 

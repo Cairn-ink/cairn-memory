@@ -20,6 +20,10 @@ the needed context; four receipts, five items, existing token ceilings and
 bounded recall remain. Rationale and staged-evidence integration are not
 supported. The current public comparison verifies prefix receipts and must
 reject window receipts that differ; no prior result is relabeled.
+The separate [indexed-window offline comparison](indexed-window-provenance.md)
+can verify exact catalog membership through synthetic cold recall and answer
+packing, but the official scorer rejects its schema. It is not a balanced paid
+comparison or evidence of improved real-model answers.
 
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed

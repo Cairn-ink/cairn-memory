@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto';
 
 import { captureSnapshot } from '../../core/capture-input.mjs';
+import { sourceWindowCatalog } from '../../core/source-windows.mjs';
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 
 export const INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-ingestion-plan-v1';
+export const INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-indexed-window-ingestion-plan-v1';
 export const INGESTION_CLIENT = 'longmemeval-ingestion-v1';
+export const INDEXED_WINDOW_CAPTURE_QUALIFICATION = 'source-bound-v2';
+export const INDEXED_WINDOW_CAPTURE_SOURCE_POLICY = 'indexed-windows-v1';
 export const CAPTURE_LIMITS = Object.freeze({
   rawMessageUtf16: 20_000,
   normalizedMessageUtf16: 4_000,
@@ -378,6 +382,39 @@ export function planLongMemEvalCase(options) {
   return deepFreeze(buildPlan(history, namespace));
 }
 
+export function planIndexedWindowLongMemEvalCase(options) {
+  const legacy = planLongMemEvalCase(options);
+  const blockers = structuredClone(legacy.blockers);
+  const batches = legacy.batches.map((batch) => {
+    let snapshot;
+    try {
+      snapshot = captureSnapshot(batch.captureInput, INDEXED_WINDOW_CAPTURE_QUALIFICATION,
+        INDEXED_WINDOW_CAPTURE_SOURCE_POLICY);
+      const catalog = sourceWindowCatalog(snapshot);
+      return { ...batch,
+        normalizedCapture: { ...batch.normalizedCapture, messages: snapshot.messages,
+          normalizedTotalUtf16: snapshot.messages.reduce((sum, message) => sum + message.content.length, 0),
+          payloadDigest: snapshot.payloadDigest },
+        indexedWindows: catalog.entries,
+        sourceWindowCatalog: catalog.coverage.sourceWindowCatalog };
+    } catch {
+      blockers.push({ code: 'indexed_window_preflight_failed', batchIndex: batch.batchIndex });
+      return { ...batch, normalizedCapture: snapshot
+        ? { messages: snapshot.messages,
+          normalizedTotalUtf16: snapshot.messages.reduce((sum, message) => sum + message.content.length, 0),
+          payloadDigest: snapshot.payloadDigest }
+        : { ...batch.normalizedCapture, payloadDigest: null },
+        indexedWindows: [], sourceWindowCatalog: null };
+    }
+  });
+  return deepFreeze({ ...legacy, schemaVersion: INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION,
+    captureQualification: INDEXED_WINDOW_CAPTURE_QUALIFICATION,
+    captureSourcePolicy: INDEXED_WINDOW_CAPTURE_SOURCE_POLICY,
+    executable: blockers.length === 0, blockers, batches,
+    summary: { ...legacy.summary, blockerCount: blockers.length,
+      rawReconstruction: blockers.length === 0 ? 'exact-from-source-map' : 'exact-from-source-turns' } });
+}
+
 const exactResponseObject = (value, keys) => {
   if (!isPlainObject(value)
     || Object.keys(value).length !== keys.length
@@ -421,7 +458,7 @@ const validMemoryIds = (value) => Array.isArray(value)
   && Object.keys(value).length === value.length
   && value.every(validCoreIdentifier);
 
-const classifyCaptureResponse = (response) => {
+const classifyCaptureResponse = (response, expectedCatalog = null) => {
   if (!isPlainObject(response) || typeof response.ok !== 'boolean') return null;
   if (response.ok === false) {
     if (!exactResponseObject(response, ['ok', 'error'])
@@ -432,17 +469,24 @@ const classifyCaptureResponse = (response) => {
   }
   if (!exactResponseObject(response, ['ok', 'value']) || !isPlainObject(response.value)) return null;
   const value = response.value;
-  if (exactResponseObject(value, ['processing']) && value.processing === true) {
-    return { status: 'unknown', error: { code: 'capture_processing', retryable: false } };
+  if (expectedCatalog !== null && (!exactResponseObject(value.sourceWindowCatalog,
+    ['version', 'maxUnitsPerWindow', 'messageCount', 'windowCount', 'semanticCoverage'])
+    || Object.keys(expectedCatalog).some((key) => value.sourceWindowCatalog[key] !== expectedCatalog[key]))) return null;
+  const exactSuccess = (keys) => exactResponseObject(value,
+    expectedCatalog === null ? keys : [...keys, 'sourceWindowCatalog']);
+  const withCatalog = (classified) => expectedCatalog === null ? classified
+    : { ...classified, sourceWindowCatalog: structuredClone(value.sourceWindowCatalog) };
+  if (exactSuccess(['processing']) && value.processing === true) {
+    return withCatalog({ status: 'unknown', error: { code: 'capture_processing', retryable: false } });
   }
-  if (exactResponseObject(value, ['duplicate', 'memoryIds', 'suppressedCount'])
+  if (exactSuccess(['duplicate', 'memoryIds', 'suppressedCount'])
     && value.duplicate === true
     && validMemoryIds(value.memoryIds)
     && Number.isSafeInteger(value.suppressedCount)
     && value.suppressedCount >= 0) {
-    return { status: 'duplicate', result: structuredClone(value) };
+    return withCatalog({ status: 'duplicate', result: structuredClone(value) });
   }
-  if (!exactResponseObject(value, ['duplicate', 'admission', 'classification'])
+  if (!exactSuccess(['duplicate', 'admission', 'classification'])
     || value.duplicate !== false
     || !exactResponseObject(value.admission, ['memories', 'suppressedCount', 'indexRevision'])
     || !Array.isArray(value.admission.memories)
@@ -473,22 +517,23 @@ const classifyCaptureResponse = (response) => {
     && exactResponseObject(classification.error, ['code', 'retryable'])
     && typeof classification.error.code === 'string'
     && typeof classification.error.retryable === 'boolean';
-  if (skipped || applied) return { status: 'completed', result: structuredClone(value) };
-  if (failed) return { status: 'partial', result: {
+  if (skipped || applied) return withCatalog({ status: 'completed', result: structuredClone(value) });
+  if (failed) return withCatalog({ status: 'partial', result: {
     duplicate: false,
     admission: structuredClone(value.admission),
     classification: { status: 'failed', error: safeError(classification.error, 'classification_failed') },
-  } };
+    ...(expectedCatalog === null ? {} : { sourceWindowCatalog: structuredClone(value.sourceWindowCatalog) }),
+  } });
   return null;
 };
 
-export async function ingestLongMemEvalCase(options) {
+async function ingestCase(options, planCase, indexed = false) {
   exactObject(options, INGEST_OPTIONS_KEYS, 'invalid_options');
   if (typeof options.capture !== 'function') fail('invalid_options');
   const capture = options.capture;
   // Clone and recursively freeze all source, map and future batch input state before
   // the first await. Mutating the caller's history cannot alter later capture calls.
-  const plan = deepFreeze(structuredClone(planLongMemEvalCase({
+  const plan = deepFreeze(structuredClone(planCase({
     history: options.history,
     namespace: options.namespace,
   })));
@@ -501,7 +546,7 @@ export async function ingestLongMemEvalCase(options) {
     let classified;
     try {
       const response = await capture(structuredClone(batch.captureInput));
-      classified = classifyCaptureResponse(response) ?? {
+      classified = classifyCaptureResponse(response, indexed ? batch.sourceWindowCatalog : null) ?? {
         status: 'unknown', error: { code: 'malformed_capture_response', retryable: false },
       };
     } catch {
@@ -511,4 +556,12 @@ export async function ingestLongMemEvalCase(options) {
     if (!['completed', 'duplicate'].includes(classified.status)) break;
   }
   return deepFreeze({ plan, outcomes });
+}
+
+export function ingestLongMemEvalCase(options) {
+  return ingestCase(options, planLongMemEvalCase);
+}
+
+export function ingestIndexedWindowLongMemEvalCase(options) {
+  return ingestCase(options, planIndexedWindowLongMemEvalCase, true);
 }
