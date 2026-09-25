@@ -1,7 +1,7 @@
 # Chained benchmark budget extension
 
-Status: planning only; implementation is NOT released. The ledger-owned
-transaction seam below must be frozen before dispatch. No operational use.
+Status: contract prepared; implementation is NOT released until its accepted
+scorer dependency and fixed review base are recorded. No operational use.
 Planning base: `9402ae702b3b8836c6684db4a889acef34ee4b60` (PR #224).
 Branch/worktree: `feat/chained-benchmark-budget` / `chained-benchmark-budget`.
 Before implementation, rebase only these unpublished plan commits onto the
@@ -56,8 +56,34 @@ validated parent authorization ID. Never overwrite any prior binding or claim.
 
 ## B2 — Ledger-owned existing-only transaction
 
-Primary is still selecting the exact helper signature. Implementation must not
-start with a guessed raw-SQL or raw-database interface. The required behavior:
+Add exactly two narrow maintainer APIs in `index.mjs`:
+
+`transitionExperimentBudgetCaps({oldConfiguration, newConfiguration,
+expectedCheckpoint, authorize})` and
+`inspectExperimentBudgetSnapshot(configuration)`.
+
+Configurations have the current exact four configuration fields. Both money
+and request caps strictly increase, with identical normalized directory/run ID;
+the helper is cap mechanics, while B1 enforces the campaign's exact money
+amounts and binding. Snapshot returns the existing immutable publicState shape
+after a genuinely read-only validation, not a reserving/reopening handle.
+Transition returns that same shape for the verified post-state after successful
+commit/replay. It never returns a raw database, transaction or writable handle.
+
+`authorize` is synchronous and receives exactly `{mode, state,
+checkpointAttempts}`: mode is `transition` at the prior config or `replay` at
+the exact new config; state is the frozen detached publicState; checkpointAttempts
+is the immutable ordered prefix of length expectedCheckpoint.requestCount.
+Checkpoint is exactly requestCount/reservedMicroUsd, both safe nonnegative
+integers within prior caps. Verify its prefix reservation sum and terminal
+outcomes; in transition mode the whole state must equal the checkpoint.
+Only undefined callback return is accepted; reject thenables and other return
+values before a cap update. The guard owns the candidate record outside the
+callback, and only returns it after successful helper completion. Guard-specific
+callback failures must remain their fixed guard errors, not disappear into a
+generic ledger error. Unknown callback errors get the ledger's fixed failure.
+
+The required behavior:
 
 - Reuse the ledger's current schema, state and privacy validators rather than
   copy them into the guard. Do not import the unrelated embedding migration.
@@ -82,6 +108,14 @@ start with a guessed raw-SQL or raw-database interface. The required behavior:
   not a raw database. A callback is not a sandbox or new user authorization.
   Reject async completion before any cap update. Verify state and identity
   after callback; preserve authoritative failure and release the lock.
+
+The inspection API uses a read-only SQLite connection and read transaction;
+it does not call ordinary writable reopen or the cap-transition helper. It
+checks current exact configuration, complete schema/rows and path identity
+before returning. It does not itself require settled state; the B3 chain loader
+does. Share narrow private location/identity primitives between these new APIs
+only unless a separately justified old-callsite change is required. New physical
+DB/directory checks must reject multiple hard links, not just symbolic links.
 
 Existing create/reopen behavior and old guard dispatch must not widen. Any
 necessary shared-code refactor is explicit in the frozen helper contract and
@@ -133,6 +167,8 @@ ready status. No merge, release, deployment or actual cap transition.
 ## Resume checkpoint
 
 No implementation, runtime evidence, candidate review or live authorization
-exists yet. Next: finish source-pair scorer acceptance, decide the narrow
-ledger-owned helper, update fixed base, freeze this contract, then dispatch.
+exists yet. Primary selected the narrow ledger-owned helper after independently
+reading existing state/path/transaction code and two read-only Sol/high seam
+proposals. Next: finish source-pair scorer acceptance, update fixed base and
+release this contract, then dispatch.
 Read this checkpoint and the current tracked diff, not conversation memory.
