@@ -38,6 +38,23 @@ harnesses, evaluated against existing solutions under matched conditions.
 - Publish no raw case/source data, IDs, credentials, private paths or ledger
   contents. This checkpoint authorizes no new paid call, rerun, merge or release.
 
+### Next checkpoint requirements — completed fresh development continuation
+
+Before editing its current summary, preserve all earlier checkpoints. Record
+the frozen continuation's wrapper completion separately from both arms' zero
+resolved/six unresolved outcomes; six scoring records were not six judge calls.
+Retain eight qualification-budget refusals and four generic compiler-invalid
+slots without inventing the latter's subreason or retrospectively explaining R5.
+Record the primary and independent terminal audit, report digest, 56 requests,
+US$0.280000 reserved/US$0.038510 known actual/28 unknown count costs/zero pending,
+and cumulative US$86.516460 under US$200 with the old prefix unchanged.
+Keep all130 prior/reserved/selected cases excluded from new development and the
+original reserved30 untouched. The qualification evidence-pool repair is only
+in implementation; its synthetic wire savings and citation control are not a
+provider compatibility pass, a semantic score or complete maximum-input support.
+Synchronize only this plan, ROADMAP and limitations; no runtime, actual data,
+ledger, model, provider call, scorer or other workflow change in this checkpoint.
+
 ## Baseline and authority
 
 The [audited 30-case cohort](https://github.com/Cairn-ink/cairn-memory/blob/fcfd2b349ce20c6def46ed4815fa6de6b5404308/docs/evidence/reliability-cohort-30.md)
@@ -73,10 +90,53 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after PR #231 / synthetic compatibility)
+## Latest checkpoint — 2026-09-25 (after fresh-development terminal)
 
-This is the current resumption checkpoint; older snapshots below are retained
-as dated history. PR #230 (`5ec4793`) passed its two independent reviews,
+This supersedes the after-#231 checkpoint below; earlier snapshots remain
+dated history. At the last check, PRs #230 and #231 had two independent reviews
+and exact-head CI (21/21) and remained open/unmerged; #231 was mergeable. PR #205's
+previous 21/21 result applies only to its old head, not this documentation
+update; current reviews and exact-head CI remain pending.
+
+The source-free terminal report SHA-256
+`e8d75ac9cd0865c78777587d132eec44ee84dff0bd500afad8ffa1f310dce84d` records
+that the wrapper completed six generation and six scoring records (not six
+judge calls), but all 12 arm-cases were
+`ingestion_incomplete`: each arm had 0 resolved, 0 correct, 0 wrong and 6
+unresolved; common N was 0 and accuracy is null. This is not a quality score.
+The run made 56 requests (28 count and 28 generation; no answer or judge calls),
+with US$0.280000 reserved, US$0.038510 known actual, 28 count-route costs
+unknown and zero pending. Diagnostics recorded eight qualification-budget
+refusals and four generic compiler-invalid slots; the exact compiler subreason
+is unknown. Do not infer that this explains R5, whose separate prefix-failure
+cause remains unknown.
+
+Primary and independent accounting audits confirmed the prior 12,646-request
+prefix unchanged: 12,702 terminal requests, US$86.516460 conservatively
+reserved and US$113.483540 remaining under the unchanged US$200 user ceiling.
+The operational cap remains US$200/50,000 requests; preserve US$70 for the
+comparator and US$10 for host work. This does not complete the embedding-ledger
+migration. The prior 124 exclusions plus these six remain closed in the 130-case
+exclusion set; the already-reserved 30-case cohort is the next fixed holdout,
+untouched and not to be reselected or replaced. No earlier cohort was rerun.
+
+Finite S1 mechanics remain accepted; S2–S5 remain open. The qualification
+evidence-pool repair is in implementation, not accepted: the proposal uses a
+pool of 1–4 source-backed candidate windows per item and shared field schemas,
+without extra calls, truncation or relaxed validation. Its minimal synthetic wire estimate
+falls from 6,003 to 3,991 only in that proposal; the maximum 5×4×800 case still
+fails at a core-side count of 11,348. These mechanics establish neither
+provider compatibility nor semantic quality. Complete and independently
+review the offline repair first, then use a separately frozen small provider-
+compatibility check before any future fresh development cohort. Never retry
+consumed or prior cohorts. This checkpoint authorizes no new paid call, merge
+or release.
+
+## Historical checkpoint — 2026-09-25 (after PR #231 / synthetic compatibility)
+
+This was the current resumption checkpoint at that time; it is superseded by
+the fresh-development checkpoint above. Older snapshots below remain dated
+history. PR #230 (`5ec4793`) passed its two independent reviews,
 primary dual-Node gates and exact-head CI (21/21); it remained open and
 unmerged. PR #231 (`b781a3c`) also passed its two reviews, local dual-Node
 gates and exact-head CI run `36125459749` (21/21); it was open, mergeable and
@@ -674,7 +734,8 @@ evidence, not a QA score or product runtime fix claim.
 The preflight does not replace the later end-to-end S2 answer-stage gate. After
 S1's repair and safety conditions pass and the candidate path is frozen, use a
 shared answer model, judge/scorer, prompt, cutoff and final context cap on a
-frozen development set and then a fresh held-out roster. Report visible-to-
+frozen development set and then the already-reserved 30-case holdout; do not
+reselect or replace it. Report visible-to-
 packed stages, candidate work, fixed-N correct/wrong/unresolved outcomes,
 source-span fidelity and abstention; preserve every failure and unresolved
 case. Freeze thresholds and resource limits before scored calls, and do not
@@ -689,10 +750,13 @@ an oracle diagnostic is not a product score.
 
 ### S3 — Fresh matched comparison against one existing solution
 
-Freeze a new held-out roster before scoring; run Cairn and one comparator on the
-same cases, ordered histories, timestamps and question cutoffs. Keep the old
-30-case cohort out of tuning and never rerun it as holdout. Tune on development
-cases; hold out this roster until configs are frozen.
+Use the already-reserved 30-case roster as the fixed holdout: do not reselect or
+replace it. Freeze configurations before revealing/scoring it; run Cairn and
+one comparator on the same cases, ordered histories, timestamps and question
+cutoffs. Keep this holdout out of tuning and never rerun it. Tune only on
+development cases. A genuinely new holdout may be predeclared only after this
+one is inconclusive and only within the remaining authorized resources; it
+cannot substitute for the reserved 30-case roster.
 
 Mem0 OSS is prospective, pending a synthetic preflight of its actual engine
 version, dependencies and model config. Its

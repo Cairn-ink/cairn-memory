@@ -36,53 +36,51 @@ claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: the [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-records the latest after-#231 checkpoint; earlier results and failures remain
-dated historical evidence, not fresh reruns. PR #230 (`5ec4793`) passed two
-independent reviews, primary Node 22.16/24.15 gates and exact-head CI (21/21).
-PR #231 (`b781a3c`) passed two reviews, local dual-Node gates and exact-head CI
-run `36125459749` (21/21); both were open and unmerged at the last check, and
-#231 was mergeable. Finite S1 mechanics alone are accepted; S2–S5 remain open.
-No S1–S5 sequence pass is claimed.
+records the latest checkpoint after the fresh-development terminal run; older
+results and failures remain dated history, not fresh reruns. PRs #230
+(`5ec4793`) and #231 (`b781a3c`) passed two independent reviews and exact-head
+CI (21/21) at their recorded heads and remained open/unmerged at the last
+check. PR #205's earlier 21/21 run applies to its prior head only; this docs
+update still needs review and exact-head CI. Finite S1 mechanics alone are
+accepted; S2–S5 remain open and no S1–S5 sequence pass is claimed.
 
-The R5 run stopped before scoring: seven requests, US$0.035 conservatively
-reserved, zero scored and six unresolved cases per arm. Unresolved is not a 0%
-accuracy score. Its global halt followed an observed indexed count of 8,701
-exceeding the 7,024 bounded dispatch limit. A separate earlier prefix-capture
-record is labeled `invalid_model_output` / `ingestion_incomplete`; no output or
-subreason was retained, so that prefix failure's exact cause is unknown. Do not
-retry this consumed six-case roster or prior cohorts; the reserved 30-case set
-remains untouched. The historical audited 30-case results remain 15 correct,
-8 wrong and 7 unresolved.
+The source-free fresh-development report SHA-256
+`e8d75ac9cd0865c78777587d132eec44ee84dff0bd500afad8ffa1f310dce84d` records
+that the wrapper completed six generation and six scoring records (not six
+judge calls), but all 12 arm-cases were
+`ingestion_incomplete`: each arm had 0 resolved, 0 correct, 0 wrong and 6
+unresolved, with common N=0 and null accuracy. This is not a score. The run made
+56 requests (28 count and 28 generation, no answer or judge calls), reserved
+US$0.280000, recorded US$0.038510 known actual, left 28 count-route costs
+unknown and had zero pending. Eight qualification-budget refusals and four
+generic compiler-invalid slots were observed; their exact compiler subreason
+is unknown. Do not infer a cause for R5 from these diagnostics or retry any
+consumed/prior cohort. The original reserved 30-case set remains untouched.
 
-The current primary read-only accounting audit recorded 12,646 terminal
-requests, US$86.236460 conservatively reserved and zero pending. The cumulative
-user ceiling remains US$200; the operational cap was atomically extended from
-US$100 to US$200 with a 50,000-request cap. This is not the separate
-embedding-ledger migration, which remains incomplete. Keep at least US$70 for
-comparator work and US$10 for host work. No additional paid request, cohort
-retry, merge or release is authorized by this status update.
+R5 remains a separate historical failure: seven requests and US$0.035
+conservatively reserved, with zero scored and six unresolved per arm. Its global
+halt followed an indexed count of 8,701 exceeding the 7,024 dispatch limit; an
+earlier prefix-capture failure has no retained output or subreason and remains
+unknown. The audited 30-case result remains 15/8/7 and was not rerun.
 
-The bounded budget-boundary repair and source-free failure diagnostics are
-accepted mechanical changes in #230/#231; neither explains the historical R5
-halt or establishes semantic reliability. A separate synthetic installed-
-compatibility check, run on #230's accepted runtime before #231's remote CI
-completed, passed count, generation and core compilation on three fixed shapes.
-It made six requests, reserved US$0.030000, recorded US$0.005377 known actual
-cost, left three count-route costs unknown and zero pending. Its report is
-pinned by SHA-256
-`b75dcea6bb317adc988c846f6493a5703ca536b702b17d7f88aef0796b6d119f`. This is
-compatibility evidence only—not QA, recall, judging, a semantic score or a
-quality gain.
+The primary and independent accounting audits confirmed the old 12,646-request
+prefix unchanged: 12,702 terminal requests, US$86.516460 conservatively
+reserved, US$113.483540 remaining under the unchanged US$200 user ceiling, and
+zero pending. The operational cap remains US$200 with a 50,000-request cap;
+this is not completion of the embedding-ledger migration. Preserve at least
+US$70 for comparator work and US$10 for host work. The previous 124 exclusions
+plus the six consumed fresh cases remain closed in the 130-case exclusion set.
 
-Next, use operator-only preparation for a separately frozen fresh six-case
-development run: one case per question type, fixed seed, excluding all 124
-used or reserved cases. Keep the reserved 30-case set untouched and do not
-retry old cohorts. Before any run, recheck the frozen plan, accepted diagnostics,
-installed inputs and budget gates; cap development at US$29.935 (29,935,000
-micro-USD), preserving at least US$70 for comparator work and US$10 for host
-work. Then proceed separately to matched Mem0 comparison, installed-growth
-measurement and onboarding. S2–S5 remain unpassed; this status update makes no
-provider call or new paid authorization.
+Next, complete and independently review the qualification evidence-pool repair,
+which is in implementation but not accepted. Its proposal uses a pool of 1–4
+source-backed candidate windows per item and reuses shared field schemas,
+without extra calls, truncation or relaxed validation. A minimal synthetic wire estimate falls from 6,003 to
+3,991 only in that proposal; the maximum 5×4×800 case still fails at a core-side
+count of 11,348. This is not a provider-compatibility pass or quality
+result. After offline acceptance, run a separately frozen small provider-
+compatibility check before any future fresh development cohort. Then proceed
+separately to matched Mem0 comparison, installed-growth measurement and
+onboarding. No new paid call is authorized by this status update.
 
 The older after-#221 accounting, smoke completion, synthetic Mem0/index-window
 results and embedding-migration mechanics remain in the plan as historical

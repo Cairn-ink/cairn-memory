@@ -68,6 +68,45 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
+### Latest checkpoint — 2026-09-25 (after fresh development terminal)
+
+The source-free terminal report SHA-256
+`e8d75ac9cd0865c78777587d132eec44ee84dff0bd500afad8ffa1f310dce84d` records
+that the wrapper completed six generation and six scoring records (not six
+judge calls), but all 12 arm-cases were
+`ingestion_incomplete`: each arm had 0 resolved, 0 correct, 0 wrong and 6
+unresolved, common N=0 and null accuracy. This is not an accuracy result. The
+run made 56 requests (28 count and 28 generation, no answer or judge calls),
+reserved US$0.280000, recorded US$0.038510 known actual, left 28 count-route
+costs unknown and had zero pending. Eight qualification-budget refusals and
+four generic compiler-invalid slots were recorded; the exact compiler
+subreason is unknown and is not evidence of R5's cause.
+
+The primary and independent audit confirmed the prior 12,646-request prefix
+unchanged: 12,702 terminal requests, US$86.516460 conservatively reserved,
+US$113.483540 remaining under the unchanged US$200 user ceiling and zero
+pending. The operational cap is US$200/50,000 requests; preserve US$70 for
+comparator work and US$10 for host work. The separate embedding-ledger
+migration is not complete. The prior 124 exclusions plus the fresh six are
+closed in the 130-case exclusion set; the reserved 30-case set is untouched.
+No prior cohort was rerun.
+
+Finite S1 mechanics remain accepted; S2–S5 remain open. The qualification
+evidence-pool repair is in implementation, not accepted: its proposal uses a
+pool of 1–4 source-backed candidate windows per item and shared field schemas, with no extra
+calls, truncation or relaxed validation. A minimal synthetic wire estimate of
+6,003 to 3,991 is proposal-only; the maximum 5×4×800 case still fails at a
+core-side count of 11,348. This proves neither provider compatibility nor
+quality. Complete and independently review the offline repair before a
+separately frozen small provider-compatibility check and future fresh
+development cohort. No old cohort may be retried; this documentation update
+authorizes no new paid call. See the [current milestone checkpoint](plans/comparative-reliability-milestones.md).
+
+### Historical checkpoint — after PR #231 and the earlier R5 run
+
+The following fixed-six results, failures, audit and next-step sequence are
+retained as the earlier after-#231 checkpoint, not current status.
+
 The earlier fixed-six development smoke completed and was judged 6/6 in each
 arm, but completion is not semantic quality: Cairn was 2 correct, 4 wrong,
 0 unresolved; full history 3/3/0; and no memory 0/6/0. A later R5 run stopped
@@ -93,8 +132,8 @@ and exact-head CI run `36125459749` (21/21); it was open, mergeable and unmerged
 at the last check. These mechanics do not establish provider-exact usage or
 semantic evidence.
 
-The current primary read-only accounting audit recorded 12,646 terminal
-requests, US$86.236460 conservatively reserved and zero pending. The user
+At that checkpoint, the primary read-only accounting audit recorded 12,646
+terminal requests, US$86.236460 conservatively reserved and zero pending. The user
 ceiling remains US$200; the operational cap was atomically extended from
 US$100 to US$200 with a 50,000-request cap. The separate embedding-ledger
 migration is not complete. Preserve at least US$70 for comparator work and
@@ -112,15 +151,15 @@ costs unknown, and had zero pending requests. Its source-free report SHA-256 is
 compatibility evidence only—not QA, recall, judging, a semantic score or a
 quality improvement. No consumed or earlier cohort was rerun.
 
-Recent synthetic work also includes a Mem0 fake-HTTP preflight, optional
-indexed-window capture mechanics and an existing-only embedding-ledger
+At that checkpoint, recent synthetic work also included a Mem0 fake-HTTP
+preflight, optional indexed-window capture mechanics and an existing-only embedding-ledger
 migration. None is a matched answer-quality comparison, semantic improvement,
 installed-growth result or onboarding pass. PR #220's synthetic guard
 regression is denial-only; no new paid capability or paid request is
 established. Indexed windows leave the default first-prefix behavior unchanged
 and do not prove that a model selects or answers correctly from a later
-passage. With PR #231's remote CI and acceptance gates closed, the next step is
-operator-only preparation for a separately frozen fresh six-case development
+passage. With PR #231's remote CI and acceptance gates closed, the planned next
+step was operator-only preparation for a separately frozen fresh six-case development
 run: one case per type and fixed seed, excluding 124 used or reserved cases.
 Its 30-case reserve stays untouched, and no old cohort is retried. Before any
 run, recheck the frozen plan, accepted source-free diagnostics, installed
