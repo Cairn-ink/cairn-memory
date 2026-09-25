@@ -24,6 +24,12 @@ The separate [indexed-window offline comparison](indexed-window-provenance.md)
 can verify exact catalog membership through synthetic cold recall and answer
 packing, but the official scorer rejects its schema. It is not a balanced paid
 comparison or evidence of improved real-model answers.
+The [qualified-prefix ingestion control](longmemeval-ingestion.md#qualified-prefix-control-offline-only)
+uses the same source-bound-v2 qualification as indexed windows but exposes only
+the retained first-prefix view. It is offline ingestion mechanics, not a
+matched answer comparison or proof that either treatment improves QA. An
+injected callback must be the intended trusted core; response metadata alone
+does not attest its origin.
 
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed
