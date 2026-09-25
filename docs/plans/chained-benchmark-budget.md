@@ -1,7 +1,8 @@
 # Chained benchmark budget extension
 
-Status: contract frozen; implementation released after scorer PR #225 at
-`397d22e` passed all 17 exact-head CI jobs (run `36097661692`). No operational use.
+Status: contract frozen; offline implementation locally committed for primary
+acceptance and independent review. Scorer PR #225 at `397d22e` passed all 17
+exact-head CI jobs (run `36097661692`). No B exact-head CI or operational use.
 Fixed review base: `397d22e688cce40e5aca775a5758d420f5da2575`
 (`test/qualified-source-scoring`, reviewed test-suite ownership correction).
 Branch/worktree: `feat/chained-benchmark-budget` / `chained-benchmark-budget`.
@@ -184,15 +185,16 @@ Independent nonauthor Standards and Spec review the same original base/final
 SHA; correction repeats both axes. Exact-head all CI and mergeability precede
 ready status. No merge, release, deployment or actual cap transition.
 
-## Resume checkpoint
+## Historical release checkpoint (before implementation)
 
-Implementation is released; no B runtime evidence, candidate review or live
-authorization exists yet. Primary selected the narrow ledger-owned helper after independently
-reading existing state/path/transaction code and two read-only Sol/high seam
-proposals. The scorer's exact-head CI is accepted. Next: one bounded Sol/high
-implementation, primary actual verification, two independent full-base reviews
-and exact-head CI. No actual cap change follows from this release.
-Read this checkpoint and the current tracked diff, not conversation memory.
+At release, there was no B runtime evidence, candidate review or live
+authorization. Primary selected the narrow ledger-owned helper after
+independently reading existing state/path/transaction code and two read-only
+Sol/high seam proposals. The scorer's exact-head CI was accepted. The next
+step then was one bounded Sol/high implementation followed by primary actual
+verification, two independent full-base reviews and exact-head CI. No actual
+cap change followed from that release. The later offline checkpoint below is
+the current implementation status.
 
 ## Offline implementation checkpoint (not operational acceptance)
 
@@ -220,6 +222,14 @@ identity changes under lock, and two competing child writers. These checks do
 not authenticate injected callbacks, prove power-loss durability, establish
 model quality or permit the actual operator ledger transition. Primary
 acceptance, independent review and exact-head CI remain required.
+
+The primary independently reran the same committed runtime/test/package bytes
+on both Node 22.16.0 and 24.15.0: budget 18/18, guard 192/192, live-offline
+351 total (321 passed, 30 opt-in skips), LongMemEval 123/123, generic 112/112,
+the budget and guard demos, all three LongMemEval demos, JSON validation and
+locally pinned Claude Code 2.1.260 strict validation passed. This verifies the
+offline candidate's checks; it is not an independent Standards/Spec review,
+exact-head B CI or authorization to touch the operational ledger.
 
 ## Contract clarification discovered during synthetic implementation
 
