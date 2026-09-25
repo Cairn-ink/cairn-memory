@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import { callModel } from '../model-call.mjs';
+import { callModel, isCoreModelDeadlineSignal } from '../model-call.mjs';
 import { MemoryStoreError } from '../validation.mjs';
 
 const invoke = (callback, options) => callModel({ contextWindow: 8192,
@@ -45,4 +45,6 @@ test('one core deadline aborts a pending two-phase adapter without extending pha
   t.mock.timers.tick(1);
   await rejected;
   assert.equal(signal.aborted, true);
+  assert.equal(isCoreModelDeadlineSignal(signal), true);
+  assert.equal(isCoreModelDeadlineSignal(AbortSignal.abort('model_timeout')), false);
 });

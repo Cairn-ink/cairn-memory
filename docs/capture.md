@@ -36,6 +36,30 @@ Fresh work claims a fixed 125-second lease. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
 
+Trusted embedded callers may opt in with
+`openMemoryCore({ path, model, captureDeadlineMs: 120000 })`. The setting is
+snapshotted at construction, accepts an integer from 1 through 120000, and is
+not a capture-message field. The local MCP host now accepts the same trusted
+constructor setting or `--capture-deadline-ms` with an explicitly enabled v1/v2
+capture qualification mode. Omission retains the existing behavior. The native
+Hermes provider separately accepts a canonical decimal string
+`capture_deadline_ms` of 1–110000 only with v2 capture and forwards the fixed
+CLI flag; its ordinary transport limits do not change.
+Each capture then has one monotonic budget starting before input normalization
+and spanning extraction, optional qualification/reconciliation, admission,
+initial classification and automatic rationale. Every model call still has its
+own 30-second ceiling; the smaller remaining limit applies. Deadline checks
+before capture-owned transaction commits roll back late admission, placement or
+rationale writes. This is cooperative for synchronous token counting and SQLite,
+not a hard wall-clock response guarantee. Failure cleanup may run after expiry.
+Before admission, expiry returns `model_timeout`; after admission, committed
+receipts stay committed and classification or rationale reports failure honestly.
+No automatic retry, new provider allowance, or host default is implied.
+The native Hermes provider can independently enable admission inspection and
+explicit classification recovery through `classification_recovery: guarded-v1`.
+Its keyless inspection and model-backed placement retain the installed MCP
+schemas and revision guards. See the [native setup guide](../integrations/hermes/cairn/README.md).
+
 Successful new capture returns `{ duplicate: false, admission, classification }`.
 Admission contains `{ memories: [{id,revision}], suppressedCount,indexRevision }`.
 Classification is one of:
@@ -49,6 +73,18 @@ accepted memories; they remain inspectable. Applied revisions are the actual
 post-filing revisions, not the earlier admission snapshot. Concurrent correction
 or forgetting rejects stale filing. Retry classification explicitly from fresh
 state; capture replay does not rerun extraction or classification.
+
+New captures also commit a bounded, source-free **initial classification
+attempt** journal with their admission. Its status is `not_started` before
+model work, `in_flight_or_interrupted` while work is outstanding, then
+`applied`, `skipped_already_filed` or `failed`; empty admission records
+`skipped_empty`. A crash can leave the in-flight status indefinitely. The
+`applied` status is committed with placement, including a valid no-op with no
+parent, so it does not mean every member is filed or the model was correct.
+The journal is visible only through opt-in
+[admission inspection](admission-claims.md#read-committed-admission-membership).
+It does not retry capture or provide a classification task queue. Manual and
+pre-v14 admission claims have no recorded initial attempt.
 
 Pending replay returns `{processing:true}`. Completed replay returns
 `{duplicate:true,memoryIds,suppressedCount}`, even without a model/counter. IDs
