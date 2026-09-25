@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — qualified source-pair generation protocol
+
+- Add a separate deterministic, two-arm offline generation protocol for
+  source-bound-v2 qualified first-prefix versus indexed-window receipts. Its
+  scoped execution reports finite halts and source-only evidence; the legacy
+  three-arm comparison, scorer, paid guard and core defaults remain unchanged.
+  Synthetic checks do not establish answer quality or authorize paid use.
+
 ## Unreleased — qualified-prefix ingestion control
 
 - Add separately versioned offline LongMemEval planning and ingestion using
