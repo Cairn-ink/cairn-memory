@@ -62,6 +62,8 @@ Document the integrity boundary without claiming hostile same-user isolation.
 
 Private reads are bounded, regular, non-symlink files with private modes and
 checked ancestors/identity; secrets are never printed or written to artifacts.
+Here private reads mean plan/prepared/evaluator/ledger-binding inputs; ordinary
+installed public runtime files need integrity/identity checks, not0600 modes.
 Use a separate immutable plan/input namespace from fresh output paths. Validate
 path collisions and refuse reuse/overwrite. Reuse safe existing exported helpers
 where suitable; do not change old runner behavior just to share private helpers.
@@ -71,6 +73,18 @@ database creation/migration/cap change or output mutation. Use the existing
 read-only ledger snapshot, not writable reopen. Return only redacted counts,
 configuration fingerprints and validation status. Snapshot tests must prove
 unchanged bytes and absence of new files, not just a successful exit.
+
+Feasibility decision: the legacy100-parent loader uses writable reopen, so it
+cannot serve dry-run. Permit one narrow maintainer export in request-guard.mjs:
+`inspectQualifiedSourcePairParent({ledger, policy, benchmarkExtension})`.
+It snapshots exact inputs once, validates the existing100/200 full file-bound
+parent with the existing private verifier, uses ONLY
+`inspectExperimentBudgetSnapshot`, requires open fully settled state and returns
+that immutable state. No callback, files, claim, cap transition, writable reopen
+or new transport grant. Preserve all old loaders and G behavior. Test both
+parents, tampering and byte/file nonmutation; instrument constructors to prove
+read-only connection use. This avoids duplicating the monetary-chain validator
+inside the launcher. It is the sole permitted narrow G-module addition.
 
 ## L2 — Conservative phase quota before every guarded dispatch
 
@@ -178,7 +192,8 @@ not new arbitrary runtime fault hooks or permissive provider endpoints.
 
 ## L5 — Scope, gates and delivery
 
-Allowed: new narrowly named live runner/CLI/private quota/helper/tests, one
+Allowed: the L1 read-only inspector plus scoped guard tests/registration, new
+narrowly named live runner/CLI/private quota/helper/tests, one
 installed regression under packaging/test using existing artifact machinery,
 technical docs/limitations/CHANGELOG/this plan, and registration in existing
 package scripts if necessary. No core/adapter/N/P/G semantic changes, public
