@@ -589,6 +589,7 @@ export function upgradeExperimentBudgetForEmbeddings(options) {
   inspectExistingLocation(config);
   const db = constructDatabase(config.filename);
   return closeAfter(db, () => withTransaction(db, 'write', () => {
+      inspectExistingLocation(config);
       const version = embeddingVersion(db);
       const before = readValidatedState(db, version, true);
       assertConfiguration(before, config);

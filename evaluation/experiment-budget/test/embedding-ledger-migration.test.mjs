@@ -354,6 +354,22 @@ test('L4/L7 failed table-copy transition rolls back exact v1 schema and rows', a
   assert.equal(inspectExperimentBudgetForEmbeddingUpgrade(f.config).historySha256, request.expectedHistorySha256);
 });
 
+test('L3/L7 file privacy changing after BEGIN refuses migration without changing history', async t => {
+  const f = fixture(t);
+  const ledger = reopenExperimentBudget(f.config);
+  reserve(ledger, 'host-completion', 5, 'succeeded', 3);
+  ledger.close();
+  const beforeRows = rows(f.file);
+  const request = bound(f.config);
+  const attempted = await spawned('chmod-after-begin', f.config, request);
+  assert.equal(attempted.code, 2, attempted.stderr + attempted.stdout);
+  assert.equal(attempted.stdout, 'unsafe_database_file\n');
+  assert.equal(version(f.file), 1);
+  assert.deepEqual(rows(f.file), beforeRows);
+  assert.equal(inspectExperimentBudgetForEmbeddingUpgrade(f.config).historySha256,
+    request.expectedHistorySha256);
+});
+
 test('L5/L7 concurrent actual child upgrades serialize; stale v1 handle rejects after migration', async t => {
   const f = fixture(t);
   const stale = reopenExperimentBudget(f.config);

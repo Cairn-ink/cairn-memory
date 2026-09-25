@@ -137,16 +137,26 @@ cumulative ceiling. Never infer authority to migrate the real ledger here.
 
 ## Worker evidence (synthetic only)
 
-The new 14-case focused suite uses only new temporary SQLite files. It covers
+The new 15-case focused suite uses only new temporary SQLite files. It covers
 mixed and empty histories, rowid gaps, exact and safe-integer limits, changed
 binding, default-v1 compatibility, v2 accounting, real child races, post-copy
 rollback, and both process-exit and abrupt SIGKILL seams before/after COMMIT.
+An import-hook child changes the synthetic database file to mode 0644 after
+`BEGIN IMMEDIATE`: the previous candidate `e0fa1e7` wrongly upgraded, while
+the corrected in-transaction privacy check returns `unsafe_database_file` and
+leaves v1 rows/digest unchanged. The child restores mode 0600 in its cleanup.
 The SIGKILL pre-COMMIT case recovers through the same bound writable upgrade;
 the post-COMMIT case returns `already-upgraded`, with nonempty history intact.
 This is crash-test evidence, not a power-loss or filesystem durability proof.
 
-On each of Node 22.16.0 and 24.15.0, the updated budget command passed 29/29
-(15 legacy plus 14 new), request-guard 169/169, generic tests 112/112, and
+An independent synthetic probe against unmodified base `330ecb1` created a
+temporary v1 ledger: a real `host-embedding` reservation failed
+`invalid_options`, and the upgrade export did not exist. The new v2 migration
+and embedding reservation tests pass on the candidate; this red/green evidence
+does not use an operator ledger.
+
+On each of Node 22.16.0 and 24.15.0, the updated budget command passed 30/30
+(15 legacy plus 15 new), request-guard 169/169, generic tests 112/112, and
 live-evidence-offline 320 passed/30 skipped/0 failed. Both synthetic demos,
 JSON validation and isolated locked Claude Code 2.1.260 strict plugin
 validation passed. No actual operator ledger, provider or credential was used.

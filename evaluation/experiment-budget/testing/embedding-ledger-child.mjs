@@ -1,10 +1,13 @@
 // Synthetic child only: actual SQLite transaction/crash behavior, never a real ledger.
 import assert from 'node:assert/strict';
+import { chmodSync } from 'node:fs';
 import { registerHooks } from 'node:module';
+import path from 'node:path';
 
 const [mode, configText, requestText] = process.argv.slice(2);
 assert.ok(['upgrade', 'reserve-crash', 'crash-before-commit', 'crash-after-commit',
-  'kill-before-commit', 'kill-after-commit', 'fail-copy', 'legacy-reserve'].includes(mode));
+  'kill-before-commit', 'kill-after-commit', 'fail-copy', 'legacy-reserve',
+  'chmod-after-begin'].includes(mode));
 const config = JSON.parse(configText);
 
 const replacements = {
@@ -28,6 +31,10 @@ const replacements = {
     "      db.exec('DROP TABLE attempts_legacy');",
     "      db.exec('DROP TABLE attempts_legacy');\n      throw new Error('synthetic post-copy failure');",
   ],
+  'chmod-after-begin': [
+    "  return closeAfter(db, () => withTransaction(db, 'write', () => {",
+    "  return closeAfter(db, () => withTransaction(db, 'write', () => {\n      chmodSync(config.filename, 0o644);",
+  ],
 };
 if (replacements[mode]) {
   registerHooks({ load(url, context, nextLoad) {
@@ -36,7 +43,8 @@ if (replacements[mode]) {
     const source = String(loaded.source);
     const [target, replacement] = replacements[mode];
     assert.equal(source.split(target).length, 2, `unique fault seam for ${mode}`);
-    return { ...loaded, source: source.replace(target, replacement) };
+    return { ...loaded, source: `${mode === 'chmod-after-begin'
+      ? "import { chmodSync } from 'node:fs';\n" : ''}${source.replace(target, replacement)}` };
   } });
 }
 
@@ -64,4 +72,8 @@ try {
 } catch (error) {
   process.stdout.write(`${error?.code ?? error?.message}\n`);
   process.exitCode = error?.code ? 2 : 3;
+} finally {
+  if (mode === 'chmod-after-begin') {
+    chmodSync(path.join(config.directory, 'experiment-budget.sqlite'), 0o600);
+  }
 }
