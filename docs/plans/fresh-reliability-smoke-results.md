@@ -64,9 +64,11 @@ replaced, or relabeled, and no paid scale-up is authorized by this packet.
 
 ## Worker verification — 2026-09-25
 
-GPT-6 Sol/high inspected the five-file documentation diff. `npm test` (112/112),
-`npm run validate`, and `npm run validate --prefix tools/plugin-validation`
-passed on both Node 22.16 and 24.15. Node 24 strict plugin validation required the
-installed `claude` executable on `PATH`; its earlier missing-executable failure
-was environmental, and the corrected rerun passed. Primary acceptance and the
-independent fixed-base Standards/Spec reviews remain separate gates.
+GPT-6 Sol/high inspected the five-file documentation diff. Both `npm test`
+(112/112) and `npm run validate` passed on Node 22.16 and 24.15. The initial strict
+plugin runs used a global Claude Code 2.1.282 executable because the isolated
+tooling was missing; those runs do not satisfy the pinned-tooling gate. After
+`npm ci --prefix tools/plugin-validation`, local dependency inspection confirmed
+Claude Code 2.1.260, and `npm run validate --prefix tools/plugin-validation`
+passed on both Node versions using that local executable. Primary acceptance
+and the independent fixed-base Standards/Spec reviews remain separate gates.
