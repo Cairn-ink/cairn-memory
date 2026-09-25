@@ -58,6 +58,9 @@ fitting fails before transport or admission. The opt-in may do extra local
 serialization and tokenization; it does not promise lower CPU work. The
 6,000-token local, 7,024-token provider and 1,024-token output limits remain.
 Default adapter configuration has no fit callback and keeps the inline route.
+The optional fit is accepted only as an explicit own-data callable on the
+model. An inherited getter or function fails locally without invocation;
+genuine absence alone retains legacy inline behavior.
 Existing paid request guards reject catalog mode before forwarding or reserving;
 no old grant is implicitly upgraded.
 

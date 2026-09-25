@@ -86,6 +86,9 @@ The optional core-facing capability is
 It receives a detached request built by core, never the trusted source snapshot.
 Only strict booleans are accepted; a promise, nonboolean, getter failure or throw
 fails locally with a finite public error, not a fallback or provider dispatch.
+The optional capability must be an own-data callable. An inherited property,
+including an inherited getter or function, fails locally without invoking it;
+only a genuinely absent property retains the legacy inline path.
 Recheck the capture deadline before and after tokenizer/fit callbacks, including
 on throws. Keep `callModel` unchanged and authoritative. Fit uses the configured
 qualification model profile, complete instructions and output schema, matching
@@ -223,3 +226,23 @@ and `node packaging/prepare-cache.mjs` (public package metadata only).
 Focused additions and `git diff --check` also pass. The primary's independent
 exact-head gates and reviews remain subsequent acceptance steps, not worker
 evidence already claimed here.
+
+### First independent review correction
+
+The first committed candidate `61c133a` passed Standards but its Spec review
+found that an inherited `fitsQualificationRequest` getter was treated as absent.
+The primary's synthetic red control observed one legacy model dispatch instead
+of local refusal. New focused red tests reproduced that behavior for inherited
+getter/function and proxy `has` traps. The bounded correction performs an
+own-property descriptor lookup plus `Reflect.has` only when absent, checks the
+deadline after those traps, and rejects inherited or failed lookups once with
+`token_count_unavailable`; it never invokes the inherited value. A truly absent
+capability still takes the original inline path. No other production path or
+paid guard changed. The prior full gate matrix belongs to `61c133a`; affected
+checks and independent reviews must be repeated for the correction commit.
+Worker correction gates, both Node 22.16.0 and 24.15.0: the three affected
+core test files passed 28/28; the full OpenAI suite passed 224/224; generic
+tests passed 112/112; JSON/version and pinned Claude Code 2.1.260 strict
+plugin validations passed. The two new tests were red on the old candidate
+and green after this change. The primary will rerun the complete exact-head
+matrix before new independent reviews.

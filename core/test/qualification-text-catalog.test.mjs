@@ -136,6 +136,44 @@ test('pre-dispatch fit failures emit only finite source-free core diagnostics', 
   }
 });
 
+test('inherited fit getter and method fail closed without getter or model invocation', async () => {
+  for (const inherited of ['getter', 'function']) {
+    let getterCalls = 0; let modelCalls = 0; const events = [];
+    const prototype = inherited === 'getter' ? Object.defineProperty({}, 'fitsQualificationRequest', {
+      get() { getterCalls++; throw new Error('private inherited getter'); },
+    }) : { fitsQualificationRequest() { assert.fail('Inherited fit must not run'); } };
+    const model = Object.assign(Object.create(prototype), { contextWindow: 8192, countTokens: () => 1,
+      onDiagnostic: (event) => events.push(event), qualifyCandidates() { modelCalls++; } });
+    await assert.rejects(qualifyCandidateItems(model, small()), error => error.code === 'token_count_unavailable');
+    assert.equal(getterCalls, 0); assert.equal(modelCalls, 0);
+    assert.deepEqual(events, [{ version: 1, stage: 'qualifyCandidates', layer: 'core_call',
+      reason: 'token_count_unavailable' }]);
+    assert.equal(JSON.stringify(events).includes('private inherited getter'), false);
+  }
+});
+
+test('proxy has trap failure is finite; deadline expiry after lookup wins before dispatch', async () => {
+  for (const mode of ['throw', 'expire']) {
+    let expired = false; let modelCalls = 0; const events = [];
+    const target = { contextWindow: 8192, countTokens: () => 1,
+      onDiagnostic: (event) => events.push(event), qualifyCandidates() { modelCalls++; } };
+    const model = new Proxy(target, { has(_target, key) {
+      if (key === 'fitsQualificationRequest') {
+        if (mode === 'throw') throw new Error('private proxy trap');
+        expired = true; return true;
+      }
+      return Reflect.has(_target, key);
+    } });
+    const deadline = { expired: () => expired, remainingMs: () => 1000,
+      check() { if (expired) throw Object.assign(new Error('model_timeout'), { code: 'model_timeout' }); } };
+    await assert.rejects(qualifyCandidateItems(model, small(), deadline), error =>
+      error.code === (mode === 'throw' ? 'token_count_unavailable' : 'model_timeout'));
+    assert.equal(modelCalls, 0);
+    assert.equal(events.length, mode === 'throw' ? 1 : 0);
+    if (events.length) assert.equal(events[0].reason, 'token_count_unavailable');
+  }
+});
+
 test('deadline is rechecked after fit callback before any model invocation', async () => {
   let expired = false; let calls = 0;
   const deadline = { check() { if (expired) throw Object.assign(new Error('model_timeout'), { code: 'model_timeout' }); } };

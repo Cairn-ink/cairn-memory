@@ -143,10 +143,15 @@ function qualificationFit(model, deadline) {
   if (model === null || model === undefined || !['object', 'function'].includes(typeof model)) return null;
   const reject = () => { emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'token_count_unavailable');
     fail('token_count_unavailable'); };
-  let descriptor;
-  try { descriptor = Object.getOwnPropertyDescriptor(model, 'fitsQualificationRequest'); }
-  catch { deadline?.check(); reject(); }
+  let descriptor, inherited = false, lookupFailed = false;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(model, 'fitsQualificationRequest');
+    if (descriptor === undefined) inherited = Reflect.has(model, 'fitsQualificationRequest');
+  } catch { lookupFailed = true; }
   deadline?.check();
+  // An inherited capability could be a throwing getter or a mutable function.
+  // Accept only an explicit own-data callable; never invoke a prototype value.
+  if (lookupFailed || inherited) reject();
   if (descriptor === undefined) return null;
   if (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'function') {
     reject();
