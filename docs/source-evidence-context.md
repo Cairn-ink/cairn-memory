@@ -41,6 +41,21 @@ qualified and unqualified behavior remains unchanged.
 
 ## Completeness and budgets
 
+An embedded caller may construct the local core with
+`openMemoryCore({ path, model, sourceCandidatePolicy: 'bounded-keyset-v1' })`.
+Only explicit `source-evidence` or `rationale-evidence` recall then uses the
+larger private candidate window. It examines at most 20,000 current physical
+rows per authorized namespace in 256-row keyset pages, scores the generated
+body and first four stable-ID receipts of each eligible row, and retains the
+best 1,024 by literal score then ID. A single ID-only sentinel checks whether
+physical rows remain. Projection-excluded rows count toward the physical cap
+but their content and receipts do not enter scoring. A cap or discarded
+eligible candidate reports incomplete coverage; neither a returned page nor
+successful final answer proves all sources were searched. The normal
+constructor, body-only recall, namespace authority, selector/answer budgets,
+and final source payload stay unchanged. There is no MCP or hosted option for
+this constructor policy.
+
 Fetch returns every retained receipt for one memory or fails; it does not slice
 an excerpt or silently return an incomplete receipt set. The existing 101-row
 sentinel supports at most 100 receipts, still within the <=4000-token response

@@ -405,6 +405,18 @@ public maps and the classification topic catalog remain unchanged. Existing
 freshness checks stop later use or finalization after a valid mutation, but data
 already sent in a begun model request cannot be withdrawn retroactively.
 
+An embedded caller can explicitly select the experimental
+`sourceCandidatePolicy: 'bounded-keyset-v1'` constructor option. Only explicit
+source-context recall then scans up to 20,000 current physical memories per
+authorized namespace in 256-row keyset pages, retaining at most the 1,024
+highest literal scores. A physical cap with more current rows, or pruning at
+1,024 candidates, remains incomplete even when the retained candidate pages
+are consumed. This widens which retained source previews may reach the selector
+within the same read authority; it does not widen the final source DTO, model
+budgets or public host default. It is still a literal heuristic with the same
+first-four-receipt, Unicode-run/CJK and semantic limitations above. The scan
+bound is an engineering envelope, not a latency or answer-quality SLA.
+
 Synthetic actual-core tests demonstrate bounded page visibility, including one
 offline run with the pinned local tokenizer. A post-hoc development replay over
 already exposed copied stores moved one previously absent target onto the first
