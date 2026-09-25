@@ -55,10 +55,11 @@ controls verified exact selected assistant mapping and source identity.
 
 Record both-node primary25/25 helper tests, independent Standards/Spec PASS on
 final bytes, retained first-user-only positive-test gap and its correction.
-Actual dry-run initially rejected original helper mode0644; primary corrected
-to0600 without content changes, and key-free preflight passed before any claim
-or HTTP. That refusal was prelaunch, not a paid retry. One later launch consumed
-the fixed marker; never rerun it, including its dry-run.
+Actual dry-run initially rejected original helper mode0644 before key access,
+claim or HTTP; primary corrected to0600 without content changes, and key-free
+preflight passed before any claim or HTTP. That refusal was prelaunch, not a
+paid retry. One later launch consumed the fixed marker; never rerun it,
+including its dry-run.
 
 Six physical requests (three count/three generation) reserved US$0.03. Known
 new actual costUS$0.005905 plus three unknown count costs; preserve the full
@@ -242,10 +243,11 @@ The final private helper passed 25/25 synthetic tests on each of Node 22.16
 and 24.15, independent Standards/Spec reviews and primary inspection. Its
 first positive fake response selected only user candidates; that coverage gap
 was corrected before acceptance. A first actual dry-run rejected helper file
-mode 0644; primary changed only its mode to 0600, then key-free read-only
-preflight passed before any claim or HTTP. That refusal was prelaunch, not a
-paid retry. One subsequent launch consumed the fixed marker. H is closed:
-never rerun that helper, including its dry-run, or its fixtures.
+mode 0644 before key access, claim or HTTP; primary changed only its mode to
+0600, then key-free read-only preflight passed before any claim or HTTP. That
+refusal was prelaunch, not a paid retry. One subsequent launch consumed the
+fixed marker. H is closed: never rerun that helper, including its dry-run, or
+its fixtures.
 
 The terminal attempt made six physical requests, three count and three
 generation, reserving US$0.030000. Known new actual cost was US$0.005905;

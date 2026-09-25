@@ -53,13 +53,13 @@ not semantic quality, retrieval, all-role selection, capacity or a new score.
 The helper passed final 25/25 synthetic tests on both Node versions, independent
 Standards/Spec reviews and primary inspection. Its first fake positive test
 selected only users; that coverage gap was corrected before acceptance. An
-initial actual dry-run rejected file mode 0644 without claim or HTTP. Primary
-changed only the mode to 0600; key-free read-only preflight then passed. One
-subsequent launch consumed the fixed marker: H and its fixtures are closed and
-must not be rerun, even in dry-run mode. Six physical requests (three count,
-three generation) reserved US$0.030000; US$0.005905 new actual cost is known
-and three count-route costs remain unknown. No answer, judge or holdout call
-was made.
+initial actual dry-run rejected file mode 0644 before key access, claim or
+HTTP. Primary changed only the mode to 0600; key-free read-only preflight
+then passed. One subsequent launch consumed the fixed marker: H and its
+fixtures are closed and must not be rerun, even in dry-run mode. Six physical
+requests (three count, three generation) reserved US$0.030000; US$0.005905
+new actual cost is known and three count-route costs remain unknown.
+No answer, judge or holdout call was made.
 
 The fresh read-only audit found the prior 12,708-request prefix unchanged:
 12,714 terminal requests, US$86.576460 reserved, US$113.423540 remaining and

@@ -86,9 +86,10 @@ general capacity or a new benchmark score.
 The final helper passed 25/25 synthetic checks on both Node versions and
 independent Standards/Spec review. Its initial fake positive-test gap (only
 user selections) was corrected. The first actual dry-run rejected helper
-mode 0644 before any claim or HTTP; primary changed only file mode to 0600,
-then key-free read-only preflight passed. One subsequent launch consumed the
-fixed marker. H and its fixtures must not be rerun, including by dry-run.
+mode 0644 before key access, claim or HTTP; primary changed only file mode
+to 0600, then key-free read-only preflight passed. One subsequent launch
+consumed the fixed marker. H and its fixtures must not be rerun, including by
+dry-run.
 The six physical requests reserved US$0.030000; US$0.005905 new actual cost
 is known and three count-route costs remain unknown, with no refund.
 
