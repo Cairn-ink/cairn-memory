@@ -258,6 +258,70 @@ test('N4 local timeout isolates only while global guard stays live; malformed sc
     [['failed', 'global_halt'], ['blocked', 'global_halt']]);
 });
 
+test('N4 hostile snapshot shape/getters and handle lookup halt before any core or later scope', async () => {
+  const badSnapshots = [
+    (identity) => ({ get version() { throw new Error('private getter'); }, phase: 'generation',
+      caseId: identity.caseId, status: 'active' }),
+    (identity) => ({ version: 'case-deadline-scope-v1', phase: 'generation',
+      caseId: identity.caseId, get status() { throw new Error('private status'); } }),
+    () => new Proxy({}, { ownKeys() { throw new Error('private proxy'); } }),
+    () => new Proxy({}, { getPrototypeOf() { throw new Error('private prototype'); } }),
+  ];
+  for (const make of badSnapshots) {
+    const fixture = runner();
+    let scopes = 0;
+    fixture.options.execution = scriptedExecution([], { withCaseScope: async (identity, operation) => {
+      scopes++;
+      return operation({ snapshot: () => make(identity) });
+    } });
+    const run = await runQualifiedSourcePair(fixture.options);
+    assert.equal(run.executionStatus, 'halted');
+    assert.equal(run.haltReason, 'scope_contract_invalid');
+    assert.deepEqual(run.arms.map((arm) => [arm.status, arm.reason]),
+      [['failed', 'scope_contract_invalid'], ['blocked', 'scope_contract_invalid']]);
+    assert.deepEqual(run.attemptedOrder, ['qualified-prefix']);
+    assert.equal(scopes, 1);
+    assert.equal(fixture.record.length, 0);
+    assert.equal(fixture.requests.length, 0);
+    assert.equal(JSON.stringify(run).includes('private'), false);
+  }
+  const fixture = runner();
+  let scopes = 0;
+  fixture.options.execution = scriptedExecution([], { withCaseScope: async (_, operation) => {
+    scopes++;
+    return operation({ get snapshot() { throw new Error('private handle getter'); } });
+  } });
+  const run = await runQualifiedSourcePair(fixture.options);
+  assert.equal(run.haltReason, 'scope_contract_invalid');
+  assert.equal(scopes, 1);
+  assert.equal(fixture.record.length, 0);
+});
+
+test('N4 scope and handle getters are read once per observation, not drifted during validation', async () => {
+  let handleReads = 0;
+  let statusObservations = 0;
+  const fixture = runner({ execution: scriptedExecution([], { withCaseScope: async (identity, operation) =>
+    operation({ get snapshot() {
+      handleReads++;
+      if (handleReads > 2) throw new Error('snapshot method reread');
+      return () => {
+        let reads = 0;
+        return { version: 'case-deadline-scope-v1', phase: identity.phase,
+          caseId: identity.caseId, get status() {
+            reads++;
+            statusObservations++;
+            if (reads > 1) throw new Error('status reread');
+            return 'active';
+          } };
+      };
+    } }) }) });
+  const run = await runQualifiedSourcePair(fixture.options);
+  assert.equal(run.executionStatus, 'completed');
+  assert.deepEqual(run.arms.map((arm) => arm.status), ['completed', 'completed']);
+  assert.equal(handleReads, 2);
+  assert.ok(statusObservations > 2);
+});
+
 test('N4 swallowed capture halt and throwing port are sticky; late answer cannot resume work', async () => {
   let halted = false;
   const fixture = runner();

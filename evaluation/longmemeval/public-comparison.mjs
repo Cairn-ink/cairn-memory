@@ -504,20 +504,23 @@ function pairScopeCheck(state) {
     state.sticky = 'scope_contract_invalid'; throw new PairBoundary(state.sticky);
   }
   if (halted) { state.sticky = 'global_halt'; throw new PairBoundary(state.sticky); }
-  let status;
-  try { status = state.snapshot(); }
-  catch { state.sticky = 'scope_contract_invalid'; throw new PairBoundary(state.sticky); }
-  if (!isPlainObject(status) || Object.keys(status).length !== 4
-    || !['version', 'phase', 'caseId', 'status'].every((key) => Object.hasOwn(status, key))
-    || status.version !== 'case-deadline-scope-v1' || status.phase !== 'generation'
-    || status.caseId !== state.scopeId) {
-    state.sticky = 'scope_contract_invalid'; throw new PairBoundary(state.sticky);
+  let scopeStatus;
+  try {
+    const returned = state.snapshot();
+    if (!isPlainObject(returned) || Object.keys(returned).length !== 4
+      || !['version', 'phase', 'caseId', 'status'].every((key) => Object.hasOwn(returned, key))) {
+      throw new Error('invalid scope shape');
+    }
+    const { version, phase, caseId, status } = returned;
+    if (version !== 'case-deadline-scope-v1' || phase !== 'generation' || caseId !== state.scopeId
+      || !['active', 'timed_out', 'blocked'].includes(status)) throw new Error('invalid scope identity');
+    scopeStatus = status;
+  } catch {
+    state.sticky = 'scope_contract_invalid';
+    throw new PairBoundary(state.sticky);
   }
-  if (status.status === 'timed_out' || status.status === 'blocked')
+  if (scopeStatus === 'timed_out' || scopeStatus === 'blocked')
     throw new PairBoundary('case_timeout');
-  if (status.status !== 'active') {
-    state.sticky = 'scope_contract_invalid'; throw new PairBoundary(state.sticky);
-  }
 }
 
 function pairSync(state, callback, argument) {
@@ -696,11 +699,18 @@ export async function runQualifiedSourcePair(options) {
           throw new PairBoundary('scope_contract_invalid');
         }
         attemptedOrder.push(name);
-        const snapshot = handle?.snapshot;
         state = { ports: data.ports, scopeId: descriptor.scopeId, open: true, sticky: null,
-          snapshot: typeof snapshot === 'function' ? snapshot.bind(handle) : null };
+          snapshot: null };
         let result;
         try {
+          try {
+            const snapshotMethod = handle?.snapshot;
+            if (typeof snapshotMethod !== 'function') throw new Error('invalid scope handle');
+            state.snapshot = Function.prototype.bind.call(snapshotMethod, handle);
+          } catch {
+            state.sticky = 'scope_contract_invalid';
+            throw new PairBoundary(state.sticky);
+          }
           pairScopeCheck(state);
           result = await pairSourceArm(name, data, state);
           pairScopeCheck(state);
