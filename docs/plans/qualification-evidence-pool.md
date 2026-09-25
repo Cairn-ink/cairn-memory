@@ -169,7 +169,7 @@ Do not confuse transport compilation, wrapper completion and semantic quality.
 | --- | --- |
 | Provider request/response | `adapters/openai/schemas.mjs` defines only the `qualifyCandidates` versioned pool schema; `adapters/openai/index.mjs` counts and generates with that same schema, decodes through `qualification-evidence-pool.mjs`, then checks the unchanged inline candidate-ID schema. OpenAI focused tests cover 1–5 item mapping, sparse IDs, four citations, malformed pools/slots, all-unknown field citation and request mutation. |
 | Core compiler/diagnostics | `core/qualification-candidates.mjs` keeps public `invalid_model_output` and exact anchored receipts while classifying the pre-existing rejection boundaries. `core/model-diagnostics.mjs` permits only four added finite reasons; focused tests check categories, Unicode/canonical/enum boundaries, observer throws/rejections and no callback. The primary also compared the old and new compiler on 1,943 synthetic variants with identical output/error codes, including NFKC expansion, whitespace, redaction and citation unions. |
-| Guarded real core | `evaluation/live/test/qualified-source-budget-boundary.test.mjs` exercises the actual adapter, core and fake request guard: the formerly over-budget five-item/323-unit fixture reaches one count and one generation, four selected candidates cold-store exact receipt slices, a unique-source 2×4×800 request with core partial below 6,000 refuses at the full-wire adapter check before HTTP, and unique-source 5×4×800 also refuses before HTTP. The separate oversized capture leaves zero failed-case admission and a later case can proceed. `qualified-source-pair-guard.test.mjs` and `source-pair-preparation-adapter.test.mjs` retain two-arm scope and projection assertions. No guard runtime was edited. |
+| Adapter/core and guarded paths | `adapters/openai/test/qualification-candidates.test.mjs` exercises the five-item/323-unit fixture through actual core and adapter with unguarded fake HTTP: one count and one generation, then valid compilation. Separately, `evaluation/live/test/qualified-source-budget-boundary.test.mjs` exercises guarded capture through the actual adapter and core: four selected candidates cold-store exact receipt slices, and an oversized capture leaves zero failed-case admission while a later case can proceed. That file also tests direct `qualifyCandidateItems` calls with unguarded fake HTTP: a unique-source 2×4×800 request with core partial below 6,000 refuses at the full-wire adapter check before HTTP, and a unique-source 5×4×800 request also refuses before HTTP. `qualified-source-pair-guard.test.mjs` and `source-pair-preparation-adapter.test.mjs` retain two-arm scope and projection assertions. No guard runtime was edited. |
 | Installed callers | `packaging/artifact-files.json` adds only the new production decoder. The source-tree test-only `qualification-pool-wire.mjs` is explicitly excluded from the artifact; `packaging/test/install.test.mjs` checks its installed source hash and an independent inline installed-v2 probe. Other affected `packaging/test/` fake providers, the opt-in rationale fixture, and `adapters/mcp/test/fixtures/candidate-server.mjs` emit the new wire; the latter retains source, replay, namespace and malformed-later-candidate checks. Scripted core-model fixtures and MCP runtime are unchanged. |
 | Old/new guard test callers | `evaluation/experiment-budget/test/candidate-qualification-guard.test.mjs`, `chained-budget-extension.test.mjs` and `qualified-source-pair-guard.test.mjs` had actual adapter fake providers still emitting the old response. Their only production-facing change is the test response wire; legacy denial, full-history, monetary and request-cap assertions remain. The root guard script and full guard directory both pass; no ledger or guard implementation was changed. |
 
@@ -198,6 +198,16 @@ Worker verification before candidate freeze, on both Node 22.16.0 and
 | Installed rationale opt-in | Four passed, no skips |
 | Applicable synthetic demos | Store, capture, OpenAI offline, experiment budget, experiment request guard, LongMemEval ingestion and public comparison passed |
 | `npm run validate`; isolated pinned Claude 2.1.260 strict validation | Passed |
+
+At candidate `6d77d6f`, the primary's 56 sequential gates passed on both Node
+versions. Independent Standards review identified two E7 assertion weakenings,
+and Spec review identified the same exact-prompt assertion gap. The scoped
+correction restores a complete independently specified installed provider
+instruction comparison and exact synthetic local/schema counts (2,452/1,369)
+while leaving the runtime, paid behavior and other measured boundaries unchanged.
+Both affected test files passed 8/8 on each Node version; generic 112/112,
+JSON validation and locally pinned Claude 2.1.260 strict validation also passed
+on each version after the test correction.
 
 The first focused installed matrix retained two red inline-script probes caused
 by an implementation patch touching the separate v1 fixture; v1 bytes were

@@ -287,8 +287,8 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   assert.ok(qualification(threeItems).inputTokens < qualification(full).inputTokens);
   assert.ok(qualification(oneSource).inputTokens < qualification(full).inputTokens);
   assert.equal(qualification(full).inputTokens, 3_913);
-  assert.ok(qualification(full).localTokens < 6_000);
-  assert.ok(qualification(full).qualification.schemaTokens < 1_500);
+  assert.equal(qualification(full).localTokens, 2_452);
+  assert.equal(qualification(full).qualification.schemaTokens, 1_369);
   assert.equal(qualification(full).qualification.schemaContributionTokens, 1_366);
   assert.equal(qualification(full).qualification.evidenceContributionTokens, 1_016);
   assert.ok(qualification(threeItems).qualification.schemaContributionTokens

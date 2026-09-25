@@ -25,6 +25,13 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
   const qualifierPrompt = readFileSync(join(packageRoot, 'core/prompts/qualify-candidates.md'), 'utf8');
   assert.equal(createHash('sha256').update(qualifierPrompt).digest('hex'), artifact.sourceHashes['core/prompts/qualify-candidates.md']);
   assert.equal(qualifierPrompt, readFileSync(new URL('../../core/prompts/qualify-candidates.md', import.meta.url), 'utf8'));
+  const expectedQualificationInstructions = `${qualifierPrompt}\n\nProvider wire-format override evidence-pool-v1: return wireVersion "evidence-pool-v1" `
+    + 'and qualifications as an object with exactly these fields: item_0=>itemIndex 0. '
+    + 'For each item, choose one to four distinct original candidateIndex values in pool. '
+    + 'Each field returns value and evidenceSlots, zero-based positions from 0 through pool.length-1, not original candidate IDs. '
+    + 'At least one field must reference a pool slot per item, even when all values are null or unknown; '
+    + 'unused pool members are not citations. Cite only actual supporting evidence. '
+    + 'The pool and item fields are transport references, not new source identities.';
   const source = 'I suggest a small welcome illustration 🚋; it is only a proposal.';
   let active, sends = 0, ranks = 0, forbid = false, expectedQualification;
   const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
@@ -35,8 +42,7 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
     switch (payload.text.format.name) {
       case 'cairn_extract': output = { items: [{ content: source, kind: 'context', confidence: 0.8, sourceIndices: [0] }] }; break;
       case 'cairn_qualifyCandidates':
-        assert.ok(payload.instructions.startsWith(qualifierPrompt));
-        assert.match(payload.instructions, /at least one field must reference a pool slot/i);
+        assert.equal(payload.instructions, expectedQualificationInstructions);
         output = { qualifications: input.items.map(item => {
         const field = value => ({ value, evidenceIndices: [item.candidates[0].candidateIndex] });
         return { itemIndex: item.itemIndex, subject: field('welcome screen'), property: field('illustration'),
