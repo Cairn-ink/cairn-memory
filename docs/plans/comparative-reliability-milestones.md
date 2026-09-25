@@ -3,10 +3,10 @@
 Status: proposed sequence; the finite S1 mechanical repair/recovery gate is
 accepted on the current candidate. Semantic reliability and the S2–S5 product
 milestones remain open; the S1–S5 sequence has not passed as a whole. See the
-latest checkpoint and resume protocol below. The evidence-pool repair is
-accepted offline, but adaptive text-catalog capacity work is not. Older
-execution snapshots are explicitly historical. Re-check live PR and CI state
-before resuming.
+latest checkpoint and resume protocol below. Evidence-pool, adaptive catalog
+and adaptive guard candidates are accepted offline; installed adaptive provider
+compatibility remains pending. Older execution snapshots are explicitly
+historical. Re-check live PR and CI state before resuming.
 Goal: a lightweight, source-backed memory layer for Hermes and other agent
 harnesses, evaluated against existing solutions under matched conditions.
 
@@ -40,7 +40,51 @@ harnesses, evaluated against existing solutions under matched conditions.
 - Publish no raw case/source data, IDs, credentials, private paths or ledger
   contents. This checkpoint authorizes no new paid call, rerun, merge or release.
 
-### Next checkpoint requirements — E accepted, adaptive capacity repair pending
+### Next checkpoint requirements — adaptive runtime accepted, installed check pending
+
+Checkpoint scope: synchronize this plan, ROADMAP and limitations only. Preserve
+all prior evidence as dated history. Record accepted PR #233 at `cf42dff` and
+PR #235 at `062b7da`: independent Standards/Spec reviews and 21/21 exact-head CI,
+both ready/unmerged at the recorded check. Exact text sharing retains original
+candidate/source/role/offset identity and unchanged defaults/bounds. G adds a
+distinct opt-in adaptive grant rather than reinterpreting the prior grant.
+Neither acceptance establishes semantic quality, capacity for all-unique
+oversize input, a release or a new score.
+
+Record that a separately frozen three-fixture installed compatibility helper
+is in implementation, not accepted or launched. Primary offline preconditions
+passed both Node22.16/24.15 against76 installed/source files: one inline case,
+two inline-refused/catalog-fit cases with80 candidate identities and4 unique
+texts each. Count-body estimates2084/4739/4707; exact expansion preserves source
+mapping. Independent installed fake-HTTP acceptance selected mixed-role receipt
+identities correctly and retained historical accounting:6 fake requests and
+30000 synthetic microUSD per run, no real HTTP. These are mechanics only.
+Do not publish private paths, fixture/source IDs, helper text or source content.
+
+H requires readonly preflight, frozen artifact/config/request identity, a
+root-bound one-shot marker, new grant, maximum6 physical requests/US$0.03,
+stop-on-first-failure and no retry. Independent reviews and primary acceptance
+precede any actual launch. Last audited accounting remains12708 terminal /
+US$86.546460 reserved /US$113.453540 remaining /0pending; do not imply a fresh
+operational audit. Cumulative US$200/50000 and protected US$70+US$10 unchanged.
+
+Make the next sequence explicit without enlarging authority: finish H on v1;
+then separate mixed-ledger integration/inspection, distinct Cairn/Mem0 transport
+and runner/resource-freeze packets. Existing embedding v2 candidate is not
+integrated with G; old v1 guards deliberately reject v2, so do not migrate the
+real ledger first. Existing pinned Mem0 fake add/search is feasibility, not a
+matched score or complete gateway. Keep S2 development separate from the sole
+original reserved30 S3 holdout; no rerun, reselection or holdout tuning.
+S3 fairness, paired uncertainty/resource criteria, S4 installed growth and
+S5 cold-context onboarding remain open with their existing acceptance criteria.
+No new statistic or parity threshold is authorized by this status checkpoint.
+
+Worker verification: both Node generic/JSON/pinned-plugin checks; primary
+direct diff/gates; nonauthor Standards+Spec of the entire fixed-base diff;
+exact-head CI before ready. Existing PR205 head d8d94cf green becomes historical
+after edits. No runtime/package/CI/ledger/source changes, merge or release.
+
+### Historical checkpoint requirements — E accepted, adaptive capacity repair pending
 
 Preserve all earlier checkpoints as dated history. Record PR232's accepted
 runtime `767f1e1`, two independent reviews and 21/21 exact-head CI, ready/unmerged,
@@ -135,7 +179,52 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after evidence-pool compatibility)
+## Latest checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
+
+PR #233 (`cf42dff`) and PR #235 (`062b7da`) passed independent Standards and
+Spec reviews and 21/21 exact-head CI checks each. Both were ready and
+unmerged at the recorded check. The optional catalog shares exact text while
+retaining every candidate's source, role and offset identity and the prior
+defaults and bounds. The separate adaptive guard grants the named mode only
+through a distinct capability; existing grants do not acquire it. These are
+accepted offline candidates, not a release, all-unique capacity repair,
+semantic-quality result or new score.
+
+A separately frozen three-fixture installed compatibility helper is being
+implemented; it has not been accepted or launched. On both Node 22.16 and
+24.15, primary offline preflight checked 76 installed/source files and found
+one fitting-inline fixture and two inline-refused/catalog-fit fixtures. Each
+catalog fixture preserves 80 candidate identities across four unique texts;
+complete count-body estimates were 2,084/4,739/4,707. Installed fake-HTTP
+acceptance selected exact mixed-role receipt anchors and retained historical
+accounting: six fake requests and 30,000 synthetic microUSD per run. This
+establishes local mechanics only. H still needs frozen artifact, configuration
+and request identities, read-only preflight, a root-bound one-shot marker,
+independent reviews and primary acceptance before any actual provider call.
+Its cap is six physical requests and US$0.03 reserved, with stop on first
+failure and no retry. The consumed E fixtures remain closed.
+
+The last read-only operational audit, not repeated for this checkpoint, found
+12,708 terminal requests, US$86.546460 reserved, US$113.453540 remaining and
+zero pending under the unchanged US$200/50,000-request authority. At least
+US$70 for the comparator and US$10 for installed host work remain protected;
+the old six-case ceiling is not proof that the joint 30-case run fits. No old
+cohort is reopened, and the original reserved 30 remain untouched for one
+jointly frozen S3 Cairn/comparator protocol. S2 development uses separate
+cases. S2–S5 and the full S1–S5 sequence remain open.
+
+Resume in order: finish and accept H on the v1 ledger; separately integrate
+and inspect the mixed request/embedding ledger, since old v1 guards reject v2;
+then freeze a distinct Cairn/Mem0 transport, runner, fair source/answer/scorer
+protocol and complete joint S3/development/host resource ceilings before any
+holdout preparation or paid comparison. Pinned Mem0 fake add/search proves
+feasibility only. S3's paired uncertainty and resource decision rules, S4's
+installed growth gate and S5's cold-context onboarding gate retain their
+existing criteria below. This status update authorizes no paid call, ledger
+migration, holdout access, merge or release. PR #205's prior exact-head CI is
+historical for any new documentation head.
+
+## Historical checkpoint — 2026-09-25 (after evidence-pool compatibility)
 
 The evidence-pool repair candidate in PR #232 (`767f1e1`) passed two
 independent reviews and 21/21 exact-head CI checks. At the recorded check it

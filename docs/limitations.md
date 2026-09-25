@@ -68,7 +68,43 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
-### Latest checkpoint — 2026-09-25 (after evidence-pool compatibility)
+### Latest checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
+
+PR #233 (`cf42dff`) and PR #235 (`062b7da`) passed independent Standards/Spec
+reviews and 21/21 exact-head CI each; both were ready and unmerged at the
+recorded check. The optional catalog preserves exact candidate/source/role/
+offset identities and old defaults/bounds, and the separate adaptive guard
+requires a distinct opt-in grant. Neither is a release, semantic-quality
+result, all-unique capacity fix or new benchmark score.
+
+The three-fixture installed adaptive compatibility helper remains in
+implementation and has not been accepted or launched. Primary offline
+preflight on Node 22.16 and 24.15 checked 76 installed/source files, one
+inline fixture and two inline-refused/catalog-fit fixtures. Each catalog
+fixture retains 80 candidate identities across four unique texts. Count-body
+estimates were 2,084/4,739/4,707; installed fake HTTP selected exact
+mixed-role receipt anchors with six fake requests and 30,000 synthetic
+microUSD per run. This verifies local wiring and source binding only. A later
+provider check still needs frozen artifact/configuration/request identity,
+read-only preflight, one-shot protection, independent review, primary
+acceptance and a fresh budget audit. Its prospective maximum is six physical
+requests and US$0.03 reserved, with stop on first failure and no retry.
+
+The last operational audit remains 12,708 terminal requests,
+US$86.546460 reserved, US$113.453540 remaining and zero pending under the
+unchanged US$200/50,000-request authority; it was not repeated here. Protect
+US$70 for the comparator and US$10 for host work. The 130 exclusions and
+consumed cohorts stay closed. The original reserved 30 remain untouched for
+one jointly frozen S3 Cairn/comparator protocol, with separate S2 development.
+After H, mixed request/embedding ledger integration and inspection remain a
+separate step because old v1 guards reject embedding v2; then the Cairn/Mem0
+transport, runner, fair protocol and complete resource ceilings require their
+own freeze. Pinned Mem0 fake add/search is feasibility only. S2–S5 remain
+open; this documentation update authorizes no paid call, holdout access,
+operational migration, merge or release. See the
+[current milestone checkpoint](plans/comparative-reliability-milestones.md).
+
+### Historical checkpoint — 2026-09-25 (after evidence-pool compatibility)
 
 The evidence-pool repair candidate in PR #232 (`767f1e1`) passed two
 independent reviews and 21/21 exact-head CI checks and was ready but unmerged
@@ -82,9 +118,9 @@ and zero pending. The source-free report SHA-256 is
 `bdbe2d4d7ba8a5c43b6962e5ca70c02b454b95786f83f1ad5098d3d37adb8061`.
 No extraction, answer or judge was invoked; this is narrow wire/schema and
 compiler compatibility, not semantic quality, retrieval or proof that all
-maximum-size inputs fit. Adaptive text-catalog work remains in implementation,
-not accepted; a distinct capability/profile and installed, configuration and
-experiment pins are prerequisites to paid use.
+maximum-size inputs fit. At that recorded check, adaptive text-catalog work
+remained in implementation and a distinct capability/profile and installed,
+configuration and experiment pins were prerequisites to paid use.
 
 Primary and independent read-only terminal audits confirmed the old
 12,702-request prefix intact. Cumulative accounting is now 12,708 terminal

@@ -35,10 +35,50 @@ distinguishes main from pending PRs and proposed behavior; it is not a release
 claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
-### Current checkpoint — 2026-09-25
+### Current checkpoint — 2026-09-26
 
 The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-now record PR #232's accepted offline evidence-pool repair candidate
+record PR #233's adaptive catalog (`cf42dff`) and PR #235's separate adaptive
+guard (`062b7da`) as accepted offline candidates. Each passed independent
+Standards/Spec reviews and 21/21 exact-head CI; both were ready and unmerged
+at the recorded check. The opt-in catalog preserves candidate/source/role/
+offset identity and prior defaults and bounds. The new grant is distinct from
+the old v1 grant. These mechanics establish no semantic quality, all-unique
+capacity repair, release or new score.
+
+The fresh three-fixture installed adaptive compatibility helper is in
+implementation and has not been accepted or launched. Primary offline checks
+on both Node versions covered 76 installed/source files, one inline case and
+two inline-refused/catalog-fit cases, each catalog case retaining 80 candidate
+identities across four unique texts. Count-body estimates were
+2,084/4,739/4,707; installed fake HTTP selected exact mixed-role receipt
+anchors and conserved six fake requests and 30,000 synthetic microUSD per run.
+An actual launch still requires frozen artifact/configuration/request identity,
+read-only preflight, one-shot protection, independent reviews, primary
+acceptance and a current budget audit. Its maximum is six physical requests
+and US$0.03 reserved, with no retry. The older evidence-pool provider check
+remains dated history in the plan.
+
+The last operational audit, not repeated for this checkpoint, recorded 12,708
+terminal requests, US$86.546460 reserved, US$113.453540 remaining and zero
+pending under the unchanged US$200/50,000-request authority. Protect at least
+US$70 for the comparator and US$10 for host work. The 130 prior exclusions
+stay closed, and the original reserved 30 remain untouched for one jointly
+frozen S3 Cairn/comparator run; S2 development uses separate cases. S2–S5
+remain open. Finish H on the v1 ledger, then separately integrate and inspect
+mixed request/embedding accounting: old v1 guards reject embedding v2.
+Afterward freeze the distinct Cairn/Mem0 transport, runner, fair protocol and
+complete S3/development/host resource ceilings before any holdout preparation
+or paid comparison. Pinned Mem0 fake add/search is feasibility evidence only;
+S3 paired uncertainty, S4 growth and S5 onboarding retain their existing
+gates. This update authorizes no paid call, operational migration, holdout
+access, merge or release. PR #205's previous exact-head CI is historical for
+this new documentation candidate.
+
+### Historical checkpoint — 2026-09-25 (after evidence-pool compatibility)
+
+The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+then recorded PR #232's accepted offline evidence-pool repair candidate
 (`767f1e1`): two independent reviews and 21/21 exact-head CI checks. It was
 ready and unmerged at the recorded check, not a released runtime. One separate
 installed compatibility attempt completed all three new synthetic fixtures
@@ -47,26 +87,26 @@ reserved US$0.030000, with US$0.004670 known actual cost, three count-route
 costs unknown and zero pending. Its source-free report SHA-256 is
 `bdbe2d4d7ba8a5c43b6962e5ca70c02b454b95786f83f1ad5098d3d37adb8061`.
 This is provider-schema compatibility only, not extraction, answering, judging
-or semantic accuracy. Adaptive text-catalog work is still in implementation;
-its separate profile and installed/configuration/experiment pins need offline
+or semantic accuracy. Adaptive text-catalog work was still in implementation;
+its separate profile and installed/configuration/experiment pins needed offline
 acceptance before any paid use.
 
 Read-only terminal audits preserved the prior 12,702-request prefix. The
-cumulative ledger has 12,708 terminal requests, US$86.546460 reserved,
+cumulative ledger had 12,708 terminal requests, US$86.546460 reserved,
 US$113.453540 remaining and zero pending under unchanged US$200/50,000-request
-authority. The original reserved 30 cases remain untouched for one jointly
-frozen S3 Cairn/comparator run; the 130 exclusions stay closed, and S2–S5
-remain open. The stale six-case development projection ceiling of
+authority. The original reserved 30 cases remained untouched for one jointly
+frozen S3 Cairn/comparator run; the 130 exclusions stayed closed, and S2–S5
+remained open. The stale six-case development projection ceiling of
 US$18.734640 would leave only US$14.718900 beyond the protected US$70
-comparator and US$10 host allocations. That is not a forecast or proof the
+comparator and US$10 host allocations. That was not a forecast or proof the
 joint 30 fit. Freeze complete prospective S3 and development budget projections
 before further substantial paid development. Automated holdout preparation for
 source-free bounds follows, never precedes, a frozen exact roster, both S3 arm
 configurations, source/answer/scorer protocol and resource limits; workers must
-not inspect its source/answers or tune afterward. This checkpoint opens no
-holdout content. No old cohort rerun, paid call,
-merge or release is authorized by this update. PR #205's previous exact-head
-CI is stale for this new documentation candidate.
+not inspect its source/answers or tune afterward. This checkpoint opened no
+holdout content. No old cohort rerun, paid call, merge or release was authorized
+by that update. PR #205's earlier exact-head CI was stale for its new
+documentation candidate.
 
 ### Historical checkpoint — after fresh-development terminal
 
