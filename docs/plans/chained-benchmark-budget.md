@@ -1,7 +1,7 @@
 # Chained benchmark budget extension
 
-Status: contract frozen; implementation is NOT released until the exact-head
-CI of the scorer dependency is accepted. No operational use.
+Status: contract frozen; implementation released after scorer PR #225 at
+`397d22e` passed all 17 exact-head CI jobs (run `36097661692`). No operational use.
 Fixed review base: `397d22e688cce40e5aca775a5758d420f5da2575`
 (`test/qualified-source-scoring`, reviewed test-suite ownership correction).
 Branch/worktree: `feat/chained-benchmark-budget` / `chained-benchmark-budget`.
@@ -177,9 +177,10 @@ ready status. No merge, release, deployment or actual cap transition.
 
 ## Resume checkpoint
 
-No implementation, runtime evidence, candidate review or live authorization
-exists yet. Primary selected the narrow ledger-owned helper after independently
+Implementation is released; no B runtime evidence, candidate review or live
+authorization exists yet. Primary selected the narrow ledger-owned helper after independently
 reading existing state/path/transaction code and two read-only Sol/high seam
-proposals. Next: accept the source-pair scorer's exact-head CI, then release
-this contract and dispatch. No actual cap change follows from that release.
+proposals. The scorer's exact-head CI is accepted. Next: one bounded Sol/high
+implementation, primary actual verification, two independent full-base reviews
+and exact-head CI. No actual cap change follows from this release.
 Read this checkpoint and the current tracked diff, not conversation memory.
