@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
+  rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
 import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
+import { installedCoreDeadlinePredicateFor,
+  loadQualifiedSourcePairInstalledCoreDeadline } from '../installed-core-deadline.mjs';
 import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
   authorizeBenchmarkBudgetExtension, authorizeQualifiedSourcePairCapability,
   createExperimentRequestGuard, createQualifiedSourcePairExperimentRequestGuard } from '../request-guard.mjs';
@@ -28,6 +32,43 @@ const request = (body) => ({ method: 'POST', redirect: 'error',
   signal: new AbortController().signal,
   headers: { Authorization: 'Bearer synthetic', 'Content-Type': 'application/json' },
   body: JSON.stringify(body) });
+
+const installedDeadlineFiles = ['core/model-call.mjs', 'core/model-budget.mjs',
+  'core/model-diagnostics.mjs', 'core/validation.mjs',
+  'plugins/cairn-memory/lib/redact.mjs'];
+function copiedInstalledDeadlinePackage(t) {
+  const parent = mkdtempSync(join(tmpdir(), 'cairn-installed-deadline-'));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const packageRoot = join(parent, 'cairn-memory-local-preview');
+  for (const name of installedDeadlineFiles) {
+    const target = join(packageRoot, name);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(fileURLToPath(new URL(`../../../${name}`, import.meta.url)), target);
+  }
+  return packageRoot;
+}
+
+async function genuineDeadlineSignal(moduleUrl) {
+  const module = await import(moduleUrl);
+  let signal;
+  await assert.rejects(module.callModel({ contextWindow: 8192, countTokens: () => 1,
+    extract({ signal: source }) { signal = source; return new Promise(() => {}); } },
+  'extract', 'Synthetic system.', { messages: [] },
+  { deadline: { expired: () => false, remainingMs: () => 10 } }), /model_timeout/);
+  assert.equal(signal.aborted, true);
+  return signal;
+}
+
+async function pendingDeadlineSignal(moduleUrl) {
+  const module = await import(moduleUrl);
+  let reveal;
+  const ready = new Promise((resolve) => { reveal = resolve; });
+  const finished = module.callModel({ contextWindow: 8192, countTokens: () => 1,
+    extract({ signal }) { reveal(signal); return new Promise(() => {}); } },
+  'extract', 'Synthetic system.', { messages: [] },
+  { deadline: { expired: () => false, remainingMs: () => 200 } });
+  return { signal: await ready, finished };
+}
 
 async function adapterWire(method, input) {
   const captured = [];
@@ -759,3 +800,94 @@ test('G4 late body after a transport deadline never settles the old reservation 
   assert.equal(calls, 2);
   assert.deepEqual(guard.attempts().map((attempt) => attempt.outcome), ['unknown', 'succeeded']);
 });
+
+test('L2 installed deadline token is opaque; forged/cloned tokens fail before pair claim', async (t) => {
+  const packageRoot = copiedInstalledDeadlinePackage(t);
+  const token = await loadQualifiedSourcePairInstalledCoreDeadline({ packageRoot });
+  assert.equal(Object.isFrozen(token), true);
+  const f = fixture(t);
+  const capability = authorizeQualifiedSourcePairCapability(f.options);
+  const claim = join(f.ledger.directory,
+    `experiment-qualified-source-pair-${f.options.executionId}.claim.json`);
+  for (const forged of [Object.freeze({}), structuredClone(token), () => true, null]) {
+    assert.throws(() => createQualifiedSourcePairExperimentRequestGuard({ ledger: f.ledger,
+      policy: f.policy, benchmarkExtension: f.parent, qualifiedSourcePairCapability: capability,
+      fetchImpl: () => assert.fail('no HTTP'), installedCoreDeadline: forged }), fails('invalid_options'));
+    assert.equal(existsSync(claim), false);
+  }
+  const guard = createQualifiedSourcePairExperimentRequestGuard({ ledger: f.ledger,
+    policy: f.policy, benchmarkExtension: f.parent, qualifiedSourcePairCapability: capability,
+    fetchImpl: () => assert.fail('no HTTP'), installedCoreDeadline: token });
+  guard.close();
+  assert.equal(existsSync(claim), true);
+  const changed = copiedInstalledDeadlinePackage(t);
+  const dependency = join(changed, 'core/model-budget.mjs');
+  writeFileSync(dependency, `${readFileSync(dependency, 'utf8')}\n` +
+    'globalThis.__cairnDeadlineDependencyImported = true;\n');
+  await assert.rejects(loadQualifiedSourcePairInstalledCoreDeadline({ packageRoot: changed }),
+    /installed_core_deadline_invalid/);
+  assert.equal(globalThis.__cairnDeadlineDependencyImported, undefined);
+});
+
+test('L2 installed predicate accepts only its own genuine core signals', async (t) => {
+  const installed = copiedInstalledDeadlinePackage(t);
+  const foreign = copiedInstalledDeadlinePackage(t);
+  const token = await loadQualifiedSourcePairInstalledCoreDeadline({ packageRoot: installed });
+  const predicate = installedCoreDeadlinePredicateFor(token);
+  const installedSignal = await genuineDeadlineSignal(pathToFileURL(join(installed,
+    'core/model-call.mjs')).href);
+  const foreignSignal = await genuineDeadlineSignal(pathToFileURL(join(foreign,
+    'core/model-call.mjs')).href);
+  const checkoutSignal = await genuineDeadlineSignal(new URL('../../../core/model-call.mjs',
+    import.meta.url).href);
+  assert.equal(predicate(installedSignal), true);
+  assert.equal(predicate(foreignSignal), false);
+  assert.equal(predicate(checkoutSignal), false);
+  assert.equal(predicate(AbortSignal.abort('model_timeout')), false);
+});
+
+test('L2 pair guard isolates installed and checkout deadlines but globally halts foreign/external abort',
+  async (t) => {
+    const installed = copiedInstalledDeadlinePackage(t);
+    const foreign = copiedInstalledDeadlinePackage(t);
+    const token = await loadQualifiedSourcePairInstalledCoreDeadline({ packageRoot: installed });
+    const wire = (await adapterWire('extract', { messages: [
+      { index: 0, role: 'user', content: 'Synthetic source.' }] }))[1];
+    for (const [origin, moduleUrl, local] of [
+      ['installed', pathToFileURL(join(installed, 'core/model-call.mjs')).href, true],
+      ['checkout', new URL('../../../core/model-call.mjs', import.meta.url).href, true],
+      ['foreign', pathToFileURL(join(foreign, 'core/model-call.mjs')).href, false],
+      ['external', null, false],
+    ]) {
+      const f = fixture(t);
+      const capability = authorizeQualifiedSourcePairCapability(f.options);
+      let sends = 0;
+      const guard = createQualifiedSourcePairExperimentRequestGuard({ ledger: f.ledger,
+        policy: f.policy, benchmarkExtension: f.parent, qualifiedSourcePairCapability: capability,
+        installedCoreDeadline: token,
+        fetchImpl(url, options) {
+          sends++;
+          return new Promise((_, reject) => options.signal.addEventListener('abort',
+            () => reject(new Error('synthetic aborted fetch')), { once: true }));
+        },
+      });
+      t.after(() => { try { guard.close(); } catch { /* Assertion failures leave one-shot claim. */ } });
+      const pending = moduleUrl ? await pendingDeadlineSignal(moduleUrl) : null;
+      const controller = moduleUrl ? null : new AbortController();
+      let routeError = null;
+      const scope = guard.withCaseScope(capability.schedule[0], async () => {
+        try {
+          await guard.cairnFetch(wire.url, { ...request(wire.body),
+            signal: pending?.signal ?? controller.signal });
+        } catch (error) { routeError = error.code; }
+      });
+      if (controller) setTimeout(() => controller.abort('external'), 20);
+      await scope.catch(() => {});
+      if (pending) await assert.rejects(pending.finished, /model_timeout/);
+      assert.equal(sends, 1, origin);
+      assert.equal(guard.getState().attempts[0].outcome, 'unknown', origin);
+      assert.equal(guard.isHalted(), !local, origin);
+      assert.equal(guard.caseTimeouts().length, local ? 1 : 0, origin);
+      assert.equal(routeError, local ? 'case_deadline_exceeded' : 'request_aborted', origin);
+    }
+  });

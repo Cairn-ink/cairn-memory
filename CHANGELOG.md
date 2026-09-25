@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — offline installed qualified source-pair launcher
+
+- Add a private, closed-plan installed two-arm launcher with read-only monetary
+  parent preflight, one consumed guarded claim, synchronous conservative phase
+  quotas and fixed-roster terminal accounting. Synthetic installed-core and
+  fake-HTTP tests do not authorize a paid run or establish answer quality.
+- Bridge genuine deadlines from the verified installed core to the pair-only
+  guard with a file-checked opaque token; external aborts stay globally fatal.
+
 ## Unreleased — offline qualified source-pair guarded transport
 
 - Add a separately claimed, compact two-arm capability and one-connection
