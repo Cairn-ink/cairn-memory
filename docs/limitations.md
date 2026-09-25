@@ -66,6 +66,15 @@ historic method, real-provider token savings and strict-schema compatibility
 remain unverified. The consumed attempts are not reclassified or retried, and
 there is no new semantic score or quality claim.
 
+New installed source-pair launches can retain bounded, source-free model
+failure events separately by case and arm, but the earlier halted R5 run did
+not collect them. Its prefix `invalid_model_output` remains unattributed.
+Events identify a finite rejecting boundary, not a provider root cause or
+semantic error; missing events can mean no emission or failed observation.
+The per-case projection is best effort, and its failure is counted only when
+the terminal report persists. This offline observability does not authorize a
+retry, provider call or quality claim.
+
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed
 source receipts stop moving through capture, recall and answer packing. It adds

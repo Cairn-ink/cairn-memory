@@ -17,6 +17,7 @@ import { qualifiedSourcePairProtocol } from '../../evaluation/longmemeval/public
 import { loadPreparedPilot } from '../../evaluation/live/pilot.mjs';
 import { benchmarkStagePolicy } from '../../evaluation/live/public-pilot.mjs';
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
+import { createDiagnosticCollector, readDiagnostics } from '../../evaluation/live/diagnostics.mjs';
 import { main } from '../../evaluation/live/qualified-source-pair-launch-cli.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -36,6 +37,7 @@ const harnessFiles = [
   'evaluation/longmemeval/qualified-source-scoring.mjs',
   'evaluation/longmemeval/receipt-canonicalization.mjs',
   'evaluation/longmemeval/reference-rendering.mjs', 'evaluation/live/pilot.mjs',
+  'evaluation/live/diagnostics.mjs',
   'evaluation/longmemeval/scoring.mjs', 'evaluation/longmemeval/validation.mjs',
   'evaluation/live/public-pilot.mjs',
   'evaluation/live/qualified-source-pair-launch.mjs',
@@ -58,7 +60,7 @@ function dataset() {
     ]], answer_session_ids: [`source-${suffix}`] }));
 }
 
-function responseFor(url, options, observed) {
+function responseFor(url, options, observed, changeOutput = null) {
   const body = JSON.parse(options.body);
   observed.push({ url, body });
   if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
@@ -87,6 +89,7 @@ function responseFor(url, options, observed) {
       namespaceIndex: entry.namespaceIndex, memoryId: entry.memory.id,
       revision: entry.memory.revision })) };
     else assert.fail(`unknown method ${method}`);
+    if (changeOutput) output = changeOutput(method, input, output);
     return Response.json({ id: 'resp_synthetic', object: 'response', model: body.model,
       status: 'completed', error: null, incomplete_details: null,
       output: [{ id: 'msg_synthetic', type: 'message', role: 'assistant', status: 'completed',
@@ -200,6 +203,8 @@ test('L1/L3 dry-run is nonmutating; installed launch uses one claim and terminal
     assert.equal(report.fixedCaseCount, 2);
     assert.equal(report.generationRecordCount, 2);
     assert.equal(report.scoringRecordCount, 2);
+    assert.deepEqual(report.diagnostics, { version: 1, attemptedCaseCount: 2,
+      projectionWriteFailures: 0 });
     assert.equal(report.accounting.owned.requests, observed.length);
     assert.equal(report.accounting.attempts.length, observed.length);
     assert.equal(report.accounting.owned.requests <= report.accounting.shadow.used.generation.requests
@@ -212,6 +217,20 @@ test('L1/L3 dry-run is nonmutating; installed launch uses one claim and terminal
     assert.ok(evidence[0][0].receipts.some((receipt) => receipt.excerpt === 'x'.repeat(800)));
     assert.ok(evidence[1][0].receipts.some((receipt) => receipt.excerpt.includes('Friday is the day')));
     assert.ok(!JSON.stringify(chats).includes('GENERATED_SUMMARY_POISON'));
+    for (const questionId of f.roster.map((entry) => entry.questionId)) {
+      const caseDirectory = path.join(f.plan.outputDirectory, 'cases', questionId);
+      const diagnostic = JSON.parse(readFileSync(path.join(caseDirectory, 'diagnostics.json'), 'utf8'));
+      assert.equal(diagnostic.version, 1);
+      for (const name of ['qualified-prefix', 'indexed-windows']) {
+        assert.equal(diagnostic.arms[name].available, true);
+        assert.deepEqual(diagnostic.arms[name].events, []);
+        assert.deepEqual(diagnostic.arms[name].collection, {
+          slotLimit: 64, slotBytes: 256, capacityReached: false, overflow: false,
+          corrupted: false, writeFailed: false, deliveryGuaranteed: false,
+        });
+        assert.deepEqual(readdirSync(path.join(caseDirectory, `diagnostics-${name}`)), []);
+      }
+    }
     assert.ok(!launched.out.includes('Friday is the day'));
     const replay = await runCli('--launch');
     assert.equal(replay.status, 1);
@@ -248,9 +267,237 @@ test('L1 malformed, missing and reordered roster and phase headroom refuse befor
       ...original.harness.sourceHashes,
       'evaluation/longmemeval/official-scoring.mjs': '0'.repeat(64),
     } } }), 'harness_mismatch');
+    assert.equal(await run({ ...original, harness: { ...original.harness, sourceHashes: {
+      ...original.harness.sourceHashes,
+      'evaluation/live/diagnostics.mjs': '0'.repeat(64),
+    } } }), 'harness_mismatch');
     assert.equal(reads, 0);
     assert.equal(calls, 0);
     assert.deepEqual(readdirSync(f.planDir), ['plan.json']);
+  });
+
+test('O2/O4 installed adapter and core qualification failures stay in their own arm and case',
+  { timeout: 120_000 }, async (t) => {
+    const f = await fixture(t);
+    const observed = [];
+    let qualifications = 0;
+    let out = '', err = '';
+    const status = await main(['--plan', f.planPath, '--launch'], {
+      stdout: { write(value) { out += value; } }, stderr: { write(value) { err += value; } },
+      readKey() { return 'synthetic-only'; },
+      fetchImpl: (url, options) => responseFor(url, options, observed, (method, input, output) => {
+        if (method !== 'qualifyCandidates') return output;
+        qualifications++;
+        if (qualifications === 1) return { qualifications: {} }; // Adapter shape rejection.
+        if (qualifications === 2) {
+          const entry = output.qualifications[`item_${input.items[0].itemIndex}`];
+          const candidate = input.items[0].candidates[0].candidateIndex;
+          entry.subject = { value: 'Synthetic', evidenceIndices: [candidate, candidate] };
+        }
+        return output; // Adapter accepts; core rejects duplicate evidence selection.
+      }),
+    });
+    assert.equal(status, 0, err || out);
+    assert.equal(qualifications >= 2, true);
+    const report = JSON.parse(readFileSync(path.join(f.plan.outputDirectory, 'report.json'), 'utf8'));
+    assert.equal(report.fixedCaseCount, 2);
+    assert.equal(report.generationRecordCount, 2);
+    assert.equal(report.accounting.owned.requests, observed.length);
+    const first = path.join(f.plan.outputDirectory, 'cases', f.roster[0].questionId);
+    const second = path.join(f.plan.outputDirectory, 'cases', f.roster[1].questionId);
+    const firstDiagnostics = JSON.parse(readFileSync(path.join(first, 'diagnostics.json'), 'utf8'));
+    const secondDiagnostics = JSON.parse(readFileSync(path.join(second, 'diagnostics.json'), 'utf8'));
+    assert.ok(firstDiagnostics.arms['qualified-prefix'].events.some((event) =>
+      event.stage === 'qualifyCandidates' && event.layer === 'adapter' && event.reason === 'output_shape'));
+    assert.ok(firstDiagnostics.arms['indexed-windows'].events.some((event) =>
+      event.stage === 'qualifyCandidates' && event.layer === 'core_validation'
+        && event.reason === 'invalid_qualification'));
+    assert.ok(firstDiagnostics.arms['qualified-prefix'].events.every((event) =>
+      event.layer !== 'core_validation'));
+    for (const name of ['qualified-prefix', 'indexed-windows']) {
+      assert.deepEqual(secondDiagnostics.arms[name].events, []);
+      assert.equal(secondDiagnostics.arms[name].available, true);
+    }
+    assert.ok(!out.includes('Synthetic'));
+  });
+
+test('O5 failed observer and overflow are explicit without changing guarded work',
+  { timeout: 120_000 }, async (t) => {
+    const f = await fixture(t);
+    const first = path.join(f.plan.outputDirectory, 'cases', f.roster[0].questionId);
+    let corrupted = false;
+    const observed = [];
+    let err = '';
+    const status = await main(['--plan', f.planPath, '--launch'], {
+      stdout: { write() {} }, stderr: { write(value) { err += value; } },
+      readKey() { return 'synthetic-only'; },
+      fetchImpl(url, options) {
+        const body = JSON.parse(options.body);
+        if (!corrupted && url.endsWith('/responses')
+          && body.text?.format?.name === 'cairn_qualifyCandidates') {
+          corrupted = true;
+          chmodSync(path.join(first, 'diagnostics-qualified-prefix'), 0o500);
+          return responseFor(url, options, observed, (method, _input, output) =>
+            method === 'qualifyCandidates' ? { qualifications: {} } : output);
+        }
+        return responseFor(url, options, observed);
+      },
+    });
+    assert.equal(status, 0, err);
+    assert.equal(corrupted, true);
+    const report = JSON.parse(readFileSync(path.join(f.plan.outputDirectory, 'report.json'), 'utf8'));
+    assert.equal(report.accounting.owned.requests, observed.length);
+    const firstGeneration = JSON.parse(readFileSync(path.join(first, 'generation.json'), 'utf8'));
+    assert.equal(firstGeneration.arms.find((arm) => arm.name === 'qualified-prefix').reason,
+      'ingestion_incomplete');
+    const projected = JSON.parse(readFileSync(path.join(first, 'diagnostics.json'), 'utf8'));
+    assert.equal(projected.arms['qualified-prefix'].available, true);
+    assert.equal(projected.arms['qualified-prefix'].collection.corrupted, true);
+    assert.deepEqual(projected.arms['qualified-prefix'].events, []);
+    assert.equal(projected.arms['indexed-windows'].collection.corrupted, false);
+
+    const overflowFixture = await fixture(t);
+    const overflowFirst = path.join(overflowFixture.plan.outputDirectory, 'cases',
+      overflowFixture.roster[0].questionId);
+    const overflowCalls = [];
+    let flooded = false;
+    const overflowStatus = await main(['--plan', overflowFixture.planPath, '--launch'], {
+      stdout: { write() {} }, stderr: { write(value) { err += value; } },
+      readKey() { return 'synthetic-only'; },
+      fetchImpl(url, options) {
+        if (!flooded) {
+          flooded = true;
+          const collect = createDiagnosticCollector(path.join(overflowFirst,
+            'diagnostics-qualified-prefix'));
+          for (let index = 0; index < 65; index++) collect({ version: 1,
+            stage: 'extract', layer: 'adapter', reason: 'request_bounds' });
+        }
+        return responseFor(url, options, overflowCalls);
+      },
+    });
+    assert.equal(overflowStatus, 0, err);
+    const overflowReport = JSON.parse(readFileSync(path.join(overflowFixture.plan.outputDirectory,
+      'report.json'), 'utf8'));
+    const overflowProjection = JSON.parse(readFileSync(path.join(overflowFirst,
+      'diagnostics.json'), 'utf8'));
+    assert.equal(overflowProjection.arms['qualified-prefix'].events.length, 64);
+    assert.equal(overflowProjection.arms['qualified-prefix'].collection.capacityReached, true);
+    assert.equal(overflowProjection.arms['qualified-prefix'].collection.overflow, true);
+    assert.deepEqual(overflowProjection.arms['indexed-windows'].events, []);
+    assert.equal(overflowReport.accounting.owned.requests, overflowCalls.length);
+    assert.equal(overflowReport.fixedCaseCount, report.fixedCaseCount);
+  });
+
+test('O5 diagnostic projection write failure stays bounded and cannot replace the result',
+  { timeout: 120_000 }, async (t) => {
+    const f = await fixture(t);
+    const target = path.join(f.plan.outputDirectory, 'cases', f.roster[0].questionId,
+      'diagnostics.json');
+    let blocked = false;
+    const observed = [];
+    let err = '';
+    const status = await main(['--plan', f.planPath, '--launch'], {
+      stdout: { write() {} }, stderr: { write(value) { err += value; } },
+      readKey() { return 'synthetic-only'; },
+      fetchImpl(url, options) {
+        if (!blocked) {
+          blocked = true;
+          writeFileSync(target, 'synthetic occupied output', { mode: 0o600, flag: 'wx' });
+        }
+        return responseFor(url, options, observed);
+      },
+    });
+    assert.equal(status, 0, err);
+    assert.equal(readFileSync(target, 'utf8'), 'synthetic occupied output');
+    const report = JSON.parse(readFileSync(path.join(f.plan.outputDirectory, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'completed');
+    assert.equal(report.accounting.owned.requests, observed.length);
+    assert.deepEqual(report.diagnostics, { version: 1, attemptedCaseCount: 2,
+      projectionWriteFailures: 1 });
+  });
+
+test('O4 a delayed installed-adapter diagnostic cannot write after its scope is sealed',
+  { timeout: 120_000 }, async (t) => {
+    const f = await fixture(t);
+    const originalSetTimeout = globalThis.setTimeout;
+    const projectionPath = path.join(f.plan.outputDirectory, 'cases', f.roster[0].questionId,
+      'diagnostics.json');
+    let shortened = false, delayed = false, releaseLate;
+    globalThis.setTimeout = (callback, delay, ...args) => {
+      if (delay === 30_000 && !shortened) {
+        shortened = true;
+        return originalSetTimeout(callback, 40, ...args);
+      }
+      return originalSetTimeout(callback, delay, ...args);
+    };
+    let status;
+    try {
+      status = await main(['--plan', f.planPath, '--launch'], {
+        stdout: { write() {} }, stderr: { write() {} },
+        readKey() { return 'synthetic-only'; },
+        fetchImpl(url, options) {
+          const body = JSON.parse(options.body);
+          if (!delayed && url.endsWith('/responses') && body.text?.format?.name === 'cairn_extract') {
+            delayed = true;
+            return new Promise((_, reject) => {
+              releaseLate = () => reject(new Error('synthetic late transport failure'));
+            });
+          }
+          return responseFor(url, options, []);
+        },
+      });
+    } finally { globalThis.setTimeout = originalSetTimeout; }
+    assert.equal(shortened, true);
+    assert.equal(delayed, true);
+    assert.equal(status, 0);
+    assert.equal(typeof releaseLate, 'function');
+    assert.equal(JSON.parse(readFileSync(projectionPath, 'utf8')).version, 1,
+      'The first case must be projected after its scope closes');
+    const directory = path.join(f.plan.outputDirectory, 'cases', f.roster[0].questionId,
+      'diagnostics-qualified-prefix');
+    const before = readDiagnostics(directory);
+    assert.ok(before.events.some((event) => event.stage === 'extract'
+      && event.layer === 'core_call' && event.reason === 'model_timeout'));
+    releaseLate();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(readDiagnostics(directory), before);
+    assert.equal(before.events.some((event) => event.layer === 'adapter'
+      && event.reason === 'transport_failure'), false);
+  });
+
+test('O4 failed-arm diagnostics survive a refused generation record',
+  { timeout: 120_000 }, async (t) => {
+    const f = await fixture(t);
+    const first = path.join(f.plan.outputDirectory, 'cases', f.roster[0].questionId);
+    const generationPath = path.join(first, 'generation.json');
+    let occupied = false;
+    let err = '';
+    const status = await main(['--plan', f.planPath, '--launch'], {
+      stdout: { write() {} }, stderr: { write(value) { err += value; } },
+      readKey() { return 'synthetic-only'; },
+      fetchImpl(url, options) {
+        if (!occupied) {
+          occupied = true;
+          writeFileSync(generationPath, 'synthetic occupied output', { mode: 0o600, flag: 'wx' });
+        }
+        return responseFor(url, options, [], (method, _input, output) =>
+          method === 'qualifyCandidates' ? { qualifications: {} } : output);
+      },
+    });
+    assert.equal(status, 1, err);
+    assert.equal(occupied, true);
+    assert.equal(readFileSync(generationPath, 'utf8'), 'synthetic occupied output');
+    const report = JSON.parse(readFileSync(path.join(f.plan.outputDirectory, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'halted');
+    assert.equal(report.firstFailure, 'launch_output_failed');
+    assert.equal(report.generationRecordCount, 1);
+    assert.equal(report.scoringRecordCount, 0);
+    assert.deepEqual(report.diagnostics, { version: 1, attemptedCaseCount: 1,
+      projectionWriteFailures: 0 });
+    const diagnostics = JSON.parse(readFileSync(path.join(first, 'diagnostics.json'), 'utf8'));
+    assert.ok(diagnostics.arms['qualified-prefix'].events.some((event) =>
+      event.stage === 'qualifyCandidates' && event.layer === 'adapter'
+        && event.reason === 'output_shape'));
   });
 
 test('L3 terminal persistence failure retains the earlier global halt and consumed marker',

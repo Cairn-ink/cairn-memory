@@ -31,7 +31,8 @@ public runtime may retain normal package permissions.
   independently computed `protocolDigest`.
 - `installed` binds a verified installation receipt path/hash and artifact
   hash. `harness` binds the checkout commit plus a closed set of critical
-  source-file hashes, including official scoring and source canonicalization.
+  source-file hashes, including official scoring, source canonicalization and
+  the unchanged finite diagnostic collector.
 - `ledger` is the exact existing configuration. `parent` is the complete
   bound US$100 or chained US$200 monetary grant with common G policy/stages.
   `checkpoint` binds request count, full reserved micro-USD and the canonical
@@ -66,6 +67,16 @@ records and a versioned terminal `report.json` when persistence succeeds. The
 report keeps fixed-roster denominators, unresolved slots, shadow dispatch
 totals **separate** from durable ledger reservations/actual-known/unknown
 cost, guard attempts, timeouts, transport diagnostics, latency and storage.
+New launches also write per-arm bounded source-free model diagnostic slots under
+each attempted case and best-effort `diagnostics.json` with the finite event
+vocabulary and collection flags. Each observer is sealed at its own generation
+scope boundary, so late callbacks cannot appear under a later arm or case.
+The report adds only diagnostic attempted-case and projection-write-failure
+counts; neither an empty event set nor a missing projection proves success.
+Collector setup/read/write failures cannot replace the primary operation's
+failure or initiate another request. Earlier frozen plans and the halted R5
+attempt are not migrated or retried by this addition. The collector's local
+privacy and retention limits are documented in [model failure diagnostics](model-failure-diagnostics.md).
 Failures after the marker best-effort write a bounded redacted failure record;
 even if that write fails, the marker remains consumed and the CLI exits nonzero.
 An interrupted process may leave only marker and ledger evidence.

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { constants, closeSync, fsyncSync, fstatSync, lstatSync, mkdirSync,
   openSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,6 +14,7 @@ import { qualifiedSourcePairProtocol, runQualifiedSourcePair } from '../longmeme
 import { aggregateQualifiedSourceScores, scoreQualifiedSourcePair } from '../longmemeval/qualified-source-scoring.mjs';
 import { loadReferenceRenderings } from '../longmemeval/reference-rendering.mjs';
 import { loadPreparedPilot, pilotEvaluatorFor } from './pilot.mjs';
+import { createDiagnosticCollector, readDiagnostics } from './diagnostics.mjs';
 import { createQualifiedSourcePairPhaseQuota } from './qualified-source-pair-phase-quota.mjs';
 
 export const QUALIFIED_SOURCE_PAIR_LAUNCH_PLAN_VERSION = 'cairn-qualified-source-pair-launch-plan-v1';
@@ -45,6 +47,7 @@ const HARNESS_FILES = Object.freeze([
   'evaluation/longmemeval/scoring.mjs',
   'evaluation/longmemeval/validation.mjs',
   'evaluation/live/pilot.mjs',
+  'evaluation/live/diagnostics.mjs',
   'evaluation/live/public-pilot.mjs',
   'evaluation/live/qualified-source-pair-launch.mjs',
   'evaluation/live/qualified-source-pair-launch-cli.mjs',
@@ -391,6 +394,32 @@ function makePrivateDirectory(directory) {
   }
 }
 
+function armDiagnostics(caseDirectory) {
+  const arms = new Map(ARM_NAMES.map((name) => {
+    const directory = path.join(caseDirectory, `diagnostics-${name}`);
+    let collect = null;
+    try {
+      makePrivateDirectory(directory);
+      collect = createDiagnosticCollector(directory);
+    } catch { /* Observation must not change execution or its first failure. */ }
+    return [name, { directory, collect, open: true }];
+  }));
+  return {
+    arms,
+    project() {
+      return { version: 1, arms: Object.fromEntries(ARM_NAMES.map((name) => {
+        const arm = arms.get(name);
+        const result = readDiagnostics(arm.directory);
+        return [name, { ...result, available: arm.collect !== null,
+          events: arm.collect === null ? [] : result.events,
+          collection: { ...result.collection,
+            corrupted: result.collection.corrupted || arm.collect === null } }];
+      })) };
+    },
+    close() { for (const arm of arms.values()) arm.open = false; },
+  };
+}
+
 function defaultReadKey(filename) {
   return regularBytes(filename, 1024, 'missing_key', true).toString('utf8').trim();
 }
@@ -461,6 +490,9 @@ async function runInstalled(preflight, key, fetchImpl, recordFailureContext) {
   const generations = new Map();
   const scorings = new Map();
   const databasePaths = [];
+  const diagnosticScope = new AsyncLocalStorage();
+  let diagnosticAttemptedCases = 0;
+  let diagnosticProjectionWriteFailures = 0;
   const started = Date.now();
   try {
     const quota = createQualifiedSourcePairPhaseQuota({ guard, policy, stages,
@@ -472,7 +504,13 @@ async function runInstalled(preflight, key, fetchImpl, recordFailureContext) {
     if (typeof installedCore.openMemoryCore !== 'function'
       || typeof installedAdapter.createOpenAIModel !== 'function') fail('installed_mismatch');
     const model = installedAdapter.createOpenAIModel({ apiKey: key,
-      fetchImpl: quota.cairnFetch });
+      fetchImpl: quota.cairnFetch,
+      onDiagnostic(event) {
+        const arm = diagnosticScope.getStore();
+        if (arm?.open) {
+          try { arm.collect?.(event); } catch { /* Observer failure is never a model failure. */ }
+        }
+      } });
     const countTokens = model.countTokens.bind(model);
     const answer = ({ request, signal }) => stageText(quota.answerFetch,
       stages.answer.endpoint, key, request, signal);
@@ -493,6 +531,21 @@ async function runInstalled(preflight, key, fetchImpl, recordFailureContext) {
       if (quota.execution.isHalted()) break;
       const caseDirectory = path.join(casesDirectory, data.question.question_id);
       makePrivateDirectory(caseDirectory);
+      diagnosticAttemptedCases++;
+      const diagnostics = armDiagnostics(caseDirectory);
+      const armByScope = new Map(protocol.arms.map(({ name, scopeId }) => [scopeId, diagnostics.arms.get(name)]));
+      const execution = {
+        isHalted: () => quota.execution.isHalted(),
+        async withCaseScope(identity, operation) {
+          const arm = armByScope.get(identity?.caseId);
+          try {
+            return await quota.execution.withCaseScope(identity, async (handle) => {
+              try { return await diagnosticScope.run(arm, () => operation(handle)); }
+              finally { if (arm) arm.open = false; }
+            });
+          } finally { if (arm) arm.open = false; }
+        },
+      };
       const cores = {};
       try {
         for (const [name, keyName, sourcePolicy] of [
@@ -506,7 +559,7 @@ async function runInstalled(preflight, key, fetchImpl, recordFailureContext) {
           databasePaths.push(filename);
         }
         const run = await runQualifiedSourcePair({ ...data, cores, answer, countTokens,
-          execution: quota.execution });
+          execution });
         if (canonical(run.protocol) !== canonical(protocol)) fail('protocol_mismatch');
         generations.set(protocol.questionId, run);
         writePrivateDurable(path.join(caseDirectory, 'generation.json'), run);
@@ -518,11 +571,17 @@ async function runInstalled(preflight, key, fetchImpl, recordFailureContext) {
         break;
       }
       finally {
+        diagnostics.close();
         for (const core of Object.values(cores)) {
           try { core.close(); } catch {
             secondaryFailure ??= 'core_close_failed';
             secondaryFailureStage ??= 'core_close';
           }
+        }
+        try { writePrivateDurable(path.join(caseDirectory, 'diagnostics.json'), diagnostics.project()); }
+        catch {
+          diagnosticProjectionWriteFailures++;
+          // Keep the original execution result and bounded slot files.
         }
       }
       if (generations.get(protocol.questionId)?.executionStatus === 'halted') {
@@ -580,6 +639,8 @@ async function runInstalled(preflight, key, fetchImpl, recordFailureContext) {
       protocolSetSha256: preflight.publicSummary.protocolSetSha256,
       fixedCaseCount: selected.length, generationRecordCount: generations.size,
       scoringRecordCount: scorings.size, aggregate, accounting: observed,
+      diagnostics: { version: 1, attemptedCaseCount: diagnosticAttemptedCases,
+        projectionWriteFailures: diagnosticProjectionWriteFailures },
       latencyMs: Date.now() - started, databaseBytes: storageBytes,
       interpretation: 'source-pair-evaluation-not-product-parity-or-host-integration-proof' };
     writePrivateDurable(path.join(plan.outputDirectory, 'report.json'), report);
