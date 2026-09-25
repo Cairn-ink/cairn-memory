@@ -321,6 +321,30 @@ test('C12: missing/failing classification preserves successful admission and rep
   }
 });
 
+test('C12: omitted or repeated classification targets preserve admission without filing or replay', async (t) => {
+  for (const duplicate of [false, true]) {
+    const { core, calls } = fixture(t, {
+      extract: () => ({ items: [item(), item({ content: 'Prefer short tables.' })] }),
+      classify: ({ input: classified }) => ({ items: [{
+        memoryId: classified.memories[0].id, parentIds: [],
+      }, ...(duplicate ? [{ memoryId: classified.memories[0].id, parentIds: [] }] : [])] }),
+    });
+    const submitted = input({ eventId: `coverage-${duplicate}` });
+    const result = ok(await core.capture(submitted));
+    assert.equal(result.admission.memories.length, 2);
+    assert.deepEqual(result.classification, { status: 'failed',
+      error: { code: 'invalid_model_output', retryable: false } });
+    for (const admitted of result.admission.memories) {
+      assert.equal(get(core, admitted.id).memory.filing.status, 'unfiled');
+      assert.equal(get(core, admitted.id).receipts.length, 1);
+    }
+    const before = calls.length;
+    assert.deepEqual(ok(await core.capture(submitted)), { duplicate: true,
+      memoryIds: result.admission.memories.map((memory) => memory.id), suppressedCount: 0 });
+    assert.equal(calls.length, before);
+  }
+});
+
 test('C12: another connection can correct/forget during classification without stale filing or resurrection', async (t) => {
   for (const action of ['correct', 'forget']) {
     let other;

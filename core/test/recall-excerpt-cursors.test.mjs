@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
-import { QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT } from '../query-candidates.mjs';
+import { QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT, SOURCE_QUERY_CANDIDATE_VERSION,
+  SOURCE_QUERY_RECEIPT_LIMIT } from '../query-candidates.mjs';
 
 const namespace = { ownerId: 'excerpt-cursor-test', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -37,9 +38,9 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
   assert.ok(publicCursor);
   assert.equal(payload(publicCursor).o, 'map');
   assert.equal(Object.hasOwn(payload(publicCursor), 'q'), false);
-  const run = async query => {
+  const run = async (query, contextMode) => {
     observed = []; selections = 0;
-    const result = ok(await core.recall({ readSet: [namespace], query }));
+    const result = ok(await core.recall({ readSet: [namespace], query, ...(contextMode ? { contextMode } : {}) }));
     assert.equal(result.coverage, 'complete');
     assert.equal(selections, 2);
     assert.deepEqual(result.memories, []);
@@ -54,6 +55,15 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
     assert.equal(binding.policy, 'literal-current-memory-overlap-v2');
     assert.notEqual(binding.policy, 'literal-memory-overlap-v1');
     assert.equal(binding.scan, QUERY_SCAN_LIMIT);
+    if (contextMode) {
+      assert.equal(binding.sourceMode, contextMode);
+      assert.equal(binding.sourcePolicy, SOURCE_QUERY_CANDIDATE_VERSION);
+      assert.equal(binding.sourceReceiptLimit, SOURCE_QUERY_RECEIPT_LIMIT);
+    } else {
+      assert.equal(Object.hasOwn(binding, 'sourceMode'), false);
+      assert.equal(Object.hasOwn(binding, 'sourcePolicy'), false);
+      assert.equal(Object.hasOwn(binding, 'sourceReceiptLimit'), false);
+    }
     assert.deepEqual(binding.a, { offset: 100 });
     assert.equal(binding.l, 100);
     assert.equal(binding.b, 4000);
@@ -65,6 +75,12 @@ test('internal excerpt cursors bind query and policy without exposing query; pub
   const first = await run('Juniper ownership');
   const other = await run('Cedar rollout');
   assert.notEqual(payload(first).q, payload(other).q);
+  const source = await run('Juniper ownership', 'source-evidence');
+  const rationale = await run('Juniper ownership', 'rationale-evidence');
+  assert.equal(payload(source).q, payload(rationale).q);
+  assert.notEqual(source, first);
+  assert.notEqual(source, rationale);
+  assert.equal(core.map({ namespace, cursor: source }).error?.code, 'invalid_cursor');
   core.close();
   core = openMemoryCore({ path, model });
   assert.equal(ok(core.map({ namespace, cursor: publicCursor })).exhausted, true);

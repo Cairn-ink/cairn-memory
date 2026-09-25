@@ -6,17 +6,17 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 const system = readFileSync(new URL('./prompts/relate-rationale.md', import.meta.url), 'utf8');
 const focusGuidance = readFileSync(new URL('./prompts/relate-claim-focus.md', import.meta.url), 'utf8');
 
-export async function proposeRationale(model, sources, validateFresh) {
+export async function proposeRationale(model, sources, validateFresh, deadline) {
   const focused = sources.some(source => source.focus);
   const output = await callModel(model, 'relate', focused ? `${system}\n${focusGuidance}` : system, {
     memories: sources.map((source, index) => ({ index,
       ...(source.focus ? { focus: { content: source.focus.content, interpretationStatus: 'unverified' } } : {}),
       receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt })) })),
-  }, { validateFresh, failureCode: 'rationale_failed' });
+  }, { validateFresh, failureCode: 'rationale_failed', deadline });
   try {
     object(output, ['edges']);
     const seen = new Set();
-    return denseArray(output.edges, 0, 10).map(edge => {
+    const proposals = denseArray(output.edges, 0, 10).map(edge => {
       object(edge, ['from', 'to', 'relation', 'fromReceipt', 'toReceipt']);
       if (!['supports-decision', 'challenges-premise'].includes(edge.relation)) fail('invalid_model_output');
       for (const side of ['from', 'to']) {
@@ -32,5 +32,10 @@ export async function proposeRationale(model, sources, validateFresh) {
       seen.add(key);
       return clean;
     });
-  } catch { emitDiagnostic(model, 'relate', 'core_validation', 'invalid_rationale'); fail('invalid_model_output'); }
+    deadline?.check();
+    return proposals;
+  } catch {
+    deadline?.check();
+    emitDiagnostic(model, 'relate', 'core_validation', 'invalid_rationale'); fail('invalid_model_output');
+  }
 }

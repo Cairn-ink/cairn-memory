@@ -34,7 +34,8 @@ function decisions(output, items, candidates, messages) {
   }).filter(decision => decision !== null);
 }
 
-export async function reconcileCapture({ model, snapshot, items, discovery }) {
+export async function reconcileCapture({ model, snapshot, items, discovery, deadline }) {
+  deadline?.check();
   const { candidates } = discovery;
   if (discovery.reason || !items.length || !candidates.length) {
     return { decisions: [], reason: discovery.reason };
@@ -46,13 +47,19 @@ export async function reconcileCapture({ model, snapshot, items, discovery }) {
       kind: row.kind, receipts: receipts.map(({ role, excerpt }) => ({ role, excerpt })) })),
   };
   let output;
-  try { output = await callModel(model, 'reconcile', system, input, { failureCode: 'reconciliation_failed' }); }
+  try { output = await callModel(model, 'reconcile', system, input,
+    { failureCode: 'reconciliation_failed', deadline }); }
   catch (error) {
     if (error.code === 'context_budget_exceeded') return { decisions: [], reason: 'context_budget' };
     throw error;
   }
-  try { return { decisions: decisions(output, items, candidates, snapshot.messages), reason: null }; }
+  try {
+    const result = { decisions: decisions(output, items, candidates, snapshot.messages), reason: null };
+    deadline?.check();
+    return result;
+  }
   catch {
+    deadline?.check();
     emitDiagnostic(model, 'reconcile', 'core_validation', 'invalid_reconciliation');
     fail('invalid_model_output');
   }

@@ -4,6 +4,7 @@ import {
   planLongMemEvalCase,
   projectIngestionFailure,
 } from './ingestion.mjs';
+import { canonicalStoredReceiptExcerpt } from './receipt-canonicalization.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
 export const COMPARISON_SCHEMA_VERSION = 'cairn-longmemeval-comparison-v1';
@@ -174,15 +175,6 @@ const lexicalCandidates = (snapshot) => {
     .map((candidate) => ({ candidateId: candidate.candidateId, reason: 'retrieval_limit' })) };
 };
 
-const truncateReceipt = (text) => {
-  let result = '';
-  for (const point of text) {
-    if (result.length + point.length > 800) break;
-    result += point;
-  }
-  return result;
-};
-
 const mapCairnEvidence = (recall, plan, namespace) => {
   if (!isPlainObject(recall) || Object.keys(recall).length !== 3
     || Object.keys(recall).some((key) => !['memories', 'namespaces', 'coverage'].includes(key))
@@ -234,7 +226,8 @@ const mapCairnEvidence = (recall, plan, namespace) => {
     for (let receiptIndex = 0; receiptIndex < recalled.receipts.length; receiptIndex += 1) {
       const receipt = recalled.receipts[receiptIndex];
       const mapped = isPlainObject(receipt) ? byEvent.get(receipt.eventId) : undefined;
-      const expectedExcerpt = mapped ? truncateReceipt(mapped.source.normalizedContent) : null;
+      const expectedExcerpt = mapped
+        ? canonicalStoredReceiptExcerpt(mapped.source.normalizedContent) : null;
       if (!mapped || Object.keys(receipt).length !== 7
         || Object.keys(receipt).some((key) => !['id', 'client', 'sessionId', 'eventId', 'role',
           'excerpt', 'createdAt'].includes(key))

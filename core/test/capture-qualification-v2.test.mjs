@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
+import { snapshotQualificationTextCatalog } from '../qualification-text-catalog.mjs';
 
 const namespace = { ownerId: 'candidate-capture-test', scope: 'personal', projectId: null };
 const source = 'For my personal reading notes, use short numbered lists.';
@@ -42,7 +43,7 @@ test('CV2 candidate capture stores exact core-derived source span, cold-inspects
   const saved = detail(f.core, id); assert.equal(saved.qualification.anchors[0].end, source.length);
   assert.deepEqual(saved.qualification.anchors[0].fields, fields);
   assert.equal(f.db.prepare('SELECT count(*) n FROM qualified_claim_bindings').get().n, 0);
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 13);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 14);
   f.close(); const cold = openMemoryCore({ path: f.path, captureQualification: 'source-bound-v2' }); t.after(() => cold.close());
   assert.deepEqual(detail(cold, id), saved); assert.equal(ok(await cold.capture(input())).duplicate, true);
   for (const mode of [undefined, 'source-bound-v1']) {
@@ -156,4 +157,56 @@ test('CV2 qualifier input mutation cannot rewrite original source binding', asyn
   } });
   const result = ok(await f.core.capture(input())); const saved = detail(f.core, result.admission.memories[0].id);
   assert.equal(saved.memory.content, source); assert.equal(saved.qualification.anchors[0].text, source);
+});
+
+test('CV2 adaptive catalog preserves distinct repeated receipts through warm/cold inspection and replay', async (t) => {
+  const source = 'Synthetic shared source.';
+  const messages = Array.from({ length: 20 }, (_, index) => ({ id: `message-${index}`,
+    role: index % 2 ? 'assistant' : 'user', content: source }));
+  const fitModes = [];
+  const f = fixture(t, { extract: () => ({ items: Array.from({ length: 5 }, (_, index) => ({
+    content: `Synthetic claim ${index}`, kind: 'preference', confidence: 0.8,
+    sourceIndices: Array.from({ length: 4 }, (_, offset) => index * 4 + offset),
+  })) }),
+  fitsQualificationRequest(request) { fitModes.push(request.input.inputMode ?? 'inline'); return fitModes.length === 2; },
+  qualifyCandidates: (request) => {
+    assert.equal(request.input.inputMode, 'text-catalog-v1');
+    const expanded = snapshotQualificationTextCatalog(request.input).expanded;
+    return qualifyCandidates({ input: expanded });
+  } });
+  const capture = input({ messages, eventId: 'adaptive-batch' });
+  const first = ok(await f.core.capture(capture));
+  assert.deepEqual(fitModes, ['inline', 'text-catalog-v1']);
+  assert.deepEqual(f.calls.map((call) => call.method), ['extract', 'qualifyCandidates']);
+  assert.equal(first.admission.memories.length, 5);
+  const warm = first.admission.memories.map((entry) => detail(f.core, entry.id));
+  for (let index = 0; index < warm.length; index++) {
+    assert.equal(warm[index].qualification.anchors[0].text, source);
+    assert.equal(warm[index].qualification.anchors[0].start, 0);
+    assert.equal(warm[index].qualification.anchors[0].end, source.length);
+    const anchoredReceipt = warm[index].receipts.find((receipt) =>
+      receipt.id === warm[index].qualification.anchors[0].receiptId);
+    assert.equal(anchoredReceipt?.eventId, `message-${index * 4}`);
+    assert.equal(anchoredReceipt?.role, 'user');
+    assert.deepEqual(warm[index].receipts.map((receipt) => receipt.eventId).sort(),
+      Array.from({ length: 4 }, (_, offset) => `message-${index * 4 + offset}`).sort());
+    for (const receipt of warm[index].receipts) {
+      assert.equal(receipt.role, Number(receipt.eventId.slice('message-'.length)) % 2 ? 'assistant' : 'user');
+    }
+  }
+  f.close(); const cold = openMemoryCore({ path: f.path, captureQualification: 'source-bound-v2' });
+  t.after(() => cold.close());
+  assert.deepEqual(first.admission.memories.map((entry) => detail(cold, entry.id)), warm);
+  assert.equal(ok(await cold.capture(capture)).duplicate, true);
+  assert.deepEqual(fitModes, ['inline', 'text-catalog-v1']);
+});
+
+test('CV2 neither-fitting qualifier refuses the whole capture before admission', async (t) => {
+  let fitCalls = 0; let modelCalls = 0;
+  const f = fixture(t, { fitsQualificationRequest() { fitCalls++; return false; },
+    qualifyCandidates() { modelCalls++; return { qualifications: [] }; } });
+  const before = material(f.db);
+  error(await f.core.capture(input({ eventId: 'no-fit' })), 'context_budget_exceeded');
+  assert.equal(fitCalls, 2); assert.equal(modelCalls, 0);
+  assert.deepEqual(material(f.db), before);
 });
