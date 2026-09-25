@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — opt-in bounded keyset source candidates
+
+- Add a trusted embedded-core constructor policy for explicit source-context
+  recall. It scans up to 20,000 current physical rows per authorized namespace
+  in indexed keyset pages, retains the best 1,024 literal candidates, and
+  reports physical-cap or top-candidate incompleteness. Existing default and
+  body-only recall, host interfaces, authority, source validation and final
+  answer budgets remain unchanged. Fresh synthetic public-admit/capture and
+  resource controls establish reachability and bounds, not semantic accuracy.
+
 ## Unreleased — explicit adaptive qualified source-pair guard
 
 - Add a distinct, roster-bound adaptive capability and one-shot guard for
