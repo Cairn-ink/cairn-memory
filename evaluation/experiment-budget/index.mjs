@@ -1,10 +1,12 @@
 import { closeSync, lstatSync, mkdirSync, openSync, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
 
 const APPLICATION_ID = 0x43454247;
 const SCHEMA_VERSION = 1;
+const EMBEDDING_SCHEMA_VERSION = 2;
 const DATABASE_FILENAME = 'experiment-budget.sqlite';
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 
@@ -38,8 +40,22 @@ const ATTEMPT_SCHEMA = `CREATE TABLE attempts (
   CHECK (outcome IS NOT NULL OR actual_micro_usd IS NULL)
 ) STRICT`;
 
+const EMBEDDING_ATTEMPT_SCHEMA = `CREATE TABLE attempts (
+  attempt_id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL CHECK (channel IN ('host-completion','cairn-count','cairn-generation','host-embedding')),
+  reserved_micro_usd INTEGER NOT NULL CHECK (reserved_micro_usd BETWEEN 0 AND ${MAX_SAFE_INTEGER}),
+  outcome TEXT CHECK (outcome IN ('succeeded','failed','unknown')),
+  actual_micro_usd INTEGER CHECK (actual_micro_usd BETWEEN 0 AND ${MAX_SAFE_INTEGER}),
+  CHECK (outcome IS NOT NULL OR actual_micro_usd IS NULL)
+) STRICT`;
+const EMBEDDING_CHANNELS = new Set([...CHANNELS, 'host-embedding']);
+
 const EXPECTED_SCHEMA = new Map([
   ['attempts', normalizeSql(ATTEMPT_SCHEMA)],
+  ['run_config', normalizeSql(RUN_SCHEMA)],
+]);
+const EMBEDDING_EXPECTED_SCHEMA = new Map([
+  ['attempts', normalizeSql(EMBEDDING_ATTEMPT_SCHEMA)],
   ['run_config', normalizeSql(RUN_SCHEMA)],
 ]);
 
@@ -99,6 +115,35 @@ function validateConfiguration(options) {
     limitMicroUsd: validateSafeInteger(options.limitMicroUsd, { positive: true }),
     requestCap: validateSafeInteger(options.requestCap, { positive: true }),
   };
+}
+
+// New embedding APIs inspect descriptors before reading any caller value.
+// Existing entrypoints deliberately retain their previously reviewed behavior.
+function ownData(value, keys) {
+  if (!isPlainObject(value)) fail('invalid_options');
+  const names = Reflect.ownKeys(value);
+  if (names.length !== keys.length || names.some((name) => typeof name !== 'string'
+    || !keys.includes(name))) fail('invalid_options');
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (keys.some((key) => !hasOwn(descriptors[key], 'value'))) fail('invalid_options');
+  return Object.fromEntries(keys.map((key) => [key, descriptors[key].value]));
+}
+
+function detachedEmbeddingConfiguration(value) {
+  return validateConfiguration(ownData(value, ['directory', 'runId', 'limitMicroUsd', 'requestCap']));
+}
+
+function detachedUpgradeOptions(value) {
+  const options = ownData(value, ['directory', 'runId', 'limitMicroUsd', 'requestCap',
+    'expectedCheckpoint', 'expectedHistorySha256']);
+  const config = validateConfiguration({ directory: options.directory, runId: options.runId,
+    limitMicroUsd: options.limitMicroUsd, requestCap: options.requestCap });
+  const checkpoint = ownData(options.expectedCheckpoint, ['requestCount', 'reservedMicroUsd']);
+  if (!Number.isSafeInteger(checkpoint.requestCount) || checkpoint.requestCount < 0
+    || !Number.isSafeInteger(checkpoint.reservedMicroUsd) || checkpoint.reservedMicroUsd < 0
+    || typeof options.expectedHistorySha256 !== 'string'
+    || !/^[a-f0-9]{64}$/u.test(options.expectedHistorySha256)) fail('invalid_options');
+  return { config, checkpoint, historySha256: options.expectedHistorySha256 };
 }
 
 function pathParts(target) {
@@ -231,21 +276,23 @@ function configureConnection(db, readOnly = false) {
   db.exec(`PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;${readOnly ? ' PRAGMA query_only = ON;' : ''}`);
 }
 
-function assertSchema(db) {
+function assertSchema(db, version = SCHEMA_VERSION) {
   const applicationId = db.prepare('PRAGMA application_id').get().application_id;
-  const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (applicationId !== APPLICATION_ID || version !== SCHEMA_VERSION) fail('invalid_ledger');
+  const storedVersion = db.prepare('PRAGMA user_version').get().user_version;
+  if (applicationId !== APPLICATION_ID || storedVersion !== version) fail('invalid_ledger');
   const integrity = db.prepare('PRAGMA quick_check').all();
   if (integrity.length !== 1 || integrity[0].quick_check !== 'ok') fail('invalid_ledger');
   const journalMode = db.prepare('PRAGMA journal_mode').get().journal_mode;
   if (journalMode !== 'delete') fail('invalid_ledger');
   const rows = db.prepare(`SELECT type, name, tbl_name, sql FROM sqlite_schema
     WHERE sql IS NOT NULL ORDER BY type, name`).all();
-  if (rows.length !== EXPECTED_SCHEMA.size) fail('invalid_ledger');
+  const expected = version === SCHEMA_VERSION ? EXPECTED_SCHEMA
+    : version === EMBEDDING_SCHEMA_VERSION ? EMBEDDING_EXPECTED_SCHEMA : null;
+  if (expected === null || rows.length !== expected.size) fail('invalid_ledger');
   for (const row of rows) {
     if (row.type !== 'table' || row.tbl_name !== row.name
-      || !EXPECTED_SCHEMA.has(row.name)
-      || normalizeSql(row.sql) !== EXPECTED_SCHEMA.get(row.name)) {
+      || !expected.has(row.name)
+      || normalizeSql(row.sql) !== expected.get(row.name)) {
       fail('invalid_ledger');
     }
   }
@@ -255,8 +302,8 @@ function validStoredInteger(value, { positive = false } = {}) {
   return Number.isSafeInteger(value) && value >= (positive ? 1 : 0);
 }
 
-function readValidatedState(db) {
-  assertSchema(db);
+function readValidatedState(db, version = SCHEMA_VERSION, includeRowid = false) {
+  assertSchema(db, version);
   const runs = db.prepare('SELECT * FROM run_config').all();
   if (runs.length !== 1) fail('invalid_ledger');
   const run = runs[0];
@@ -268,13 +315,18 @@ function readValidatedState(db) {
     || !['open', 'overrun'].includes(run.state)) {
     fail('invalid_ledger');
   }
-  const attempts = db.prepare(`SELECT attempt_id, channel, reserved_micro_usd, outcome,
-    actual_micro_usd FROM attempts ORDER BY rowid`).all();
+  const attempts = db.prepare(version === SCHEMA_VERSION && !includeRowid
+    ? `SELECT attempt_id, channel, reserved_micro_usd, outcome,
+      actual_micro_usd FROM attempts ORDER BY rowid`
+    : `SELECT rowid, attempt_id, channel, reserved_micro_usd, outcome,
+      actual_micro_usd FROM attempts ORDER BY rowid`).all();
   let reservedMicroUsd = 0;
   let hasOverrun = false;
   for (const attempt of attempts) {
-    if (!UUID_PATTERN.test(attempt.attempt_id)
-      || !CHANNEL_SET.has(attempt.channel)
+    if (((version === EMBEDDING_SCHEMA_VERSION || includeRowid)
+      && !Number.isSafeInteger(attempt.rowid))
+      || !UUID_PATTERN.test(attempt.attempt_id)
+      || !(version === EMBEDDING_SCHEMA_VERSION ? EMBEDDING_CHANNELS : CHANNEL_SET).has(attempt.channel)
       || !validStoredInteger(attempt.reserved_micro_usd)
       || (attempt.outcome !== null && !OUTCOME_SET.has(attempt.outcome))
       || (attempt.actual_micro_usd !== null && !validStoredInteger(attempt.actual_micro_usd))
@@ -326,13 +378,55 @@ function publicState({ run, attempts }) {
   });
 }
 
-function openHandle(db, expected, bound = null) {
+// Version-independent history witness: schema-only migration preserves it.
+// This detects accidental or foreign edits, not a database owner's forgery.
+function embeddingHistorySha256(state) {
+  if (state.attempts.some((row) => !Number.isSafeInteger(row.rowid))) fail('invalid_ledger');
+  const run = state.run;
+  const canonical = JSON.stringify(['cairn.embedding-budget-history.v1',
+    [run.run_id, run.limit_micro_usd, run.request_cap, run.reserved_micro_usd,
+      run.request_count, run.state],
+    state.attempts.map((row) => [row.rowid, row.attempt_id, row.channel,
+      row.reserved_micro_usd, row.outcome, row.actual_micro_usd])]);
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+function embeddingInspection(state, version) {
+  return Object.freeze({ schemaVersion: version, runId: state.run.run_id,
+    limitMicroUsd: state.run.limit_micro_usd, requestCap: state.run.request_cap,
+    reservedMicroUsd: state.run.reserved_micro_usd, requestCount: state.run.request_count,
+    state: state.run.state, historySha256: embeddingHistorySha256(state) });
+}
+
+function boundEmbeddingSnapshot(state) {
+  return Object.freeze({ schemaVersion: EMBEDDING_SCHEMA_VERSION, ...publicState(state),
+    historySha256: embeddingHistorySha256(state) });
+}
+
+function embeddingVersion(db) {
+  const version = db.prepare('PRAGMA user_version').get().user_version;
+  if (version !== SCHEMA_VERSION && version !== EMBEDDING_SCHEMA_VERSION) fail('invalid_ledger');
+  return version;
+}
+
+function closeAfter(db, work) {
+  let result;
+  let error;
+  try { result = work(); } catch (caught) { error = caught; }
+  try { db.close(); } catch (caught) { if (!error) error = mapError(caught); }
+  if (error) throw error;
+  return result;
+}
+
+function openHandle(db, expected, bound = null, version = SCHEMA_VERSION) {
   let closed = false;
+  const embeddingBound = bound?.version === EMBEDDING_SCHEMA_VERSION;
+  const boundSnapshot = (state) => embeddingBound ? boundEmbeddingSnapshot(state) : publicState(state);
   const access = (mode, work, expectedAfter = null) => {
     if (closed) fail('ledger_closed');
     if (bound === null) {
       return withTransaction(db, mode, () => {
-        const state = readValidatedState(db);
+        const state = readValidatedState(db, version);
         assertConfiguration(state, expected);
         return work(state);
       });
@@ -340,15 +434,17 @@ function openHandle(db, expected, bound = null) {
     try {
       const completed = withTransaction(db, mode, () => {
         inspectTransitionLocation(expected, bound.identity);
-        const state = readValidatedState(db);
+        const state = readValidatedState(db, version, embeddingBound);
         assertConfiguration(state, expected);
-        if (JSON.stringify(publicState(state)) !== bound.witness) fail('invalid_ledger');
+        if (JSON.stringify(boundSnapshot(state)) !== bound.witness) fail('invalid_ledger');
         const result = work(state);
-        const after = readValidatedState(db);
+        const after = readValidatedState(db, version, embeddingBound);
         assertConfiguration(after, expected);
         inspectTransitionLocation(expected, bound.identity);
-        const actual = JSON.stringify(publicState(after));
-        const intended = expectedAfter === null ? bound.witness : JSON.stringify(expectedAfter(state, result));
+        const actual = JSON.stringify(boundSnapshot(after));
+        const intended = expectedAfter === null ? bound.witness
+          : JSON.stringify(embeddingBound ? boundSnapshot(expectedAfter(state, result))
+            : expectedAfter(state, result));
         if (actual !== intended) fail('invalid_ledger');
         return { result, witness: actual };
       });
@@ -362,11 +458,14 @@ function openHandle(db, expected, bound = null) {
   };
   return Object.freeze({
     reserve(options) {
-      validateExactObject(options, ['attemptId', 'channel', 'reservedMicroUsd']);
-      const attemptId = validateUuid(options.attemptId);
-      const channel = bound === null ? null : options.channel;
-      if (!CHANNEL_SET.has(bound === null ? options.channel : channel)) fail('invalid_options');
-      const reservedMicroUsd = validateSafeInteger(options.reservedMicroUsd);
+      const data = embeddingBound ? ownData(options, ['attemptId', 'channel', 'reservedMicroUsd'])
+        : options;
+      validateExactObject(data, ['attemptId', 'channel', 'reservedMicroUsd']);
+      const attemptId = validateUuid(data.attemptId);
+      const channel = bound === null ? null : data.channel;
+      if (!(version === EMBEDDING_SCHEMA_VERSION ? EMBEDDING_CHANNELS : CHANNEL_SET)
+        .has(bound === null ? data.channel : channel)) fail('invalid_options');
+      const reservedMicroUsd = validateSafeInteger(data.reservedMicroUsd);
       return access('write', (current) => {
         if (current.attempts.some((attempt) => attempt.attempt_id === attemptId)) {
           fail('attempt_exists');
@@ -379,18 +478,28 @@ function openHandle(db, expected, bound = null) {
         db.prepare(`INSERT INTO attempts
           (attempt_id, channel, reserved_micro_usd, outcome, actual_micro_usd)
           VALUES (?, ?, ?, NULL, NULL)`).run(attemptId,
-          bound === null ? options.channel : channel, reservedMicroUsd);
+          bound === null ? data.channel : channel, reservedMicroUsd);
         db.prepare(`UPDATE run_config SET reserved_micro_usd = reserved_micro_usd + ?,
           request_count = request_count + 1 WHERE singleton = 1`).run(reservedMicroUsd);
-        readValidatedState(db);
+        readValidatedState(db, version, embeddingBound);
         return publicAttempt({
           attempt_id: attemptId,
-          channel: bound === null ? options.channel : channel,
+          channel: bound === null ? data.channel : channel,
           reserved_micro_usd: reservedMicroUsd,
           outcome: null,
           actual_micro_usd: null,
         });
       }, (current, attempt) => {
+        if (embeddingBound) {
+          const previousRowid = current.attempts.at(-1)?.rowid ?? 0;
+          if (!Number.isSafeInteger(previousRowid + 1)) fail('invalid_ledger');
+          return { run: { ...current.run,
+            reserved_micro_usd: current.run.reserved_micro_usd + reservedMicroUsd,
+            request_count: current.run.request_count + 1 },
+          attempts: [...current.attempts, { rowid: previousRowid + 1,
+            attempt_id: attemptId, channel, reserved_micro_usd: reservedMicroUsd,
+            outcome: null, actual_micro_usd: null }] };
+        }
         const prior = publicState(current);
         return { ...prior, reservedMicroUsd: prior.reservedMicroUsd + reservedMicroUsd,
           requestCount: prior.requestCount + 1, attempts: [...prior.attempts, attempt] };
@@ -402,26 +511,32 @@ function openHandle(db, expected, bound = null) {
       const keys = hasOwn(options, 'actualMicroUsd')
         ? ['attemptId', 'outcome', 'actualMicroUsd']
         : ['attemptId', 'outcome'];
-      validateExactObject(options, keys);
-      const attemptId = validateUuid(options.attemptId);
-      const outcome = bound === null ? null : options.outcome;
-      if (!OUTCOME_SET.has(bound === null ? options.outcome : outcome)) fail('invalid_options');
-      const actualMicroUsd = hasOwn(options, 'actualMicroUsd')
-        ? validateSafeInteger(options.actualMicroUsd)
+      const data = embeddingBound ? ownData(options, keys) : options;
+      validateExactObject(data, keys);
+      const attemptId = validateUuid(data.attemptId);
+      const outcome = bound === null ? null : data.outcome;
+      if (!OUTCOME_SET.has(bound === null ? data.outcome : outcome)) fail('invalid_options');
+      const actualMicroUsd = hasOwn(data, 'actualMicroUsd')
+        ? validateSafeInteger(data.actualMicroUsd)
         : null;
       return access('write', (current) => {
         const attempt = current.attempts.find((row) => row.attempt_id === attemptId);
         if (!attempt) fail('attempt_not_found');
         if (attempt.outcome !== null) fail('attempt_terminal');
         db.prepare(`UPDATE attempts SET outcome = ?, actual_micro_usd = ?
-          WHERE attempt_id = ?`).run(bound === null ? options.outcome : outcome, actualMicroUsd, attemptId);
+          WHERE attempt_id = ?`).run(bound === null ? data.outcome : outcome, actualMicroUsd, attemptId);
         if (actualMicroUsd !== null && actualMicroUsd > attempt.reserved_micro_usd) {
           db.prepare(`UPDATE run_config SET state = 'overrun' WHERE singleton = 1`).run();
         }
-        readValidatedState(db);
+        readValidatedState(db, version, embeddingBound);
         return publicAttempt({ ...attempt,
-          outcome: bound === null ? options.outcome : outcome, actual_micro_usd: actualMicroUsd });
+          outcome: bound === null ? data.outcome : outcome, actual_micro_usd: actualMicroUsd });
       }, (current, result) => {
+        if (embeddingBound) return { run: { ...current.run,
+          state: actualMicroUsd !== null && actualMicroUsd > result.reservedMicroUsd
+            ? 'overrun' : current.run.state },
+        attempts: current.attempts.map((attempt) => attempt.attempt_id === attemptId
+          ? { ...attempt, outcome, actual_micro_usd: actualMicroUsd } : attempt) };
         const prior = publicState(current);
         return { ...prior,
           state: actualMicroUsd !== null && actualMicroUsd > result.reservedMicroUsd ? 'overrun' : prior.state,
@@ -430,7 +545,7 @@ function openHandle(db, expected, bound = null) {
     },
 
     getState() {
-      return access('read', publicState);
+      return access('read', embeddingBound ? boundEmbeddingSnapshot : publicState);
     },
 
     close() {
@@ -690,6 +805,131 @@ export function reopenExperimentBudget(options) {
     return openHandle(db, config);
   } catch (error) {
     try { db.close(); } catch { /* The fixed reopen error is authoritative. */ }
+    throw mapError(error);
+  }
+}
+
+/** Read-only migration checkpoint; neither form grants embedding transport. */
+export function inspectExperimentBudgetForEmbeddingUpgrade(options) {
+  const config = detachedEmbeddingConfiguration(options);
+  inspectExistingLocation(config);
+  const db = constructDatabase(config.filename, { readOnly: true });
+  return closeAfter(db, () => withTransaction(db, 'read', () => {
+    const version = embeddingVersion(db);
+    const state = readValidatedState(db, version, true);
+    assertConfiguration(state, config);
+    return embeddingInspection(state, version);
+  }));
+}
+
+function assertUpgradeBinding(inspection, state, expected) {
+  if (inspection.requestCount !== expected.checkpoint.requestCount
+    || inspection.reservedMicroUsd !== expected.checkpoint.reservedMicroUsd
+    || inspection.historySha256 !== expected.historySha256) fail('configuration_mismatch');
+  if (state.run.state !== 'open' || state.attempts.some((row) => row.outcome === null)) {
+    fail('budget_blocked');
+  }
+}
+
+/** Explicit, existing-only schema transition on a previously inspected ledger. */
+export function upgradeExperimentBudgetForEmbeddings(options) {
+  const expected = detachedUpgradeOptions(options);
+  const config = expected.config;
+  const identity = inspectTransitionLocation(config);
+  const db = constructExistingWritableDatabase(config.filename);
+  return closeAfter(db, () => withTransaction(db, 'write', () => {
+    inspectTransitionLocation(config, identity);
+    const version = embeddingVersion(db);
+    const before = readValidatedState(db, version, true);
+    assertConfiguration(before, config);
+    assertUpgradeBinding(embeddingInspection(before, version), before, expected);
+    if (version === EMBEDDING_SCHEMA_VERSION) {
+      return Object.freeze({ status: 'already-upgraded', ...embeddingInspection(before, version) });
+    }
+    db.exec('ALTER TABLE attempts RENAME TO attempts_legacy');
+    db.exec(EMBEDDING_ATTEMPT_SCHEMA);
+    db.exec(`INSERT INTO attempts (rowid, attempt_id, channel, reserved_micro_usd, outcome, actual_micro_usd)
+      SELECT rowid, attempt_id, channel, reserved_micro_usd, outcome, actual_micro_usd
+      FROM attempts_legacy ORDER BY rowid`);
+    db.exec('DROP TABLE attempts_legacy');
+    db.exec(`PRAGMA user_version = ${EMBEDDING_SCHEMA_VERSION}`);
+    const after = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(after, config);
+    const inspection = embeddingInspection(after, EMBEDDING_SCHEMA_VERSION);
+    assertUpgradeBinding(inspection, after, expected);
+    inspectTransitionLocation(config, identity);
+    return Object.freeze({ status: 'upgraded', ...inspection });
+  }));
+}
+
+/** Legacy embedding reopen retains the v1-shaped public state, on exact v2 only. */
+export function reopenEmbeddingExperimentBudget(options) {
+  const config = detachedEmbeddingConfiguration(options);
+  const identity = inspectTransitionLocation(config);
+  const probe = constructDatabase(config.filename, { readOnly: true });
+  closeAfter(probe, () => withTransaction(probe, 'read', () => {
+    inspectTransitionLocation(config, identity);
+    const state = readValidatedState(probe, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(state, config);
+    embeddingHistorySha256(state);
+  }));
+  const db = constructExistingWritableDatabase(config.filename);
+  try {
+    withTransaction(db, 'read', () => {
+      inspectTransitionLocation(config, identity);
+      const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+      assertConfiguration(state, config);
+      embeddingHistorySha256(state);
+    });
+    return openHandle(db, config, null, EMBEDDING_SCHEMA_VERSION);
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the validation failure. */ }
+    throw mapError(error);
+  }
+}
+
+/** Exact-v2 detached snapshot, including pending and overrun diagnostic states. */
+export function inspectEmbeddingExperimentBudgetSnapshot(configuration) {
+  const config = detachedEmbeddingConfiguration(configuration);
+  const identity = inspectTransitionLocation(config);
+  const db = constructDatabase(config.filename, { readOnly: true });
+  return closeAfter(db, () => withTransaction(db, 'read', () => {
+    inspectTransitionLocation(config, identity);
+    const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(state, config);
+    inspectTransitionLocation(config, identity);
+    return boundEmbeddingSnapshot(state);
+  }));
+}
+
+/** Existing-only v2 handle: local accounting capability, not HTTP authority. */
+export function openBoundEmbeddingExperimentBudget(options) {
+  const data = ownData(options, ['configuration', 'authorize']);
+  const config = detachedEmbeddingConfiguration(data.configuration);
+  const authorize = data.authorize;
+  if (typeof authorize !== 'function') fail('invalid_options');
+  const identity = inspectTransitionLocation(config);
+  const db = constructExistingWritableDatabase(config.filename);
+  try {
+    const witness = withTransaction(db, 'write', () => {
+      inspectTransitionLocation(config, identity);
+      const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+      assertConfiguration(state, config);
+      if (state.run.state !== 'open' || state.attempts.some((row) => row.outcome === null)) {
+        fail('budget_blocked');
+      }
+      const original = JSON.stringify(boundEmbeddingSnapshot(state));
+      if (authorize(boundEmbeddingSnapshot(state)) !== undefined) fail('ledger_failed');
+      inspectTransitionLocation(config, identity);
+      const after = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+      assertConfiguration(after, config);
+      if (JSON.stringify(boundEmbeddingSnapshot(after)) !== original) fail('invalid_ledger');
+      return original;
+    });
+    return openHandle(db, config, { identity, witness, version: EMBEDDING_SCHEMA_VERSION },
+      EMBEDDING_SCHEMA_VERSION);
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the first authorization failure. */ }
     throw mapError(error);
   }
 }

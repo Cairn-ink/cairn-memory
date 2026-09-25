@@ -98,6 +98,15 @@ certify the actual runtime, and the offline installed test is not a paid launch.
 Real-provider strict-schema compatibility, semantic support, benchmark answers
 and quality remain unmeasured. Existing grants still deny catalog mode.
 
+An [explicit embedding-ledger migration](embedding-ledger-migration.md) and
+bound-v2 accounting handle have offline synthetic coverage for mixed historical
+outcomes, original rowid gaps, one shared request/money cap and foreign-edit
+fencing. Migration is opt-in and irreversible for old v1 readers: existing
+request guards reject v2 before claim or transport. The new handle is an
+accounting seam only, not a mixed-engine grant, credential owner or Mem0
+transport. No operator ledger has been migrated for this work and no provider
+request, recall comparison or quality result follows from these tests.
+
 The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
 performance test at its unchanged five-second child-process timeout; the other
 223 adapter tests passed. A controlled two-CPU diagnostic reproduced that timeout
