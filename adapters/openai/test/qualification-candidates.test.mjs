@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createOpenAIModel } from '../index.mjs';
+import { countOpenAITokens, createOpenAIModel } from '../index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, EXPERIMENTAL_EXTRACTION_MODEL } from '../profiles.mjs';
-import { schemas, schemasFor } from '../schemas.mjs';
+import { qualificationCandidatesInlineSchema, schemas, schemasFor } from '../schemas.mjs';
+import { decodeQualificationEvidencePool } from '../qualification-evidence-pool.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
 
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const input = () => ({ items: [
@@ -17,8 +20,14 @@ const input = () => ({ items: [
 const output = () => ({ qualifications: input().items.map((item) => ({ itemIndex: item.itemIndex,
   ...Object.fromEntries(fields.map((field) => [field, { value: ['attribution', 'commitment'].includes(field) ? 'unknown' : null,
     evidenceIndices: field === 'value' ? [item.candidates[0].candidateIndex] : [] }])) })) });
-const wire = (value = output()) => ({ qualifications: Object.fromEntries(
-  value.qualifications.map(item => [`item_${item.itemIndex}`, item])) });
+const wire = (value = output(), data = input()) => ({ wireVersion: 'evidence-pool-v1',
+  qualifications: Object.fromEntries(value.qualifications.map((item, position) => {
+    const pool = [...new Set(fields.flatMap((field) => item[field].evidenceIndices))];
+    if (!pool.length) pool.push(data.items[position].candidates[0].candidateIndex);
+    return [`item_${item.itemIndex}`, { itemIndex: item.itemIndex, pool,
+      ...Object.fromEntries(fields.map((field) => [field, { value: item[field].value,
+        evidenceSlots: item[field].evidenceIndices.map((candidateIndex) => pool.indexOf(candidateIndex)) }])) }];
+  })) });
 const request = (value = input()) => ({ system: 'Select source candidates; do not calculate offsets.', input: value,
   maxOutputTokens: 1024, signal: new AbortController().signal });
 function envelope(model, result = wire()) {
@@ -50,8 +59,10 @@ test('candidate qualification uses identical count/generate baseline model frami
     for (const call of calls) {
       assert.equal(call.body.model, DEFAULT_MODEL); assert.equal(call.body.text.format.name, 'cairn_qualifyCandidates');
       assert.equal(call.body.reasoning, undefined); assert.equal(call.body.text.format.strict, true);
-      assert.ok(call.body.instructions.startsWith(request().system + '\n\nProvider wire-format override:'));
+      assert.ok(call.body.instructions.startsWith(request().system + '\n\nProvider wire-format override evidence-pool-v1:'));
       assert.match(call.body.instructions, /item_0=>itemIndex 0, item_1=>itemIndex 1/);
+      assert.match(call.body.instructions, /At least one field must reference a pool slot per item/u);
+      assert.match(call.body.instructions, /unused pool members are not citations/u);
       assert.deepEqual(JSON.parse(call.body.input[0].content[0].text), input());
     }
     const { max_output_tokens, store, stream, ...count } = calls[1].body;
@@ -61,9 +72,11 @@ test('candidate qualification uses identical count/generate baseline model frami
   assert.deepEqual(bodies[0], bodies[1]); assert.deepEqual(bodies[0], bodies[2]);
 });
 
-test('dynamic candidate schema requires same-item candidate indices and known-value evidence without weakening legacy schemas', () => {
+test('authoritative inline candidate schema still requires same-item citations and known-value evidence', () => {
   assert.equal(Object.hasOwn(schemas, 'qualifyCandidates'), false);
-  const schema = schemasFor('qualifyCandidates', input()); assert.equal(accepts(schema, wire()), true);
+  const inlineWire = (value = output()) => ({ qualifications: Object.fromEntries(
+    value.qualifications.map(item => [`item_${item.itemIndex}`, item])) });
+  const schema = qualificationCandidatesInlineSchema(input()); assert.equal(accepts(schema, inlineWire()), true);
   const slots = schema.properties.qualifications.properties;
   assert.deepEqual(slots.item_0.properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [0, 1]);
   assert.deepEqual(slots.item_1.properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [2]);
@@ -81,9 +94,38 @@ test('dynamic candidate schema requires same-item candidate indices and known-va
     (v) => { v.qualifications.item_0.scope = { value: 'x'.repeat(121), evidenceIndices: [0] }; },
     (v) => { v.qualifications.item_0.anchors = []; }, (v) => { delete v.qualifications.item_0.value; },
     (v) => { v.qualifications.item_1.itemIndex = 0; },
-  ]) { const value = wire(); mutate(value); assert.equal(accepts(schema, value), false); }
+  ]) { const value = inlineWire(); mutate(value); assert.equal(accepts(schema, value), false); }
   const duplicate = output(); duplicate.qualifications[1] = duplicate.qualifications[0];
   assert.equal(accepts(schema, duplicate), false, 'Provider schema must require unique complete item coverage');
+});
+
+test('pool wire shares field definitions while frozen authoritative inline schemas are unchanged', () => {
+  const ids = [0, 3, 7, 11, 19];
+  const groups = [[2], [13, 17], [20, 27, 31], [40, 45, 51, 59], [80]];
+  // Literal digests were measured from schemasFor on the fixed pre-repair base,
+  // independently of the new inline builder and reference expansion.
+  const originalSha256 = [
+    'b70271382ced8c013faa6920b5b05f618cf87fad2cec8cc8f4ec31c3bbfbdc28',
+    '9fd3fac08aea024f79b83c4c55f99cbb997323047897ee380f900708af52c4a5',
+    '317d3afe781f0c540b114a88d9f7c2bdf706a471d24cc7c36636991dee30d91c',
+    'd83e9a1de9b27bf1a70ac4475742f0d932ac33a1da30510899d7dbb1413e1ed8',
+    '408a2a8ad9293f7f37d47e417f150d63330e002935a510432b71f8a46598f4c4',
+  ];
+  for (let count = 1; count <= 5; count++) {
+    const data = { items: ids.slice(0, count).map((itemIndex, position) => ({ itemIndex,
+      candidates: groups[position].map(candidateIndex => ({ candidateIndex })) })) };
+    const wireSchema = schemasFor('qualifyCandidates', data);
+    const digest = createHash('sha256').update(JSON.stringify(qualificationCandidatesInlineSchema(data))).digest('hex');
+    assert.equal(digest, originalSha256[count - 1], `original inline schema for ${count} items`);
+    assert.deepEqual(Object.keys(wireSchema.$defs), ['text160', 'text120', 'attribution', 'commitment']);
+    assert.deepEqual(wireSchema.properties.wireVersion.enum, ['evidence-pool-v1']);
+    assert.equal(Object.keys(wireSchema.properties.qualifications.properties).length, count);
+    for (const slot of Object.values(wireSchema.properties.qualifications.properties)) {
+      assert.equal(slot.properties.pool.maxItems, 4);
+      assert.equal(slot.properties.pool.minItems, 1);
+      assert.deepEqual(slot.properties.subject, { $ref: '#/$defs/text160' });
+    }
+  }
 });
 
 test('candidate qualification normalizes reordered named slots and rejects invalid mappings without retry', async () => {
@@ -98,6 +140,9 @@ test('candidate qualification normalizes reordered named slots and rejects inval
     (() => { const value = wire(); delete value.qualifications.item_1; return value; })(),
     (() => { const value = wire(); value.qualifications.extra = value.qualifications.item_1; return value; })(),
     (() => { const value = wire(); value.qualifications.item_1.itemIndex = 0; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_0.pool = [0, 0]; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_0.pool = [0, 2]; return value; })(),
+    (() => { const value = wire(); value.qualifications.item_0.subject = { value: 'Known', evidenceSlots: [] }; return value; })(),
     (() => { const value = wire(); value.qualifications.item_0.subject.evidenceIndices = [2]; return value; })(),
     (() => { const value = wire(); value.qualifications.item_0.attribution.value = 'authorized'; return value; })(),
     (() => { const value = wire(); delete value.qualifications.item_0.value; return value; })(),
@@ -118,13 +163,14 @@ test('source-bound capture admits normalized slots and exact replay stays offlin
     if (body.text.format.name === 'cairn_extract') result = { items: [{ content: value.messages[0].content,
       kind: 'preference', confidence: 0.9, sourceIndices: [0] }] };
     else if (body.text.format.name === 'cairn_qualifyCandidates') {
-      result = { qualifications: Object.fromEntries(value.items.map(item => [`item_${item.itemIndex}`, {
+      const inline = { qualifications: value.items.map(item => ({
         itemIndex: item.itemIndex, ...Object.fromEntries(fields.map(field => [field, {
           value: field === 'value' ? item.content : field === 'attribution' ? 'direct'
             : field === 'commitment' ? 'adopted' : null,
           evidenceIndices: ['value', 'attribution', 'commitment'].includes(field)
             ? [item.candidates[0].candidateIndex] : [],
-        }])) }])) };
+        }])) })) };
+      result = wire(inline, value);
     } else if (body.text.format.name === 'cairn_classify') {
       result = { items: value.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
     } else assert.fail(`Unexpected method ${body.text.format.name}`);
@@ -174,5 +220,80 @@ test('candidate adapter remote token ceiling, malformed JSON and cancellation us
     assert.ok(events.length > 0); assert.ok(events.every((event) => event.stage === 'qualifyCandidates'));
     assert.ok(!JSON.stringify(events).includes('synthetic-private-error'));
     if (mode === 'json') assert.ok(events.some((event) => event.reason === 'output_json'));
+  }
+});
+
+test('E4 exact five-item 323-unit core qualifier fits complete wire and compiles source anchors', async () => {
+  const excerpt = (itemIndex) => {
+    let text = '';
+    for (let chunkIndex = 0; text.length < 323; chunkIndex++) {
+      text += createHash('sha256').update(`synthetic-${itemIndex}-0-${chunkIndex}`).digest('hex');
+    }
+    return text.slice(0, 323);
+  };
+  const items = Array.from({ length: 5 }, (_, itemIndex) => ({
+    content: `Synthetic item ${itemIndex} from explicit synthetic source.`,
+    kind: 'fact', confidence: 0.9,
+    receipts: [{ client: 'synthetic-client', sessionId: 'synthetic-session',
+      eventId: `synthetic-event-${itemIndex}-0`, role: 'user', excerpt: excerpt(itemIndex) }],
+  }));
+  const calls = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: async (url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push({ route: url.endsWith('/input_tokens') ? 'count' : 'generation',
+      tokens: countOpenAITokens(options.body) });
+    if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 5000 });
+    const data = JSON.parse(body.input[0].content[0].text);
+    const result = { wireVersion: 'evidence-pool-v1',
+      qualifications: Object.fromEntries(data.items.map((item) => [`item_${item.itemIndex}`, {
+        itemIndex: item.itemIndex, pool: [item.candidates[0].candidateIndex],
+        ...Object.fromEntries(fields.map((field) => [field, { value: field === 'subject' ? 'Synthetic subject'
+          : ['attribution', 'commitment'].includes(field) ? 'unknown' : null,
+        evidenceSlots: field === 'subject' ? [0] : [] }])),
+      }])) };
+    return Response.json(envelope(body.model, result));
+  } });
+  const result = await qualifyCandidateItems(model, items);
+  assert.equal(result.length, 5);
+  assert.deepEqual(calls.map(({ route }) => route), ['count', 'generation']);
+  assert.ok(calls[0].tokens < 6000);
+  assert.ok(result.every((item) => item.qualification.anchors.length === 1));
+});
+
+test('E3 actual adapter plus core require a cited field, not merely a populated pool', async () => {
+  for (const cite of [false, true]) {
+    const items = [{ content: 'Synthetic claim', kind: 'context', confidence: 0.8,
+      receipts: [{ client: 'synthetic', sessionId: 'session', eventId: 'original', role: 'user',
+        excerpt: 'Original source evidence' }] }];
+    const events = []; const calls = [];
+    const model = createOpenAIModel({ apiKey: 'synthetic', onDiagnostic: event => events.push(event),
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body); calls.push(url.endsWith('/input_tokens') ? 'count' : 'generation');
+        if (url.endsWith('/input_tokens')) {
+          items[0].receipts[0].excerpt = 'Mutated caller source';
+          return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+        }
+        const data = JSON.parse(body.input[0].content[0].text);
+        assert.equal(data.items[0].candidates[0].text, 'Original source evidence');
+        const result = { wireVersion: 'evidence-pool-v1', qualifications: { item_0: { itemIndex: 0,
+          pool: [data.items[0].candidates[0].candidateIndex],
+          ...Object.fromEntries(fields.map(field => [field, {
+            value: field === 'attribution' || field === 'commitment' ? 'unknown' : null,
+            evidenceSlots: field === 'value' && cite ? [0] : [],
+          }])),
+        } } };
+        return Response.json(envelope(body.model, result));
+      } });
+    if (cite) {
+      const result = await qualifyCandidateItems(model, items);
+      assert.equal(result[0].qualification.anchors[0].text, 'Original source evidence');
+      assert.deepEqual(result[0].qualification.anchors[0].fields, ['value']);
+      assert.deepEqual(events, []);
+    } else {
+      await assert.rejects(qualifyCandidateItems(model, items), { code: 'invalid_model_output' });
+      assert.deepEqual(events.map(({ stage, layer, reason }) => ({ stage, layer, reason })),
+        [{ stage: 'qualifyCandidates', layer: 'core_validation', reason: 'qualification_citation_integrity' }]);
+    }
+    assert.deepEqual(calls, ['count', 'generation']);
   }
 });

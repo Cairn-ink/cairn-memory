@@ -9,13 +9,19 @@ import {
   realpathSync,
   writeFileSync,
 } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import {
   ExperimentBudgetError,
+  inspectExperimentBudgetSnapshot,
+  inspectEmbeddingExperimentBudgetSnapshot,
+  openBoundExperimentBudget,
+  openBoundEmbeddingExperimentBudget,
   reopenExperimentBudget,
+  transitionExperimentBudgetCaps,
 } from './index.mjs';
 import {
   DEFAULT_MODEL,
@@ -24,7 +30,12 @@ import {
   SOL_RATIONALE_MODEL,
 } from '../../adapters/openai/profiles.mjs';
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
-import { schemasFor } from '../../adapters/openai/schemas.mjs';
+import { schemasFor, schemasForQualificationInput } from '../../adapters/openai/schemas.mjs';
+import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
+import { createTransportDiagnosticsCollector } from './transport-diagnostics.mjs';
+import { installedCoreDeadlinePredicateFor } from './installed-core-deadline.mjs';
+import { inspectMem0WireRequest, inspectMem0WireResponse, mem0WireProfile,
+  Mem0WireError } from './mem0-wire.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
@@ -46,6 +57,34 @@ const RATIONALE_MODELS_KIND = Object.freeze({
 const BASIS_MODELS_KIND = Object.freeze({
   filename: 'experiment-basis-models-extension.json', method: 'cairn_reviewBasis',
 });
+const BENCHMARK_KIND = Object.freeze({
+  filename: 'experiment-benchmark-extension.json', method: 'benchmark',
+});
+const BENCHMARK_REQUEST_ALLOWANCE_VERSION = 'benchmark-request-allowance-v1';
+const BENCHMARK_BUDGET_EXTENSION_VERSION = 'benchmark-budget-extension-v1';
+const BENCHMARK_BUDGET_CHAIN_VERSION = 'benchmark-budget-chain-v1';
+const CASE_DEADLINE_VERSION = 'case-deadline-v1';
+const SOURCE_PAIR_VERSION = 'qualified-source-pair-case-v1';
+const SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-v1';
+const ADAPTIVE_SOURCE_PAIR_VERSION = 'qualified-source-pair-adaptive-case-v1';
+const ADAPTIVE_SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-adaptive-v1';
+const ADAPTIVE_QUALIFICATION_INPUT_PROFILE = 'adaptive-text-catalog-v1';
+const ADAPTIVE_SOURCE_PAIR_DOMAIN = 'cairn.lme.source-pair.adaptive.experiment.v1';
+const MIXED_SOURCE_PAIR_VERSION = 'cairn-mem0-source-pair-case-v1';
+const MIXED_SOURCE_PAIR_METHOD_PROFILE = 'cairn-mem0-source-pair-v1';
+const MIXED_SOURCE_PAIR_NAMES = Object.freeze(['cairn', 'mem0']);
+const SOURCE_PAIR_NAMES = Object.freeze(['qualified-prefix', 'indexed-windows']);
+const SOURCE_PAIR_QUESTION = /^lme-case-[0-9a-f]{64}$/u;
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
+const CASE_PHASES = Object.freeze(['generation', 'scoring']);
+const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
+const BENCHMARK_STAGES = Object.freeze(['answer', 'judge']);
+const BENCHMARK_MODELS = Object.freeze({
+  answer: Object.freeze(['gpt-4.1-mini-2025-04-14']),
+  judge: Object.freeze(['gpt-4o-2024-08-06']),
+});
+const STAGE_BODY_KEYS = Object.freeze(['max_tokens', 'messages', 'model', 'n', 'store', 'stream', 'temperature']);
+const STAGE_ROLES = new Set(['system', 'user', 'assistant']);
 const isModelControl = kind => kind === RATIONALE_MODELS_KIND || kind === BASIS_MODELS_KIND;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
@@ -75,6 +114,11 @@ const CHANNELS = Object.freeze({
   cairnCount: 'cairn-count',
   cairnGeneration: 'cairn-generation',
 });
+const EMBEDDING_SNAPSHOT_CHANNELS = new Set([...Object.values(CHANNELS), 'host-embedding']);
+const EMBEDDING_SNAPSHOT_KEYS = Object.freeze(['schemaVersion', 'runId', 'limitMicroUsd',
+  'requestCap', 'reservedMicroUsd', 'requestCount', 'state', 'attempts', 'historySha256']);
+const EMBEDDING_ATTEMPT_KEYS = Object.freeze(['attemptId', 'channel', 'reservedMicroUsd',
+  'outcome', 'actualMicroUsd']);
 const encoder = new TextEncoder();
 const localCounter = createOpenAIModel({
   apiKey: 'synthetic-local-counter',
@@ -185,7 +229,7 @@ function validateConstructor(options) {
   return snapshotPolicy(options.policy);
 }
 
-function readBinding(filename, expected) {
+function readBinding(filename, expected, { syncFile = false } = {}) {
   let entry;
   try { entry = lstatSync(filename); } catch { fail('unsafe_policy_binding'); }
   if (entry.isSymbolicLink() || !entry.isFile()
@@ -210,8 +254,31 @@ function readBinding(filename, expected) {
       size += read;
     }
     if (size > 1_000_000) fail('unsafe_policy_binding');
-    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size)));
+    const content = bytes.subarray(0, size);
+    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(content));
     if (expected !== undefined && canonical(parsed) !== canonical(expected)) fail('policy_mismatch');
+    if (syncFile) {
+      fsyncSync(descriptor);
+      const verified = Buffer.alloc(1_000_001);
+      let verifiedSize = 0;
+      while (verifiedSize < verified.length) {
+        const read = readSync(descriptor, verified, verifiedSize,
+          verified.length - verifiedSize, verifiedSize);
+        if (read === 0) break;
+        verifiedSize += read;
+      }
+      const after = fstatSync(descriptor);
+      const current = lstatSync(filename);
+      if (verifiedSize !== size || !content.equals(verified.subarray(0, verifiedSize))
+        || after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size
+        || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+        || current.isSymbolicLink() || !current.isFile()
+        || current.dev !== opened.dev || current.ino !== opened.ino || current.size !== opened.size
+        || current.nlink !== 1 || realpathSync(filename) !== filename
+        || (process.platform !== 'win32' && (current.mode & 0o777) !== 0o600)) {
+        fail('unsafe_policy_binding');
+      }
+    }
     return parsed;
   } catch (error) {
     if (error instanceof ExperimentRequestGuardError) throw error;
@@ -362,7 +429,7 @@ function validateHostBody(body, channel, byteLength) {
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
 function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
-  modelControl = false) {
+  modelControl = false, pairArm = null, adaptiveQualification = false, mixedCairn = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -398,8 +465,20 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
     && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
+  // The optional indexed-window adapter schema is not a live budget grant.
+  if (pairArm !== null) {
+    if (!isPlainObject(input)) fail('unsupported_request');
+    if (match?.[1] === 'extract'
+      && (pairArm === 'indexed-windows' || mixedCairn ? input?.inputMode !== 'indexed-windows-v1'
+        : own(input, 'inputMode'))) fail('unsupported_request');
+    if (match?.[1] === 'qualifyCandidates' && own(input, 'inputMode')
+      && (!adaptiveQualification || input.inputMode !== 'text-catalog-v1')) fail('unsupported_request');
+  } else if (match?.[1] === 'extract' && input?.inputMode === 'indexed-windows-v1') {
+    fail('unsupported_request');
+  }
   let expectedSchema;
-  try { expectedSchema = match ? schemasFor(match[1], input) : null; }
+  try { expectedSchema = match ? (adaptiveQualification && match[1] === 'qualifyCandidates'
+    ? schemasForQualificationInput(input) : schemasFor(match[1], input)) : null; }
   catch { fail('unsupported_request'); }
   if (!match || format.type !== 'json_schema' || format.strict !== true
     || !deepEqual(format.schema, expectedSchema)) fail('unsupported_request');
@@ -414,6 +493,14 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   if (localTokens > 6000 || localTokens + channel.inputTokenFraming > channel.maxInputTokens) {
     fail('input_bound_exceeded');
   }
+  if (adaptiveQualification && match?.[1] === 'qualifyCandidates') {
+    const countBody = generation ? Object.fromEntries(Object.entries(body).filter(([key]) =>
+      !['max_output_tokens', 'store', 'stream'].includes(key))) : body;
+    let countBodyTokens;
+    try { countBodyTokens = localCounter.countTokens(JSON.stringify(countBody)); }
+    catch { fail('unsupported_request'); }
+    if (countBodyTokens > 6000) fail('input_bound_exceeded');
+  }
   if (generation && (body.max_output_tokens !== 1024
     || body.max_output_tokens > channel.maxOutputTokens || body.store !== false || body.stream !== false)) {
     fail('unsupported_request');
@@ -422,12 +509,21 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
 
 function integerUsage(value) { return safeInteger(value); }
 
-function parseUsage(json, kind, channel, requestedOutputTokens) {
+function countDiagnostic(json, channel) {
+  exactKeys(json, ['input_tokens', 'object'], 'invalid_response');
+  if (json.object !== 'response.input_tokens' || !integerUsage(json.input_tokens)) fail('invalid_response');
+  return deepFreeze({
+    reason: json.input_tokens <= channel.maxInputTokens ? 'within_limit' : 'input_limit_exceeded',
+    observedInputTokens: json.input_tokens,
+    configuredInputLimit: channel.maxInputTokens,
+  });
+}
+
+function parseUsage(json, kind, channel, requestedOutputTokens, retainCountOverflow = false) {
   if (kind === 'cairnCount') {
-    exactKeys(json, ['input_tokens', 'object'], 'invalid_response');
-    if (json.object !== 'response.input_tokens' || !integerUsage(json.input_tokens)
-      || json.input_tokens > channel.maxInputTokens) fail('invalid_response');
-    return { actualMicroUsd: null, withinBounds: true };
+    const diagnostic = countDiagnostic(json, channel);
+    if (diagnostic.reason === 'input_limit_exceeded' && !retainCountOverflow) fail('invalid_response');
+    return { actualMicroUsd: null, withinBounds: diagnostic.reason === 'within_limit', countDiagnostic: diagnostic };
   }
   if (kind === 'hostCompletion') {
     if (json?.object !== 'chat.completion' || json?.model !== channel.model) fail('invalid_response');
@@ -469,7 +565,7 @@ function raceAbort(promise, signal) {
   });
 }
 
-async function readBounded(response, maximum, signal) {
+async function readBounded(response, maximum, signal, observeFailure = null) {
   if (!response?.body || typeof response.body.getReader !== 'function') fail('invalid_response');
   const reader = response.body.getReader();
   const cancel = () => {
@@ -480,11 +576,23 @@ async function readBounded(response, maximum, signal) {
   let size = 0;
   try {
     while (true) {
-      const { done, value } = await raceAbort(reader.read(), signal);
+      let read;
+      if (observeFailure === null) {
+        read = await raceAbort(reader.read(), signal);
+      } else {
+        try {
+          const raw = reader.read();
+          const pending = Promise.resolve(raw).catch((error) => { observeFailure(); throw error; });
+          const observed = await raceAbort(pending, signal);
+          // Read potentially hostile getters before cancellation can advance a timer.
+          read = { done: observed.done, value: observed.value };
+        } catch (error) { observeFailure(); throw error; }
+      }
+      const { done, value } = read;
       if (done) break;
-      if (!(value instanceof Uint8Array)) fail('invalid_response');
+      if (!(value instanceof Uint8Array)) { observeFailure?.(); fail('invalid_response'); }
       size += value.byteLength;
-      if (size > maximum) fail('response_too_large');
+      if (size > maximum) { observeFailure?.(); fail('response_too_large'); }
       chunks.push(new Uint8Array(value));
     }
     const bytes = new Uint8Array(size);
@@ -498,8 +606,37 @@ async function readBounded(response, maximum, signal) {
   }
 }
 
-function parseResponseJson(bytes) {
-  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+function hasDuplicateTopLevelKeys(text) {
+  let depth = 0;
+  const keys = new Set();
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      const start = index;
+      for (index += 1; index < text.length; index += 1) {
+        if (text[index] === '\\') index += 1;
+        else if (text[index] === '"') break;
+      }
+      if (depth !== 1) continue;
+      let cursor = index + 1;
+      while (/\s/u.test(text[cursor] ?? '')) cursor += 1;
+      if (text[cursor] !== ':') continue;
+      const key = JSON.parse(text.slice(start, index + 1));
+      if (keys.has(key)) return true;
+      keys.add(key);
+    } else if (character === '{' || character === '[') depth += 1;
+    else if (character === '}' || character === ']') depth -= 1;
+  }
+  return false;
+}
+
+function parseResponseJson(bytes, rejectDuplicateTopLevelKeys = false) {
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const json = JSON.parse(text);
+    if (rejectDuplicateTopLevelKeys && hasDuplicateTopLevelKeys(text)) fail('invalid_response');
+    return json;
+  }
   catch { fail('invalid_response'); }
 }
 
@@ -557,6 +694,23 @@ function writeAuthorizationBinding(directory, filename, authorization) {
   } finally { if (descriptor !== undefined) closeSync(descriptor); }
   const directoryDescriptor = openSync(directory, constants.O_RDONLY);
   try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+}
+
+function syncAuthorizationBinding(directory, filename, expected) {
+  const before = lstatSync(filename);
+  // Recovery validates, syncs, and re-reads the same descriptor, then retains
+  // that inode identity across the directory durability boundary.
+  readBinding(filename, expected, { syncFile: true });
+  const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+  try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+  const after = lstatSync(filename);
+  if (after.isSymbolicLink() || !after.isFile()
+    || after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size
+    || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs || after.nlink !== 1
+    || realpathSync(filename) !== filename
+    || (process.platform !== 'win32' && (after.mode & 0o777) !== 0o600)) {
+    fail('unsafe_policy_binding');
+  }
 }
 
 // Provisioning is separate from transport construction: existing guards never opt in implicitly.
@@ -1007,5 +1161,2563 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
       ledger.close();
     },
     policy,
+  });
+}
+
+// Benchmark answer/judge stages share the historical ledger through its fixed
+// `host-completion` channel; the stage identity, model and prices live in this
+// separate immutable extension and in the guard's own per-attempt record.
+function validateStage(name, value) {
+  exactKeys(value, CHANNEL_KEYS, 'invalid_extension');
+  if (value.endpoint !== POLICY_ENDPOINTS.hostCompletion
+    || typeof value.model !== 'string'
+    || !MODEL_PATTERN.test(value.model)
+    || !BENCHMARK_MODELS[name].includes(value.model)
+    || !safeInteger(value.reservedMicroUsd, 1)
+    || !safeInteger(value.maxRequestBytes, 1)
+    || !safeInteger(value.maxResponseBytes, 1)
+    || !safeInteger(value.timeoutMs, 1) || value.timeoutMs > 2_147_483_647
+    || !safeInteger(value.maxInputTokens, 1)
+    || !safeInteger(value.maxOutputTokens, 1)
+    || !safeInteger(value.inputTokenFraming)) {
+    fail('invalid_extension');
+  }
+  for (const price of [value.inputPrice, value.outputPrice]) {
+    exactKeys(price, PRICE_KEYS, 'invalid_extension');
+    if (!safeInteger(price.microUsdNumerator) || !safeInteger(price.tokenDenominator, 1)) fail('invalid_extension');
+  }
+  const upper = pricedUpperBound(value);
+  if (upper > BigInt(MAX_SAFE_INTEGER) || BigInt(value.reservedMicroUsd) < upper) fail('invalid_extension');
+}
+
+function benchmarkConfiguration(options) {
+  // Reuse the exact baseline gate; the two chat stages grant no Cairn method or extraction model.
+  const { version, authorizationId, ledger, policy } = extensionConfiguration({ ledger: options.ledger,
+    policy: options.policy, authorizationId: options.authorizationId });
+  let stages;
+  try { stages = structuredClone(options.stages); } catch { fail('invalid_extension'); }
+  exactKeys(stages, BENCHMARK_STAGES, 'invalid_extension');
+  for (const name of BENCHMARK_STAGES) validateStage(name, stages[name]);
+  return { version, authorizationId, ledger, policy, method: BENCHMARK_KIND.method, stages: deepFreeze(stages) };
+}
+
+function verifyOriginalBenchmarkExtension(extension, ledger, policy) {
+  exactKeys(extension, ['version', 'authorizationId', 'ledger', 'policy', 'method', 'stages', 'checkpoint'],
+    'invalid_extension');
+  const expected = benchmarkConfiguration({ ledger, policy,
+    authorizationId: extension.authorizationId, stages: extension.stages });
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount) || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > ledger.requestCap
+    || extension.checkpoint.reservedMicroUsd > ledger.limitMicroUsd
+    || canonical(extension) !== canonical({ ...expected, checkpoint: extension.checkpoint })) fail('invalid_extension');
+  readBinding(path.join(expected.ledger.directory, BINDING_FILENAME), { version: 1, runId: ledger.runId, policy });
+  readBinding(path.join(expected.ledger.directory, BENCHMARK_KIND.filename), extension);
+}
+
+function requestAllowanceFilename(directory, benchmarkAuthorizationId) {
+  return path.join(directory, `experiment-benchmark-request-allowance-${benchmarkAuthorizationId}.json`);
+}
+
+function requestAllowanceRecord(configuration, digest) {
+  return {
+    version: BENCHMARK_REQUEST_ALLOWANCE_VERSION,
+    authorizationId: configuration.authorizationId,
+    priorLedger: configuration.priorLedger,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    method: BENCHMARK_KIND.method,
+    stages: configuration.originalBenchmarkExtension.stages,
+    originalBenchmarkExtension: configuration.originalBenchmarkExtension,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+  };
+}
+
+function snapshotRequestAllowanceAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['oldLedger', 'policy', 'benchmarkExtension', 'authorizationId',
+    'newRequestCap', 'expectedCheckpoint'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy, fetchImpl: () => {} });
+  const priorLedger = structuredClone(snapshot.oldLedger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  const originalBenchmarkExtension = snapshotExtension(snapshot.benchmarkExtension);
+  if (typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1)
+    || snapshot.newRequestCap <= priorLedger.requestCap) fail('invalid_extension');
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > priorLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > priorLedger.limitMicroUsd) fail('invalid_extension');
+  verifyOriginalBenchmarkExtension(originalBenchmarkExtension, priorLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < originalBenchmarkExtension.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < originalBenchmarkExtension.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, priorLedger,
+    ledger: { ...priorLedger, requestCap: snapshot.newRequestCap }, policy,
+    originalBenchmarkExtension, checkpoint: snapshot.expectedCheckpoint });
+}
+
+function verifyRequestAllowance(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method', 'stages',
+    'originalBenchmarkExtension', 'checkpoint', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_REQUEST_ALLOWANCE_VERSION
+    || typeof extension.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(extension.authorizationId)
+    || typeof extension.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(extension.historicalDigest)) fail('invalid_extension');
+  try {
+    validateConstructor({ ledger: extension.priorLedger, policy: extension.policy, fetchImpl: () => {} });
+    validateConstructor({ ledger: extension.ledger, policy: extension.policy, fetchImpl: () => {} });
+  } catch { fail('invalid_extension'); }
+  const priorLedger = structuredClone(extension.priorLedger);
+  const currentLedger = structuredClone(extension.ledger);
+  const expectedLedger = structuredClone(ledger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  currentLedger.directory = path.resolve(currentLedger.directory);
+  expectedLedger.directory = path.resolve(expectedLedger.directory);
+  if (canonical(currentLedger) !== canonical(expectedLedger)
+    || canonical(extension.policy) !== canonical(policy)
+    || currentLedger.directory !== priorLedger.directory
+    || currentLedger.runId !== priorLedger.runId
+    || currentLedger.limitMicroUsd !== priorLedger.limitMicroUsd
+    || currentLedger.requestCap <= priorLedger.requestCap
+    || extension.method !== BENCHMARK_KIND.method) fail('invalid_extension');
+  const original = snapshotExtension(extension.originalBenchmarkExtension);
+  verifyOriginalBenchmarkExtension(original, priorLedger, policy);
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount)
+    || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > priorLedger.requestCap
+    || extension.checkpoint.reservedMicroUsd > priorLedger.limitMicroUsd
+    || extension.checkpoint.requestCount < original.checkpoint.requestCount
+    || extension.checkpoint.reservedMicroUsd < original.checkpoint.reservedMicroUsd
+    || canonical(extension.stages) !== canonical(original.stages)
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.benchmarkAuthorizationId !== undefined
+      && original.authorizationId !== expected.benchmarkAuthorizationId)) fail('invalid_extension');
+  readBinding(requestAllowanceFilename(currentLedger.directory, original.authorizationId), extension);
+  return extension;
+}
+
+function verifyBenchmarkExtension(extension, ledger, policy) {
+  if (extension?.version === BENCHMARK_BUDGET_EXTENSION_VERSION) {
+    verifyBudgetExtension(extension, ledger, policy);
+    return;
+  }
+  if (extension?.version === BENCHMARK_REQUEST_ALLOWANCE_VERSION) {
+    verifyRequestAllowance(extension, ledger, policy);
+    return;
+  }
+  verifyOriginalBenchmarkExtension(extension, ledger, policy);
+}
+
+function verifyBenchmarkCheckpoint(extension, state) {
+  verifyExtensionCheckpoint(extension, state);
+  if (extension.version === BENCHMARK_BUDGET_EXTENSION_VERSION) {
+    verifyExtensionCheckpoint(extension.originalRequestAllowance, state);
+    verifyExtensionCheckpoint(extension.originalRequestAllowance.originalBenchmarkExtension, state);
+  } else if (extension.version === BENCHMARK_REQUEST_ALLOWANCE_VERSION) {
+    verifyExtensionCheckpoint(extension.originalBenchmarkExtension, state);
+  } else return;
+  const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+  if (prefix.length !== extension.checkpoint.requestCount
+    || historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+}
+
+function normalizeRequestAllowanceError(error) {
+  if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) return error;
+  const primaryCode = Number.isInteger(error?.errcode) ? error.errcode & 0xff : null;
+  return new ExperimentRequestGuardError(primaryCode === 5 || primaryCode === 6
+    ? 'extension_busy' : 'unsafe_policy_binding');
+}
+
+// This operator transition preserves the original grant and every historical row.
+// Its singleton-per-original-grant filename prevents a different target from
+// replacing a fully durable intent after a crash but before the SQLite commit.
+export function authorizeBenchmarkRequestAllowance(options) {
+  const configuration = snapshotRequestAllowanceAuthorization(options);
+  let ledger;
+  let usingPriorLedgerConfiguration = true;
+  try { ledger = reopenExperimentBudget(configuration.priorLedger); }
+  catch (error) {
+    if (!(error instanceof ExperimentBudgetError) || error.code !== 'configuration_mismatch') throw error;
+    usingPriorLedgerConfiguration = false;
+    ledger = reopenExperimentBudget(configuration.ledger);
+  }
+  let lock;
+  let transaction = false;
+  let committed = false;
+  let result;
+  let operationError;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    transaction = true;
+    verifyOriginalBenchmarkExtension(configuration.originalBenchmarkExtension,
+      configuration.priorLedger, configuration.policy);
+    const state = ledger.getState();
+    verifyExtensionCheckpoint(configuration.originalBenchmarkExtension, state);
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) fail('extension_busy');
+    if (state.requestCount < configuration.checkpoint.requestCount
+      || state.reservedMicroUsd < configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    const prefix = historicalRows(state).slice(0, configuration.checkpoint.requestCount);
+    if (prefix.length !== configuration.checkpoint.requestCount
+      || prefix.some((attempt) => attempt.outcome === null)
+      || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
+        !== configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    if (usingPriorLedgerConfiguration && (state.requestCount !== configuration.checkpoint.requestCount
+      || state.reservedMicroUsd !== configuration.checkpoint.reservedMicroUsd)) fail('policy_mismatch');
+    const allowance = requestAllowanceRecord(configuration, historicalDigest(prefix));
+    const filename = requestAllowanceFilename(configuration.ledger.directory,
+      configuration.originalBenchmarkExtension.authorizationId);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) syncAuthorizationBinding(configuration.ledger.directory, filename, allowance);
+    else {
+      if (!usingPriorLedgerConfiguration) fail('policy_mismatch');
+      writeAuthorizationBinding(configuration.ledger.directory, filename, allowance);
+      readBinding(filename, allowance);
+    }
+    if (usingPriorLedgerConfiguration) {
+      const update = lock.prepare(`UPDATE run_config SET request_cap = ?
+        WHERE singleton = 1 AND run_id = ? AND limit_micro_usd = ? AND request_cap = ?
+          AND reserved_micro_usd = ? AND request_count = ? AND state = 'open'`).run(
+        configuration.ledger.requestCap,
+        configuration.priorLedger.runId,
+        configuration.priorLedger.limitMicroUsd,
+        configuration.priorLedger.requestCap,
+        configuration.checkpoint.reservedMicroUsd,
+        configuration.checkpoint.requestCount,
+      );
+      if (Number(update.changes) !== 1) fail('policy_mismatch');
+      const changed = lock.prepare(`SELECT run_id, limit_micro_usd, request_cap,
+        reserved_micro_usd, request_count, state FROM run_config WHERE singleton = 1`).get();
+      if (changed.run_id !== configuration.ledger.runId
+        || changed.limit_micro_usd !== configuration.ledger.limitMicroUsd
+        || changed.request_cap !== configuration.ledger.requestCap
+        || changed.reserved_micro_usd !== configuration.checkpoint.reservedMicroUsd
+        || changed.request_count !== configuration.checkpoint.requestCount
+        || changed.state !== 'open') fail('policy_mismatch');
+      lock.exec('COMMIT');
+      transaction = false;
+      committed = true;
+    }
+    result = deepFreeze(allowance);
+  } catch (error) { operationError = normalizeRequestAllowanceError(error); }
+  let cleanupError;
+  if (lock) {
+    if (transaction) {
+      try { lock.exec('ROLLBACK'); } catch (error) { cleanupError = normalizeRequestAllowanceError(error); }
+    }
+    try { lock.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
+  }
+  try { ledger.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
+  if (operationError) throw operationError;
+  if (cleanupError) throw cleanupError;
+  if (usingPriorLedgerConfiguration && !committed) fail('unsafe_policy_binding');
+  return result;
+}
+
+export function loadBenchmarkRequestAllowance(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'benchmarkAuthorizationId', 'authorizationId', 'stages'],
+    'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy, fetchImpl: () => {} });
+  if (typeof snapshot.benchmarkAuthorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.benchmarkAuthorizationId)
+    || typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)) fail('invalid_extension');
+  const ledgerConfiguration = structuredClone(snapshot.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  const expectedStages = benchmarkConfiguration({ ledger: ledgerConfiguration, policy,
+    authorizationId: snapshot.benchmarkAuthorizationId, stages: snapshot.stages }).stages;
+  const extension = snapshotExtension(readBinding(requestAllowanceFilename(ledgerConfiguration.directory,
+    snapshot.benchmarkAuthorizationId)));
+  verifyRequestAllowance(extension, ledgerConfiguration, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(expectedStages)) fail('policy_mismatch');
+  const ledger = reopenExperimentBudget(ledgerConfiguration);
+  try {
+    const state = ledger.getState();
+    verifyBenchmarkCheckpoint(extension, state);
+    return extension;
+  } finally { ledger.close(); }
+}
+
+function budgetExtensionFilename(directory, requestAllowanceAuthorizationId) {
+  return path.join(directory,
+    `experiment-benchmark-budget-extension-${requestAllowanceAuthorizationId}.json`);
+}
+
+function budgetExtensionRecord(configuration, digest) {
+  return {
+    version: BENCHMARK_BUDGET_EXTENSION_VERSION,
+    authorizationId: configuration.authorizationId,
+    priorLedger: configuration.priorLedger,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    method: BENCHMARK_KIND.method,
+    stages: configuration.originalRequestAllowance.stages,
+    originalRequestAllowance: configuration.originalRequestAllowance,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+  };
+}
+
+function snapshotBudgetExtensionAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['oldLedger', 'policy', 'requestAllowance', 'authorizationId',
+    'newLimitMicroUsd', 'newRequestCap', 'expectedCheckpoint'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  const priorLedger = structuredClone(snapshot.oldLedger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  const originalRequestAllowance = snapshotExtension(snapshot.requestAllowance);
+  if (!safeInteger(snapshot.newLimitMicroUsd, 1)
+    || snapshot.newLimitMicroUsd <= priorLedger.limitMicroUsd
+    || typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1)
+    || snapshot.newRequestCap <= priorLedger.requestCap) fail('invalid_extension');
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > priorLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > priorLedger.limitMicroUsd) fail('invalid_extension');
+  verifyRequestAllowance(originalRequestAllowance, priorLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < originalRequestAllowance.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < originalRequestAllowance.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, priorLedger,
+    ledger: { ...priorLedger, limitMicroUsd: snapshot.newLimitMicroUsd,
+      requestCap: snapshot.newRequestCap },
+    policy, originalRequestAllowance, checkpoint: snapshot.expectedCheckpoint });
+}
+
+function verifyBudgetExtension(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method', 'stages',
+    'originalRequestAllowance', 'checkpoint', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_BUDGET_EXTENSION_VERSION
+    || typeof extension.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(extension.authorizationId)
+    || typeof extension.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(extension.historicalDigest)) fail('invalid_extension');
+  try {
+    validateConstructor({ ledger: extension.priorLedger, policy: extension.policy, fetchImpl: () => {} });
+    validateConstructor({ ledger: extension.ledger, policy: extension.policy, fetchImpl: () => {} });
+  } catch { fail('invalid_extension'); }
+  const priorLedger = structuredClone(extension.priorLedger);
+  const currentLedger = structuredClone(extension.ledger);
+  const expectedLedger = structuredClone(ledger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  currentLedger.directory = path.resolve(currentLedger.directory);
+  expectedLedger.directory = path.resolve(expectedLedger.directory);
+  if (canonical(currentLedger) !== canonical(expectedLedger)
+    || canonical(extension.policy) !== canonical(policy)
+    || currentLedger.directory !== priorLedger.directory
+    || currentLedger.runId !== priorLedger.runId
+    || currentLedger.limitMicroUsd <= priorLedger.limitMicroUsd
+    || currentLedger.requestCap <= priorLedger.requestCap
+    || extension.method !== BENCHMARK_KIND.method) fail('invalid_extension');
+  const original = snapshotExtension(extension.originalRequestAllowance);
+  verifyRequestAllowance(original, priorLedger, policy);
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount)
+    || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > priorLedger.requestCap
+    || extension.checkpoint.reservedMicroUsd > priorLedger.limitMicroUsd
+    || extension.checkpoint.requestCount < original.checkpoint.requestCount
+    || extension.checkpoint.reservedMicroUsd < original.checkpoint.reservedMicroUsd
+    || canonical(extension.stages) !== canonical(original.stages)
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.requestAllowanceAuthorizationId !== undefined
+      && original.authorizationId !== expected.requestAllowanceAuthorizationId)
+    || (expected.benchmarkAuthorizationId !== undefined
+      && original.originalBenchmarkExtension.authorizationId !== expected.benchmarkAuthorizationId)) {
+    fail('invalid_extension');
+  }
+  readBinding(budgetExtensionFilename(currentLedger.directory, original.authorizationId), extension);
+  return extension;
+}
+
+// One audited, explicitly parameterized ceiling transition. Campaign authority
+// pins the actual amount; this mechanism preserves the exact token and history.
+export function authorizeBenchmarkBudgetExtension(options) {
+  const configuration = snapshotBudgetExtensionAuthorization(options);
+  let ledger;
+  let usingPriorLedgerConfiguration = true;
+  try { ledger = reopenExperimentBudget(configuration.priorLedger); }
+  catch (error) {
+    if (!(error instanceof ExperimentBudgetError) || error.code !== 'configuration_mismatch') throw error;
+    usingPriorLedgerConfiguration = false;
+    ledger = reopenExperimentBudget(configuration.ledger);
+  }
+  let lock;
+  let transaction = false;
+  let committed = false;
+  let result;
+  let operationError;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    transaction = true;
+    verifyRequestAllowance(configuration.originalRequestAllowance,
+      configuration.priorLedger, configuration.policy);
+    const state = ledger.getState();
+    verifyBenchmarkCheckpoint(configuration.originalRequestAllowance, state);
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+      fail('extension_busy');
+    }
+    if (state.requestCount < configuration.checkpoint.requestCount
+      || state.reservedMicroUsd < configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    const prefix = historicalRows(state).slice(0, configuration.checkpoint.requestCount);
+    if (prefix.length !== configuration.checkpoint.requestCount
+      || prefix.some((attempt) => attempt.outcome === null)
+      || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
+        !== configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    if (usingPriorLedgerConfiguration && (state.requestCount !== configuration.checkpoint.requestCount
+      || state.reservedMicroUsd !== configuration.checkpoint.reservedMicroUsd)) fail('policy_mismatch');
+    const extension = budgetExtensionRecord(configuration, historicalDigest(prefix));
+    const filename = budgetExtensionFilename(configuration.ledger.directory,
+      configuration.originalRequestAllowance.authorizationId);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) syncAuthorizationBinding(configuration.ledger.directory, filename, extension);
+    else {
+      if (!usingPriorLedgerConfiguration) fail('policy_mismatch');
+      writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
+      readBinding(filename, extension);
+    }
+    if (usingPriorLedgerConfiguration) {
+      const update = lock.prepare(`UPDATE run_config SET limit_micro_usd = ?, request_cap = ?
+        WHERE singleton = 1 AND run_id = ? AND limit_micro_usd = ? AND request_cap = ?
+          AND reserved_micro_usd = ? AND request_count = ? AND state = 'open'`).run(
+        configuration.ledger.limitMicroUsd,
+        configuration.ledger.requestCap,
+        configuration.priorLedger.runId,
+        configuration.priorLedger.limitMicroUsd,
+        configuration.priorLedger.requestCap,
+        configuration.checkpoint.reservedMicroUsd,
+        configuration.checkpoint.requestCount,
+      );
+      if (Number(update.changes) !== 1) fail('policy_mismatch');
+      const changed = lock.prepare(`SELECT run_id, limit_micro_usd, request_cap,
+        reserved_micro_usd, request_count, state FROM run_config WHERE singleton = 1`).get();
+      if (changed.run_id !== configuration.ledger.runId
+        || changed.limit_micro_usd !== configuration.ledger.limitMicroUsd
+        || changed.request_cap !== configuration.ledger.requestCap
+        || changed.reserved_micro_usd !== configuration.checkpoint.reservedMicroUsd
+        || changed.request_count !== configuration.checkpoint.requestCount
+        || changed.state !== 'open') fail('policy_mismatch');
+      lock.exec('COMMIT');
+      transaction = false;
+      committed = true;
+    }
+    result = deepFreeze(extension);
+  } catch (error) { operationError = normalizeRequestAllowanceError(error); }
+  let cleanupError;
+  if (lock) {
+    if (transaction) {
+      try { lock.exec('ROLLBACK'); } catch (error) { cleanupError = normalizeRequestAllowanceError(error); }
+    }
+    try { lock.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
+  }
+  try { ledger.close(); } catch (error) { cleanupError ??= normalizeRequestAllowanceError(error); }
+  if (operationError) throw operationError;
+  if (cleanupError) throw cleanupError;
+  if (usingPriorLedgerConfiguration && !committed) fail('unsafe_policy_binding');
+  return result;
+}
+
+export function loadBenchmarkBudgetExtension(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'benchmarkAuthorizationId',
+    'requestAllowanceAuthorizationId', 'authorizationId', 'stages'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  for (const id of [snapshot.benchmarkAuthorizationId, snapshot.requestAllowanceAuthorizationId,
+    snapshot.authorizationId]) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(id)) {
+      fail('invalid_extension');
+    }
+  }
+  const ledgerConfiguration = structuredClone(snapshot.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  const expectedStages = benchmarkConfiguration({ ledger: ledgerConfiguration, policy,
+    authorizationId: snapshot.benchmarkAuthorizationId, stages: snapshot.stages }).stages;
+  const extension = snapshotExtension(readBinding(budgetExtensionFilename(ledgerConfiguration.directory,
+    snapshot.requestAllowanceAuthorizationId)));
+  verifyBudgetExtension(extension, ledgerConfiguration, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(expectedStages)) fail('policy_mismatch');
+  const ledger = reopenExperimentBudget(ledgerConfiguration);
+  try {
+    const state = ledger.getState();
+    verifyBenchmarkCheckpoint(extension, state);
+    return extension;
+  } finally { ledger.close(); }
+}
+
+function chainedBudgetFilename(directory, parentAuthorizationId) {
+  return path.join(directory, `experiment-benchmark-budget-chain-${parentAuthorizationId}.json`);
+}
+
+function chainedBudgetRecord(configuration, digest) {
+  return {
+    version: BENCHMARK_BUDGET_CHAIN_VERSION,
+    authorizationId: configuration.authorizationId,
+    priorLedger: configuration.priorLedger,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    method: BENCHMARK_KIND.method,
+    stages: configuration.parentBudgetExtension.stages,
+    parentBudgetExtension: configuration.parentBudgetExtension,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+  };
+}
+
+function snapshotChainedBudgetAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['oldLedger', 'policy', 'parentBudgetExtension', 'authorizationId',
+    'newLimitMicroUsd', 'newRequestCap', 'expectedCheckpoint'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  const priorLedger = structuredClone(snapshot.oldLedger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  const parentBudgetExtension = snapshotExtension(snapshot.parentBudgetExtension);
+  if (priorLedger.limitMicroUsd !== 100_000_000
+    || snapshot.newLimitMicroUsd !== 200_000_000
+    || typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1)
+    || snapshot.newRequestCap <= priorLedger.requestCap) fail('invalid_extension');
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > priorLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > priorLedger.limitMicroUsd) fail('invalid_extension');
+  verifyBudgetExtension(parentBudgetExtension, priorLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < parentBudgetExtension.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < parentBudgetExtension.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, priorLedger,
+    ledger: { ...priorLedger, limitMicroUsd: 200_000_000, requestCap: snapshot.newRequestCap },
+    policy, parentBudgetExtension, checkpoint: snapshot.expectedCheckpoint });
+}
+
+function verifyChainedBudgetExtension(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method',
+    'stages', 'parentBudgetExtension', 'checkpoint', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_BUDGET_CHAIN_VERSION
+    || typeof extension.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(extension.authorizationId)
+    || typeof extension.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(extension.historicalDigest)) fail('invalid_extension');
+  let priorLedger;
+  let currentLedger;
+  let expectedLedger;
+  try {
+    validateConstructor({ ledger: extension.priorLedger, policy: extension.policy, fetchImpl: () => {} });
+    validateConstructor({ ledger: extension.ledger, policy: extension.policy, fetchImpl: () => {} });
+    priorLedger = structuredClone(extension.priorLedger);
+    currentLedger = structuredClone(extension.ledger);
+    expectedLedger = structuredClone(ledger);
+    priorLedger.directory = path.resolve(priorLedger.directory);
+    currentLedger.directory = path.resolve(currentLedger.directory);
+    expectedLedger.directory = path.resolve(expectedLedger.directory);
+  } catch { fail('invalid_extension'); }
+  const parent = snapshotExtension(extension.parentBudgetExtension);
+  if (canonical(currentLedger) !== canonical(expectedLedger)
+    || canonical(extension.policy) !== canonical(policy)
+    || currentLedger.directory !== priorLedger.directory
+    || currentLedger.runId !== priorLedger.runId
+    || priorLedger.limitMicroUsd !== 100_000_000
+    || currentLedger.limitMicroUsd !== 200_000_000
+    || currentLedger.requestCap <= priorLedger.requestCap
+    || extension.method !== BENCHMARK_KIND.method) fail('invalid_extension');
+  verifyBudgetExtension(parent, priorLedger, policy);
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount)
+    || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > priorLedger.requestCap
+    || extension.checkpoint.reservedMicroUsd > priorLedger.limitMicroUsd
+    || extension.checkpoint.requestCount < parent.checkpoint.requestCount
+    || extension.checkpoint.reservedMicroUsd < parent.checkpoint.reservedMicroUsd
+    || canonical(extension.stages) !== canonical(parent.stages)
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.parentBudgetAuthorizationId !== undefined
+      && parent.authorizationId !== expected.parentBudgetAuthorizationId)) fail('invalid_extension');
+  readBinding(chainedBudgetFilename(currentLedger.directory, parent.authorizationId), extension);
+  return extension;
+}
+
+export function authorizeChainedBenchmarkBudgetExtension(options) {
+  const configuration = snapshotChainedBudgetAuthorization(options);
+  const filename = chainedBudgetFilename(configuration.ledger.directory,
+    configuration.parentBudgetExtension.authorizationId);
+  let callbackFailure;
+  let extension;
+  try {
+    transitionExperimentBudgetCaps({ oldConfiguration: configuration.priorLedger,
+      newConfiguration: configuration.ledger, expectedCheckpoint: configuration.checkpoint,
+      authorize({ mode, state, checkpointAttempts }) {
+        try {
+          verifyBudgetExtension(configuration.parentBudgetExtension,
+            configuration.priorLedger, configuration.policy);
+          verifyBenchmarkCheckpoint(configuration.parentBudgetExtension, state);
+          extension = chainedBudgetRecord(configuration, historicalDigest(checkpointAttempts));
+          let existing;
+          try { existing = lstatSync(filename); }
+          catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+          if (existing) syncAuthorizationBinding(configuration.ledger.directory, filename, extension);
+          else {
+            if (mode !== 'transition') fail('policy_mismatch');
+            writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
+            readBinding(filename, extension);
+          }
+        } catch (error) {
+          if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+          throw error;
+        }
+      } });
+  } catch (error) {
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+  return deepFreeze(extension);
+}
+
+export function loadChainedBenchmarkBudgetExtension(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'parentBudgetAuthorizationId', 'authorizationId', 'stages'],
+    'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  for (const id of [snapshot.parentBudgetAuthorizationId, snapshot.authorizationId]) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(id)) {
+      fail('invalid_extension');
+    }
+  }
+  const ledgerConfiguration = structuredClone(snapshot.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  const expectedStages = benchmarkConfiguration({ ledger: ledgerConfiguration, policy,
+    authorizationId: snapshot.authorizationId, stages: snapshot.stages }).stages;
+  const extension = snapshotExtension(readBinding(chainedBudgetFilename(ledgerConfiguration.directory,
+    snapshot.parentBudgetAuthorizationId)));
+  verifyChainedBudgetExtension(extension, ledgerConfiguration, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(expectedStages)) fail('policy_mismatch');
+  const state = inspectExperimentBudgetSnapshot(ledgerConfiguration);
+  if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+    fail('extension_busy');
+  }
+  verifyBenchmarkCheckpoint(extension.parentBudgetExtension, state);
+  const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+  if (prefix.length !== extension.checkpoint.requestCount
+    || prefix.some((attempt) => attempt.outcome === null)
+    || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
+      !== extension.checkpoint.reservedMicroUsd
+    || historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+  return deepFreeze(extension);
+}
+
+// A separate operator action. It grants exactly the two chat-completion stages
+// below and never alters an older capability file or the ledger allowance.
+export function authorizeBenchmarkExtension(options) {
+  exactKeys(options, ['ledger', 'policy', 'authorizationId', 'stages']);
+  const configuration = benchmarkConfiguration(options);
+  const ledger = reopenExperimentBudget(configuration.ledger);
+  let lock;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    readBinding(path.join(configuration.ledger.directory, BINDING_FILENAME),
+      { version: 1, runId: configuration.ledger.runId, policy: configuration.policy });
+    const state = ledger.getState();
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) fail('extension_busy');
+    const filename = path.join(configuration.ledger.directory, BENCHMARK_KIND.filename);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) {
+      const extension = readBinding(filename);
+      verifyOriginalBenchmarkExtension(extension, configuration.ledger, configuration.policy);
+      verifyExtensionCheckpoint(extension, state);
+      if (extension.authorizationId !== configuration.authorizationId
+        || canonical(extension.stages) !== canonical(configuration.stages)) fail('policy_mismatch');
+      return deepFreeze(extension);
+    }
+    const extension = { ...configuration,
+      checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
+    writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
+    verifyOriginalBenchmarkExtension(extension, configuration.ledger, configuration.policy);
+    verifyExtensionCheckpoint(extension, state);
+    return deepFreeze(extension);
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) throw error;
+    fail('unsafe_policy_binding');
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* No ledger writes were made. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
+function validateStageBody(body, stage) {
+  exactKeys(body, STAGE_BODY_KEYS, 'unsupported_request');
+  if (body.model !== stage.model || body.n !== 1 || body.temperature !== 0
+    || body.store !== false || body.stream !== false
+    || !safeInteger(body.max_tokens, 1) || body.max_tokens > stage.maxOutputTokens
+    || !Array.isArray(body.messages) || body.messages.length < 1 || body.messages.length > 128) {
+    fail('unsupported_request');
+  }
+  for (const message of body.messages) {
+    exactKeys(message, ['content', 'role'], 'unsupported_request');
+    if (!STAGE_ROLES.has(message.role) || typeof message.content !== 'string') fail('unsupported_request');
+  }
+  let localTokens;
+  try { localTokens = localCounter.countTokens(JSON.stringify(body.messages)); }
+  catch { fail('unsupported_request'); }
+  if (localTokens + stage.inputTokenFraming > stage.maxInputTokens) fail('input_bound_exceeded');
+}
+
+function usageRecord(kind, json) {
+  if (kind === 'cairnCount') return null;
+  return kind === 'hostCompletion'
+    ? { inputTokens: json.usage.prompt_tokens, outputTokens: json.usage.completion_tokens }
+    : { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens };
+}
+
+function caseDeadlineFilenames(directory, executionId) {
+  return {
+    binding: path.join(directory, `experiment-case-deadline-${executionId}.json`),
+    claim: path.join(directory, `experiment-case-deadline-${executionId}.claim.json`),
+  };
+}
+
+function assertCaseClaimUnused(directory, executionId) {
+  const { claim } = caseDeadlineFilenames(directory, executionId);
+  try {
+    lstatSync(claim);
+    fail('capability_consumed');
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    if (error?.code !== 'ENOENT') fail('capability_consumed');
+  }
+}
+
+function historicalRows(state) {
+  return state.attempts.map((attempt) => ({
+    attemptId: attempt.attemptId,
+    channel: attempt.channel,
+    reservedMicroUsd: attempt.reservedMicroUsd,
+    outcome: attempt.outcome,
+    actualMicroUsd: attempt.actualMicroUsd,
+  }));
+}
+
+function historicalDigest(attempts) {
+  return createHash('sha256').update(canonical(attempts), 'utf8').digest('hex');
+}
+
+function pairHash(domain, value) {
+  return createHash('sha256').update(canonical([domain, value]), 'utf8').digest('hex');
+}
+
+function denseArray(value, minimum, maximum, code = 'invalid_capability') {
+  if (!Array.isArray(value) || value.length < minimum || value.length > maximum
+    || Object.keys(value).length !== value.length
+    || Object.keys(value).some((key, index) => key !== String(index))) fail(code);
+  return value;
+}
+
+function pairRoster(value) {
+  denseArray(value, 1, 250);
+  const questions = new Set();
+  const scopes = new Set();
+  const roster = value.map((entry) => {
+    exactKeys(entry, ['questionId', 'protocolDigest', 'armOrder', 'arms'], 'invalid_capability');
+    if (typeof entry.questionId !== 'string' || !SOURCE_PAIR_QUESTION.test(entry.questionId)
+      || questions.has(entry.questionId) || typeof entry.protocolDigest !== 'string'
+      || !SHA256_HEX.test(entry.protocolDigest)) fail('invalid_capability');
+    questions.add(entry.questionId);
+    denseArray(entry.armOrder, 2, 2);
+    if (new Set(entry.armOrder).size !== 2
+      || SOURCE_PAIR_NAMES.some((name) => !entry.armOrder.includes(name))) fail('invalid_capability');
+    denseArray(entry.arms, 2, 2);
+    const arms = entry.arms.map((arm, index) => {
+      exactKeys(arm, ['name', 'scopeId'], 'invalid_capability');
+      const name = SOURCE_PAIR_NAMES[index];
+      const scopeId = `lme-case-${pairHash('cairn.lme.source-pair.scope.v1', [entry.questionId, name])}`;
+      if (arm.name !== name || arm.scopeId !== scopeId || scopes.has(scopeId)) fail('invalid_capability');
+      scopes.add(scopeId);
+      return { name, scopeId };
+    });
+    return { questionId: entry.questionId, protocolDigest: entry.protocolDigest,
+      armOrder: [...entry.armOrder], arms };
+  });
+  return deepFreeze(roster);
+}
+
+function pairSchedule(roster) {
+  const ordered = roster.flatMap((entry) => entry.armOrder.map((name) => ({
+    caseId: entry.arms.find((arm) => arm.name === name).scopeId,
+  })));
+  return deepFreeze([...ordered.map(({ caseId }) => ({ phase: 'generation', caseId })),
+    ...ordered.map(({ caseId }) => ({ phase: 'scoring', caseId }))]);
+}
+
+function pairFilenames(directory, executionId, adaptive = false) {
+  const stem = path.join(directory, `${adaptive ? 'experiment-adaptive-qualified-source-pair'
+    : 'experiment-qualified-source-pair'}-${executionId}`);
+  return { binding: `${stem}.json`, claim: `${stem}.claim.json` };
+}
+
+function exactAdaptiveKeys(value, keys) {
+  if (!isPlainObject(value) || Reflect.ownKeys(value).length !== keys.length) fail('invalid_capability');
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !own(descriptor, 'value')) fail('invalid_capability');
+  }
+}
+
+export function deriveAdaptiveQualifiedSourcePairExperimentDigest(options) {
+  let detached;
+  try {
+    exactAdaptiveKeys(options, ['qualificationInputProfile', 'runtimeArtifactSha256',
+      'adapterConfigurationSha256', 'roster']);
+    detached = structuredClone(options);
+  } catch { fail('invalid_capability'); }
+  const { qualificationInputProfile, runtimeArtifactSha256, adapterConfigurationSha256 } = detached;
+  if (qualificationInputProfile !== ADAPTIVE_QUALIFICATION_INPUT_PROFILE
+    || typeof runtimeArtifactSha256 !== 'string' || !SHA256_HEX.test(runtimeArtifactSha256)
+    || typeof adapterConfigurationSha256 !== 'string' || !SHA256_HEX.test(adapterConfigurationSha256)) {
+    fail('invalid_capability');
+  }
+  const roster = pairRoster(detached.roster);
+  return pairHash(ADAPTIVE_SOURCE_PAIR_DOMAIN, {
+    qualificationInputProfile, runtimeArtifactSha256, adapterConfigurationSha256, roster,
+  });
+}
+
+function adaptivePairContext(value, roster) {
+  exactAdaptiveKeys(value, ['qualificationInputProfile', 'runtimeArtifactSha256',
+    'adapterConfigurationSha256', 'experimentDigest']);
+  const detached = structuredClone(value);
+  const expected = deriveAdaptiveQualifiedSourcePairExperimentDigest({
+    qualificationInputProfile: detached.qualificationInputProfile,
+    runtimeArtifactSha256: detached.runtimeArtifactSha256,
+    adapterConfigurationSha256: detached.adapterConfigurationSha256, roster,
+  });
+  if (detached.experimentDigest !== expected) fail('invalid_capability');
+  return deepFreeze(detached);
+}
+
+function verifyPairParent(extension, ledger, policy, state) {
+  if (extension?.version === BENCHMARK_BUDGET_EXTENSION_VERSION
+    && ledger.limitMicroUsd === 100_000_000) {
+    verifyBudgetExtension(extension, ledger, policy);
+    verifyBenchmarkCheckpoint(extension, state);
+    return;
+  }
+  if (extension?.version === BENCHMARK_BUDGET_CHAIN_VERSION
+    && ledger.limitMicroUsd === 200_000_000) {
+    verifyChainedBudgetExtension(extension, ledger, policy);
+    const parent = extension.parentBudgetExtension;
+    verifyBenchmarkCheckpoint(parent, state);
+    verifyExtensionCheckpoint(extension, state);
+    const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+    if (historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+    return;
+  }
+  fail('invalid_capability');
+}
+
+// Read-only parent preflight for the installed pair launcher. In particular,
+// the legacy 100-dollar loader opens a writable handle and is not a dry-run
+// verifier. Keep the same file-bound parent checks without issuing a claim.
+export function inspectQualifiedSourcePairParent(options) {
+  let detached;
+  try {
+    exactKeys(options, ['ledger', 'policy', 'benchmarkExtension'], 'invalid_options');
+    detached = structuredClone({ ledger: options.ledger, policy: options.policy,
+      benchmarkExtension: options.benchmarkExtension });
+  } catch { fail('invalid_options'); }
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const extension = snapshotExtension(detached.benchmarkExtension);
+  const state = inspectExperimentBudgetSnapshot(ledger);
+  if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+    fail('extension_busy');
+  }
+  verifyPairParent(extension, ledger, policy, state);
+  return deepFreeze(state);
+}
+
+// Only this read-only v2 assertion uses descriptor-first detachment. Existing
+// constructors deliberately retain their reviewed input and error behavior.
+function detachEmbeddingLineage(value) {
+  const limits = { visited: 0, bytes: 0, ancestors: new WeakSet() };
+  const addBytes = (text) => {
+    limits.bytes += Buffer.byteLength(text, 'utf8');
+    if (limits.bytes > 16 * 1024 * 1024) fail('invalid_options');
+  };
+  const visit = (input, depth) => {
+    limits.visited += 1;
+    if (depth > 32 || limits.visited > 1_000_000) fail('invalid_options');
+    if (input === null || typeof input === 'boolean') return input;
+    if (typeof input === 'string') { addBytes(input); return input; }
+    if (typeof input === 'number' && Number.isFinite(input)) return input;
+    if (typeof input !== 'object' || limits.ancestors.has(input)) fail('invalid_options');
+    const array = Array.isArray(input);
+    if ((array && Object.getPrototypeOf(input) !== Array.prototype)
+      || (!array && !isPlainObject(input))) fail('invalid_options');
+    limits.ancestors.add(input);
+    const names = Reflect.ownKeys(input);
+    const count = array ? input.length : names.length;
+    if (count > 1_000_000 - limits.visited
+      || (array && (names.length !== count + 1 || names.at(-1) !== 'length'))) {
+      fail('invalid_options');
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    const output = array ? new Array(count) : Object.create(null);
+    for (let index = 0; index < count; index += 1) {
+      const name = names[index];
+      if (typeof name !== 'string' || (array && name !== String(index))) fail('invalid_options');
+      const descriptor = descriptors[name];
+      if (!descriptor?.enumerable || !own(descriptor, 'value')) fail('invalid_options');
+      addBytes(name);
+      output[name] = visit(descriptor.value, depth + 1);
+    }
+    limits.ancestors.delete(input);
+    return output;
+  };
+  return visit(value, 0);
+}
+
+function validateEmbeddingLineageSnapshot(snapshot, ledger) {
+  const invalid = () => { throw new ExperimentBudgetError('invalid_ledger'); };
+  if (!isPlainObject(snapshot) || Object.keys(snapshot).length !== EMBEDDING_SNAPSHOT_KEYS.length
+    || EMBEDDING_SNAPSHOT_KEYS.some((key) => !own(snapshot, key))
+    || snapshot.schemaVersion !== 2 || !UUID_PATTERN.test(snapshot.runId)
+    || snapshot.runId !== ledger.runId
+    || !safeInteger(snapshot.limitMicroUsd, 1)
+    || !safeInteger(snapshot.requestCap, 1)
+    || snapshot.limitMicroUsd !== ledger.limitMicroUsd
+    || snapshot.requestCap !== ledger.requestCap
+    || !safeInteger(snapshot.reservedMicroUsd)
+    || !safeInteger(snapshot.requestCount)
+    || snapshot.reservedMicroUsd > snapshot.limitMicroUsd
+    || snapshot.requestCount > snapshot.requestCap
+    || !['open', 'overrun'].includes(snapshot.state)
+    || !Array.isArray(snapshot.attempts)
+    || snapshot.attempts.length !== snapshot.requestCount
+    || typeof snapshot.historySha256 !== 'string'
+    || !SHA256_HEX.test(snapshot.historySha256)) invalid();
+  const ids = new Set();
+  let total = 0;
+  let overrun = false;
+  for (const attempt of snapshot.attempts) {
+    if (!isPlainObject(attempt) || Object.keys(attempt).length !== EMBEDDING_ATTEMPT_KEYS.length
+      || EMBEDDING_ATTEMPT_KEYS.some((key) => !own(attempt, key))
+      || typeof attempt.attemptId !== 'string' || !UUID_PATTERN.test(attempt.attemptId)
+      || ids.has(attempt.attemptId)
+      || !EMBEDDING_SNAPSHOT_CHANNELS.has(attempt.channel)
+      || !safeInteger(attempt.reservedMicroUsd)
+      || (attempt.outcome !== null && !['succeeded', 'failed', 'unknown'].includes(attempt.outcome))
+      || (attempt.actualMicroUsd !== null && !safeInteger(attempt.actualMicroUsd))
+      || (attempt.outcome === null && attempt.actualMicroUsd !== null)
+      || attempt.reservedMicroUsd > MAX_SAFE_INTEGER - total) invalid();
+    ids.add(attempt.attemptId);
+    total += attempt.reservedMicroUsd;
+    if (attempt.actualMicroUsd !== null
+      && attempt.actualMicroUsd > attempt.reservedMicroUsd) overrun = true;
+  }
+  if (total !== snapshot.reservedMicroUsd || (snapshot.state === 'overrun') !== overrun) invalid();
+}
+
+// This assertion is not a grant: it verifies only the inherited 200M parent
+// and original prefix, never the authenticity of a supplied current suffix.
+export function assertChainedBenchmarkParentForEmbeddingSnapshot(options) {
+  let detached;
+  try { detached = detachEmbeddingLineage(options); }
+  catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    fail('invalid_options');
+  }
+  exactKeys(detached, ['ledger', 'policy', 'benchmarkExtension', 'snapshot']);
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(detached.ledger);
+  if (ledger.directory.length === 0 || ledger.directory.includes('\0')) fail('invalid_options');
+  ledger.directory = path.resolve(ledger.directory);
+  if (ledger.directory === path.parse(ledger.directory).root) fail('invalid_options');
+  validateEmbeddingLineageSnapshot(detached.snapshot, ledger);
+  if (detached.snapshot.state !== 'open'
+    || detached.snapshot.attempts.some((attempt) => attempt.outcome === null)) {
+    fail('extension_busy');
+  }
+  const extension = snapshotExtension(detached.benchmarkExtension);
+  if (ledger.limitMicroUsd !== 200_000_000
+    || extension.version !== BENCHMARK_BUDGET_CHAIN_VERSION) fail('invalid_capability');
+  verifyPairParent(extension, ledger, policy, detached.snapshot);
+}
+
+const MIXED_AUTHORIZATION_KEYS = Object.freeze(['ledger', 'policy', 'benchmarkExtension',
+  'authorizationId', 'executionId', 'checkpoint', 'manifest', 'roster', 'limits']);
+const MIXED_CAPABILITY_KEYS = Object.freeze(['version', 'authorizationId', 'executionId',
+  'ledger', 'policy', 'benchmarkExtension', 'checkpoint', 'manifest', 'roster', 'limits',
+  'rosterDigest', 'experimentDigest', 'schedule', 'methodProfile']);
+const MIXED_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u;
+
+function mixedCheckpoint(value, ledger) {
+  exactKeys(value, ['requestCount', 'reservedMicroUsd', 'historySha256'], 'invalid_capability');
+  if (!safeInteger(value.requestCount) || !safeInteger(value.reservedMicroUsd)
+    || value.requestCount > ledger.requestCap || value.reservedMicroUsd > ledger.limitMicroUsd
+    || typeof value.historySha256 !== 'string' || !SHA256_HEX.test(value.historySha256)) {
+    fail('invalid_capability');
+  }
+  return deepFreeze(value);
+}
+
+function mixedManifest(value) {
+  exactKeys(value, ['sourceProtocolSha256', 'contextProtocolSha256',
+    'answerProtocolSha256', 'scorerProtocolSha256', 'cairn', 'mem0'], 'invalid_capability');
+  for (const key of ['sourceProtocolSha256', 'contextProtocolSha256',
+    'answerProtocolSha256', 'scorerProtocolSha256']) {
+    if (typeof value[key] !== 'string' || !SHA256_HEX.test(value[key])) fail('invalid_capability');
+  }
+  exactKeys(value.cairn, ['runtimeArtifactSha256', 'adapterConfigurationSha256',
+    'qualificationInputProfile', 'captureSourcePolicy'], 'invalid_capability');
+  for (const key of ['runtimeArtifactSha256', 'adapterConfigurationSha256']) {
+    if (typeof value.cairn[key] !== 'string' || !SHA256_HEX.test(value.cairn[key])) {
+      fail('invalid_capability');
+    }
+  }
+  if (value.cairn.qualificationInputProfile !== ADAPTIVE_QUALIFICATION_INPUT_PROFILE
+    || value.cairn.captureSourcePolicy !== 'indexed-windows-v1') fail('invalid_capability');
+  exactKeys(value.mem0, ['version', 'sourceTreeSha256', 'dependencyLockSha256',
+    'configurationSha256', 'wireProfile'], 'invalid_capability');
+  if (value.mem0.version !== '2.2.0') fail('invalid_capability');
+  for (const key of ['sourceTreeSha256', 'dependencyLockSha256', 'configurationSha256']) {
+    if (typeof value.mem0[key] !== 'string' || !SHA256_HEX.test(value.mem0[key])) {
+      fail('invalid_capability');
+    }
+  }
+  if (canonical(value.mem0.wireProfile) !== canonical(mem0WireProfile())) fail('invalid_capability');
+  return deepFreeze(value);
+}
+
+function mixedRoster(value) {
+  denseArray(value, 1, 250);
+  const questions = new Set();
+  const scopes = new Set();
+  const result = value.map((entry) => {
+    exactKeys(entry, ['questionId', 'protocolDigest', 'armOrder', 'arms'], 'invalid_capability');
+    if (typeof entry.questionId !== 'string' || !SOURCE_PAIR_QUESTION.test(entry.questionId)
+      || questions.has(entry.questionId) || typeof entry.protocolDigest !== 'string'
+      || !SHA256_HEX.test(entry.protocolDigest)) fail('invalid_capability');
+    questions.add(entry.questionId);
+    denseArray(entry.armOrder, 2, 2);
+    if (new Set(entry.armOrder).size !== 2
+      || MIXED_SOURCE_PAIR_NAMES.some((name) => !entry.armOrder.includes(name))) fail('invalid_capability');
+    denseArray(entry.arms, 2, 2);
+    const arms = entry.arms.map((arm, index) => {
+      exactKeys(arm, ['name', 'scopeId'], 'invalid_capability');
+      const name = MIXED_SOURCE_PAIR_NAMES[index];
+      const scopeId = `lme-case-${pairHash('cairn.lme.mixed-source-pair.scope.v1',
+        [entry.questionId, name])}`;
+      if (arm.name !== name || arm.scopeId !== scopeId || scopes.has(scopeId)) fail('invalid_capability');
+      scopes.add(scopeId);
+      return { name, scopeId };
+    });
+    return { questionId: entry.questionId, protocolDigest: entry.protocolDigest,
+      armOrder: [...entry.armOrder], arms };
+  });
+  return deepFreeze(result);
+}
+
+function mixedLimits(value, ledger, checkpoint) {
+  exactKeys(value, ['phaseCaps', 'caseCaps', 'mem0TimeoutMs'], 'invalid_capability');
+  const leaf = (candidate) => {
+    exactKeys(candidate, ['requests', 'reservedMicroUsd'], 'invalid_capability');
+    if (!safeInteger(candidate.requests, 1) || !safeInteger(candidate.reservedMicroUsd, 1)) {
+      fail('invalid_capability');
+    }
+    return candidate;
+  };
+  exactKeys(value.phaseCaps, CASE_PHASES, 'invalid_capability');
+  for (const phase of CASE_PHASES) leaf(value.phaseCaps[phase]);
+  exactKeys(value.caseCaps, MIXED_SOURCE_PAIR_NAMES, 'invalid_capability');
+  for (const arm of MIXED_SOURCE_PAIR_NAMES) {
+    exactKeys(value.caseCaps[arm], CASE_PHASES, 'invalid_capability');
+    for (const phase of CASE_PHASES) {
+      const cap = leaf(value.caseCaps[arm][phase]);
+      if (cap.requests > value.phaseCaps[phase].requests
+        || cap.reservedMicroUsd > value.phaseCaps[phase].reservedMicroUsd) fail('invalid_capability');
+    }
+  }
+  const phases = CASE_PHASES.map((phase) => value.phaseCaps[phase]);
+  if (!safeInteger(value.mem0TimeoutMs, 1) || value.mem0TimeoutMs > 110_000
+    || BigInt(phases[0].requests) + BigInt(phases[1].requests)
+      > BigInt(ledger.requestCap - checkpoint.requestCount)
+    || BigInt(phases[0].reservedMicroUsd) + BigInt(phases[1].reservedMicroUsd)
+      > BigInt(ledger.limitMicroUsd - checkpoint.reservedMicroUsd)) fail('invalid_capability');
+  return deepFreeze(value);
+}
+
+function mixedSchedule(roster) {
+  const ordered = roster.flatMap((entry) => entry.armOrder.map((name) => ({
+    caseId: entry.arms.find((arm) => arm.name === name).scopeId,
+  })));
+  return deepFreeze([...ordered.map(({ caseId }) => ({ phase: 'generation', caseId })),
+    ...ordered.map(({ caseId }) => ({ phase: 'scoring', caseId }))]);
+}
+
+function mixedFilenames(directory, executionId) {
+  const stem = path.join(directory, `experiment-mixed-source-pair-${executionId}`);
+  return { binding: `${stem}.json`, claim: `${stem}.claim.json` };
+}
+
+function mixedConfiguration(value) {
+  exactKeys(value, MIXED_AUTHORIZATION_KEYS, 'invalid_capability');
+  const policy = validateConstructor({ ledger: value.ledger, policy: value.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(value.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  if (typeof value.authorizationId !== 'string' || !MIXED_ID.test(value.authorizationId)
+    || typeof value.executionId !== 'string' || !MIXED_ID.test(value.executionId)) {
+    fail('invalid_capability');
+  }
+  const benchmarkExtension = snapshotExtension(value.benchmarkExtension);
+  const checkpoint = mixedCheckpoint(value.checkpoint, ledger);
+  if (ledger.limitMicroUsd !== 200_000_000) fail('invalid_capability');
+  return { ledger, policy, benchmarkExtension, authorizationId: value.authorizationId,
+    executionId: value.executionId, checkpoint, manifest: mixedManifest(value.manifest),
+    roster: mixedRoster(value.roster), limits: mixedLimits(value.limits, ledger, checkpoint) };
+}
+
+function mixedCapabilityRecord(config) {
+  return { version: MIXED_SOURCE_PAIR_VERSION, authorizationId: config.authorizationId,
+    executionId: config.executionId, ledger: config.ledger, policy: config.policy,
+    benchmarkExtension: config.benchmarkExtension, checkpoint: config.checkpoint,
+    manifest: config.manifest, roster: config.roster, limits: config.limits,
+    rosterDigest: pairHash('cairn.lme.mixed-source-pair.roster.v1', config.roster),
+    experimentDigest: pairHash('cairn.lme.mixed-source-pair.experiment.v1', {
+      checkpoint: config.checkpoint, manifest: config.manifest, roster: config.roster,
+      limits: config.limits }), schedule: mixedSchedule(config.roster),
+    methodProfile: MIXED_SOURCE_PAIR_METHOD_PROFILE };
+}
+
+function verifyMixedCapability(capability, ledger, policy, benchmarkExtension) {
+  exactKeys(capability, MIXED_CAPABILITY_KEYS, 'invalid_capability');
+  const config = mixedConfiguration({ ledger, policy, benchmarkExtension,
+    authorizationId: capability.authorizationId, executionId: capability.executionId,
+    checkpoint: capability.checkpoint, manifest: capability.manifest,
+    roster: capability.roster, limits: capability.limits });
+  if (canonical(capability) !== canonical(mixedCapabilityRecord(config))) fail('invalid_capability');
+  readBinding(mixedFilenames(ledger.directory, capability.executionId).binding, capability);
+  return config;
+}
+
+function verifyMixedBaseline(capability, state) {
+  if (state.state !== 'open' || state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.historySha256 !== capability.checkpoint.historySha256
+    || state.attempts.some((attempt) => attempt.outcome === null)) fail('policy_mismatch');
+}
+
+function mixedParent(ledger, policy, benchmarkExtension, state) {
+  assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger, policy, benchmarkExtension,
+    snapshot: state });
+}
+
+export function inspectMixedSourcePairParent(options) {
+  const detached = detachEmbeddingLineage(options);
+  exactKeys(detached, ['ledger', 'policy', 'benchmarkExtension', 'checkpoint']);
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
+  const checkpoint = mixedCheckpoint(detached.checkpoint, ledger);
+  const state = inspectEmbeddingExperimentBudgetSnapshot(ledger);
+  mixedParent(ledger, policy, benchmarkExtension, state);
+  verifyMixedBaseline({ checkpoint }, state);
+  return deepFreeze(state);
+}
+
+export function authorizeMixedSourcePairCapability(options) {
+  const config = mixedConfiguration(detachEmbeddingLineage(options));
+  let callbackFailure;
+  let capability;
+  let handle;
+  let operationError;
+  try {
+    handle = openBoundEmbeddingExperimentBudget({ configuration: config.ledger, authorize(state) {
+      try {
+        mixedParent(config.ledger, config.policy, config.benchmarkExtension, state);
+        verifyMixedBaseline(config, state);
+        const files = mixedFilenames(config.ledger.directory, config.executionId);
+        assertPairClaimUnused(files.claim);
+        capability = mixedCapabilityRecord(config);
+        if (Buffer.byteLength(`${canonical(capability)}\n`) > 1_000_000) fail('invalid_capability');
+        let existing;
+        try { existing = lstatSync(files.binding); }
+        catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+        if (existing) syncAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        else writeAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        readBinding(files.binding, capability);
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+  } catch (error) { operationError = callbackFailure ?? error; }
+  try { handle?.close(); } catch (error) { operationError ??= error; }
+  if (operationError) throw operationError;
+  return deepFreeze(capability);
+}
+
+function writeMixedClaim(directory, capability) {
+  const { claim } = mixedFilenames(directory, capability.executionId);
+  let descriptor;
+  try {
+    descriptor = openSync(claim,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  } catch (error) {
+    if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+    fail('unsafe_policy_binding');
+  }
+  let claimError;
+  try {
+    writeFileSync(descriptor, `${canonical({ version: 'mixed-source-pair-claim-v1',
+      executionId: capability.executionId, capabilityDigest: historicalDigest([capability]) })}\n`,
+    { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } catch (error) { claimError = error; }
+  try { closeSync(descriptor); } catch (error) { claimError ??= error; }
+  if (claimError) fail('unsafe_policy_binding');
+  try {
+    const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+  } catch { fail('unsafe_policy_binding'); }
+}
+
+export function createMixedSourcePairExperimentRequestGuard(options) {
+  let detached;
+  let fetchImpl;
+  let installedDeadline = null;
+  try {
+    const keys = ['ledger', 'policy', 'benchmarkExtension', 'mixedSourcePairCapability',
+      'fetchImpl', ...(own(options, 'installedCoreDeadline') ? ['installedCoreDeadline'] : [])];
+    exactAdaptiveKeys(options, keys);
+    const descriptors = Object.getOwnPropertyDescriptors(options);
+    fetchImpl = descriptors.fetchImpl.value;
+    if (typeof fetchImpl !== 'function') fail('invalid_options');
+    if (own(descriptors, 'installedCoreDeadline')) {
+      installedDeadline = installedCoreDeadlinePredicateFor(descriptors.installedCoreDeadline.value);
+    }
+    detached = detachEmbeddingLineage(Object.fromEntries(keys.filter((key) =>
+      !['fetchImpl', 'installedCoreDeadline'].includes(key)).map((key) => [key, descriptors[key].value])));
+  } catch { fail('invalid_options'); }
+  if (typeof fetchImpl !== 'function') fail('invalid_options');
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy, fetchImpl });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
+  const capability = deepFreeze(detached.mixedSourcePairCapability);
+  verifyMixedCapability(capability, ledger, policy, benchmarkExtension);
+  assertPairClaimUnused(mixedFilenames(ledger.directory, capability.executionId).claim);
+  let bound;
+  let callbackFailure;
+  let baseline;
+  try {
+    bound = openBoundEmbeddingExperimentBudget({ configuration: ledger, authorize(state) {
+      try {
+        verifyMixedCapability(capability, ledger, policy, benchmarkExtension);
+        mixedParent(ledger, policy, benchmarkExtension, state);
+        verifyMixedBaseline(capability, state);
+        writeMixedClaim(ledger.directory, capability);
+        baseline = deepFreeze(historicalRows(state));
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+    return constructMixedSourcePairGuard({ ledger, policy, benchmarkExtension,
+      capability, fetchImpl, installedDeadline, bound, baseline });
+  } catch (error) {
+    try { bound?.close(); } catch { /* Preserve the first failure and consumed claim. */ }
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+}
+
+function pairConfiguration(options, authorization, adaptive = false) {
+  const keys = authorization
+    ? ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint',
+      'roster', ...(adaptive ? ['adaptiveContext'] : [])]
+    : ['ledger', 'policy', 'benchmarkExtension', adaptive
+      ? 'adaptiveQualifiedSourcePairCapability' : 'qualifiedSourcePairCapability', 'fetchImpl'];
+  let optionalTransport;
+  let detached;
+  let fetchImpl;
+  let transportDiagnostics = null;
+  let installedDeadline = null;
+  try {
+    optionalTransport = !authorization && own(options, 'transportDiagnostics');
+    const optionalInstalled = !authorization && own(options, 'installedCoreDeadline');
+    exactKeys(options, [...keys, ...(optionalTransport ? ['transportDiagnostics'] : []),
+      ...(optionalInstalled ? ['installedCoreDeadline'] : [])],
+      authorization ? 'invalid_capability' : 'invalid_options');
+    const raw = Object.fromEntries(keys.filter((key) => key !== 'fetchImpl')
+      .map((key) => [key, options[key]]));
+    if (adaptive && authorization) exactAdaptiveKeys(raw.adaptiveContext,
+      ['qualificationInputProfile', 'runtimeArtifactSha256',
+        'adapterConfigurationSha256', 'experimentDigest']);
+    if (adaptive && !authorization) {
+      const rawCapability = raw.adaptiveQualifiedSourcePairCapability;
+      exactAdaptiveKeys(rawCapability, ['version', 'authorizationId', 'executionId', 'ledger',
+        'policy', 'benchmarkExtension', 'checkpoint', 'historicalDigest', 'roster',
+        'rosterDigest', 'schedule', 'methodProfile', 'adaptiveContext']);
+      exactAdaptiveKeys(Object.getOwnPropertyDescriptor(rawCapability, 'adaptiveContext').value,
+        ['qualificationInputProfile', 'runtimeArtifactSha256',
+          'adapterConfigurationSha256', 'experimentDigest']);
+    }
+    fetchImpl = authorization ? null : options.fetchImpl;
+    transportDiagnostics = optionalTransport ? options.transportDiagnostics : null;
+    installedDeadline = optionalInstalled
+      ? installedCoreDeadlinePredicateFor(options.installedCoreDeadline) : null;
+    detached = structuredClone(raw);
+  } catch (error) {
+    if (adaptive && error instanceof ExperimentRequestGuardError
+      && error.code === 'invalid_capability') throw error;
+    fail(authorization ? 'invalid_capability' : 'invalid_options');
+  }
+  if (!authorization && (typeof fetchImpl !== 'function'
+    || (optionalTransport && transportDiagnostics !== 'bounded-v1'))) fail('invalid_options');
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: fetchImpl ?? (() => {}) });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
+  if (!authorization) return { ledger, policy, benchmarkExtension,
+    capability: adaptive ? detached.adaptiveQualifiedSourcePairCapability
+      : detached.qualifiedSourcePairCapability, fetchImpl, transportDiagnostics,
+    installedDeadline };
+  const { authorizationId, executionId, checkpoint } = detached;
+  if (typeof authorizationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(authorizationId)
+    || typeof executionId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(executionId)) {
+    fail('invalid_capability');
+  }
+  exactKeys(checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_capability');
+  if (!safeInteger(checkpoint.requestCount) || !safeInteger(checkpoint.reservedMicroUsd)
+    || checkpoint.requestCount > ledger.requestCap
+    || checkpoint.reservedMicroUsd > ledger.limitMicroUsd) fail('invalid_capability');
+  const roster = pairRoster(detached.roster);
+  return { ledger, policy, benchmarkExtension, authorizationId, executionId,
+    checkpoint: deepFreeze(checkpoint), roster, fetchImpl, transportDiagnostics,
+    ...(adaptive ? { adaptiveContext: adaptivePairContext(detached.adaptiveContext, roster) } : {}) };
+}
+
+function pairCapabilityRecord(configuration, digest, adaptive = false) {
+  return { version: adaptive ? ADAPTIVE_SOURCE_PAIR_VERSION : SOURCE_PAIR_VERSION,
+    authorizationId: configuration.authorizationId,
+    executionId: configuration.executionId, ledger: configuration.ledger,
+    policy: configuration.policy, benchmarkExtension: configuration.benchmarkExtension,
+    checkpoint: configuration.checkpoint, historicalDigest: digest,
+    roster: configuration.roster,
+    rosterDigest: pairHash('cairn.lme.source-pair.roster.v1', configuration.roster),
+    schedule: pairSchedule(configuration.roster),
+    methodProfile: adaptive ? ADAPTIVE_SOURCE_PAIR_METHOD_PROFILE : SOURCE_PAIR_METHOD_PROFILE,
+    ...(adaptive ? { adaptiveContext: configuration.adaptiveContext } : {}) };
+}
+
+function verifyPairCapability(capability, ledger, policy, benchmarkExtension, adaptive = false) {
+  exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
+    'benchmarkExtension', 'checkpoint', 'historicalDigest', 'roster', 'rosterDigest',
+    'schedule', 'methodProfile', ...(adaptive ? ['adaptiveContext'] : [])], 'invalid_capability');
+  const config = pairConfiguration({ ledger, policy, benchmarkExtension,
+    authorizationId: capability.authorizationId, executionId: capability.executionId,
+    checkpoint: capability.checkpoint, roster: capability.roster,
+    ...(adaptive ? { adaptiveContext: capability.adaptiveContext } : {}) }, true, adaptive);
+  if (capability.version !== (adaptive ? ADAPTIVE_SOURCE_PAIR_VERSION : SOURCE_PAIR_VERSION)
+    || typeof capability.historicalDigest !== 'string'
+    || !SHA256_HEX.test(capability.historicalDigest)
+    || canonical(capability) !== canonical(pairCapabilityRecord(config, capability.historicalDigest, adaptive))) {
+    fail('invalid_capability');
+  }
+  readBinding(pairFilenames(ledger.directory, capability.executionId, adaptive).binding, capability);
+  return config;
+}
+
+function verifyPairBaseline(capability, state) {
+  if (state.state !== 'open' || state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.attempts.some((attempt) => attempt.outcome === null)
+    || historicalDigest(historicalRows(state)) !== capability.historicalDigest) fail('policy_mismatch');
+}
+
+export function authorizeQualifiedSourcePairCapability(options) {
+  return authorizePairCapability(options, false);
+}
+
+export function authorizeAdaptiveQualifiedSourcePairCapability(options) {
+  return authorizePairCapability(options, true);
+}
+
+function authorizePairCapability(options, adaptive) {
+  const config = pairConfiguration(options, true, adaptive);
+  let callbackFailure;
+  let capability;
+  let handle;
+  let operationError;
+  try {
+    handle = openBoundExperimentBudget({ configuration: config.ledger, authorize(state) {
+      try {
+        verifyPairParent(config.benchmarkExtension, config.ledger, config.policy, state);
+        if (state.requestCount !== config.checkpoint.requestCount
+          || state.reservedMicroUsd !== config.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+        const files = pairFilenames(config.ledger.directory, config.executionId, adaptive);
+        assertPairClaimUnused(files.claim);
+        capability = pairCapabilityRecord(config, historicalDigest(historicalRows(state)), adaptive);
+        if (Buffer.byteLength(`${canonical(capability)}\n`) > 1_000_000) fail('invalid_capability');
+        let existing;
+        try { existing = lstatSync(files.binding); }
+        catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+        if (existing) syncAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        else writeAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        readBinding(files.binding, capability);
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+  } catch (error) { operationError = callbackFailure ?? error; }
+  try { handle?.close(); } catch (error) { operationError ??= error; }
+  if (operationError) throw operationError;
+  return deepFreeze(capability);
+}
+
+function assertPairClaimUnused(filename) {
+  try { lstatSync(filename); fail('capability_consumed'); }
+  catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    if (error?.code !== 'ENOENT') fail('capability_consumed');
+  }
+}
+
+function writePairClaim(directory, capability, adaptive = false) {
+  const { claim } = pairFilenames(directory, capability.executionId, adaptive);
+  let descriptor;
+  try {
+    descriptor = openSync(claim,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  } catch (error) {
+    if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+    fail('unsafe_policy_binding');
+  }
+  let error;
+  try {
+    writeFileSync(descriptor, `${canonical({ version: adaptive
+      ? 'qualified-source-pair-adaptive-claim-v1' : 'qualified-source-pair-claim-v1',
+      executionId: capability.executionId, capabilityDigest: historicalDigest([capability]) })}\n`,
+    { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } catch (caught) { error = caught; }
+  try { closeSync(descriptor); } catch (caught) { error ??= caught; }
+  if (error) throw error;
+  const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+  try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+}
+
+function validateCaseSchedule(value) {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 1_000 || value.length % 2 !== 0) {
+    fail('invalid_capability');
+  }
+  const schedule = value.map((entry) => {
+    exactKeys(entry, ['phase', 'caseId'], 'invalid_capability');
+    if (!CASE_PHASES.includes(entry.phase) || typeof entry.caseId !== 'string'
+      || !CASE_ID_PATTERN.test(entry.caseId)) fail('invalid_capability');
+    return { phase: entry.phase, caseId: entry.caseId };
+  });
+  const half = schedule.length / 2;
+  const ids = new Set();
+  for (let index = 0; index < half; index += 1) {
+    const generation = schedule[index];
+    const scoring = schedule[index + half];
+    if (generation.phase !== 'generation' || scoring.phase !== 'scoring'
+      || generation.caseId !== scoring.caseId || ids.has(generation.caseId)) fail('invalid_capability');
+    ids.add(generation.caseId);
+  }
+  return deepFreeze(schedule);
+}
+
+function snapshotCaseAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_capability'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'benchmarkExtension', 'authorizationId',
+    'executionId', 'checkpoint', 'schedule'], 'invalid_capability');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy, fetchImpl: () => {} });
+  const ledger = structuredClone(snapshot.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  if (typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || typeof snapshot.executionId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.executionId)) fail('invalid_capability');
+  exactKeys(snapshot.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_capability');
+  if (!safeInteger(snapshot.checkpoint.requestCount)
+    || !safeInteger(snapshot.checkpoint.reservedMicroUsd)
+    || snapshot.checkpoint.requestCount > ledger.requestCap
+    || snapshot.checkpoint.reservedMicroUsd > ledger.limitMicroUsd) fail('invalid_capability');
+  const benchmarkExtension = snapshotExtension(snapshot.benchmarkExtension);
+  const schedule = validateCaseSchedule(snapshot.schedule);
+  return { ledger, policy, benchmarkExtension, authorizationId: snapshot.authorizationId,
+    executionId: snapshot.executionId, checkpoint: deepFreeze(snapshot.checkpoint), schedule };
+}
+
+function caseCapabilityRecord(configuration, digest) {
+  return {
+    version: CASE_DEADLINE_VERSION,
+    authorizationId: configuration.authorizationId,
+    executionId: configuration.executionId,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    benchmarkExtension: configuration.benchmarkExtension,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+    schedule: configuration.schedule,
+  };
+}
+
+function verifyCaseCapability(capability, ledger, policy, benchmarkExtension) {
+  exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
+    'benchmarkExtension', 'checkpoint', 'historicalDigest', 'schedule'], 'invalid_capability');
+  const configuration = snapshotCaseAuthorization({ ledger, policy, benchmarkExtension,
+    authorizationId: capability.authorizationId, executionId: capability.executionId,
+    checkpoint: capability.checkpoint, schedule: capability.schedule });
+  if (capability.version !== CASE_DEADLINE_VERSION
+    || typeof capability.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(capability.historicalDigest)
+    || canonical(capability) !== canonical(caseCapabilityRecord(configuration, capability.historicalDigest))) {
+    fail('invalid_capability');
+  }
+  verifyBenchmarkExtension(configuration.benchmarkExtension, configuration.ledger, configuration.policy);
+  readBinding(caseDeadlineFilenames(configuration.ledger.directory, capability.executionId).binding, capability);
+  return configuration;
+}
+
+function verifyPinnedBaseline(capability, state) {
+  if (state.state !== 'open'
+    || state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.attempts.length !== capability.checkpoint.requestCount
+    || state.attempts.some((attempt) => attempt.outcome === null)
+    || historicalDigest(historicalRows(state)) !== capability.historicalDigest) fail('policy_mismatch');
+}
+
+function normalizeCaseClaimError(error) {
+  if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) return error;
+  const primaryCode = Number.isInteger(error?.errcode) ? error.errcode & 0xff : null;
+  return new ExperimentRequestGuardError(primaryCode === 5 || primaryCode === 6
+    ? 'capability_busy' : 'unsafe_policy_binding');
+}
+
+// Provisioning pins the whole settled historical prefix. It does not consume the
+// one-shot execution claim and therefore is safe for a future dry-run verifier.
+export function authorizeCaseDeadlineCapability(options) {
+  const configuration = snapshotCaseAuthorization(options);
+  const ledger = reopenExperimentBudget(configuration.ledger);
+  let lock;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    verifyBenchmarkExtension(configuration.benchmarkExtension, configuration.ledger, configuration.policy);
+    const state = ledger.getState();
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+      fail('capability_busy');
+    }
+    if (state.requestCount !== configuration.checkpoint.requestCount
+      || state.reservedMicroUsd !== configuration.checkpoint.reservedMicroUsd) fail('policy_mismatch');
+    const capability = caseCapabilityRecord(configuration, historicalDigest(historicalRows(state)));
+    const filename = caseDeadlineFilenames(configuration.ledger.directory, configuration.executionId).binding;
+    assertCaseClaimUnused(configuration.ledger.directory, configuration.executionId);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) {
+      const stored = readBinding(filename);
+      verifyCaseCapability(stored, configuration.ledger, configuration.policy,
+        configuration.benchmarkExtension);
+      if (canonical(stored) !== canonical(capability)) fail('policy_mismatch');
+      verifyPinnedBaseline(stored, state);
+      return deepFreeze(stored);
+    }
+    writeAuthorizationBinding(configuration.ledger.directory, filename, capability);
+    verifyCaseCapability(capability, configuration.ledger, configuration.policy,
+      configuration.benchmarkExtension);
+    verifyPinnedBaseline(capability, state);
+    return deepFreeze(capability);
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) throw error;
+    fail('unsafe_policy_binding');
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* No ledger writes were made. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
+function consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, benchmarkExtension) {
+  let ledger;
+  let lock;
+  let result;
+  let operationError;
+  try {
+    ledger = reopenExperimentBudget(ledgerConfiguration);
+    lock = new DatabaseSync(path.join(ledgerConfiguration.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    verifyCaseCapability(capability, ledgerConfiguration, policy, benchmarkExtension);
+    const state = ledger.getState();
+    verifyPinnedBaseline(capability, state);
+    const { claim } = caseDeadlineFilenames(ledgerConfiguration.directory, capability.executionId);
+    let descriptor;
+    try {
+      descriptor = openSync(claim,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    } catch (error) {
+      if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+      fail('unsafe_policy_binding');
+    }
+    let claimError;
+    try {
+      const claimRecord = { version: 'case-deadline-claim-v1', executionId: capability.executionId,
+        capabilityDigest: historicalDigest([capability]) };
+      writeFileSync(descriptor, `${canonical(claimRecord)}\n`, { encoding: 'utf8' });
+      fsyncSync(descriptor);
+    } catch (error) { claimError = error; }
+    try { closeSync(descriptor); } catch (error) { claimError ??= error; }
+    // Never unlink a partial claim: its existence is irrevocable consumption.
+    if (claimError) throw claimError;
+    let directoryDescriptor;
+    let directoryError;
+    try {
+      directoryDescriptor = openSync(ledgerConfiguration.directory, constants.O_RDONLY);
+      fsyncSync(directoryDescriptor);
+    } catch (error) { directoryError = error; }
+    if (directoryDescriptor !== undefined) {
+      try { closeSync(directoryDescriptor); } catch (error) { directoryError ??= error; }
+    }
+    if (directoryError) throw directoryError;
+    result = deepFreeze(historicalRows(state));
+  } catch (error) {
+    operationError = normalizeCaseClaimError(error);
+  }
+  let cleanupError;
+  if (lock) {
+    try { lock.exec('ROLLBACK'); } catch (error) { cleanupError = normalizeCaseClaimError(error); }
+    try { lock.close(); } catch (error) { cleanupError ??= normalizeCaseClaimError(error); }
+  }
+  if (ledger) {
+    try { ledger.close(); } catch (error) { cleanupError ??= normalizeCaseClaimError(error); }
+  }
+  if (operationError) throw operationError;
+  if (cleanupError) throw cleanupError;
+  return result;
+}
+
+export function createBenchmarkExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'fetchImpl']);
+  const benchmark = snapshotExtension(options.benchmarkExtension);
+  return constructBenchmarkGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    benchmark);
+}
+
+export function createCaseDeadlineExperimentRequestGuard(options) {
+  const required = ['ledger', 'policy', 'benchmarkExtension', 'caseDeadlineCapability', 'fetchImpl'];
+  if (!isPlainObject(options)) fail('invalid_options');
+  const transportPresent = own(options, 'transportDiagnostics');
+  exactKeys(options, transportPresent ? [...required, 'transportDiagnostics'] : required);
+  // Read each caller-owned field once, then use only detached snapshots. In
+  // particular no accessor can swap the ledger or capability after claiming.
+  const caller = { ledger: options.ledger, policy: options.policy,
+    benchmarkExtension: options.benchmarkExtension, caseDeadlineCapability: options.caseDeadlineCapability };
+  const fetchImpl = options.fetchImpl;
+  const transportDiagnostics = transportPresent ? options.transportDiagnostics : null;
+  if (transportPresent && transportDiagnostics !== 'bounded-v1') fail('invalid_options');
+  if (typeof fetchImpl !== 'function') fail('invalid_options');
+  let detached;
+  try { detached = structuredClone(caller); } catch { fail('invalid_options'); }
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy, fetchImpl });
+  const benchmark = snapshotExtension(detached.benchmarkExtension);
+  const capability = snapshotExtension(detached.caseDeadlineCapability);
+  const ledgerConfiguration = structuredClone(detached.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  verifyCaseCapability(capability, ledgerConfiguration, policy, benchmark);
+  const baseline = consumeCaseDeadlineClaim(capability, ledgerConfiguration, policy, benchmark);
+  return constructBenchmarkGuard({ ledger: ledgerConfiguration, policy, fetchImpl }, benchmark,
+    capability, baseline, transportDiagnostics);
+}
+
+export function createQualifiedSourcePairExperimentRequestGuard(options) {
+  return createPairExperimentRequestGuard(options, false);
+}
+
+export function createAdaptiveQualifiedSourcePairExperimentRequestGuard(options) {
+  return createPairExperimentRequestGuard(options, true);
+}
+
+function createPairExperimentRequestGuard(options, adaptive) {
+  const configuration = pairConfiguration(options, false, adaptive);
+  const { ledger, policy, benchmarkExtension, fetchImpl, transportDiagnostics,
+    installedDeadline } = configuration;
+  const capability = snapshotExtension(configuration.capability);
+  verifyPairCapability(capability, ledger, policy, benchmarkExtension, adaptive);
+  let callbackFailure;
+  let bound;
+  let baseline;
+  try {
+    bound = openBoundExperimentBudget({ configuration: ledger, authorize(state) {
+      try {
+        verifyPairCapability(capability, ledger, policy, benchmarkExtension, adaptive);
+        verifyPairParent(benchmarkExtension, ledger, policy, state);
+        verifyPairBaseline(capability, state);
+        writePairClaim(ledger.directory, capability, adaptive);
+        baseline = deepFreeze(historicalRows(state));
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+    return constructBenchmarkGuard({ ledger, policy, fetchImpl }, benchmarkExtension,
+      capability, baseline, transportDiagnostics, { bound, pair: true, adaptive, installedDeadline });
+  } catch (error) {
+    try { bound?.close(); } catch { /* Preserve first failure; claim remains consumed. */ }
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+}
+
+function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null,
+  transportDiagnostics = null, pairProfile = null) {
+  const policy = validateConstructor(options);
+  const ledgerConfiguration = structuredClone(options.ledger);
+  let ledger;
+  try { ledger = pairProfile?.bound ?? reopenExperimentBudget(ledgerConfiguration); }
+  catch (error) {
+    if (error instanceof ExperimentBudgetError) throw error;
+    fail('ledger_failed');
+  }
+  const inFlightIds = new Set();
+  const records = [];
+  let closed = false;
+  let inFlight = 0;
+  let halted = false;
+  const scoped = caseCapability !== null;
+  const transportCollector = transportDiagnostics === 'bounded-v1'
+    ? createTransportDiagnosticsCollector() : null;
+  const observeTransport = (operation) => {
+    try { return operation(); } catch { return null; }
+  };
+  const scopeStorage = scoped ? new AsyncLocalStorage() : null;
+  const sealedCases = new Set();
+  const timeoutRecords = [];
+  let scheduleIndex = 0;
+  let activeScope = null;
+  let lastScopeSnapshot = null;
+  // Any unsettled ledger attempt that is not currently in flight on this guard halts new paid work,
+  // including this guard's own attempt whose settlement failed to persist.
+  const unsettled = (state) => state.attempts.some((attempt) =>
+    attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
+  const verify = () => {
+    if (pairProfile?.pair) {
+      verifyPairCapability(caseCapability, ledgerConfiguration, policy, benchmark,
+        pairProfile.adaptive);
+    } else {
+      verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
+      if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
+    }
+    const state = ledger.getState();
+    if (pairProfile?.pair) verifyPairParent(benchmark, ledgerConfiguration, policy, state);
+    else verifyBenchmarkCheckpoint(benchmark, state);
+    if (scoped) {
+      const expectedAttempts = [...pinnedBaseline, ...records.map((record) => ({
+        attemptId: record.attemptId,
+        channel: record.ledgerChannel,
+        reservedMicroUsd: record.reservedMicroUsd,
+        outcome: record.outcome,
+        actualMicroUsd: record.actualMicroUsd,
+      }))];
+      const reservedMicroUsd = expectedAttempts.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0);
+      const expectedState = expectedAttempts.some((attempt) => attempt.actualMicroUsd !== null
+        && attempt.actualMicroUsd > attempt.reservedMicroUsd) ? 'overrun' : 'open';
+      if (canonical(historicalRows(state)) !== canonical(expectedAttempts)
+        || state.requestCount !== expectedAttempts.length
+        || state.reservedMicroUsd !== reservedMicroUsd
+        || state.state !== expectedState) fail('policy_mismatch');
+    }
+    return state;
+  };
+  const guardedVerify = () => {
+    try { return verify(); }
+    catch (error) { if (scoped) halted = true; throw error; }
+  };
+  try { if (unsettled(scoped ? guardedVerify() : verify())) halted = true; }
+  catch (error) { ledger.close(); throw error; }
+  const stages = benchmark.stages;
+  const pairArms = pairProfile?.pair ? new Map(caseCapability.roster.flatMap((entry) =>
+    entry.arms.map((arm) => [arm.scopeId, arm.name]))) : null;
+  const fetchImpl = options.fetchImpl;
+
+  const scopeSnapshot = (scope, status = scope.status) => deepFreeze({
+    version: 'case-deadline-scope-v1', phase: scope.phase, caseId: scope.caseId, status,
+  });
+  const requireScope = (route) => {
+    if (!scoped) return null;
+    const scope = scopeStorage.getStore();
+    if (!scope || scope !== activeScope || !scope.open) fail('case_scope_required');
+    if ((scope.phase === 'generation' && route === 'judge')
+      || (scope.phase === 'scoring' && route !== 'judge')) fail('case_scope_violation');
+    if (sealedCases.has(scope.caseId)) fail('case_timeout_halted');
+    if (inFlight !== 0) fail('guard_busy');
+    return scope;
+  };
+  const sealDeadline = (scope, termination) => {
+    if (!scoped || sealedCases.has(scope.caseId)) return;
+    sealedCases.add(scope.caseId);
+    scope.status = 'timed_out';
+    const timeout = deepFreeze({ version: 'case-deadline-timeout-v1', phase: scope.phase,
+      caseId: scope.caseId, termination });
+    timeoutRecords.push(timeout);
+    lastScopeSnapshot = scopeSnapshot(scope);
+  };
+
+  const send = async (stage, kind, channel, snapshot, requestedOutputTokens, caseScope = null,
+    diagnosticMethod = 'unknown') => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    if (scoped) requireScope(stage === 'judge' ? 'judge' : stage === 'answer' ? 'answer' : 'cairn');
+    // Snapshotting caller-owned request/header objects can execute accessors.
+    // Recheck the capability and the shared ledger after those callbacks, before reserving.
+    if (unsettled(scoped ? guardedVerify() : verify())) { halted = true; fail('paid_work_halted'); }
+    const attemptId = randomUUID();
+    const startedAt = Date.now();
+    try { ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd }); }
+    catch (error) { if (scoped) halted = true; throw error; }
+    inFlightIds.add(attemptId);
+    const record = { attemptId, stage, ledgerChannel: CHANNELS[kind], model: channel.model,
+      endpoint: channel.endpoint, reservedMicroUsd: channel.reservedMicroUsd,
+      rates: { inputPrice: { ...channel.inputPrice }, outputPrice: { ...channel.outputPrice } },
+      outcome: null, actualMicroUsd: null, usage: null, startedAt, settledAt: null, elapsedMs: null,
+      ...(scoped ? { phase: caseScope.phase, caseId: caseScope.caseId, termination: null } : {}) };
+    records.push(record);
+    inFlight += 1;
+    const route = kind === 'cairnCount' ? 'count' : kind === 'cairnGeneration'
+      ? 'generation' : stage;
+    const transportAttempt = transportCollector
+      ? observeTransport(() => transportCollector.start(route, diagnosticMethod)) : null;
+    const markTransport = (method, ...args) => {
+      if (transportAttempt) observeTransport(() => transportAttempt[method](...args));
+    };
+    const controller = new AbortController();
+    let terminationCause = null;
+    const externalAbort = scoped ? () => {
+      if (terminationCause === null) terminationCause = (isCoreModelDeadlineSignal(snapshot.signal)
+        || pairProfile?.pair && pairProfile.installedDeadline?.(snapshot.signal))
+        ? 'core_deadline' : 'external_abort';
+      controller.abort('request_aborted');
+    } : () => controller.abort('request_aborted');
+    snapshot.signal.addEventListener('abort', externalAbort, { once: true });
+    if (snapshot.signal.aborted) externalAbort();
+    const timer = scoped ? setTimeout(() => {
+      if (terminationCause === null) terminationCause = 'transport_deadline';
+      controller.abort('request_timeout');
+    }, channel.timeoutMs) : setTimeout(() => controller.abort('request_timeout'), channel.timeoutMs);
+    let settled = false;
+    const settle = (outcome, actualMicroUsd, usage = null, diagnostic = null,
+      termination = 'other_failure', isolatedDeadline = false, observedTermination = termination) => {
+      if (settled) return;
+      settled = true;
+      if ((outcome === 'unknown' && !isolatedDeadline)
+        || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
+        halted = true;
+      }
+      // Observed token counts survive a failed ledger write so an operator can settle by hand;
+      // outcome and cost stay null until the ledger accepted them.
+      record.usage = usage;
+      if (scoped) record.termination = termination;
+      if (diagnostic !== null) record.countDiagnostic = diagnostic;
+      let accountingAccepted = false;
+      try {
+        ledger.recordOutcome(actualMicroUsd === null
+          ? { attemptId, outcome }
+          : { attemptId, outcome, actualMicroUsd });
+        accountingAccepted = true;
+      } catch (error) {
+        // The attempt stays unsettled in the ledger; no later paid work may proceed.
+        halted = true;
+        throw error;
+      } finally {
+        markTransport('settle', observedTermination, accountingAccepted ? outcome : null);
+      }
+      record.outcome = outcome;
+      record.actualMicroUsd = actualMicroUsd;
+      record.settledAt = Date.now();
+      record.elapsedMs = record.settledAt - startedAt;
+      deepFreeze(record);
+    };
+    try {
+      let response;
+      try {
+        let pending = Promise.resolve().then(() => {
+          if (controller.signal.aborted) fail(abortError(controller.signal));
+          markTransport('fetchEntered');
+          return fetchImpl(channel.endpoint, {
+            method: 'POST',
+            redirect: 'error',
+            signal: controller.signal,
+            headers: snapshot.headers,
+            body: snapshot.bodyText,
+          });
+        });
+        if (scoped) pending = pending.catch((error) => {
+          if (terminationCause === null) terminationCause = 'transport_failure';
+          throw error;
+        });
+        pending.then((late) => {
+          if (controller.signal.aborted) {
+            try { Promise.resolve(late?.body?.cancel()).catch(() => {}); } catch { /* Late cleanup only. */ }
+          }
+        }, () => {});
+        response = await raceAbort(pending, controller.signal);
+      } catch (error) {
+        const deadline = scoped && ['core_deadline', 'transport_deadline'].includes(terminationCause);
+        const observed = deadline ? terminationCause
+          : terminationCause === 'external_abort' ? 'external_abort'
+            : terminationCause === 'transport_failure' ? 'transport_failure' : 'other_failure';
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline, observed);
+        if (deadline) {
+          sealDeadline(caseScope, terminationCause);
+          fail('case_deadline_exceeded');
+        }
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('transport_failed');
+      }
+      if (!(response instanceof Response)) {
+        settle('unknown', null, null, null, 'other_failure', false, 'invalid_response');
+        fail('transport_failed');
+      }
+      markTransport('responseAvailable');
+      let bytes;
+      try {
+        bytes = await readBounded(response, channel.maxResponseBytes, controller.signal, scoped ? () => {
+          if (terminationCause === null) terminationCause = 'body_failure';
+        } : null);
+        markTransport('bodyComplete');
+      }
+      catch (error) {
+        const deadline = scoped && ['core_deadline', 'transport_deadline'].includes(terminationCause);
+        const observed = deadline ? terminationCause
+          : terminationCause === 'external_abort' ? 'external_abort'
+            : terminationCause === 'body_failure' ? 'body_failure' : 'other_failure';
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline, observed);
+        if (deadline) {
+          sealDeadline(caseScope, terminationCause);
+          fail('case_deadline_exceeded');
+        }
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('transport_failed');
+      }
+      if (response.redirected || response.status < 200 || response.status >= 300) {
+        settle('failed', null, null, null, 'http_failure');
+        if (scoped) halted = true;
+        fail('http_failed');
+      }
+      let json;
+      let usage;
+      try {
+        json = parseResponseJson(bytes, kind === 'cairnCount');
+        usage = parseUsage(json, kind, channel, requestedOutputTokens, true);
+      } catch (error) {
+        settle('unknown', null, null, kind === 'cairnCount'
+          ? deepFreeze({ reason: 'invalid_count_response', configuredInputLimit: channel.maxInputTokens })
+          : null, 'invalid_response');
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('invalid_response');
+      }
+      if (kind === 'cairnCount' && !usage.withinBounds) {
+        settle('unknown', null, null, usage.countDiagnostic, 'invalid_response');
+        fail('invalid_response');
+      }
+      settle('succeeded', usage.actualMicroUsd, usageRecord(kind, json), usage.countDiagnostic ?? null, 'response');
+      if (!usage.withinBounds
+        || (usage.actualMicroUsd !== null && usage.actualMicroUsd > channel.reservedMicroUsd)) {
+        if (scoped) halted = true;
+        fail('usage_bound_exceeded');
+      }
+      try {
+        return new Response(bytes, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      } catch { fail('invalid_response'); }
+    } finally {
+      clearTimeout(timer);
+      snapshot.signal.removeEventListener('abort', externalAbort);
+      inFlightIds.delete(attemptId);
+      inFlight -= 1;
+      markTransport('finalize');
+    }
+  };
+
+  const nonFatalScopeErrors = new Set(['case_deadline_exceeded', 'case_timeout_halted',
+    'case_scope_required', 'case_scope_violation', 'case_scope_busy', 'case_schedule_mismatch',
+    'guard_busy', 'paid_work_halted', 'guard_closed']);
+  const fatalizeRouteError = (error) => {
+    if (scoped && !nonFatalScopeErrors.has(error?.code)) halted = true;
+    throw error;
+  };
+  const scopedCairnFetch = (kind) => async (url, requestOptions) => {
+    try {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      const caseScope = requireScope('cairn');
+      guardedVerify();
+      const channel = policy[kind];
+      const snapshot = requestSnapshot(url, requestOptions, channel);
+      validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
+        pairProfile?.pair ? CANDIDATE_QUALIFICATION_KIND.method : null, false,
+        pairProfile?.pair ? pairArms.get(caseScope.caseId) : null, pairProfile?.adaptive ?? false);
+      const method = kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
+        cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank',
+        cairn_qualifyCandidates: 'qualifyCandidates' })[
+        snapshot.body.text.format.name] ?? 'unknown';
+      return await send(CHANNELS[kind], kind, channel, snapshot,
+        kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope, method);
+    } catch (error) { fatalizeRouteError(error); }
+  };
+  const scopedStageFetch = (name) => async (url, requestOptions) => {
+    try {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      const caseScope = requireScope(name);
+      guardedVerify();
+      const stage = stages[name];
+      const snapshot = requestSnapshot(url, requestOptions, stage);
+      validateStageBody(snapshot.body, stage);
+      return await send(name, 'hostCompletion', stage, snapshot, snapshot.body.max_tokens, caseScope);
+    } catch (error) { fatalizeRouteError(error); }
+  };
+  const legacyCairnFetch = (kind) => async (url, requestOptions) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    verify();
+    const channel = policy[kind];
+    const snapshot = requestSnapshot(url, requestOptions, channel);
+    validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
+    return send(CHANNELS[kind], kind, channel, snapshot,
+      kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0);
+  };
+  const legacyStageFetch = (name) => async (url, requestOptions) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    verify();
+    const stage = stages[name];
+    const snapshot = requestSnapshot(url, requestOptions, stage);
+    validateStageBody(snapshot.body, stage);
+    return send(name, 'hostCompletion', stage, snapshot, snapshot.body.max_tokens);
+  };
+  const cairnFetch = scoped ? scopedCairnFetch : legacyCairnFetch;
+  const stageFetch = scoped ? scopedStageFetch : legacyStageFetch;
+
+  const caseMethods = scoped ? {
+    async withCaseScope(identity, operation) {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      let requested;
+      try { requested = structuredClone(identity); } catch { fail('case_schedule_mismatch'); }
+      exactKeys(requested, ['phase', 'caseId'], 'case_schedule_mismatch');
+      if (typeof operation !== 'function') fail('invalid_options');
+      if (activeScope !== null) fail('case_scope_busy');
+      const expected = caseCapability.schedule[scheduleIndex];
+      if (!expected || canonical(requested) !== canonical(expected)) fail('case_schedule_mismatch');
+      guardedVerify();
+      const scope = { phase: expected.phase, caseId: expected.caseId, open: true,
+        status: sealedCases.has(expected.caseId) ? 'blocked' : 'active' };
+      activeScope = scope;
+      if (transportCollector) {
+        try { transportCollector.openScope(scheduleIndex, expected.phase); }
+        catch { transportCollector.invalidate(); }
+      }
+      lastScopeSnapshot = scopeSnapshot(scope);
+      const handle = Object.freeze({ snapshot: () => scopeSnapshot(scope) });
+      let value;
+      let operationError;
+      let operationFailed = false;
+      try { value = await scopeStorage.run(scope, () => operation(handle)); }
+      catch (error) { operationError = error; operationFailed = true; halted = true; }
+      // Fence descendants before any boundary check can authorize the next entry.
+      scope.open = false;
+      if (transportCollector) observeTransport(() => transportCollector.closeScope());
+      activeScope = null;
+      if (scope.status === 'active') scope.status = 'completed';
+      lastScopeSnapshot = scopeSnapshot(scope);
+      if (operationFailed) throw operationError;
+      if (inFlight !== 0 || records.some((record) => record.outcome === null)) {
+        halted = true;
+        fail('guard_busy');
+      }
+      guardedVerify();
+      scheduleIndex += 1;
+      return value;
+    },
+    caseTimeouts() {
+      return Object.freeze(timeoutRecords.map((record) => deepFreeze(structuredClone(record))));
+    },
+    caseScopeSnapshot() {
+      return lastScopeSnapshot === null ? null : deepFreeze(structuredClone(lastScopeSnapshot));
+    },
+    ...(pairProfile?.pair ? { qualifiedSourcePairCapability: caseCapability }
+      : { caseDeadlineCapability: caseCapability }),
+    ...(transportCollector ? { transportDiagnostics() {
+      return observeTransport(() => transportCollector.snapshot());
+    } } : {}),
+  } : {};
+
+  return Object.freeze({
+    cairnFetch(url, requestOptions) {
+      const text = url instanceof URL ? url.href : url;
+      if (text === policy.cairnCount.endpoint) return cairnFetch('cairnCount')(url, requestOptions);
+      if (text === policy.cairnGeneration.endpoint) return cairnFetch('cairnGeneration')(url, requestOptions);
+      fail('invalid_request');
+    },
+    answerFetch: stageFetch('answer'),
+    judgeFetch: stageFetch('judge'),
+    async hostFetch() { fail('unsupported_request'); },
+    getState() {
+      if (closed) fail('guard_closed');
+      return ledger.getState();
+    },
+    attempts() {
+      return Object.freeze(records.map((record) => deepFreeze(structuredClone(record))));
+    },
+    isHalted() { return halted; },
+    close() {
+      if (closed) return;
+      if (inFlight !== 0 || activeScope !== null) fail('guard_busy');
+      closed = true;
+      if (transportCollector) observeTransport(() => transportCollector.closeScope());
+      ledger.close();
+    },
+    policy,
+    stages,
+    ...caseMethods,
+  });
+}
+
+function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, benchmarkExtension,
+  capability, fetchImpl, installedDeadline, bound: ledger, baseline }) {
+  const storage = new AsyncLocalStorage();
+  const inFlightIds = new Set();
+  const records = [];
+  const outcomes = [];
+  const scopeUsage = [];
+  const phaseUsed = { generation: { requests: 0, reservedMicroUsd: 0 },
+    scoring: { requests: 0, reservedMicroUsd: 0 } };
+  const sealedGeneration = new Set();
+  const armById = new Map(capability.roster.flatMap((entry) => entry.arms.map((arm) =>
+    [arm.scopeId, arm.name])));
+  let scheduleIndex = 0;
+  let activeScope = null;
+  let lastScopeSnapshot = null;
+  let inFlight = 0;
+  let halted = false;
+  let closed = false;
+  const detached = (value) => deepFreeze(structuredClone(value));
+  const leaf = () => ({ requests: 0, reservedMicroUsd: 0 });
+  const scopeSnapshot = (scope, status = scope.status, reason = scope.reason) =>
+    deepFreeze({ version: 'mixed-source-pair-scope-v1', ordinal: scope.ordinal,
+      phase: scope.phase, arm: scope.arm, status, reason });
+  const sealScope = (scope, reason) => {
+    if (scope.status !== 'active') return;
+    scope.status = 'failed';
+    scope.reason = reason;
+    scope.controller.abort('case_sealed');
+    lastScopeSnapshot = scopeSnapshot(scope);
+  };
+  const verify = () => {
+    verifyMixedCapability(capability, ledgerConfiguration, policy, benchmarkExtension);
+    const state = ledger.getState();
+    mixedParent(ledgerConfiguration, policy, benchmarkExtension, state);
+    const expected = [...baseline, ...records.map(({ attemptId, ledgerChannel,
+      reservedMicroUsd, outcome, actualMicroUsd }) => ({ attemptId, channel: ledgerChannel,
+      reservedMicroUsd, outcome, actualMicroUsd }))];
+    if (canonical(historicalRows(state)) !== canonical(expected)
+      || state.requestCount !== expected.length
+      || state.reservedMicroUsd !== expected.reduce((total, attempt) =>
+        total + attempt.reservedMicroUsd, 0)) fail('policy_mismatch');
+    if (state.attempts.some((attempt) => attempt.outcome === null
+      && !inFlightIds.has(attempt.attemptId))) fail('paid_work_halted');
+    if (state.state !== 'open') fail('paid_work_halted');
+    return state;
+  };
+  const guardedVerify = () => {
+    try { return verify(); } catch (error) { halted = true; throw error; }
+  };
+  try { guardedVerify(); } catch (error) { ledger.close(); throw error; }
+
+  const requireScope = (arm, phase) => {
+    const scope = storage.getStore();
+    if (!scope || scope !== activeScope || !scope.open) fail('case_scope_required');
+    if (scope.status !== 'active') fail('case_sealed');
+    if (scope.arm !== arm && arm !== 'either') fail('case_scope_violation');
+    if (scope.phase !== phase) fail('case_scope_violation');
+    if (inFlight !== 0) fail('guard_busy');
+    return scope;
+  };
+  const routeError = (error) => {
+    const scope = storage.getStore();
+    // An old ALS descendant cannot poison a new scope. All unexpected active
+    // route violations do halt, including malformed bodies and wrong arms.
+    if (scope && scope === activeScope && scope.open && scope.status === 'active'
+      && !['guard_busy', 'case_cap_exceeded'].includes(error?.code)) halted = true;
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    if (error instanceof Mem0WireError) fail(error.code);
+    fail('invalid_request');
+  };
+  const reserve = (scope, ledgerChannel, reservedMicroUsd, stage, model, endpoint) => {
+    const state = guardedVerify();
+    const phase = phaseUsed[scope.phase];
+    const phaseCap = capability.limits.phaseCaps[scope.phase];
+    const caseCap = capability.limits.caseCaps[scope.arm][scope.phase];
+    // Global ceilings win over a simultaneous local case exhaustion. B4 still
+    // makes the authoritative transactional decision immediately below.
+    if (state.requestCount >= ledgerConfiguration.requestCap) {
+      halted = true;
+      fail('request_cap_exceeded');
+    }
+    if (reservedMicroUsd > ledgerConfiguration.limitMicroUsd - state.reservedMicroUsd) {
+      halted = true;
+      fail('budget_exceeded');
+    }
+    if (phase.requests >= phaseCap.requests
+      || reservedMicroUsd > phaseCap.reservedMicroUsd - phase.reservedMicroUsd) {
+      halted = true;
+      fail('phase_cap_exceeded');
+    }
+    if (scope.used.requests >= caseCap.requests
+      || reservedMicroUsd > caseCap.reservedMicroUsd - scope.used.reservedMicroUsd) {
+      sealScope(scope, 'case_cap_exceeded');
+      fail('case_cap_exceeded');
+    }
+    const attemptId = randomUUID();
+    try { ledger.reserve({ attemptId, channel: ledgerChannel, reservedMicroUsd }); }
+    catch (error) { halted = true; throw error; }
+    phase.requests += 1;
+    phase.reservedMicroUsd += reservedMicroUsd;
+    scope.used.requests += 1;
+    scope.used.reservedMicroUsd += reservedMicroUsd;
+    const record = { attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd,
+      outcome: null, actualMicroUsd: null, observedActualMicroUsd: null,
+      inputTokens: null, outputTokens: null,
+      ordinal: scope.ordinal, phase: scope.phase, arm: scope.arm };
+    records.push(record);
+    inFlightIds.add(attemptId);
+    inFlight += 1;
+    return record;
+  };
+
+  const send = async ({ scope, stage, kind, channel, snapshot, requestRecord = null,
+    requestedOutputTokens = 0 }) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    requireScope(scope.arm, scope.phase);
+    const mem0 = requestRecord !== null;
+    const reservedMicroUsd = mem0 ? requestRecord.reservedMicroUsd : channel.reservedMicroUsd;
+    const record = reserve(scope, mem0 ? (kind === 'embedding' ? 'host-embedding'
+      : 'host-completion') : CHANNELS[kind], reservedMicroUsd, stage, channel.model,
+    channel.endpoint);
+    const controller = new AbortController();
+    let termination = null;
+    let settled = false;
+    const settle = (outcome, actualMicroUsd, inputTokens = null, outputTokens = null) => {
+      if (settled) return;
+      settled = true;
+      // A priced observation survives a failed B4 write, but cannot masquerade
+      // as a durable settlement or enter the expected persisted history.
+      record.observedActualMicroUsd = actualMicroUsd;
+      record.inputTokens = inputTokens;
+      record.outputTokens = outputTokens;
+      try { ledger.recordOutcome(actualMicroUsd === null
+        ? { attemptId: record.attemptId, outcome }
+        : { attemptId: record.attemptId, outcome, actualMicroUsd }); }
+      catch (error) { halted = true; throw error; }
+      record.outcome = outcome;
+      record.actualMicroUsd = actualMicroUsd;
+      deepFreeze(record);
+      if (actualMicroUsd !== null && actualMicroUsd > reservedMicroUsd) halted = true;
+    };
+    const onScopeAbort = () => {
+      if (termination === null) termination = scope.reason === 'cancelled' ? 'cancelled' : 'case_sealed';
+      controller.abort('request_aborted');
+    };
+    const onExternalAbort = () => {
+      if (termination === null) termination = (isCoreModelDeadlineSignal(snapshot.signal)
+        || installedDeadline?.(snapshot.signal)) ? 'deadline' : 'external_abort';
+      if (termination === 'deadline') sealScope(scope, 'deadline');
+      controller.abort('request_aborted');
+    };
+    scope.controller.signal.addEventListener('abort', onScopeAbort, { once: true });
+    snapshot.signal.addEventListener('abort', onExternalAbort, { once: true });
+    if (scope.controller.signal.aborted) onScopeAbort();
+    if (snapshot.signal.aborted) onExternalAbort();
+    const timeoutMs = mem0 ? capability.limits.mem0TimeoutMs : channel.timeoutMs;
+    const timer = setTimeout(() => {
+      if (termination === null) {
+        termination = 'deadline';
+        sealScope(scope, 'deadline');
+        controller.abort('request_timeout');
+      }
+    }, timeoutMs);
+    try {
+      let response;
+      try {
+        const pending = Promise.resolve().then(() => {
+          if (controller.signal.aborted) fail(abortError(controller.signal));
+          let physical;
+          try {
+            physical = fetchImpl(channel.endpoint, { method: 'POST', redirect: 'error',
+              signal: controller.signal, headers: snapshot.headers, body: snapshot.bodyText });
+          } catch (error) {
+            if (termination === null) termination = 'transport_failure';
+            throw error;
+          }
+          // Attach to the physical promise before any caller may revoke the
+          // scope. A rejection already queued on that promise wins the race.
+          return Promise.resolve(physical).catch((error) => {
+            if (termination === null) termination = 'transport_failure';
+            throw error;
+          });
+        }).catch((error) => {
+          if (termination === null) termination = 'transport_failure';
+          throw error;
+        });
+        pending.then((late) => {
+          if (controller.signal.aborted) {
+            try { Promise.resolve(late?.body?.cancel()).catch(() => {}); } catch { /* Late only. */ }
+          }
+        }, () => {});
+        response = await raceAbort(pending, controller.signal);
+      } catch {
+        settle('unknown', null);
+        if (['deadline', 'cancelled'].includes(termination)) {
+          fail(termination === 'cancelled' ? 'case_cancelled' : 'case_deadline_exceeded');
+        }
+        halted = true;
+        fail('transport_failed');
+      }
+      if (!(response instanceof Response)) {
+        settle('unknown', null); halted = true; fail('transport_failed');
+      }
+      let bytes;
+      try { bytes = await readBounded(response, channel.maxResponseBytes, controller.signal, () => {
+        if (termination === null) termination = 'body_failure';
+      }); }
+      catch {
+        if (termination === null) termination = 'body_failure';
+        settle('unknown', null);
+        if (['deadline', 'cancelled'].includes(termination)) {
+          fail(termination === 'cancelled' ? 'case_cancelled' : 'case_deadline_exceeded');
+        }
+        halted = true;
+        fail('transport_failed');
+      }
+      if (response.redirected) {
+        settle('unknown', null); halted = true; fail('http_failed');
+      }
+      if (response.status < 200 || response.status >= 300) {
+        if (mem0 && kind === 'embedding' && response.status >= 500 && response.status < 600) {
+          settle('failed', null);
+          guardedVerify();
+          if (requestRecord.itemCount > 1) {
+            return new Response('{"error":{"message":"embedding_batch_failed"}}', {
+              status: 500, headers: { 'content-type': 'application/json' } });
+          }
+          sealScope(scope, 'embedding_singleton_failed');
+          fail('http_failed');
+        }
+        settle('failed', null); halted = true; fail('http_failed');
+      }
+      if (mem0) {
+        let inspected;
+        try {
+          inspected = inspectMem0WireResponse(requestRecord,
+            new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          settle('unknown', null); halted = true; fail('invalid_response');
+        }
+        settle(inspected.usageWithinBounds && inspected.payloadValid ? 'succeeded' : 'failed',
+          inspected.actualMicroUsd, inspected.inputTokens, inspected.outputTokens);
+        if (halted || !inspected.usageWithinBounds) {
+          halted = true;
+          fail('usage_bound_exceeded');
+        }
+        if (!inspected.payloadValid) { sealScope(scope, 'invalid_payload'); fail('invalid_payload'); }
+        return new Response(inspected.bodyText, { status: 200,
+          headers: { 'content-type': 'application/json' } });
+      }
+      let json;
+      let usage;
+      try {
+        json = parseResponseJson(bytes, kind === 'cairnCount');
+        usage = parseUsage(json, kind, channel, requestedOutputTokens, true);
+      } catch {
+        settle('unknown', null); halted = true; fail('invalid_response');
+      }
+      if (kind === 'cairnCount' && !usage.withinBounds) {
+        settle('unknown', null); halted = true; fail('invalid_response');
+      }
+      settle(usage.withinBounds ? 'succeeded' : 'failed', usage.actualMicroUsd);
+      if (halted || !usage.withinBounds) { halted = true; fail('usage_bound_exceeded'); }
+      return new Response(bytes, { status: response.status, statusText: response.statusText,
+        headers: response.headers });
+    } finally {
+      clearTimeout(timer);
+      scope.controller.signal.removeEventListener('abort', onScopeAbort);
+      snapshot.signal.removeEventListener('abort', onExternalAbort);
+      inFlightIds.delete(record.attemptId);
+      inFlight -= 1;
+    }
+  };
+
+  const scopedRoute = (arm, phase, prepare) => async (url, requestOptions) => {
+    try {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      const scope = requireScope(arm, phase);
+      guardedVerify();
+      const prepared = prepare(url, requestOptions, scope);
+      return await send({ scope, ...prepared });
+    } catch (error) { routeError(error); }
+  };
+  const cairnFetch = scopedRoute('cairn', 'generation', (url, options, scope) => {
+    const text = url instanceof URL ? url.href : url;
+    const kind = text === policy.cairnCount.endpoint ? 'cairnCount'
+      : text === policy.cairnGeneration.endpoint ? 'cairnGeneration' : null;
+    if (kind === null) fail('invalid_request');
+    const channel = policy[kind];
+    const snapshot = requestSnapshot(url, options, channel);
+    validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
+      CANDIDATE_QUALIFICATION_KIND.method, false, 'cairn', true, true);
+    return { stage: kind === 'cairnCount' ? 'cairn-count' : 'cairn-generation', kind,
+      channel, snapshot, requestedOutputTokens: kind === 'cairnGeneration'
+        ? snapshot.body.max_output_tokens : 0 };
+  });
+  const mem0Route = (route) => scopedRoute('mem0', 'generation', (url, options) => {
+    const wire = mem0WireProfile()[route];
+    const channel = { ...wire, timeoutMs: capability.limits.mem0TimeoutMs };
+    const snapshot = requestSnapshot(url, options, channel);
+    const requestRecord = inspectMem0WireRequest(route, snapshot.bodyText);
+    snapshot.bodyText = requestRecord.bodyText;
+    return { stage: `mem0-${route}`, kind: route, channel, snapshot, requestRecord };
+  });
+  const stageRoute = (name, phase) => scopedRoute('either', phase, (url, options) => {
+    const channel = benchmarkExtension.stages[name];
+    const snapshot = requestSnapshot(url, options, channel);
+    validateStageBody(snapshot.body, channel);
+    return { stage: name, kind: 'hostCompletion', channel, snapshot,
+      requestedOutputTokens: snapshot.body.max_tokens };
+  });
+
+  return Object.freeze({
+    cairnFetch,
+    mem0ChatFetch: mem0Route('chat'),
+    mem0EmbeddingFetch: mem0Route('embedding'),
+    answerFetch: stageRoute('answer', 'generation'),
+    judgeFetch: stageRoute('judge', 'scoring'),
+    async hostFetch() { fail('unsupported_request'); },
+    async withCaseScope(identity, operation) {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      let requested;
+      try { requested = detachEmbeddingLineage(identity); }
+      catch { fail('case_schedule_mismatch'); }
+      exactKeys(requested, ['phase', 'caseId'], 'case_schedule_mismatch');
+      if (typeof operation !== 'function') fail('invalid_options');
+      if (activeScope !== null) fail('case_scope_busy');
+      const expected = capability.schedule[scheduleIndex];
+      if (!expected || canonical(requested) !== canonical(expected)) fail('case_schedule_mismatch');
+      guardedVerify();
+      const arm = armById.get(expected.caseId);
+      const scope = { ordinal: scheduleIndex, phase: expected.phase, caseId: expected.caseId,
+        arm, used: leaf(), controller: new AbortController(), status: 'active',
+        reason: null, open: true };
+      if (scope.phase === 'scoring' && sealedGeneration.has(scope.caseId)) {
+        scope.status = 'blocked'; scope.reason = 'case_sealed'; scope.open = false;
+        lastScopeSnapshot = scopeSnapshot(scope);
+        outcomes.push({ ordinal: scope.ordinal, phase: scope.phase, arm, status: 'blocked',
+          reason: 'case_sealed' });
+        scheduleIndex += 1;
+        return Object.freeze({ status: 'blocked', reason: 'case_sealed', value: null });
+      }
+      activeScope = scope;
+      scopeUsage.push({ ordinal: scope.ordinal, phase: scope.phase, arm,
+        used: scope.used, cap: capability.limits.caseCaps[arm][scope.phase] });
+      lastScopeSnapshot = scopeSnapshot(scope);
+      const handle = Object.freeze({ snapshot: () => scopeSnapshot(scope),
+        revocationSignal: scope.controller.signal,
+        revoke: () => { if (scope.open && scope === activeScope) sealScope(scope, 'cancelled'); } });
+      let value;
+      let callbackError = false;
+      try { value = await storage.run(scope, () => operation(handle)); }
+      catch { callbackError = true; }
+      // Close and revoke first, so every descendant is fenced before any
+      // accounting boundary can advance to another scheduled arm.
+      scope.open = false;
+      scope.controller.abort('scope_closed');
+      activeScope = null;
+      if (callbackError && scope.status === 'active') halted = true;
+      if (inFlight !== 0 || records.some((record) => record.outcome === null)) halted = true;
+      if (halted) fail(callbackError ? 'callback_failed' : 'paid_work_halted');
+      guardedVerify();
+      if (scope.status === 'active') scope.status = 'completed';
+      lastScopeSnapshot = scopeSnapshot(scope);
+      if (scope.phase === 'generation' && scope.status === 'failed') sealedGeneration.add(scope.caseId);
+      outcomes.push({ ordinal: scope.ordinal, phase: scope.phase, arm,
+        status: scope.status, reason: scope.reason });
+      scheduleIndex += 1;
+      return Object.freeze({ status: scope.status, reason: scope.reason,
+        value: scope.status === 'completed' ? value : null });
+    },
+    caseScopeSnapshot() { return lastScopeSnapshot === null ? null : detached(lastScopeSnapshot); },
+    caseOutcomes() { return detached({ version: 'mixed-source-pair-outcomes-v1', scopes: outcomes }); },
+    quotaSnapshot() { return detached({ version: 'mixed-source-pair-quota-v1',
+      phaseUsed, phaseCaps: capability.limits.phaseCaps, scopes: scopeUsage }); },
+    attempts() { return detached(records); },
+    getState() { if (closed) fail('guard_closed'); return ledger.getState(); },
+    isHalted() { return halted; },
+    close() {
+      if (closed) return;
+      if (activeScope !== null || inFlight !== 0) fail('guard_busy');
+      closed = true;
+      ledger.close();
+    },
+    policy,
+    stages: benchmarkExtension.stages,
+    mixedSourcePairCapability: capability,
   });
 }
