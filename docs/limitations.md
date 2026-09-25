@@ -81,19 +81,36 @@ roster and prior cohorts must not be retried; the separately reserved 30-case
 set remains untouched. The audited 30-case result remains 15/8/7 and was not
 rerun.
 
-At the latest independent read-only accounting audit, 12,640 requests were
-terminal, US$86.206460 was conservatively reserved and zero were pending. The
-US$200 user ceiling is unchanged; the operational cap was atomically extended
-from US$100 to US$200 with a 50,000-request cap. This does not mean the separate
-embedding-ledger migration is complete. An offline budget-boundary control
-through the real core, adapter and fake-HTTP guard produced one pass and one red
-on each of Node 22.16 and 24.15. In each of four source turns, source text
-length increased from 113 to 114 UTF-16 units; for the 114-unit fixture, local
-partial preflight counted 2,379 while full wire serialization was 7,032. This
-demonstrates an analogous schema-budget gap, not an explanation of R5's distinct
-global halt or prefix failure. The budget repair is in progress but unaccepted;
-source-free observability is not implemented. These are synthetic mechanics,
-not provider-exact usage or semantic evidence.
+An earlier offline budget-boundary control through the real core, adapter and
+fake-HTTP guard produced one pass and one red on each of Node 22.16 and 24.15.
+In each of four source turns, source text length increased from 113 to 114
+UTF-16 units; for the 114-unit fixture, local partial preflight counted 2,379
+while full wire serialization was 7,032. This established an analogous
+schema-budget gap, not an explanation of R5's distinct global halt or prefix
+failure. PR #230 later passed its bounded repair gates. PR #231's separate
+source-free failure-diagnostics candidate passed reviews, local dual-Node gates
+and exact-head CI run `36125459749` (21/21); it was open, mergeable and unmerged
+at the last check. These mechanics do not establish provider-exact usage or
+semantic evidence.
+
+The current primary read-only accounting audit recorded 12,646 terminal
+requests, US$86.236460 conservatively reserved and zero pending. The user
+ceiling remains US$200; the operational cap was atomically extended from
+US$100 to US$200 with a 50,000-request cap. The separate embedding-ledger
+migration is not complete. Preserve at least US$70 for comparator work and
+US$10 for host work; the audit does not authorize a new call.
+
+Using PR #230's accepted runtime, before PR #231's remote CI completed, a
+separate installed-compatibility check passed count, generation and core
+compilation on three fixed synthetic shapes (1×1, 4×4 and 5×1). Local
+serialized estimates were 1,929, 4,680 and 4,987; provider-validated counts
+were 1,526, 3,434 and 3,476. It made six requests, reserved
+US$0.030000, recorded US$0.005377 known actual cost, left three count-route
+costs unknown, and had zero pending requests. Its source-free report SHA-256 is
+`b75dcea6bb317adc988c846f6493a5703ca536b702b17d7f88aef0796b6d119f`; runtime
+`5ec4793` and the pinned installed-source set were used. This is narrow
+compatibility evidence only—not QA, recall, judging, a semantic score or a
+quality improvement. No consumed or earlier cohort was rerun.
 
 Recent synthetic work also includes a Mem0 fake-HTTP preflight, optional
 indexed-window capture mechanics and an existing-only embedding-ledger
@@ -102,15 +119,17 @@ installed-growth result or onboarding pass. PR #220's synthetic guard
 regression is denial-only; no new paid capability or paid request is
 established. Indexed windows leave the default first-prefix behavior unchanged
 and do not prove that a model selects or answers correctly from a later
-passage. Next gates remain a bounded offline budget-boundary fix and
-source-free diagnostic, a separately frozen synthetic real-API
-compatibility/count check within the existing authority, a separately frozen fresh
-development cohort with no old retries, matched Mem0 scoring, then installed
-growth and onboarding. S2
-answer-stage quality, S3 matched comparison, S4 installed growth and S5
-cold-context onboarding remain open. This documentation update makes no
-provider call or compatibility claim; see the [current milestone
-checkpoint](plans/comparative-reliability-milestones.md).
+passage. With PR #231's remote CI and acceptance gates closed, the next step is
+operator-only preparation for a separately frozen fresh six-case development
+run: one case per type and fixed seed, excluding 124 used or reserved cases.
+Its 30-case reserve stays untouched, and no old cohort is retried. Before any
+run, recheck the frozen plan, accepted source-free diagnostics, installed
+inputs and budget gates; cap this allocation at US$29.935 (29,935,000
+micro-USD), protecting at least US$70 for comparator work and US$10 for host
+work. S2 answer-stage quality, S3
+matched comparison, S4 installed growth and S5 cold-context onboarding remain
+open. This documentation update makes no provider call; see the [current
+milestone checkpoint](plans/comparative-reliability-milestones.md).
 
 ## Where the evidence lives
 

@@ -32,9 +32,9 @@ harnesses, evaluated against existing solutions under matched conditions.
   dated read-only accounting audit without implying embedding-ledger migration.
 - Keep the consumed fresh roster and prior cohorts closed, the reserved 30-case
   set untouched, and the comparator/host reserves protected.
-- State the next gated sequence, including a separately frozen synthetic
-  real-API compatibility/count check before fresh development; label the budget
-  repair in progress but unaccepted, and source-free diagnosis unimplemented.
+- Record the completed synthetic real-API compatibility/count check without
+  treating it as semantic evidence; keep the next fresh development run behind
+  its separate frozen plan and acceptance gates.
 - Publish no raw case/source data, IDs, credentials, private paths or ledger
   contents. This checkpoint authorizes no new paid call, rerun, merge or release.
 
@@ -73,10 +73,73 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after PR #229 / R5)
+## Latest checkpoint — 2026-09-25 (after PR #231 / synthetic compatibility)
 
-This checkpoint supersedes older execution status only; their heads, results
-and failures remain historical. At the last check, PR #228 (launch candidate)
+This is the current resumption checkpoint; older snapshots below are retained
+as dated history. PR #230 (`5ec4793`) passed its two independent reviews,
+primary dual-Node gates and exact-head CI (21/21); it remained open and
+unmerged. PR #231 (`b781a3c`) also passed its two reviews, local dual-Node
+gates and exact-head CI run `36125459749` (21/21); it was open, mergeable and
+unmerged at the last check. These gates concern bounded mechanics and
+diagnostics, not answer quality.
+
+Using PR #230's accepted runtime, and before PR #231's remote CI completed, a
+separately frozen installed-compatibility probe completed on three fixed
+synthetic shapes (1×1, 4×4 and 5×1): count, generation and core compilation
+passed for all three. Local serialized estimates were 1,929,
+4,680 and 4,987; provider-validated counts were 1,526, 3,434 and 3,476. The
+six-request probe reserved US$0.030000; US$0.005377 is known actual cost, the
+three count-route costs remain unknown, and zero requests are pending. Its
+source-free report is pinned by SHA-256
+`b75dcea6bb317adc988c846f6493a5703ca536b702b17d7f88aef0796b6d119f` against
+runtime `5ec4793` and the verified installed-source set. This demonstrates
+compatibility on those fixtures only: no QA, recall, judge, semantic score or
+quality improvement. It did not rerun the consumed R5 roster or any older
+cohort.
+
+The finite S1 mechanical gate is accepted; S2 semantic answer-stage quality,
+S3 matched comparison, S4 installed growth and S5 cold-context onboarding
+remain open. The earlier R5 terminal result remains seven requests, US$0.035
+conservatively reserved, zero scored and six unresolved cases per arm—not a
+0% accuracy result. Its global halt followed an observed indexed count of
+8,701 exceeding the 7,024 bounded dispatch limit. A separate earlier prefix
+capture was marked `invalid_model_output` / `ingestion_incomplete`, but its
+exact cause remains unknown. Do not retry that consumed roster or prior
+cohorts; the separate 30-case reserve remains untouched.
+
+The user ceiling remains US$200 cumulative. The operational cap was atomically
+extended from US$100 to US$200 with a 50,000-request cap; this is separate from
+and does not imply completion of the embedding-ledger migration. The latest
+primary read-only audit recorded 12,646 terminal requests, US$86.236460
+conservatively reserved and zero pending, leaving US$113.763540 under the
+ceiling. Preserve at least US$70 for comparator work and US$10 for host work.
+This documentation update does not authorize another call.
+
+With PR #231's remote CI and acceptance gates closed, next use operator-only
+preparation to freeze a fresh six-case development run: one case per question
+type, fixed seed, excluding all 124 used or reserved cases. Keep the separately
+reserved 30-case set untouched; do not retry R5 or any prior cohort. Before any
+run, recheck its frozen plan, accepted source-free diagnostics, installed
+inputs and budget gates; cap this development allocation at US$29.935
+(29,935,000 micro-USD) so the US$70 comparator and US$10 host reserves remain
+protected. Then proceed separately to the matched Mem0
+comparison, installed-growth measurement and onboarding gate. Each needs its
+own frozen acceptance; none is passed by compatibility or completion alone.
+Keep source text, case IDs, private paths, credentials and ledger contents out
+of public documentation.
+
+Checkpoint implementation owner: `checkpoint212`, GPT-6 Sol/high. Primary
+inspected this two-file delta and personally reran 106/106 generic tests,
+JSON validation and pinned Claude 2.1.260 validations on both Node22.16.0
+and24.15.0; all passed. The final verification-record update is the primary's
+bounded integration edit. The fixed review base remains `83a10c3`; both
+independent review axes and exact-head CI are required before delivery.
+
+## Historical checkpoint — 2026-09-25 (after PR #229 / R5)
+
+This checkpoint was current before the later PR #230/#231 work; it is retained
+as history, and its heads, results and failures remain historical. At that
+last check, PR #228 (launch candidate)
 and PR #229 (cohort preparation) were open and unmerged. These exact-head CI
 records are retained here, not a fresh audit of every earlier PR:
 
