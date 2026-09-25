@@ -76,7 +76,7 @@ The example zeroes are placeholders, not a runnable launch. The wrapper
 requires an exact clean checkout at `runtimeCommit`, exact source/prepared/
 sidecar/selection bytes, the existing benchmark → request allowance → budget
 extension chain, an open settled ledger at the frozen checkpoint, and absent
-new output/capability/claim/launch-marker identities. It does not create a new
+new output/capability/claim/launch-marker/failure-record identities. It does not create a new
 ledger, grant, allowance or budget extension.
 
 ## Preflight and one-shot launch
@@ -99,9 +99,17 @@ operator may call `--launch` once. The wrapper recomputes all preflight checks,
 durably creates a 0600 launch-attempt marker before reading the authorized key
 or importing the delegate CLI, then supplies the complete `case-deadline-v1`
 identity and `bounded-v1` transport diagnostics. A failed launch is terminal;
-the marker and any claim are never removed or reused. The delegate retains all
-case artifacts in its 0700 output directory. The wrapper prints only counts
-and fixed status codes, not question IDs, answers, private paths or credentials.
+the marker and any claim are never removed or reused. After the marker exists,
+the wrapper also creates `smoke-launch-failure-<execution-id>.json` exclusively
+as a 0600 file in the private plan directory if the launch fails, even when
+the delegate has not created an output directory. It records only bounded
+phase, exit, output-size and closed diagnostic codes; it does not retain raw
+delegate output, arbitrary exception messages or credentials. A pre-existing
+failure record or a failure to persist one is an explicit terminal error;
+neither permits overwrite or relaunch. Dry-run and pre-marker refusals create
+no failure record. The delegate retains case artifacts in its 0700 output
+directory when it reaches execution. The wrapper prints only counts and fixed
+status codes, not question IDs, answers, private paths or credentials.
 
 ```sh
 node evaluation/live/reliability-smoke-cli.mjs --plan /private/launch-plan.json --launch
@@ -133,5 +141,5 @@ from six cases.
 
 `npm run test:live-evidence-offline` exercises this wrapper on synthetic
 prepared files and ledgers with fake HTTP only, including actual delegated
-CLI execution, read-only dry-run, one-shot launch, deadline isolation and
-global halt. It needs no provider key or paid call.
+CLI execution, read-only dry-run, one-shot launch, bounded failure retention,
+deadline isolation and global halt. It needs no provider key or paid call.

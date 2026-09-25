@@ -28,6 +28,29 @@ const COMMIT = /^[0-9a-f]{40}$/u;
 const OUTPUT_FILES = { manifest: 'manifest.json', history: 'history.jsonl',
   questions: 'questions.jsonl', evaluator: 'evaluator.jsonl' };
 const ANSWER_TEMPLATE = 'cairn-longmemeval-public-answer-v2';
+const DELEGATE_DIAGNOSTICS = new Set(['missing_environment', 'missing_fetch',
+  'capability_consumed', 'case_output_must_be_new', 'invalid_case_checkpoint',
+  'invalid_case_identifier', 'invalid_case_selection', 'invalid_case_timeout_policy',
+  'invalid_transport_diagnostics', 'input_invalid_json', 'input_permissions',
+  'input_unreadable', 'unknown_case', 'invalid_exclusions', 'invalid_ledger_config',
+  'invalid_options', 'invalid_prepared_directory', 'invalid_sidecar',
+  'sidecar_digest_mismatch', 'invalid_manifest', 'evaluator_digest_mismatch',
+  'invalid_evaluator', 'sidecar_mismatch', 'evaluator_mismatch', 'rendering_mismatch']);
+const PUBLIC_ERROR_CODES = new Set(['invalid_arguments', 'invalid_plan', 'runtime_mismatch',
+  'delegate_output_too_large', 'delegate_output_invalid', 'delegate_failed',
+  'launch_consumed', 'launch_marker_failed', 'failure_record_exists',
+  'failure_record_write_failed', 'key_file_invalid', 'source_invalid',
+  'source_hash_mismatch', 'exclusions_invalid', 'exclusions_hash_mismatch',
+  'selection_mismatch', 'prepared_invalid', 'prepared_hash_mismatch',
+  'invalid_roster', 'invalid_selection', 'invalid_source', 'insufficient_type',
+  'prepared_roster_mismatch', 'sidecar_invalid', 'sidecar_hash_mismatch',
+  'sidecar_roster_mismatch', 'ledger_config_invalid', 'ledger_config_hash_mismatch',
+  'capability_not_new', 'claim_not_new', 'output_exists', 'checkpoint_mismatch',
+  'authority_invalid', 'delegate_projection_mismatch', 'projection_exceeds_cap',
+  'prepared_not_executable', 'dry_run_mutated_authority', 'authority_changed']);
+const redactCredential = (value, key) => typeof key === 'string' && key.length > 0
+  && value.includes(key) ? ['redacted', 'unclassified', 'x', 'y']
+    .find((replacement) => !replacement.includes(key)) : value;
 
 export const USAGE = `Usage: node evaluation/live/reliability-smoke-cli.mjs --plan <private-0600-json> (--dry-run | --launch)\n`;
 
@@ -173,13 +196,16 @@ function inspectRuntime(expected) {
   }
 }
 
-function capture() {
-  let value = '';
+function boundedOutputSink() {
+  let value = ''; let byteCount = 0;
   return { write(chunk) {
-    value += String(chunk);
-    if (value.length > MAX_CAPTURE_BYTES) failSmoke('delegate_output_too_large');
+    const fragment = String(chunk);
+    const addedBytes = Buffer.byteLength(fragment);
+    if (byteCount + addedBytes > MAX_CAPTURE_BYTES) failSmoke('delegate_output_too_large');
+    value += fragment;
+    byteCount += addedBytes;
     return true;
-  }, text() { return value; } };
+  }, text() { return value; }, bytes() { return byteCount; } };
 }
 const delegateRecord = (output, expectedMode) => {
   const lines = output.trim().split('\n').filter(Boolean);
@@ -189,20 +215,34 @@ const delegateRecord = (output, expectedMode) => {
   return record;
 };
 
-async function invokeDelegate(args, env, dependencies) {
+async function invokeDelegate(args, env, dependencies, evidence = {}) {
   // The import is deliberately deferred until after the outer launch marker.
+  evidence.phase = 'delegate_import';
   const delegate = dependencies.delegateMain ?? (await import('./public-pilot-cli.mjs')).main;
-  const stdout = capture(); const stderr = capture();
-  const code = await delegate(args, { env, stdout, stderr, fetchImpl: dependencies.fetchImpl ?? globalThis.fetch });
+  const stdout = boundedOutputSink(); const stderr = boundedOutputSink();
+  evidence.phase = 'delegate_call';
+  let code;
+  try {
+    code = await delegate(args, { env, stdout, stderr,
+      fetchImpl: dependencies.fetchImpl ?? globalThis.fetch });
+  } finally {
+    evidence.stdoutBytes = stdout.bytes();
+    evidence.stderrBytes = stderr.bytes();
+    const diagnostic = /^([a-z_]+)(?:\s|$)/u.exec(stderr.text())?.[1];
+    evidence.diagnosticCode = DELEGATE_DIAGNOSTICS.has(diagnostic) ? diagnostic : 'unclassified';
+  }
+  evidence.exitCode = Number.isSafeInteger(code) && code >= 0 && code <= 255 ? code : null;
+  evidence.phase = 'delegate_result';
   if (code !== 0) failSmoke('delegate_failed');
   return delegateRecord(stdout.text(), args.includes('--dry-run') ? 'dry-run' : 'run');
 }
 
-function createLaunchMarker(filename, record) {
+function createPrivateRecord(filename, record, collisionCode, failureCode, onCreated = () => {}) {
   let descriptor;
   try {
     descriptor = openSync(filename, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL
       | (constants.O_NOFOLLOW ?? 0), 0o600);
+    onCreated();
     fchmodSync(descriptor, 0o600);
     writeFileSync(descriptor, `${canonical(record)}\n`, 'utf8');
     fsyncSync(descriptor);
@@ -211,8 +251,8 @@ function createLaunchMarker(filename, record) {
       | (constants.O_NOFOLLOW ?? 0));
     try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
   } catch (error) {
-    if (error?.code === 'EEXIST') failSmoke('launch_consumed');
-    failSmoke('launch_marker_failed');
+    if (error?.code === 'EEXIST') failSmoke(collisionCode);
+    failSmoke(failureCode);
   } finally { if (descriptor !== undefined) try { closeSync(descriptor); } catch { /* terminal */ } }
 }
 
@@ -262,7 +302,7 @@ function verifyFrozenInputs(plan) {
   return { selection, caseIds: expectedIds.map(opaqueQuestionId) };
 }
 
-function verifyAuthority(plan, marker) {
+function verifyAuthority(plan, marker, failureRecord) {
   const ledgerFile = readJson(plan.ledger.path, 64 * 1024, 'ledger_config_invalid');
   verifyHash(ledgerFile.sha256, plan.ledger.sha256, 'ledger_config_hash_mismatch');
   exact(ledgerFile.value, ['directory', 'runId', 'limitMicroUsd', 'requestCap'], 'ledger_config_invalid');
@@ -270,6 +310,7 @@ function verifyAuthority(plan, marker) {
     failSmoke('ledger_config_invalid');
   }
   absent(marker, 'launch_consumed');
+  absent(failureRecord, 'failure_record_exists');
   const base = ledgerFile.value.directory;
   absent(path.join(base, `experiment-case-deadline-${plan.authorizations.execution}.json`), 'capability_not_new');
   absent(path.join(base, `experiment-case-deadline-${plan.authorizations.execution}.claim.json`), 'claim_not_new');
@@ -339,6 +380,10 @@ async function projectedTotals(plan, caseIds) {
 export async function main(argv, dependencies = {}) {
   const stdout = dependencies.stdout ?? process.stdout;
   const stderr = dependencies.stderr ?? process.stderr;
+  let postMarker = null;
+  let key;
+  const delegateEvidence = { phase: 'preflight', exitCode: null, diagnosticCode: 'unclassified',
+    stdoutBytes: 0, stderrBytes: 0 };
   try {
     const { planPath, mode } = parseArguments(argv);
     const resolvedPlan = safePath(planPath, 'invalid_plan');
@@ -347,7 +392,9 @@ export async function main(argv, dependencies = {}) {
     (dependencies.inspectRuntime ?? inspectRuntime)(plan.runtimeCommit);
     const { caseIds } = verifyFrozenInputs(plan);
     const marker = path.join(path.dirname(resolvedPlan), `smoke-launch-attempt-${plan.authorizations.execution}.json`);
-    const before = verifyAuthority(plan, marker);
+    const failureRecord = path.join(path.dirname(resolvedPlan),
+      `smoke-launch-failure-${plan.authorizations.execution}.json`);
+    const before = verifyAuthority(plan, marker, failureRecord);
     const totals = await projectedTotals(plan, caseIds);
     if (before.state.limitMicroUsd - before.state.reservedMicroUsd < totals.reservedMicroUsd
       || before.state.requestCap - before.state.requestCount < totals.requests) {
@@ -362,7 +409,7 @@ export async function main(argv, dependencies = {}) {
       if (canonical(delegatedTotals) !== canonical(totals) || result.fits?.caps !== true) {
         failSmoke('delegate_projection_mismatch');
       }
-      const after = verifyAuthority(plan, marker);
+      const after = verifyAuthority(plan, marker, failureRecord);
       if (canonical(before.state) !== canonical(after.state)
         || canonical(before.bindings) !== canonical(after.bindings)) failSmoke('dry_run_mutated_authority');
       stdout.write(`${JSON.stringify({ mode, verified: true, selectedCount: 6,
@@ -372,27 +419,58 @@ export async function main(argv, dependencies = {}) {
         caseDeadlineCapability: 'unissued' })}\n`);
       return 0;
     }
-    const checked = verifyAuthority(plan, marker);
+    const checked = verifyAuthority(plan, marker, failureRecord);
     if (canonical(before.state) !== canonical(checked.state)
       || canonical(before.bindings) !== canonical(checked.bindings)) failSmoke('authority_changed');
-    createLaunchMarker(marker, { version: 'cairn-fresh-reliability-smoke-attempt-v1',
+    delegateEvidence.phase = 'launch_marker';
+    createPrivateRecord(marker, { version: 'cairn-fresh-reliability-smoke-attempt-v1',
       executionId: plan.authorizations.execution, runtimeCommit: plan.runtimeCommit,
-      planSha256: input.sha256, checkpoint: plan.checkpoint });
-    const key = (dependencies.readKey ?? readKey)(plan.keyFile);
+      planSha256: input.sha256, checkpoint: plan.checkpoint }, 'launch_consumed',
+    'launch_marker_failed', () => { postMarker = { plan, inputSha256: input.sha256, failureRecord }; });
+    delegateEvidence.phase = 'key_read';
+    key = (dependencies.readKey ?? readKey)(plan.keyFile);
     const result = await invokeDelegate([...capped, '--output', plan.outputDirectory,
       '--case-timeout-policy', 'case-deadline-v1',
       '--case-authorization-id', plan.authorizations.case,
       '--execution-id', plan.authorizations.execution,
       '--expected-request-count', String(plan.checkpoint.requestCount),
       '--expected-reserved-micro-usd', String(plan.checkpoint.reservedMicroUsd),
-      '--transport-diagnostics', 'bounded-v1'], { OPENAI_API_KEY: key }, dependencies);
+      '--transport-diagnostics', 'bounded-v1'], { OPENAI_API_KEY: key }, dependencies,
+    delegateEvidence);
+    delegateEvidence.phase = 'delegate_output';
     if (result.answerTemplateVersion !== ANSWER_TEMPLATE) failSmoke('delegate_output_invalid');
     stdout.write(`${JSON.stringify({ mode: 'launch', verified: true, selectedCount: 6,
       projectedRequests: totals.requests, projectedReservedMicroUsd: totals.reservedMicroUsd,
       completed: result.summary?.scored ?? null })}\n`);
     return 0;
   } catch (error) {
-    stderr.write(`${error instanceof ReliabilitySmokeError ? error.code : 'smoke_failed'}\n`);
+    let code = error instanceof ReliabilitySmokeError && PUBLIC_ERROR_CODES.has(error.code)
+      ? error.code : 'smoke_failed';
+    code = redactCredential(code, key);
+    if (postMarker) {
+      const { plan, inputSha256, failureRecord } = postMarker;
+      const outputCreated = (() => {
+        try { return lstatSync(plan.outputDirectory).isDirectory(); } catch { return false; }
+      })();
+      try {
+        createPrivateRecord(failureRecord, {
+          version: 'cairn-fresh-reliability-smoke-launch-failure-v1',
+          executionId: plan.authorizations.execution, runtimeCommit: plan.runtimeCommit,
+          planSha256: inputSha256, phase: delegateEvidence.phase, wrapperCode: code,
+          delegateExitCode: delegateEvidence.exitCode,
+          diagnosticCode: redactCredential(delegateEvidence.diagnosticCode, key),
+          delegateStdoutBytes: delegateEvidence.stdoutBytes,
+          delegateStderrBytes: delegateEvidence.stderrBytes,
+          delegateOutputDirectoryCreated: outputCreated,
+        }, 'failure_record_exists', 'failure_record_write_failed');
+      } catch (persistenceError) {
+        code = persistenceError instanceof ReliabilitySmokeError
+          && ['failure_record_exists', 'failure_record_write_failed'].includes(persistenceError.code)
+          ? persistenceError.code : 'failure_record_write_failed';
+      }
+    }
+    code = redactCredential(code, key);
+    stderr.write(`${code}\n`);
     return 1;
   }
 }

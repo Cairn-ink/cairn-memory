@@ -221,3 +221,29 @@ the same underlying scripts through its absolute `node` binary, and strict
 validation through its own `npm-cli.js`. Offline `npm ci --prefix` installed
 the isolated OpenAI, MCP and plugin-validation tooling; no dependency manifests
 or locks changed.
+
+### First-review correction implementation evidence
+
+The bounded wrapper correction renames the output collector to
+`boundedOutputSink` and adds a create-only, fsynced 0600 failure record beside
+the launch marker in the private 0700 plan directory. The record contains only
+fixed phase, wrapper and reviewed delegate diagnostic codes, bounded output
+byte counts, exit code and output-directory presence. Raw delegate stderr and
+arbitrary thrown messages are intentionally not retained; the provided key is
+redacted from the record and public status. A record collision or persistence
+failure is an explicit terminal status; the marker remains, with no retry or
+overwrite. Dry-run and pre-marker refusals create no failure record. The
+synthetic actual-delegate test pins a malformed sidecar's changed hash, reaches
+the delegate's reference-rendering preflight, and retains `invalid_sidecar`
+without an output directory or ledger requests. Other synthetic tests cover
+nonzero and thrown delegates, missing key, key redaction, collision, persistence
+failure and relaunch denial. No paid call, real key, corpus or ledger was used.
+
+On both Node 22.16 and 24.15, the broad live-evidence-offline gate passed 348
+tests (318 passed, 30 existing skips); generic tests passed 112/112, JSON
+validation and strict marketplace/plugin validation passed. These broad gates
+preceded the final credential-redaction edge hardening and two focused tests
+for actual missing-key and credential-equals-error-code coverage; the final
+focused correction suite then passed 15/15 on both runtimes. No unresolved gate
+failure was observed. The primary retains ownership of final candidate review, independent
+fixed-base Standards/Spec review, private preflight and any paid launch.

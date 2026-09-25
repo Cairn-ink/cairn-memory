@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { chmodSync, writeFileSync } from 'node:fs';
 import { chmod, lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -17,6 +18,8 @@ import { experimentPolicy } from '../session.mjs';
 const KEY = 'synthetic-smoke-key-never-print';
 const PRIVATE_TEXT = 'synthetic-private-roster-text-never-print';
 const COMMIT = 'a'.repeat(40);
+const failurePath = (f) => path.join(f.root, 'smoke-launch-failure-synthetic-smoke-execution.json');
+const markerPath = (f) => path.join(f.root, 'smoke-launch-attempt-synthetic-smoke-execution.json');
 const stream = () => { const chunks = []; return { write(value) { chunks.push(String(value)); return true; },
   text() { return chunks.join(''); } }; };
 const canonical = (value) => JSON.stringify(value, (key, item) => item && !Array.isArray(item)
@@ -184,6 +187,8 @@ test('keyless dry-run is read-only, validates hashes/roster/checkpoint/runtime a
     inspectRuntime: () => {}, fetchImpl: () => assert.fail('dry-run transport'),
     readKey: () => { keyReads += 1; throw new Error('key must remain unread'); } }), 0);
   assert.equal(keyReads, 0);
+  await assert.rejects(lstat(failurePath(f)), { code: 'ENOENT' });
+  await assert.rejects(lstat(markerPath(f)), { code: 'ENOENT' });
   const realRuntimeError = stream();
   assert.equal(await main(['--plan', f.planPath, '--dry-run'], { stdout: stream(),
     stderr: realRuntimeError, fetchImpl: () => assert.fail('transport') }), 1);
@@ -227,6 +232,20 @@ test('keyless dry-run is read-only, validates hashes/roster/checkpoint/runtime a
   assert.equal((await run(f, '--dry-run')).stderr, 'selection_mismatch\n');
 });
 
+test('actual missing key file after marker retains fixed failure without delegate output', async (t) => {
+  const f = await setup(t);
+  await rm(f.keyFile);
+  const result = await run(f, '--launch');
+  assert.equal(result.code, 1);
+  assert.equal(result.stderr, 'key_file_invalid\n');
+  const failure = JSON.parse(await readFile(failurePath(f), 'utf8'));
+  assert.equal(failure.phase, 'key_read');
+  assert.equal(failure.wrapperCode, 'key_file_invalid');
+  assert.equal(failure.delegateOutputDirectoryCreated, false);
+  assert.equal((await lstat(markerPath(f))).isFile(), true);
+  assert.equal((await run(f, '--launch')).stderr, 'launch_consumed\n');
+});
+
 test('private input permissions and symlinks refuse before delegation', async (t) => {
   const f = await setup(t);
   await chmod(f.sourcePath, 0o644);
@@ -265,10 +284,141 @@ test('delegate error text cannot escape and a post-marker key failure is termina
     fetchImpl: () => assert.fail('transport') });
   assert.equal(code, 1);
   assert.equal(launchError.text(), 'smoke_failed\n');
-  assert.equal((await lstat(path.join(f.root,
-    'smoke-launch-attempt-synthetic-smoke-execution.json'))).isFile(), true);
+  assert.equal((await lstat(markerPath(f))).isFile(), true);
+  const failure = JSON.parse(await readFile(failurePath(f), 'utf8'));
+  assert.equal(failure.phase, 'key_read');
+  assert.equal(failure.wrapperCode, 'smoke_failed');
+  assert.equal(failure.delegateExitCode, null);
+  assert.equal(failure.delegateOutputDirectoryCreated, false);
+  assert.equal((await lstat(failurePath(f))).mode & 0o777, 0o600);
+  assert.doesNotMatch(JSON.stringify(failure), /synthetic missing key|synthetic-smoke-key-never-print/u);
   assert.equal((await run(f, '--launch')).stderr, 'launch_consumed\n');
   assert.equal(state(f.ledger).requestCount, 0);
+});
+
+test('post-marker delegate nonzero retains bounded redacted diagnostics without output', async (t) => {
+  const f = await setup(t);
+  const stdout = stream(); const stderr = stream();
+  const result = await main(['--plan', f.planPath, '--launch'], { stdout, stderr,
+    inspectRuntime: () => {}, delegateMain: async (args, options) => {
+      assert.ok(args.includes('--case-timeout-policy'));
+      assert.equal(options.env.OPENAI_API_KEY, KEY);
+      options.stdout.write('synthetic-progress');
+      options.stderr.write(`missing_environment ${KEY} ${PRIVATE_TEXT}\n`);
+      return 2;
+    } });
+  assert.equal(result, 1);
+  assert.equal(stdout.text(), '');
+  assert.equal(stderr.text(), 'delegate_failed\n');
+  const failureBytes = await readFile(failurePath(f), 'utf8');
+  const failure = JSON.parse(failureBytes);
+  assert.equal(failure.phase, 'delegate_result');
+  assert.equal(failure.wrapperCode, 'delegate_failed');
+  assert.equal(failure.delegateExitCode, 2);
+  assert.equal(failure.diagnosticCode, 'missing_environment');
+  assert.ok(failure.delegateStdoutBytes > 0);
+  assert.ok(failure.delegateStderrBytes > 0);
+  assert.equal(failure.delegateOutputDirectoryCreated, false);
+  assert.doesNotMatch(failureBytes + stdout.text() + stderr.text(),
+    /synthetic-smoke-key-never-print|synthetic-private-roster-text-never-print/u);
+  assert.equal((await lstat(failurePath(f))).mode & 0o777, 0o600);
+  assert.equal((await run(f, '--launch')).stderr, 'launch_consumed\n');
+  assert.equal(state(f.ledger).requestCount, 0);
+});
+
+test('post-marker thrown delegate error retains only closed metadata', async (t) => {
+  const f = await setup(t);
+  const stderr = stream();
+  const code = await main(['--plan', f.planPath, '--launch'], { stdout: stream(), stderr,
+    inspectRuntime: () => {}, delegateMain: async (args, options) => {
+      options.stderr.write(`private-${KEY}\n`);
+      throw new Error(`throw-secret-${KEY}-${PRIVATE_TEXT}`);
+    } });
+  assert.equal(code, 1);
+  assert.equal(stderr.text(), 'smoke_failed\n');
+  const failureBytes = await readFile(failurePath(f), 'utf8');
+  const failure = JSON.parse(failureBytes);
+  assert.equal(failure.phase, 'delegate_call');
+  assert.equal(failure.delegateExitCode, null);
+  assert.equal(failure.diagnosticCode, 'unclassified');
+  assert.equal(failure.delegateOutputDirectoryCreated, false);
+  assert.doesNotMatch(failureBytes, /synthetic-smoke-key-never-print|synthetic-private-roster-text-never-print|throw-secret/u);
+});
+
+test('a synthetic credential matching a fixed error code is redacted from both channels', async (t) => {
+  const f = await setup(t);
+  const stderr = stream();
+  const key = 'delegate_failed';
+  const code = await main(['--plan', f.planPath, '--launch'], { stdout: stream(), stderr,
+    inspectRuntime: () => {}, readKey: () => key,
+    delegateMain: async (args, options) => {
+      assert.equal(options.env.OPENAI_API_KEY, key);
+      options.stderr.write(`${key}\n`);
+      return 1;
+    } });
+  assert.equal(code, 1);
+  const failure = await readFile(failurePath(f), 'utf8');
+  assert.doesNotMatch(stderr.text() + failure, /delegate_failed/u);
+  assert.equal(JSON.parse(failure).diagnosticCode, 'unclassified');
+});
+
+test('actual delegate sidecar preflight failure retains a specific private reason before output', async (t) => {
+  const f = await setup(t);
+  const sidecar = JSON.parse(await readFile(f.plan.sidecar.path, 'utf8'));
+  delete sidecar.schema_version;
+  const sidecarSha256 = await save(f.plan.sidecar.path, sidecar);
+  await f.writePlan({ ...f.plan, sidecar: { ...f.plan.sidecar, sha256: sidecarSha256 } });
+  const result = await run(f, '--launch');
+  assert.equal(result.code, 1);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr, 'delegate_failed\n');
+  const failure = JSON.parse(await readFile(failurePath(f), 'utf8'));
+  assert.equal(failure.phase, 'delegate_result');
+  assert.equal(failure.delegateExitCode, 1);
+  assert.equal(failure.diagnosticCode, 'invalid_sidecar');
+  assert.equal(failure.delegateOutputDirectoryCreated, false);
+  await assert.rejects(lstat(f.plan.outputDirectory), { code: 'ENOENT' });
+  assert.equal(state(f.ledger).requestCount, 0);
+  assert.equal((await lstat(markerPath(f))).isFile(), true);
+  assert.equal((await run(f, '--launch')).stderr, 'launch_consumed\n');
+});
+
+test('pre-marker rejection creates no failure record; post-marker collision never overwrites', async (t) => {
+  const f = await setup(t);
+  const rejected = await main(['--plan', f.planPath, '--launch'], { stdout: stream(),
+    stderr: stream(), inspectRuntime: () => { throw new Error('preflight'); } });
+  assert.equal(rejected, 1);
+  await assert.rejects(lstat(failurePath(f)), { code: 'ENOENT' });
+  await assert.rejects(lstat(markerPath(f)), { code: 'ENOENT' });
+  const sentinel = 'prior-private-failure';
+  const stderr = stream();
+  const code = await main(['--plan', f.planPath, '--launch'], { stdout: stream(), stderr,
+    inspectRuntime: () => {}, readKey: () => {
+      // Simulate another writer claiming the failure name after marker creation.
+      writeFileSync(failurePath(f), sentinel, { mode: 0o600 });
+      throw new Error('synthetic key failure');
+    } });
+  assert.equal(code, 1);
+  assert.equal(stderr.text(), 'failure_record_exists\n');
+  assert.equal(await readFile(failurePath(f), 'utf8'), sentinel);
+  assert.equal((await lstat(markerPath(f))).isFile(), true);
+  assert.equal((await run(f, '--launch')).stderr, 'launch_consumed\n');
+});
+
+test('failure-record persistence error is explicit and leaves launch consumed', async (t) => {
+  const f = await setup(t);
+  const stderr = stream();
+  const code = await main(['--plan', f.planPath, '--launch'], { stdout: stream(), stderr,
+    inspectRuntime: () => {}, readKey: () => {
+      chmodSync(f.root, 0o500);
+      throw new Error(`unprintable ${KEY}`);
+    } });
+  await chmod(f.root, 0o700);
+  assert.equal(code, 1);
+  assert.equal(stderr.text(), 'failure_record_write_failed\n');
+  assert.equal((await lstat(markerPath(f))).isFile(), true);
+  await assert.rejects(lstat(failurePath(f)), { code: 'ENOENT' });
+  assert.equal((await run(f, '--launch')).stderr, 'launch_consumed\n');
 });
 
 test('actual delegate runs six synthetic cases with bounded flags, one-shot marker and redacted output', async (t) => {
