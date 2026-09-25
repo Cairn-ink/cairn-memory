@@ -227,6 +227,15 @@ function assertColdStoredEvidence(trace) {
   }
 }
 
+function assertThreeMethodPairs(trace) {
+  assert.equal(trace.result?.value?.classification?.status, 'applied', JSON.stringify(trace));
+  assert.deepEqual(trace.calls.map(({ route, method }) => [route, method]), [
+    ['count', 'cairn_extract'], ['generation', 'cairn_extract'],
+    ['count', 'cairn_qualifyCandidates'], ['generation', 'cairn_qualifyCandidates'],
+    ['count', 'cairn_classify'], ['generation', 'cairn_classify'],
+  ]);
+}
+
 test('D1 within-limit indexed source-qualified capture reaches normal guarded generation', async (t) => {
   const trace = await capture(t, { size: 113, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
@@ -234,8 +243,7 @@ test('D1 within-limit indexed source-qualified capture reaches normal guarded ge
   assert.equal(trace.calls[2]?.inputTokens, 5_519, JSON.stringify(trace));
   assert.equal(trace.calls[2]?.qualification.schemaContributionTokens, 3_053,
     JSON.stringify(trace));
-  assert.deepEqual(trace.calls.map((call) => call.route),
-    ['count', 'generation', 'count', 'generation', 'count', 'generation']);
+  assertThreeMethodPairs(trace);
   assertColdStoredEvidence(trace);
 });
 
@@ -246,6 +254,7 @@ test('D1 prompt-shaped indexed qualification does not globally halt on a valid s
   assert.equal(trace.calls[2].inputTokens, 5_527, JSON.stringify(trace));
   assert.equal(trace.halted, false, JSON.stringify(trace));
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
+  assertThreeMethodPairs(trace);
   assertColdStoredEvidence(trace);
 });
 

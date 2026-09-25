@@ -266,6 +266,20 @@ Independent original-base Standards/Spec reviews and exact-head remote CI are
 the remaining delivery gates; no merge, release, live compatibility or semantic
 reliability pass is claimed by this local checkpoint.
 
+### D2c review correction — test-only
+
+The independent Spec review of local candidate `fc82c7e` found that `ok: true`
+and reopened receipts did not alone prove classification was applied, and the
+114-unit test did not assert the full route sequence. The focused integrated
+test now checks `classification.status === 'applied'` and the exact extract,
+qualifyCandidates and classify count/generation pairs for **both** original
+fixtures. No runtime or fixture bytes changed. Focused tests pass 4/4 on Node
+22.16 and 24.15. Primary personally reran the corrected focused gate (4/4 on
+each runtime) and the full live-offline suite (335 passed, 30 existing opt-in
+skips, zero failed on each). Runtime hashes still match the full-matrix
+candidate above. Renewed full-base independent reviews and exact-head CI on
+the corrected candidate remain pending.
+
 ## D3 — Verification and delivery (after D2)
 
 Require red→green at the real seam, within-limit and oversized controls,
