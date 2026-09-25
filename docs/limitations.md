@@ -68,6 +68,20 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
+The latest fixed-six development smoke completed and was judged 6/6 in each
+arm, but completion is not a semantic-quality result: Cairn was 2 correct, 4
+wrong, 0 unresolved; full history 3/3/0; and no memory 0/6/0. The audited
+30-case result remains unchanged at 15/8/7; it was not rerun. Recent synthetic
+work also includes a Mem0 fake-HTTP preflight, optional indexed source-window
+capture mechanics, and an existing-only embedding-ledger migration. None is a
+matched answer-quality comparison, semantic improvement, installed-growth
+result or onboarding pass. PR #220's synthetic guard regression is denial-only;
+no new paid capability or paid request is established. Indexed windows leave
+the default first-prefix behavior unchanged and do not prove that a model
+selects or answers correctly from a later passage. S2 answer-stage quality,
+S3 matched comparison, S4 installed growth and S5 cold-context onboarding
+remain open; see the [current milestone checkpoint](plans/comparative-reliability-milestones.md).
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)

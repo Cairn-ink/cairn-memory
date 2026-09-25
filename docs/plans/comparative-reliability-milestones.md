@@ -39,29 +39,80 @@ correct on 15/23 (65.2%) versus full history's 16/23 (69.6%). Full history is a
 reference, not a competing product. The old 70% target is no longer primary and
 is not a threshold retrofitted to new systems.
 
-The authorized API ceiling is US$200 cumulative; US$79.389500 is reserved,
-leaving US$120.610500. Tentative DRI allocations: $15 fresh smoke, $75 paired
-comparison, $20 targeted architecture, $10 installed workflow, $0.610500 buffer.
-Before freezing a phase, the DRI may rebalance within remaining headroom and
-reduce N/arms; freeze its cap before calls and honor that stop. The operational
-ledger remains at US$100 until the authorized limit is separately reviewed and
-enforced. This docs-only task makes no calls or ledger changes; verify the
-frozen plan, ledger and guard before each phase. No reset/refund/retry of prior
-failures; new authority is needed only above the ceiling or for new sensitive
-data access. Replanning within the cap needs no further user approval.
+The authorized API ceiling is US$200 cumulative. The original audit recorded
+US$79.389500 reserved and US$120.610500 remaining; that is a historical
+baseline, not the latest accounting checkpoint below. The original tentative
+phase allocations ($15 fresh smoke, $75 paired comparison, $20 targeted
+architecture, $10 installed workflow and $0.610500 buffer) remain planning
+inputs, not current reservations. Before freezing a phase, the DRI may rebalance
+within remaining headroom and reduce N/arms; freeze its cap before calls and
+honor that stop. The operational ledger remains capped at US$100 unless the
+authorized limit is separately reviewed and enforced. This docs-only task
+makes no calls or ledger changes; verify the frozen plan, ledger and guard
+before each phase. No reset/refund/retry of prior failures; new authority is
+needed only above the ceiling or for new sensitive data access. Replanning
+within the cap needs no further user approval.
 
 Preserve wrapper failure, reservations, unknown prices/outcomes and case results;
 do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after PR #216)
+## Latest checkpoint — 2026-09-25 (after PR #221)
 
-This checkpoint supersedes the execution status of older snapshots below; their
-recorded heads, results and failures remain historical evidence. The following
-candidate PRs are ready, open and unmerged. PR #216's exact-head CI was
-confirmed at this checkpoint; the #213–#215 runs are earlier recorded results,
-not newly rerun checks.
+This concise status supersedes the execution status of older snapshots; their
+heads, results and failures remain historical. PRs #217–#221 are ready, open
+and unmerged. The recorded candidate/CI state is:
+
+| PR | Candidate head | Recorded exact-head CI |
+| --- | --- | --- |
+| [#217](https://github.com/Cairn-ink/cairn-memory/pull/217) | `45eca226` | Run `36076692945`, 17/17 passed. |
+| [#218](https://github.com/Cairn-ink/cairn-memory/pull/218) | `330ecb1` | Run `36082430474`, 17/17 passed. |
+| [#219](https://github.com/Cairn-ink/cairn-memory/pull/219) | `3bd876f` | Run `36083139820`, 17/17 passed. |
+| [#220](https://github.com/Cairn-ink/cairn-memory/pull/220) | `dbfe5d8` | Run `36087301218`, attempt 1, 17/17 passed. |
+| [#221](https://github.com/Cairn-ink/cairn-memory/pull/221) | `a9c00a5` | Run `36086514751`, 17/17 passed. |
+
+PR #220 is reported ready and mergeable, with both local runtime matrices and
+independent full-base Standards/Spec reviews passing; it is not merged. The
+finite S1 mechanical gate alone is accepted. No S1–S5 sequence pass is claimed.
+
+PR #219 records the terminal fresh-six development smoke on PR #217's runtime:
+all three arms completed and were judged 6/6. Cairn scored 2 correct, 4 wrong,
+0 unresolved; full history 3/3/0; no memory 0/6/0. This clears only the tiny
+run's predeclared 95% completion checkpoint at 6/6 in every arm, not semantic
+quality, improvement, comparator parity or an installed-host gate. The audited
+30-case result remains 15 correct, 8 wrong and 7 unresolved; that cohort was
+not rerun. PR #218's
+Mem0 2.2.0 preflight covers 16 synthetic fake-HTTP cases only, not a quality
+comparison. PR #220 adds an optional indexed-window path for passages beyond
+the ordinary first-800-unit receipt prefix; the default is unchanged and the
+synthetic mechanics establish no semantic gain. Its W10 request-guard regression
+is denial-only, not a new paid capability or paid request. PR #221 proves a
+synthetic existing-only v1→v2 embedding-ledger migration preserves history; the
+actual ledger was unchanged, and that migration establishes no paid request
+guard.
+
+The last read-only accounting audit recorded US$86.171460 conservatively
+reserved and 12,633 requests terminal, against the unchanged US$100 operational
+cap and US$200 user ceiling. This documentation checkpoint did not inspect the
+ledger or make a paid call. Verify the actual ledger, grants and guard before
+any future paid phase; no old-cohort rerun or budget increase is authorized.
+
+S2 semantic answer-stage quality, S3 matched Mem0 scoring, S4 installed growth
+and S5 cold-context onboarding remain open. A separately versioned
+indexed-window provenance plan is frozen at `3cd37a5` against PR #220; its
+implementation has started but is not accepted and has no public PR link yet.
+Ingestion and verifier versioning must precede scoring. Later paired fresh
+comparison, guarded Mem0 routes, same-budget MOC ablation and installed growth /
+onboarding remain separately gated proposals, not results. No source text, case
+IDs or private artifact paths belong in public documentation.
+
+## Historical checkpoint — 2026-09-25 (after PR #216)
+
+At that checkpoint this status superseded older execution snapshots; it is
+retained here as historical evidence. The following candidate PRs were ready,
+open and unmerged. PR #216's exact-head CI was confirmed then; the #213–#215
+runs were earlier recorded results, not newly rerun checks.
 
 | PR | Candidate head | Recorded exact-head CI |
 | --- | --- | --- |
@@ -107,13 +158,11 @@ pending. Recheck the actual ledger, grants, runner and current PR heads before
 any paid phase; no source text, case IDs or private artifact paths belong in
 public reports.
 
-Review correction scope, frozen before edits: independent Standards and Spec
-reviews of `55e2b3b` both found that ROADMAP still presented the #212 checkpoint
-as current. The primary's initial checkpoint assignment was too narrow. Update
-ROADMAP's current status to this after-#216 checkpoint, preserving the prior
-index diagnostic and unexplained tokenizer failure as historical evidence.
-No runtime or paid-work change is included. Reverify contributor checks on
-both runtimes and rerun both full original-base review axes on the new head.
+Historical review correction: independent Standards and Spec reviews of
+`55e2b3b` found that ROADMAP still presented the #212 checkpoint as current.
+That documentation correction produced this after-#216 snapshot. It has since
+been superseded by the after-#221 checkpoint above; no runtime or paid-work
+change was included in that earlier correction.
 
 ## Previous checkpoint — 2026-09-25 (after PR #212; retained)
 
