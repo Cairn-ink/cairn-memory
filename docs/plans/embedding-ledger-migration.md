@@ -125,7 +125,8 @@ Report any interface mismatch to primary before expanding scope.
 
 ## Acceptance and next step
 
-Planning only; implementation and gates pending. Passing L1–L8 establishes an
+Worker candidate and offline gates complete; independent review and dependent
+CI remain pending. Passing L1–L8 establishes an
 explicit synthetic-tested accounting transition, not a usable competitor
 transport. Next S3b must freeze a separate Mem0 stage grant, bounded chat and
 embedding requests/usage, every-attempt accounting including fallback,
@@ -133,3 +134,21 @@ key-owning Node loopback gateway, child termination and fake-HTTP tests. Only
 after independent review, official price verification, temporal-treatment and
 matched-roster decisions may primary plan a new paid phase within the unchanged
 cumulative ceiling. Never infer authority to migrate the real ledger here.
+
+## Worker evidence (synthetic only)
+
+The new 14-case focused suite uses only new temporary SQLite files. It covers
+mixed and empty histories, rowid gaps, exact and safe-integer limits, changed
+binding, default-v1 compatibility, v2 accounting, real child races, post-copy
+rollback, and both process-exit and abrupt SIGKILL seams before/after COMMIT.
+The SIGKILL pre-COMMIT case recovers through the same bound writable upgrade;
+the post-COMMIT case returns `already-upgraded`, with nonempty history intact.
+This is crash-test evidence, not a power-loss or filesystem durability proof.
+
+On each of Node 22.16.0 and 24.15.0, the updated budget command passed 29/29
+(15 legacy plus 14 new), request-guard 169/169, generic tests 112/112, and
+live-evidence-offline 320 passed/30 skipped/0 failed. Both synthetic demos,
+JSON validation and isolated locked Claude Code 2.1.260 strict plugin
+validation passed. No actual operator ledger, provider or credential was used.
+Primary must inspect the fixed-base diff and rerun its gates; Standards, Spec,
+dependent CI and any later transport grant are separate gates.
