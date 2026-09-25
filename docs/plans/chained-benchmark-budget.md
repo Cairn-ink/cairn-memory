@@ -2,8 +2,8 @@
 
 Status: contract frozen; implementation is NOT released until the exact-head
 CI of the scorer dependency is accepted. No operational use.
-Fixed review base: `6679e1ffe7beae2ee78d2a0c5817565e9aece10e`
-(`test/qualified-source-scoring`, locally verified and independently reviewed).
+Fixed review base: `ee96e7faee8459c35479f0aed7b360c868ced250`
+(`test/qualified-source-scoring`, CI dependency-setup correction candidate).
 Branch/worktree: `feat/chained-benchmark-budget` / `chained-benchmark-budget`.
 Only unpublished planning commits were rebased onto that scorer candidate;
 the primary worktree, existing grants and operational ledger are untouched.
