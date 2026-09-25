@@ -213,6 +213,59 @@ core algorithm, guard, phase projection, CI, dependency, model, corpus or paid
 artifact change. Main personally inspects and reruns both runtime gates before
 freezing the deliverable candidate for independent reviews.
 
+### D2 implementation checkpoint — synthetic only, verification in progress
+
+`schemasFor('qualifyCandidates')` now gives the guarded provider route a
+request-scoped `$defs`/`$ref` schema; the adapter separately validates output
+using the same builder's fully expanded form. An independent test expands wire
+references and compares SHA-256 of the entire result to literal original-base
+goldens for one through five items with non-contiguous item/candidate indices.
+The adapter also checks the full serialized count request against the existing
+6,000-token local bound before any HTTP. Other methods, guard code, output
+budget and model-call count are unchanged.
+
+On both Node 22.16 and 24.15, the original 113/114-unit actual-core fake-HTTP fixtures now
+complete three count/generation pairs; compact qualification count requests
+measure 5,519/5,527 local tokens versus the frozen old 7,024/7,032, with four
+qualified memories cold-reopened and exact source receipts/anchors checked.
+The still-oversize synthetic fixture is locally refused before qualification
+HTTP or admission; its guard remains open and a distinct smaller capture in
+the same approved scope succeeds. The original D1 RED is retained in commit
+`81aa697` and must not be erased from the record. Focused adapter tests 7/7
+and integrated live tests 4/4 pass on both runtimes. The complete OpenAI
+adapter suite 211/211 passes on Node 22.16; the remaining both-runtime matrix
+and primary review remain pending. These local tokenizer measurements do not prove provider token
+savings, actual strict-schema compatibility, historic method identity or the
+prefix invalid-output cause.
+
+### Primary final local acceptance
+
+Primary inspected all eight scoped files and personally reran the final runtime
+and test bytes on Node 22.16.0 and 24.15.0. Both complete matrices passed:
+
+| Gate | Result per runtime |
+| --- | --- |
+| `npm test`, `npm run validate`, pinned local Claude 2.1.260 validation | 112 tests; JSON and marketplace/strict plugin pass |
+| `test:core`, `test:openai`, `test:mcp` | 702, 211 and 91 passed |
+| `test:experiment-budget`, `test:experiment-request-guard` | 25 and 227 passed |
+| `test:live-evidence-offline` | 335 passed, 30 existing opt-in skips, zero failed |
+| `test:longmemeval` and its ingestion/comparison/public demos | 128 passed; all three demos pass |
+| Budget/guard demos; store/capture/OpenAI offline demos | All pass |
+| Installed rationale opt-in gate | All 4 pass, zero skipped |
+
+The installed gate was explicitly run with
+`CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node --test evaluation/live/test/rationale-pilot.test.mjs`
+after isolated dependency/cache preparation; ordinary-suite skips are not counted
+as installed passes. No provider key was read. Primary also independently loaded
+the original `d302abe` schema source and compared the fully expanded new schema
+across 20 combinations of 1–5 items and 1/4/16/20 non-contiguous candidate indices;
+all equal on both runtimes. The original schema-source SHA-256 was
+`195719f3d86483e80cdeaca6c0fae97a0bd5d9c186daf7a31c6d541c27f815f2`.
+These are offline correctness checks, not evidence of live token savings.
+Independent original-base Standards/Spec reviews and exact-head remote CI are
+the remaining delivery gates; no merge, release, live compatibility or semantic
+reliability pass is claimed by this local checkpoint.
+
 ## D3 — Verification and delivery (after D2)
 
 Require red→green at the real seam, within-limit and oversized controls,

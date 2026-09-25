@@ -1,7 +1,7 @@
 import { get_encoding } from 'tiktoken';
 import { MemoryStoreError } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
-import { schemasFor, snapshotIndexedExtractInput } from './schemas.mjs';
+import { qualificationCandidatesInlineSchema, schemasFor, snapshotIndexedExtractInput } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 import { classificationWire } from './classification-wire.mjs';
 
@@ -180,6 +180,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let serializedInput;
     let localTokens;
     let schema;
+    let validationSchema;
     let snapshot;
     let wire;
     let instructions;
@@ -191,6 +192,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       const originalSerializedInput = JSON.stringify(prevalidated);
       snapshot = JSON.parse(originalSerializedInput);
       schema = schemasFor(method, snapshot);
+      validationSchema = method === 'qualifyCandidates'
+        ? qualificationCandidatesInlineSchema(snapshot) : schema;
       instructions = qualificationInstructions(method, system, snapshot);
       localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
       if (method === 'classify') {
@@ -214,6 +217,10 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     // Serialize both requests before the first asynchronous host callback.
     const countBody = JSON.stringify(payload);
     const generateBody = JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
+    if (method === 'qualifyCandidates' && countTokens(countBody) > 6000) {
+      diagnose('request_bounds');
+      fail('context_budget_exceeded');
+    }
     const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose);
     if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
       diagnose('token_count_response');
@@ -228,7 +235,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     checkAbort(signal, diagnose);
     const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)
-      ?? normalizeQualificationSlots(method, snapshot, output, schema, diagnose);
+      ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),

@@ -152,6 +152,17 @@ fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
 
+The opt-in `qualifyCandidates` path now shares repeated request-scoped strict
+field schemas through `$defs`/`$ref` in its count and generation wire requests.
+The adapter validates returned fields against the equivalent fully expanded
+schema, while the guarded route matches the exact compact wire schema. A
+second local check counts the complete serialized qualification count request
+against the existing 6,000-token ceiling before either HTTP call. This is a
+conservative admission check, not a provider token guarantee: the provider's
+count and the unchanged 7,024-token ceiling still decide whether generation
+may proceed. Neither source evidence nor output fields are shortened; a request
+that remains too large fails explicitly without a partial qualified batch.
+
 Classification also requires exactly one output item per distinct target memory
 in the detached zero-to-five-target request. Duplicate or oversized direct
 adapter target lists fail before HTTP. The array schema constrains length and

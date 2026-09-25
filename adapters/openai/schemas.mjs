@@ -42,6 +42,67 @@ const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const qualificationSlots = (items, variants) => object(Object.fromEntries(
   items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
+// Preserve the fully expanded schema for local response validation. The
+// provider wire form below only replaces repeated, identical field schemas.
+export function qualificationCandidatesInlineSchema(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+  const items = Array.from(list(input.items));
+  if (!items.length || items.length > 5) invalid();
+  const itemIndices = items.map(item => index(item?.itemIndex));
+  if (sorted(itemIndices).length !== items.length) invalid();
+  const allCandidateIndices = new Set();
+  const variants = items.map(item => {
+    const candidates = Array.from(list(item.candidates));
+    if (!candidates.length) invalid();
+    const candidateIndices = candidates.map(candidate => {
+      const candidateIndex = index(candidate?.candidateIndex);
+      if (allCandidateIndices.has(candidateIndex)) invalid();
+      allCandidateIndices.add(candidateIndex);
+      return candidateIndex;
+    });
+    // Core checks duplicate selections, aggregate anchor count and complete
+    // item coverage. The provider schema restricts each field to this item's
+    // candidates without claiming that a selected quote entails the value.
+    const field = (known, unknown) => ({ anyOf: [
+      object({ value: known, evidenceIndices: {
+        ...array(constrained(integer, candidateIndices), 4), minItems: 1,
+      } }),
+      object({ value: unknown, evidenceIndices: {
+        ...array(constrained(integer, candidateIndices), 4), minItems: 0,
+      } }),
+    ] });
+    const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
+    const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
+    return object({ itemIndex: constrained(integer, [item.itemIndex]),
+      subject: descriptive(160), property: descriptive(160),
+      scope: descriptive(120), applies: descriptive(120), value: descriptive(160),
+      attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
+      commitment: categorical(['adopted', 'considered', 'rejected']),
+    });
+  });
+  return object({ qualifications: qualificationSlots(items, variants) });
+}
+
+function compactQualificationCandidatesSchema(inline) {
+  const definitions = {};
+  const slots = inline.properties.qualifications.properties;
+  const compactSlots = Object.fromEntries(Object.entries(slots).map(([name, slot], position) => {
+    const properties = { ...slot.properties };
+    for (const [suffix, field, aliases] of [
+      ['text160', 'subject', ['subject', 'property', 'value']],
+      ['text120', 'scope', ['scope', 'applies']],
+    ]) {
+      const key = `q${position}_${suffix}`;
+      definitions[key] = properties[field];
+      for (const alias of aliases) properties[alias] = { $ref: `#/$defs/${key}` };
+    }
+    return [name, { ...slot, properties }];
+  }));
+  return { ...inline, properties: { ...inline.properties,
+    qualifications: { ...inline.properties.qualifications, properties: compactSlots } },
+  $defs: definitions };
+}
+
 function exactData(value, fields) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
@@ -196,42 +257,7 @@ export function schemasFor(method, input) {
       fromReceipt: constrained(integer, receiptIndices), toReceipt: constrained(integer, receiptIndices) }), 10) });
   }
   if (method === 'qualifyCandidates') {
-    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
-    const items = Array.from(list(input.items));
-    if (!items.length || items.length > 5) invalid();
-    const itemIndices = items.map(item => index(item?.itemIndex));
-    if (sorted(itemIndices).length !== items.length) invalid();
-    const allCandidateIndices = new Set();
-    const variants = items.map(item => {
-      const candidates = Array.from(list(item.candidates));
-      if (!candidates.length) invalid();
-      const candidateIndices = candidates.map(candidate => {
-        const candidateIndex = index(candidate?.candidateIndex);
-        if (allCandidateIndices.has(candidateIndex)) invalid();
-        allCandidateIndices.add(candidateIndex);
-        return candidateIndex;
-      });
-      // Core checks duplicate selections, aggregate anchor count and complete
-      // item coverage. The provider schema restricts each field to this item's
-      // candidates without claiming that a selected quote entails the value.
-      const field = (known, unknown) => ({ anyOf: [
-        object({ value: known, evidenceIndices: {
-          ...array(constrained(integer, candidateIndices), 4), minItems: 1,
-        } }),
-        object({ value: unknown, evidenceIndices: {
-          ...array(constrained(integer, candidateIndices), 4), minItems: 0,
-        } }),
-      ] });
-      const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
-      const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
-      return object({ itemIndex: constrained(integer, [item.itemIndex]),
-        subject: descriptive(160), property: descriptive(160),
-        scope: descriptive(120), applies: descriptive(120), value: descriptive(160),
-        attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
-        commitment: categorical(['adopted', 'considered', 'rejected']),
-      });
-    });
-    return object({ qualifications: qualificationSlots(items, variants) });
+    return compactQualificationCandidatesSchema(qualificationCandidatesInlineSchema(input));
   }
   if (method === 'qualify') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();

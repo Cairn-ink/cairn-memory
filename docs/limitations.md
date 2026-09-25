@@ -53,6 +53,19 @@ opening their answers or running them. The source experiment isolates two
 exposure policies, not a matched Mem0 result or parity claim; the real ledger,
 prices, caps and comparator budget remain unaudited in this offline packet.
 
+The first paid six-case source-pair development attempt halted after seven
+requests and produced zero scored cases. Its prefix capture returned
+`invalid_model_output`; retained evidence does not identify that failure's
+method or subreason. Its indexed capture later observed an 8,701-token provider
+input count above the unchanged 7,024-token ceiling and globally halted.
+The [qualification budget-boundary repair](plans/qualification-budget-boundary.md)
+compacts only the candidate-qualification wire schema and adds a conservative
+complete-wire local check. Synthetic fake-HTTP tests now fit the previously
+failing prompt-shaped fixture without dropping source receipts, but the
+historic method, real-provider token savings and strict-schema compatibility
+remain unverified. The consumed attempts are not reclassified or retried, and
+there is no new semantic score or quality claim.
+
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed
 source receipts stop moving through capture, recall and answer packing. It adds

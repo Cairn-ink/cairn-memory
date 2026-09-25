@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { countOpenAITokens, createOpenAIModel } from '../../../adapters/openai/index.mjs';
+import { DEFAULT_MODEL } from '../../../adapters/openai/profiles.mjs';
+import { schemasFor } from '../../../adapters/openai/schemas.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { createExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
@@ -20,8 +22,7 @@ import { experimentPolicy } from '../session.mjs';
 const LIMITS = { contextWindow: 123_000, outputTokens: 512,
   answerTimeoutMs: 200_000, recallLimit: 6 };
 
-function sourceCase(size, turnCount = 12) {
-  const sourceId = 'synthetic-budget-case';
+function sourceCase(size, turnCount = 12, sourceId = 'synthetic-budget-case') {
   const questionId = opaqueQuestionId(sourceId);
   const turns = Array.from({ length: turnCount }, (_, index) => ({
     turn_id: stableTurnIdV2(sourceId, 0, index), role: index % 2 ? 'assistant' : 'user',
@@ -97,7 +98,8 @@ function modelOutput(body, extractionItems, candidateSources) {
   assert.fail(`unexpected method ${method}`);
 }
 
-async function capture(t, { size, turnCount, extractionItems, candidateSources = 4 }) {
+async function capture(t, { size, turnCount, extractionItems, candidateSources = 4,
+  followupSize = null }) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-qualified-budget-boundary-'));
   const data = sourceCase(size, turnCount);
   const f = ledger(t, root, data);
@@ -147,23 +149,57 @@ async function capture(t, { size, turnCount, extractionItems, candidateSources =
           total_tokens: counts.get(method) + 100 } });
     } });
   t.after(() => guard.close());
-  const model = createOpenAIModel({ apiKey: 'synthetic-only',
+  const baseModel = createOpenAIModel({ apiKey: 'synthetic-only',
     fetchImpl: (url, options) => guard.cairnFetch(url, options),
     onDiagnostic: (entry) => diagnostics.push({ stage: entry.stage, reason: entry.reason }) });
-  const core = openMemoryCore({ path: join(root, 'indexed.sqlite'), model,
-    captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' });
-  t.after(() => core.close());
+  const qualificationRequests = [];
+  const model = Object.freeze({ ...baseModel, qualifyCandidates: async (request) => {
+    qualificationRequests.push({ system: request.system, input: request.input });
+    return baseModel.qualifyCandidates(request);
+  } });
+  const corePath = join(root, 'indexed.sqlite');
+  const coreOptions = { path: corePath, model,
+    captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' };
+  const core = openMemoryCore(coreOptions);
+  let coreClosed = false;
+  t.after(() => { if (!coreClosed) core.close(); });
   const plan = planIndexedWindowLongMemEvalCase({ history: data.history,
     namespace: data.namespace });
   assert.equal(plan.executable, true);
   assert.equal(plan.batches.length, 1);
-  let result, scopeError;
+  let result, followupResult, scopeError, failedMemoryCount;
   try {
     await guard.withCaseScope({ phase: 'generation', caseId: f.scopeId }, async () => {
       result = await core.capture(plan.batches[0].captureInput);
+      if (followupSize !== null) {
+        const listing = core.list({ namespace: data.namespace });
+        assert.equal(listing.ok, true, JSON.stringify(listing));
+        failedMemoryCount = listing.value.memories.length;
+        const followup = sourceCase(followupSize, 4, 'synthetic-budget-followup');
+        const followupPlan = planIndexedWindowLongMemEvalCase({ history: followup.history,
+          namespace: followup.namespace });
+        assert.equal(followupPlan.executable, true);
+        assert.equal(followupPlan.batches.length, 1);
+        followupResult = await core.capture(followupPlan.batches[0].captureInput);
+      }
     });
   } catch (error) { scopeError = error.code; }
-  return { calls, diagnostics, result, scopeError, halted: guard.isHalted(),
+  let stored = [];
+  if (result?.ok) {
+    core.close(); coreClosed = true;
+    const reopened = openMemoryCore(coreOptions);
+    t.after(() => reopened.close());
+    stored = result.value.admission.memories.map(({ id }) => {
+      const found = reopened.get({ namespace: data.namespace, memoryId: id,
+        includeQualification: true });
+      assert.equal(found.ok, true, JSON.stringify(found));
+      return found.value;
+    });
+  }
+  return { calls, diagnostics, result, followupResult, qualificationRequests,
+    scopeError, failedMemoryCount, halted: guard.isHalted(),
+    stored,
+    expectedSources: plan.batches[0].captureInput.messages.map(({ role, content }) => ({ role, content })),
     bounds: { coreAndAdapterLocalTokens: 6_000,
       guardCountMaxInputTokens: f.policy.cairnCount.maxInputTokens,
       guardGenerationMaxInputTokens: f.policy.cairnGeneration.maxInputTokens,
@@ -173,25 +209,44 @@ async function capture(t, { size, turnCount, extractionItems, candidateSources =
       outcome: attempt.outcome, actualMicroUsd: attempt.actualMicroUsd })) };
 }
 
+function assertColdStoredEvidence(trace) {
+  assert.equal(trace.stored.length, 4);
+  assert.deepEqual(trace.stored.map((item) => item.memory.id),
+    trace.result.value.admission.memories.map((item) => item.id));
+  const sorted = (entries) => entries.map((entry) => JSON.stringify(entry)).sort();
+  const expected = sorted(trace.expectedSources.map(({ role, content }) => ({ role, excerpt: content })));
+  for (const item of trace.stored) {
+    assert.deepEqual(sorted(item.receipts.map(({ role, excerpt }) => ({ role, excerpt }))), expected);
+    assert.ok(item.qualification.anchors.length > 0);
+    for (const anchor of item.qualification.anchors) {
+      const receipt = item.receipts.find((row) => row.id === anchor.receiptId);
+      assert.ok(receipt);
+      assert.equal(anchor.text, receipt.excerpt.slice(anchor.start, anchor.end));
+      assert.deepEqual(anchor.fields, ['value']);
+    }
+  }
+}
+
 test('D1 within-limit indexed source-qualified capture reaches normal guarded generation', async (t) => {
   const trace = await capture(t, { size: 113, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
   assert.equal(trace.halted, false, JSON.stringify(trace));
-  assert.equal(trace.calls[2]?.inputTokens, 7_024, JSON.stringify(trace));
-  assert.equal(trace.calls[2]?.qualification.schemaContributionTokens, 4_558,
+  assert.equal(trace.calls[2]?.inputTokens, 5_519, JSON.stringify(trace));
+  assert.equal(trace.calls[2]?.qualification.schemaContributionTokens, 3_053,
     JSON.stringify(trace));
-  assert.deepEqual(trace.calls.slice(0, 4).map((call) => call.route),
-    ['count', 'generation', 'count', 'generation']);
+  assert.deepEqual(trace.calls.map((call) => call.route),
+    ['count', 'generation', 'count', 'generation', 'count', 'generation']);
+  assertColdStoredEvidence(trace);
 });
 
 test('D1 prompt-shaped indexed qualification does not globally halt on a valid source batch', async (t) => {
   const trace = await capture(t, { size: 114, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.calls[0]?.method, 'cairn_extract', JSON.stringify(trace));
   assert.equal(trace.calls[2]?.method, 'cairn_qualifyCandidates', JSON.stringify(trace));
-  assert.equal(trace.calls[2].inputTokens, 7_032, JSON.stringify(trace));
-  // RED at the real adapter/guard seam until the separately scoped D2 repair.
+  assert.equal(trace.calls[2].inputTokens, 5_527, JSON.stringify(trace));
   assert.equal(trace.halted, false, JSON.stringify(trace));
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
+  assertColdStoredEvidence(trace);
 });
 
 test('D2 item, candidate, and evidence dimensions isolate qualification request growth', async (t) => {
@@ -206,14 +261,15 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   assert.equal(qualification(full).qualification.itemCount, 4);
   assert.equal(qualification(oneSource).qualification.candidateCount, 4);
   assert.equal(qualification(full).qualification.candidateCount, 16);
-  assert.equal(qualification(threeItems).inputTokens, 5_564);
-  assert.equal(qualification(oneSource).inputTokens, 5_844);
-  assert.equal(qualification(full).inputTokens, 7_032);
+  assert.ok(qualification(threeItems).inputTokens < qualification(full).inputTokens);
+  assert.ok(qualification(oneSource).inputTokens < qualification(full).inputTokens);
+  assert.equal(qualification(full).inputTokens, 5_527);
   assert.equal(qualification(full).localTokens, 2_379);
-  assert.equal(qualification(full).qualification.schemaTokens, 4_561);
-  assert.equal(qualification(full).qualification.schemaContributionTokens, 4_558);
+  assert.equal(qualification(full).qualification.schemaTokens, 3_056);
+  assert.equal(qualification(full).qualification.schemaContributionTokens, 3_053);
   assert.equal(qualification(full).qualification.evidenceContributionTokens, 1_016);
-  assert.equal(qualification(threeItems).qualification.schemaContributionTokens, 3_427);
+  assert.ok(qualification(threeItems).qualification.schemaContributionTokens
+    < qualification(full).qualification.schemaContributionTokens);
   assert.equal(qualification(oneSource).qualification.evidenceContributionTokens, 332);
   assert.deepEqual(full.bounds, { coreAndAdapterLocalTokens: 6_000,
     guardCountMaxInputTokens: 7_024, guardGenerationMaxInputTokens: 7_024,
@@ -221,4 +277,30 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   assert.equal(qualification(localRefusal), undefined);
   assert.equal(localRefusal.result?.error.code, 'context_budget_exceeded');
   assert.equal(localRefusal.halted, false);
+});
+
+test('D2 full qualification wire refuses locally before count without halting the guard', async (t) => {
+  const trace = await capture(t, { size: 200, turnCount: 4, extractionItems: 4,
+    followupSize: 40 });
+  assert.equal(trace.result?.error.code, 'context_budget_exceeded', JSON.stringify(trace));
+  assert.equal(trace.halted, false, JSON.stringify(trace));
+  assert.equal(trace.followupResult?.ok, true, JSON.stringify(trace));
+  assert.equal(trace.failedMemoryCount, 0);
+  assert.deepEqual(trace.calls.map((call) => call.method), [
+    'cairn_extract', 'cairn_extract',
+    'cairn_extract', 'cairn_extract', 'cairn_qualifyCandidates', 'cairn_qualifyCandidates',
+    'cairn_classify', 'cairn_classify',
+  ]);
+  const request = trace.qualificationRequests[0];
+  assert.equal(trace.qualificationRequests.length, 2);
+  const originalLocal = countOpenAITokens(JSON.stringify({ system: request.system,
+    input: request.input, maxOutputTokens: 1024 }));
+  const lowerBoundWire = countOpenAITokens(JSON.stringify({ model: DEFAULT_MODEL,
+    instructions: request.system,
+    input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(request.input) }] }],
+    text: { format: { type: 'json_schema', name: 'cairn_qualifyCandidates', strict: true,
+      schema: schemasFor('qualifyCandidates', request.input) } }, truncation: 'disabled' }));
+  assert.ok(originalLocal <= 6_000);
+  assert.ok(lowerBoundWire > 6_000);
+  assert.equal(trace.stored.length, 0);
 });

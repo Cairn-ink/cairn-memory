@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — bounded qualification request wire
+
+- Factor repeated candidate-qualification strict-schema fields with local
+  `$defs`/`$ref` while retaining the exact expanded response constraints and
+  one count/generation pair. A complete-wire local 6,000-token check now refuses
+  oversized qualification before HTTP; guard/provider ceilings remain unchanged.
+  Synthetic source-qualified captures and cold receipt/anchor checks pass. The
+  halted seven-request development attempt remains failed and this does not
+  establish provider compatibility, answer quality or a new paid result.
+
 ## Unreleased — offline qualified source-pair cohort preparation
 
 - Add pure ID/type-only development and reserved-holdout allocation with a new
