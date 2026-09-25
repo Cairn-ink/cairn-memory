@@ -144,8 +144,8 @@ isolated adapter; no guard source is changed. The B9 batch/fallback control
 reserves each synthetic physical dispatch in the same durable v2 ledger and
 observes the exact `request_cap_exceeded` boundary.
 
-Focused observations: on Node 22.16.0 and 24.15.0, the new bound test passed
-13/13. It covers mixed unknown/succeeded history with original rowids 1 and
+Initial focused observations: on Node 22.16.0 and 24.15.0, the new bound test
+passed 13/13. It covers mixed unknown/succeeded history with original rowids 1 and
 9, next rowid 10, exact digest equality across migration, pending/overrun
 diagnosis, accessor getters zero, a real same-transaction callback rowid edit
 that is rolled back, foreign rowid-only edits and path drift, and actual
@@ -161,12 +161,36 @@ failure. The fixed base has no `inspectEmbeddingExperimentBudgetSnapshot` or
 `openBoundEmbeddingExperimentBudget` export; the new positive controls
 exercise behavior absent there.
 
-Final sequential matrix, with isolated `npm ci` only under `adapters/openai`,
+The first candidate `3ab2ac6f59820deb5bcd13a9b1bdc7b122bbc66c` passed
+primary's 18 direct and matrix gates on both Nodes, but independent Standards
+and Spec review found two test-evidence gaps. Standards found the synthetic
+fault children could accept a prefix-looking traversal or another directory;
+primary follow-up additionally found the migration child's separate
+`requestText` could name another ledger even when `configText` looked safe.
+Spec found the B8/B10 suite had no actual
+same-path inode replacement during authorization or a bound operation, though
+the runtime identity check was present. No product-runtime correction was
+indicated. The correction limits both children to canonical direct children
+of their own generated temporary roots before hooks or mutation, and binds
+the migration request's four config fields to the validated config text.
+Negative controls now reject lookalike/traversal roots and an alternate
+request target before changing either fresh synthetic ledger. Actual callback
+and post-work replacement controls prove a new inode at the same pathname is
+refused, a bound handle closes after the post-work race, no reservation commits,
+and the replacement and moved original stay inspectable. They do not claim
+SQLite can reverse the callback's filesystem writes. Both Node versions passed
+the revised focused migration-plus-bound suite 33/33. The new negatives are
+red-capable against the first candidate's child boundary, but that earlier
+candidate was not rerun with them after review; no false historical red-run
+claim is made.
+
+Final worker sequential matrix after the review corrections, with isolated
+`npm ci` only under `adapters/openai`,
 `adapters/mcp` and `tools/plugin-validation`:
 
 | Gate | Node 22.16.0 | Node 24.15.0 |
 | --- | --- | --- |
-| `npm run test:experiment-budget` | 55 pass | 55 pass |
+| `npm run test:experiment-budget` | 58 pass | 58 pass |
 | `npm run test:experiment-request-guard` | 249 pass | 249 pass |
 | `npm run test:live-evidence-offline` | 340 pass, 30 expected skips | 340 pass, 30 expected skips |
 | `npm test` | 112 pass | 112 pass |

@@ -3,14 +3,32 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { registerHooks } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readdirSync } from 'node:fs';
+import { lstatSync, readdirSync, realpathSync } from 'node:fs';
 
 const [mode, configText, attemptId] = process.argv.slice(2);
 assert.ok(['rename-open', 'foreign-post-work', 'fail-before-commit',
-  'fail-after-commit', 'callback-sql-mutation', 'old-guards-v2'].includes(mode));
+  'fail-after-commit', 'callback-sql-mutation', 'old-guards-v2',
+  'replace-post-work'].includes(mode));
 const config = JSON.parse(configText);
-assert.match(config.directory, /^\/tmp\/cairn-bound-embedding-/u);
+// This executable fault helper is only for its own generated test fixture.
+// Reject traversal, lookalike prefixes and symlinked directories before hooks.
+assert.deepEqual(Object.keys(config).sort(),
+  ['directory', 'runId', 'limitMicroUsd', 'requestCap'].sort());
+assert.equal(typeof config.directory, 'string');
+assert.equal(path.isAbsolute(config.directory), true);
+assert.equal(config.directory, path.resolve(config.directory));
+const root = path.dirname(config.directory);
+assert.equal(path.dirname(root), realpathSync(tmpdir()));
+assert.match(path.basename(root), /^cairn-bound-embedding-[A-Za-z0-9]{6}$/u);
+assert.equal(path.basename(config.directory), 'budget #v2');
+assert.equal(realpathSync(root), root);
+assert.equal(realpathSync(config.directory), config.directory);
+assert.equal(lstatSync(root).isDirectory(), true);
+assert.equal(lstatSync(config.directory).isDirectory(), true);
+assert.equal(lstatSync(root).isSymbolicLink(), false);
+assert.equal(lstatSync(config.directory).isSymbolicLink(), false);
 if (mode === 'old-guards-v2') {
   // No model work is exercised. The stub makes budget CI independent of the
   // optional adapter install while proving actual guard factory schema fences.
@@ -132,6 +150,10 @@ const replacements = {
     '        const after = readValidatedState(db, version, embeddingBound);',
     "        db.exec('UPDATE attempts SET rowid = 21 WHERE rowid = 1');\n        const after = readValidatedState(db, version, embeddingBound);",
   ],
+  'replace-post-work': [
+    '        const after = readValidatedState(db, version, embeddingBound);',
+    "        syntheticRenameSync(expected.filename, expected.filename + '.moved');\n        syntheticCopyFileSync(expected.filename + '.replacement', expected.filename);\n        const after = readValidatedState(db, version, embeddingBound);",
+  ],
 };
 if (replacements[mode]) registerHooks({ load(url, context, nextLoad) {
   const loaded = nextLoad(url, context);
@@ -140,7 +162,10 @@ if (replacements[mode]) registerHooks({ load(url, context, nextLoad) {
   const [target, replacement] = replacements[mode];
   assert.equal(source.split(target).length, 2, `unique synthetic seam ${mode}`);
   const imports = mode === 'rename-open'
-    ? "import { renameSync as syntheticRenameSync } from 'node:fs';\n" : '';
+    ? "import { renameSync as syntheticRenameSync } from 'node:fs';\n"
+    : mode === 'replace-post-work'
+      ? "import { renameSync as syntheticRenameSync, copyFileSync as syntheticCopyFileSync } from 'node:fs';\n"
+      : '';
   return { ...loaded, source: `${imports}${source.replace(target, replacement)}` };
 } });
 

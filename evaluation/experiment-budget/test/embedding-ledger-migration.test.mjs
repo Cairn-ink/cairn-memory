@@ -298,6 +298,41 @@ const childResult = outcome => {
   return parsed.status;
 };
 
+test('synthetic migration child refuses external, traversal and alternate request targets', t => {
+  const external = mkdtempSync(path.join(tmpdir(), 'cairn-embedding-ledger-external-'));
+  t.after(() => rmSync(external, { recursive: true, force: true }));
+  const outside = { directory: path.join(external, 'budget'), runId: randomUUID(),
+    limitMicroUsd: 100, requestCap: 5 };
+  createExperimentBudget(outside).close();
+  const standard = fixture(t);
+  const alternate = fixture(t);
+  const beforeOutside = readFileSync(path.join(outside.directory, 'experiment-budget.sqlite'));
+  const beforeAlternate = readFileSync(alternate.file);
+  const traversal = { ...outside,
+    directory: `${standard.parent}/../${path.basename(external)}/budget` };
+  const invoke = (config, request) => spawnSync(process.execPath,
+    [child, 'upgrade', JSON.stringify(config), JSON.stringify(request)],
+    { encoding: 'utf8', timeout: 10_000, env: { ...process.env, NODE_NO_WARNINGS: '1' } });
+  const outsideRequest = bound(outside);
+  for (const config of [outside, traversal]) {
+    const request = { ...outsideRequest, directory: config.directory };
+    const result = invoke(config, request);
+    assert.equal(result.status, 1, `migration child did not reject ${config.directory}`);
+    assert.equal(result.signal, null);
+    assert.match(result.stderr, /AssertionError/u);
+    assert.equal(result.stdout, '');
+    assert.deepEqual(readFileSync(path.join(outside.directory, 'experiment-budget.sqlite')),
+      beforeOutside);
+  }
+  const mismatch = invoke(standard.config, bound(alternate.config));
+  assert.equal(mismatch.status, 1, 'migration child did not reject alternate request path');
+  assert.equal(mismatch.signal, null);
+  assert.match(mismatch.stderr, /AssertionError/u);
+  assert.equal(mismatch.stdout, '');
+  assert.deepEqual(readFileSync(alternate.file), beforeAlternate);
+  assert.equal(version(alternate.file), 1);
+});
+
 test('L5/L7 actual child crashes before/after COMMIT and recovers the same bound request', async t => {
   for (const [mode, expectedVersion, exitCode] of [['crash-before-commit', 1, 66],
     ['crash-after-commit', 2, 67]]) {

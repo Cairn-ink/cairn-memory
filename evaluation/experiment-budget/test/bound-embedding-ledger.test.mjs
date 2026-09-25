@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, linkSync, lstatSync, mkdtempSync, readFileSync,
+import { chmodSync, copyFileSync, existsSync, linkSync, lstatSync, mkdtempSync, readFileSync,
   renameSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -270,6 +270,58 @@ test('B4/B6 constructor race, post-work foreign rowid and commit failures fence 
     assert.deepEqual(rawRows(f.config).map(row => row.rowid), committed ? [1, 9, 10] : [1, 9]);
     assert.equal(state.attempts.some(row => row.attemptId === ownId), committed);
     if (committed) assert.equal(state.attempts.at(-1).outcome, null);
+  }
+});
+
+test('B4/B6 same-path inode replacement is refused during callback and post-work operation', t => {
+  const callback = fixture(t);
+  const callbackFile = filename(callback.config);
+  const callbackBytes = readFileSync(callbackFile);
+  assert.throws(() => bound(callback.config, () => {
+    renameSync(callbackFile, `${callbackFile}.moved`);
+    copyFileSync(`${callbackFile}.moved`, callbackFile);
+  }), denied('unsafe_database_file'));
+  assert.notEqual(lstatSync(callbackFile).ino, lstatSync(`${callbackFile}.moved`).ino);
+  assert.deepEqual(readFileSync(callbackFile), callbackBytes);
+  assert.deepEqual(rawRows(callback.config), callback.beforeRows);
+
+  const operation = fixture(t);
+  const operationFile = filename(operation.config);
+  const operationBytes = readFileSync(operationFile);
+  copyFileSync(operationFile, `${operationFile}.replacement`);
+  const ownId = randomUUID();
+  assert.deepEqual(JSON.parse(runChild('replace-post-work', operation.config, ownId)),
+    { first: 'unsafe_database_file', second: 'ledger_closed' });
+  assert.notEqual(lstatSync(operationFile).ino, lstatSync(`${operationFile}.moved`).ino);
+  assert.deepEqual(readFileSync(operationFile), operationBytes);
+  assert.deepEqual(readFileSync(`${operationFile}.moved`), operationBytes);
+  assert.deepEqual(rawRows(operation.config), operation.beforeRows);
+  assert.equal(inspectEmbeddingExperimentBudgetSnapshot(operation.config).requestCount, 2);
+});
+
+test('synthetic bound fault child refuses lookalike and traversal roots before hooks', t => {
+  const external = mkdtempSync(path.join(tmpdir(), 'cairn-bound-embedding-external-'));
+  t.after(() => rmSync(external, { recursive: true, force: true }));
+  const externalConfig = { directory: path.join(external, 'budget #v2'), runId: randomUUID(),
+    limitMicroUsd: 100, requestCap: 3 };
+  createExperimentBudget(externalConfig).close();
+  const inspection = inspectExperimentBudgetForEmbeddingUpgrade(externalConfig);
+  upgradeExperimentBudgetForEmbeddings({ ...externalConfig,
+    expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 },
+    expectedHistorySha256: inspection.historySha256 });
+  const original = readFileSync(filename(externalConfig));
+  const standard = fixture(t);
+  const traversal = { ...externalConfig,
+    directory: `${standard.root}/../${path.basename(external)}/budget #v2` };
+  for (const config of [externalConfig, traversal]) {
+    const result = spawnSync(process.execPath,
+      [child, 'callback-sql-mutation', JSON.stringify(config), randomUUID()],
+      { encoding: 'utf8', timeout: 10_000, env: { ...process.env, NODE_NO_WARNINGS: '1' } });
+    assert.equal(result.status, 1, `fault child did not reject ${config.directory}`);
+    assert.equal(result.signal, null);
+    assert.match(result.stderr, /AssertionError/u);
+    assert.equal(result.stdout, '');
+    assert.deepEqual(readFileSync(filename(externalConfig)), original);
   }
 });
 
