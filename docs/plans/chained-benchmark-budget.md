@@ -1,11 +1,12 @@
 # Chained benchmark budget extension
 
-Status: contract prepared; implementation is NOT released until its accepted
-scorer dependency and fixed review base are recorded. No operational use.
-Planning base: `9402ae702b3b8836c6684db4a889acef34ee4b60` (PR #224).
+Status: contract frozen; implementation is NOT released until the exact-head
+CI of the scorer dependency is accepted. No operational use.
+Fixed review base: `6679e1ffe7beae2ee78d2a0c5817565e9aece10e`
+(`test/qualified-source-scoring`, locally verified and independently reviewed).
 Branch/worktree: `feat/chained-benchmark-budget` / `chained-benchmark-budget`.
-Before implementation, rebase only these unpublished plan commits onto the
-accepted source-pair scorer, record that fixed review base and run its gates.
+Only unpublished planning commits were rebased onto that scorer candidate;
+the primary worktree, existing grants and operational ledger are untouched.
 
 This is an offline prerequisite to a possible later experiment, not a paid-run
 grant. No operator ledger, corpus, credential, provider call, actual ceiling
@@ -179,6 +180,6 @@ ready status. No merge, release, deployment or actual cap transition.
 No implementation, runtime evidence, candidate review or live authorization
 exists yet. Primary selected the narrow ledger-owned helper after independently
 reading existing state/path/transaction code and two read-only Sol/high seam
-proposals. Next: finish source-pair scorer acceptance, update fixed base and
-release this contract, then dispatch.
+proposals. Next: accept the source-pair scorer's exact-head CI, then release
+this contract and dispatch. No actual cap change follows from that release.
 Read this checkpoint and the current tracked diff, not conversation memory.
