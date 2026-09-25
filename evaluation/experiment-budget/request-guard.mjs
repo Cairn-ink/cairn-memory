@@ -31,6 +31,7 @@ import { createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { schemasFor } from '../../adapters/openai/schemas.mjs';
 import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
 import { createTransportDiagnosticsCollector } from './transport-diagnostics.mjs';
+import { installedCoreDeadlinePredicateFor } from './installed-core-deadline.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
@@ -1976,6 +1977,29 @@ function verifyPairParent(extension, ledger, policy, state) {
   fail('invalid_capability');
 }
 
+// Read-only parent preflight for the installed pair launcher. In particular,
+// the legacy 100-dollar loader opens a writable handle and is not a dry-run
+// verifier. Keep the same file-bound parent checks without issuing a claim.
+export function inspectQualifiedSourcePairParent(options) {
+  let detached;
+  try {
+    exactKeys(options, ['ledger', 'policy', 'benchmarkExtension'], 'invalid_options');
+    detached = structuredClone({ ledger: options.ledger, policy: options.policy,
+      benchmarkExtension: options.benchmarkExtension });
+  } catch { fail('invalid_options'); }
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const extension = snapshotExtension(detached.benchmarkExtension);
+  const state = inspectExperimentBudgetSnapshot(ledger);
+  if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+    fail('extension_busy');
+  }
+  verifyPairParent(extension, ledger, policy, state);
+  return deepFreeze(state);
+}
+
 function pairConfiguration(options, authorization) {
   const keys = authorization
     ? ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint', 'roster']
@@ -1984,14 +2008,19 @@ function pairConfiguration(options, authorization) {
   let detached;
   let fetchImpl;
   let transportDiagnostics = null;
+  let installedDeadline = null;
   try {
     optionalTransport = !authorization && own(options, 'transportDiagnostics');
-    exactKeys(options, optionalTransport ? [...keys, 'transportDiagnostics'] : keys,
+    const optionalInstalled = !authorization && own(options, 'installedCoreDeadline');
+    exactKeys(options, [...keys, ...(optionalTransport ? ['transportDiagnostics'] : []),
+      ...(optionalInstalled ? ['installedCoreDeadline'] : [])],
       authorization ? 'invalid_capability' : 'invalid_options');
     const raw = Object.fromEntries(keys.filter((key) => key !== 'fetchImpl')
       .map((key) => [key, options[key]]));
     fetchImpl = authorization ? null : options.fetchImpl;
     transportDiagnostics = optionalTransport ? options.transportDiagnostics : null;
+    installedDeadline = optionalInstalled
+      ? installedCoreDeadlinePredicateFor(options.installedCoreDeadline) : null;
     detached = structuredClone(raw);
   } catch { fail(authorization ? 'invalid_capability' : 'invalid_options'); }
   if (!authorization && (typeof fetchImpl !== 'function'
@@ -2002,7 +2031,8 @@ function pairConfiguration(options, authorization) {
   ledger.directory = path.resolve(ledger.directory);
   const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
   if (!authorization) return { ledger, policy, benchmarkExtension,
-    capability: detached.qualifiedSourcePairCapability, fetchImpl, transportDiagnostics };
+    capability: detached.qualifiedSourcePairCapability, fetchImpl, transportDiagnostics,
+    installedDeadline };
   const { authorizationId, executionId, checkpoint } = detached;
   if (typeof authorizationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(authorizationId)
     || typeof executionId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(executionId)) {
@@ -2344,7 +2374,8 @@ export function createCaseDeadlineExperimentRequestGuard(options) {
 
 export function createQualifiedSourcePairExperimentRequestGuard(options) {
   const configuration = pairConfiguration(options, false);
-  const { ledger, policy, benchmarkExtension, fetchImpl, transportDiagnostics } = configuration;
+  const { ledger, policy, benchmarkExtension, fetchImpl, transportDiagnostics,
+    installedDeadline } = configuration;
   const capability = snapshotExtension(configuration.capability);
   verifyPairCapability(capability, ledger, policy, benchmarkExtension);
   let callbackFailure;
@@ -2364,7 +2395,7 @@ export function createQualifiedSourcePairExperimentRequestGuard(options) {
       }
     } });
     return constructBenchmarkGuard({ ledger, policy, fetchImpl }, benchmarkExtension,
-      capability, baseline, transportDiagnostics, { bound, pair: true });
+      capability, baseline, transportDiagnostics, { bound, pair: true, installedDeadline });
   } catch (error) {
     try { bound?.close(); } catch { /* Preserve first failure; claim remains consumed. */ }
     if (callbackFailure) throw callbackFailure;
@@ -2495,7 +2526,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     const controller = new AbortController();
     let terminationCause = null;
     const externalAbort = scoped ? () => {
-      if (terminationCause === null) terminationCause = isCoreModelDeadlineSignal(snapshot.signal)
+      if (terminationCause === null) terminationCause = (isCoreModelDeadlineSignal(snapshot.signal)
+        || pairProfile?.pair && pairProfile.installedDeadline?.(snapshot.signal))
         ? 'core_deadline' : 'external_abort';
       controller.abort('request_aborted');
     } : () => controller.abort('request_aborted');

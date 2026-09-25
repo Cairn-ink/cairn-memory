@@ -473,8 +473,31 @@ gain, semantic coverage, fair Mem0 comparison, paid readiness or product
 reliability is inferred from these transport tests. The actual operator ledger
 and historical cohort remain untouched.
 
+## Installed qualified source-pair launch remains offline
+
+The [installed qualified source-pair launcher](qualified-source-pair-launch.md)
+has only synthetic temporary-ledger and fake-HTTP evidence. Its one-shot marker
+prevents a fresh launcher attempt after a crash; it does not resume an
+interrupted score. The in-process pre-dispatch phase quota bounds this trusted
+launcher, not another process or arbitrary outbound HTTP. A denied dispatch
+still consumes its shadow reservation, while the durable ledger records only
+G-owned attempts. Local deadline and 429 fixtures cannot establish remote
+cancellation, final billing, source relevance or accuracy. A `completed`
+launcher status can coexist with unresolved judgments and is not a ≥95%
+completion or quality gate. No operator ledger, provider, private corpus,
+actual cap transition or paid comparison was used in this packet.
+
+An initial actual-installed timeout fixture exposed separate module-local
+deadline WeakSets: the guard misclassified a genuine installed-core timeout
+as external, globally halting after two requests. The narrow verified-origin
+token corrected this in synthetic installed tests, including one native 30s
+core timer. This supports local continuation accounting, not a guarantee
+about remote abort or eventual provider billing; foreign and external aborts
+still halt globally.
+
 ## Where the evidence lives
 
+- [Installed qualified source-pair launch](qualified-source-pair-launch.md)
 - [Semantic evaluation](semantic-evaluation.md)
 - [Paired update-reliability experiment](evidence/qualified-comparison.md)
 - [Source-support pilot results](../evaluations/results/source-support-v1.json)

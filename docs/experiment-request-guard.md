@@ -597,6 +597,22 @@ hidden retry or per-arm ledger reset. This synthetic transport interface is
 not an installed launcher, a fresh roster, a paid grant or proof of answer
 quality; old factories and their denials are unchanged.
 
+The separate installed-launch packet adds
+`inspectQualifiedSourcePairParent({ledger, policy, benchmarkExtension})` for
+read-only preflight. It reuses the same private US$100/US$200 parent validation
+and ledger snapshot, requires an open fully settled ledger, and returns a
+frozen state without creating a capability, claim, file, cap or writable
+handle. See [installed qualified source-pair launch](qualified-source-pair-launch.md)
+for the later one-shot CLI and its independent phase quota.
+
+For that launcher only, `loadQualifiedSourcePairInstalledCoreDeadline({packageRoot})`
+checks a fixed five-file installed core deadline dependency set against the
+trusted checkout and returns an opaque local token. Only the pair guard factory
+may receive it as optional `installedCoreDeadline`, validated before claim.
+The source-checkout deadline recognizer remains active. Arbitrary callbacks,
+cloned tokens, foreign-module signals and external aborts do not receive local
+deadline treatment; older guard constructors are unchanged.
+
 All potentially paid routes must actually use this guard. Independent host
 connections, background jobs or a retrying injected transport can bypass its
 accounting. Inject a one-attempt transport, disable hidden SDK retries, and

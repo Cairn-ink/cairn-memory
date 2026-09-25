@@ -17,8 +17,9 @@ packet connects the accepted two-source-policy generation, scoring and guard
 to a reproducible installed-engine experiment. It does not itself establish
 answer quality, improve MOC navigation or complete the installed-host milestone.
 
-Reuse N (`qualifiedSourcePairProtocol`, `runQualifiedSourcePair`), P
-(`scoreQualifiedSourcePair`, `aggregateQualifiedSourceScores`) and G unchanged.
+Reuse N (`qualifiedSourcePairProtocol`, `runQualifiedSourcePair`) and P
+(`scoreQualifiedSourcePair`, `aggregateQualifiedSourceScores`) unchanged, and
+G except for the pair-only installed-deadline correction frozen below.
 Both arms use source-bound-v2 qualification; qualified-prefix versus indexed
 windows isolates source exposure, not qualification or MOC versus vector search.
 The older three-arm public-pilot CLI, smoke wrapper and their report schemas
@@ -110,7 +111,8 @@ that immutable state. No callback, files, claim, cap transition, writable reopen
 or new transport grant. Preserve all old loaders and G behavior. Test both
 parents, tampering and byte/file nonmutation; instrument constructors to prove
 read-only connection use. This avoids duplicating the monetary-chain validator
-inside the launcher. It is the sole permitted narrow G-module addition.
+inside the launcher. This was the initial narrow G-module addition; the
+reproduced installed-deadline correction below is an additional scoped seam.
 
 ## L2 — Conservative phase quota before every guarded dispatch
 
@@ -143,6 +145,48 @@ that durable owned requests/reservations never exceed their corresponding
 shadow totals. This proves a hard ceiling for this trusted single-process
 launcher's routed dispatches, not a native G phase cap or arbitrary egress
 sandbox. The consumed, nonresumable launch is necessary to prevent quota reset.
+
+### Reproduced installed-core deadline correction (primary decision)
+
+Primary actual-installed CLI probes on Node22 and24 reproduced a RED after
+the first installed extraction timed out: only two sends, global halt and all
+four score slots unresolved. The core's existing30s timer was accelerated in
+test instrumentation only; G's60s transport timer and N/P backups were not
+changed. A separate same-code/different-module-origin probe confirmed that
+checkout and installed `core/model-call.mjs` have distinct private WeakSets.
+G recognized only the checkout copy's genuine timeout, misclassifying the
+installed copy's timeout as an external abort. Earlier judge-timeout passes
+did NOT establish installed core-timeout isolation.
+
+Extend this packet narrowly, without changing core files, monetary parents,
+old guard profiles, N/P, timeout limits or global handling of external aborts.
+Add a maintainer-only installed provenance loader under experiment-budget.
+It accepts only an exact packageRoot input; before importing the fixed
+`core/model-call.mjs`, it checks regular non-symlink bounded files and canonical
+paths, and verifies the exact closed dependency set against trusted checkout
+bytes: core/model-call.mjs, core/model-budget.mjs, core/model-diagnostics.mjs,
+core/validation.mjs and plugins/cairn-memory/lib/redact.mjs. The launcher must
+already verify that installation's receipt/artifact and runtime integrity.
+This is not a general module loader and accepts no caller-provided predicate.
+
+The loader issues a frozen opaque in-process token backed by a private WeakMap
+to the actual installed predicate. Only the qualified-source-pair G factory
+may optionally accept `installedCoreDeadline` as that token; reject forged,
+cloned or arbitrary callback tokens before a claim. Keep the old checkout
+recognizer, and additionally recognize genuine signals from exactly the verified
+installed module for this guard. No global registry/setter, shared core WeakSet,
+string/Symbol-based signal trust or change to older guard constructors.
+The launcher owns and supplies the token; do not expose it to model callbacks.
+Bind the new helper and its closed dependencies in the harness hash list.
+
+Regression before fix: persist an actual installed capture/recall timeout case
+that fails with the observed global halt, then prove local unknown settlement,
+full reservation retention and continuation of later preselected slots. Retain
+an external abort negative, a foreign-module signal negative, invalid-token
+negatives and a changed installed-helper dependency refusal before import.
+Re-run the original primary CLI reproduction on both runtimes, affected full
+gates and both independent review axes against the same original base. This
+extends offline integration correctness, not semantic quality or paid authority.
 
 ## L3 — One irreversible launch and fixed-roster terminal accounting
 
@@ -218,11 +262,13 @@ not new arbitrary runtime fault hooks or permissive provider endpoints.
 
 ## L5 — Scope, gates and delivery
 
-Allowed: the L1 read-only inspector plus scoped guard tests/registration, new
+Allowed: the L1 read-only inspector and the reproduced L2 installed-deadline
+loader/token seam in the pair-only G factory, scoped guard tests/registration, new
 narrowly named live runner/CLI/private quota/helper/tests, one
 installed regression under packaging/test using existing artifact machinery,
 technical docs/limitations/CHANGELOG/this plan, and registration in existing
-package scripts if necessary. No core/adapter/N/P/G semantic changes, public
+package scripts if necessary. No core/adapter/N/P semantic changes or other G
+behavior changes beyond the explicitly scoped installed recognizer; no public
 schema/version changes, old-runner rewrites, dependency/lockfile/workflow edits,
 production data or new registry publication. Escalate a genuine boundary/API
 contradiction to primary before widening implementation; primary can re-scope
@@ -254,15 +300,56 @@ never reset/refund old rows or retry prior cases. No real IDs or phase dollar
 allocation is selected in this offline implementation contract.
 
 Report correct/wrong/unresolved, completion, paired differences, costs,
-uncertainty, latency and deployment weight separately.95% completion is not
+uncertainty, latency and deployment weight separately. 95% completion is not
 accuracy; development informs changes but cannot be passed off as holdout.
 No parity/gain claim from a small pilot. Matched Mem0 comparison, installed
 Hermes/MCP growth and cold onboarding remain later product gates.
 
-Current checkpoint: G accepted offline, not merged. Read-only author feasibility
-confirmed the closed wrapper/installed path after primary approved the narrow
-read-only parent inspector above. Main installed locked maintainer dependencies
-and prepared public package metadata (no model requests). Implementation is
-released to the bounded Sol6/high author on this frozen contract. No L runtime
-evidence or paid score exists yet. Main independently verifies final behavior;
-the next paid packet remains excluded.
+Historical pre-implementation checkpoint: G was accepted offline but not
+merged. Read-only author feasibility confirmed the closed wrapper/installed
+path after primary approved the narrow read-only parent inspector above. Main
+installed locked maintainer dependencies and prepared public package metadata
+(no model requests). The bounded Sol6/high implementation was then released.
+
+Current local implementation checkpoint (not yet independently reviewed or
+accepted by CI): the read-only parent inspector, closed-plan CLI, installed
+two-arm runner and synchronous phase quota are implemented in this worktree.
+The installed fixture is owned by the packaging suite because CI prepares
+artifact metadata there, not in the live-offline job. A dependency-light CLI
+parser test and quota tests remain in the live suite; the inspector is
+registered in the guard suite. Synthetic focused tests exercise both runtimes,
+including one real installed two-case/four-core path, a first-halt plus terminal
+write failure, consumed marker/replay, and altered frozen inputs. Primary's
+separate synthetic read-only, actual-G quota, installed normal/deadline/429/cap
+probes passed during implementation; those do not establish semantic quality
+or authorize paid work. Full exact-candidate L5 gates, clean-archive check,
+two independent full-base reviews and CI remain pending. No actual ledger,
+private corpus, provider or paid score was used. The next paid packet remains
+excluded.
+
+Correction checkpoint: primary's actual installed-core timeout probe was RED
+on both Node versions before the verified-origin token: the first installed
+extraction abort was treated as external, globally halting after two requests
+with all four judgment slots unresolved. The author then persisted an actual
+installed-core timeout regression; it was RED on Node22 before the correction
+and GREEN on both Node22/24 after it. Primary independently reran the same
+installed CLI case GREEN on both versions with later preselected slots
+continuing, and a Node24 native 30-second core-timer variant also passed.
+The corrected guard+packaging focused suites passed 39/39 on both versions;
+synthetic forged/cloned-token, changed-helper-before-import, genuine checkout,
+foreign-module and external-abort cases are included. This proves the
+local deadline-provenance boundary, not remote cancellation or billing.
+The earlier synthetic fixture setup errors in primary probes were corrected
+before acceptance and were not product regressions. Full exact-byte L5 and
+artifact gates, clean archive, independent reviews and CI remain pending.
+
+Final-byte primary verification checkpoint: both Node22.16 and24.15 passed
+budget25, guard227, live360 total (330 pass, 30 pre-existing opt-in skips),
+LongMemEval123, generic112, all five budget/guard/LongMemEval demos, JSON,
+and the locally pinned Claude2.1.260 strict validation. The installed artifact
+suite passed77/77 without skips on both. Primary's independent eight-scenario
+installed matrix, ready-barrier two-process launch race, read-only parent and
+opaque-token boundary probes passed on both. These are synthetic local checks;
+clean-archive verification, two independent full-base reviews and exact-head
+CI remain pending. No provider, actual ledger, private corpus or paid call was
+used.
