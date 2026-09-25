@@ -5,6 +5,7 @@ coverage/
 .env
 .env.*
 !.env.example
+*.pem
 .claude/settings.local.json
 *.sqlite
 *.sqlite-*

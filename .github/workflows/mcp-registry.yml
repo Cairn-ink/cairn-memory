@@ -7,7 +7,8 @@ name: Publish to MCP Registry
 #
 # The ink.cairn namespace comes from the DNS TXT record at the cairn.ink
 # apex; the job logs in with the matching private key from the
-# MCP_REGISTRY_PRIVATE_KEY secret. See docs/registry.md.
+# MCP_REGISTRY_PRIVATE_KEY secret of the mcp-registry environment. See
+# docs/registry.md.
 
 on:
   workflow_dispatch:
@@ -18,6 +19,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: mcp-registry
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -32,7 +34,7 @@ jobs:
           MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
         run: |
           if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
-            echo "::error::The MCP_REGISTRY_PRIVATE_KEY secret is empty or not set; see docs/registry.md."
+            echo "::error::The MCP_REGISTRY_PRIVATE_KEY secret of the mcp-registry environment is empty or not set; see docs/registry.md."
             exit 1
           fi
           ./mcp-publisher login dns --domain cairn.ink --private-key "$MCP_REGISTRY_PRIVATE_KEY"
