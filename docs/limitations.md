@@ -68,6 +68,15 @@ qualification, explicit recovery, or a capture invocation deadline. The old
 30-case counts remain unchanged. The wrapper's earlier keyless dry-run was a
 prelaunch checkpoint, not evidence of this result or of an installed host.
 
+The [Mem0 OSS actual-engine synthetic preflight](mem0-engine-preflight.md)
+uses a hash-pinned Python 3.11 install, fake loopback model responses and
+temporary local stores. It verifies request and evidence plumbing only; its
+fake facts are not recall accuracy or a matched competitor result. Mem0 OSS at
+this pin rejects direct timestamp/reference-date parameters and does not
+return exact source spans. Its default extraction uses the run date unless a
+separate fair replay treatment is frozen. The child-process socket check is
+not a paid-run outbound or cost guard. S3 comparison remains pending.
+
 The public-comparison provenance adapter previously expected only capture's
 first 800-unit normalized source prefix. When that prefix ended in whitespace,
 admission's existing second canonicalization trimmed it before storage and the

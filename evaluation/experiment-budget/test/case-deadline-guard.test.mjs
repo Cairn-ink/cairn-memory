@@ -719,10 +719,11 @@ test('G5 a priced overrun is distinct from a within-reservation token-bound fail
 });
 
 test('G1/G4 constructor snapshots getters once and a second in-scope send never reserves', async (t) => {
-  const f = fixture(t);
+  const f = fixture(t, { stageTimeoutMs: 5_000 });
   let release;
   let calls = 0;
-  const fetchImpl = () => { calls += 1; return new Promise(resolve => { release = () => resolve(response()); }); };
+  const fetchImpl = () => { calls += 1;
+    return calls === 1 ? new Promise(resolve => { release = () => resolve(response()); }) : response(); };
   const values = { ledger: f.ledger, policy: f.policy, benchmarkExtension: f.benchmarkExtension,
     caseDeadlineCapability: f.caseDeadlineCapability, fetchImpl };
   const reads = {};
@@ -730,18 +731,34 @@ test('G1/G4 constructor snapshots getters once and a second in-scope send never 
   for (const [key, value] of Object.entries(values)) Object.defineProperty(options, key, { enumerable: true,
     get() { reads[key] = (reads[key] ?? 0) + 1; return value; } });
   const guard = createCaseDeadlineExperimentRequestGuard(options);
-  assert.deepEqual(reads, { ledger: 1, policy: 1, benchmarkExtension: 1, caseDeadlineCapability: 1, fetchImpl: 1 });
-  await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
-    const first = guard.answerFetch(url, request());
-    await setImmediate();
-    await assert.rejects(guard.answerFetch(url, request()), guardError('guard_busy'));
-    assert.equal(calls, 1);
-    assert.equal(state(f.ledger).requestCount, 1);
-    release();
-    await first;
-  });
-  assert.equal(guard.isHalted(), false);
-  guard.close();
+  try {
+    assert.deepEqual(reads, { ledger: 1, policy: 1, benchmarkExtension: 1, caseDeadlineCapability: 1, fetchImpl: 1 });
+    await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
+      const first = guard.answerFetch(url, request()).then(value => ({ value }), error => ({ error }));
+      let firstOutcome;
+      try {
+        await setImmediate();
+        await new Promise(resolve => setTimeout(resolve, 20));
+        await assert.rejects(guard.answerFetch(url, request()), guardError('guard_busy'));
+        assert.equal(calls, 1);
+        assert.equal(state(f.ledger).requestCount, 1);
+        assert.equal(state(f.ledger).attempts.length, 1);
+      } finally {
+        release?.();
+        firstOutcome = await first;
+      }
+      assert.equal(firstOutcome.error, undefined);
+      assert.equal(firstOutcome.value.status, 200);
+    });
+    assert.equal(guard.attempts()[0].outcome, 'succeeded');
+    await guard.withCaseScope({ phase: 'generation', caseId: 'case-b' }, async () => {
+      const received = await guard.answerFetch(url, request());
+      assert.equal(received.status, 200);
+    });
+    assert.equal(calls, 2);
+    assert.equal(state(f.ledger).requestCount, 2);
+    assert.equal(guard.isHalted(), false);
+  } finally { guard.close(); }
 });
 
 test('G2 partial claim and unsafe capability bindings are never repaired or made reusable', (t) => {
