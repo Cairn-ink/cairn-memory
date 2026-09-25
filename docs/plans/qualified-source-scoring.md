@@ -4,7 +4,8 @@ Fixed base: `9402ae702b3b8836c6684db4a889acef34ee4b60` (qualified source-pair).
 Branch/worktree: `test/qualified-source-scoring` / `qualified-source-scoring`.
 Primary owns this contract. One GPT-6 Sol/high worker implements; two separate
 nonauthor agents review Standards and Spec at the full original base.
-Implementation is held until the dependency's exact-head CI is accepted.
+Dependency PR #224 at the fixed base passed all 17 exact-head CI checks;
+implementation is released. This does not authorize merging either PR.
 
 This packet is offline only: no actual corpus, keys, operator ledger, paid calls, merge,
 release or deployment. User's cumulative US$200 authority is unchanged.
@@ -80,8 +81,8 @@ execution/reason generation_halted; zero scope and judge calls. Retain each
 generationStatus and do not rewrite saved generation evidence.
 
 Scope checks match N's exact case-deadline-scope-v1 identity and phase scoring.
-Only active permits judge. timed_out/blocked is local case_timeout only when
-global isHalted is false. Invalid/throwing/nonboolean ports are sticky contract
+Only active permits judge. For completed generation, timed_out/blocked is local
+case_timeout only when global isHalted is false. Invalid/throwing/nonboolean ports are sticky contract
 failure. Check before/after judge; close local entry and callback fence on every
 wrapper exit, including nonawaiting wrappers and late callback entry. Exactly
 one operation invocation. Any wrapper exception halts remaining scoring with
@@ -102,6 +103,21 @@ If scope exit fails, discard current judgment (unresolved execution), preserve
 earlier successfully exited judgments, block later slots. A later global halt
 never erases an earlier validated individual outcome. Future actual guard's
 own deadline must beat backup timer; external abort is not promised isolated.
+
+Failure precedence is explicit. Generation-wide halt skips all scoring as
+above. Otherwise validate the exact scope and check global halt first; a global
+halt, scope contract failure or wrapper exit failure overrides the current
+judgment and fences later slots, preserving earlier successfully exited ones.
+Within a valid, globally live scope, a noncompleted generation retains its
+original safe reason at stage generation, attempted false, even if that scoring
+scope is timed_out/blocked. The actual guard seals timed-out generation cases,
+so their matching scoring slots are blocked by design; this is not a second
+failure and must not hide the first one. For completed generation, local
+timed_out/blocked takes precedence over compatibility or missing-judge outcomes.
+With an active scope, check reference compatibility, then judge availability,
+then invoke judge. Test failed generation with active, timed_out and blocked
+scopes, plus malformed scope/global halt/exit failure overriding it. Also test
+completed generation local timeout with unverified reference or absent judge.
 
 ## P3 — Closed score record
 
