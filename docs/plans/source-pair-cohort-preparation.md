@@ -124,14 +124,19 @@ orders, one and multiple capture batches, prefix/tail exposure, exact per-route
 and per-phase formula, safe arithmetic, invalid reservations and real planner
 blockers. Include an independently calculated golden expected total and an
 actual scripted-core/adapter pair control showing observed routes do not exceed
-the derived bound. Do not assert every maximum route always fires. Verify no
+the derived bound. Keep that actual-adapter control in one narrowly named test
+under `evaluation/live/test`, whose existing CI installs adapter dependencies;
+the pure preparation tests stay under `evaluation/longmemeval/test` and must
+not import the optional adapter. Do not add a skipped-only gate or change CI.
+Do not assert every maximum route always fires. Verify no
 core/answer/judge/provider callback can be supplied to this data-only helper.
 No actual dataset, operator ledger, environment key or network in worker tests.
 
 ## R4 — Scope, gates and delivery
 
 Allowed: this plan, the one new preparation module, focused tests under
-evaluation/longmemeval/test, technical preparation docs, CHANGELOG and retained
+evaluation/longmemeval/test, one actual-adapter control under evaluation/live/test,
+technical preparation docs, CHANGELOG and retained
 limitations. No changes to old selectors/CLI, core, adapter, N/P/G/L protocols,
 ledger/caps, packaging, dependencies, lockfiles, workflows or public runtime.
 Report a genuine API contradiction to primary before expanding scope.
