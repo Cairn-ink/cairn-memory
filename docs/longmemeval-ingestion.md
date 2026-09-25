@@ -103,3 +103,7 @@ guarantee or evidence that real users save time. The separate
 answering and evaluator-only scoring with offline tests. Actual-model scoring,
 a frozen live judge and separately authorized paid runs remain later steps.
 Preserve blocked/failed cases in evaluation denominators.
+
+The optional [indexed-window provenance path](indexed-window-provenance.md) is
+separately versioned and requires explicit core opt-in. The default plan and
+ingestion path continue to use their original digest and response contract.

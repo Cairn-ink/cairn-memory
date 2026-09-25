@@ -125,6 +125,39 @@ mandatory. MOC routing and Mem0 comparison are distinct experiments, followed
 by installed growing-collection measurements and cold-context onboarding.
 No pass here establishes S2 answer quality, S3 competitor parity or S4–S5.
 
+## Local implementation evidence (pre-review)
+
+- The fixed dependency `dbfe5d80a6c0091c2e086a0ec4c5eb4d91e46920`
+  passed its exact-head 17-check CI run `36087301218`; the primary separately
+  confirmed both runtime gates and independent Standards/Spec PASS0 before
+  releasing this implementation. It remains an unmerged dependent base here.
+- The primary's synthetic base-version probe at
+  `/tmp/cairn-indexed-ingestion-red.mjs` used actual opt-in core capture with
+  two catalog windows and empty extraction. On both Node 22.16.0 and 24.15.0,
+  that successful core response became `unknown/malformed_capture_response`
+  through the legacy ingestion classifier. This is an integration mismatch,
+  not a source-quality or answer-quality finding.
+- The new focused tests include a real opt-in core cold reopen before
+  recall/get, same-message prefix and tail receipts plus a mixed-role receipt,
+  exact source-only answer evidence, fixed-base plan/request goldens,
+  malformed catalog response refusal, old prefix refusal and scorer refusal.
+  `npm run test:longmemeval` passed 83/83 on both Node versions; `npm test`
+  passed 112/112 on both. The three existing synthetic LongMemEval demos,
+  `npm run validate`, and local pinned Claude Code 2.1.260 strict plugin
+  validation passed on both. These are offline structural checks only.
+- Caller trace: `evaluation/live/public-pilot.mjs` still imports and calls only
+  `runPublicComparison`; `evaluation/longmemeval/comparison.mjs` and the
+  existing ingestion demo still call only `ingestLongMemEvalCase`;
+  `official-scoring.mjs` still requires the legacy comparison schema before a
+  judge. None was widened or edited.
+- `npm run test:live-evidence-offline` passed on both runtimes: 350 tests,
+  320 passed, 30 intentionally skipped, zero failures. The existing live
+  consumers were not changed. The explicit request-guard suite also passed
+  170/170 on both runtimes, retaining the earlier indexed-wire refusal gate.
+  Final candidate SHA, primary inspection, two
+  independent review axes, dependent PR and exact-head CI are pending. No
+  provider, corpus, actual operator ledger or key was used for this packet.
+
 At every resume read this contract and the latest evidence section, check the
 actual worktree/branch/head and current PR CI, then continue the first unpassed
 gate. Record commands, final SHAs, review findings and retained failures here or
