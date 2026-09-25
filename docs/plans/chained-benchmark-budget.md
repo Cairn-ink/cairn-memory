@@ -115,7 +115,9 @@ checks current exact configuration, complete schema/rows and path identity
 before returning. It does not itself require settled state; the B3 chain loader
 does. Share narrow private location/identity primitives between these new APIs
 only unless a separately justified old-callsite change is required. New physical
-DB/directory checks must reject multiple hard links, not just symbolic links.
+database-file checks must reject multiple hard links (`nlink !== 1`), not just
+symbolic links. Directory link counts have normal directory semantics; do not
+incorrectly require a directory's link count to equal one.
 
 Existing create/reopen behavior and old guard dispatch must not widen. Any
 necessary shared-code refactor is explicit in the frozen helper contract and
