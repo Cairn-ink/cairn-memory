@@ -5,11 +5,11 @@ import { createOpenAIModel } from '../index.mjs';
 import { DEFAULT_MODEL } from '../profiles.mjs';
 import { schemasFor } from '../schemas.mjs';
 import { createQualificationCandidateSnapshot, compileQualificationCandidates } from '../../../core/qualification-candidates.mjs';
+import { qualificationPoolWire } from './qualification-pool-wire.mjs';
 
 const system = readFileSync(new URL('../../../core/prompts/qualify-candidates.md', import.meta.url), 'utf8');
 const [input, output] = [...system.matchAll(/```json\s*([\s\S]*?)```/g)].map(match => JSON.parse(match[1]));
-const wire = { qualifications: Object.fromEntries(
-  output.qualifications.map(item => [`item_${item.itemIndex}`, item])) };
+const wire = qualificationPoolWire(input, output);
 const request = () => ({ system, input: structuredClone(input), maxOutputTokens: 1024, signal: new AbortController().signal });
 const response = () => ({ object: 'response', model: DEFAULT_MODEL, status: 'completed', error: null, incomplete_details: null,
   output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(wire) }] }],
@@ -23,8 +23,9 @@ test('Q5 actual adapter preserves guidance with a count/generate wire override a
   const result = await model.qualifyCandidates(request()); assert.deepEqual(result, output);
   assert.deepEqual(calls.map(call => call.url), ['https://api.openai.com/v1/responses/input_tokens', 'https://api.openai.com/v1/responses']);
   for (const { body } of calls) {
-    assert.ok(body.instructions.startsWith(system + '\n\nProvider wire-format override:'));
+    assert.ok(body.instructions.startsWith(system + '\n\nProvider wire-format override evidence-pool-v1:'));
     assert.match(body.instructions, /item_0=>itemIndex 0/); assert.equal(body.model, DEFAULT_MODEL);
+    assert.match(body.instructions, /at least one field must reference a pool slot/i);
     assert.equal(body.text.format.name, 'cairn_qualifyCandidates'); assert.equal(body.text.format.strict, true);
     assert.deepEqual(body.text.format.schema, schemasFor('qualifyCandidates', input));
     assert.deepEqual(JSON.parse(body.input[0].content[0].text), input);

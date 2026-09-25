@@ -3,6 +3,9 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { boundedText, denseArray, fail, object } from './validation.mjs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { countTokens } from './model-budget.mjs';
+import { createQualificationTextCatalog } from './qualification-text-catalog.mjs';
+import { isPromise } from 'node:util/types';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
@@ -68,7 +71,9 @@ function canonicalLabel(value, limit) {
 }
 
 /** Compile selected evidence and canonical labels; never infer semantic support. */
-export function compileQualificationCandidates(output, snapshot) {
+function compileQualification(output, snapshot, onFailure) {
+  let reason = 'invalid_qualification';
+  const reject = (category) => { reason = category; fail('invalid_model_output'); };
   try {
     exact(output, ['qualifications']);
     const entries = denseArray(output.qualifications, snapshot.items.length, snapshot.items.length);
@@ -77,7 +82,7 @@ export function compileQualificationCandidates(output, snapshot) {
       exact(entry, ['itemIndex', ...FIELDS]);
       const index = entry.itemIndex;
       if (!Number.isSafeInteger(index) || index < 0 || index >= snapshot.items.length || compiled.has(index)) {
-        fail('invalid_model_output');
+        reject('qualification_binding');
       }
       const candidates = new Map(snapshot.candidates[index].map(candidate => [candidate.candidateIndex, candidate]));
       const selected = new Map();
@@ -85,37 +90,126 @@ export function compileQualificationCandidates(output, snapshot) {
       for (const field of FIELDS) {
         exact(entry[field], ['value', 'evidenceIndices']);
         const value = entry[field].value;
+        if (Array.isArray(entry[field].evidenceIndices) && entry[field].evidenceIndices.length > 4) {
+          reject('qualification_citation_budget');
+        }
         const references = denseArray(entry[field].evidenceIndices, 0, 4);
         if (new Set(references).size !== references.length || references.some(id =>
-          !Number.isSafeInteger(id) || !candidates.has(id))) fail('invalid_model_output');
+          !Number.isSafeInteger(id) || !candidates.has(id))) reject('qualification_citation_integrity');
         const unknown = value === null || (['attribution', 'commitment'].includes(field) && value === 'unknown');
-        if (!unknown && !references.length) fail('invalid_model_output');
-        values[field] = Object.hasOwn(LABEL_LIMITS, field) ? canonicalLabel(value, LABEL_LIMITS[field]) : value;
+        if (!unknown && !references.length) reject('qualification_citation_integrity');
+        if (Object.hasOwn(LABEL_LIMITS, field)) {
+          try {
+            const label = canonicalLabel(value, LABEL_LIMITS[field]);
+            if (label !== null && (label.length > LABEL_LIMITS[field]
+              || boundedText(label, LABEL_LIMITS[field]) !== label)) {
+              reject('qualification_label_canonicality');
+            }
+            values[field] = label;
+          } catch { reject('qualification_label_canonicality'); }
+        } else values[field] = value;
         for (const id of references) {
           if (!selected.has(id)) selected.set(id, []);
           selected.get(id).push(field);
         }
       }
-      if (!selected.size || selected.size > 4) fail('invalid_model_output');
+      if (!selected.size) reject('qualification_citation_integrity');
+      if (selected.size > 4) reject('qualification_citation_budget');
       const anchors = [...selected.keys()].sort((a, b) => a - b).map(id => {
         const { receiptIndex, start, end, text } = candidates.get(id);
         return { receiptIndex, start, end, text, fields: selected.get(id) };
       });
-      const qualification = qualificationInput({ version: 1,
-        slot: Object.fromEntries(['subject', 'property', 'scope', 'applies'].map(field => [field, values[field]])),
-        value: values.value, attribution: values.attribution, commitment: values.commitment, anchors }, snapshot.items[index].receipts);
+      let qualification;
+      try {
+        qualification = qualificationInput({ version: 1,
+          slot: Object.fromEntries(['subject', 'property', 'scope', 'applies'].map(field => [field, values[field]])),
+          value: values.value, attribution: values.attribution, commitment: values.commitment, anchors }, snapshot.items[index].receipts);
+      } catch { reject('qualification_binding'); }
       compiled.set(index, qualification);
     }
     return snapshot.items.map((item, index) => ({ ...item, qualification: compiled.get(index) }));
-  } catch { fail('invalid_model_output'); }
+  } catch {
+    try { onFailure?.(reason); } catch { /* Diagnostics cannot change validation. */ }
+    fail('invalid_model_output');
+  }
 }
 
-export async function qualifyCandidateItems(model, items) {
+export function compileQualificationCandidates(output, snapshot) {
+  return compileQualification(output, snapshot);
+}
+
+function qualificationFit(model, deadline) {
+  deadline?.check();
+  if (model === null || model === undefined || !['object', 'function'].includes(typeof model)) return null;
+  const reject = () => { emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'token_count_unavailable');
+    fail('token_count_unavailable'); };
+  let descriptor, inherited = false, lookupFailed = false;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(model, 'fitsQualificationRequest');
+    if (descriptor === undefined) inherited = Reflect.has(model, 'fitsQualificationRequest');
+  } catch { lookupFailed = true; }
+  deadline?.check();
+  // An inherited capability could be a throwing getter or a mutable function.
+  // Accept only an explicit own-data callable; never invoke a prototype value.
+  if (lookupFailed || inherited) reject();
+  if (descriptor === undefined) return null;
+  if (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'function') {
+    reject();
+  }
+  const fit = descriptor.value;
+  return (request) => {
+    deadline?.check();
+    let logical;
+    try { logical = countTokens(model, JSON.stringify(request)); }
+    catch { deadline?.check(); reject(); }
+    finally { deadline?.check(); }
+    if (logical > 6000) return false;
+    let result;
+    try {
+      deadline?.check();
+      result = fit.call(model, structuredClone(request));
+      if (isPromise(result)) {
+        // Reject the nonboolean synchronously without leaving a native
+        // rejected promise unobserved. Never adopt arbitrary thenables.
+        Promise.prototype.then.call(result, undefined, () => {});
+      }
+    } catch { deadline?.check(); reject(); }
+    finally { deadline?.check(); }
+    if (typeof result !== 'boolean') reject();
+    return result;
+  };
+}
+
+export async function qualifyCandidateItems(model, items, deadline) {
+  deadline?.check();
   const snapshot = createQualificationCandidateSnapshot(items);
-  const output = await callModel(model, 'qualifyCandidates', system, snapshot.input, { failureCode: 'qualification_failed' });
-  try { return compileQualificationCandidates(output, snapshot); }
+  deadline?.check();
+  let input = snapshot.input;
+  const fits = qualificationFit(model, deadline);
+  if (fits && !fits({ system, input, maxOutputTokens: 1024 })) {
+    deadline?.check();
+    let catalog;
+    try { catalog = createQualificationTextCatalog(snapshot.input); }
+    catch { deadline?.check(); fail('invalid_model_output'); }
+    deadline?.check();
+    if (!fits({ system, input: catalog.catalog, maxOutputTokens: 1024 })) {
+      emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'context_budget_exceeded');
+      fail('context_budget_exceeded');
+    }
+    input = catalog.catalog;
+  }
+  deadline?.check();
+  const output = await callModel(model, 'qualifyCandidates', system, input,
+    { failureCode: 'qualification_failed', deadline });
+  let reason = 'invalid_qualification';
+  try {
+    const result = compileQualification(output, snapshot, (category) => { reason = category; });
+    deadline?.check();
+    return result;
+  }
   catch {
-    emitDiagnostic(model, 'qualifyCandidates', 'core_validation', 'invalid_qualification');
+    deadline?.check();
+    emitDiagnostic(model, 'qualifyCandidates', 'core_validation', reason);
     fail('invalid_model_output');
   }
 }

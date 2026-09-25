@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,7 +23,12 @@ CAPTURE_TIMEOUT_SECONDS = 135
 
 
 def configured_tools(config):
-    return TOOLS | {"capture_memory"} if config and config.get("capture_qualification") == "source-bound-v2" else TOOLS
+    tools = TOOLS
+    if config and config.get("capture_qualification") == "source-bound-v2":
+        tools = tools | {"capture_memory"}
+    if config and config.get("classification_recovery") == "guarded-v1":
+        tools = tools | {"inspect_capture_admission", "classify_unfiled_memories"}
+    return tools
 
 
 def stop_process(process):
@@ -57,10 +63,18 @@ def configuration(home):
 
 def validate_config(value):
     required = {"node_path", "executable_path"}
-    optional = {"capture_qualification", "recall_context"}
+    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context"}
     if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
         raise ValueError("cairn_invalid_configuration")
     if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
+        raise ValueError("cairn_invalid_configuration")
+    if "capture_deadline_ms" in value:
+        deadline = value["capture_deadline_ms"]
+        if (value.get("capture_qualification") != "source-bound-v2" or not isinstance(deadline, str)
+                or not re.fullmatch(r"[1-9][0-9]*", deadline) or len(deadline) > 6
+                or int(deadline) > 110000):
+            raise ValueError("cairn_invalid_configuration")
+    if "classification_recovery" in value and value["classification_recovery"] != "guarded-v1":
         raise ValueError("cairn_invalid_configuration")
     if "recall_context" in value and value["recall_context"] != "source-evidence":
         raise ValueError("cairn_invalid_configuration")
@@ -130,17 +144,33 @@ class CairnMemoryProvider(MemoryProvider):
         return "Cairn requires Linux, the host MCP SDK and explicit installed Node/Cairn paths; run hermes memory setup."
 
     def get_config_schema(self):
+        try:
+            existing = configuration(get_hermes_home().resolve())
+        except ValueError:
+            existing = {}
         paths = [{"key": key, "description": description, "required": True}
                 for key, description in [("node_path", "Absolute Node >=22.16 executable path"),
                                          ("executable_path", "Absolute installed cairn-memory JavaScript executable path")]]
-        return paths + [{"key": "capture_qualification",
+        for field in paths:
+            if field["key"] in existing:
+                field["default"] = existing[field["key"]]
+        optional = [{"key": "capture_qualification",
                          "description": "Optional source-bound-v2 for explicitly submitted capture (paid). Omit on fresh setup for five tools; existing setting is retained. No passive capture.",
+                         "required": False},
+                        {"key": "capture_deadline_ms",
+                         "description": "Optional capture-only deadline, canonical decimal string 1–110000 milliseconds. No hard response-time or spend guarantee; blank retains an existing value.",
+                         "when": {"capture_qualification": "source-bound-v2"}, "required": False},
+                        {"key": "classification_recovery",
+                         "description": "Optional guarded-v1 for keyless batch admission inspection and explicit paid classification recovery. No automatic retry.",
                          "required": False},
                         {"key": "recall_context",
                          "description": "Optional source-evidence default for recall calls that omit both contextMode and includeQualification. Explicit tool arguments take precedence.",
-                         "required": False},
-                        {"key": "api_key", "description": "Optional Cairn capture/recall OpenAI key (paid; selected source evidence leaves this device)",
-                         "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
+                         "required": False}]
+        for field in optional:
+            if field["key"] in existing:
+                field["default"] = existing[field["key"]]
+        return paths + optional + [{"key": "api_key", "description": "Optional Cairn capture/recall/classification OpenAI key (paid; selected source evidence leaves this device)",
+                                    "secret": True, "required": False, "env_var": "CAIRN_MEMORY_OPENAI_API_KEY"}]
 
     def save_config(self, values, hermes_home):
         validated = validate_config(values)
@@ -210,8 +240,8 @@ class CairnMemoryProvider(MemoryProvider):
             request = {"operation": operation, "database": str(database), "owner": owner,
                        **self._config, **fields}
             environment = {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
-            capture = operation == "call" and fields.get("name") == "capture_memory"
-            if operation == "call" and fields.get("name") in {"recall_memory", "capture_memory"}:
+            uses_extended_timeout = operation == "call" and fields.get("name") in {"capture_memory", "classify_unfiled_memories"}
+            if operation == "call" and fields.get("name") in {"recall_memory", "capture_memory", "classify_unfiled_memories"}:
                 environment["OPENAI_API_KEY"] = os.environ.get("CAIRN_MEMORY_OPENAI_API_KEY", "")
             process = subprocess.Popen([sys.executable, "-I", str(Path(__file__).with_name("bridge.py"))],
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -219,7 +249,7 @@ class CairnMemoryProvider(MemoryProvider):
             self._process = process
         try:
             output, _ = process.communicate(json.dumps(request).encode(),
-                                            timeout=CAPTURE_TIMEOUT_SECONDS if capture else TIMEOUT_SECONDS)
+                                            timeout=CAPTURE_TIMEOUT_SECONDS if uses_extended_timeout else TIMEOUT_SECONDS)
             if process.returncode or len(output) > 262144:
                 raise ValueError("cairn_transport_failed")
             return json.loads(output)

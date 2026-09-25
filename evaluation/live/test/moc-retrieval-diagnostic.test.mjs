@@ -4,19 +4,23 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import { countOpenAITokens } from '../../../adapters/openai/index.mjs';
 import { runMocRetrievalDiagnostic } from '../moc-retrieval-diagnostic.mjs';
 
 test('real-core matrix separates stored evidence, page visibility and lexical retrieval', async t => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'cairn-moc-matrix-test-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const report = await runMocRetrievalDiagnostic({ directory });
+  const report = await runMocRetrievalDiagnostic({ directory, countTokens: countOpenAITokens,
+    counter: 'pinned local o200k_base; offline envelope measurement, not provider accounting' });
+  assert.equal(report.version, 'moc-architecture-diagnostic-v2');
   assert.equal(report.providerRequests, 0);
   assert.match(report.model, /oracle/u);
-  assert.match(report.counter, /synthetic/u);
-  assert.equal(report.cases.length, 10);
+  assert.match(report.counter, /o200k_base/u);
+  assert.equal(report.cases.length, 11);
   for (const entry of report.cases) {
     assert.equal(entry.status, 'observed', JSON.stringify({ id: entry.id, error: entry.error, recall: entry.recall }));
     assert.equal(entry.coldDirectReadSupported, true);
+    assert.equal(entry.coldSourceReadSupported, true);
     assert.equal(entry.allTargetsInventoried, true);
     assert.equal(entry.fullInventoryCount, entry.size);
     assert.equal(entry.namespaceIsolated, true);
@@ -45,6 +49,12 @@ test('real-core matrix separates stored evidence, page visibility and lexical re
     assert.equal(at(id).targetRecalledCount, 1, id);
     assert.equal(at(id).targetLexicalCount, 0, id);
   }
+  const receiptOnly = at('receipt-only-late');
+  assert.equal(receiptOnly.contextMode, 'source-evidence');
+  assert.equal(receiptOnly.targetVisibleCount, 1);
+  assert.equal(receiptOnly.targetRecalledCount, 1);
+  assert.equal(receiptOnly.targetLexicalCount, 0);
+  assert.ok(receiptOnly.targetMapPages[0] > 2);
   assert.equal(report.classification[0].result.ok, true);
   assert.equal(report.classification[0].observations[0].mapExhausted, true);
   assert.equal(report.classification[1].observations[0].mocCount, 0);
