@@ -246,3 +246,40 @@ tests passed 112/112; JSON/version and pinned Claude Code 2.1.260 strict
 plugin validations passed. The two new tests were red on the old candidate
 and green after this change. The primary will rerun the complete exact-head
 matrix before new independent reviews.
+
+### CI scheduling correction contract (primary, before implementation)
+
+PR233 candidate `e567040` passed the primary's complete 56-gate dual-runtime
+matrix and both independent reviews. Its first remote CI run `36148762416`
+failed OpenAI Node22.16 test A01 at its unchanged five-second child-process
+guard; 223 other adapter tests passed. This failure remains blocking, not a
+green rerun or semantic result. The primary reproduced the same timeout in all
+eight copies when pinned to two CPUs. Isolated prior-E and F counts both took
+about 1.5 CPU seconds; under the same contention both took about six wall-clock
+seconds. This establishes resource sensitivity, not the exact CI host cause.
+
+The bounded correction may additionally edit `adapters/openai/package.json`
+and this plan plus `docs/limitations.md` only. It must make the standard adapter
+test command run test files with `--test-concurrency=1`, preserving discovery
+of every existing test. Do not change the tokenizer, dependencies, input size,
+five-second process timeout, test assertions, runtime policy or workflow matrix.
+This prevents same-suite test-file contention; it does not guarantee execution
+speed under arbitrary external CPU load. No test is skipped, retried or hidden.
+
+Acceptance: verify the unchanged A01 and full adapter suite on Node22.16/24.15,
+plus generic/JSON/pinned plugin and offline adapter demo checks on both. The
+primary personally reruns the affected adapter and installed-artifact paths;
+the full previous runtime matrix stays attributed to `e567040`, not relabeled
+as new-head evidence. Freeze a new candidate, repeat independent full-base
+Standards and Spec reviews, and require all latest-head remote CI to pass before
+marking PR233 ready. Retain red CI and controlled diagnosis in the limitations.
+There is no paid call, holdout access or new product-performance claim.
+
+Worker correction evidence (Node 22.16.0 and 24.15.0, sequential runs): the
+unchanged isolated A01 test passed 1/1 on each runtime. The standard OpenAI
+adapter command used `node --test --test-concurrency=1 test/*.test.mjs` and
+passed 224/224 on each, still discovering all 30 existing test files. Generic
+tests passed 112/112; JSON/version validation, pinned Claude Code 2.1.260
+marketplace and strict plugin validation, and `demo:openai-offline` passed on
+both runtimes. These are local correction gates; installed-artifact acceptance,
+new fixed-base independent reviews and latest-head CI remain primary-owned.

@@ -88,6 +88,18 @@ possible, but the physical qualifier schedule and token ceilings are unchanged.
 Existing guards deny this named mode, and no paid cohort, real-provider response,
 semantic quality or source-selection improvement has been demonstrated.
 
+The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
+performance test at its unchanged five-second child-process timeout; the other
+223 adapter tests passed. A controlled two-CPU diagnostic reproduced that timeout
+in eight of eight copies. With the same 30 test files forced to concurrency 16
+on two CPUs, 222 tests passed and two timed out (the tokenizer test and a CLI
+child-process test). Isolated prior and current candidate counts used about 1.5
+CPU seconds each but about six wall-clock seconds under contention. These
+observations show scheduling sensitivity, not the exact cause on the CI host.
+The adapter test script now runs those files sequentially; external CPU load
+can still make the unchanged five-second guard fail. This is an execution
+stability correction, with no new model or product-performance result.
+
 New installed source-pair launches can retain bounded, source-free model
 failure events separately by case and arm, but the earlier halted R5 run did
 not collect them. Its prefix `invalid_model_output` remains unattributed.
