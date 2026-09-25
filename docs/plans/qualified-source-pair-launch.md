@@ -45,6 +45,32 @@ protocol digests, private output/launch paths, and finite phase request and
 reserved-micro-dollar ceilings. No defaults selected after answers are seen.
 The author may choose field names but must document the exact schema and bounds.
 
+Frozen implementation seam: `qualified-source-pair-launch-cli.mjs` exports
+parseArguments/main; `qualified-source-pair-launch.mjs` owns preflight and run;
+`qualified-source-pair-phase-quota.mjs` exposes the maintainer-only
+`createQualifiedSourcePairPhaseQuota({guard, policy, stages, phaseCaps})`, returning
+only wrapped cairnFetch/answerFetch/judgeFetch, execution and immutable snapshot.
+The CLI's injectable fetch/readKey/streams are trusted test/application seams,
+not flags or permission to bypass the guard. CLI defaults use one native fetch
+attempt and the explicit private key file only in launch mode.
+
+Plan keys are schemaVersion, executionId, prepared, installed, harness, ledger,
+parent, checkpoint, answerModel, limits, judgeTimeoutMs, roster, phaseCaps,
+outputDirectory and keyFile; optional referenceSidecar is a private path/hash
+pair validated by the existing reference-rendering loader. Non-string references
+require that verified capability; do not silently stringify or discard a case.
+prepared holds directory plus manifest/history/questions/evaluator hashes;
+installed holds receiptPath/receiptSha256/artifactSha256; harness holds pinned
+commit and a closed set of critical sourceHashes. Derive the installed package
+root from the verified existing installation receipt, not a separate arbitrary
+module path. checkpoint holds requestCount/reservedMicroUsd/attemptsSha256.
+roster is prepared-order {questionId, armOrder, protocolDigest}. phaseCaps holds
+generation/scoring, each {requests, reservedMicroUsd}; their safe sums cannot
+exceed remaining cumulative headroom. Stage-derived subquotas are conservative
+upper bounds, not permission to continue after one latches a global halt.
+Derive marker path from the private plan directory and bounded executionId;
+output must be a fresh disjoint sibling, never an ad-hoc marker path.
+
 Reuse the prepared-v2 loader/evaluator boundary. Independently derive every
 full N protocol from the selected prepared history/question, namespace, common
 limits and frozen arm order; compare it with the frozen digest BEFORE a claim.
@@ -233,6 +259,10 @@ accuracy; development informs changes but cannot be passed off as holdout.
 No parity/gain claim from a small pilot. Matched Mem0 comparison, installed
 Hermes/MCP growth and cold onboarding remain later product gates.
 
-Current checkpoint: G accepted offline, not merged. This plan releases one
-bounded implementation worker only after read-only feasibility confirms no
-contract contradiction. No L runtime evidence or paid score exists yet.
+Current checkpoint: G accepted offline, not merged. Read-only author feasibility
+confirmed the closed wrapper/installed path after primary approved the narrow
+read-only parent inspector above. Main installed locked maintainer dependencies
+and prepared public package metadata (no model requests). Implementation is
+released to the bounded Sol6/high author on this frozen contract. No L runtime
+evidence or paid score exists yet. Main independently verifies final behavior;
+the next paid packet remains excluded.
