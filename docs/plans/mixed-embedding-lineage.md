@@ -114,8 +114,8 @@ in-memory test use that existing shape; neither changes the ledger schema.
 One new export is a read-only assertion. Its descriptor-first detacher is
 private to this entrypoint, bounded at depth 32, one million visited values
 and 16 MiB cumulative UTF-8 key/string bytes. It validates supplied B3
-accounting before invoking the existing constructor, chained-parent binding
-and original-prefix checks. It never opens SQLite or returns a grant. The
+accounting after existing constructor validation and before chained-parent
+binding and original-prefix checks. It never opens SQLite or returns a grant. The
 existing constructors, pair parent inspector, B3/B4 ledger and all transport
 callers remain unchanged. The newly affected caller is a future B4
 authorization callback only; the focused test owns that integration path.
@@ -136,6 +136,14 @@ chain, B3/B4, missing-binding ordering, getter rejection, changed-prefix denial
 and unauthenticated-suffix behavior on both Node versions. Dependency-base
 absence of the new export was also checked. Final frozen-head primary
 acceptance and independent reviews remain owned by primary.
+
+On frozen candidate `120defa69b326067689718064f5d5c7fc942eee2`, primary
+personally reran the integrated synthetic path and all 18 matrix gates across
+both Node versions; every gate passed. Independent Standards and Spec reviews
+of that same fixed-base diff each reported zero findings. This correction
+round changes only the factual order stated in this plan and records those
+results; primary will repeat affected checks and both review axes on the new
+final head before push.
 
 Both sequential Node 22.16.0 and 24.15.0 M8 matrices passed with isolated
 OpenAI, MCP and pinned Claude validation dependencies installed:
