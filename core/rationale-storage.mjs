@@ -90,7 +90,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       edge.from_receipt, edge.to_receipt, edge.from_digest, edge.to_digest);
   }
 
-  function commit(ns, refs, expected, proposals) {
+  function commit(ns, refs, expected, proposals, deadline) {
     return transaction(db, () => {
       assertSnapshot(ns, refs, expected);
       let inserted = 0;
@@ -110,7 +110,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       }
       if (inserted) advanceEpoch(ns);
       return { proposed: proposals.length, inserted, interpretationStatus: 'model-proposed', indexRevision: epoch(ns) };
-    });
+    }, deadline?.check);
   }
 
   function inspectInside(ns, ref, view = 'decision-context') {

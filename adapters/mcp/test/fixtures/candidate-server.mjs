@@ -4,6 +4,7 @@ import { serveStdio, StdioServerTransport } from '@modelcontextprotocol/server/s
 import { createCairnServer } from '../../server.mjs';
 import { parseConfiguration } from '../../cli.mjs';
 import { createOpenAIModel } from '../../../openai/index.mjs';
+import { qualificationPoolWire } from '../../../openai/test/qualification-pool-wire.mjs';
 globalThis.fetch = () => assert.fail('Native HTTP forbidden');
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const model = createOpenAIModel({ apiKey: 'synthetic-candidate-key', fetchImpl: async (url, request) => {
@@ -25,7 +26,7 @@ const model = createOpenAIModel({ apiKey: 'synthetic-candidate-key', fetchImpl: 
     assert.equal(method, 'cairn_classify'); result = { items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [] })) };
   }
   if (method === 'cairn_qualifyCandidates') {
-    result.qualifications = Object.fromEntries(result.qualifications.map(item => ['item_' + item.itemIndex, item]));
+    result = qualificationPoolWire(input, result);
   }
   return Response.json({ object: 'response', model: body.model, status: 'completed', error: null, incomplete_details: null,
     output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(result) }] }],

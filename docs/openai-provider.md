@@ -132,6 +132,14 @@ model's context window. This is an absolute ceiling, not a requirement that
 schema/framing overhead be at most 1,024 above each request's local count.
 Oversize fails before generation, without truncation.
 
+Extract response schemas bind `sourceIndices` to the canonical positions of the
+current message batch (`0..messages.length - 1`, at most 24 messages). A direct
+zero-message adapter request permits only an empty `items` array. Missing,
+sparse, reordered or noncanonical source messages fail before HTTP. Count and
+generation use the same detached snapshot and schema. Core independently checks
+source bounds and duplicate citations before constructing receipts from its
+original messages; schema-valid citations alone do not prove source support.
+
 Classify/select/rank response schemas constrain references to the request's
 snapshot: classification uses visible L1/L2 group IDs and supplied memory IDs;
 recall uses the supplied namespace indices, memory IDs and revisions. An empty
@@ -143,6 +151,50 @@ enums do not replace those checks. Larger candidate schemas consume the same
 fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
+
+The opt-in `qualifyCandidates` path uses the named
+[`evidence-pool-v1` wire](qualification-evidence-pool.md): each item supplies at
+most four original candidate IDs in one pool and its fields cite pool slots.
+Repeated strict field schemas are shared through `$defs`/`$ref` in both count
+and generation requests. The adapter decodes back to original candidate IDs
+and validates against the unchanged fully expanded inline schema; the guarded
+route matches the exact versioned pool schema. A
+second local check counts the complete serialized qualification count request
+against the existing 6,000-token ceiling before either HTTP call. This is a
+conservative admission check, not a provider token guarantee: the provider's
+count and the unchanged 7,024-token ceiling still decide whether generation
+may proceed. Neither source evidence nor output fields are shortened; a request
+that remains too large fails explicitly without a partial qualified batch.
+
+Classification also requires exactly one output item per distinct target memory
+in the detached zero-to-five-target request. Duplicate or oversized direct
+adapter target lists fail before HTTP. The array schema constrains length and
+individual IDs; core still rejects omitted, repeated or forged target coverage
+and invalid topic relationships. A failed classification after capture admission
+leaves the admitted source memory inspectable and unfiled; replaying its event
+does not retry classification. This reduces one avoidable malformed-output path
+but does not establish the cause of any historical provider failure or improve
+measured memory quality.
+
+Classification alone uses deterministic request-local short aliases for the
+target-memory IDs and visible catalog-MOC IDs sent in the input and strict output
+schema. Memory and MOC aliases use separate roles. The adapter validates output
+against that exact aliased schema, then decodes only `memoryId`, `parentIds` and
+`newL1.parentL2Ids` through private per-invocation maps before returning to core.
+Unknown, wrong-role and raw UUID references fail closed. No reverse table is sent,
+persisted or reported, and count/generation share one frozen aliased snapshot;
+concurrent requests do not share mappings. Core inputs, durable IDs, catalog
+selection/order, content, titles, metadata and `mapExhausted` are unchanged.
+The original unaliased input still has to pass both existing 6,000-local-token
+checks before transport; the provider ceiling and output allowance remain 7,024
+and 1,024. Other adapter methods keep their existing wire formats.
+
+These aliases compress repeated opaque identifiers; they are not anonymization.
+Card content, titles and metadata still cross the same external-provider boundary,
+and an identifier copied into content or a title is not rewritten. The offline
+reduction evidence uses the pinned local tokenizer and fake HTTP. It is neither a
+provider count nor proof of the interrupted pilot's unknown historical count or
+cause; see the [classification wire acceptance](plans/classification-wire-aliases.md).
 
 Classification instructions distinguish an empty complete map from uncertainty:
 a clear subject without a suitable visible L1 group should propose a precise

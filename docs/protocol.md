@@ -1,5 +1,189 @@
 # Compatibility protocol v0.1
 
+### Optional embedded indexed source-window boundary
+
+Trusted embedded construction may select `captureSourcePolicy: 'indexed-windows-v1'`
+only with `source-bound-v2` qualification and without active rationale or
+staged evidence. Core sends the configured extractor bounded canonical
+window text, global/message-group indices and claimed roles, then binds its
+selected indices to original local receipt identity. This can expose later
+parts of submitted messages to the configured provider; hosts must assess
+that personal-data exposure. Window offsets are transient normalized-text
+positions, never claimed raw-source offsets or persisted fields. The success
+metadata gives only bounded catalog counts and unassessed semantic coverage.
+No new HTTP/plugin/MCP/native capture field, telemetry, permission, model,
+archive, storage schema or default is introduced. See
+[indexed source windows](retained-source-windows.md).
+
+### Offline synthetic evidence-lineage boundary
+
+The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through
+the embedded core and the existing public comparison. It uses a fresh temporary
+store, scripted callbacks and no provider credentials or historical data. The
+report contains only fixed scenario names, fixture-local source ordinals, counts,
+closed statuses and explicit unknown/overflow markers. Source, question and
+answer text, identifiers, paths, raw errors and source-derived hashes are excluded;
+transient identifiers are used only to join capture receipts to later refs and
+answer-packed receipts while the case runs. The wrapper adds read-only `core.get`
+calls after capture to join admitted memories to receipts; it preserves model
+callback inputs, outputs, errors and order. These fixed one-chunk-per-turn
+fixtures are not a general multi-receipt tracer or a live benchmark artifact.
+This local diagnostic adds no core,
+MCP, HTTP or hosted telemetry field, and captured metadata must never enter
+hosted telemetry. Linked evidence proves provenance plumbing, not semantic
+truth or answer correctness. An unobserved stage is unknown, not a measured
+zero or loss.
+
+### Experimental public-pilot answer boundary
+
+The evaluation-only public comparison and pilot accept an explicit
+`cairn-longmemeval-public-answer-v2` opt-in. It changes only the answer user
+message from v1 `{question,evidence}` ordering to
+`{evidence,currentQuestion}` ordering, identically across all three arms.
+The system instruction, provider controls, evidence, scoring rubric, guard,
+limits and retry policy are unchanged. Identity is retained through private
+pilot artifacts, resume and offline merge so v1 and v2 cannot be mixed. This
+does not change the public core, plugin, MCP, HTTP, or telemetry protocol.
+
+### Private public-pilot diagnostic boundary
+
+The source-only embedded core may opt in to `captureDeadlineMs` at trusted
+construction. The local MCP server can now forward a validated own constructor
+option or `--capture-deadline-ms` CLI flag, only with explicit source-qualified
+capture. It is not an MCP tool argument, hosted HTTP field, provider request
+parameter, benchmark capability, or diagnostic payload. The monotonic budget
+belongs to one capture invocation; its core-created abort signal retains private
+provenance so a provider error string or external abort cannot authorize case-deadline
+isolation. MCP omission retains the previous default and tool schemas. The
+native Hermes provider also forwards a validated profile-local
+`capture_deadline_ms` string from 1 through 110000 only with v2 capture. It
+adds no model-controlled field or default. Its cooperative checks are not a
+hard response-time SLA or API spending cap.
+
+The optional live public-pilot runner writes a per-case `diagnostics.json` only
+inside its private 0700 run directory. This is benchmark-local observation, not
+a hosted protocol field, telemetry event, model request, public comparison
+response or scoring input. It does not widen HTTP, MCP, core or adapter
+contracts. Ordinary answer callbacks remain exactly `{text,usage}`.
+
+The artifact contains only the opaque case ID; fixed version, stage, layer and
+reason categories already allowed by model diagnostics; runner-owned answer
+order and arm categories; `stop`/`length`; availability markers; fixed limits;
+drop counts; and separately versioned capture-admission and recall-stage
+subsections.
+That subsection is `cairn-capture-admission-observation-v1`, contains at most 64
+rows, and projects only a batch ordinal, `completed|partial|failed|unavailable`,
+finite admitted-reference and suppression counts, a duplicate-event boolean and
+`skipped|applied|failed` classification status. Unsupported fields are `null`;
+malformed projections are unavailable, not zero.
+
+The `cairn-recall-stage-observation-v1` subsection adds only bounded ordinals,
+counts, booleans, closed status enums and explicit overflow state. It projects
+visible selection-map shape, model-returned select/rank ref counts and the
+existing final core map/fetch exhaustion booleans. Returned ref identities may
+be compared transiently for a cumulative unique count but are neither retained
+nor hashed. Accessors and `toJSON` are not invoked to produce the projection;
+malformed or inaccessible metadata is unavailable/null. These counts precede
+core validation and do not assert that a ref was accepted, relevant or correct.
+The ordinary retrieval `candidateCount` still means final core-returned memories,
+and `selectedCount` still means answer-packed items.
+
+The artifact never accepts provider/model exception strings, raw responses,
+request bodies, source or answer text, headers, keys, paths, memory/receipt/
+source identifiers or arbitrary observer fields. Every observed field is read
+once, checked against the fixed allowlists and projected into a new object.
+Prospective core extraction validation uses fixed output-shape, item-shape,
+text, value, source-shape, duplicate-source and source-range reason categories.
+These categories retain neither returned values nor indices and do not recover
+the branch behind an older `invalid_extraction` catchall.
+Model and capture events are each capped at 64 per case and answer completion
+rows at the three fixed arms; overflow is counted, not retained. Recall-stage
+selection retains at most two rows and rank/final recall at most one, with a
+separate bounded invocation counter and explicit overflow uncertainty. Capture
+and recall observations wrap runner-owned core calls and are available
+independently of a session's optional model-diagnostic hook. They preserve the
+original response, exception, call order and request and do not change the
+public core response or any HTTP/MCP/adapter wire contract.
+
+The real benchmark session binds collection to each asynchronous case
+invocation and keeps sessions separate. Work spawned in an earlier case retains
+that earlier collector even if it completes after another case begins; once a
+collector closes, late events are ignored and cannot be reassigned. This avoids
+cross-case attribution but does not prove complete delivery. `available` means
+the hook was installed, not that an empty list proves no error. A missing file,
+an unavailable row, a legacy/custom session or a case blocked before generation
+is non-evidence. These local files share the run directory's ordinary
+filesystem, journal, backup and secure-erasure limitations and grant no
+authority or semantic correctness.
+
+The separate prospective `case-deadline-v1` benchmark capability adds no hosted
+or public core field. Its private operator-controlled files contain only bounded
+authorization/execution IDs, the existing ledger/policy/benchmark configuration,
+opaque source-free case IDs, ordered generation/scoring phases, checkpoint
+counters and a SHA-256 digest of historical accounting rows. The digest is a
+consistency binding, not anonymization; attempt identifiers and cost/outcome
+metadata remain sensitive local experiment data. The one-shot claim grants no
+new allowance and is never automatically removed or reset.
+
+The private benchmark request-allowance record changes only the finite request
+cap on that same ledger while preserving its run ID, monetary ceiling, ordered
+attempt history, outcomes and reservations. It contains the old/new ledger
+configuration, existing policy and benchmark grant, authorization IDs,
+checkpoint counters and the same content-free five-field accounting digest.
+The digest and IDs remain sensitive local experiment metadata, not anonymized
+telemetry. The record contains no key, prompt, source, answer, provider body or
+raw error, grants no new model/method/stage, and cannot reset, refund, retry or
+resume an old execution.
+
+The private `benchmark-budget-extension-v1` record is a single explicit
+monetary transition on the same run to strictly higher finite monetary and
+request ceilings. This campaign separately pins those parameters to cumulative
+`50_000_000` → `100_000_000` micro-USD. The record embeds and re-verifies the exact request-allowance
+grant, unchanged policy/stages, settled checkpoint, and five-field history
+digest. Its create-only private file is durable before a conditional transaction
+changes only the two ceilings. Original bindings and attempt history remain
+unchanged; unknown outcomes stay charged. Loading is explicit and read-only.
+The record cannot create/reset a ledger, refund, retry/resume a case, revive an
+older capability, or grant another model, method, rate, stage or deadline.
+
+The public-pilot runner can explicitly bind that capability to one process-
+local session and exact prepared roster. The new fields retain only a bounded
+policy/execution identity and fixed timeout/blocked enums, never the capability
+file, provider key, source text or raw exception; existing private generation
+and answer artifacts retain their documented content. Only a guard-observed
+genuine deadline can isolate one case. Diagnostics grant no authority, while
+every other unknown request outcome halts globally. This opt-in is not resumable
+or retryable.
+
+Process-local opt-mode attempt observations add only the opaque case ID, phase
+and a fixed termination enum. Read-only scope/timeout snapshots likewise contain
+only fixed versions and enums. They never contain questions, evidence, answers,
+request/response bodies, headers, keys, raw exceptions, paths, memory/source/
+receipt identifiers or arbitrary diagnostics. Runner-owned failure artifacts
+remain in the private mode-0700 run directory under its existing retention,
+backup and secure-erasure limitations. These fields distinguish case isolation
+from a global safety halt; they do not establish provider cancellation, zero
+cost, semantic correctness, permission to retry or authority to resume an old
+run.
+
+Explicit case-deadline transport observations add only bounded ordinals,
+closed route/method/termination/accounting enums and monotonic elapsed
+milestones to the private generation diagnostics. They contain no case or
+attempt identifiers, provider/model IDs, payloads, URLs, headers, usage or raw
+errors. The response milestone is availability to the guard, not a provider
+processing timestamp; a settlement milestone is not evidence of a successful
+ledger write unless its accounting outcome is non-null. Observation failure
+cannot grant a request or change the original fail-closed guard outcome.
+
+An admitted-reference count describes references accepted by core admission,
+not newly created memories or retained-message coverage. A content-deduplicated
+memory can contribute a reference, partial extraction can omit source messages,
+and an admitted stage can contain zero references. Source retention remains the
+separate prospective opt-in described below. Existing qualified deduplication
+requires identical resolved source anchors; a changed source identity remains
+an intentional `qualification_conflict`. Observation does not weaken either
+boundary or reconstruct old pilot artifacts.
+
 ### Explicit embedded complete-source snapshot
 
 The local shared core's [sourceSnapshot](bounded-source-snapshot.md) returns the
@@ -57,7 +241,7 @@ event bound payload retention, not content-free replay metadata or total file
 size. Expired/discarded/forgotten fences remain; replay does not renew retention.
 SQLite journals, backups, local-file authority, best-effort redaction and opaque
 identifier limitations still apply. Stop older runtime connections before the
-v13 migration; an already-open old process is not retroactively fenced. See
+v14 migration; an already-open old process is not retroactively fenced. See
 [staged evidence](staged-capture-evidence.md) for the threat model and limits.
 
 ### Embedded proposed-rationale boundary
@@ -273,6 +457,64 @@ adopted label is not execution authority. No telemetry,
 hosted plugin/HTTP schema change, account authority or execution consent is
 introduced. See [local MCP](standalone-mcp.md#opt-in-submitted-source-qualified-capture).
 
+### Opt-in local MCP classification placement
+
+The separate local stdio MCP server can opt into
+`inspect_capture_admission` and `classify_unfiled_memories`
+with `classificationRecovery: 'guarded-v1'` or
+`--classification-recovery guarded-v1`, independently of capture.
+`inspect_capture_admission` reads the existing exact-namespace claim and up to
+five committed distinct member IDs in one read transaction. Its fixed local
+MCP client and server namespace cannot be supplied by the caller. It reports
+only absent, pending, or completed **admission**, always with unknown overall
+classification by default. Completed results include the stored bounded suppression
+count and fresh current active member refs with per-member filing status;
+historical, deleted, or missing members are closed without actionable refs or
+old text. An expired pending claim remains pending. The read does not change a
+lease, clock, memory, claim, or source, contact a provider, or retry capture.
+Empty membership and fully filed membership still cannot certify that
+classification finished.
+
+An optional strict boolean `includeInitialClassification: true` adds only
+`initialClassification:{status}`. This reads a v14 source-free journal for
+the exact batch's **initial capture attempt**; omitted/false keeps the prior
+response unchanged. A new capture commits `not_started` or `skipped_empty`
+atomically with admission, changes to `in_flight_or_interrupted` before model
+interpretation, and can finish as `applied`, `skipped_already_filed` or
+`failed`. In-flight may mean interruption, not current progress. Applied can
+be a valid empty-parent no-op with unfiled members. Manual/legacy batches
+and a batch with any corrected, deleted, historical, missing, foreign or
+revision-changed original member yield `unknown`; no old refs, tokens,
+errors, source text or provider output are returned. Placement and success
+status commit in one transaction, including no-op placement. Later explicit
+classification never rewrites the initial journal. Journal identifiers and
+revision guards persist with the local SQLite file, are not encryption, and
+do not create a retention/pruning policy. Older open runtimes must stop before
+the v14 upgrade; it cannot retroactively fence an already-open process.
+
+`classify_unfiled_memories`
+accepts only one to five unique memory ID/revision pairs. Its namespace is
+bound at server startup; it rejects missing, deleted, historical, stale or
+filed records before model work. A correction invalidates the old revision,
+but a freshly inspected corrected memory remains eligible if active and
+unfiled. It then uses the existing public core
+classification and atomic placement revision guards. The selected current
+memory content and topic catalog may be sent to the configured provider and
+incur charges. Two concurrent explicit requests may both consume a model call;
+if one changes placement, stale guards prevent a second conflicting change.
+No-op proposals may both succeed. The response reports the actual placement
+and filing status, including a valid applied result that remains unfiled and
+can be classified again by another explicit call with the same reference.
+
+Classification does not replay capture, alter source receipts, infer whether a
+batch failed classification, settle currentness or authenticate remembered
+consent. Admission inspection reads committed membership without inferring
+current classification from filing; the optional journal reports only the
+original attempt. This adds no hosted HTTP, plugin or telemetry field, and
+no old evaluation is retried. Explicit recovery attempts have no durable
+history or automatic replay. See
+[the local MCP tool](standalone-mcp.md#explicit-classification-of-unfiled-memories).
+
 The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
 
 ### Opt-in local source evidence context
@@ -300,6 +542,47 @@ personal fields, provider method, telemetry or hosted wire schema is introduced.
 Source roles and passages remain untrusted; even explicit remember may contain
 an assertion supplied by a client, not an authenticated transcript. Source
 selection remains unassessed and MOC routing labels remain model interpretations.
+For an explicit `source-evidence` or `rationale-evidence` recall only, private
+candidate navigation may score the first four retained receipt excerpts for
+each already current, namespace-owned and published-projection-eligible memory.
+It reads receipts in stable opaque-ID order, which is not event chronology, and
+uses the greatest distinct literal query-token overlap across the generated body
+and those four excerpts. A receipt supplies the existing 120-code-point select
+preview only when it scores strictly above the body; the first stable-ID receipt
+wins a receipt tie, while a body tie keeps the body preview. The default scans
+at most 1,024 current physical memories per namespace and scores at most 4,096
+excerpts of at most 800 UTF-16 units. An embedded trusted caller may opt into
+`openMemoryCore({ sourceCandidatePolicy: 'bounded-keyset-v1' })` for explicit
+source-context recall only. It keyset-scans at most 20,000 current physical rows
+per authorized namespace in pages of at most 256, checks one ID-only sentinel,
+and retains the top 1,024 by the same score and ID order. Projection-excluded
+rows consume the physical bound without exposing text or receipts to scoring.
+The selector sees only a winning 120-code-point
+preview for each candidate actually packed into the existing at-most-100-item,
+4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
+metadata. This is bounded navigation, not complete source search or semantic
+relevance. Before any receipt can contribute a score or preview, the core applies
+the same authoritative stored identity, ownership, role, canonical excerpt and
+receipt-key validation used by source output; corrupted rows fail before selector
+invocation.
+
+Default recall and automatic rationale discovery remain body-only; public maps
+and the classification topic catalog remain unchanged. Source-aware cursor
+state binds the explicit mode, query, policy version and four-receipt limit
+separately from body-only cursors. The four-receipt score bound does not change
+map/reference exhaustion or complete-map source ranking: later receipts can
+still be fetched after a memory is selected, but a query term present only in
+receipt five or later cannot help that memory reach selection. Existing epoch,
+revision and final-snapshot checks prevent stale later use and finalization;
+they cannot retract a preview after a model request has already begun.
+
+The opt-in policy additionally binds its 20,000-row cap, 256-row page and
+1,024-candidate top bound in private recall cursors. A physical cap with another
+current row or any eligible candidate discarded by top-K retention is explicitly
+incomplete; it never triggers complete-map source ranking. This constructor
+policy adds no public map, MCP, HTTP, Hermes or persisted schema field and
+provides no semantic-accuracy guarantee.
+
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can
 still expose the original model interpretation. File-access, journals, backups

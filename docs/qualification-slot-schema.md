@@ -5,19 +5,23 @@ items. The original array schema allowed each entry to match any item variant;
 the required array length could not ensure one entry for every distinct input.
 The core correctly rejected this response before admitting the batch.
 
-The OpenAI adapter's `qualifyCandidates` wire format now uses an object:
+The OpenAI adapter's `qualifyCandidates` wire retains required named item
+entries. Its current provider representation is the separately versioned
+[`evidence-pool-v1` format](qualification-evidence-pool.md):
 
 ```json
-{"qualifications":{"item_0":{"itemIndex":0},"item_1":{"itemIndex":1}}}
+{"wireVersion":"evidence-pool-v1","qualifications":{"item_0":{"itemIndex":0},"item_1":{"itemIndex":1}}}
 ```
 
 This is a shape illustration, not a complete accepted response: each entry also
-requires all seven existing descriptive/evidence fields. Each named field is
-required, permits only its matching item index, and restricts evidence to that
-item's supplied candidates. Additional fields are forbidden. The adapter checks
-this bounded schema before returning the existing `qualifications` array in
-input order. It does not assign a missing entry, deduplicate an invalid array,
-change evidence indices, retry, or admit an unqualified fallback.
+requires a one-to-four-candidate pool and all seven descriptive/evidence fields.
+Each named field is required, permits only its matching item index, and
+restricts the pool to that item's supplied candidates. Fields cite slots in
+that pool. Additional fields are forbidden. The adapter validates and decodes
+the bounded wire, checks the unchanged inline schema, then returns the existing
+`qualifications` array in input order. It does not assign a missing entry,
+deduplicate an invalid array, invent evidence, retry, or admit an unqualified
+fallback.
 
 The shared core prompt and programmatic model contract remain unchanged. A
 provider-specific instruction clarifies that its wire object supersedes the
