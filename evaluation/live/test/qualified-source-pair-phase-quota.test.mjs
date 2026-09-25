@@ -100,3 +100,27 @@ test('L2 guard-local halt is observed without rewriting a recognized local deadl
   assert.throws(() => quota.answerFetch(f.stages.answer.endpoint, {}), /paid_work_halted/);
   assert.equal(f.calls.length, 0);
 });
+
+test('G5 adaptive capability stays opaque while the quota delegates to guarded closures', async () => {
+  const f = fixture();
+  const adaptive = Object.freeze({ version: 'qualified-source-pair-adaptive-case-v1',
+    methodProfile: 'qualified-source-pair-adaptive-v1', adaptiveContext: Object.freeze({
+      qualificationInputProfile: 'adaptive-text-catalog-v1' }) });
+  f.guard.qualifiedSourcePairCapability = adaptive;
+  const forwarded = [];
+  f.guard.cairnFetch = function (url, request) {
+    assert.equal(this, f.guard);
+    forwarded.push([url, request]);
+    return Promise.resolve('guarded');
+  };
+  const quota = createQualifiedSourcePairPhaseQuota({ guard: f.guard, policy: f.policy,
+    stages: f.stages, phaseCaps: { generation: { requests: 1, reservedMicroUsd: 5_000 },
+      scoring: { requests: 0, reservedMicroUsd: 0 } } });
+  const request = Object.freeze({ synthetic: true });
+  assert.equal(await quota.cairnFetch(f.policy.cairnCount.endpoint, request), 'guarded');
+  assert.deepEqual(forwarded, [[f.policy.cairnCount.endpoint, request]]);
+  assert.equal(quota.qualifiedSourcePairCapability, undefined);
+  assert.throws(() => quota.cairnFetch(f.policy.cairnGeneration.endpoint, request),
+    /phase_cap_exceeded/u);
+  assert.equal(forwarded.length, 1);
+});

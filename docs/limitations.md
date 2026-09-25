@@ -85,8 +85,18 @@ every candidate ID, role and receipt mapping. The repeated-source five-item ×
 four-receipt × 800-unit synthetic fake-HTTP fixture fits and compiles original
 anchors; an all-unique fixture remains too large. Additional local fit work is
 possible, but the physical qualifier schedule and token ceilings are unchanged.
-Existing guards deny this named mode, and no paid cohort, real-provider response,
+Existing v1 guards deny this named mode, and no paid cohort, real-provider response,
 semantic quality or source-selection improvement has been demonstrated.
+
+The separately versioned adaptive source-pair guard can authorize both inline
+and text-catalog qualification for a declared artifact/configuration identity
+and a fixed normalized roster. Synthetic temporary-ledger and installed local
+archive tests exercise its one-shot claim, phase caps, original source anchors
+and request accounting with fake HTTP. The capability's artifact and
+configuration hashes are declarations: issuing the grant does not inspect or
+certify the actual runtime, and the offline installed test is not a paid launch.
+Real-provider strict-schema compatibility, semantic support, benchmark answers
+and quality remain unmeasured. Existing grants still deny catalog mode.
 
 The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
 performance test at its unchanged five-second child-process timeout; the other
@@ -159,6 +169,10 @@ result yet. Its dry-run does not issue or prove a case-deadline capability;
 launch is a separate one-shot action. Even if all six cases complete, this
 selected small roster cannot establish comparative superiority, population
 accuracy, installed Hermes behavior or that historical failures were repaired.
+The offline genuine-core-timeout smoke test now drives the real core timer in
+an isolated test-only process and confirms five later cases continue; it does
+not calibrate a 30-second wall-clock deadline. Its earlier Node 24 full-suite
+45-second outer-timeout failure remains retained, with initial cause unknown.
 It exercises embedded default capture and recall, without native v2
 qualification, explicit recovery or a capture invocation deadline. The old
 30-case counts remain unchanged.

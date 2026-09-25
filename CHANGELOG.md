@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — explicit adaptive qualified source-pair guard
+
+- Add a distinct, roster-bound adaptive capability and one-shot guard for
+  inline and strict catalog qualification. Synthetic 100M/200M parent-ledger,
+  phase-quota and installed local-archive controls retain source anchors and
+  existing request bounds. Old grants continue to deny catalog traffic. No
+  default route, paid launch or model-quality result follows.
+
 ## Unreleased — optional adaptive qualification text catalog
 
 - Add an explicit adapter opt-in that checks inline qualification first, then

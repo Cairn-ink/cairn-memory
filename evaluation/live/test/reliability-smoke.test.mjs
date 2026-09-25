@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { chmodSync, writeFileSync } from 'node:fs';
 import { chmod, lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkBudgetExtension, authorizeBenchmarkExtension,
@@ -473,16 +475,33 @@ test('global unknown guard outcome stops the round without exposing delegate dat
   assert.doesNotMatch(result.stdout + result.stderr, /synthetic-private|synthetic-smoke-key|lme-case-|\/tmp\//u);
 });
 
+const deadlineChild = fileURLToPath(new URL('../testing/reliability-smoke-deadline-child.mjs', import.meta.url));
+const runDeadlineChild = (f, mode) => {
+  const result = spawnSync(process.execPath, [deadlineChild, f.planPath, mode], {
+    encoding: 'utf8', env: { NODE_NO_WARNINGS: '1' }, timeout: 40_000,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.stderr, '');
+  return { status: result.status, evidence: JSON.parse(result.stdout) };
+};
+
 test('genuine core deadline isolates one case and later cases continue', { timeout: 45_000 }, async (t) => {
   const f = await setup(t);
-  const calls = [];
-  const result = await run(f, '--launch', fakeHttp(calls, 'timeout-first'));
-  assert.equal(result.code, 0, result.stderr);
-  const report = JSON.parse(await readFile(path.join(f.plan.outputDirectory, 'report.json'), 'utf8'));
-  assert.equal(report.summary.fixedN, 6);
-  assert.equal(report.summary.generationTimeouts, 1);
-  assert.equal(report.summary.halted, false);
-  assert.ok(report.summary.generated >= 1);
-  assert.ok(calls.length > 1);
-  assert.ok(calls.length <= f.plan.projection.requests);
+  const result = runDeadlineChild(f, 'normal');
+  assert.equal(result.status, 0);
+  assert.deepEqual(result.evidence, { mode: 'normal', clockAdvanced: true, fixedN: 6,
+    generationTimeouts: 1, generated: 5, halted: false, termination: 'core_deadline',
+    continued: true, conserved: true, requests: result.evidence.requests, invariant: true });
+  assert.ok(result.evidence.requests > 1);
+  assert.ok(result.evidence.requests <= f.plan.projection.requests);
+});
+
+test('removing core timeout provenance fails the continuation invariant', { timeout: 45_000 }, async (t) => {
+  const f = await setup(t);
+  const result = runDeadlineChild(f, 'without-core-provenance');
+  assert.equal(result.status, 2);
+  assert.equal(result.evidence.mode, 'without-core-provenance');
+  assert.equal(result.evidence.clockAdvanced, true);
+  assert.equal(result.evidence.invariant, false);
+  assert.notEqual(result.evidence.termination, 'core_deadline');
 });

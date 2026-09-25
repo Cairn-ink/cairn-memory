@@ -28,7 +28,7 @@ import {
   SOL_RATIONALE_MODEL,
 } from '../../adapters/openai/profiles.mjs';
 import { createOpenAIModel } from '../../adapters/openai/index.mjs';
-import { schemasFor } from '../../adapters/openai/schemas.mjs';
+import { schemasFor, schemasForQualificationInput } from '../../adapters/openai/schemas.mjs';
 import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
 import { createTransportDiagnosticsCollector } from './transport-diagnostics.mjs';
 import { installedCoreDeadlinePredicateFor } from './installed-core-deadline.mjs';
@@ -62,6 +62,10 @@ const BENCHMARK_BUDGET_CHAIN_VERSION = 'benchmark-budget-chain-v1';
 const CASE_DEADLINE_VERSION = 'case-deadline-v1';
 const SOURCE_PAIR_VERSION = 'qualified-source-pair-case-v1';
 const SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-v1';
+const ADAPTIVE_SOURCE_PAIR_VERSION = 'qualified-source-pair-adaptive-case-v1';
+const ADAPTIVE_SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-adaptive-v1';
+const ADAPTIVE_QUALIFICATION_INPUT_PROFILE = 'adaptive-text-catalog-v1';
+const ADAPTIVE_SOURCE_PAIR_DOMAIN = 'cairn.lme.source-pair.adaptive.experiment.v1';
 const SOURCE_PAIR_NAMES = Object.freeze(['qualified-prefix', 'indexed-windows']);
 const SOURCE_PAIR_QUESTION = /^lme-case-[0-9a-f]{64}$/u;
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
@@ -413,7 +417,7 @@ function validateHostBody(body, channel, byteLength) {
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
 function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
-  modelControl = false, pairArm = null) {
+  modelControl = false, pairArm = null, adaptiveQualification = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -455,12 +459,14 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
     if (match?.[1] === 'extract'
       && (pairArm === 'indexed-windows' ? input?.inputMode !== 'indexed-windows-v1'
         : own(input, 'inputMode'))) fail('unsupported_request');
-    if (match?.[1] === 'qualifyCandidates' && own(input, 'inputMode')) fail('unsupported_request');
+    if (match?.[1] === 'qualifyCandidates' && own(input, 'inputMode')
+      && (!adaptiveQualification || input.inputMode !== 'text-catalog-v1')) fail('unsupported_request');
   } else if (match?.[1] === 'extract' && input?.inputMode === 'indexed-windows-v1') {
     fail('unsupported_request');
   }
   let expectedSchema;
-  try { expectedSchema = match ? schemasFor(match[1], input) : null; }
+  try { expectedSchema = match ? (adaptiveQualification && match[1] === 'qualifyCandidates'
+    ? schemasForQualificationInput(input) : schemasFor(match[1], input)) : null; }
   catch { fail('unsupported_request'); }
   if (!match || format.type !== 'json_schema' || format.strict !== true
     || !deepEqual(format.schema, expectedSchema)) fail('unsupported_request');
@@ -474,6 +480,14 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   } catch { fail('unsupported_request'); }
   if (localTokens > 6000 || localTokens + channel.inputTokenFraming > channel.maxInputTokens) {
     fail('input_bound_exceeded');
+  }
+  if (adaptiveQualification && match?.[1] === 'qualifyCandidates') {
+    const countBody = generation ? Object.fromEntries(Object.entries(body).filter(([key]) =>
+      !['max_output_tokens', 'store', 'stream'].includes(key))) : body;
+    let countBodyTokens;
+    try { countBodyTokens = localCounter.countTokens(JSON.stringify(countBody)); }
+    catch { fail('unsupported_request'); }
+    if (countBodyTokens > 6000) fail('input_bound_exceeded');
   }
   if (generation && (body.max_output_tokens !== 1024
     || body.max_output_tokens > channel.maxOutputTokens || body.store !== false || body.stream !== false)) {
@@ -1952,9 +1966,50 @@ function pairSchedule(roster) {
     ...ordered.map(({ caseId }) => ({ phase: 'scoring', caseId }))]);
 }
 
-function pairFilenames(directory, executionId) {
-  const stem = path.join(directory, `experiment-qualified-source-pair-${executionId}`);
+function pairFilenames(directory, executionId, adaptive = false) {
+  const stem = path.join(directory, `${adaptive ? 'experiment-adaptive-qualified-source-pair'
+    : 'experiment-qualified-source-pair'}-${executionId}`);
   return { binding: `${stem}.json`, claim: `${stem}.claim.json` };
+}
+
+function exactAdaptiveKeys(value, keys) {
+  if (!isPlainObject(value) || Reflect.ownKeys(value).length !== keys.length) fail('invalid_capability');
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !own(descriptor, 'value')) fail('invalid_capability');
+  }
+}
+
+export function deriveAdaptiveQualifiedSourcePairExperimentDigest(options) {
+  let detached;
+  try {
+    exactAdaptiveKeys(options, ['qualificationInputProfile', 'runtimeArtifactSha256',
+      'adapterConfigurationSha256', 'roster']);
+    detached = structuredClone(options);
+  } catch { fail('invalid_capability'); }
+  const { qualificationInputProfile, runtimeArtifactSha256, adapterConfigurationSha256 } = detached;
+  if (qualificationInputProfile !== ADAPTIVE_QUALIFICATION_INPUT_PROFILE
+    || typeof runtimeArtifactSha256 !== 'string' || !SHA256_HEX.test(runtimeArtifactSha256)
+    || typeof adapterConfigurationSha256 !== 'string' || !SHA256_HEX.test(adapterConfigurationSha256)) {
+    fail('invalid_capability');
+  }
+  const roster = pairRoster(detached.roster);
+  return pairHash(ADAPTIVE_SOURCE_PAIR_DOMAIN, {
+    qualificationInputProfile, runtimeArtifactSha256, adapterConfigurationSha256, roster,
+  });
+}
+
+function adaptivePairContext(value, roster) {
+  exactAdaptiveKeys(value, ['qualificationInputProfile', 'runtimeArtifactSha256',
+    'adapterConfigurationSha256', 'experimentDigest']);
+  const detached = structuredClone(value);
+  const expected = deriveAdaptiveQualifiedSourcePairExperimentDigest({
+    qualificationInputProfile: detached.qualificationInputProfile,
+    runtimeArtifactSha256: detached.runtimeArtifactSha256,
+    adapterConfigurationSha256: detached.adapterConfigurationSha256, roster,
+  });
+  if (detached.experimentDigest !== expected) fail('invalid_capability');
+  return deepFreeze(detached);
 }
 
 function verifyPairParent(extension, ledger, policy, state) {
@@ -2000,10 +2055,12 @@ export function inspectQualifiedSourcePairParent(options) {
   return deepFreeze(state);
 }
 
-function pairConfiguration(options, authorization) {
+function pairConfiguration(options, authorization, adaptive = false) {
   const keys = authorization
-    ? ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint', 'roster']
-    : ['ledger', 'policy', 'benchmarkExtension', 'qualifiedSourcePairCapability', 'fetchImpl'];
+    ? ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint',
+      'roster', ...(adaptive ? ['adaptiveContext'] : [])]
+    : ['ledger', 'policy', 'benchmarkExtension', adaptive
+      ? 'adaptiveQualifiedSourcePairCapability' : 'qualifiedSourcePairCapability', 'fetchImpl'];
   let optionalTransport;
   let detached;
   let fetchImpl;
@@ -2017,12 +2074,28 @@ function pairConfiguration(options, authorization) {
       authorization ? 'invalid_capability' : 'invalid_options');
     const raw = Object.fromEntries(keys.filter((key) => key !== 'fetchImpl')
       .map((key) => [key, options[key]]));
+    if (adaptive && authorization) exactAdaptiveKeys(raw.adaptiveContext,
+      ['qualificationInputProfile', 'runtimeArtifactSha256',
+        'adapterConfigurationSha256', 'experimentDigest']);
+    if (adaptive && !authorization) {
+      const rawCapability = raw.adaptiveQualifiedSourcePairCapability;
+      exactAdaptiveKeys(rawCapability, ['version', 'authorizationId', 'executionId', 'ledger',
+        'policy', 'benchmarkExtension', 'checkpoint', 'historicalDigest', 'roster',
+        'rosterDigest', 'schedule', 'methodProfile', 'adaptiveContext']);
+      exactAdaptiveKeys(Object.getOwnPropertyDescriptor(rawCapability, 'adaptiveContext').value,
+        ['qualificationInputProfile', 'runtimeArtifactSha256',
+          'adapterConfigurationSha256', 'experimentDigest']);
+    }
     fetchImpl = authorization ? null : options.fetchImpl;
     transportDiagnostics = optionalTransport ? options.transportDiagnostics : null;
     installedDeadline = optionalInstalled
       ? installedCoreDeadlinePredicateFor(options.installedCoreDeadline) : null;
     detached = structuredClone(raw);
-  } catch { fail(authorization ? 'invalid_capability' : 'invalid_options'); }
+  } catch (error) {
+    if (adaptive && error instanceof ExperimentRequestGuardError
+      && error.code === 'invalid_capability') throw error;
+    fail(authorization ? 'invalid_capability' : 'invalid_options');
+  }
   if (!authorization && (typeof fetchImpl !== 'function'
     || (optionalTransport && transportDiagnostics !== 'bounded-v1'))) fail('invalid_options');
   const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
@@ -2031,7 +2104,8 @@ function pairConfiguration(options, authorization) {
   ledger.directory = path.resolve(ledger.directory);
   const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
   if (!authorization) return { ledger, policy, benchmarkExtension,
-    capability: detached.qualifiedSourcePairCapability, fetchImpl, transportDiagnostics,
+    capability: adaptive ? detached.adaptiveQualifiedSourcePairCapability
+      : detached.qualifiedSourcePairCapability, fetchImpl, transportDiagnostics,
     installedDeadline };
   const { authorizationId, executionId, checkpoint } = detached;
   if (typeof authorizationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(authorizationId)
@@ -2044,33 +2118,38 @@ function pairConfiguration(options, authorization) {
     || checkpoint.reservedMicroUsd > ledger.limitMicroUsd) fail('invalid_capability');
   const roster = pairRoster(detached.roster);
   return { ledger, policy, benchmarkExtension, authorizationId, executionId,
-    checkpoint: deepFreeze(checkpoint), roster, fetchImpl, transportDiagnostics };
+    checkpoint: deepFreeze(checkpoint), roster, fetchImpl, transportDiagnostics,
+    ...(adaptive ? { adaptiveContext: adaptivePairContext(detached.adaptiveContext, roster) } : {}) };
 }
 
-function pairCapabilityRecord(configuration, digest) {
-  return { version: SOURCE_PAIR_VERSION, authorizationId: configuration.authorizationId,
+function pairCapabilityRecord(configuration, digest, adaptive = false) {
+  return { version: adaptive ? ADAPTIVE_SOURCE_PAIR_VERSION : SOURCE_PAIR_VERSION,
+    authorizationId: configuration.authorizationId,
     executionId: configuration.executionId, ledger: configuration.ledger,
     policy: configuration.policy, benchmarkExtension: configuration.benchmarkExtension,
     checkpoint: configuration.checkpoint, historicalDigest: digest,
     roster: configuration.roster,
     rosterDigest: pairHash('cairn.lme.source-pair.roster.v1', configuration.roster),
-    schedule: pairSchedule(configuration.roster), methodProfile: SOURCE_PAIR_METHOD_PROFILE };
+    schedule: pairSchedule(configuration.roster),
+    methodProfile: adaptive ? ADAPTIVE_SOURCE_PAIR_METHOD_PROFILE : SOURCE_PAIR_METHOD_PROFILE,
+    ...(adaptive ? { adaptiveContext: configuration.adaptiveContext } : {}) };
 }
 
-function verifyPairCapability(capability, ledger, policy, benchmarkExtension) {
+function verifyPairCapability(capability, ledger, policy, benchmarkExtension, adaptive = false) {
   exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
     'benchmarkExtension', 'checkpoint', 'historicalDigest', 'roster', 'rosterDigest',
-    'schedule', 'methodProfile'], 'invalid_capability');
+    'schedule', 'methodProfile', ...(adaptive ? ['adaptiveContext'] : [])], 'invalid_capability');
   const config = pairConfiguration({ ledger, policy, benchmarkExtension,
     authorizationId: capability.authorizationId, executionId: capability.executionId,
-    checkpoint: capability.checkpoint, roster: capability.roster }, true);
-  if (capability.version !== SOURCE_PAIR_VERSION
+    checkpoint: capability.checkpoint, roster: capability.roster,
+    ...(adaptive ? { adaptiveContext: capability.adaptiveContext } : {}) }, true, adaptive);
+  if (capability.version !== (adaptive ? ADAPTIVE_SOURCE_PAIR_VERSION : SOURCE_PAIR_VERSION)
     || typeof capability.historicalDigest !== 'string'
     || !SHA256_HEX.test(capability.historicalDigest)
-    || canonical(capability) !== canonical(pairCapabilityRecord(config, capability.historicalDigest))) {
+    || canonical(capability) !== canonical(pairCapabilityRecord(config, capability.historicalDigest, adaptive))) {
     fail('invalid_capability');
   }
-  readBinding(pairFilenames(ledger.directory, capability.executionId).binding, capability);
+  readBinding(pairFilenames(ledger.directory, capability.executionId, adaptive).binding, capability);
   return config;
 }
 
@@ -2082,7 +2161,15 @@ function verifyPairBaseline(capability, state) {
 }
 
 export function authorizeQualifiedSourcePairCapability(options) {
-  const config = pairConfiguration(options, true);
+  return authorizePairCapability(options, false);
+}
+
+export function authorizeAdaptiveQualifiedSourcePairCapability(options) {
+  return authorizePairCapability(options, true);
+}
+
+function authorizePairCapability(options, adaptive) {
+  const config = pairConfiguration(options, true, adaptive);
   let callbackFailure;
   let capability;
   let handle;
@@ -2093,9 +2180,9 @@ export function authorizeQualifiedSourcePairCapability(options) {
         verifyPairParent(config.benchmarkExtension, config.ledger, config.policy, state);
         if (state.requestCount !== config.checkpoint.requestCount
           || state.reservedMicroUsd !== config.checkpoint.reservedMicroUsd) fail('policy_mismatch');
-        const files = pairFilenames(config.ledger.directory, config.executionId);
+        const files = pairFilenames(config.ledger.directory, config.executionId, adaptive);
         assertPairClaimUnused(files.claim);
-        capability = pairCapabilityRecord(config, historicalDigest(historicalRows(state)));
+        capability = pairCapabilityRecord(config, historicalDigest(historicalRows(state)), adaptive);
         if (Buffer.byteLength(`${canonical(capability)}\n`) > 1_000_000) fail('invalid_capability');
         let existing;
         try { existing = lstatSync(files.binding); }
@@ -2122,8 +2209,8 @@ function assertPairClaimUnused(filename) {
   }
 }
 
-function writePairClaim(directory, capability) {
-  const { claim } = pairFilenames(directory, capability.executionId);
+function writePairClaim(directory, capability, adaptive = false) {
+  const { claim } = pairFilenames(directory, capability.executionId, adaptive);
   let descriptor;
   try {
     descriptor = openSync(claim,
@@ -2134,7 +2221,8 @@ function writePairClaim(directory, capability) {
   }
   let error;
   try {
-    writeFileSync(descriptor, `${canonical({ version: 'qualified-source-pair-claim-v1',
+    writeFileSync(descriptor, `${canonical({ version: adaptive
+      ? 'qualified-source-pair-adaptive-claim-v1' : 'qualified-source-pair-claim-v1',
       executionId: capability.executionId, capabilityDigest: historicalDigest([capability]) })}\n`,
     { encoding: 'utf8' });
     fsyncSync(descriptor);
@@ -2373,21 +2461,29 @@ export function createCaseDeadlineExperimentRequestGuard(options) {
 }
 
 export function createQualifiedSourcePairExperimentRequestGuard(options) {
-  const configuration = pairConfiguration(options, false);
+  return createPairExperimentRequestGuard(options, false);
+}
+
+export function createAdaptiveQualifiedSourcePairExperimentRequestGuard(options) {
+  return createPairExperimentRequestGuard(options, true);
+}
+
+function createPairExperimentRequestGuard(options, adaptive) {
+  const configuration = pairConfiguration(options, false, adaptive);
   const { ledger, policy, benchmarkExtension, fetchImpl, transportDiagnostics,
     installedDeadline } = configuration;
   const capability = snapshotExtension(configuration.capability);
-  verifyPairCapability(capability, ledger, policy, benchmarkExtension);
+  verifyPairCapability(capability, ledger, policy, benchmarkExtension, adaptive);
   let callbackFailure;
   let bound;
   let baseline;
   try {
     bound = openBoundExperimentBudget({ configuration: ledger, authorize(state) {
       try {
-        verifyPairCapability(capability, ledger, policy, benchmarkExtension);
+        verifyPairCapability(capability, ledger, policy, benchmarkExtension, adaptive);
         verifyPairParent(benchmarkExtension, ledger, policy, state);
         verifyPairBaseline(capability, state);
-        writePairClaim(ledger.directory, capability);
+        writePairClaim(ledger.directory, capability, adaptive);
         baseline = deepFreeze(historicalRows(state));
       } catch (error) {
         if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
@@ -2395,7 +2491,7 @@ export function createQualifiedSourcePairExperimentRequestGuard(options) {
       }
     } });
     return constructBenchmarkGuard({ ledger, policy, fetchImpl }, benchmarkExtension,
-      capability, baseline, transportDiagnostics, { bound, pair: true, installedDeadline });
+      capability, baseline, transportDiagnostics, { bound, pair: true, adaptive, installedDeadline });
   } catch (error) {
     try { bound?.close(); } catch { /* Preserve first failure; claim remains consumed. */ }
     if (callbackFailure) throw callbackFailure;
@@ -2436,7 +2532,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
   const verify = () => {
     if (pairProfile?.pair) {
-      verifyPairCapability(caseCapability, ledgerConfiguration, policy, benchmark);
+      verifyPairCapability(caseCapability, ledgerConfiguration, policy, benchmark,
+        pairProfile.adaptive);
     } else {
       verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
       if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
@@ -2692,7 +2789,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       const snapshot = requestSnapshot(url, requestOptions, channel);
       validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
         pairProfile?.pair ? CANDIDATE_QUALIFICATION_KIND.method : null, false,
-        pairProfile?.pair ? pairArms.get(caseScope.caseId) : null);
+        pairProfile?.pair ? pairArms.get(caseScope.caseId) : null, pairProfile?.adaptive ?? false);
       const method = kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
         cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank',
         cairn_qualifyCandidates: 'qualifyCandidates' })[

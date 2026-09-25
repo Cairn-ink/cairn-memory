@@ -61,8 +61,20 @@ Default adapter configuration has no fit callback and keeps the inline route.
 The optional fit is accepted only as an explicit own-data callable on the
 model. An inherited getter or function fails locally without invocation;
 genuine absence alone retains legacy inline behavior.
-Existing paid request guards reject catalog mode before forwarding or reserving;
-no old grant is implicitly upgraded.
+Existing v1 paid request guards reject catalog mode before forwarding or
+reserving; no old grant is implicitly upgraded.
+
+The separate adaptive qualified source-pair guard grants this mode only through
+an explicit `qualified-source-pair-adaptive-case-v1` capability. Its binding
+records a declared installed artifact hash, declared non-secret adapter
+configuration hash, the `adaptive-text-catalog-v1` profile and an outer digest
+over those fields plus the complete normalized two-arm roster. The new guard
+accepts inline qualification as well as the strict catalog, while the old
+source-pair guard continues to reject catalog requests. Both modes keep the
+same source-bound compiler, one count/one generation schedule, 6,000-token
+logical and equivalent count-body bounds, 7,024-token provider bound and
+1,024-token output bound. The grant records declarations; a later installed
+helper must verify actual artifact and configuration bytes before paid use.
 
 The fixed repeated-source synthetic five-item × four-receipt × 800-unit fixture
 fits this catalog route in fake HTTP and compiles exact original anchors. The
@@ -70,5 +82,5 @@ all-unique fixture still refuses locally. A surrogate-safe split can produce
 five candidates per 800-unit receipt, so catalog validation allows up to 100
 candidates across the five items without changing the four-cited-anchor cap.
 These local controls do not establish real-provider interpretation, strict-schema
-compatibility or benchmark resolution. A separately versioned paid guard,
-installed artifact and frozen synthetic compatibility plan are still required.
+compatibility or benchmark resolution. A frozen one-shot installed compatibility
+plan and budget audit are still required before any paid call.
