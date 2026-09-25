@@ -138,3 +138,15 @@ Changed call path: `run.py` launches one isolated child with an explicit env;
 invokes real `Memory.add`/`Memory.search` against fake HTTP and local Qdrant.
 No product entrypoint, core, scorer, ledger, packaging or CI caller changed.
 Primary owns final gate reruns, original-base independent review, PR and CI.
+
+### First-review correction contract (frozen before edits)
+
+At `aab2f80`, independent Spec review passed with zero findings. Standards
+found no hard violation and one low heuristic: `connect` and `connect_ex`
+duplicate non-loopback refusal/logging. Primary accepts that small maintenance
+correction. In `child.py` only, share the address refusal check while retaining
+the distinct original socket delegates and existing behavior, counts and
+Python-only proof boundaries. Record the correction here; rerun the focused
+actual-engine path and contributor gates on both Node runtimes, then both
+original-base independent reviews on the new committed candidate. No broader
+socket sandbox, paid guard or engine behavior change is in scope.
