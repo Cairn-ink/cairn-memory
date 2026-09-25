@@ -55,6 +55,12 @@ sourceWindowCatalog, extra fields, missing metadata, mixed policies or a caller
 claim that an unqualified capture is qualified. Failure responses retain their
 existing closed shape and cannot attach success metadata.
 
+This is shape/host-plan validation against a trusted injected core port, not
+cryptographic attestation of that callback. A real default-core response lacks
+the required metadata and is rejected. An arbitrary callback could fabricate a
+matching envelope; proving its construction belongs to the later actual-core
+launch harness. Do not claim metadata alone authenticates qualification.
+
 Use a small closed internal metadata mode if sharing the response classifier;
 never loosen existing legacy/indexed checks to accommodate the new mode.
 Capture failure/throw/unknown/partial stops the current ingestion without retry;
