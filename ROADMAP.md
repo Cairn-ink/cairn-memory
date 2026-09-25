@@ -35,6 +35,44 @@ distinguishes main from pending PRs and proposed behavior; it is not a release
 claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
+### Current checkpoint — 2026-09-25
+
+The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+now record PR #232's accepted offline evidence-pool repair candidate
+(`767f1e1`): two independent reviews and 21/21 exact-head CI checks. It was
+ready and unmerged at the recorded check, not a released runtime. One separate
+installed compatibility attempt completed all three new synthetic fixtures
+through provider count, generation and core compilation. Six physical requests
+reserved US$0.030000, with US$0.004670 known actual cost, three count-route
+costs unknown and zero pending. Its source-free report SHA-256 is
+`bdbe2d4d7ba8a5c43b6962e5ca70c02b454b95786f83f1ad5098d3d37adb8061`.
+This is provider-schema compatibility only, not extraction, answering, judging
+or semantic accuracy. Adaptive text-catalog work is still in implementation;
+its separate profile and installed/configuration/experiment pins need offline
+acceptance before any paid use.
+
+Read-only terminal audits preserved the prior 12,702-request prefix. The
+cumulative ledger has 12,708 terminal requests, US$86.546460 reserved,
+US$113.453540 remaining and zero pending under unchanged US$200/50,000-request
+authority. The original reserved 30 cases remain untouched for one jointly
+frozen S3 Cairn/comparator run; the 130 exclusions stay closed, and S2–S5
+remain open. The stale six-case development projection ceiling of
+US$18.734640 would leave only US$14.718900 beyond the protected US$70
+comparator and US$10 host allocations. That is not a forecast or proof the
+joint 30 fit. Freeze complete prospective S3 and development budget projections
+before further substantial paid development. Automated holdout preparation for
+source-free bounds follows, never precedes, a frozen exact roster, both S3 arm
+configurations, source/answer/scorer protocol and resource limits; workers must
+not inspect its source/answers or tune afterward. This checkpoint opens no
+holdout content. No old cohort rerun, paid call,
+merge or release is authorized by this update. PR #205's previous exact-head
+CI is stale for this new documentation candidate.
+
+### Historical checkpoint — after fresh-development terminal
+
+The following snapshot is retained as written; “latest” refers to that earlier
+checkpoint, not current status.
+
 Dated 2026-09-25: the [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
 records the latest checkpoint after the fresh-development terminal run; older
 results and failures remain dated history, not fresh reruns. PRs #230

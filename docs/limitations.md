@@ -68,7 +68,37 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
-### Latest checkpoint — 2026-09-25 (after fresh development terminal)
+### Latest checkpoint — 2026-09-25 (after evidence-pool compatibility)
+
+The evidence-pool repair candidate in PR #232 (`767f1e1`) passed two
+independent reviews and 21/21 exact-head CI checks and was ready but unmerged
+at the recorded check. Its new installed provider-compatibility attempt
+completed three synthetic fixtures through count, generation and core
+compilation. Local serialized estimates were 2,063/3,066/3,015; provider
+counts were 1,609/2,435/2,341; selected candidates equaled supplied
+candidates at 1/1, 16/16 and 5/5. Six physical requests reserved
+US$0.030000, with US$0.004670 known actual, three count-route costs unknown
+and zero pending. The source-free report SHA-256 is
+`bdbe2d4d7ba8a5c43b6962e5ca70c02b454b95786f83f1ad5098d3d37adb8061`.
+No extraction, answer or judge was invoked; this is narrow wire/schema and
+compiler compatibility, not semantic quality, retrieval or proof that all
+maximum-size inputs fit. Adaptive text-catalog work remains in implementation,
+not accepted; a distinct capability/profile and installed, configuration and
+experiment pins are prerequisites to paid use.
+
+Primary and independent read-only terminal audits confirmed the old
+12,702-request prefix intact. Cumulative accounting is now 12,708 terminal
+requests, US$86.546460 conservatively reserved, US$113.453540 remaining and
+zero pending under unchanged US$200/50,000-request authority. Protect at least
+US$70 for the comparator and US$10 for installed host work. The stale six-case
+development ceiling of US$18.734640 would leave only US$14.718900 beyond
+those protected allocations; it is not a forecast or proof that the original
+30-case joint S3 run fits. The 130 exclusions remain closed, the reserved
+30-case holdout untouched, and no old cohort was rerun. S2–S5 remain open;
+this documentation update authorizes no new paid call or quality claim. See
+the [current milestone checkpoint](plans/comparative-reliability-milestones.md).
+
+### Historical checkpoint — 2026-09-25 (after fresh development terminal)
 
 The source-free terminal report SHA-256
 `e8d75ac9cd0865c78777587d132eec44ee84dff0bd500afad8ffa1f310dce84d` records

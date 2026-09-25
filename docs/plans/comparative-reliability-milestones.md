@@ -3,8 +3,10 @@
 Status: proposed sequence; the finite S1 mechanical repair/recovery gate is
 accepted on the current candidate. Semantic reliability and the S2–S5 product
 milestones remain open; the S1–S5 sequence has not passed as a whole. See the
-latest checkpoint and resume protocol below; older execution snapshots are
-explicitly historical. Re-check live PR and CI state before resuming.
+latest checkpoint and resume protocol below. The evidence-pool repair is
+accepted offline, but adaptive text-catalog capacity work is not. Older
+execution snapshots are explicitly historical. Re-check live PR and CI state
+before resuming.
 Goal: a lightweight, source-backed memory layer for Hermes and other agent
 harnesses, evaluated against existing solutions under matched conditions.
 
@@ -32,13 +34,49 @@ harnesses, evaluated against existing solutions under matched conditions.
   dated read-only accounting audit without implying embedding-ledger migration.
 - Keep the consumed fresh roster and prior cohorts closed, the reserved 30-case
   set untouched, and the comparator/host reserves protected.
-- Record the completed synthetic real-API compatibility/count check without
-  treating it as semantic evidence; keep the next fresh development run behind
-  its separate frozen plan and acceptance gates.
+- Record the completed evidence-pool synthetic real-API compatibility check
+  without treating it as semantic evidence; keep any next development run
+  behind a current frozen plan and complete budget-feasibility gates.
 - Publish no raw case/source data, IDs, credentials, private paths or ledger
   contents. This checkpoint authorizes no new paid call, rerun, merge or release.
 
-### Next checkpoint requirements — completed fresh development continuation
+### Next checkpoint requirements — E accepted, adaptive capacity repair pending
+
+Preserve all earlier checkpoints as dated history. Record PR232's accepted
+runtime `767f1e1`, two independent reviews and 21/21 exact-head CI, ready/unmerged,
+and the newly completed installed evidence-pool compatibility run: three new
+synthetic fixtures, 3/3 compiled, six physical requests, US$0.030000 reserved,
+US$0.004670 known actual, three count-route costs unknown and zero pending.
+Source-free report digest
+`bdbe2d4d7ba8a5c43b6962e5ca70c02b454b95786f83f1ad5098d3d37adb8061`.
+Local estimates were 2,063/3,066/3,015; provider counts were
+1,609/2,435/2,341; supplied/selected candidates were 1/1, 16/16 and 5/5.
+No extraction, answer or judge was invoked; this is compatibility
+only, not a semantic score. Primary and independent terminal audits preserved
+the prior 12,702-request prefix. The current ledger has 12,708 terminal
+requests, US$86.546460 reserved, US$113.453540 remaining and zero pending
+under the unchanged US$200/50,000-request authority.
+
+F adaptive text catalog is in implementation, not accepted: exact text sharing
+only, unchanged source identities/defaults/call limits; all-unique oversize
+remains a refusal. A separate new profile and installed/config/experiment pins
+must pass offline review before any paid catalog use. Keep S2–S5 open, the
+original 30 untouched for one joint S3 protocol, the 130 prior exclusions
+unchanged and no old rerun.
+Before another substantial development run, review total budget feasibility for
+the joint 30 and host work. The old six-case projection ceiling of US$18.734640 would
+leave only US$14.718900 beyond the US$80 protected comparator/host allocation;
+that is not proof S3 fits. It is a stale plan, not launch authority or expected
+actual cost; no holdout content is inspected for this checkpoint.
+
+Synchronize only this plan, ROADMAP and limitations. No raw source, IDs, private
+paths, keys, new metric, paid call, actual-data/ledger write, runtime change or new
+approval claim. Preserve existing S1–S5 acceptance criteria. A clean candidate,
+both Node generic/JSON/pinned-plugin gates, two independent full-base reviews,
+and exact-head CI are required for this doc update; prior `26522f7` green is stale
+for any new head. Worker may append exact verification evidence after running it.
+
+### Historical checkpoint requirements — completed fresh development continuation
 
 Before editing its current summary, preserve all earlier checkpoints. Record
 the frozen continuation's wrapper completion separately from both arms' zero
@@ -97,7 +135,63 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-25 (after fresh-development terminal)
+## Latest checkpoint — 2026-09-25 (after evidence-pool compatibility)
+
+The evidence-pool repair candidate in PR #232 (`767f1e1`) passed two
+independent reviews and 21/21 exact-head CI checks. At the recorded check it
+was ready and unmerged; this is an accepted offline candidate, not a released
+runtime or a semantic-quality result. The later adaptive text-catalog work is
+in implementation and has not passed its independent review or acceptance
+gates. Its proposed exact-text sharing must retain source identities, defaults
+and call limits; all-unique oversized input must still be refused. A distinct
+capability/profile and installed, configuration and experiment pins are
+required before paid use of that mode.
+
+One separately authorized installed compatibility attempt used three new
+synthetic evidence-pool fixtures. All three completed provider count,
+generation and core compilation; their local serialized estimates were
+2,063/3,066/3,015, provider counts were 1,609/2,435/2,341, and selected
+candidates equaled supplied candidates at 1/1, 16/16 and 5/5. The six physical
+requests reserved US$0.030000; known actual cost was US$0.004670, three
+count-route costs remain unknown and none are pending. The source-free report
+SHA-256 is
+`bdbe2d4d7ba8a5c43b6962e5ca70c02b454b95786f83f1ad5098d3d37adb8061`.
+No extraction, answer or judge was invoked. This verifies a narrow provider
+wire/schema and compiler path, not retrieval, semantic accuracy or general
+maximum-input support.
+
+Primary and independent read-only terminal audits found the previous
+12,702-request prefix intact. The cumulative ledger now has 12,708 terminal
+requests, US$86.546460 reserved, US$113.453540 remaining and zero pending
+under the unchanged US$200 and 50,000-request caps. Protect at least US$70
+for a matched comparator and US$10 for installed host work. The prior 130
+exclusions remain closed; the original reserved 30-case holdout remains
+untouched for one jointly frozen Cairn/comparator S3 protocol, not a separate
+S2 Cairn run. No old cohort was rerun, and S2–S5 remain open.
+
+The earlier six-case development plan's conservative full ceiling was 3,624
+requests and US$18.734640. At that ceiling, the present remaining authority
+would leave US$94.718900, only US$14.718900 beyond the protected US$80.
+That plan's checkpoint predates this compatibility attempt and is not
+launchable as written. Its ceiling is neither expected actual spend nor proof
+that a joint 30-case Cairn/comparator run fits. This checkpoint opens no
+holdout content. Before any automated holdout preparation for source-free
+bound counts, freeze the exact roster and both S3 arm configurations, source,
+answer and scorer protocol, and resource limits. No implementation worker may
+inspect holdout source/answers or tune afterward. Check the resulting complete
+S3 Cairn/comparator/host projections with the development ceiling against
+current cumulative headroom before another substantial paid development run;
+no historical reservation can be reset or refunded. This documentation
+checkpoint itself authorizes no new paid call, rerun, merge or release. Its
+new-head reviews and exact-head CI remain pending.
+
+For this documentation candidate, local generic tests passed 106/106 on both
+Node 22.16.0 (`npm test`) and 24.15.0 (the same two test globs with that Node
+binary). `npm run validate` and the pinned Claude Code 2.1.260 marketplace and
+strict plugin validations passed on both versions. These local checks do not
+substitute for the pending new-head independent reviews or exact-head CI.
+
+## Historical checkpoint — 2026-09-25 (after fresh-development terminal)
 
 This supersedes the after-#231 checkpoint below; earlier snapshots remain
 dated history. At the last check, PRs #230 and #231 had two independent reviews
