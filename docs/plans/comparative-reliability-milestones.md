@@ -1,12 +1,10 @@
 # Comparative reliability and lightweight product milestones
 
-Status: proposed sequence; the finite S1 mechanical repair/recovery gate is
-accepted on the current candidate. Semantic reliability and the S2–S5 product
-milestones remain open; the S1–S5 sequence has not passed as a whole. See the
-latest checkpoint and resume protocol below. Evidence-pool, adaptive catalog
-and adaptive guard candidates are accepted offline; H's installed adaptive
-provider compatibility check is complete and closed, not a semantic score.
-Older execution snapshots are explicitly historical. Re-check live PR and CI
+Status: proposed sequence. The finite S1 mechanical repair/recovery gate is
+accepted; semantic reliability and S2–S5 remain open. Offline accounting,
+mixed-guard and opt-in resource candidates do not pass the S1–S5 sequence or
+authorize a paid run. See the latest checkpoint and resume protocol below;
+older execution snapshots are explicitly historical. Re-check live PR and CI
 state before resuming.
 Goal: a lightweight, source-backed memory layer for Hermes and other agent
 harnesses, evaluated against existing solutions under matched conditions.
@@ -26,22 +24,33 @@ harnesses, evaluated against existing solutions under matched conditions.
 
 ### Latest-checkpoint acceptance checklist
 
-- Preserve all earlier scores, failures, unresolved cases and exact-head CI as
-  dated historical evidence; do not imply older PRs were rechecked.
-- Distinguish synthetic mechanics, completion and budget tests from semantic
-  quality. No R5 arm reached scoring, so unresolved is not an accuracy rate.
-- Record the unchanged US$200 user ceiling, the completed US$100→US$200
-  operational-cap transition, its separate 50,000-request cap, and the latest
-  dated read-only accounting audit without implying embedding-ledger migration.
-- Keep the consumed fresh roster and prior cohorts closed, the reserved 30-case
-  set untouched, and the comparator/host reserves protected.
-- Record the completed evidence-pool synthetic real-API compatibility check
-  without treating it as semantic evidence; keep any next development run
-  behind a current frozen plan and complete budget-feasibility gates.
-- Publish no raw case/source data, IDs, credentials, private paths or ledger
-  contents. This checkpoint authorizes no new paid call, rerun, merge or release.
+- Preserve earlier scores, failures, unknowns and CI as dated evidence. In
+  particular, R5 never reached scoring; unresolved is not an accuracy rate.
+- Record #236–#240 as reviewed, ready, unmerged offline candidates at the
+  checked heads below. Bound-v2 and the mixed guard are synthetic mechanics;
+  K's opt-in retrieval fix restores retained-source reachability beyond the
+  old 1,024 physical prefix under a bounded 20k scan/top-1,024 control, not
+  semantic improvement or a default/host change.
+- Keep the last read-only audit explicitly dated: US$200/50,000 operational
+  ceiling, 12,714 terminal requests, US$86.576460 reserved, US$113.423540
+  remaining, zero pending. The operational ledger remains v1; protect US$70
+  comparator and US$10 host allocations.
+- Keep consumed cohorts closed and the original reserved 30 untouched for one
+  jointly frozen S3 run. S1's finite mechanics are accepted; S2–S5 remain open.
+- Next: contained native gateway Y, then the common fair runner and full
+  resource freeze, then the reserved 30 once, then installed opt-in, growth and
+  cold-session gates. This docs checkpoint grants no paid call, migration,
+  holdout access, rerun, merge or release; publish no private source or IDs.
 
-### Next checkpoint requirements — H terminal compatibility, mixed accounting next
+| Next gate | Observable exit boundary (details remain in S2–S5 below) |
+| --- | --- |
+| Y native gateway | Real pinned native Mem0 add/get/search uses the one-shot mixed guard; verify fallback accounting, cancellation/reaping and no late dispatch before paid use. Contract recorded; implementation in progress, not accepted. |
+| S2 development and S3 freeze | Use separate development cases for source-backed answer-stage work. Freeze a common source/answer/scorer protocol and complete joint Cairn/comparator/host resource ceilings before opening the original 30. |
+| S3 matched comparison | Run both arms once on the reserved 30; retain fixed-N correct/wrong/unresolved and paired uncertainty. The existing completion gate is at least 29/30 jointly scoreable, not 100% semantic accuracy or automatic parity. |
+| S4 installed growth | Verify actual installed Hermes/MCP cold restart and the frozen 100/1,000/10,000-memory write/recall/correct/delete profile with all repeats, bounded inputs and failures retained. |
+| S5 onboarding | A cold-context tester completes sourced write, new-session recall, inspect, correct, forget and restart/no-result from docs with receipt-backed pass/fail. |
+
+### Historical checkpoint requirements — H terminal compatibility, mixed accounting next
 
 Prospective docs-only scope: this plan, ROADMAP and limitations, preserving every
 earlier checkpoint as dated history. Record H's one completed installed/provider
@@ -222,7 +231,47 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
+## Latest checkpoint — 2026-09-26 (mixed mechanics and resource probe accepted offline)
+
+The finite S1 mechanical gate is accepted; S2 answer-stage quality, S3 matched
+comparison, S4 installed growth and S5 cold-context onboarding remain open.
+At this check, these reviewed candidates had 21/21 exact-head CI, were
+mergeable and ready, and remained unmerged:
+
+| PR | Exact head | Bounded result |
+| --- | --- | --- |
+| [#236](https://github.com/Cairn-ink/cairn-memory/pull/236) | `b1d4e825e44035d4d75656a817a84ebec4b480e2` | Explicit bound-v2 embedding accounting; no actual-ledger migration. |
+| [#237](https://github.com/Cairn-ink/cairn-memory/pull/237) | `230d7ff5e348ba7e6180d9eac9a46a0a85cfe0fa` | Read-only mixed-lineage parent assertion. |
+| [#238](https://github.com/Cairn-ink/cairn-memory/pull/238) | `6d67cf0c8cf67adddcc74622e9c805d632ed7769` | Pure, pinned Mem0 request/response wire validation. |
+| [#239](https://github.com/Cairn-ink/cairn-memory/pull/239) | `f85322724eb91e4900d49cf1a400e8ce2f98ea4a` | Distinct mixed-source-pair guard on real synthetic v2 accounting, with fake-HTTP fallback and case isolation; no native containment. |
+| [#240](https://github.com/Cairn-ink/cairn-memory/pull/240) | `f4e3666f610b2f728c7c5f87d0bbe99a115570ca` | Opt-in retrieval fix restores exact retained-source reachability beyond the old 1,024 physical prefix; a separate 20k scan/top-1,024 control bounds work. Default and host unchanged. |
+
+These are mechanical and resource observations, not a matched Mem0 score,
+semantic reliability gain, 100% target, or released product. Y's native
+gateway contract is recorded and implementation is in progress, not accepted.
+Next, verify Y containment, then freeze the common fair runner and complete
+joint S3/development/host resource ceilings before using the original reserved
+30 once. Installed opt-in, growth and cold-session gates follow separately.
+No old cohort is replayed or tuned on.
+
+The **last read-only audit**, not repeated for this documentation checkpoint,
+remains 12,714 terminal requests, US$86.576460 reserved, US$113.423540
+remaining and zero pending under the unchanged US$200/50,000-request authority.
+The operational ledger is still v1; no paid call or actual migration occurred
+in this slice. Protect US$70 for comparator work and US$10 for host work.
+Passing candidate CI does not prove that the joint reserved-30 run fits this
+headroom. This three-file status update changes no runtime, ledger, key,
+corpus, holdout or launch authority. Primary exact-head acceptance, independent
+reviews and PR #205 CI are still required for this new documentation head.
+
+Docs-only author: `adapter_ci_serial6`, actual GPT-6 Sol/high; fixed review
+base `83a10c3b7664b1f67485a19e7d84d24dcb3041a5`. On this candidate,
+`npm test` passed 106/106 on both Node 22.16.0
+and 24.15.0; JSON validation and pinned Claude Code 2.1.260 marketplace plus
+strict plugin validation also passed on both. These local checks do not replace
+the pending exact-head review and CI of PR #205.
+
+## Historical checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
 
 PR #233's adaptive catalog and PR #235's separate guard remain accepted offline
 candidates, not a merged release. The distinct opt-in grant and prior default

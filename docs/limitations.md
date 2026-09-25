@@ -68,7 +68,33 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
-### Latest checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
+### Latest checkpoint — 2026-09-26 (mixed mechanics and resource probe accepted offline)
+
+Reviewed PRs #236–#240 are ready, mergeable and unmerged at the checked
+heads recorded in the [milestone plan](plans/comparative-reliability-milestones.md),
+each with 21/21 exact-head CI. Bound-v2 accounting, mixed lineage, Mem0 wire
+validation and the distinct mixed guard were exercised with real synthetic
+ledgers and fake HTTP. The guard prices separate embedding fallback requests
+and isolates bounded case failures, but it has no contained native child and
+does not authorize a provider run. The operational ledger remains v1. PR
+#240's opt-in retrieval fix restores exact retained-source reachability beyond
+the old 1,024 physical prefix; a separate 20k scan/top-1,024 check bounds
+that resource path, without changing default or host behavior. None of this
+measures semantic improvement, Mem0 parity,
+installed reliability or a new score.
+
+Finite S1 mechanics are accepted; S2–S5 remain open. The native gateway Y has
+a recorded contract and implementation is in progress, not accepted. Its containment must precede the common
+fair runner and complete resource freeze, then the original reserved 30 may
+be run once under a jointly frozen S3 protocol. Installed opt-in, growth and
+cold-session gates remain later work. Historical cohorts and failures stay
+closed; no holdout tuning or rerun is permitted. The last read-only audit,
+not repeated here, is 12,714 terminal requests, US$86.576460 reserved,
+US$113.423540 remaining and zero pending under US$200/50,000; protect US$70
+for comparator work and US$10 for host work. This docs update makes no paid
+call or ledger migration and authorizes no holdout access, merge or release.
+
+### Historical checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
 
 PR #233's adaptive catalog and PR #235's distinct opt-in guard remain accepted
 offline candidates, not a merged release; defaults and bounds are unchanged.

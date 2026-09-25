@@ -37,6 +37,31 @@ reliability work below without declaring older failure gates resolved.
 
 ### Current checkpoint — 2026-09-26
 
+The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+record reviewed PRs #236–#240 as ready, mergeable, unmerged offline
+candidates at their checked heads, each with 21/21 CI. Bound-v2 accounting and
+mixed lineage/wire/guard mechanics use synthetic ledgers and fake HTTP; the
+actual operational ledger remains v1. The mixed guard isolates case failures
+and separately reserves Mem0 batch fallback, but does not contain a native
+child. K's opt-in retrieval fix restores exact retained-source reachability
+beyond the old 1,024 physical prefix; a separate 20k scan/top-1,024 check
+bounds that resource path. It changes neither default retrieval nor host
+behavior and supplies no semantic score. These candidates
+are not a merged release or a matched comparison.
+
+Finite S1 mechanics are accepted. S2 answer quality, S3 matched comparison,
+S4 installed growth and S5 cold-session onboarding remain open. Next is the
+in-progress, not-yet-accepted native gateway Y, followed by a common fair runner and
+complete resource freeze, then one run of the original reserved 30, then
+installed opt-in/growth/cold-session gates. Keep old cohorts closed; do not
+tune on or rerun the reserved set. The last read-only audit (not repeated here)
+remains 12,714 terminal requests, US$86.576460 reserved, US$113.423540
+remaining and zero pending under US$200/50,000, with US$70 comparator and
+US$10 host allocations protected. No paid call, ledger migration, holdout
+access, merge or release is authorized by this documentation update.
+
+### Historical checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
+
 PR #233's adaptive catalog and PR #235's distinct opt-in guard remain accepted
 offline candidates, not a merged release; defaults and bounds are unchanged.
 The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
