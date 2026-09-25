@@ -2,16 +2,17 @@ name: Publish to MCP Registry
 
 # Manual dispatch only. Publishing lists the server on the public registry
 # and every aggregator that mirrors it, and ROADMAP.md has not yet cleared
-# broad promotion, so no tag or push starts this on its own. The first
-# publish under io.github.cairn-ink must be done by an organization Owner
-# with `mcp-publisher login github`; see docs/registry.md. Once that gate
+# broad promotion, so no tag or push starts this on its own. Once that gate
 # is lifted, a `push: tags: ["v*"]` trigger can be added here.
+#
+# The ink.cairn namespace comes from the DNS TXT record at the cairn.ink
+# apex; the job logs in with the matching private key from the
+# MCP_REGISTRY_PRIVATE_KEY secret. See docs/registry.md.
 
 on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -26,8 +27,15 @@ jobs:
       - name: Validate server.json
         run: ./mcp-publisher validate
 
-      - name: Log in with GitHub OIDC
-        run: ./mcp-publisher login github-oidc
+      - name: Log in with cairn.ink DNS
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "::error::The MCP_REGISTRY_PRIVATE_KEY secret is empty or not set; see docs/registry.md."
+            exit 1
+          fi
+          ./mcp-publisher login dns --domain cairn.ink --private-key "$MCP_REGISTRY_PRIVATE_KEY"
 
       - name: Publish
         run: ./mcp-publisher publish
