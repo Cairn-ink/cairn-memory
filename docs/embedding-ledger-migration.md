@@ -56,6 +56,17 @@ operation; its `getState()` includes the history digest. Neither API grants
 HTTP access or performs an upgrade. Existing v1 readers and G request guards
 continue to refuse v2; a future mixed-engine grant needs a separate protocol.
 
+`assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger, policy,
+benchmarkExtension, snapshot })` is a separate read-only verifier for the
+existing US$200 chained benchmark parent and its inherited original prefix.
+It accepts a supplied B3-shaped exact-v2 snapshot and returns only
+`undefined`; it does not open a database, create a grant or authenticate the
+snapshot's current suffix or digest. Read-only preflight can supply B3 output.
+A future mixed guard must instead call it on the authentic snapshot received
+inside B4's authorization transaction, then bind the entire current history
+to its own distinct grant and one-shot claim. A matching original prefix is
+not proof that later attempts or their rowids are genuine.
+
 ## History binding and limits
 
 `historySha256` is lowercase SHA-256 of UTF-8 `JSON.stringify` on this exact

@@ -106,6 +106,12 @@ request guards reject v2 before claim or transport. The new handle is an
 accounting seam only, not a mixed-engine grant, credential owner or Mem0
 transport. No operator ledger has been migrated for this work and no provider
 request, recall comparison or quality result follows from these tests.
+The [mixed embedding lineage assertion](embedding-ledger-migration.md) can
+check a supplied v2 snapshot against the existing 200M parent and original
+historical prefix without opening a ledger. Its success does not authenticate
+the supplied current suffix or digest, bind a new grant, or authorize transport.
+Only a later guard using B4's in-transaction authentic snapshot can bind that
+full history; no such mixed guard is present in this gate.
 
 The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
 performance test at its unchanged five-second child-process timeout; the other

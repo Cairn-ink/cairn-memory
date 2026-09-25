@@ -107,6 +107,11 @@ const CHANNELS = Object.freeze({
   cairnCount: 'cairn-count',
   cairnGeneration: 'cairn-generation',
 });
+const EMBEDDING_SNAPSHOT_CHANNELS = new Set([...Object.values(CHANNELS), 'host-embedding']);
+const EMBEDDING_SNAPSHOT_KEYS = Object.freeze(['schemaVersion', 'runId', 'limitMicroUsd',
+  'requestCap', 'reservedMicroUsd', 'requestCount', 'state', 'attempts', 'historySha256']);
+const EMBEDDING_ATTEMPT_KEYS = Object.freeze(['attemptId', 'channel', 'reservedMicroUsd',
+  'outcome', 'actualMicroUsd']);
 const encoder = new TextEncoder();
 const localCounter = createOpenAIModel({
   apiKey: 'synthetic-local-counter',
@@ -2053,6 +2058,115 @@ export function inspectQualifiedSourcePairParent(options) {
   }
   verifyPairParent(extension, ledger, policy, state);
   return deepFreeze(state);
+}
+
+// Only this read-only v2 assertion uses descriptor-first detachment. Existing
+// constructors deliberately retain their reviewed input and error behavior.
+function detachEmbeddingLineage(value) {
+  const limits = { visited: 0, bytes: 0, ancestors: new WeakSet() };
+  const addBytes = (text) => {
+    limits.bytes += Buffer.byteLength(text, 'utf8');
+    if (limits.bytes > 16 * 1024 * 1024) fail('invalid_options');
+  };
+  const visit = (input, depth) => {
+    limits.visited += 1;
+    if (depth > 32 || limits.visited > 1_000_000) fail('invalid_options');
+    if (input === null || typeof input === 'boolean') return input;
+    if (typeof input === 'string') { addBytes(input); return input; }
+    if (typeof input === 'number' && Number.isFinite(input)) return input;
+    if (typeof input !== 'object' || limits.ancestors.has(input)) fail('invalid_options');
+    const array = Array.isArray(input);
+    if ((array && Object.getPrototypeOf(input) !== Array.prototype)
+      || (!array && !isPlainObject(input))) fail('invalid_options');
+    limits.ancestors.add(input);
+    const names = Reflect.ownKeys(input);
+    const count = array ? input.length : names.length;
+    if (count > 1_000_000 - limits.visited
+      || (array && (names.length !== count + 1 || names.at(-1) !== 'length'))) {
+      fail('invalid_options');
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    const output = array ? new Array(count) : Object.create(null);
+    for (let index = 0; index < count; index += 1) {
+      const name = names[index];
+      if (typeof name !== 'string' || (array && name !== String(index))) fail('invalid_options');
+      const descriptor = descriptors[name];
+      if (!descriptor?.enumerable || !own(descriptor, 'value')) fail('invalid_options');
+      addBytes(name);
+      output[name] = visit(descriptor.value, depth + 1);
+    }
+    limits.ancestors.delete(input);
+    return output;
+  };
+  return visit(value, 0);
+}
+
+function validateEmbeddingLineageSnapshot(snapshot, ledger) {
+  const invalid = () => { throw new ExperimentBudgetError('invalid_ledger'); };
+  if (!isPlainObject(snapshot) || Object.keys(snapshot).length !== EMBEDDING_SNAPSHOT_KEYS.length
+    || EMBEDDING_SNAPSHOT_KEYS.some((key) => !own(snapshot, key))
+    || snapshot.schemaVersion !== 2 || !UUID_PATTERN.test(snapshot.runId)
+    || snapshot.runId !== ledger.runId
+    || !safeInteger(snapshot.limitMicroUsd, 1)
+    || !safeInteger(snapshot.requestCap, 1)
+    || snapshot.limitMicroUsd !== ledger.limitMicroUsd
+    || snapshot.requestCap !== ledger.requestCap
+    || !safeInteger(snapshot.reservedMicroUsd)
+    || !safeInteger(snapshot.requestCount)
+    || snapshot.reservedMicroUsd > snapshot.limitMicroUsd
+    || snapshot.requestCount > snapshot.requestCap
+    || !['open', 'overrun'].includes(snapshot.state)
+    || !Array.isArray(snapshot.attempts)
+    || snapshot.attempts.length !== snapshot.requestCount
+    || typeof snapshot.historySha256 !== 'string'
+    || !SHA256_HEX.test(snapshot.historySha256)) invalid();
+  const ids = new Set();
+  let total = 0;
+  let overrun = false;
+  for (const attempt of snapshot.attempts) {
+    if (!isPlainObject(attempt) || Object.keys(attempt).length !== EMBEDDING_ATTEMPT_KEYS.length
+      || EMBEDDING_ATTEMPT_KEYS.some((key) => !own(attempt, key))
+      || typeof attempt.attemptId !== 'string' || !UUID_PATTERN.test(attempt.attemptId)
+      || ids.has(attempt.attemptId)
+      || !EMBEDDING_SNAPSHOT_CHANNELS.has(attempt.channel)
+      || !safeInteger(attempt.reservedMicroUsd)
+      || (attempt.outcome !== null && !['succeeded', 'failed', 'unknown'].includes(attempt.outcome))
+      || (attempt.actualMicroUsd !== null && !safeInteger(attempt.actualMicroUsd))
+      || (attempt.outcome === null && attempt.actualMicroUsd !== null)
+      || attempt.reservedMicroUsd > MAX_SAFE_INTEGER - total) invalid();
+    ids.add(attempt.attemptId);
+    total += attempt.reservedMicroUsd;
+    if (attempt.actualMicroUsd !== null
+      && attempt.actualMicroUsd > attempt.reservedMicroUsd) overrun = true;
+  }
+  if (total !== snapshot.reservedMicroUsd || (snapshot.state === 'overrun') !== overrun) invalid();
+}
+
+// This assertion is not a grant: it verifies only the inherited 200M parent
+// and original prefix, never the authenticity of a supplied current suffix.
+export function assertChainedBenchmarkParentForEmbeddingSnapshot(options) {
+  let detached;
+  try { detached = detachEmbeddingLineage(options); }
+  catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    fail('invalid_options');
+  }
+  exactKeys(detached, ['ledger', 'policy', 'benchmarkExtension', 'snapshot']);
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(detached.ledger);
+  if (ledger.directory.length === 0 || ledger.directory.includes('\0')) fail('invalid_options');
+  ledger.directory = path.resolve(ledger.directory);
+  if (ledger.directory === path.parse(ledger.directory).root) fail('invalid_options');
+  validateEmbeddingLineageSnapshot(detached.snapshot, ledger);
+  if (detached.snapshot.state !== 'open'
+    || detached.snapshot.attempts.some((attempt) => attempt.outcome === null)) {
+    fail('extension_busy');
+  }
+  const extension = snapshotExtension(detached.benchmarkExtension);
+  if (ledger.limitMicroUsd !== 200_000_000
+    || extension.version !== BENCHMARK_BUDGET_CHAIN_VERSION) fail('invalid_capability');
+  verifyPairParent(extension, ledger, policy, detached.snapshot);
 }
 
 function pairConfiguration(options, authorization, adaptive = false) {
