@@ -111,7 +111,7 @@ export function createBudgetedFetch({ budgetUsd, maxRequests = 40,
         if (!(value instanceof Uint8Array)) fail('invalid_provider_response');
         size += value.byteLength;
         if (size > (countEndpoint ? 65536 : 262144)) fail('invalid_provider_response');
-        chunks.push(value);
+        chunks.push(new Uint8Array(value));
       }
       const bytes = new Uint8Array(size);
       let offset = 0;

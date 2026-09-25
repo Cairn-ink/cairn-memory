@@ -1,4 +1,4 @@
-<h1 align="center">Cairn Memory</h1>
+<h1 align="center">Cairn.ink Memory</h1>
 
 <p align="center"><strong>Lightweight cross-session memory for AI agents, with receipts.</strong></p>
 
@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="#install">Install</a> ·
   <a href="#try-the-local-memory-layer">Quickstart</a> ·
   <a href="docs/local-memory-demo.md">Walkthrough</a> ·
   <a href="docs/limitations.md">Known limitations</a> ·
@@ -39,6 +40,46 @@ tools are explicit memory operations, not automatic transcript capture.
 and forget loop passes on a real model. Extraction quality does not yet meet our
 own bar: the frozen evaluation and every retained failure are collected in
 [Known limitations](docs/limitations.md). Read it before relying on recall.
+
+## Install
+
+This is Cairn.ink Memory (github.com/Cairn-ink/cairn-memory, hosted at
+cairn.ink). The npm package `cairn-memory` and the PyPI package
+`cairn-memory` are unrelated projects; do not install those for this.
+
+There are two ways to run Cairn: hosted on cairn.ink with the Claude Code
+plugin for automatic memory (needs a cairn.ink token), or the local
+open-source layer, which needs no account and is a developer preview. For
+the hosted plugin, run:
+
+```sh
+claude plugin marketplace add Cairn-ink/cairn-memory
+claude plugin install cairn-memory@cairn-memory
+```
+
+Create a personal access token at `https://cairn.ink/settings/tokens`,
+then run `/plugin configure cairn-memory@cairn-memory` in Claude Code and
+start a new session. See
+[Install for Claude Code](#install-for-claude-code-automatic-memory) for
+the slash-command form.
+
+Agents: ask the user before installing. The hosted plugin captures
+allowlisted conversation text to cairn.ink by default, and the user
+creates and enters the token themselves. See the
+[hosted plugin privacy contract](#hosted-plugin-privacy-contract).
+
+To use explicit memory tools on cairn.ink without automatic capture, add
+the remote MCP server:
+
+```sh
+claude mcp add --transport http --scope user cairn https://cairn.ink/api/mcp
+```
+
+Then sign in from `/mcp` in Claude Code (browser OAuth). Codex users: see
+[Connect from Codex](#connect-from-codex-explicit-mcp-memory).
+
+The local, no-account developer preview installed from source is the section
+directly below: [Try the local memory layer](#try-the-local-memory-layer).
 
 ## Try the local memory layer
 

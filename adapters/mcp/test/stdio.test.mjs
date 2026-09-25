@@ -13,9 +13,9 @@ const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 const scripted = fileURLToPath(new URL('./fixtures/scripted-server.mjs', import.meta.url));
 const database = () => join(mkdtempSync(join(tmpdir(), 'cairn-mcp-test-')), 'memory.sqlite');
 const options = { timeout: 20000 };
-async function host(t, path, { owner = 'synthetic-owner', project, fixture = false, modern = false } = {}) {
+async function host(t, path, { owner = 'synthetic-owner', project, fixture = false, modern = false, sourceDefault = false } = {}) {
   const args = [fixture ? scripted : cli, '--db', path, '--owner', owner,
-    ...(project ? ['--project', project] : [])];
+    ...(project ? ['--project', project] : []), ...(sourceDefault ? ['--recall-context', 'source-evidence'] : [])];
   // No application environment or credentials are copied. The SDK additionally
   // inherits its documented shell environment allowlist, which excludes keys.
   const transport = new StdioClientTransport({ command: process.execPath, args,
@@ -28,6 +28,13 @@ async function host(t, path, { owner = 'synthetic-owner', project, fixture = fal
   await client.connect(transport);
   return { client, transport, stderr: () => stderr };
 }
+
+test('SCD keyless source-default startup preserves local tools and returns model_not_configured for recall', options, async t => {
+  const { client } = await host(t, database(), { sourceDefault: true });
+  const saved = ok(await call(client, 'remember_memory', { content: 'Synthetic source text.' }));
+  assert.equal(ok(await call(client, 'inspect_memory', { memoryId: saved.memory.id })).memory.content, 'Synthetic source text.');
+  error(await call(client, 'recall_memory', { query: 'source text' }), 'model_not_configured');
+});
 async function call(client, name, args = {}) {
   const response = await client.callTool({ name, arguments: args });
   assert.equal(response.content[0].type, 'text');
