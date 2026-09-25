@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — installed source-candidate opt-in
+
+- Expose the existing experimental `bounded-keyset-v1` source-candidate policy
+  through an explicit local MCP startup flag and optional Hermes profile field.
+  Installed synthetic public-admit and pinned native-host controls reach a
+  source beyond the old 1,024-ID prefix, then inspect, correct, forget and
+  restart without changing default/body recall, tools, model bounds or source
+  authority. This is diagnostic reachability, not semantic accuracy, a paid
+  comparison, a default promotion or a release.
+
 ## Unreleased — opt-in bounded keyset source candidates
 
 - Add a trusted embedded-core constructor policy for explicit source-context

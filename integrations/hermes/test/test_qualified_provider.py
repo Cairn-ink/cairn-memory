@@ -68,6 +68,9 @@ def test_strict_config_and_actual_native_wizard_optional_blank(provider_factory,
     for value in [None, True, False, "", "qualified", " source-evidence", "source-evidence ", 2]:
         with pytest.raises(ValueError, match="cairn_invalid_configuration"):
             provider.save_config({**config, "recall_context": value}, str(home))
+    for value in [None, True, False, "", "bounded-keyset-v2", " bounded-keyset-v1", "bounded-keyset-v1 ", 2]:
+        with pytest.raises(ValueError, match="cairn_invalid_configuration"):
+            provider.save_config({**config, "source_candidate_policy": value}, str(home))
     with pytest.raises(ValueError):
         provider.save_config({**config, "timeout": 999}, str(home))
     assert json.loads((home / "cairn.json").read_text()) == config
@@ -76,6 +79,8 @@ def test_strict_config_and_actual_native_wizard_optional_blank(provider_factory,
     assert not mode.get("required") and mode.get("default") == "source-bound-v2" and not mode.get("choices")
     context = next(field for field in schema if field["key"] == "recall_context")
     assert not context.get("required") and not context.get("default") and not context.get("choices")
+    candidate = next(field for field in schema if field["key"] == "source_candidate_policy")
+    assert not candidate.get("required") and not candidate.get("default") and not candidate.get("choices")
     deadline = next(field for field in schema if field["key"] == "capture_deadline_ms")
     assert deadline["when"] == {"capture_qualification": "source-bound-v2"}
 
@@ -118,7 +123,7 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     monkeypatch.setattr(memory_setup, "masked_secret_prompt", lambda *args, **kwargs: next(secrets))
     monkeypatch.setattr(memory_setup, "_write_env_vars", lambda values: written_secrets.append(dict(values)))
     assert "  cairn:" not in (home / "config.yaml").read_text()
-    monkeypatch.setattr(sys, "stdin", io.StringIO(config["node_path"] + "\n" + config["executable_path"] + "\n\n\n\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(config["node_path"] + "\n" + config["executable_path"] + "\n\n\n\n\n"))
     memory_setup.cmd_setup([])
     minimal = {"node_path": config["node_path"], "executable_path": config["executable_path"]}
     assert json.loads((home / "cairn.json").read_text()) == minimal
@@ -126,17 +131,18 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     assert "synthetic-wizard-only-key" not in (home / "cairn.json").read_text()
     assert not (home / "cairn").exists()
     enabled = {**minimal, "capture_qualification": "source-bound-v2", "capture_deadline_ms": "1500",
-               "classification_recovery": "guarded-v1", "recall_context": "source-evidence"}
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\nsource-bound-v2\n1500\nguarded-v1\nsource-evidence\n"))
+               "classification_recovery": "guarded-v1", "recall_context": "source-evidence",
+               "source_candidate_policy": "bounded-keyset-v1"}
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\nsource-bound-v2\n1500\nguarded-v1\nsource-evidence\nbounded-keyset-v1\n"))
     memory_setup.cmd_setup([])
     assert json.loads((home / "cairn.json").read_text()) == enabled
     assert all(field.get("default") == enabled[field["key"]]
                for field in provider.get_config_schema() if field["key"] in enabled)
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 6))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 7))
     memory_setup.cmd_setup([])
     assert json.loads((home / "cairn.json").read_text()) == enabled
     before = (home / "cairn.json").read_bytes()
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\n\n01500\n\n\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\n\n01500\n\n\n\n"))
     memory_setup.cmd_setup([])
     assert (home / "cairn.json").read_bytes() == before
     assert not (home / "cairn").exists()

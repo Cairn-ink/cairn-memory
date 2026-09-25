@@ -23,6 +23,26 @@ preview, append the flag/value pair to the generated `stdio.args` in your MCP
 client (or invoke the installed executable with them); the installer receipt
 itself remains unchanged.
 
+The separate experimental `--source-candidate-policy bounded-keyset-v1` flag
+selects a larger **local** source-candidate examination for explicit
+`source-evidence` or `rationale-evidence` recall. Programmatic hosts may pass
+`sourceCandidatePolicy: 'bounded-keyset-v1'` to `createCairnServer`. It is
+independent of `--recall-context`, capture and source snapshot. Add the flag
+explicitly to an installed local executable's startup arguments; the installer
+does not set it. `--check-config` reports it when present without opening storage
+or contacting a provider. Default/body recall remains on its old path even if
+the server has this setting. Tool arguments cannot set the policy or owner.
+The core scans at most 20,000 current physical rows per authorized namespace,
+in 256-row keyset pages, and keeps at most 1,024 literal-score candidates.
+It scores the body and first four retained receipts; a source excerpt supplies
+the visible 120-code-point label only when it strictly beats the body score.
+Literal Unicode runs are not stemming or semantic search, and contiguous CJK
+text is not segmented into words. The selector still sees at most two existing
+100-item/4,000-token pages, not all scanned sources. Model-facing and final
+response bounds, namespace authority, retention and normal provider costs are
+unchanged. Incomplete coverage, missed meaning and latency remain possible;
+this is neither a default promotion nor an accuracy or service-level claim.
+
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run
 stdio transport. Registry packaging, named-client compatibility and remote
@@ -84,6 +104,8 @@ npm ci --prefix adapters/openai
 node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user
 # Optional source-first presentation for recall_memory:
 node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --recall-context source-evidence
+# Independent experimental source-candidate opt-in; only source-context recall activates it:
+node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --source-candidate-policy bounded-keyset-v1
 ```
 
 The database parent directory must exist and be controlled by you. Supply

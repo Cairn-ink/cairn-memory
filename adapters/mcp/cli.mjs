@@ -15,6 +15,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
+  cairn-memory --db PATH --owner ID [--project ID] --source-candidate-policy bounded-keyset-v1
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
 
 Keep the database outside node_modules; its parent directory must exist.
@@ -42,6 +43,11 @@ or qualifications within existing namespace and budgets. Per-call contextMode
 overrides it; explicit includeQualification true conflicts with source mode.
 This does not enable capture, prove source truth or currentness, or make recall
 work without a configured model. Complete excerpts may expose more source text.
+--source-candidate-policy bounded-keyset-v1 is an experimental opt-in for
+source-evidence and rationale-evidence recall only. It examines a larger local
+authorized source prefix (up to 20,000 current memories), scores body plus the
+first four retained receipts, and keeps at most 1,024 candidates. Default/body
+recall and model-facing bounds do not grow. This is not a semantic guarantee.
 --capture-qualification source-bound-v1 or source-bound-v2 adds capture_memory for explicitly
 submitted messages. No background capture or hooks are installed. Submitted
 roles/text are claims, not authenticated human intent. Qualification binds
@@ -86,7 +92,7 @@ It cannot verify database permissions, credentials or model availability.
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
-    '--classification-recovery', '--capture-deadline-ms']);
+    '--classification-recovery', '--capture-deadline-ms', '--source-candidate-policy']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -126,6 +132,9 @@ export function parseConfiguration(args) {
   if (values.has('--recall-context') && values.get('--recall-context') !== 'source-evidence') {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--source-candidate-policy') && values.get('--source-candidate-policy') !== 'bounded-keyset-v1') {
+    throw new Error('invalid_mcp_configuration');
+  }
   if (values.has('--classification-recovery') && values.get('--classification-recovery') !== 'guarded-v1') {
     throw new Error('invalid_mcp_configuration');
   }
@@ -138,6 +147,7 @@ export function parseConfiguration(args) {
     ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}),
     ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}),
     ...(values.has('--recall-context') ? { recallContext: values.get('--recall-context') } : {}),
+    ...(values.has('--source-candidate-policy') ? { sourceCandidatePolicy: values.get('--source-candidate-policy') } : {}),
     ...(values.has('--classification-recovery') ? {
       classificationRecovery: values.get('--classification-recovery') } : {}) };
 }
@@ -157,6 +167,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
       ...(config.recallContext ? { recallContext: config.recallContext } : {}),
+      ...(config.sourceCandidatePolicy ? { sourceCandidatePolicy: config.sourceCandidatePolicy } : {}),
       ...(config.sourceSnapshot ? { sourceSnapshot: config.sourceSnapshot,
         sourceSnapshotTokenizer: 'o200k_base' } : {}),
       ...(config.captureQualification ? { captureQualification: config.captureQualification,

@@ -63,7 +63,8 @@ def configuration(home):
 
 def validate_config(value):
     required = {"node_path", "executable_path"}
-    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context"}
+    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context",
+                "source_candidate_policy"}
     if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
         raise ValueError("cairn_invalid_configuration")
     if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
@@ -77,6 +78,8 @@ def validate_config(value):
     if "classification_recovery" in value and value["classification_recovery"] != "guarded-v1":
         raise ValueError("cairn_invalid_configuration")
     if "recall_context" in value and value["recall_context"] != "source-evidence":
+        raise ValueError("cairn_invalid_configuration")
+    if "source_candidate_policy" in value and value["source_candidate_policy"] != "bounded-keyset-v1":
         raise ValueError("cairn_invalid_configuration")
     for key in ("node_path", "executable_path"):
         raw = value[key]
@@ -165,6 +168,9 @@ class CairnMemoryProvider(MemoryProvider):
                          "required": False},
                         {"key": "recall_context",
                          "description": "Optional source-evidence default for recall calls that omit both contextMode and includeQualification. Explicit tool arguments take precedence.",
+                         "required": False},
+                        {"key": "source_candidate_policy",
+                         "description": "Optional experimental bounded-keyset-v1 for larger local source-evidence/rationale-evidence candidate examination only. Default/body recall and model-facing bounds stay unchanged; this is not a semantic guarantee.",
                          "required": False}]
         for field in optional:
             if field["key"] in existing:

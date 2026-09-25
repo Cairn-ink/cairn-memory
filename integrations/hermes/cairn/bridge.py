@@ -32,6 +32,10 @@ async def exchange(request):
         if request["classification_recovery"] != "guarded-v1":
             raise ValueError("invalid_recovery_configuration")
         args += ["--classification-recovery", "guarded-v1"]
+    if "source_candidate_policy" in request:
+        if request["source_candidate_policy"] != "bounded-keyset-v1":
+            raise ValueError("invalid_source_candidate_configuration")
+        args += ["--source-candidate-policy", "bounded-keyset-v1"]
     uses_extended_timeout = request["operation"] == "call" and request.get("name") in {"capture_memory", "classify_unfiled_memories"}
     parameters = StdioServerParameters(command=request["node_path"],
         args=args,

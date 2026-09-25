@@ -40,8 +40,13 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
 export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
-    'captureDeadlineMs']);
+    'captureDeadlineMs', 'sourceCandidatePolicy']);
   const { path, namespace, model } = options;
+  const candidateDescriptor = Object.getOwnPropertyDescriptor(options, 'sourceCandidatePolicy');
+  if ('sourceCandidatePolicy' in options &&
+      (!candidateDescriptor || !Object.hasOwn(candidateDescriptor, 'value') ||
+        candidateDescriptor.value !== 'bounded-keyset-v1')) throw new Error('invalid_mcp_configuration');
+  const sourceCandidatePolicy = candidateDescriptor?.value;
   const recoveryConfigured = Object.hasOwn(options, 'classificationRecovery');
   if (recoveryConfigured && options.classificationRecovery !== 'guarded-v1') throw new Error('invalid_mcp_configuration');
   const recallContextConfigured = Object.hasOwn(options, 'recallContext');
@@ -77,6 +82,7 @@ export function createCairnServer(options = {}) {
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
   const core = openMemoryCore({ path, model, ...(configured ? { captureQualification } : {}),
+    ...(sourceCandidatePolicy ? { sourceCandidatePolicy } : {}),
     ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });

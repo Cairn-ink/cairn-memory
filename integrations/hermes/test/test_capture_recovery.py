@@ -22,6 +22,7 @@ def test_native_deadline_cold_inspection_and_scripted_recovery(isolated_profile,
     late_classify = home / "late-classify-complete"
     preload = r"""
       import assert from 'node:assert/strict';
+      import {qualificationPoolWire} from __WIRE_HELPER__;
       import {appendFileSync,existsSync,writeFileSync} from 'node:fs';
       const log=__LOG__, forbid=__FORBID__;
       const lateExtract=__LATE_EXTRACT__, lateClassify=__LATE_CLASSIFY__;
@@ -49,7 +50,8 @@ def test_native_deadline_cold_inspection_and_scripted_recovery(isolated_profile,
               return ['item_'+item.itemIndex,{itemIndex:item.itemIndex,subject:field(null),
                 property:field(null),scope:field(null),applies:field(null),value:field(null),
                 attribution:field('direct'),commitment:field('adopted')}];
-            }))};break;
+            }))};
+            result=qualificationPoolWire(input,result);break;
           case 'cairn_classify':
             if(input.memories.some(m=>m.content.includes('STALL_CLASSIFY'))){
               await new Promise(resolve=>setTimeout(resolve,5000));
@@ -64,7 +66,9 @@ def test_native_deadline_cold_inspection_and_scripted_recovery(isolated_profile,
           content:[{type:'output_text',text:JSON.stringify(result)}]}],
           usage:{input_tokens:100,output_tokens:100,total_tokens:200}});
       };
-    """.replace("__LOG__", json.dumps(str(log))).replace("__FORBID__", json.dumps(str(forbid)))
+    """.replace("__LOG__", json.dumps(str(log))).replace("__FORBID__", json.dumps(str(forbid))).replace(
+        "__WIRE_HELPER__", json.dumps((Path(__file__).parents[3] / "adapters" / "openai" / "test" /
+                                       "qualification-pool-wire.mjs").as_uri()))
     preload = preload.replace("__LATE_EXTRACT__", json.dumps(str(late_extract)))
     preload = preload.replace("__LATE_CLASSIFY__", json.dumps(str(late_classify)))
     wrapper = home / "synthetic-node"

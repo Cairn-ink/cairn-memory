@@ -608,6 +608,23 @@ core timer. This supports local continuation accounting, not a guarantee
 about remote abort or eventual provider billing; foreign and external aborts
 still halt globally.
 
+## Experimental installed source-candidate reachability is not quality
+
+The optional MCP startup flag and Hermes profile field forward the already
+accepted `bounded-keyset-v1` constructor policy only for explicit source-context
+recall. Synthetic installed public-admit and pinned-host scripted-model tests
+show a retained receipt beyond the former 1,024-ID prefix can become visible,
+then be inspected, corrected, forgotten and excluded after restart. They do not
+show that a real model selects relevant evidence or answers correctly. Only the
+first four stable-ID receipts affect local literal scoring; contiguous CJK
+text, synonyms, missing source passages and MOC labels can still cause misses.
+The 20,000-current-row physical cap and top-1,024 retention can report
+incomplete coverage. The selector and final answer keep their existing bounds,
+but model use may still incur normal cost; retained sources and local backups
+keep their ordinary privacy and deletion limits. This is not the separately
+required 100/1,000/10,000 installed growth, latency/cost, onboarding or
+semantic-comparison evidence, nor a default or SLA promotion.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)

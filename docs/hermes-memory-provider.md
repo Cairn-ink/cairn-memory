@@ -11,6 +11,38 @@ for neither, capture, recovery or both settings. A v2-only optional
 configuration, restart and cost boundaries. Historical evidence below predates
 these opt-ins and does not certify semantic quality.
 
+## Experimental source-candidate profile opt-in
+
+`source_candidate_policy: bounded-keyset-v1` is an independent optional native
+profile field. Hermes validates it on load/save, and its bridge validates and
+forwards the exact installed MCP `--source-candidate-policy bounded-keyset-v1`
+flag for schema listing and tool calls. It does not add a tool or make source
+recall the default: only a recall resolved to `source-evidence` or
+`rationale-evidence` activates the larger local candidate window. Body/default
+recall, explicit context and qualification precedence, the five-tool inventory
+and per-call namespace binding remain. The [source-context boundary](source-evidence-context.md)
+describes the literal first-four-receipt score, 20,000-row scan, top-1,024
+retention, existing model exposure bounds and incomplete-coverage cases.
+
+The focused `test_source_candidate_policy.py` uses the pinned native
+MemoryManager and scripted AIAgent, an inspected locally installed archive,
+installed public-core admission and fake HTTP. It is a synthetic diagnostic of
+one source beyond the old 1,024-ID prefix and a cold-session source recall,
+not natural model choice, semantic relevance or a default-policy result.
+The full six-file canonical host gate is the five-file command below with
+`/absolute/cairn/integrations/hermes/test/test_source_candidate_policy.py`
+added before `--file-retries 0`; use both documented Node executables.
+The final six-file offline matrix passed **24/24 tests on each of Node 22.16.0
+and 24.15.0**, with `--file-retries 0`, against an inspected local archive
+(`f71e099152520feac8efcd0fd022a028feb94fbb2ac3590983d33ce21f864b3c`).
+Two older fake-provider fixtures initially returned an obsolete qualification
+wire shape and failed locally with `invalid_model_output`; their synthetic
+responses now use the already accepted test-only evidence-pool encoder. The
+installed adapter, core and host runtime were not changed for that correction.
+The pinned source archive's optional bytecode precompile still emits its known
+`.git` warning; the runner's six test files completed successfully. No user
+profile, real provider request or paid call was used.
+
 ## Native deadline and recovery offline gate
 
 The focused `test_capture_recovery.py` uses the real pinned Hermes

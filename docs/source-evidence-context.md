@@ -53,8 +53,11 @@ but their content and receipts do not enter scoring. A cap or discarded
 eligible candidate reports incomplete coverage; neither a returned page nor
 successful final answer proves all sources were searched. The normal
 constructor, body-only recall, namespace authority, selector/answer budgets,
-and final source payload stay unchanged. There is no MCP or hosted option for
-this constructor policy.
+and final source payload stay unchanged. The local MCP host now exposes this
+same experimental constructor policy only through its explicit startup flag
+`--source-candidate-policy bounded-keyset-v1`; a Hermes profile may bind the
+same flag with `source_candidate_policy: bounded-keyset-v1`. Neither changes
+the default or lets a model tool call choose the policy.
 
 Fetch returns every retained receipt for one memory or fails; it does not slice
 an excerpt or silently return an incomplete receipt set. The existing 101-row

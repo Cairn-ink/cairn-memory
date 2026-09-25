@@ -44,6 +44,20 @@ It makes source evidence the default only when a recall call omits both
 precedence. Blank input can retain an existing value. To restore the installed
 MCP's ordinary recall default, remove `recall_context` from `cairn.json` and
 restart. This profile preference does not change MCP or core defaults.
+The independent experimental `source_candidate_policy` field accepts exactly
+`bounded-keyset-v1`. The wizard saves it in this profile's `cairn.json`; the
+bridge validates it again and passes the fixed installed CLI flag on both
+schema discovery and tool calls. It is not a tool argument and does not grant
+another owner or namespace. Only source-evidence/rationale-evidence recall uses
+the larger local candidate examination: at most 20,000 current physical rows
+in 256-row pages, first four receipts per eligible memory, and top 1,024 by
+literal overlap. Unicode runs (including contiguous CJK text) are not semantic
+word segmentation. The existing visible 120-code-point label, two selector
+pages, model budgets, final source bounds, provider cost and retention limits
+remain. Body/default recall and five-tool inventory stay unchanged when this
+sole option is set. Blank reconfiguration may retain it; remove the field and
+restart to disable it. This is not an accuracy, latency or default-promotion
+claim.
 Restart the session after setup; schemas remain stable within a session.
 Hermes writes provider activation to `config.yaml` before validating Cairn's
 separate `cairn.json`, and can save a separately collected secret afterward.
@@ -68,6 +82,7 @@ Tools: `cairn_remember_memory`, `cairn_recall_memory`, `cairn_inspect_memory`,
 `cairn_correct_memory`, `cairn_forget_memory`. Schemas come from installed MCP.
 The inventories are five by default, six with capture, seven with recovery, and
 eight with both. The optional deadline changes no tool or schema.
+The source-candidate policy also changes no tool or schema.
 Ask explicitly to save, inspect ID/revision, then correct or forget at that
 revision. Stale revisions fail. Content and receipts are untrusted data, not
 instructions; a receipt is not proof of model-generated entailment.

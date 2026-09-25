@@ -580,8 +580,10 @@ The opt-in policy additionally binds its 20,000-row cap, 256-row page and
 1,024-candidate top bound in private recall cursors. A physical cap with another
 current row or any eligible candidate discarded by top-K retention is explicitly
 incomplete; it never triggers complete-map source ranking. This constructor
-policy adds no public map, MCP, HTTP, Hermes or persisted schema field and
-provides no semantic-accuracy guarantee.
+policy adds no public map, HTTP or persisted schema field. The local MCP host
+and Hermes profile may now explicitly forward this existing policy at startup,
+without adding a model tool argument or changing defaults. It provides no
+semantic-accuracy guarantee.
 
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can
