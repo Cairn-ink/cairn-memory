@@ -103,17 +103,44 @@ MOC navigation, semantic entailment and matched Mem0 scoring remain separate.
   reject incompatible window receipts. Do not relax that verifier or count an
   old result as windowed. Later scored use needs its own versioned provenance
   contract, frozen fixtures/roster, guards and independent review.
+- W9 Installed adapter compatibility (frozen before implementation): inspection
+  found that `adapters/openai/schemas.mjs` caps ordinary extraction at 24 source
+  descriptors. Keep that legacy path unchanged. The new core path sends the
+  explicit input envelope `{ inputMode: 'indexed-windows-v1', messages }`, where
+  each descriptor has only `index`, `messageIndex`, `role`, `content`. For this
+  mode only, accept 1–64 dense, own-data descriptors with sequential global
+  indices, contiguous nondecreasing message groups starting at zero (at most
+  24 groups), a consistent role within each group, well-formed nonempty text
+  at most 800 units per window, at most 4,000 content units per group and 20,000
+  total. Reject malformed/unknown/explicit-undefined modes, custom fields,
+  accessors and sparse arrays before JSON serialization can erase them or any
+  transport occurs. Inherited modes do not opt in. Dynamic output source-index
+  constraints must address the actual global catalog, including indices above
+  23; retain five items and four sources per item. Count and generation must
+  use the same snapshotted input/schema. This is a narrow optional wire-format
+  extension, not a new provider, model, retry, endpoint or live guard grant.
+  Keep the existing 6,000 local / 7,024 provider-input / 1,024 output token
+  ceilings. Add fake-HTTP tests for 24/25/64/65 descriptors, index 24+ output,
+  missing mode with more than 24 descriptors, invalid fields/groups/roles,
+  input/output bounds and count-time mutation. The installed synthetic test
+  must use the actual OpenAI adapter with fake HTTP and a selected tail window;
+  no real key or provider call. Run full `test:openai` and `demo:openai-offline`
+  on both runtimes, in addition to W1–W8 gates. Legacy request/schema bytes
+  must stay unchanged. Do not relax public benchmark source verification.
 
 ## Allowed files and exclusions
 
 Allowed: this plan; `core/contract.mjs`, `core/capture.mjs`,
 `core/capture-input.mjs`; one focused `core/source-windows.mjs` helper if useful;
 one `core/prompts/extract-source-windows.md` prompt; focused new tests under
-`core/test/` and `packaging/test/`; `packaging/artifact-files.json` for required
+`core/test/`, `packaging/test/` and `adapters/openai/test/`;
+`adapters/openai/schemas.mjs` and the narrow pre-serialization validation
+dispatch in `adapters/openai/index.mjs` for W9 only;
+`packaging/artifact-files.json` for required
 runtime dependencies only; technical `docs/retained-source-windows.md`, a narrow
 privacy/boundary addition in `docs/protocol.md`, `docs/limitations.md`, and
 `CHANGELOG.md`. No existing failures removed, model/price/default changes,
-storage schema change, provider/ledger/scorer/host changes, source corpus use,
+storage schema change, provider configuration/ledger/scorer/host changes, source corpus use,
 historical case reruns, npm publication or new dependency.
 
 If the existing v2/ordered interfaces cannot satisfy these constraints, worker
@@ -132,7 +159,7 @@ No network model call is authorized by those commands. Freeze the candidate;
 independent Standards and Spec review the same complete fixed-base diff; correct,
 reverify and rereview before a dependent PR and all exact-head CI checks.
 
-Completion of W1–W8 means a bounded optional source-binding mechanism works in
+Completion of W1–W9 means a bounded optional source-binding mechanism works in
 the tested paths, not that memory is semantically reliable or S2–S5 passed.
 Next: separately version benchmark/source verification and measure source-window
 and navigation effects at matched budgets on fresh development/holdout cases.
@@ -144,3 +171,10 @@ Planning only. Dependency acceptance and worker implementation are pending.
 At resume check the base PR's exact head/CI, this worktree's status, and the
 latest evidence. Never infer a paid run is unlaunched from a missing report.
 The prior six-case run is terminal and must not be retried.
+
+Pre-implementation inspection identified the W9 adapter mismatch; primary
+expanded only the necessary optional wire format, fake-HTTP and installed
+acceptance, rather than silently reducing the catalog or raising budgets.
+For W1, reject combinations with any active rationale/evidence mode even when
+inherited: the existing constructor reads those values unconditionally.
+Do not change inherited legacy behavior when the new policy is omitted.
