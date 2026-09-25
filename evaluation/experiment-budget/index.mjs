@@ -1,9 +1,12 @@
 import { closeSync, lstatSync, mkdirSync, openSync, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
 
 const APPLICATION_ID = 0x43454247;
 const SCHEMA_VERSION = 1;
+const EMBEDDING_SCHEMA_VERSION = 2;
 const DATABASE_FILENAME = 'experiment-budget.sqlite';
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 
@@ -37,8 +40,23 @@ const ATTEMPT_SCHEMA = `CREATE TABLE attempts (
   CHECK (outcome IS NOT NULL OR actual_micro_usd IS NULL)
 ) STRICT`;
 
+const EMBEDDING_ATTEMPT_SCHEMA = `CREATE TABLE attempts (
+  attempt_id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL CHECK (channel IN ('host-completion','cairn-count','cairn-generation','host-embedding')),
+  reserved_micro_usd INTEGER NOT NULL CHECK (reserved_micro_usd BETWEEN 0 AND ${MAX_SAFE_INTEGER}),
+  outcome TEXT CHECK (outcome IN ('succeeded','failed','unknown')),
+  actual_micro_usd INTEGER CHECK (actual_micro_usd BETWEEN 0 AND ${MAX_SAFE_INTEGER}),
+  CHECK (outcome IS NOT NULL OR actual_micro_usd IS NULL)
+) STRICT`;
+
+const EMBEDDING_CHANNELS = new Set([...CHANNELS, 'host-embedding']);
+
 const EXPECTED_SCHEMA = new Map([
   ['attempts', normalizeSql(ATTEMPT_SCHEMA)],
+  ['run_config', normalizeSql(RUN_SCHEMA)],
+]);
+const EMBEDDING_EXPECTED_SCHEMA = new Map([
+  ['attempts', normalizeSql(EMBEDDING_ATTEMPT_SCHEMA)],
   ['run_config', normalizeSql(RUN_SCHEMA)],
 ]);
 
@@ -98,6 +116,36 @@ function validateConfiguration(options) {
     limitMicroUsd: validateSafeInteger(options.limitMicroUsd, { positive: true }),
     requestCap: validateSafeInteger(options.requestCap, { positive: true }),
   };
+}
+
+// New operator APIs inspect only own data descriptors before any filesystem access.
+// Legacy entrypoints deliberately retain their original validation behavior.
+function ownData(value, keys) {
+  if (!isPlainObject(value)) fail('invalid_options');
+  const names = Reflect.ownKeys(value);
+  if (names.length !== keys.length || names.some((name) => typeof name !== 'string' || !keys.includes(name))) {
+    fail('invalid_options');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (keys.some((key) => !hasOwn(descriptors[key], 'value'))) fail('invalid_options');
+  return Object.fromEntries(keys.map((key) => [key, descriptors[key].value]));
+}
+
+function detachedEmbeddingConfiguration(value) {
+  return validateConfiguration(ownData(value, ['directory', 'runId', 'limitMicroUsd', 'requestCap']));
+}
+
+function detachedUpgradeOptions(value) {
+  const options = ownData(value, ['directory', 'runId', 'limitMicroUsd', 'requestCap',
+    'expectedCheckpoint', 'expectedHistorySha256']);
+  const config = validateConfiguration({ directory: options.directory, runId: options.runId,
+    limitMicroUsd: options.limitMicroUsd, requestCap: options.requestCap });
+  const checkpoint = ownData(options.expectedCheckpoint, ['requestCount', 'reservedMicroUsd']);
+  if (!Number.isSafeInteger(checkpoint.requestCount) || checkpoint.requestCount < 0
+    || !Number.isSafeInteger(checkpoint.reservedMicroUsd) || checkpoint.reservedMicroUsd < 0
+    || typeof options.expectedHistorySha256 !== 'string'
+    || !/^[a-f0-9]{64}$/u.test(options.expectedHistorySha256)) fail('invalid_options');
+  return { config, checkpoint, historySha256: options.expectedHistorySha256 };
 }
 
 function pathParts(target) {
@@ -230,21 +278,23 @@ function configureConnection(db, readOnly = false) {
   db.exec(`PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;${readOnly ? ' PRAGMA query_only = ON;' : ''}`);
 }
 
-function assertSchema(db) {
+function assertSchema(db, version = SCHEMA_VERSION) {
   const applicationId = db.prepare('PRAGMA application_id').get().application_id;
-  const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (applicationId !== APPLICATION_ID || version !== SCHEMA_VERSION) fail('invalid_ledger');
+  const storedVersion = db.prepare('PRAGMA user_version').get().user_version;
+  if (applicationId !== APPLICATION_ID || storedVersion !== version) fail('invalid_ledger');
   const integrity = db.prepare('PRAGMA quick_check').all();
   if (integrity.length !== 1 || integrity[0].quick_check !== 'ok') fail('invalid_ledger');
   const journalMode = db.prepare('PRAGMA journal_mode').get().journal_mode;
   if (journalMode !== 'delete') fail('invalid_ledger');
   const rows = db.prepare(`SELECT type, name, tbl_name, sql FROM sqlite_schema
     WHERE sql IS NOT NULL ORDER BY type, name`).all();
-  if (rows.length !== EXPECTED_SCHEMA.size) fail('invalid_ledger');
+  const expected = version === SCHEMA_VERSION ? EXPECTED_SCHEMA
+    : version === EMBEDDING_SCHEMA_VERSION ? EMBEDDING_EXPECTED_SCHEMA : null;
+  if (expected === null || rows.length !== expected.size) fail('invalid_ledger');
   for (const row of rows) {
     if (row.type !== 'table' || row.tbl_name !== row.name
-      || !EXPECTED_SCHEMA.has(row.name)
-      || normalizeSql(row.sql) !== EXPECTED_SCHEMA.get(row.name)) {
+      || !expected.has(row.name)
+      || normalizeSql(row.sql) !== expected.get(row.name)) {
       fail('invalid_ledger');
     }
   }
@@ -254,8 +304,8 @@ function validStoredInteger(value, { positive = false } = {}) {
   return Number.isSafeInteger(value) && value >= (positive ? 1 : 0);
 }
 
-function readValidatedState(db) {
-  assertSchema(db);
+function readValidatedState(db, version = SCHEMA_VERSION, includeRowid = false) {
+  assertSchema(db, version);
   const runs = db.prepare('SELECT * FROM run_config').all();
   if (runs.length !== 1) fail('invalid_ledger');
   const run = runs[0];
@@ -267,13 +317,17 @@ function readValidatedState(db) {
     || !['open', 'overrun'].includes(run.state)) {
     fail('invalid_ledger');
   }
-  const attempts = db.prepare(`SELECT attempt_id, channel, reserved_micro_usd, outcome,
-    actual_micro_usd FROM attempts ORDER BY rowid`).all();
+  const attempts = db.prepare(version === SCHEMA_VERSION && !includeRowid
+    ? `SELECT attempt_id, channel, reserved_micro_usd, outcome,
+      actual_micro_usd FROM attempts ORDER BY rowid`
+    : `SELECT rowid, attempt_id, channel, reserved_micro_usd, outcome,
+      actual_micro_usd FROM attempts ORDER BY rowid`).all();
   let reservedMicroUsd = 0;
   let hasOverrun = false;
   for (const attempt of attempts) {
-    if (!UUID_PATTERN.test(attempt.attempt_id)
-      || !CHANNEL_SET.has(attempt.channel)
+    if ((version === EMBEDDING_SCHEMA_VERSION && !Number.isSafeInteger(attempt.rowid))
+      || !UUID_PATTERN.test(attempt.attempt_id)
+      || !(version === EMBEDDING_SCHEMA_VERSION ? EMBEDDING_CHANNELS : CHANNEL_SET).has(attempt.channel)
       || !validStoredInteger(attempt.reserved_micro_usd)
       || (attempt.outcome !== null && !OUTCOME_SET.has(attempt.outcome))
       || (attempt.actual_micro_usd !== null && !validStoredInteger(attempt.actual_micro_usd))
@@ -325,12 +379,12 @@ function publicState({ run, attempts }) {
   });
 }
 
-function openHandle(db, expected) {
+function openHandle(db, expected, version = SCHEMA_VERSION) {
   let closed = false;
   const access = (mode, work) => {
     if (closed) fail('ledger_closed');
     return withTransaction(db, mode, () => {
-      const state = readValidatedState(db);
+      const state = readValidatedState(db, version);
       assertConfiguration(state, expected);
       return work(state);
     });
@@ -339,7 +393,9 @@ function openHandle(db, expected) {
     reserve(options) {
       validateExactObject(options, ['attemptId', 'channel', 'reservedMicroUsd']);
       const attemptId = validateUuid(options.attemptId);
-      if (!CHANNEL_SET.has(options.channel)) fail('invalid_options');
+      if (!(version === EMBEDDING_SCHEMA_VERSION ? EMBEDDING_CHANNELS : CHANNEL_SET).has(options.channel)) {
+        fail('invalid_options');
+      }
       const reservedMicroUsd = validateSafeInteger(options.reservedMicroUsd);
       return access('write', (current) => {
         if (current.attempts.some((attempt) => attempt.attempt_id === attemptId)) {
@@ -355,7 +411,7 @@ function openHandle(db, expected) {
           VALUES (?, ?, ?, NULL, NULL)`).run(attemptId, options.channel, reservedMicroUsd);
         db.prepare(`UPDATE run_config SET reserved_micro_usd = reserved_micro_usd + ?,
           request_count = request_count + 1 WHERE singleton = 1`).run(reservedMicroUsd);
-        readValidatedState(db);
+        readValidatedState(db, version);
         return publicAttempt({
           attempt_id: attemptId,
           channel: options.channel,
@@ -386,7 +442,7 @@ function openHandle(db, expected) {
         if (actualMicroUsd !== null && actualMicroUsd > attempt.reserved_micro_usd) {
           db.prepare(`UPDATE run_config SET state = 'overrun' WHERE singleton = 1`).run();
         }
-        readValidatedState(db);
+        readValidatedState(db, version);
         return publicAttempt({ ...attempt, outcome: options.outcome, actual_micro_usd: actualMicroUsd });
       });
     },
@@ -430,6 +486,12 @@ function constructDatabase(filename, options = {}) {
   }
 }
 
+function constructExistingWritableDatabase(filename) {
+  const url = pathToFileURL(filename);
+  url.searchParams.set('mode', 'rw');
+  return constructDatabase(url);
+}
+
 export function createExperimentBudget(options) {
   const config = validateConfiguration(options);
   createLocation(config);
@@ -467,5 +529,116 @@ export function reopenExperimentBudget(options) {
   } catch (error) {
     try { db.close(); } catch { /* The fixed reopen error is authoritative. */ }
     throw mapError(error);
+  }
+}
+
+// The digest is a version-independent, domain-separated account of the exact
+// validated history, not a signature against a party that can edit the database.
+function embeddingHistorySha256(state) {
+  if (state.attempts.some((row) => !Number.isSafeInteger(row.rowid))) fail('invalid_ledger');
+  const run = state.run;
+  const canonical = JSON.stringify(['cairn.embedding-budget-history.v1',
+    [run.run_id, run.limit_micro_usd, run.request_cap, run.reserved_micro_usd,
+      run.request_count, run.state],
+    state.attempts.map((row) => [row.rowid, row.attempt_id, row.channel,
+      row.reserved_micro_usd, row.outcome, row.actual_micro_usd])]);
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+function embeddingInspection(state, version) {
+  return Object.freeze({ schemaVersion: version, runId: state.run.run_id,
+    limitMicroUsd: state.run.limit_micro_usd, requestCap: state.run.request_cap,
+    reservedMicroUsd: state.run.reserved_micro_usd, requestCount: state.run.request_count,
+    state: state.run.state, historySha256: embeddingHistorySha256(state) });
+}
+
+function embeddingVersion(db) {
+  const version = db.prepare('PRAGMA user_version').get().user_version;
+  if (version !== SCHEMA_VERSION && version !== EMBEDDING_SCHEMA_VERSION) fail('invalid_ledger');
+  return version;
+}
+
+function closeAfter(db, work) {
+  let result;
+  let error;
+  try { result = work(); } catch (caught) { error = caught; }
+  try { db.close(); } catch (caught) { if (!error) error = mapError(caught); }
+  if (error) throw error;
+  return result;
+}
+
+/** Read-only exact-schema inspection; it confers no embedding or transport permission. */
+export function inspectExperimentBudgetForEmbeddingUpgrade(options) {
+  const config = detachedEmbeddingConfiguration(options);
+  inspectExistingLocation(config);
+  const db = constructDatabase(config.filename, { readOnly: true });
+  return closeAfter(db, () => withTransaction(db, 'read', () => {
+      const version = embeddingVersion(db);
+      const state = readValidatedState(db, version, true);
+      assertConfiguration(state, config);
+      return embeddingInspection(state, version);
+    }));
+}
+
+function assertUpgradeBinding(inspection, state, expected) {
+  if (inspection.requestCount !== expected.checkpoint.requestCount
+    || inspection.reservedMicroUsd !== expected.checkpoint.reservedMicroUsd
+    || inspection.historySha256 !== expected.historySha256) fail('configuration_mismatch');
+  if (state.run.state !== 'open' || state.attempts.some((row) => row.outcome === null)) {
+    fail('budget_blocked');
+  }
+}
+
+/** Explicit, transaction-only schema transition on the same validated ledger. */
+export function upgradeExperimentBudgetForEmbeddings(options) {
+  const expected = detachedUpgradeOptions(options);
+  const config = expected.config;
+  inspectExistingLocation(config);
+  const db = constructExistingWritableDatabase(config.filename);
+  return closeAfter(db, () => withTransaction(db, 'write', () => {
+      inspectExistingLocation(config);
+      const version = embeddingVersion(db);
+      const before = readValidatedState(db, version, true);
+      assertConfiguration(before, config);
+      assertUpgradeBinding(embeddingInspection(before, version), before, expected);
+      if (version === EMBEDDING_SCHEMA_VERSION) {
+        return Object.freeze({ status: 'already-upgraded', ...embeddingInspection(before, version) });
+      }
+      db.exec('ALTER TABLE attempts RENAME TO attempts_legacy');
+      db.exec(EMBEDDING_ATTEMPT_SCHEMA);
+      db.exec(`INSERT INTO attempts (rowid, attempt_id, channel, reserved_micro_usd, outcome, actual_micro_usd)
+        SELECT rowid, attempt_id, channel, reserved_micro_usd, outcome, actual_micro_usd
+        FROM attempts_legacy ORDER BY rowid`);
+      db.exec('DROP TABLE attempts_legacy');
+      db.exec(`PRAGMA user_version = ${EMBEDDING_SCHEMA_VERSION}`);
+      const after = readValidatedState(db, EMBEDDING_SCHEMA_VERSION);
+      assertConfiguration(after, config);
+      const inspection = embeddingInspection(after, EMBEDDING_SCHEMA_VERSION);
+      assertUpgradeBinding(inspection, after, expected);
+      return Object.freeze({ status: 'upgraded', ...inspection });
+    }));
+}
+
+/** Embedding-aware accounting only; callers still need a separately reviewed HTTP grant. */
+export function reopenEmbeddingExperimentBudget(options) {
+  const config = detachedEmbeddingConfiguration(options);
+  inspectExistingLocation(config);
+  const probe = constructDatabase(config.filename, { readOnly: true });
+  closeAfter(probe, () => withTransaction(probe, 'read', () => {
+      const state = readValidatedState(probe, EMBEDDING_SCHEMA_VERSION);
+      assertConfiguration(state, config);
+      embeddingHistorySha256(state);
+    }));
+  const db = constructExistingWritableDatabase(config.filename);
+  try {
+    withTransaction(db, 'read', () => {
+      const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION);
+      assertConfiguration(state, config);
+      embeddingHistorySha256(state);
+    });
+    return openHandle(db, config, EMBEDDING_SCHEMA_VERSION);
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the validation failure. */ }
+    throw error;
   }
 }

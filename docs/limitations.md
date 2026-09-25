@@ -74,6 +74,17 @@ return exact source spans. Its default extraction uses the run date unless a
 separate fair replay treatment is frozen. The child-process socket check is
 not a paid-run outbound or cost guard. S3 comparison remains pending.
 
+The [explicit embedding ledger migration](embedding-ledger-migration.md) is
+offline accounting infrastructure only. It adds a fourth shared-budget channel
+to an explicitly migrated v2 synthetic ledger; default v1 reopening and old
+binaries cannot use v2. The history digest detects changes relative to a bound
+inspection but does not authenticate a database owner. No operator ledger was
+migrated, no embedding/chat gateway or price was granted, and no Mem0 quality
+or fair-comparison conclusion follows. Its existing-only writable opens prevent
+blank replacement-file creation if an inspected file disappears before upgrade
+or explicit v2 reopening; they do not close every hostile same-user inode-swap
+or filesystem race.
+
 The public-comparison provenance adapter previously expected only capture's
 first 800-unit normalized source prefix. When that prefix ended in whitespace,
 admission's existing second canonicalization trimmed it before storage and the
