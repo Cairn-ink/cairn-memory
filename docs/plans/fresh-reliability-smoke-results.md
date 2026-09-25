@@ -62,7 +62,19 @@ candidate. Completion permits the separately gated next investigation; S2–S5
 and comparator fairness/guard prerequisites remain open. No case was rerun,
 replaced, or relabeled, and no paid scale-up is authorized by this packet.
 
-## Worker verification — 2026-09-25
+## Delivery-base integration — 2026-09-25
+
+The fixed base above identifies the paid experiment's execution runtime, not
+the later documentation delivery base. This branch locally merged reviewed PR
+#218 candidate `330ecb13555832003015c5850905860903bfacc4`; its inherited
+test-only CI fixture corrections isolate case-guard scheduling and cumulative
+capture-deadline timing without changing either production guard or capture
+runtime. The result-document diff against that delivery base remains the five
+R4 files only. The paid six-case run was not repeated on PR #218, and its
+original runtime and reported results are unchanged. PR #218 exact-head CI and
+this dependent delivery's independent review remain separate gates.
+
+## Pre-integration worker verification — 2026-09-25
 
 GPT-6 Sol/high inspected the five-file documentation diff. Both `npm test`
 (112/112) and `npm run validate` passed on Node 22.16 and 24.15. The initial strict
@@ -72,3 +84,12 @@ tooling was missing; those runs do not satisfy the pinned-tooling gate. After
 Claude Code 2.1.260, and `npm run validate --prefix tools/plugin-validation`
 passed on both Node versions using that local executable. Primary acceptance
 and the independent fixed-base Standards/Spec reviews remain separate gates.
+
+After local integration of `330ecb13555832003015c5850905860903bfacc4`,
+the worker reran `npm test` (112/112), `npm run validate`, and the isolated
+`npm run validate --prefix tools/plugin-validation` successfully on Node
+22.16.0 and 24.15.0. The local Claude Code binary and installed dependency
+both identified pinned version 2.1.260; Node 24 ran with no global Claude
+binary on `PATH`. This post-integration check does not claim a worker rerun of
+the full core or request-guard suites, nor does it replace primary acceptance
+or exact-head CI.
