@@ -284,3 +284,42 @@ packages; no lockfile or dependency declaration changed. Author verification
 does not substitute for primary exact-head acceptance, independent Standards
 and Spec reviews, or PR CI. No operational ledger, key, corpus, holdout,
 native child, or provider was accessed.
+
+## Independent-review correction round 1
+
+Primary exact-head synthetic acceptance found that a W-priced Mem0 response
+followed by a deliberately failed B4 settlement left the process-local token
+counts null, even though durable outcome/actual correctly remained null and
+the guard halted. The corrected mixed attempt record sets bounded
+`observedActualMicroUsd`, `inputTokens`, and `outputTokens` before the B4 write;
+only a successful durable write sets `outcome` and `actualMicroUsd`. Observed
+cost is never an accounting credit, historical-prefix value, retry permission,
+or substitute for a settled ledger row. The fresh in-flight rowid-fault test
+now asserts observed cost 3µUSD and 1+1 tokens, durable outcome/actual null,
+pending ledger row, global halt and no later dispatch. Primary's independent
+synthetic settlement-observation check passed on the correction before the
+full affected matrix.
+
+Independent Spec review found the X12 mutation matrix incomplete. The added
+five-case fresh-real-chain table exercises a valid Cairn route after changing
+one prior terminal prefix row, appending a foreign terminal suffix, changing
+persisted cap metadata, changing the durable capability configuration digest,
+or replacing the SQLite file at the same path with a new inode. Each proves
+zero additional physical dispatch and zero guard-owned reservation with a
+global halt. Existing rowid-only, pending and binding tests remain. The first
+two targeted cases (mutation table and failed settlement) passed on both
+Node 22.16.0 and 24.15.0 while the separate K matrix held the heavy-test
+slot. Standards review had no blockers; its two judgment notes concern the
+separate mixed engine and one narrow mixed validator flag. Both remain scoped
+because B4/local isolation differs from v1 and a legacy-wide refactor is not
+authorized here. Final whole-diff reviews and primary frozen-head gates are
+still required.
+
+The correction's affected suites then passed sequentially on both
+Node 22.16.0 and 24.15.0: `npm run test:experiment-budget` (58/58),
+`npm run test:experiment-request-guard` (285/285), `npm test` (112/112),
+`npm run validate`, and strict plugin validation
+(`npm run validate --prefix tools/plugin-validation`). The earlier whole-candidate live-offline result
+(340 pass/30 skip on each Node) remains applicable because no live caller,
+core, or adapter changed in this correction. `git diff --check` passed before
+the scoped correction commit. No provider or operational data was used.

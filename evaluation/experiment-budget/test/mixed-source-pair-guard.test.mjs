@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, renameSync,
+  rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -556,6 +557,61 @@ test('X7 B4 rowid witness and durable binding tamper halt before any new HTTP', 
   execution.close();
 });
 
+test('X7/X12 authoritative prefix, suffix, caps, binding and inode drift deny a valid route', async t => {
+  const indexed = (await cairnWire())[0];
+  const variants = ['prefix', 'suffix', 'caps', 'binding', 'same-path-inode'];
+  for (const variant of variants) {
+    const f = fixture(t, { executionId: `drift-${variant}` });
+    const capability = authorizeMixedSourcePairCapability(f.options);
+    let physical = 0;
+    const guard = create(f, capability, () => { physical += 1;
+      return Response.json({ object: 'response.input_tokens', input_tokens: 100 }); });
+    const dbPath = join(f.ledger.directory, 'experiment-budget.sqlite');
+    const countRows = () => {
+      const db = new DatabaseSync(dbPath);
+      try { return db.prepare('SELECT request_count FROM run_config WHERE singleton = 1')
+        .get().request_count; } finally { db.close(); }
+    };
+    let invoked = 0;
+    await assert.rejects(guard.withCaseScope(capability.schedule[0], async () => {
+      if (variant === 'prefix' || variant === 'caps') {
+        const db = new DatabaseSync(dbPath);
+        try {
+          if (variant === 'prefix') db.exec("UPDATE attempts SET outcome = 'failed', "
+            + 'actual_micro_usd = NULL WHERE rowid = 2');
+          else db.exec('UPDATE run_config SET request_cap = 81 WHERE singleton = 1');
+        } finally { db.close(); }
+      } else if (variant === 'suffix') {
+        const foreign = reopenEmbeddingExperimentBudget(f.ledger);
+        try { const attemptId = randomUUID();
+          foreign.reserve({ attemptId, channel: 'host-embedding', reservedMicroUsd: 1 });
+          foreign.recordOutcome({ attemptId, outcome: 'unknown' });
+        } finally { foreign.close(); }
+      } else if (variant === 'binding') {
+        const file = join(f.ledger.directory,
+          `experiment-mixed-source-pair-drift-${variant}.json`);
+        const changed = JSON.parse(readFileSync(file, 'utf8'));
+        changed.manifest.mem0.configurationSha256 = '0'.repeat(64);
+        writeFileSync(file, JSON.stringify(changed), { mode: 0o600 });
+      } else {
+        const replacement = join(f.ledger.directory, 'replacement.sqlite');
+        copyFileSync(dbPath, replacement);
+        chmodSync(replacement, 0o600);
+        renameSync(replacement, dbPath);
+      }
+      const afterMutation = countRows();
+      invoked += 1;
+      try { await guard.cairnFetch(indexed.url, request(indexed.body)); }
+      finally { assert.equal(countRows(), afterMutation); }
+    }), rejected('callback_failed'));
+    assert.equal(invoked, 1, variant);
+    assert.equal(physical, 0, variant);
+    assert.deepEqual(guard.attempts(), [], variant);
+    assert.equal(guard.isHalted(), true, variant);
+    guard.close();
+  }
+});
+
 test('X10 invalid model/usage and known priced usage bound globally halt without refund', async t => {
   for (const variant of ['model', 'usage', 'bound']) {
     const f = fixture(t, { executionId: `global-${variant}` });
@@ -795,6 +851,10 @@ test('X7/X12 in-flight foreign rowid mutation fences bound settlement and global
   assert.equal(guard.isHalted(), true);
   const attempt = guard.attempts()[0];
   assert.equal(attempt.outcome, null);
+  assert.equal(attempt.actualMicroUsd, null);
+  assert.equal(attempt.observedActualMicroUsd, 3);
+  assert.equal(attempt.inputTokens, 1);
+  assert.equal(attempt.outputTokens, 1);
   const db = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
   try {
     const persisted = db.prepare('SELECT outcome FROM attempts WHERE attempt_id = ?').get(attempt.attemptId);

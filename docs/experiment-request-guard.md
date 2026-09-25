@@ -640,7 +640,14 @@ returned in sanitized form for individually reserved fallback; known-priced
 invalid payload and trusted deadlines seal one case, while ambiguous transport,
 unknown usage and ledger faults halt globally. Case snapshots contain only
 bounded ordinals and closed statuses, not case IDs or source text. This guard
-does not run or contain a native child, hold keys, verify the declared artifact
+keeps a bounded `observedActualMicroUsd` and observed token counts in its
+process-local attempt snapshot once a Mem0 response has been priced. If B4
+settlement fails, those observations remain visible for diagnosis while
+`outcome` and `actualMicroUsd` stay null because no durable settlement was
+confirmed; the full reservation remains pending and paid work halts.
+This observation is never substituted into the ledger or used to advance the
+historical binding. The guard does not run or contain a native child, hold keys,
+verify the declared artifact
 hashes against an installation, grant a paid launch or measure quality. See
 [its acceptance contract](plans/mixed-source-pair-guard.md).
 

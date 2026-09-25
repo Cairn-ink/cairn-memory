@@ -3432,7 +3432,8 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     scope.used.requests += 1;
     scope.used.reservedMicroUsd += reservedMicroUsd;
     const record = { attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd,
-      outcome: null, actualMicroUsd: null, inputTokens: null, outputTokens: null,
+      outcome: null, actualMicroUsd: null, observedActualMicroUsd: null,
+      inputTokens: null, outputTokens: null,
       ordinal: scope.ordinal, phase: scope.phase, arm: scope.arm };
     records.push(record);
     inFlightIds.add(attemptId);
@@ -3456,14 +3457,17 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     const settle = (outcome, actualMicroUsd, inputTokens = null, outputTokens = null) => {
       if (settled) return;
       settled = true;
+      // A priced observation survives a failed B4 write, but cannot masquerade
+      // as a durable settlement or enter the expected persisted history.
+      record.observedActualMicroUsd = actualMicroUsd;
+      record.inputTokens = inputTokens;
+      record.outputTokens = outputTokens;
       try { ledger.recordOutcome(actualMicroUsd === null
         ? { attemptId: record.attemptId, outcome }
         : { attemptId: record.attemptId, outcome, actualMicroUsd }); }
       catch (error) { halted = true; throw error; }
       record.outcome = outcome;
       record.actualMicroUsd = actualMicroUsd;
-      record.inputTokens = inputTokens;
-      record.outputTokens = outputTokens;
       deepFreeze(record);
       if (actualMicroUsd !== null && actualMicroUsd > reservedMicroUsd) halted = true;
     };
