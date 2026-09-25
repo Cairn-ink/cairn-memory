@@ -38,6 +38,7 @@ test('W1/W2 exact frozen profile, inert exports and fixed source-free errors', (
   assert.deepEqual([profile.chat.model, profile.embedding.model],
     ['gpt-4.1-mini-2025-04-14', 'text-embedding-3-small']);
   assert.deepEqual([profile.chat.reservedMicroUsd, profile.embedding.dimensions], [16_308, 1536]);
+  assert.equal(profile.embedding.minimumReservedMicroUsd, 1);
   assert.equal(Object.isFrozen(profile.chat.inputPrice), true);
   assert.equal(Object.isFrozen(profile.embedding), true);
   assert.throws(() => inspectMem0WireRequest('other', '{}'), error('invalid_options'));

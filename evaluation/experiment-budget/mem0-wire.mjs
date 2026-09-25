@@ -36,7 +36,7 @@ const PROFILE = deepFreeze({
     maxRequestBytes: 4_194_304, maxResponseBytes: 8_388_608,
     inputPrice: { microUsdNumerator: 1, tokenDenominator: 50 },
     outputPrice: { microUsdNumerator: 0, tokenDenominator: 1 },
-    dimensions: 1_536, encodingFormat: 'float', maxItems: 100,
+    minimumReservedMicroUsd: 1, dimensions: 1_536, encodingFormat: 'float', maxItems: 100,
   },
 });
 
@@ -146,7 +146,8 @@ export function inspectMem0WireRequest(route, bodyText) {
     }
     itemCount = body.input.length;
     requestedOutputTokens = 0;
-    reservedMicroUsd = Math.max(1, ceiling(inputTokenUpperBound, 1, 50));
+    reservedMicroUsd = Math.max(profile.minimumReservedMicroUsd,
+      ceiling(inputTokenUpperBound, 1, 50));
   }
   const forwarded = canonical(body);
   if (bytes(forwarded) > profile.maxRequestBytes) fail('unsupported_request');

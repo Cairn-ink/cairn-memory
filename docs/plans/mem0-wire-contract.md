@@ -197,6 +197,19 @@ hardcoded tokenizer goldens, canonical duplicate keys, known-usage failure
 paths, exact fact limits and forged-record denial; both passed. Primary will
 repeat that acceptance against the frozen SHA.
 
+Independent review of first candidate `9f04225` found one profile completeness
+issue: embedding's minimum-one reservation was enforced in code but absent
+from the exported profile a later manifest must bind. The accepted narrow
+correction adds frozen `minimumReservedMicroUsd:1`, uses that field in the
+reservation calculation and asserts it in the focused test; no wire behavior
+or ceilings change. Standards review found no issue. Primary's exact-first-
+candidate 18-gate matrix and direct pure-wire acceptance passed on both pinned
+Nodes before this correction. After the correction, focused W tests (10/10),
+the complete request-guard command (265/265), generic tests (112/112), JSON
+validation, and pinned strict plugin/marketplace validation all passed on both
+Node 22.16.0 and 24.15.0. Primary final-head acceptance and independent
+rereviews remain required.
+
 With existing isolated OpenAI, MCP and pinned Claude validation dependencies,
 the sequential offline W10 matrices were:
 
