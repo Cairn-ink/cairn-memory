@@ -276,3 +276,36 @@ The explicit baseline-330 real-core tail probe above printed
 comparison, source-window public-verifier version, installed Hermes test or
 quality promotion is inferred from these checks. Primary acceptance, both
 independent review axes and exact-head CI remain separate pending gates.
+
+## W10 guard correction evidence — 2026-09-25
+
+The actual OpenAI adapter's indexed extract body/schema reached the shared
+`validateCairnBody` path through the legacy Cairn count and generation routes.
+That validator recomputed `schemasFor('extract', input)`, so W9's optional
+adapter schema also made the new envelope pass an existing paid guard without
+an explicit grant. The narrow correction rejects the indexed extract envelope
+after parsing and before dynamic schema matching, reservation or forwarding.
+It does not change the adapter, schema, ordinary extract wire, grant factories,
+or ledger. Both the legacy `cairnFetch` and benchmark case-scoped `cairnFetch`
+call this validator; the focused test owns those two paths.
+
+The focused `evaluation/experiment-budget/test/request-guard.test.mjs` case
+captures real adapter-generated one- and 25-window count/generation bodies,
+then submits them to synthetic ledgers through default, reconciliation,
+qualification, candidate-qualification and case-deadline benchmark factories.
+Every denial asserts `unsupported_request`, zero fake-HTTP forwarding, zero
+request count/reservation and no attempt rows; ordinary extraction count and
+generation still succeed through the four unscoped factories. The current test
+against exact pre-correction guard source `2a13107` via an external diagnostic
+import hook exited 1 with `Missing expected rejection: default/.../input_tokens`;
+the corrected focused test exited 0. This red/green proof uses no provider.
+
+Worker reran both Node 22.16.0 and 24.15.0: full request guard 170/170,
+experiment budget 15/15, core 702/702, OpenAI 210/210, artifact 71/71,
+MCP 91/91, LongMemEval 75/75, live-offline 320 passed/30 skipped, generic
+112/112, JSON validation and pinned Claude Code 2.1.260 marketplace/strict
+plugin validation. The 13 applicable synthetic demos per runtime exited 0.
+The focused test and full guard suite were rerun after the final assertions;
+primary will rerun the final candidate gates. This remains an offline guard denial,
+not a new paid capability or provider test. Independent reviews and exact-head
+CI are required on the corrected candidate.

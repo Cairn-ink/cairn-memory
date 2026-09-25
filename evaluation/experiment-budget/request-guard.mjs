@@ -439,6 +439,8 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
     && body.model !== DEFAULT_MODEL) fail('unsupported_request');
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
+  // The optional indexed-window adapter schema is not a live budget grant.
+  if (match?.[1] === 'extract' && input?.inputMode === 'indexed-windows-v1') fail('unsupported_request');
   let expectedSchema;
   try { expectedSchema = match ? schemasFor(match[1], input) : null; }
   catch { fail('unsupported_request'); }
