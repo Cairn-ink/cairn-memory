@@ -43,6 +43,17 @@ prefix of protocol.armOrder, completed scheduling has both attempted. A halted
 run may have a previously completed arm. Validate retrieval coverage IDs and
 packed subset whenever present; diagnostics otherwise remain non-oracular.
 
+Finite generation reasons are the accepted N runner's SAFE_ERROR_CODES plus
+namespace_check_failed, namespace_not_pristine, question_or_framing_too_large,
+ingestion_failed, ingestion_incomplete, recall_threw, malformed_recall_response,
+invalid_recall_provenance, source_get_failed, source_get_mismatch,
+duplicate_receipt, unknown_or_mismatched_receipt, partial_receipts,
+context_window_exceeded, malformed_answer_response, answer_output_too_large,
+answer_timeout, answer_failed, case_timeout, arm_failed, global_halt,
+scope_contract_invalid and scope_execution_failed. Reject not_started and
+arbitrary error prose; do not export or widen old private validators to reuse
+this finite set. Halt codes must agree with the report's halted scheduling.
+
 Validate evaluator with the existing six exact fields and semantics: opaque
 question/source identity, six types, unique session/turn labels, supported
 string/finite-number/nonempty dense scalar-list reference. No labels reach N.
@@ -139,6 +150,11 @@ stageCounts/reasonCounts. Empty subtype buckets have null rates/bounds,
 not a misleading zero score. Include overall, perType, abstentionOverlay;
 macroSixTypeAccuracy only when all six types present and fully resolved.
 The bounds are best/worst unresolved bounds, NOT confidence intervals.
+Each arm object has exactly overall, perType, abstentionOverlay,
+macroSixTypeAccuracy and completeVerifiedOfficialStyle. Empty buckets use
+accuracy:null, coverage:null, fixedNBounds:{lower:null,upper:null}; an absent
+abstention overlay is null. Aggregate interpretation is exactly
+`qualified-source-pair-fixed-roster-accounting-not-a-competitive-or-product-reliability-claim`.
 
 Common overall/perType/abstention only rows where BOTH arms resolved. Report
 commonN and canonical byArm correct/incorrect/accuracy; commonN zero=>null
@@ -148,6 +164,10 @@ noninferiority, competitive parity or promotion threshold from this packet.
 An individual score retained before scoring halt remains in its arm totals;
 the incomplete pair never enters common. Interpretation must state offline
 accounting, not paid authorization or general benchmark/competitive result.
+Common's exact keys are commonN, byArm, pairedOutcomes, byType and
+abstentionOverlay. Per-type/abstention common buckets have only commonN, byArm,
+pairedOutcomes. pairedOutcomes has exactly the four named counts above;
+byArm entries have exactly correct, incorrect and accuracy.
 
 Validate scheduling consistency, not just field types: a generation-halted
 record has no scoring attempts or resolved judgments. A scoring-halted record
