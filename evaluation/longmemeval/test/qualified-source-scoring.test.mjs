@@ -1,22 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createExperimentBudget } from '../../experiment-budget/index.mjs';
-import { authorizeBenchmarkExtension, authorizeCaseDeadlineCapability,
-  createCaseDeadlineExperimentRequestGuard, createExperimentRequestGuard } from '../../experiment-budget/request-guard.mjs';
-import { benchmarkStagePolicy } from '../../live/public-pilot.mjs';
-import { experimentPolicy } from '../../live/session.mjs';
 import { captureSnapshot, retainedSourceView } from '../../../core/capture-input.mjs';
 import { sourceWindowCatalog } from '../../../core/source-windows.mjs';
 import { officialJudgeRequest, officialPrompt, scorePublicComparison,
   aggregateOfficialScores, OFFICIAL_QUESTION_TYPES } from '../official-scoring.mjs';
 import { opaqueQuestionId, opaqueSessionId, prepareLongMemEval, stableTurnIdV2 } from '../prepare.mjs';
-import { qualifiedSourcePairProtocol, runQualifiedSourcePair } from '../public-comparison.mjs';
+import { runQualifiedSourcePair } from '../public-comparison.mjs';
 import { loadReferenceRenderings } from '../reference-rendering.mjs';
 import { scoreQualifiedSourcePair, aggregateQualifiedSourceScores } from '../qualified-source-scoring.mjs';
 
@@ -542,67 +537,6 @@ test('P3 nonzero reference overlap and P4 complete six-type macro/abstention acc
   malformed.arms[0].referenceSessionCoverage.packed.numerator = 2;
   assert.throws(() => aggregateQualifiedSourceScores({ roster, records: [malformed] }),
     { code: 'invalid_records' });
-});
-
-test('P5 existing scoped guard settles a synthetic timed-out judge before the next slot', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'cairn-qualified-scoring-guard-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const ledger = { directory: join(root, 'ledger'), runId: randomUUID(),
-    limitMicroUsd: 5_000_000, requestCap: 10 };
-  createExperimentBudget(ledger).close();
-  const policy = experimentPolicy();
-  createExperimentRequestGuard({ ledger, policy,
-    fetchImpl: () => assert.fail('initialization must not call transport') }).close();
-  const stages = clone(benchmarkStagePolicy());
-  stages.judge.timeoutMs = 30;
-  const benchmarkExtension = authorizeBenchmarkExtension({ ledger, policy,
-    authorizationId: 'synthetic-qualified-scoring', stages });
-  const input = fixture('source-scoring-actual-guard');
-  const { history: sourceHistory, question: sourceQuestion, namespace: sourceNamespace,
-    answerModel, limits: sourceLimits, armOrder } = input.options;
-  const protocol = qualifiedSourcePairProtocol({ history: sourceHistory, question: sourceQuestion,
-    namespace: sourceNamespace, answerModel, limits: sourceLimits, armOrder });
-  const schedule = ['generation', 'scoring'].flatMap((phase) => protocol.armOrder.map((name) => ({
-    phase, caseId: protocol.arms.find((arm) => arm.name === name).scopeId })));
-  const caseDeadlineCapability = authorizeCaseDeadlineCapability({ ledger, policy,
-    benchmarkExtension, authorizationId: 'synthetic-scoring-scope',
-    executionId: 'synthetic-scoring-once', checkpoint: { requestCount: 0, reservedMicroUsd: 0 }, schedule });
-  let forwards = 0;
-  const guard = createCaseDeadlineExperimentRequestGuard({ ledger, policy,
-    benchmarkExtension, caseDeadlineCapability, fetchImpl: (_url, options) => {
-      if (++forwards === 1) return new Promise(() => {});
-      return Response.json({ id: 'synthetic', object: 'chat.completion',
-        model: JSON.parse(options.body).model,
-        choices: [{ index: 0, message: { role: 'assistant', content: 'yes' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } });
-    } });
-  try {
-    const port = { withCaseScope: guard.withCaseScope, isHalted: guard.isHalted };
-    input.options.execution = port;
-    const run = await runQualifiedSourcePair(input.options);
-    assert.equal(run.executionStatus, 'completed');
-    const result = await scoreQualifiedSourcePair({ run, expectedProtocol: protocol,
-      evaluator: input.evaluator, execution: port, judgeTimeoutMs: 1000,
-      judge: async ({ request, signal }) => {
-        const response = await guard.judgeFetch(stages.judge.endpoint, {
-          method: 'POST', redirect: 'error', signal,
-          headers: { authorization: 'Bearer synthetic', 'content-type': 'application/json' },
-          body: JSON.stringify({ ...request, store: false, stream: false }) });
-        const value = await response.json();
-        return { text: value.choices[0].message.content };
-      } });
-    assert.equal(result.executionStatus, 'completed');
-    assert.equal(result.arms[0].judgment.reason, 'case_timeout');
-    assert.equal(result.arms[0].judgment.attempted, true);
-    assert.equal(result.arms[1].judgment.correct, true);
-    assert.equal(guard.isHalted(), false);
-    assert.equal(forwards, 2);
-    assert.deepEqual(guard.attempts().map((row) => row.outcome), ['unknown', 'succeeded']);
-    assert.equal(guard.getState().attempts.some((row) => row.outcome === null), false);
-    assert.equal(aggregateQualifiedSourceScores({ roster: [{ protocol,
-      sourceQuestionId: input.evaluator.source_question_id, questionType: type }],
-    records: [result] }).common.commonN, 0);
-  } finally { guard.close(); }
 });
 
 test('P4 independent three-case fixed-roster golden and strict record consistency', async () => {

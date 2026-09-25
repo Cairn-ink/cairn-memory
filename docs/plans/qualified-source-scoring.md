@@ -223,6 +223,16 @@ core/ingestion/adapter/guard/ledger/live/host/default/dependency changes. Avoid
 exporting legacy private validation just to widen API; report necessary shared
 seam changes to primary before touching old runtime.
 
+P5 test-suite ownership correction, frozen before implementation: keep pure
+scoring and aggregate tests in LongMemEval without requiring adapter packages.
+Move the actual scoped-guard/fake-HTTP regression into the existing live-offline
+suite, whose required CI already installs its adapter dependencies. Preserve
+every integration assertion and run it on both runtimes; never skip or replace
+the real guard. A clean tracked snapshot without adapter packages must pass
+LongMemEval and its three demos; the installed live-offline suite must execute
+the moved case. No workflow, contributor prerequisite, package, lockfile,
+runtime or paid-grant change is permitted by this correction.
+
 Both Node22.16/24.15: focused, full LME/live/request-guard/generic, 3 LME demos,
 JSON and verified pinned Claude2.1.260 strict, diff hygiene. Primary actual diff
 inspection/reruns then independent Standards and Spec same original base and
@@ -237,15 +247,17 @@ is not paid-run authorization. Keep old terminal six/30-case experiments closed.
 ## Implementation checkpoint (offline candidate, not acceptance)
 
 `evaluation/longmemeval/qualified-source-scoring.mjs` owns only the new P scorer
-and aggregate exports. Its focused test uses actual scripted N reports in both
-orders, official request construction, evaluator-bound Python sidecar rendering,
-synthetic scoped-guard fake HTTP/temporary ledger settlement and independent
-three-case fixed-roster arithmetic. Existing N, legacy official scoring,
+and aggregate exports. Its LongMemEval focused test uses actual scripted N
+reports in both orders, official request construction, evaluator-bound Python
+sidecar rendering and independent three-case fixed-roster arithmetic; the
+live-offline focused test owns synthetic scoped-guard fake HTTP/temporary ledger
+settlement. Existing N, legacy official scoring,
 production core, live routes and guard entrypoints are unchanged. This is
 interface compatibility evidence, not semantic relevance or a transport grant
 for indexed capture.
 
-Worker-local checks on Node 22.16.0 and 24.15.0: full LongMemEval 124/124;
+Historical pre-suite-split worker-local checks on Node 22.16.0 and 24.15.0:
+full LongMemEval 124/124;
 offline live evidence 320 pass/30 opt-in skips; experiment request guard
 170/170; generic 112/112; three LongMemEval demos, JSON validation and
 locally pinned Claude Code 2.1.260 strict plugin validation pass. Independent
@@ -263,3 +275,21 @@ judgment, and refusal of the fully resolved forgery. Cleanly exited judgments
 followed by `global_halt` or `scope_contract_invalid` remain permitted. This
 is a record-consistency correction, not evidence that arbitrary injected
 scoring callbacks are authenticated.
+
+CI test-suite ownership correction: the first pushed `6679e1f` candidate's
+LongMemEval job failed to import `tiktoken` from `adapters/openai/index.mjs`.
+Its actual synthetic scoped-guard regression imported the adapter, but that
+isolated suite intentionally had no adapter dependency install. A clean
+tracked-file snapshot outside ancestor `node_modules` reproduced
+`ERR_MODULE_NOT_FOUND` on both Node 22.16.0 and 24.15.0. An unpublished
+`ee96e7f` candidate tried adding the pinned adapter install to CI and
+CONTRIBUTING; its push was refused because the available OAuth permission
+cannot change workflow files. No credential or authorization was altered.
+The final correction restores those files byte-for-byte to `6679e1f`, moves
+the complete actual fake-HTTP guard regression into the already-installed
+live-offline suite, and leaves only pure scorer tests in LongMemEval. A clean
+no-adapter snapshot passes focused 15/15 and full 123/123 LongMemEval, three
+demos, generic 112/112 and JSON validation on both runtimes. The installed
+live suite passes 351 total (321 passed, 30 opt-in skips) on Node 22.16.0 and
+24.15.0. Exact-head CI is still required; no runtime, lockfile, provider or
+transport grant changed.
