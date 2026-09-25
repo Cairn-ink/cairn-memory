@@ -16,7 +16,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 import {
   ExperimentBudgetError,
+  inspectExperimentBudgetSnapshot,
   reopenExperimentBudget,
+  transitionExperimentBudgetCaps,
 } from './index.mjs';
 import {
   DEFAULT_MODEL,
@@ -54,6 +56,7 @@ const BENCHMARK_KIND = Object.freeze({
 });
 const BENCHMARK_REQUEST_ALLOWANCE_VERSION = 'benchmark-request-allowance-v1';
 const BENCHMARK_BUDGET_EXTENSION_VERSION = 'benchmark-budget-extension-v1';
+const BENCHMARK_BUDGET_CHAIN_VERSION = 'benchmark-budget-chain-v1';
 const CASE_DEADLINE_VERSION = 'case-deadline-v1';
 const CASE_PHASES = Object.freeze(['generation', 'scoring']);
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
@@ -1621,6 +1624,172 @@ export function loadBenchmarkBudgetExtension(options) {
     verifyBenchmarkCheckpoint(extension, state);
     return extension;
   } finally { ledger.close(); }
+}
+
+function chainedBudgetFilename(directory, parentAuthorizationId) {
+  return path.join(directory, `experiment-benchmark-budget-chain-${parentAuthorizationId}.json`);
+}
+
+function chainedBudgetRecord(configuration, digest) {
+  return {
+    version: BENCHMARK_BUDGET_CHAIN_VERSION,
+    authorizationId: configuration.authorizationId,
+    priorLedger: configuration.priorLedger,
+    ledger: configuration.ledger,
+    policy: configuration.policy,
+    method: BENCHMARK_KIND.method,
+    stages: configuration.parentBudgetExtension.stages,
+    parentBudgetExtension: configuration.parentBudgetExtension,
+    checkpoint: configuration.checkpoint,
+    historicalDigest: digest,
+  };
+}
+
+function snapshotChainedBudgetAuthorization(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['oldLedger', 'policy', 'parentBudgetExtension', 'authorizationId',
+    'newLimitMicroUsd', 'newRequestCap', 'expectedCheckpoint'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  const priorLedger = structuredClone(snapshot.oldLedger);
+  priorLedger.directory = path.resolve(priorLedger.directory);
+  const parentBudgetExtension = snapshotExtension(snapshot.parentBudgetExtension);
+  if (priorLedger.limitMicroUsd !== 100_000_000
+    || snapshot.newLimitMicroUsd !== 200_000_000
+    || typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1)
+    || snapshot.newRequestCap <= priorLedger.requestCap) fail('invalid_extension');
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > priorLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > priorLedger.limitMicroUsd) fail('invalid_extension');
+  verifyBudgetExtension(parentBudgetExtension, priorLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < parentBudgetExtension.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < parentBudgetExtension.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, priorLedger,
+    ledger: { ...priorLedger, limitMicroUsd: 200_000_000, requestCap: snapshot.newRequestCap },
+    policy, parentBudgetExtension, checkpoint: snapshot.expectedCheckpoint });
+}
+
+function verifyChainedBudgetExtension(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method',
+    'stages', 'parentBudgetExtension', 'checkpoint', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_BUDGET_CHAIN_VERSION
+    || typeof extension.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(extension.authorizationId)
+    || typeof extension.historicalDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(extension.historicalDigest)) fail('invalid_extension');
+  let priorLedger;
+  let currentLedger;
+  let expectedLedger;
+  try {
+    validateConstructor({ ledger: extension.priorLedger, policy: extension.policy, fetchImpl: () => {} });
+    validateConstructor({ ledger: extension.ledger, policy: extension.policy, fetchImpl: () => {} });
+    priorLedger = structuredClone(extension.priorLedger);
+    currentLedger = structuredClone(extension.ledger);
+    expectedLedger = structuredClone(ledger);
+    priorLedger.directory = path.resolve(priorLedger.directory);
+    currentLedger.directory = path.resolve(currentLedger.directory);
+    expectedLedger.directory = path.resolve(expectedLedger.directory);
+  } catch { fail('invalid_extension'); }
+  const parent = snapshotExtension(extension.parentBudgetExtension);
+  if (canonical(currentLedger) !== canonical(expectedLedger)
+    || canonical(extension.policy) !== canonical(policy)
+    || currentLedger.directory !== priorLedger.directory
+    || currentLedger.runId !== priorLedger.runId
+    || priorLedger.limitMicroUsd !== 100_000_000
+    || currentLedger.limitMicroUsd !== 200_000_000
+    || currentLedger.requestCap <= priorLedger.requestCap
+    || extension.method !== BENCHMARK_KIND.method) fail('invalid_extension');
+  verifyBudgetExtension(parent, priorLedger, policy);
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount)
+    || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > priorLedger.requestCap
+    || extension.checkpoint.reservedMicroUsd > priorLedger.limitMicroUsd
+    || extension.checkpoint.requestCount < parent.checkpoint.requestCount
+    || extension.checkpoint.reservedMicroUsd < parent.checkpoint.reservedMicroUsd
+    || canonical(extension.stages) !== canonical(parent.stages)
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.parentBudgetAuthorizationId !== undefined
+      && parent.authorizationId !== expected.parentBudgetAuthorizationId)) fail('invalid_extension');
+  readBinding(chainedBudgetFilename(currentLedger.directory, parent.authorizationId), extension);
+  return extension;
+}
+
+export function authorizeChainedBenchmarkBudgetExtension(options) {
+  const configuration = snapshotChainedBudgetAuthorization(options);
+  const filename = chainedBudgetFilename(configuration.ledger.directory,
+    configuration.parentBudgetExtension.authorizationId);
+  let callbackFailure;
+  let extension;
+  try {
+    transitionExperimentBudgetCaps({ oldConfiguration: configuration.priorLedger,
+      newConfiguration: configuration.ledger, expectedCheckpoint: configuration.checkpoint,
+      authorize({ mode, state, checkpointAttempts }) {
+        try {
+          verifyBudgetExtension(configuration.parentBudgetExtension,
+            configuration.priorLedger, configuration.policy);
+          verifyBenchmarkCheckpoint(configuration.parentBudgetExtension, state);
+          extension = chainedBudgetRecord(configuration, historicalDigest(checkpointAttempts));
+          let existing;
+          try { existing = lstatSync(filename); }
+          catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+          if (existing) syncAuthorizationBinding(configuration.ledger.directory, filename, extension);
+          else {
+            if (mode !== 'transition') fail('policy_mismatch');
+            writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
+            readBinding(filename, extension);
+          }
+        } catch (error) {
+          if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+          throw error;
+        }
+      } });
+  } catch (error) {
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+  return deepFreeze(extension);
+}
+
+export function loadChainedBenchmarkBudgetExtension(options) {
+  let snapshot;
+  try { snapshot = structuredClone(options); } catch { fail('invalid_extension'); }
+  exactKeys(snapshot, ['ledger', 'policy', 'parentBudgetAuthorizationId', 'authorizationId', 'stages'],
+    'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  for (const id of [snapshot.parentBudgetAuthorizationId, snapshot.authorizationId]) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(id)) {
+      fail('invalid_extension');
+    }
+  }
+  const ledgerConfiguration = structuredClone(snapshot.ledger);
+  ledgerConfiguration.directory = path.resolve(ledgerConfiguration.directory);
+  const expectedStages = benchmarkConfiguration({ ledger: ledgerConfiguration, policy,
+    authorizationId: snapshot.authorizationId, stages: snapshot.stages }).stages;
+  const extension = snapshotExtension(readBinding(chainedBudgetFilename(ledgerConfiguration.directory,
+    snapshot.parentBudgetAuthorizationId)));
+  verifyChainedBudgetExtension(extension, ledgerConfiguration, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(expectedStages)) fail('policy_mismatch');
+  const state = inspectExperimentBudgetSnapshot(ledgerConfiguration);
+  if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) {
+    fail('extension_busy');
+  }
+  verifyBenchmarkCheckpoint(extension.parentBudgetExtension, state);
+  const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+  if (prefix.length !== extension.checkpoint.requestCount
+    || prefix.some((attempt) => attempt.outcome === null)
+    || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
+      !== extension.checkpoint.reservedMicroUsd
+    || historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+  return deepFreeze(extension);
 }
 
 // A separate operator action. It grants exactly the two chat-completion stages

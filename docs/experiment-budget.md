@@ -11,11 +11,11 @@ Use one new ledger per separately approved experiment, never a new ledger per
 session, subprocess or retry. All participating adapters must eventually open
 that same ledger with the same immutable run identity, limit and request cap.
 Creating a fresh ledger is not permission to refill historical spending authority.
-The benchmark's separately audited budget extension is the sole exception to
-immutable ceilings: its explicit campaign invocation conditionally changes the
+The benchmark's separately audited extension conditionally changed the
 existing run from the fixed cumulative US$50 ceiling to US$100 while retaining
-every row and binding. It is
-not exposed by these ordinary constructors; see
+every row and binding. A separately bound US$100→US$200 chain is now an offline
+prerequisite only; it has not been applied to an operator ledger or granted
+transport. Neither transition is exposed by the ordinary constructors; see
 [the guarded benchmark contract](experiment-request-guard.md#benchmark-monetary-budget-extension).
 
 ## Accounting contract
@@ -107,7 +107,9 @@ request; there is no built-in retry or permission to bypass the ledger.
 
 All methods are synchronous and throw on failure; they do not return the
 memory core's `{ok, value}` envelope. Exports are `createExperimentBudget`,
-`reopenExperimentBudget`, `ExperimentBudgetError`, `CHANNELS` and `OUTCOMES`.
+`reopenExperimentBudget`, `inspectExperimentBudgetSnapshot`,
+`transitionExperimentBudgetCaps`, `ExperimentBudgetError`, `CHANNELS` and
+`OUTCOMES`.
 The last two are frozen arrays containing the channel/outcome strings above.
 All option objects have closed key sets; arbitrary metadata is rejected.
 
@@ -135,6 +137,30 @@ requestCount, state, attempts}`. `state` is `open` or `overrun`; the ordered
 attempt array and each record are frozen too. Snapshots are detached observations,
 not live views: call `getState` again for a later coherent transaction snapshot.
 Valid operations on a closed handle throw `ledger_closed`; closing again is safe.
+
+The separate maintainer-only `inspectExperimentBudgetSnapshot(configuration)`
+checks an existing private ledger in a read-only SQLite transaction and returns
+that same frozen state shape without a writable handle. It does not require
+settled rows. `transitionExperimentBudgetCaps({oldConfiguration,
+newConfiguration, expectedCheckpoint, authorize})` is existing-only: the two
+configurations have the same resolved directory and run ID and strictly higher
+monetary and request caps. It owns a writer transaction, validates the exact
+settled checkpoint and immutable attempt prefix, and calls one synchronous
+trusted `authorize({mode, state, checkpointAttempts})` binding callback while
+locked. `mode` is `transition` at the old caps or `replay` at the exact new
+caps. Only an `undefined` callback return is valid. The helper updates the two
+cap fields conditionally, verifies the post-state and returns the frozen state;
+it never hands the callback a database handle. A callback is not a sandbox or
+operator authorization. The [benchmark chain](experiment-request-guard.md)
+owns the only intended campaign binding; direct helper use grants no transport.
+
+These two new APIs reject hard-linked database files and check path identity
+and private modes under the transaction. The transition uses an encoded
+`mode=rw` SQLite file URL, so disappearance before open cannot create a new
+database; special-character paths remain encoded. This is a bounded race
+defense, not isolation from a privileged same-user actor repeatedly swapping
+paths: Node SQLite does not expose the opened database file descriptor for an
+independent inode check. Older create/reopen paths are unchanged.
 
 `ExperimentBudgetError` has `name: 'ExperimentBudgetError'`, a fixed `code`, and
 the same code as `message`. The fixed code set is:
