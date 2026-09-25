@@ -233,3 +233,21 @@ operational cap extension belongs here. Before a later paid phase, independently
 verify remaining budget and any safe US$100→200 immutable chained transition;
 never reuse/overwrite the old single-transition capability. Passing this scorer
 is not paid-run authorization. Keep old terminal six/30-case experiments closed.
+
+## Implementation checkpoint (offline candidate, not acceptance)
+
+`evaluation/longmemeval/qualified-source-scoring.mjs` owns only the new P scorer
+and aggregate exports. Its focused test uses actual scripted N reports in both
+orders, official request construction, evaluator-bound Python sidecar rendering,
+synthetic scoped-guard fake HTTP/temporary ledger settlement and independent
+three-case fixed-roster arithmetic. Existing N, legacy official scoring,
+production core, live routes and guard entrypoints are unchanged. This is
+interface compatibility evidence, not semantic relevance or a transport grant
+for indexed capture.
+
+Worker-local checks on Node 22.16.0 and 24.15.0: full LongMemEval 123/123;
+offline live evidence 320 pass/30 opt-in skips; experiment request guard
+170/170; generic 112/112; three LongMemEval demos, JSON validation and
+locally pinned Claude Code 2.1.260 strict plugin validation pass. Independent
+review, exact-head CI, mergeability and any actual paid comparison are not
+claimed by this checkpoint.
