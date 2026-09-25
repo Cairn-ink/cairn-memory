@@ -109,7 +109,15 @@ cap remains USD 100 and the user ceiling USD 200. This packet changes none.
 This plan; `evaluation/experiment-budget/index.mjs`; focused new tests under
 `evaluation/experiment-budget/test/` and synthetic child helpers under its
 `testing/` directory; technical `docs/embedding-ledger-migration.md`; a narrow
-entry in `docs/limitations.md`. Share version-aware internal validation/handle
+entry in `docs/limitations.md`; and only the `test:experiment-budget` command
+in root `package.json`, appending the new focused test path to the existing
+ledger test path. Do not replace the old test, use a broad unrelated glob or
+alter dependencies, lockfiles, other scripts or CI workflow. Inspection found
+that this command explicitly names just `ledger.test.mjs`, so without this
+narrow integration the new migration tests would not run in CI. This scope
+addition is frozen before editing that command; L8's full-suite evidence and
+exact-head CI must include the new tests, not only a separate manual invocation.
+Share version-aware internal validation/handle
 logic where safe without widening legacy v1 behavior. No root dependency,
 storage-core schema, request-guard implementation, live runner, pricing,
 Python gateway, corpus, product host, release artifact or CI workflow change.
