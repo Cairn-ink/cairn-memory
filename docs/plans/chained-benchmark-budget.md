@@ -82,6 +82,9 @@ values before a cap update. The guard owns the candidate record outside the
 callback, and only returns it after successful helper completion. Guard-specific
 callback failures must remain their fixed guard errors, not disappear into a
 generic ledger error. Unknown callback errors get the ledger's fixed failure.
+The guard can capture a known guard error in its callback closure and rethrow
+it after the helper has rolled back/closed. Do not introduce a ledger-to-guard
+import cycle just to recognize that error class.
 
 The required behavior:
 
@@ -118,6 +121,11 @@ only unless a separately justified old-callsite change is required. New physical
 database-file checks must reject multiple hard links (`nlink !== 1`), not just
 symbolic links. Directory link counts have normal directory semantics; do not
 incorrectly require a directory's link count to equal one.
+These named identity/race tests are not an isolation guarantee against a
+privileged same-user adversary swapping paths repeatedly; Node's SQLite API
+does not expose a raw opened file descriptor for independent inode inspection.
+Keep that limitation explicit. Inject synthetic crash/fault tests in child
+processes or temporary test modules, not new production runtime fault hooks.
 
 Existing create/reopen behavior and old guard dispatch must not widen. Any
 necessary shared-code refactor is explicit in the frozen helper contract and
