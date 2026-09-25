@@ -128,12 +128,14 @@ own frozen acceptance; none is passed by compatibility or completion alone.
 Keep source text, case IDs, private paths, credentials and ledger contents out
 of public documentation.
 
-Checkpoint implementation owner: `checkpoint212`, GPT-6 Sol/high. Primary
-inspected this two-file delta and personally reran 106/106 generic tests,
-JSON validation and pinned Claude 2.1.260 validations on both Node22.16.0
-and24.15.0; all passed. The final verification-record update is the primary's
-bounded integration edit. The fixed review base remains `83a10c3`; both
-independent review axes and exact-head CI are required before delivery.
+Checkpoint implementation owner: `checkpoint212`, GPT-6 Sol/high. Independent
+Standards review caught a stale ROADMAP checkpoint; the author synchronized
+it with this plan and limitations. Primary inspected the resulting three-file
+checkpoint and personally reran 106/106 generic tests, JSON validation and
+pinned Claude 2.1.260 validations on both Node22.16.0 and24.15.0; all passed.
+The final verification-record update is the primary's bounded integration
+edit. The fixed review base remains `83a10c3`; both independent review axes
+and exact-head CI are required before delivery.
 
 ## Historical checkpoint — 2026-09-25 (after PR #229 / R5)
 

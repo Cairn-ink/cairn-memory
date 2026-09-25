@@ -36,12 +36,13 @@ claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
 Dated 2026-09-25: the [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
-records the latest after-#229/R5 checkpoint and preserves earlier results as
-history. PR #228 (`a5d76b3`, CI run `36109490910`) and PR #229 (`d302abe`, CI
-run `36112167726`) each have a recorded exact-head 17/17 pass and were open,
-unmerged at last check. This is not a fresh audit of every earlier PR. Finite
-S1 mechanics are accepted within their bounded scope; S2–S5 remain open. No
-S1–S5 sequence pass is claimed.
+records the latest after-#231 checkpoint; earlier results and failures remain
+dated historical evidence, not fresh reruns. PR #230 (`5ec4793`) passed two
+independent reviews, primary Node 22.16/24.15 gates and exact-head CI (21/21).
+PR #231 (`b781a3c`) passed two reviews, local dual-Node gates and exact-head CI
+run `36125459749` (21/21); both were open and unmerged at the last check, and
+#231 was mergeable. Finite S1 mechanics alone are accepted; S2–S5 remain open.
+No S1–S5 sequence pass is claimed.
 
 The R5 run stopped before scoring: seven requests, US$0.035 conservatively
 reserved, zero scored and six unresolved cases per arm. Unresolved is not a 0%
@@ -53,28 +54,35 @@ retry this consumed six-case roster or prior cohorts; the reserved 30-case set
 remains untouched. The historical audited 30-case results remain 15 correct,
 8 wrong and 7 unresolved.
 
-The latest independent read-only accounting audit recorded 12,640 terminal
-requests, US$86.206460 conservatively reserved and zero pending. The cumulative
-user ceiling remains US$200; the operational cap has been atomically extended
-from US$100 to US$200 with a 50,000-request cap. This is not the separate
+The current primary read-only accounting audit recorded 12,646 terminal
+requests, US$86.236460 conservatively reserved and zero pending. The cumulative
+user ceiling remains US$200; the operational cap was atomically extended from
+US$100 to US$200 with a 50,000-request cap. This is not the separate
 embedding-ledger migration, which remains incomplete. Keep at least US$70 for
 comparator work and US$10 for host work. No additional paid request, cohort
 retry, merge or release is authorized by this status update.
 
-A primary offline budget-boundary control through the real core, adapter and
-fake-HTTP guard produced one pass and one red on both Node 22.16 and 24.15. In
-each of four source turns, source text length increased from 113 to 114 UTF-16
-units. For the 114-unit fixture, the local partial preflight counted
-2,379 while full wire serialization was 7,032. This demonstrates an analogous
-schema-budget gap; it does not explain R5's distinct 8,701-over-7,024 global
-halt or the earlier prefix failure. The budget repair is in progress but not
-accepted; source-free observability is not implemented. Next: finish and accept
-the offline fix/diagnostic, separately freeze and pass a small synthetic
-real-API compatibility/count check within the existing authority, freeze a separate
-fresh development cohort without old retries, run a matched Mem0 comparison,
-then measure installed growth and onboarding. Protect the comparator and host
-reserves; none of these steps is a result yet. This documentation update makes
-no provider call and does not itself establish API compatibility.
+The bounded budget-boundary repair and source-free failure diagnostics are
+accepted mechanical changes in #230/#231; neither explains the historical R5
+halt or establishes semantic reliability. A separate synthetic installed-
+compatibility check, run on #230's accepted runtime before #231's remote CI
+completed, passed count, generation and core compilation on three fixed shapes.
+It made six requests, reserved US$0.030000, recorded US$0.005377 known actual
+cost, left three count-route costs unknown and zero pending. Its report is
+pinned by SHA-256
+`b75dcea6bb317adc988c846f6493a5703ca536b702b17d7f88aef0796b6d119f`. This is
+compatibility evidence only—not QA, recall, judging, a semantic score or a
+quality gain.
+
+Next, use operator-only preparation for a separately frozen fresh six-case
+development run: one case per question type, fixed seed, excluding all 124
+used or reserved cases. Keep the reserved 30-case set untouched and do not
+retry old cohorts. Before any run, recheck the frozen plan, accepted diagnostics,
+installed inputs and budget gates; cap development at US$29.935 (29,935,000
+micro-USD), preserving at least US$70 for comparator work and US$10 for host
+work. Then proceed separately to matched Mem0 comparison, installed-growth
+measurement and onboarding. S2–S5 remain unpassed; this status update makes no
+provider call or new paid authorization.
 
 The older after-#221 accounting, smoke completion, synthetic Mem0/index-window
 results and embedding-migration mechanics remain in the plan as historical
