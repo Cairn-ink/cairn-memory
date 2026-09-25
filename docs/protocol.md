@@ -1,5 +1,20 @@
 # Compatibility protocol v0.1
 
+### Private mixed-source-pair metadata boundary
+
+The evaluation-only `cairn-mem0-source-pair-case-v1` capability and durable
+one-shot claim live beside an existing bound-v2 experiment ledger. They contain
+the ledger/policy/parent, an authentic rowid-aware history checkpoint, opaque
+question and scope identifiers, fixed schedule, finite caps, declared artifact
+and protocol hashes, and the complete controlled text-wire profile. Hashes and
+identifiers are sensitive local metadata, not anonymized source or proof of an
+installed runtime. They contain no source/question/answer text, API key, raw
+provider body or exception. The process-local case/quota reports retain only
+bounded ordinals, arm/phase, counts and closed outcome reasons; they are not
+hosted telemetry or a public core/plugin/MCP field. A revocation signal fences
+late in-process requests but is not evidence that a native child exited.
+
+
 ### Optional embedded indexed source-window boundary
 
 Trusted embedded construction may select `captureSourcePolicy: 'indexed-windows-v1'`

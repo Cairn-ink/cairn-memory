@@ -627,6 +627,23 @@ the accepted set is unchanged. The guard assumes the provider keeps the last
 occurrence, as common JSON parsers do; this is not verified against the live
 endpoint.
 
+The separate `cairn-mem0-source-pair-v1` offline guard opens only an existing
+bound-v2 ledger after a complete 200M parent and rowid-aware checkpoint match.
+Its exact manifest binds protocol digests, declared Cairn/Mem0 artifact/config
+identities and the full controlled Mem0 wire profile. One private durable claim
+owns an ordered Cairn/Mem0 generation-then-scoring schedule. Six explicit
+routes share four ledger channels; every physical fake-HTTP request is validated,
+checked against finite phase and arm-case caps, reserved and settled without a
+refund. Mem0 body forwarding uses the wire validator's canonical JSON, unlike
+the legacy raw-body behavior above. A definite embedding batch 5xx can be
+returned in sanitized form for individually reserved fallback; known-priced
+invalid payload and trusted deadlines seal one case, while ambiguous transport,
+unknown usage and ledger faults halt globally. Case snapshots contain only
+bounded ordinals and closed statuses, not case IDs or source text. This guard
+does not run or contain a native child, hold keys, verify the declared artifact
+hashes against an installation, grant a paid launch or measure quality. See
+[its acceptance contract](plans/mixed-source-pair-guard.md).
+
 Never create a new ledger to replenish an existing experiment. Historical
 spending authority is not renewed by a merge, passing tests or this policy.
 There are no paid runs, user profiles, production writes, release or deployment

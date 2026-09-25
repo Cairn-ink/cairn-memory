@@ -110,15 +110,18 @@ The [mixed embedding lineage assertion](embedding-ledger-migration.md) can
 check a supplied v2 snapshot against the existing 200M parent and original
 historical prefix without opening a ledger. Its success does not authenticate
 the supplied current suffix or digest, bind a new grant, or authorize transport.
-Only a later guard using B4's in-transaction authentic snapshot can bind that
-full history; no such mixed guard is present in this gate.
+The separately versioned offline mixed guard now binds that full history from
+B4's authentic in-transaction snapshot, under a private one-shot claim. It
+still does not authenticate an installed native child or contain its requests.
 
 The [controlled Mem0 text-wire profile](plans/mem0-wire-contract.md) validates
 synthetic chat and embedding JSON, pinned token counts, bounded response shape
 and known usage cost without sending requests. Its caps are prospective
 engineering limits, not native Mem0 limits or a parity claim. The validator
 does not hold credentials, reserve money, grant transport, run native Mem0 or
-measure recall; the mixed guard and contained gateway remain separate work.
+measure recall. The mixed guard composes it with B4 only for synthetic fake-HTTP
+tests; a contained gateway, real compatibility and measured parity remain
+separate work.
 
 The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
 performance test at its unchanged five-second child-process timeout; the other

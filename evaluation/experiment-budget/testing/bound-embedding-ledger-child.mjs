@@ -32,7 +32,20 @@ assert.equal(lstatSync(config.directory).isSymbolicLink(), false);
 if (mode === 'old-guards-v2') {
   // No model work is exercised. The stub makes budget CI independent of the
   // optional adapter install while proving actual guard factory schema fences.
+  // The mixed guard imports its pure wire module at load time. This legacy-v1
+  // factory test must not load that module's eager CJS tokenizer through the
+  // ESM-only tiktoken stub; no mixed route is exercised here.
+  globalThis.__cairnOldV2WireStubCalls = 0;
+  const wireStub = 'const forbidden=()=>{globalThis.__cairnOldV2WireStubCalls++;'
+    + 'throw Error("unexpected mixed wire use")};'
+    + 'export const inspectMem0WireRequest=forbidden,inspectMem0WireResponse=forbidden,'
+    + 'mem0WireProfile=forbidden;'
+    + 'export class Mem0WireError extends Error {constructor(){forbidden()}}';
   registerHooks({ resolve(specifier, context, nextResolve) {
+    if (specifier === './mem0-wire.mjs'
+      && context.parentURL === new URL('../request-guard.mjs', import.meta.url).href) {
+      return { url: `data:text/javascript,${encodeURIComponent(wireStub)}`, shortCircuit: true };
+    }
     if (specifier === 'tiktoken') return { url: 'data:text/javascript,'
       + 'export function get_encoding(){return {encode(){throw Error("tokenizer used")}}}',
     shortCircuit: true };
@@ -134,6 +147,7 @@ if (mode === 'old-guards-v2') {
     try { const guard = run(); guard.close(); observed[name] = 'unexpected-success'; }
     catch (error) { observed[name] = error.code ?? 'unexpected'; }
   }
+  assert.equal(globalThis.__cairnOldV2WireStubCalls, 0);
   const claimsAbsent = [normal.directory, pairLedger.directory]
     .every(directory => readdirSync(directory).every(name => !name.endsWith('.claim.json')));
   process.stdout.write(`${JSON.stringify({ observed, claimsAbsent, physical,

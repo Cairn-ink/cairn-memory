@@ -17,7 +17,9 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   ExperimentBudgetError,
   inspectExperimentBudgetSnapshot,
+  inspectEmbeddingExperimentBudgetSnapshot,
   openBoundExperimentBudget,
+  openBoundEmbeddingExperimentBudget,
   reopenExperimentBudget,
   transitionExperimentBudgetCaps,
 } from './index.mjs';
@@ -32,6 +34,8 @@ import { schemasFor, schemasForQualificationInput } from '../../adapters/openai/
 import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
 import { createTransportDiagnosticsCollector } from './transport-diagnostics.mjs';
 import { installedCoreDeadlinePredicateFor } from './installed-core-deadline.mjs';
+import { inspectMem0WireRequest, inspectMem0WireResponse, mem0WireProfile,
+  Mem0WireError } from './mem0-wire.mjs';
 
 const BINDING_FILENAME = 'experiment-request-policy.json';
 const EXTENSION_FILENAME = 'experiment-extraction-extension.json';
@@ -66,6 +70,9 @@ const ADAPTIVE_SOURCE_PAIR_VERSION = 'qualified-source-pair-adaptive-case-v1';
 const ADAPTIVE_SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-adaptive-v1';
 const ADAPTIVE_QUALIFICATION_INPUT_PROFILE = 'adaptive-text-catalog-v1';
 const ADAPTIVE_SOURCE_PAIR_DOMAIN = 'cairn.lme.source-pair.adaptive.experiment.v1';
+const MIXED_SOURCE_PAIR_VERSION = 'cairn-mem0-source-pair-case-v1';
+const MIXED_SOURCE_PAIR_METHOD_PROFILE = 'cairn-mem0-source-pair-v1';
+const MIXED_SOURCE_PAIR_NAMES = Object.freeze(['cairn', 'mem0']);
 const SOURCE_PAIR_NAMES = Object.freeze(['qualified-prefix', 'indexed-windows']);
 const SOURCE_PAIR_QUESTION = /^lme-case-[0-9a-f]{64}$/u;
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
@@ -422,7 +429,7 @@ function validateHostBody(body, channel, byteLength) {
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
 function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
-  modelControl = false, pairArm = null, adaptiveQualification = false) {
+  modelControl = false, pairArm = null, adaptiveQualification = false, mixedCairn = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -462,7 +469,7 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   if (pairArm !== null) {
     if (!isPlainObject(input)) fail('unsupported_request');
     if (match?.[1] === 'extract'
-      && (pairArm === 'indexed-windows' ? input?.inputMode !== 'indexed-windows-v1'
+      && (pairArm === 'indexed-windows' || mixedCairn ? input?.inputMode !== 'indexed-windows-v1'
         : own(input, 'inputMode'))) fail('unsupported_request');
     if (match?.[1] === 'qualifyCandidates' && own(input, 'inputMode')
       && (!adaptiveQualification || input.inputMode !== 'text-catalog-v1')) fail('unsupported_request');
@@ -2169,6 +2176,297 @@ export function assertChainedBenchmarkParentForEmbeddingSnapshot(options) {
   verifyPairParent(extension, ledger, policy, detached.snapshot);
 }
 
+const MIXED_AUTHORIZATION_KEYS = Object.freeze(['ledger', 'policy', 'benchmarkExtension',
+  'authorizationId', 'executionId', 'checkpoint', 'manifest', 'roster', 'limits']);
+const MIXED_CAPABILITY_KEYS = Object.freeze(['version', 'authorizationId', 'executionId',
+  'ledger', 'policy', 'benchmarkExtension', 'checkpoint', 'manifest', 'roster', 'limits',
+  'rosterDigest', 'experimentDigest', 'schedule', 'methodProfile']);
+const MIXED_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u;
+
+function mixedCheckpoint(value, ledger) {
+  exactKeys(value, ['requestCount', 'reservedMicroUsd', 'historySha256'], 'invalid_capability');
+  if (!safeInteger(value.requestCount) || !safeInteger(value.reservedMicroUsd)
+    || value.requestCount > ledger.requestCap || value.reservedMicroUsd > ledger.limitMicroUsd
+    || typeof value.historySha256 !== 'string' || !SHA256_HEX.test(value.historySha256)) {
+    fail('invalid_capability');
+  }
+  return deepFreeze(value);
+}
+
+function mixedManifest(value) {
+  exactKeys(value, ['sourceProtocolSha256', 'contextProtocolSha256',
+    'answerProtocolSha256', 'scorerProtocolSha256', 'cairn', 'mem0'], 'invalid_capability');
+  for (const key of ['sourceProtocolSha256', 'contextProtocolSha256',
+    'answerProtocolSha256', 'scorerProtocolSha256']) {
+    if (typeof value[key] !== 'string' || !SHA256_HEX.test(value[key])) fail('invalid_capability');
+  }
+  exactKeys(value.cairn, ['runtimeArtifactSha256', 'adapterConfigurationSha256',
+    'qualificationInputProfile', 'captureSourcePolicy'], 'invalid_capability');
+  for (const key of ['runtimeArtifactSha256', 'adapterConfigurationSha256']) {
+    if (typeof value.cairn[key] !== 'string' || !SHA256_HEX.test(value.cairn[key])) {
+      fail('invalid_capability');
+    }
+  }
+  if (value.cairn.qualificationInputProfile !== ADAPTIVE_QUALIFICATION_INPUT_PROFILE
+    || value.cairn.captureSourcePolicy !== 'indexed-windows-v1') fail('invalid_capability');
+  exactKeys(value.mem0, ['version', 'sourceTreeSha256', 'dependencyLockSha256',
+    'configurationSha256', 'wireProfile'], 'invalid_capability');
+  if (value.mem0.version !== '2.2.0') fail('invalid_capability');
+  for (const key of ['sourceTreeSha256', 'dependencyLockSha256', 'configurationSha256']) {
+    if (typeof value.mem0[key] !== 'string' || !SHA256_HEX.test(value.mem0[key])) {
+      fail('invalid_capability');
+    }
+  }
+  if (canonical(value.mem0.wireProfile) !== canonical(mem0WireProfile())) fail('invalid_capability');
+  return deepFreeze(value);
+}
+
+function mixedRoster(value) {
+  denseArray(value, 1, 250);
+  const questions = new Set();
+  const scopes = new Set();
+  const result = value.map((entry) => {
+    exactKeys(entry, ['questionId', 'protocolDigest', 'armOrder', 'arms'], 'invalid_capability');
+    if (typeof entry.questionId !== 'string' || !SOURCE_PAIR_QUESTION.test(entry.questionId)
+      || questions.has(entry.questionId) || typeof entry.protocolDigest !== 'string'
+      || !SHA256_HEX.test(entry.protocolDigest)) fail('invalid_capability');
+    questions.add(entry.questionId);
+    denseArray(entry.armOrder, 2, 2);
+    if (new Set(entry.armOrder).size !== 2
+      || MIXED_SOURCE_PAIR_NAMES.some((name) => !entry.armOrder.includes(name))) fail('invalid_capability');
+    denseArray(entry.arms, 2, 2);
+    const arms = entry.arms.map((arm, index) => {
+      exactKeys(arm, ['name', 'scopeId'], 'invalid_capability');
+      const name = MIXED_SOURCE_PAIR_NAMES[index];
+      const scopeId = `lme-case-${pairHash('cairn.lme.mixed-source-pair.scope.v1',
+        [entry.questionId, name])}`;
+      if (arm.name !== name || arm.scopeId !== scopeId || scopes.has(scopeId)) fail('invalid_capability');
+      scopes.add(scopeId);
+      return { name, scopeId };
+    });
+    return { questionId: entry.questionId, protocolDigest: entry.protocolDigest,
+      armOrder: [...entry.armOrder], arms };
+  });
+  return deepFreeze(result);
+}
+
+function mixedLimits(value, ledger, checkpoint) {
+  exactKeys(value, ['phaseCaps', 'caseCaps', 'mem0TimeoutMs'], 'invalid_capability');
+  const leaf = (candidate) => {
+    exactKeys(candidate, ['requests', 'reservedMicroUsd'], 'invalid_capability');
+    if (!safeInteger(candidate.requests, 1) || !safeInteger(candidate.reservedMicroUsd, 1)) {
+      fail('invalid_capability');
+    }
+    return candidate;
+  };
+  exactKeys(value.phaseCaps, CASE_PHASES, 'invalid_capability');
+  for (const phase of CASE_PHASES) leaf(value.phaseCaps[phase]);
+  exactKeys(value.caseCaps, MIXED_SOURCE_PAIR_NAMES, 'invalid_capability');
+  for (const arm of MIXED_SOURCE_PAIR_NAMES) {
+    exactKeys(value.caseCaps[arm], CASE_PHASES, 'invalid_capability');
+    for (const phase of CASE_PHASES) {
+      const cap = leaf(value.caseCaps[arm][phase]);
+      if (cap.requests > value.phaseCaps[phase].requests
+        || cap.reservedMicroUsd > value.phaseCaps[phase].reservedMicroUsd) fail('invalid_capability');
+    }
+  }
+  const phases = CASE_PHASES.map((phase) => value.phaseCaps[phase]);
+  if (!safeInteger(value.mem0TimeoutMs, 1) || value.mem0TimeoutMs > 110_000
+    || BigInt(phases[0].requests) + BigInt(phases[1].requests)
+      > BigInt(ledger.requestCap - checkpoint.requestCount)
+    || BigInt(phases[0].reservedMicroUsd) + BigInt(phases[1].reservedMicroUsd)
+      > BigInt(ledger.limitMicroUsd - checkpoint.reservedMicroUsd)) fail('invalid_capability');
+  return deepFreeze(value);
+}
+
+function mixedSchedule(roster) {
+  const ordered = roster.flatMap((entry) => entry.armOrder.map((name) => ({
+    caseId: entry.arms.find((arm) => arm.name === name).scopeId,
+  })));
+  return deepFreeze([...ordered.map(({ caseId }) => ({ phase: 'generation', caseId })),
+    ...ordered.map(({ caseId }) => ({ phase: 'scoring', caseId }))]);
+}
+
+function mixedFilenames(directory, executionId) {
+  const stem = path.join(directory, `experiment-mixed-source-pair-${executionId}`);
+  return { binding: `${stem}.json`, claim: `${stem}.claim.json` };
+}
+
+function mixedConfiguration(value) {
+  exactKeys(value, MIXED_AUTHORIZATION_KEYS, 'invalid_capability');
+  const policy = validateConstructor({ ledger: value.ledger, policy: value.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(value.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  if (typeof value.authorizationId !== 'string' || !MIXED_ID.test(value.authorizationId)
+    || typeof value.executionId !== 'string' || !MIXED_ID.test(value.executionId)) {
+    fail('invalid_capability');
+  }
+  const benchmarkExtension = snapshotExtension(value.benchmarkExtension);
+  const checkpoint = mixedCheckpoint(value.checkpoint, ledger);
+  if (ledger.limitMicroUsd !== 200_000_000) fail('invalid_capability');
+  return { ledger, policy, benchmarkExtension, authorizationId: value.authorizationId,
+    executionId: value.executionId, checkpoint, manifest: mixedManifest(value.manifest),
+    roster: mixedRoster(value.roster), limits: mixedLimits(value.limits, ledger, checkpoint) };
+}
+
+function mixedCapabilityRecord(config) {
+  return { version: MIXED_SOURCE_PAIR_VERSION, authorizationId: config.authorizationId,
+    executionId: config.executionId, ledger: config.ledger, policy: config.policy,
+    benchmarkExtension: config.benchmarkExtension, checkpoint: config.checkpoint,
+    manifest: config.manifest, roster: config.roster, limits: config.limits,
+    rosterDigest: pairHash('cairn.lme.mixed-source-pair.roster.v1', config.roster),
+    experimentDigest: pairHash('cairn.lme.mixed-source-pair.experiment.v1', {
+      checkpoint: config.checkpoint, manifest: config.manifest, roster: config.roster,
+      limits: config.limits }), schedule: mixedSchedule(config.roster),
+    methodProfile: MIXED_SOURCE_PAIR_METHOD_PROFILE };
+}
+
+function verifyMixedCapability(capability, ledger, policy, benchmarkExtension) {
+  exactKeys(capability, MIXED_CAPABILITY_KEYS, 'invalid_capability');
+  const config = mixedConfiguration({ ledger, policy, benchmarkExtension,
+    authorizationId: capability.authorizationId, executionId: capability.executionId,
+    checkpoint: capability.checkpoint, manifest: capability.manifest,
+    roster: capability.roster, limits: capability.limits });
+  if (canonical(capability) !== canonical(mixedCapabilityRecord(config))) fail('invalid_capability');
+  readBinding(mixedFilenames(ledger.directory, capability.executionId).binding, capability);
+  return config;
+}
+
+function verifyMixedBaseline(capability, state) {
+  if (state.state !== 'open' || state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.historySha256 !== capability.checkpoint.historySha256
+    || state.attempts.some((attempt) => attempt.outcome === null)) fail('policy_mismatch');
+}
+
+function mixedParent(ledger, policy, benchmarkExtension, state) {
+  assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger, policy, benchmarkExtension,
+    snapshot: state });
+}
+
+export function inspectMixedSourcePairParent(options) {
+  const detached = detachEmbeddingLineage(options);
+  exactKeys(detached, ['ledger', 'policy', 'benchmarkExtension', 'checkpoint']);
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy,
+    fetchImpl: () => {} });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
+  const checkpoint = mixedCheckpoint(detached.checkpoint, ledger);
+  const state = inspectEmbeddingExperimentBudgetSnapshot(ledger);
+  mixedParent(ledger, policy, benchmarkExtension, state);
+  verifyMixedBaseline({ checkpoint }, state);
+  return deepFreeze(state);
+}
+
+export function authorizeMixedSourcePairCapability(options) {
+  const config = mixedConfiguration(detachEmbeddingLineage(options));
+  let callbackFailure;
+  let capability;
+  let handle;
+  let operationError;
+  try {
+    handle = openBoundEmbeddingExperimentBudget({ configuration: config.ledger, authorize(state) {
+      try {
+        mixedParent(config.ledger, config.policy, config.benchmarkExtension, state);
+        verifyMixedBaseline(config, state);
+        const files = mixedFilenames(config.ledger.directory, config.executionId);
+        assertPairClaimUnused(files.claim);
+        capability = mixedCapabilityRecord(config);
+        if (Buffer.byteLength(`${canonical(capability)}\n`) > 1_000_000) fail('invalid_capability');
+        let existing;
+        try { existing = lstatSync(files.binding); }
+        catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+        if (existing) syncAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        else writeAuthorizationBinding(config.ledger.directory, files.binding, capability);
+        readBinding(files.binding, capability);
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+  } catch (error) { operationError = callbackFailure ?? error; }
+  try { handle?.close(); } catch (error) { operationError ??= error; }
+  if (operationError) throw operationError;
+  return deepFreeze(capability);
+}
+
+function writeMixedClaim(directory, capability) {
+  const { claim } = mixedFilenames(directory, capability.executionId);
+  let descriptor;
+  try {
+    descriptor = openSync(claim,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  } catch (error) {
+    if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+    fail('unsafe_policy_binding');
+  }
+  let claimError;
+  try {
+    writeFileSync(descriptor, `${canonical({ version: 'mixed-source-pair-claim-v1',
+      executionId: capability.executionId, capabilityDigest: historicalDigest([capability]) })}\n`,
+    { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } catch (error) { claimError = error; }
+  try { closeSync(descriptor); } catch (error) { claimError ??= error; }
+  if (claimError) fail('unsafe_policy_binding');
+  try {
+    const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+  } catch { fail('unsafe_policy_binding'); }
+}
+
+export function createMixedSourcePairExperimentRequestGuard(options) {
+  let detached;
+  let fetchImpl;
+  let installedDeadline = null;
+  try {
+    const keys = ['ledger', 'policy', 'benchmarkExtension', 'mixedSourcePairCapability',
+      'fetchImpl', ...(own(options, 'installedCoreDeadline') ? ['installedCoreDeadline'] : [])];
+    exactAdaptiveKeys(options, keys);
+    const descriptors = Object.getOwnPropertyDescriptors(options);
+    fetchImpl = descriptors.fetchImpl.value;
+    if (typeof fetchImpl !== 'function') fail('invalid_options');
+    if (own(descriptors, 'installedCoreDeadline')) {
+      installedDeadline = installedCoreDeadlinePredicateFor(descriptors.installedCoreDeadline.value);
+    }
+    detached = detachEmbeddingLineage(Object.fromEntries(keys.filter((key) =>
+      !['fetchImpl', 'installedCoreDeadline'].includes(key)).map((key) => [key, descriptors[key].value])));
+  } catch { fail('invalid_options'); }
+  if (typeof fetchImpl !== 'function') fail('invalid_options');
+  const policy = validateConstructor({ ledger: detached.ledger, policy: detached.policy, fetchImpl });
+  const ledger = structuredClone(detached.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const benchmarkExtension = snapshotExtension(detached.benchmarkExtension);
+  const capability = deepFreeze(detached.mixedSourcePairCapability);
+  verifyMixedCapability(capability, ledger, policy, benchmarkExtension);
+  assertPairClaimUnused(mixedFilenames(ledger.directory, capability.executionId).claim);
+  let bound;
+  let callbackFailure;
+  let baseline;
+  try {
+    bound = openBoundEmbeddingExperimentBudget({ configuration: ledger, authorize(state) {
+      try {
+        verifyMixedCapability(capability, ledger, policy, benchmarkExtension);
+        mixedParent(ledger, policy, benchmarkExtension, state);
+        verifyMixedBaseline(capability, state);
+        writeMixedClaim(ledger.directory, capability);
+        baseline = deepFreeze(historicalRows(state));
+      } catch (error) {
+        if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+        throw error;
+      }
+    } });
+    return constructMixedSourcePairGuard({ ledger, policy, benchmarkExtension,
+      capability, fetchImpl, installedDeadline, bound, baseline });
+  } catch (error) {
+    try { bound?.close(); } catch { /* Preserve the first failure and consumed claim. */ }
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+}
+
 function pairConfiguration(options, authorization, adaptive = false) {
   const keys = authorization
     ? ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint',
@@ -3028,5 +3326,394 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     policy,
     stages,
     ...caseMethods,
+  });
+}
+
+function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, benchmarkExtension,
+  capability, fetchImpl, installedDeadline, bound: ledger, baseline }) {
+  const storage = new AsyncLocalStorage();
+  const inFlightIds = new Set();
+  const records = [];
+  const outcomes = [];
+  const scopeUsage = [];
+  const phaseUsed = { generation: { requests: 0, reservedMicroUsd: 0 },
+    scoring: { requests: 0, reservedMicroUsd: 0 } };
+  const sealedGeneration = new Set();
+  const armById = new Map(capability.roster.flatMap((entry) => entry.arms.map((arm) =>
+    [arm.scopeId, arm.name])));
+  let scheduleIndex = 0;
+  let activeScope = null;
+  let lastScopeSnapshot = null;
+  let inFlight = 0;
+  let halted = false;
+  let closed = false;
+  const detached = (value) => deepFreeze(structuredClone(value));
+  const leaf = () => ({ requests: 0, reservedMicroUsd: 0 });
+  const scopeSnapshot = (scope, status = scope.status, reason = scope.reason) =>
+    deepFreeze({ version: 'mixed-source-pair-scope-v1', ordinal: scope.ordinal,
+      phase: scope.phase, arm: scope.arm, status, reason });
+  const sealScope = (scope, reason) => {
+    if (scope.status !== 'active') return;
+    scope.status = 'failed';
+    scope.reason = reason;
+    scope.controller.abort('case_sealed');
+    lastScopeSnapshot = scopeSnapshot(scope);
+  };
+  const verify = () => {
+    verifyMixedCapability(capability, ledgerConfiguration, policy, benchmarkExtension);
+    const state = ledger.getState();
+    mixedParent(ledgerConfiguration, policy, benchmarkExtension, state);
+    const expected = [...baseline, ...records.map(({ attemptId, ledgerChannel,
+      reservedMicroUsd, outcome, actualMicroUsd }) => ({ attemptId, channel: ledgerChannel,
+      reservedMicroUsd, outcome, actualMicroUsd }))];
+    if (canonical(historicalRows(state)) !== canonical(expected)
+      || state.requestCount !== expected.length
+      || state.reservedMicroUsd !== expected.reduce((total, attempt) =>
+        total + attempt.reservedMicroUsd, 0)) fail('policy_mismatch');
+    if (state.attempts.some((attempt) => attempt.outcome === null
+      && !inFlightIds.has(attempt.attemptId))) fail('paid_work_halted');
+    if (state.state !== 'open') fail('paid_work_halted');
+    return state;
+  };
+  const guardedVerify = () => {
+    try { return verify(); } catch (error) { halted = true; throw error; }
+  };
+  try { guardedVerify(); } catch (error) { ledger.close(); throw error; }
+
+  const requireScope = (arm, phase) => {
+    const scope = storage.getStore();
+    if (!scope || scope !== activeScope || !scope.open) fail('case_scope_required');
+    if (scope.status !== 'active') fail('case_sealed');
+    if (scope.arm !== arm && arm !== 'either') fail('case_scope_violation');
+    if (scope.phase !== phase) fail('case_scope_violation');
+    if (inFlight !== 0) fail('guard_busy');
+    return scope;
+  };
+  const routeError = (error) => {
+    const scope = storage.getStore();
+    // An old ALS descendant cannot poison a new scope. All unexpected active
+    // route violations do halt, including malformed bodies and wrong arms.
+    if (scope && scope === activeScope && scope.open && scope.status === 'active'
+      && !['guard_busy', 'case_cap_exceeded'].includes(error?.code)) halted = true;
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    if (error instanceof Mem0WireError) fail(error.code);
+    fail('invalid_request');
+  };
+  const reserve = (scope, ledgerChannel, reservedMicroUsd, stage, model, endpoint) => {
+    const state = guardedVerify();
+    const phase = phaseUsed[scope.phase];
+    const phaseCap = capability.limits.phaseCaps[scope.phase];
+    const caseCap = capability.limits.caseCaps[scope.arm][scope.phase];
+    // Global ceilings win over a simultaneous local case exhaustion. B4 still
+    // makes the authoritative transactional decision immediately below.
+    if (state.requestCount >= ledgerConfiguration.requestCap) {
+      halted = true;
+      fail('request_cap_exceeded');
+    }
+    if (reservedMicroUsd > ledgerConfiguration.limitMicroUsd - state.reservedMicroUsd) {
+      halted = true;
+      fail('budget_exceeded');
+    }
+    if (phase.requests >= phaseCap.requests
+      || reservedMicroUsd > phaseCap.reservedMicroUsd - phase.reservedMicroUsd) {
+      halted = true;
+      fail('phase_cap_exceeded');
+    }
+    if (scope.used.requests >= caseCap.requests
+      || reservedMicroUsd > caseCap.reservedMicroUsd - scope.used.reservedMicroUsd) {
+      sealScope(scope, 'case_cap_exceeded');
+      fail('case_cap_exceeded');
+    }
+    const attemptId = randomUUID();
+    try { ledger.reserve({ attemptId, channel: ledgerChannel, reservedMicroUsd }); }
+    catch (error) { halted = true; throw error; }
+    phase.requests += 1;
+    phase.reservedMicroUsd += reservedMicroUsd;
+    scope.used.requests += 1;
+    scope.used.reservedMicroUsd += reservedMicroUsd;
+    const record = { attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd,
+      outcome: null, actualMicroUsd: null, inputTokens: null, outputTokens: null,
+      ordinal: scope.ordinal, phase: scope.phase, arm: scope.arm };
+    records.push(record);
+    inFlightIds.add(attemptId);
+    inFlight += 1;
+    return record;
+  };
+
+  const send = async ({ scope, stage, kind, channel, snapshot, requestRecord = null,
+    requestedOutputTokens = 0 }) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    requireScope(scope.arm, scope.phase);
+    const mem0 = requestRecord !== null;
+    const reservedMicroUsd = mem0 ? requestRecord.reservedMicroUsd : channel.reservedMicroUsd;
+    const record = reserve(scope, mem0 ? (kind === 'embedding' ? 'host-embedding'
+      : 'host-completion') : CHANNELS[kind], reservedMicroUsd, stage, channel.model,
+    channel.endpoint);
+    const controller = new AbortController();
+    let termination = null;
+    let settled = false;
+    const settle = (outcome, actualMicroUsd, inputTokens = null, outputTokens = null) => {
+      if (settled) return;
+      settled = true;
+      try { ledger.recordOutcome(actualMicroUsd === null
+        ? { attemptId: record.attemptId, outcome }
+        : { attemptId: record.attemptId, outcome, actualMicroUsd }); }
+      catch (error) { halted = true; throw error; }
+      record.outcome = outcome;
+      record.actualMicroUsd = actualMicroUsd;
+      record.inputTokens = inputTokens;
+      record.outputTokens = outputTokens;
+      deepFreeze(record);
+      if (actualMicroUsd !== null && actualMicroUsd > reservedMicroUsd) halted = true;
+    };
+    const onScopeAbort = () => {
+      if (termination === null) termination = scope.reason === 'cancelled' ? 'cancelled' : 'case_sealed';
+      controller.abort('request_aborted');
+    };
+    const onExternalAbort = () => {
+      if (termination === null) termination = (isCoreModelDeadlineSignal(snapshot.signal)
+        || installedDeadline?.(snapshot.signal)) ? 'deadline' : 'external_abort';
+      if (termination === 'deadline') sealScope(scope, 'deadline');
+      controller.abort('request_aborted');
+    };
+    scope.controller.signal.addEventListener('abort', onScopeAbort, { once: true });
+    snapshot.signal.addEventListener('abort', onExternalAbort, { once: true });
+    if (scope.controller.signal.aborted) onScopeAbort();
+    if (snapshot.signal.aborted) onExternalAbort();
+    const timeoutMs = mem0 ? capability.limits.mem0TimeoutMs : channel.timeoutMs;
+    const timer = setTimeout(() => {
+      if (termination === null) {
+        termination = 'deadline';
+        sealScope(scope, 'deadline');
+        controller.abort('request_timeout');
+      }
+    }, timeoutMs);
+    try {
+      let response;
+      try {
+        const pending = Promise.resolve().then(() => {
+          if (controller.signal.aborted) fail(abortError(controller.signal));
+          let physical;
+          try {
+            physical = fetchImpl(channel.endpoint, { method: 'POST', redirect: 'error',
+              signal: controller.signal, headers: snapshot.headers, body: snapshot.bodyText });
+          } catch (error) {
+            if (termination === null) termination = 'transport_failure';
+            throw error;
+          }
+          // Attach to the physical promise before any caller may revoke the
+          // scope. A rejection already queued on that promise wins the race.
+          return Promise.resolve(physical).catch((error) => {
+            if (termination === null) termination = 'transport_failure';
+            throw error;
+          });
+        }).catch((error) => {
+          if (termination === null) termination = 'transport_failure';
+          throw error;
+        });
+        pending.then((late) => {
+          if (controller.signal.aborted) {
+            try { Promise.resolve(late?.body?.cancel()).catch(() => {}); } catch { /* Late only. */ }
+          }
+        }, () => {});
+        response = await raceAbort(pending, controller.signal);
+      } catch {
+        settle('unknown', null);
+        if (['deadline', 'cancelled'].includes(termination)) {
+          fail(termination === 'cancelled' ? 'case_cancelled' : 'case_deadline_exceeded');
+        }
+        halted = true;
+        fail('transport_failed');
+      }
+      if (!(response instanceof Response)) {
+        settle('unknown', null); halted = true; fail('transport_failed');
+      }
+      let bytes;
+      try { bytes = await readBounded(response, channel.maxResponseBytes, controller.signal, () => {
+        if (termination === null) termination = 'body_failure';
+      }); }
+      catch {
+        if (termination === null) termination = 'body_failure';
+        settle('unknown', null);
+        if (['deadline', 'cancelled'].includes(termination)) {
+          fail(termination === 'cancelled' ? 'case_cancelled' : 'case_deadline_exceeded');
+        }
+        halted = true;
+        fail('transport_failed');
+      }
+      if (response.redirected) {
+        settle('unknown', null); halted = true; fail('http_failed');
+      }
+      if (response.status < 200 || response.status >= 300) {
+        if (mem0 && kind === 'embedding' && response.status >= 500 && response.status < 600) {
+          settle('failed', null);
+          guardedVerify();
+          if (requestRecord.itemCount > 1) {
+            return new Response('{"error":{"message":"embedding_batch_failed"}}', {
+              status: 500, headers: { 'content-type': 'application/json' } });
+          }
+          sealScope(scope, 'embedding_singleton_failed');
+          fail('http_failed');
+        }
+        settle('failed', null); halted = true; fail('http_failed');
+      }
+      if (mem0) {
+        let inspected;
+        try {
+          inspected = inspectMem0WireResponse(requestRecord,
+            new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          settle('unknown', null); halted = true; fail('invalid_response');
+        }
+        settle(inspected.usageWithinBounds && inspected.payloadValid ? 'succeeded' : 'failed',
+          inspected.actualMicroUsd, inspected.inputTokens, inspected.outputTokens);
+        if (halted || !inspected.usageWithinBounds) {
+          halted = true;
+          fail('usage_bound_exceeded');
+        }
+        if (!inspected.payloadValid) { sealScope(scope, 'invalid_payload'); fail('invalid_payload'); }
+        return new Response(inspected.bodyText, { status: 200,
+          headers: { 'content-type': 'application/json' } });
+      }
+      let json;
+      let usage;
+      try {
+        json = parseResponseJson(bytes, kind === 'cairnCount');
+        usage = parseUsage(json, kind, channel, requestedOutputTokens, true);
+      } catch {
+        settle('unknown', null); halted = true; fail('invalid_response');
+      }
+      if (kind === 'cairnCount' && !usage.withinBounds) {
+        settle('unknown', null); halted = true; fail('invalid_response');
+      }
+      settle(usage.withinBounds ? 'succeeded' : 'failed', usage.actualMicroUsd);
+      if (halted || !usage.withinBounds) { halted = true; fail('usage_bound_exceeded'); }
+      return new Response(bytes, { status: response.status, statusText: response.statusText,
+        headers: response.headers });
+    } finally {
+      clearTimeout(timer);
+      scope.controller.signal.removeEventListener('abort', onScopeAbort);
+      snapshot.signal.removeEventListener('abort', onExternalAbort);
+      inFlightIds.delete(record.attemptId);
+      inFlight -= 1;
+    }
+  };
+
+  const scopedRoute = (arm, phase, prepare) => async (url, requestOptions) => {
+    try {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      const scope = requireScope(arm, phase);
+      guardedVerify();
+      const prepared = prepare(url, requestOptions, scope);
+      return await send({ scope, ...prepared });
+    } catch (error) { routeError(error); }
+  };
+  const cairnFetch = scopedRoute('cairn', 'generation', (url, options, scope) => {
+    const text = url instanceof URL ? url.href : url;
+    const kind = text === policy.cairnCount.endpoint ? 'cairnCount'
+      : text === policy.cairnGeneration.endpoint ? 'cairnGeneration' : null;
+    if (kind === null) fail('invalid_request');
+    const channel = policy[kind];
+    const snapshot = requestSnapshot(url, options, channel);
+    validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
+      CANDIDATE_QUALIFICATION_KIND.method, false, 'cairn', true, true);
+    return { stage: kind === 'cairnCount' ? 'cairn-count' : 'cairn-generation', kind,
+      channel, snapshot, requestedOutputTokens: kind === 'cairnGeneration'
+        ? snapshot.body.max_output_tokens : 0 };
+  });
+  const mem0Route = (route) => scopedRoute('mem0', 'generation', (url, options) => {
+    const wire = mem0WireProfile()[route];
+    const channel = { ...wire, timeoutMs: capability.limits.mem0TimeoutMs };
+    const snapshot = requestSnapshot(url, options, channel);
+    const requestRecord = inspectMem0WireRequest(route, snapshot.bodyText);
+    snapshot.bodyText = requestRecord.bodyText;
+    return { stage: `mem0-${route}`, kind: route, channel, snapshot, requestRecord };
+  });
+  const stageRoute = (name, phase) => scopedRoute('either', phase, (url, options) => {
+    const channel = benchmarkExtension.stages[name];
+    const snapshot = requestSnapshot(url, options, channel);
+    validateStageBody(snapshot.body, channel);
+    return { stage: name, kind: 'hostCompletion', channel, snapshot,
+      requestedOutputTokens: snapshot.body.max_tokens };
+  });
+
+  return Object.freeze({
+    cairnFetch,
+    mem0ChatFetch: mem0Route('chat'),
+    mem0EmbeddingFetch: mem0Route('embedding'),
+    answerFetch: stageRoute('answer', 'generation'),
+    judgeFetch: stageRoute('judge', 'scoring'),
+    async hostFetch() { fail('unsupported_request'); },
+    async withCaseScope(identity, operation) {
+      if (closed) fail('guard_closed');
+      if (halted) fail('paid_work_halted');
+      let requested;
+      try { requested = detachEmbeddingLineage(identity); }
+      catch { fail('case_schedule_mismatch'); }
+      exactKeys(requested, ['phase', 'caseId'], 'case_schedule_mismatch');
+      if (typeof operation !== 'function') fail('invalid_options');
+      if (activeScope !== null) fail('case_scope_busy');
+      const expected = capability.schedule[scheduleIndex];
+      if (!expected || canonical(requested) !== canonical(expected)) fail('case_schedule_mismatch');
+      guardedVerify();
+      const arm = armById.get(expected.caseId);
+      const scope = { ordinal: scheduleIndex, phase: expected.phase, caseId: expected.caseId,
+        arm, used: leaf(), controller: new AbortController(), status: 'active',
+        reason: null, open: true };
+      if (scope.phase === 'scoring' && sealedGeneration.has(scope.caseId)) {
+        scope.status = 'blocked'; scope.reason = 'case_sealed'; scope.open = false;
+        lastScopeSnapshot = scopeSnapshot(scope);
+        outcomes.push({ ordinal: scope.ordinal, phase: scope.phase, arm, status: 'blocked',
+          reason: 'case_sealed' });
+        scheduleIndex += 1;
+        return Object.freeze({ status: 'blocked', reason: 'case_sealed', value: null });
+      }
+      activeScope = scope;
+      scopeUsage.push({ ordinal: scope.ordinal, phase: scope.phase, arm,
+        used: scope.used, cap: capability.limits.caseCaps[arm][scope.phase] });
+      lastScopeSnapshot = scopeSnapshot(scope);
+      const handle = Object.freeze({ snapshot: () => scopeSnapshot(scope),
+        revocationSignal: scope.controller.signal,
+        revoke: () => { if (scope.open && scope === activeScope) sealScope(scope, 'cancelled'); } });
+      let value;
+      let callbackError = false;
+      try { value = await storage.run(scope, () => operation(handle)); }
+      catch { callbackError = true; }
+      // Close and revoke first, so every descendant is fenced before any
+      // accounting boundary can advance to another scheduled arm.
+      scope.open = false;
+      scope.controller.abort('scope_closed');
+      activeScope = null;
+      if (callbackError && scope.status === 'active') halted = true;
+      if (inFlight !== 0 || records.some((record) => record.outcome === null)) halted = true;
+      if (halted) fail(callbackError ? 'callback_failed' : 'paid_work_halted');
+      guardedVerify();
+      if (scope.status === 'active') scope.status = 'completed';
+      lastScopeSnapshot = scopeSnapshot(scope);
+      if (scope.phase === 'generation' && scope.status === 'failed') sealedGeneration.add(scope.caseId);
+      outcomes.push({ ordinal: scope.ordinal, phase: scope.phase, arm,
+        status: scope.status, reason: scope.reason });
+      scheduleIndex += 1;
+      return Object.freeze({ status: scope.status, reason: scope.reason,
+        value: scope.status === 'completed' ? value : null });
+    },
+    caseScopeSnapshot() { return lastScopeSnapshot === null ? null : detached(lastScopeSnapshot); },
+    caseOutcomes() { return detached({ version: 'mixed-source-pair-outcomes-v1', scopes: outcomes }); },
+    quotaSnapshot() { return detached({ version: 'mixed-source-pair-quota-v1',
+      phaseUsed, phaseCaps: capability.limits.phaseCaps, scopes: scopeUsage }); },
+    attempts() { return detached(records); },
+    getState() { if (closed) fail('guard_closed'); return ledger.getState(); },
+    isHalted() { return halted; },
+    close() {
+      if (closed) return;
+      if (activeScope !== null || inFlight !== 0) fail('guard_busy');
+      closed = true;
+      ledger.close();
+    },
+    policy,
+    stages: benchmarkExtension.stages,
+    mixedSourcePairCapability: capability,
   });
 }
