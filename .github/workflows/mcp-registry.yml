@@ -3,7 +3,10 @@ name: Publish to MCP Registry
 # Manual dispatch only. Publishing lists the server on the public registry
 # and every aggregator that mirrors it, and ROADMAP.md has not yet cleared
 # broad promotion, so no tag or push starts this on its own. Once that gate
-# is lifted, a `push: tags: ["v*"]` trigger can be added here.
+# is lifted, publishing on `v*` tags needs three changes together: a
+# `push: tags: ["v*"]` trigger here, a tag ruleset so only maintainers can
+# create or update `v*` tags, and `v*` tags allowed in the mcp-registry
+# environment. See docs/registry.md.
 #
 # The ink.cairn namespace comes from the DNS TXT record at the cairn.ink
 # apex; the job logs in with the matching private key from the

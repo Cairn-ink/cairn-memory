@@ -56,6 +56,7 @@ KEY_FILE="$HOME/.config/cairn-ink/mcp-registry-ed25519.pem"
 PRIVATE_KEY="$(openssl pkey -in "${KEY_FILE}" -noout -text | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n')"
 ./mcp-publisher login dns --domain "${MY_DOMAIN}" --private-key "${PRIVATE_KEY}"
 ./mcp-publisher publish
+unset PRIVATE_KEY
 ```
 
 `PRIVATE_KEY` is the value the environment secret holds. `.gitignore` ignores
@@ -86,15 +87,20 @@ To rotate the key:
 The `Publish to MCP Registry` workflow runs only when someone dispatches it by
 hand; it is not tied to tags or pushes. Listing the server exposes it on the
 public registry and its aggregators, and `ROADMAP.md` has not cleared broad
-promotion, so that decision stays with a person. When the gate is lifted, add a
-`push: tags: ["v*"]` trigger to the workflow. Bump `version` in `server.json`
-before each publish; the registry rejects a version that already exists.
+promotion, so that decision stays with a person. When the gate is lifted,
+publishing on `v*` tags needs three changes together: a `push: tags: ["v*"]`
+trigger in the workflow, a tag ruleset so only maintainers can create or update
+`v*` tags, and `v*` tags allowed, alongside main, in the `mcp-registry`
+environment. Without the ruleset, anyone who can push a tag could run the
+workflow, or a modified copy of it, with the key. Bump `version` in
+`server.json` before each publish; the registry rejects a version that already
+exists.
 
 ## When the npm package ships
 
 1. Add `"mcpName": "ink.cairn/memory"` to the published package.
 2. Add a `packages` entry to `server.json` with `registryType: "npm"`, the scoped
    identifier, the version, and a `stdio` transport.
-3. Bump `version` and dispatch the workflow on main. A `v*` tag publishes only
-   after the tag trigger is added and the `mcp-registry` environment allows
-   `v*` tags.
+3. Bump `version` and dispatch the workflow on main. Publishing on a `v*` tag
+   instead needs the three changes described under
+   [Who can publish](#who-can-publish).
