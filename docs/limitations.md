@@ -43,6 +43,15 @@ best/worst unresolved bounds, not confidence intervals. Digests are not
 signatures; an arbitrary injected callback is not authenticated. A fresh
 roster, fully guarded capture and answer transports, resource caps and reviewed
 paid authorization remain separate gates. No new paid grant follows.
+The [offline cohort preparation helpers](source-pair-cohort-preparation.md)
+derive a disjoint six-case development membership and thirty reserved holdout
+IDs from a caller-supplied audited ID/type inventory, plus a conservative
+two-arm request/reservation ceiling. They cannot prove the exclusion list is
+complete, that prompts fit provider limits, that the needed source survives or
+that any answer will be correct. Reserving holdout IDs does not authorize
+opening their answers or running them. The source experiment isolates two
+exposure policies, not a matched Mem0 result or parity claim; the real ledger,
+prices, caps and comparator budget remain unaudited in this offline packet.
 
 The [offline synthetic evidence-lineage harness](plans/synthetic-evidence-lineage.md)
 uses scripted model callbacks and fresh temporary stores to show where fixed
