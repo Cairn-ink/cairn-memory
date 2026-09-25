@@ -245,9 +245,21 @@ production core, live routes and guard entrypoints are unchanged. This is
 interface compatibility evidence, not semantic relevance or a transport grant
 for indexed capture.
 
-Worker-local checks on Node 22.16.0 and 24.15.0: full LongMemEval 123/123;
+Worker-local checks on Node 22.16.0 and 24.15.0: full LongMemEval 124/124;
 offline live evidence 320 pass/30 opt-in skips; experiment request guard
 170/170; generic 112/112; three LongMemEval demos, JSON validation and
 locally pinned Claude Code 2.1.260 strict plugin validation pass. Independent
 review, exact-head CI, mergeability and any actual paid comparison are not
 claimed by this checkpoint.
+
+Correction checkpoint: the primary's additional behavioral probe against the
+initial `45c4171` candidate found that a forged
+`scope_execution_failed` aggregate row with both judgments resolved was
+accepted, even though a wrapper exit failure must discard its current slot.
+The narrow validator now requires an unresolved execution row with that
+reason. Synthetic tests exercise both declared orders, wrapper failure before
+or after entry in either slot, preservation of an earlier clean correct/wrong
+judgment, and refusal of the fully resolved forgery. Cleanly exited judgments
+followed by `global_halt` or `scope_contract_invalid` remain permitted. This
+is a record-consistency correction, not evidence that arbitrary injected
+scoring callbacks are authenticated.

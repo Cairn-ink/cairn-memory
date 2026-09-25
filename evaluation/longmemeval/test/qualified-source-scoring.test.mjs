@@ -681,3 +681,58 @@ test('P4 independent three-case fixed-roster golden and strict record consistenc
     ...first, schemaVersion: 'cairn-longmemeval-official-scoring-v2' }] }),
   { code: 'invalid_records' });
 });
+
+test('P4 scope-exit failure must invalidate a boundary slot in both orders', async () => {
+  for (const armOrder of [names, [...names].reverse()]) {
+    const sourceId = `source-scoring-exit-${armOrder[0]}`;
+    const input = fixture(sourceId, armOrder);
+    const run = await runQualifiedSourcePair(input.options);
+    const roster = [{ protocol: run.protocol, sourceQuestionId: sourceId, questionType: type }];
+    const fullyResolved = await scoreQualifiedSourcePair(scoring(run, input.evaluator).options);
+    const forged = clone(fullyResolved);
+    forged.executionStatus = 'halted';
+    forged.haltReason = 'scope_execution_failed';
+    assert.deepEqual(forged.arms.map((arm) => arm.judgment.status), ['resolved', 'resolved']);
+    assert.throws(() => aggregateQualifiedSourceScores({ roster, records: [forged] }),
+      { code: 'invalid_records' });
+    // Global or contract halt can occur after a clean final scope exit, so
+    // this refusal is intentionally specific to wrapper execution failure.
+    for (const haltReason of ['global_halt', 'scope_contract_invalid']) {
+      const afterCleanExit = { ...forged, haltReason };
+      assert.equal(aggregateQualifiedSourceScores({ roster, records: [afterCleanExit] })
+        .common.commonN, 1);
+    }
+    for (const boundaryIndex of [0, 1]) for (const position of ['before', 'after']) {
+      let entered = 0, judgeCalls = 0;
+      const scene = scoring(run, input.evaluator, {
+        judge: async () => { judgeCalls++; return { text: boundaryIndex === 1
+          && position === 'after' ? 'no' : 'yes' }; },
+        execution: scope([], { withCaseScope: async (identity, operation) => {
+          const current = entered++;
+          if (current === boundaryIndex && position === 'before') throw Error('private before');
+          const value = await operation({ snapshot: () => ({ version: 'case-deadline-scope-v1',
+            phase: identity.phase, caseId: identity.caseId, status: 'active' }) });
+          if (current === boundaryIndex) throw Error('private after');
+          return value;
+        } }),
+      });
+      const result = await scoreQualifiedSourcePair(scene.options);
+      assert.equal(result.executionStatus, 'halted');
+      assert.equal(result.haltReason, 'scope_execution_failed');
+      assert.deepEqual(result.attemptedOrder,
+        armOrder.slice(0, boundaryIndex + (position === 'after' ? 1 : 0)));
+      const failing = result.arms.find((arm) => arm.name === armOrder[boundaryIndex]);
+      assert.equal(failing.judgment.status, 'unresolved');
+      assert.equal(failing.judgment.stage, 'execution');
+      assert.equal(failing.judgment.reason, 'scope_execution_failed');
+      assert.equal(failing.judgment.attempted, position === 'after');
+      if (boundaryIndex === 1) {
+        const earlier = result.arms.find((arm) => arm.name === armOrder[0]);
+        assert.equal(earlier.judgment.status, 'resolved');
+        assert.equal(earlier.judgment.correct, position === 'before');
+      }
+      assert.equal(judgeCalls, boundaryIndex + (position === 'after' ? 1 : 0));
+      assert.equal(aggregateQualifiedSourceScores({ roster, records: [result] }).common.commonN, 0);
+    }
+  }
+});

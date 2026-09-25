@@ -526,6 +526,12 @@ function validateScoreRecord(record, expectedProtocol) {
     });
     if (enteredHaltRows.length > 1 || enteredHaltRows.length === 1
       && enteredHaltRows[0] !== record.attemptedOrder.at(-1)) fail('invalid_records');
+    // A scope wrapper failure always invalidates its own scoring slot. A
+    // cleanly exited final judgment may precede global/contract halt, but it
+    // cannot by itself account for scope_execution_failed.
+    if (record.haltReason === 'scope_execution_failed' && !record.arms.some((arm) =>
+      arm.judgment.status === 'unresolved' && arm.judgment.stage === 'execution'
+        && arm.judgment.reason === 'scope_execution_failed')) fail('invalid_records');
   }
   return record;
 }
