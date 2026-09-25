@@ -52,4 +52,41 @@ runtime, its results, roster or ledger. No merge, release or deployment.
 
 ## Evidence
 
-Pending minimized reproduction and diagnosis. No repair or passing CI claimed.
+On local pre-fix `bd554d91e8c65d5f30f4bd0ba4013e93aab551a6`, the exact named
+test passed once unchanged, then failed twice after only one 20 ms wait was
+inserted between its existing `setImmediate()` and second in-scope send. Both
+failures matched CI's `unhandledRejection` / `case_deadline_exceeded` at the
+same test. The pre-fix test source SHA-256 was
+`06e39e2aeddbe37a6d22f949d737e15582091648df4a0246693dbe35f286a0cf`.
+An independently runnable diagnostic harness is retained outside the repo at
+`/tmp/cairn-case-guard-ci-repro.mjs` (SHA-256
+`914bd0ceac7959ed8a20f8e8e39352bad8df137e9a8934d6255a223256bc1646`).
+It loads the frozen pre-fix source, injects that one wait at the same call site,
+and asserts the exact failure. Run `node /tmp/cairn-case-guard-ci-repro.mjs`;
+it uses the existing synthetic fake HTTP and temporary ledger only.
+
+Ranked predictions before probes were: (1) the fixture's 10 ms stage deadline
+expires during ordinary scheduling while the first fake transport is held;
+only widening this test's stage deadline should preserve the busy result; (2)
+the first promise has no handler until after the busy assertions, so immediate
+ownership should remove the unhandled rejection but cannot reverse an expired
+scope; (3) a guard or ledger race would still fail with an ample deadline;
+and (4) runner parallelism was required, which the isolated red already
+falsified. A 1,000 ms deadline with the 20 ms wait passed. With the 10 ms
+deadline and an immediate handler, the failure changed to the second send's
+`case_timeout_halted`, confirming that promise ownership alone was insufficient.
+
+The test-only correction uses a 5,000 ms stage deadline, retains the 20 ms
+scheduling gap, immediately owns the first promise, and releases and settles it
+in `finally` even if an assertion fails. It checks one transport and one
+reservation while the first call is held, `guard_busy` on the second send,
+successful first settlement, and a later successful frozen case before
+asserting the guard is not halted. Production deadline and guard behavior are
+unchanged. The named focused test and complete case-deadline file (21/21)
+passed on Node 22.16.0 and 24.15.0. The full request-guard suite passed
+169/169 on both. On both runtimes, `test:experiment-budget`,
+`demo:experiment-budget`, `demo:experiment-request-guard`, `npm test`, JSON
+validation and strict plugin validation passed. The existing isolated Mem0
+venv's actual-engine fake-HTTP preflight passed with 16 local requests and no
+key. See C9 for the parallel full-core/capture gates. Candidate commit,
+primary acceptance, independent reviews and new exact-head CI remain pending.

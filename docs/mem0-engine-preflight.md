@@ -113,8 +113,9 @@ comparison.
 
 ## What remains before S3
 
-Mem0's default inferred path creates additive facts; its attribution is a role,
-not an exact source passage. A fair historical comparison still needs a frozen
+This synthetic inferred-add check returned one fact; it did not evaluate
+update/delete quality. Its attribution was a role, not an exact source passage.
+A fair historical comparison still needs a frozen
 timestamp representation/replay strategy and equivalent evidence packing for
 both arms. `search` returns memories rather than generated answers, so a later
 harness can supply the same external answering prompt/model and scorer, while

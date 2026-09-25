@@ -171,3 +171,18 @@ The PR stays draft. The narrowly expanded delivery scope is frozen in
 one existing test file and its plan only, with no runtime or deadline-policy
 change. Diagnose and preserve the failure before choosing a fix. Earlier
 Mem0 preflight passes do not waive this gate.
+
+The same-call-site synthetic scheduling variant reproduced the exact CI
+`unhandledRejection` / `case_deadline_exceeded` twice. The narrow test-only
+correction and external pre-fix diagnostic harness are recorded under C1–C5
+in the linked plan; no production guard or timeout default changed. Its
+cross-runtime synthetic gates passed; primary acceptance and new exact-head
+CI remain pending.
+
+The independent Node 24 cumulative capture deadline CI failure has its own
+frozen [clock-isolation contract](capture-deadline-test-clock.md) C6–C9. Its
+same-call-site scheduling variant reproduced the retained failure; the
+test-only child now exercises the real core with a controlled monotonic clock
+and an import-time reset-per-stage mutation. No core runtime option or
+production clock changed. Combined cross-runtime verification passed; candidate
+review, primary acceptance and new exact-head CI remain pending.
