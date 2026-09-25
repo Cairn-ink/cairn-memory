@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — optional adaptive qualification text catalog
+
+- Add an explicit adapter opt-in that checks inline qualification first, then
+  shares exact repeated candidate text through a strict first-occurrence catalog
+  when needed. Original candidate IDs, roles, evidence-pool response decoding,
+  compiler and receipt anchors remain unchanged. Synthetic repeated-source
+  capture/fake-HTTP tests fit with one count and one generation; all-unique
+  oversized sources still refuse locally. Old guards deny named catalog mode.
+  No model, budget, paid cohort, default route or quality claim changes.
+
 ## Unreleased — bounded evidence-pool qualification wire
 
 - Version the candidate-qualification provider response as `evidence-pool-v1`:

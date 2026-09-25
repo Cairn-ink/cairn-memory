@@ -79,6 +79,15 @@ maximum-size unique-source synthetic fixture (five items × four 800-unit
 excerpts) still exceeds the unchanged local budget and refuses without
 truncation or fallback.
 
+An [optional adaptive text catalog](qualification-evidence-pool.md) shares only
+identical candidate text bytes in a local qualification request while retaining
+every candidate ID, role and receipt mapping. The repeated-source five-item ×
+four-receipt × 800-unit synthetic fake-HTTP fixture fits and compiles original
+anchors; an all-unique fixture remains too large. Additional local fit work is
+possible, but the physical qualifier schedule and token ceilings are unchanged.
+Existing guards deny this named mode, and no paid cohort, real-provider response,
+semantic quality or source-selection improvement has been demonstrated.
+
 New installed source-pair launches can retain bounded, source-free model
 failure events separately by case and arm, but the earlier halted R5 run did
 not collect them. Its prefix `invalid_model_output` remains unattributed.

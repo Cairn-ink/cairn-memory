@@ -631,6 +631,9 @@ test('archive inspection and installed hashes prove the explicit single-source r
   }
   for (const path of runtimeFiles) assert.ok(artifact.files.includes(path), path);
   assert.ok(artifact.files.includes('adapters/openai/qualification-evidence-pool.mjs'));
+  assert.ok(artifact.files.includes('core/qualification-text-catalog.mjs'));
+  assert.equal(artifact.sourceHashes['core/qualification-text-catalog.mjs'],
+    hash(new URL('../../core/qualification-text-catalog.mjs', import.meta.url)));
   assert.equal(artifact.files.includes('adapters/openai/test/qualification-pool-wire.mjs'), false);
   assert.equal(artifact.sourceHashes['adapters/openai/qualification-evidence-pool.mjs'],
     hash(new URL('../../adapters/openai/qualification-evidence-pool.mjs', import.meta.url)));
@@ -648,6 +651,37 @@ test('archive inspection and installed hashes prove the explicit single-source r
   assert.ok(statSync(installation.executable).mode & 0o111);
   t.diagnostic(JSON.stringify({ artifactPath: artifact.artifactPath, sha256: artifact.sha256,
     installationPath: installation.directory, executable: installation.executable, runtime: process.version }));
+});
+
+test('installed adaptive qualifier selects a repeated-source catalog and retains original anchors', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import { createHash } from 'node:crypto';
+    import { qualifyCandidateItems } from './node_modules/${packageName}/core/qualification-candidates.mjs';
+    import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const text=Array.from({length:13},(_,i)=>createHash('sha256').update('same-'+i).digest('hex')).join('').slice(0,800);
+    const items=Array.from({length:5},(_,i)=>({content:'Synthetic '+i,kind:'fact',confidence:0.8,
+      receipts:Array.from({length:4},(_,r)=>({client:'synthetic',sessionId:'session',eventId:'event-'+i+'-'+r,
+        role:r%2?'assistant':'user',excerpt:text}))}));
+    let sends=0; const model=createOpenAIModel({apiKey:'synthetic',qualificationInputMode:'adaptive-text-catalog-v1',
+      fetchImpl:async(url,options)=>{sends++;const body=JSON.parse(options.body);
+        const input=JSON.parse(body.input[0].content[0].text);
+        assert.equal(input.inputMode,'text-catalog-v1');assert.equal(input.texts.length,4);
+        if(url.endsWith('/input_tokens'))return Response.json({object:'response.input_tokens',input_tokens:120});
+        const fields=['subject','property','scope','applies','value','attribution','commitment'];
+        const output={wireVersion:'evidence-pool-v1',qualifications:Object.fromEntries(input.items.map(entry=>[
+          'item_'+entry.itemIndex,{itemIndex:entry.itemIndex,pool:[entry.candidates[0].candidateIndex],
+            ...Object.fromEntries(fields.map(field=>[field,{value:['attribution','commitment'].includes(field)?'unknown':null,
+              evidenceSlots:field==='subject'?[0]:[]}]))}]))};
+        return Response.json({object:'response',model:body.model,status:'completed',error:null,incomplete_details:null,
+          output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(output)}]}],
+          usage:{input_tokens:120,output_tokens:80,total_tokens:200}});
+      }});
+    const result=await qualifyCandidateItems(model,items);assert.equal(result.length,5);assert.equal(sends,2);
+    for(let i=0;i<5;i++){assert.equal(result[i].qualification.anchors[0].text,text.slice(0,200));
+      assert.equal(result[i].receipts[0].eventId,'event-'+i+'-0');}
+    console.log('installed_adaptive_catalog_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_adaptive_catalog_passed');
 });
 
 test('production shrinkwrap installs only the exact reviewed closure with upstream notices', () => {

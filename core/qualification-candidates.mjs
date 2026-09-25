@@ -3,6 +3,9 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { boundedText, denseArray, fail, object } from './validation.mjs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { countTokens } from './model-budget.mjs';
+import { createQualificationTextCatalog } from './qualification-text-catalog.mjs';
+import { isPromise } from 'node:util/types';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
@@ -135,11 +138,63 @@ export function compileQualificationCandidates(output, snapshot) {
   return compileQualification(output, snapshot);
 }
 
+function qualificationFit(model, deadline) {
+  deadline?.check();
+  if (model === null || model === undefined || !['object', 'function'].includes(typeof model)) return null;
+  const reject = () => { emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'token_count_unavailable');
+    fail('token_count_unavailable'); };
+  let descriptor;
+  try { descriptor = Object.getOwnPropertyDescriptor(model, 'fitsQualificationRequest'); }
+  catch { deadline?.check(); reject(); }
+  deadline?.check();
+  if (descriptor === undefined) return null;
+  if (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'function') {
+    reject();
+  }
+  const fit = descriptor.value;
+  return (request) => {
+    deadline?.check();
+    let logical;
+    try { logical = countTokens(model, JSON.stringify(request)); }
+    catch { deadline?.check(); reject(); }
+    finally { deadline?.check(); }
+    if (logical > 6000) return false;
+    let result;
+    try {
+      deadline?.check();
+      result = fit.call(model, structuredClone(request));
+      if (isPromise(result)) {
+        // Reject the nonboolean synchronously without leaving a native
+        // rejected promise unobserved. Never adopt arbitrary thenables.
+        Promise.prototype.then.call(result, undefined, () => {});
+      }
+    } catch { deadline?.check(); reject(); }
+    finally { deadline?.check(); }
+    if (typeof result !== 'boolean') reject();
+    return result;
+  };
+}
+
 export async function qualifyCandidateItems(model, items, deadline) {
   deadline?.check();
   const snapshot = createQualificationCandidateSnapshot(items);
   deadline?.check();
-  const output = await callModel(model, 'qualifyCandidates', system, snapshot.input,
+  let input = snapshot.input;
+  const fits = qualificationFit(model, deadline);
+  if (fits && !fits({ system, input, maxOutputTokens: 1024 })) {
+    deadline?.check();
+    let catalog;
+    try { catalog = createQualificationTextCatalog(snapshot.input); }
+    catch { deadline?.check(); fail('invalid_model_output'); }
+    deadline?.check();
+    if (!fits({ system, input: catalog.catalog, maxOutputTokens: 1024 })) {
+      emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'context_budget_exceeded');
+      fail('context_budget_exceeded');
+    }
+    input = catalog.catalog;
+  }
+  deadline?.check();
+  const output = await callModel(model, 'qualifyCandidates', system, input,
     { failureCode: 'qualification_failed', deadline });
   let reason = 'invalid_qualification';
   try {

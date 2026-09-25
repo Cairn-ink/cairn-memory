@@ -1,4 +1,5 @@
 import { denseArray, identifier, revision } from '../../core/validation.mjs';
+import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
 
 const string = { type: 'string' };
 const integer = { type: 'integer', minimum: 0 };
@@ -46,6 +47,7 @@ const qualificationSlots = (items, variants) => object(Object.fromEntries(
 // the named provider pool wire has been decoded back into this exact shape.
 export function qualificationCandidatesInlineSchema(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+  if (Object.hasOwn(input, 'inputMode')) invalid();
   const items = Array.from(list(input.items));
   if (!items.length || items.length > 5) invalid();
   const itemIndices = items.map(item => index(item?.itemIndex));
@@ -106,6 +108,17 @@ function qualificationEvidencePoolSchema(inline) {
   }));
   return { ...object({ wireVersion: { type: 'string', enum: ['evidence-pool-v1'] },
     qualifications: object(entries) }), $defs: definitions };
+}
+
+/** Opt-in catalog schema; the ordinary schemasFor path remains guard-safe. */
+export function schemasForQualificationInput(input) {
+  if (!input || typeof input !== 'object' || !Object.hasOwn(input, 'inputMode')) {
+    return schemasFor('qualifyCandidates', input);
+  }
+  try {
+    const { expanded } = snapshotQualificationTextCatalog(input);
+    return qualificationEvidencePoolSchema(qualificationCandidatesInlineSchema(expanded));
+  } catch { invalid(); }
 }
 
 function exactData(value, fields) {

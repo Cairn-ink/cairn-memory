@@ -10,6 +10,7 @@ import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
+import { createQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
 import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
 import { installedCoreDeadlinePredicateFor,
@@ -71,9 +72,9 @@ async function pendingDeadlineSignal(moduleUrl) {
   return { signal: await ready, finished };
 }
 
-async function adapterWire(method, input) {
+async function adapterWire(method, input, qualificationInputMode = 'inline') {
   const captured = [];
-  const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: async (url, options) => {
+  const model = createOpenAIModel({ apiKey: 'synthetic-only', qualificationInputMode, fetchImpl: async (url, options) => {
     const body = JSON.parse(options.body);
     captured.push({ url, body });
     if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
@@ -240,6 +241,10 @@ test('G3 wrong source arm, schema, method, model, stage and endpoint never reser
   const qualification = await adapterWire('qualifyCandidates', { items: [
     { itemIndex: 0, content: 'Synthetic preference', kind: 'preference',
       candidates: [{ candidateIndex: 0, role: 'user', text: 'Synthetic preference' }] }] });
+  const catalog = await adapterWire('qualifyCandidates', createQualificationTextCatalog({ items: [
+    { itemIndex: 0, content: 'Synthetic preference', kind: 'preference',
+      candidates: [{ candidateIndex: 0, role: 'user', text: 'Synthetic preference' }] }] }).catalog,
+  'adaptive-text-catalog-v1');
   const alteredSchema = structuredClone(prefix[1].body);
   alteredSchema.text.format.schema = {};
   const alteredMethod = structuredClone(prefix[1].body);
@@ -258,6 +263,8 @@ test('G3 wrong source arm, schema, method, model, stage and endpoint never reser
     { name: 'wrong-method', body: alteredMethod, url: prefix[1].url, slot: 0 },
     { name: 'wrong-model', body: alteredModel, url: prefix[1].url, slot: 0 },
     { name: 'qualification-input-mode', body: qualifiedWithMode, url: qualification[1].url, slot: 0 },
+    ...catalog.map((wire, index) => ({ name: `actual-catalog-${index ? 'generation' : 'count'}`,
+      body: wire.body, url: wire.url, slot: 0 })),
     ...['cairn_qualify', 'cairn_relate', 'cairn_reviewBasis', 'cairn_selectChecklist']
       .map((method) => ({ name: method, body: { ...prefix[1].body,
         text: { format: { ...prefix[1].body.text.format, name: method } } },

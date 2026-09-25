@@ -9,6 +9,7 @@ import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL } from '../../../adapters/openai/profiles.mjs';
 import { schemasFor } from '../../../adapters/openai/schemas.mjs';
 import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
+import { createQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
 import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
 import * as guards from '../request-guard.mjs';
 import { experimentPolicy } from '../../live/session.mjs';
@@ -73,6 +74,35 @@ test('CG1 all four old guards deny candidate count/generation after new capabili
   }
   assert.throws(() => make({ ...f, candidateQualificationExtension: qualificationExtension }, fetchImpl));
   assert.throws(() => guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension: f.candidateQualificationExtension }));
+  assert.equal(state(f.ledger).requestCount, 0);
+});
+
+test('CG1 actual opt-in catalog adapter wire remains denied by every old guard without reservation', async () => {
+  const catalog = createQualificationTextCatalog(input()).catalog;
+  const unguarded = [];
+  const model = createOpenAIModel({ apiKey: key, qualificationInputMode: 'adaptive-text-catalog-v1',
+    fetchImpl: fake(unguarded) });
+  assert.deepEqual(await model.qualifyCandidates({ system: 'Synthetic.', input: catalog,
+    maxOutputTokens: 1024, signal: new AbortController().signal }), output());
+  assert.equal(unguarded.length, 2);
+  assert.equal(JSON.parse(unguarded[0].body.input[0].content[0].text).inputMode, 'text-catalog-v1');
+  const f = fixture(); const extension = guards.authorizeExtractionModelExtension(f.authorization);
+  const reconciliationExtension = guards.authorizeReconciliationExtension({ ...f.authorization, extension });
+  const qualificationExtension = guards.authorizeQualificationExtension(f.authorization);
+  const base = { ledger: f.ledger, policy: f.policy, fetchImpl: () => assert.fail('No guarded transport') };
+  const all = [guards.createExperimentRequestGuard(base),
+    guards.createExtendedExperimentRequestGuard({ ...base, extension }),
+    guards.createReconciliationExperimentRequestGuard({ ...base, extension, reconciliationExtension }),
+    guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension }),
+    make(f, base.fetchImpl)];
+  for (const guard of all) {
+    try {
+      for (const wire of unguarded) {
+        await assert.rejects(guard.cairnFetch(wire.url, request(wire.body)), { code: 'unsupported_request' });
+      }
+      assert.equal(guard.getState().requestCount, 0);
+    } finally { guard.close(); }
+  }
   assert.equal(state(f.ledger).requestCount, 0);
 });
 
