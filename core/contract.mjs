@@ -139,7 +139,7 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model', 'captureQualification', 'captureRationale', 'captureEvidence',
+  object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
     'captureDeadlineMs']);
   const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
   const captureDeadlineMs = hasCaptureDeadline ? input.captureDeadlineMs : undefined;
@@ -155,6 +155,13 @@ export function openMemoryCore(input) {
   }
   const captureEvidence = input.captureEvidence;
   if (Object.hasOwn(input, 'captureEvidence') && (captureEvidence !== 'staged-v1' || captureQualification !== 'source-bound-v2')) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
+  const captureSourcePolicy = policyDescriptor?.value;
+  if (policyDescriptor && (!Object.hasOwn(policyDescriptor, 'value') ||
+      captureSourcePolicy !== 'indexed-windows-v1' || captureQualification !== 'source-bound-v2' ||
+      captureEvidence !== undefined || captureRationale !== undefined)) {
     throw new MemoryStoreError('invalid_input');
   }
   const model = input.model;
@@ -764,7 +771,8 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       if (captureEvidence && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
-      return success(await captureMessages({ model, captureQualification, captureRationale, captureEvidence,
+      return success(await captureMessages({ model, captureQualification, captureSourcePolicy,
+        captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: 125000,

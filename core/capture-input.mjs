@@ -4,7 +4,7 @@ import { boundedText, denseArray, fail, identifier, object, revision } from './v
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
 /** Copy trusted identity and normalize every message before claiming or calling a model. */
-export function captureSnapshot(input, captureQualification) {
+export function captureSnapshot(input, captureQualification, captureSourcePolicy) {
   try {
     const namespace = { ownerId: input.namespace.ownerId, scope: input.namespace.scope,
       projectId: input.namespace.projectId };
@@ -31,14 +31,17 @@ export function captureSnapshot(input, captureQualification) {
       fail('invalid_input');
     }
     const payloadDigest = createHash('sha256').update(JSON.stringify([
-      captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
+      captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
+        captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
       [namespace.ownerId, namespace.scope, namespace.projectId],
       client, eventId, sessionId, messages.map(({ id, role, content }) => [id, role, content]),
       ...(causal ? [[causal.streamId, causal.sequence]] : []),
       ...(captureQualification ? [captureQualification] : []),
+      ...(captureSourcePolicy ? [captureSourcePolicy, 'nonoverlap-800-v1'] : []),
     ]), 'utf8').digest('hex');
     return { namespace, client, eventId, sessionId, messages, payloadDigest, ...(causal ? { causal } : {}),
-      ...(captureQualification ? { captureQualification } : {}) };
+      ...(captureQualification ? { captureQualification } : {}),
+      ...(captureSourcePolicy ? { captureSourcePolicy } : {}) };
   } catch { fail('invalid_input'); }
 }
 

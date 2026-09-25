@@ -42,7 +42,7 @@ const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const qualificationSlots = (items, variants) => object(Object.fromEntries(
   items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
-function checklistRecord(value, fields) {
+function exactData(value, fields) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
       Reflect.ownKeys(value).length !== fields.length) invalid();
@@ -50,6 +50,40 @@ function checklistRecord(value, fields) {
     const descriptor = Object.getOwnPropertyDescriptor(value, field);
     if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
   }
+}
+
+/** A detached indexed envelope, checked before serialization can erase bad fields. */
+export function snapshotIndexedExtractInput(input) {
+  exactData(input, ['inputMode', 'messages']);
+  if (input.inputMode !== 'indexed-windows-v1') invalid();
+  const messages = input.messages;
+  try { denseArray(messages, 1, 64); } catch { invalid(); }
+  if (Reflect.ownKeys(messages).length !== messages.length + 1) invalid();
+  const copied = [];
+  let messageIndex = -1, groupUnits = 0, totalUnits = 0, role;
+  for (let position = 0; position < messages.length; position++) {
+    const descriptor = Object.getOwnPropertyDescriptor(messages, String(position));
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+    const message = descriptor.value;
+    exactData(message, ['index', 'messageIndex', 'role', 'content']);
+    if (message.index !== position || !Number.isSafeInteger(message.messageIndex) ||
+        message.messageIndex < 0 || message.messageIndex > 23 ||
+        !['user', 'assistant'].includes(message.role) ||
+        typeof message.content !== 'string' || !message.content.length ||
+        !message.content.isWellFormed() || message.content.length > 800) invalid();
+    if (message.messageIndex !== messageIndex) {
+      if (message.messageIndex !== messageIndex + 1) invalid();
+      messageIndex = message.messageIndex; groupUnits = 0; role = message.role;
+    } else if (message.role !== role) invalid();
+    groupUnits += message.content.length; totalUnits += message.content.length;
+    if (groupUnits > 4000 || totalUnits > 20000) invalid();
+    copied.push({ index: position, messageIndex, role: message.role, content: message.content });
+  }
+  return { inputMode: 'indexed-windows-v1', messages: copied };
+}
+
+function checklistRecord(value, fields) {
+  exactData(value, fields);
 }
 
 function checklistSchema(input) {
@@ -246,6 +280,12 @@ export function schemasFor(method, input) {
   if (!Object.hasOwn(schemas, method)) invalid();
   if (method === 'extract') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+    if (Object.hasOwn(input, 'inputMode')) {
+      const indexed = snapshotIndexedExtractInput(input);
+      const schema = structuredClone(schemas.extract);
+      schema.properties.items.items.properties.sourceIndices.items.maximum = indexed.messages.length - 1;
+      return schema;
+    }
     const messages = list(input.messages);
     if (messages.length > 24) invalid();
     for (let position = 0; position < messages.length; position++) {

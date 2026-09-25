@@ -167,7 +167,9 @@ Preserve the six-case smoke and original ledger unchanged; no new API spending.
 
 ## Evidence and resume
 
-Planning only. Dependency acceptance and worker implementation are pending.
+This paragraph was the historical pre-implementation checkpoint; dependency
+acceptance is recorded in the dispatch, worker candidate verification is complete,
+and primary acceptance remains pending.
 At resume check the base PR's exact head/CI, this worktree's status, and the
 latest evidence. Never infer a paid run is unlaunched from a missing report.
 The prior six-case run is terminal and must not be retried.
@@ -178,3 +180,71 @@ acceptance, rather than silently reducing the catalog or raising budgets.
 For W1, reject combinations with any active rationale/evidence mode even when
 inherited: the existing constructor reads those values unconditionally.
 Do not change inherited legacy behavior when the new policy is omitted.
+
+## Implementation evidence — 2026-09-25
+
+GPT-6 Sol/high owns the bounded implementation against fixed base
+`330ecb13555832003015c5850905860903bfacc4`; primary retains acceptance,
+independent reviews and delivery. Changed entrypoints and test owners:
+
+- `openMemoryCore` validates the own opt-in before runtime creation; core
+  `capture` passes its snapshot to `captureMessages`. New
+  `core/test/source-windows.test.mjs` owns constructor, legacy controls,
+  replay, ordered state, source binding, mutation, lifecycle and deadline cases.
+- `captureSnapshot` binds the opt-in digest domain; `sourceWindowCatalog` derives
+  exact canonical passages before claim; `extractedWindowItems` resolves model
+  indices through the trusted catalog before v2 qualification/admission. The
+  same core test owns boundary, duplicate and atomic-rejection cases.
+- `createOpenAIModel.extract` validates the opt-in envelope before JSON
+  serialization; `schemasFor` constrains the actual catalog range. New
+  `adapters/openai/test/indexed-windows.test.mjs` owns fake-HTTP bounds,
+  mutations and baseline wire checks. New
+  `packaging/test/source-windows.test.mjs` owns installed actual-adapter
+  fake-HTTP tail selection; `packaging/artifact-files.json` includes the new
+  runtime helper and prompt. Existing public comparison source verification
+  remains the prefix-only owner and is not modified.
+
+The baseline-330 ordinary extract count-body SHA-256 is
+`572ea5375fe154584aad4767e498cdf8e3bdac0ce4c0860464e3aefc56e01c84`;
+the three baseline capture digests are pinned in the new core test. New tests
+exercise an actual core tail capture, not merely unknown-option rejection.
+For an independent pre-fix red probe, from an unchanged checkout at base 330,
+the following actual v2 capture asks for global tail index 1 without the new
+policy. It prints `invalid_model_output` (no stored tail receipt); the new
+opt-in actual-core test passes its corresponding tail selection and cold
+source-read assertions. The probe uses only a synthetic temporary database.
+
+```sh
+node --input-type=module -e 'import {mkdtempSync} from "node:fs"; import {tmpdir} from "node:os"; import {join} from "node:path"; import {openMemoryCore} from "./core/contract.mjs"; const core=openMemoryCore({path:join(mkdtempSync(join(tmpdir(),"cairn-window-red-")),"store.sqlite"),captureQualification:"source-bound-v2",model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[{content:"Synthetic tail",kind:"context",confidence:0.8,sourceIndices:[1]}]})}}); const result=await core.capture({namespace:{ownerId:"synthetic",scope:"personal",projectId:null},client:"synthetic",sessionId:"session",eventId:"batch",messages:[{id:"source",role:"user",content:"x".repeat(800)+"TAIL"}]}); core.close(); console.log(result.ok?"unexpected_success":result.error.code); if(result.ok||result.error.code!=="invalid_model_output")process.exitCode=2'
+```
+
+This evidence covers scripted source selection only; quality, staged evidence,
+rationale integration, public benchmark versioning and paid comparison remain
+unassessed or unsupported as specified above.
+
+Focused/final worker verification on the scoped worktree (all synthetic, no
+provider key or user corpus):
+
+| Gate | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `node --test core/test/source-windows.test.mjs` | 12/12 pass | 12/12 pass |
+| `node --test --test-reporter=dot core/test/*.test.mjs` | exit 0 | exit 0 |
+| `npm run test:openai` | 210/210 pass | 210/210 pass |
+| `npm run test:artifact` after isolated dependency/cache preparation | 71/71 pass | 71/71 pass |
+| `npm run test:longmemeval` | 75/75 pass | 75/75 pass |
+| `npm run test:live-evidence-offline` | 320 pass, 30 skipped, 0 fail | 320 pass, 30 skipped, 0 fail |
+| `npm run test:mcp` | 91/91 pass | 91/91 pass |
+| `npm test`; `npm run validate`; isolated locked strict plugin validation | 112/112; pass; pass | 112/112; pass; pass |
+
+The full core gate used each runtime's explicit binary; the focused new
+file was rerun after its final accessor/nonrepresentable-window assertions.
+The isolated plugin validator's local Claude Code binary reported pinned
+version 2.1.260 on both runtimes. On each runtime the scripted `demo:store`,
+`demo:moc`, `demo:recall`, `demo:admission`, `demo:capture`, `demo:history`,
+`demo:conflicts`, `demo:continuation`, `demo:openai-offline`,
+`demo:longmemeval-comparison` and `demo:longmemeval-public` all exited 0.
+The explicit baseline-330 real-core tail probe above printed
+`invalid_model_output`; the new actual-core tail test passed. No scored
+comparison, source-window public-verifier version, installed Hermes test or
+quality promotion is inferred from these checks. Primary acceptance, both
+independent review axes and exact-head CI remain separate pending gates.

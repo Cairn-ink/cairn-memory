@@ -1,7 +1,7 @@
 import { get_encoding } from 'tiktoken';
 import { MemoryStoreError } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
-import { schemasFor } from './schemas.mjs';
+import { schemasFor, snapshotIndexedExtractInput } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 import { classificationWire } from './classification-wire.mjs';
 
@@ -186,7 +186,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     try {
       // Validate before JSON serialization can erase sparse/custom fields.
       if (method === 'selectChecklist') schemasFor(method, input);
-      const originalSerializedInput = JSON.stringify(input);
+      const prevalidated = method === 'extract' && Object.hasOwn(input, 'inputMode')
+        ? snapshotIndexedExtractInput(input) : input;
+      const originalSerializedInput = JSON.stringify(prevalidated);
       snapshot = JSON.parse(originalSerializedInput);
       schema = schemasFor(method, snapshot);
       instructions = qualificationInstructions(method, system, snapshot);

@@ -1,5 +1,20 @@
 # Compatibility protocol v0.1
 
+### Optional embedded indexed source-window boundary
+
+Trusted embedded construction may select `captureSourcePolicy: 'indexed-windows-v1'`
+only with `source-bound-v2` qualification and without active rationale or
+staged evidence. Core sends the configured extractor bounded canonical
+window text, global/message-group indices and claimed roles, then binds its
+selected indices to original local receipt identity. This can expose later
+parts of submitted messages to the configured provider; hosts must assess
+that personal-data exposure. Window offsets are transient normalized-text
+positions, never claimed raw-source offsets or persisted fields. The success
+metadata gives only bounded catalog counts and unassessed semantic coverage.
+No new HTTP/plugin/MCP/native capture field, telemetry, permission, model,
+archive, storage schema or default is introduced. See
+[indexed source windows](retained-source-windows.md).
+
 ### Offline synthetic evidence-lineage boundary
 
 The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through
