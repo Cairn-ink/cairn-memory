@@ -37,8 +37,9 @@ cap remains USD 100 and the user ceiling USD 200. This packet changes none.
   directory/runId/limitMicroUsd/requestCap tuple, detached once for each new API
   from exact own-data plain-object fields. Reject accessors/custom fields and
   malformed options before filesystem access. Inspection accepts an exact
-  valid v1 or v2 ledger and returns only schemaVersion, the common public
-  accounting checkpoint, and historySha256; never source text, file content,
+  valid v1 or v2 ledger and returns exactly schemaVersion, runId, limitMicroUsd,
+  requestCap, reservedMicroUsd, requestCount, state, and historySha256; never
+  attempt details, source text, file content,
   credentials or a new authority to spend. Reopen requires v2 and never creates
   or upgrades. Its handle retains the existing reserve/outcome/state/close
   semantics but additionally accepts `host-embedding`.
