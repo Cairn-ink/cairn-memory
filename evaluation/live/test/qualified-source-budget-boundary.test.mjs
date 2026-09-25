@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import { countOpenAITokens, createOpenAIModel } from '../../../adapters/openai/index.mjs';
-import { DEFAULT_MODEL } from '../../../adapters/openai/profiles.mjs';
-import { schemasFor } from '../../../adapters/openai/schemas.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
 import { createExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
   authorizeBenchmarkBudgetExtension, authorizeQualifiedSourcePairCapability,
@@ -35,6 +35,20 @@ function sourceCase(size, turnCount = 12, sourceId = 'synthetic-budget-case') {
   const namespace = { ownerId: 'synthetic-budget-boundary', scope: 'project', projectId: questionId };
   return { history, question, namespace, answerModel: 'gpt-4.1-mini-2025-04-14',
     limits: LIMITS, armOrder: ['indexed-windows', 'qualified-prefix'] };
+}
+
+function uniqueExcerpt(itemIndex, receiptIndex) {
+  return Array.from({ length: 13 }, (_, chunkIndex) => createHash('sha256')
+    .update(`synthetic-${itemIndex}-${receiptIndex}-${chunkIndex}`).digest('hex')).join('').slice(0, 800);
+}
+
+function capacityItems(itemCount) {
+  return Array.from({ length: itemCount }, (_, itemIndex) => ({
+    content: `Synthetic capacity item ${itemIndex}.`, kind: 'context', confidence: 0.8,
+    receipts: Array.from({ length: 4 }, (_, receiptIndex) => ({ client: 'synthetic',
+      sessionId: 'capacity', eventId: `event-${itemIndex}-${receiptIndex}`,
+      role: 'user', excerpt: uniqueExcerpt(itemIndex, receiptIndex) })),
+  }));
 }
 
 function ledger(t, root, data) {
@@ -67,7 +81,7 @@ function ledger(t, root, data) {
     scopeId: protocol.arms.find((arm) => arm.name === 'indexed-windows').scopeId };
 }
 
-function modelOutput(body, extractionItems, candidateSources) {
+function modelOutput(body, extractionItems, candidateSources, citedCandidates) {
   const method = body.text.format.name.replace(/^cairn_/u, '');
   if (method === 'extract') {
     const input = JSON.parse(body.input[0].content[0].text);
@@ -83,12 +97,13 @@ function modelOutput(body, extractionItems, candidateSources) {
     const input = JSON.parse(body.input[0].content[0].text);
     const empty = { value: null, evidenceIndices: [] };
     const unknown = { value: 'unknown', evidenceIndices: [] };
-    return { qualifications: Object.fromEntries(input.items.map((entry) => [
-      `item_${entry.itemIndex}`, { itemIndex: entry.itemIndex,
+    return qualificationPoolWire(input, { qualifications: input.items.map((entry) => ({
+      itemIndex: entry.itemIndex,
         subject: empty, property: empty, scope: empty, applies: empty,
-        value: { value: null, evidenceIndices: [entry.candidates[0].candidateIndex] },
-        attribution: unknown, commitment: unknown },
-    ])) };
+        value: { value: null, evidenceIndices: entry.candidates.slice(0, citedCandidates)
+          .map(candidate => candidate.candidateIndex) },
+        attribution: unknown, commitment: unknown,
+    })) });
   }
   if (method === 'classify') {
     const input = JSON.parse(body.input[0].content[0].text);
@@ -99,7 +114,7 @@ function modelOutput(body, extractionItems, candidateSources) {
 }
 
 async function capture(t, { size, turnCount, extractionItems, candidateSources = 4,
-  followupSize = null }) {
+  citedCandidates = 1, followupSize = null }) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-qualified-budget-boundary-'));
   const data = sourceCase(size, turnCount);
   const f = ledger(t, root, data);
@@ -140,7 +155,7 @@ async function capture(t, { size, turnCount, extractionItems, candidateSources =
         return Response.json({ object: 'response.input_tokens', input_tokens: inputTokens });
       }
       calls.push({ route: 'generation', method, inputTokens: counts.get(method) });
-      const output = modelOutput(body, extractionItems, candidateSources);
+      const output = modelOutput(body, extractionItems, candidateSources, citedCandidates);
       return Response.json({ id: 'resp_synthetic', object: 'response',
         model: body.model, status: 'completed', error: null, incomplete_details: null,
         output: [{ id: 'msg_synthetic', type: 'message', role: 'assistant', status: 'completed',
@@ -240,9 +255,8 @@ test('D1 within-limit indexed source-qualified capture reaches normal guarded ge
   const trace = await capture(t, { size: 113, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
   assert.equal(trace.halted, false, JSON.stringify(trace));
-  assert.equal(trace.calls[2]?.inputTokens, 5_519, JSON.stringify(trace));
-  assert.equal(trace.calls[2]?.qualification.schemaContributionTokens, 3_053,
-    JSON.stringify(trace));
+  assert.equal(trace.calls[2]?.inputTokens, 3_905);
+  assert.equal(trace.calls[2]?.qualification.schemaContributionTokens, 1_366);
   assertThreeMethodPairs(trace);
   assertColdStoredEvidence(trace);
 });
@@ -251,7 +265,7 @@ test('D1 prompt-shaped indexed qualification does not globally halt on a valid s
   const trace = await capture(t, { size: 114, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.calls[0]?.method, 'cairn_extract', JSON.stringify(trace));
   assert.equal(trace.calls[2]?.method, 'cairn_qualifyCandidates', JSON.stringify(trace));
-  assert.equal(trace.calls[2].inputTokens, 5_527, JSON.stringify(trace));
+  assert.equal(trace.calls[2].inputTokens, 3_913);
   assert.equal(trace.halted, false, JSON.stringify(trace));
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
   assertThreeMethodPairs(trace);
@@ -263,7 +277,7 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   const oneSource = await capture(t, { size: 114, turnCount: 4,
     extractionItems: 4, candidateSources: 1 });
   const full = await capture(t, { size: 114, turnCount: 4, extractionItems: 4 });
-  const localRefusal = await capture(t, { size: 800, turnCount: 12, extractionItems: 5 });
+  const localRefusal = await capture(t, { size: 800, turnCount: 4, extractionItems: 5 });
   const qualification = (trace) => trace.calls.find((call) =>
     call.route === 'count' && call.method === 'cairn_qualifyCandidates');
   assert.equal(qualification(threeItems).qualification.itemCount, 3);
@@ -272,10 +286,10 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   assert.equal(qualification(full).qualification.candidateCount, 16);
   assert.ok(qualification(threeItems).inputTokens < qualification(full).inputTokens);
   assert.ok(qualification(oneSource).inputTokens < qualification(full).inputTokens);
-  assert.equal(qualification(full).inputTokens, 5_527);
-  assert.equal(qualification(full).localTokens, 2_379);
-  assert.equal(qualification(full).qualification.schemaTokens, 3_056);
-  assert.equal(qualification(full).qualification.schemaContributionTokens, 3_053);
+  assert.equal(qualification(full).inputTokens, 3_913);
+  assert.ok(qualification(full).localTokens < 6_000);
+  assert.ok(qualification(full).qualification.schemaTokens < 1_500);
+  assert.equal(qualification(full).qualification.schemaContributionTokens, 1_366);
   assert.equal(qualification(full).qualification.evidenceContributionTokens, 1_016);
   assert.ok(qualification(threeItems).qualification.schemaContributionTokens
     < qualification(full).qualification.schemaContributionTokens);
@@ -284,12 +298,13 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
     guardCountMaxInputTokens: 7_024, guardGenerationMaxInputTokens: 7_024,
     guardInputTokenFraming: 1_024, modelContextWindow: 1_047_576 });
   assert.equal(qualification(localRefusal), undefined);
+  assert.equal(localRefusal.qualificationRequests.length, 0);
   assert.equal(localRefusal.result?.error.code, 'context_budget_exceeded');
   assert.equal(localRefusal.halted, false);
 });
 
-test('D2 full qualification wire refuses locally before count without halting the guard', async (t) => {
-  const trace = await capture(t, { size: 200, turnCount: 4, extractionItems: 4,
+test('D2 oversized indexed extraction still refuses without admission or guard halt', async (t) => {
+  const trace = await capture(t, { size: 600, turnCount: 4, extractionItems: 4,
     followupSize: 40 });
   assert.equal(trace.result?.error.code, 'context_budget_exceeded', JSON.stringify(trace));
   assert.equal(trace.halted, false, JSON.stringify(trace));
@@ -300,16 +315,49 @@ test('D2 full qualification wire refuses locally before count without halting th
     'cairn_extract', 'cairn_extract', 'cairn_qualifyCandidates', 'cairn_qualifyCandidates',
     'cairn_classify', 'cairn_classify',
   ]);
-  const request = trace.qualificationRequests[0];
-  assert.equal(trace.qualificationRequests.length, 2);
-  const originalLocal = countOpenAITokens(JSON.stringify({ system: request.system,
-    input: request.input, maxOutputTokens: 1024 }));
-  const lowerBoundWire = countOpenAITokens(JSON.stringify({ model: DEFAULT_MODEL,
-    instructions: request.system,
-    input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(request.input) }] }],
-    text: { format: { type: 'json_schema', name: 'cairn_qualifyCandidates', strict: true,
-      schema: schemasFor('qualifyCandidates', request.input) } }, truncation: 'disabled' }));
-  assert.ok(originalLocal <= 6_000);
-  assert.ok(lowerBoundWire > 6_000);
+  assert.equal(trace.qualificationRequests.length, 1);
   assert.equal(trace.stored.length, 0);
+});
+
+test('E4 maximum 5×4×800 qualifier refuses before any HTTP', async () => {
+  let requests = 0;
+  const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: () => {
+    requests++; return assert.fail('Maximum source qualification must refuse locally');
+  } });
+  await assert.rejects(qualifyCandidateItems(model, capacityItems(5)), { code: 'context_budget_exceeded' });
+  assert.equal(requests, 0);
+});
+
+test('E4 full qualifier wire refuses locally when partial core request still fits', async () => {
+  let requests = 0; let seen; const events = [];
+  const base = createOpenAIModel({ apiKey: 'synthetic-only', onDiagnostic: event => events.push(event),
+    fetchImpl: () => { requests++; return assert.fail('Complete wire must refuse before HTTP'); } });
+  const model = Object.freeze({ ...base, qualifyCandidates: request => {
+    seen = request; return base.qualifyCandidates(request);
+  } });
+  await assert.rejects(qualifyCandidateItems(model, capacityItems(2)), { code: 'context_budget_exceeded' });
+  assert.ok(seen);
+  assert.ok(countOpenAITokens(JSON.stringify({ system: seen.system, input: seen.input,
+    maxOutputTokens: 1024 })) <= 6_000);
+  assert.equal(requests, 0);
+  assert.ok(events.some(event => event.stage === 'qualifyCandidates' && event.layer === 'adapter'
+    && event.reason === 'request_bounds'));
+});
+
+test('E4 four cited candidates compile and cold-store exact source receipts', async (t) => {
+  const trace = await capture(t, { size: 113, turnCount: 4, extractionItems: 4,
+    citedCandidates: 4 });
+  assert.equal(trace.result?.ok, true);
+  assert.equal(trace.halted, false);
+  assertThreeMethodPairs(trace);
+  assert.equal(trace.stored.length, 4);
+  for (const item of trace.stored) {
+    assert.equal(item.qualification.anchors.length, 4);
+    for (const anchor of item.qualification.anchors) {
+      const receipt = item.receipts.find(row => row.id === anchor.receiptId);
+      assert.ok(receipt);
+      assert.equal(anchor.text, receipt.excerpt.slice(anchor.start, anchor.end));
+      assert.deepEqual(anchor.fields, ['value']);
+    }
+  }
 });

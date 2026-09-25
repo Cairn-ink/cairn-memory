@@ -9,6 +9,7 @@ import test from 'node:test';
 import { buildArtifact, command, packageName } from '../build.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
 import { rationaleModel } from '../../core/testing/rationale-model.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 
 const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
@@ -61,8 +62,7 @@ test('H5 installed CLI and core bound capture, preserve partial admission, and r
         }
       } else if (method === 'qualifyCandidates') {
         const qualified = fake.qualifyCandidates({ input });
-        output = { qualifications: Object.fromEntries(qualified.qualifications.map((entry) =>
-          [`item_${entry.itemIndex}`, entry])) };
+        output = qualificationPoolWire(input, qualified);
       } else if (method === 'classify') {
         classifyCount++;
         output = { items: input.memories.map(({ id }) => ({ memoryId: id, parentIds: [],

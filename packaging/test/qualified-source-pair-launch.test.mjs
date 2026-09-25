@@ -19,6 +19,7 @@ import { benchmarkStagePolicy } from '../../evaluation/live/public-pilot.mjs';
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { createDiagnosticCollector, readDiagnostics } from '../../evaluation/live/diagnostics.mjs';
 import { main } from '../../evaluation/live/qualified-source-pair-launch-cli.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const sha = (value) => createHash('sha256').update(value).digest('hex');
@@ -73,11 +74,11 @@ function responseFor(url, options, observed, changeOutput = null) {
     if (method === 'extract') output = { items: [{ content: 'GENERATED_SUMMARY_POISON',
       kind: 'context', confidence: 0.9,
       sourceIndices: input.inputMode === 'indexed-windows-v1' ? [0, 1, 2] : [0, 1] }] };
-    else if (method === 'qualifyCandidates') output = { qualifications: Object.fromEntries(
-      input.items.map((entry) => [`item_${entry.itemIndex}`, { itemIndex: entry.itemIndex,
+    else if (method === 'qualifyCandidates') output = qualificationPoolWire(input, { qualifications:
+      input.items.map((entry) => ({ itemIndex: entry.itemIndex,
         subject: empty, property: empty, scope: empty, applies: empty,
         value: { value: null, evidenceIndices: [entry.candidates[0].candidateIndex] },
-        attribution: unknown, commitment: unknown }])) };
+        attribution: unknown, commitment: unknown })) });
     else if (method === 'classify') output = { items: input.memories.map((memory) => ({
       memoryId: memory.id, parentIds: [], newL1: { title: 'Synthetic', parentL2Ids: [] } })) };
     else if (method === 'select') output = { refs: input.maps.flatMap((page) => page.items.map((item) =>
@@ -291,10 +292,9 @@ test('O2/O4 installed adapter and core qualification failures stay in their own 
         if (qualifications === 1) return { qualifications: {} }; // Adapter shape rejection.
         if (qualifications === 2) {
           const entry = output.qualifications[`item_${input.items[0].itemIndex}`];
-          const candidate = input.items[0].candidates[0].candidateIndex;
-          entry.subject = { value: 'Synthetic', evidenceIndices: [candidate, candidate] };
+          entry.value.evidenceSlots = [];
         }
-        return output; // Adapter accepts; core rejects duplicate evidence selection.
+        return output; // Adapter accepts; core rejects unselected pool members as non-citations.
       }),
     });
     assert.equal(status, 0, err || out);
@@ -311,7 +311,7 @@ test('O2/O4 installed adapter and core qualification failures stay in their own 
       event.stage === 'qualifyCandidates' && event.layer === 'adapter' && event.reason === 'output_shape'));
     assert.ok(firstDiagnostics.arms['indexed-windows'].events.some((event) =>
       event.stage === 'qualifyCandidates' && event.layer === 'core_validation'
-        && event.reason === 'invalid_qualification'));
+        && event.reason === 'qualification_citation_integrity'));
     assert.ok(firstDiagnostics.arms['qualified-prefix'].events.every((event) =>
       event.layer !== 'core_validation'));
     for (const name of ['qualified-prefix', 'indexed-windows']) {

@@ -10,6 +10,7 @@ import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
 import { installedCoreDeadlinePredicateFor,
   loadQualifiedSourcePairInstalledCoreDeadline } from '../installed-core-deadline.mjs';
@@ -78,10 +79,10 @@ async function adapterWire(method, input) {
     if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
     const empty = { value: null, evidenceIndices: [] };
     const unknown = { value: 'unknown', evidenceIndices: [] };
-    const output = method === 'extract' ? { items: [] } : { qualifications: {
-      item_0: { itemIndex: 0, subject: empty, property: empty, scope: empty,
-        applies: empty, value: empty, attribution: unknown, commitment: unknown },
-    } };
+    const output = method === 'extract' ? { items: [] } : qualificationPoolWire(input, { qualifications: [{
+      itemIndex: 0, subject: empty, property: empty, scope: empty, applies: empty,
+      value: empty, attribution: unknown, commitment: unknown,
+    }] });
     return Response.json({ id: 'resp_synthetic', object: 'response', model: body.model,
       status: 'completed', error: null, incomplete_details: null,
       output: [{ id: 'msg_synthetic', type: 'message', role: 'assistant', status: 'completed',

@@ -152,10 +152,13 @@ fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
 
-The opt-in `qualifyCandidates` path now shares repeated request-scoped strict
-field schemas through `$defs`/`$ref` in its count and generation wire requests.
-The adapter validates returned fields against the equivalent fully expanded
-schema, while the guarded route matches the exact compact wire schema. A
+The opt-in `qualifyCandidates` path uses the named
+[`evidence-pool-v1` wire](qualification-evidence-pool.md): each item supplies at
+most four original candidate IDs in one pool and its fields cite pool slots.
+Repeated strict field schemas are shared through `$defs`/`$ref` in both count
+and generation requests. The adapter decodes back to original candidate IDs
+and validates against the unchanged fully expanded inline schema; the guarded
+route matches the exact versioned pool schema. A
 second local check counts the complete serialized qualification count request
 against the existing 6,000-token ceiling before either HTTP call. This is a
 conservative admission check, not a provider token guarantee: the provider's

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { captureSnapshot, retainedSourceView } from '../../../core/capture-input.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { sourceWindowCatalog } from '../../../core/source-windows.mjs';
@@ -87,11 +88,11 @@ function sourceOutput(body) {
   if (method === 'extract') return { items: [{ content: 'GENERATED_SUMMARY_POISON',
     kind: 'context', confidence: 0.9,
     sourceIndices: input.inputMode === 'indexed-windows-v1' ? [0, 1, 2] : [0, 1] }] };
-  if (method === 'qualifyCandidates') return { qualifications: Object.fromEntries(
-    input.items.map((entry) => [`item_${entry.itemIndex}`, { itemIndex: entry.itemIndex,
+  if (method === 'qualifyCandidates') return qualificationPoolWire(input, { qualifications:
+    input.items.map((entry) => ({ itemIndex: entry.itemIndex,
       subject: empty, property: empty, scope: empty, applies: empty,
       value: { value: null, evidenceIndices: [entry.candidates[0].candidateIndex] },
-      attribution: unknown, commitment: unknown }])) };
+      attribution: unknown, commitment: unknown })) });
   if (method === 'classify') return { items: input.memories.map((memory) => ({
     memoryId: memory.id, parentIds: [], newL1: { title: 'Synthetic schedule', parentL2Ids: [] } })) };
   if (method === 'select') return { refs: input.maps.flatMap((page) => page.items.map((item) =>

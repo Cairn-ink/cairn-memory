@@ -10,6 +10,7 @@ import { opaqueQuestionId, opaqueSessionId, stableTurnIdV2 } from '../../longmem
 import { runQualifiedSourcePair } from '../../longmemeval/public-comparison.mjs';
 import { scoreQualifiedSourcePair } from '../../longmemeval/qualified-source-scoring.mjs';
 import { projectSourcePairCase } from '../../longmemeval/source-pair-preparation.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 
 test('R3 actual scripted cores and adapter stay within source-derived two-arm route ceilings', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'cairn-source-pair-projection-'));
@@ -44,11 +45,11 @@ test('R3 actual scripted cores and adapter stay within source-derived two-arm ro
       kind: 'context', confidence: 0.9, sourceIndices: [0] }] };
     if (method === 'qualifyCandidates') {
       qualificationInputs.push(input.items.map((entry) => entry.candidates.length));
-      return { qualifications: Object.fromEntries(
-      input.items.map((entry) => [`item_${entry.itemIndex}`, { itemIndex: entry.itemIndex,
+      return qualificationPoolWire(input, { qualifications:
+      input.items.map((entry) => ({ itemIndex: entry.itemIndex,
         subject: empty, property: empty, scope: empty, applies: empty,
         value: { value: null, evidenceIndices: [entry.candidates[0].candidateIndex] },
-        attribution: unknown, commitment: unknown }])) };
+        attribution: unknown, commitment: unknown })) });
     }
     if (method === 'classify') {
       const existing = input.map.find((item) => item.type === 'moc' && item.moc.level === 'L1');

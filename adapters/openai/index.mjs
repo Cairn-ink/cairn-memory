@@ -4,6 +4,7 @@ import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
 import { qualificationCandidatesInlineSchema, schemasFor, snapshotIndexedExtractInput } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 import { classificationWire } from './classification-wire.mjs';
+import { decodeQualificationEvidencePool } from './qualification-evidence-pool.mjs';
 
 const encoder = get_encoding('o200k_base');
 const fail = (code) => { throw new MemoryStoreError(code); };
@@ -36,22 +37,23 @@ function schemaAccepts(schema, value) {
 function qualificationInstructions(method, system, input) {
   if (method !== 'qualifyCandidates') return system;
   const mapping = input.items.map(item => `${qualificationSlot(item.itemIndex)}=>itemIndex ${item.itemIndex}`).join(', ');
-  return `${system}\n\nProvider wire-format override: return qualifications as an object, not the illustrative array above. `
-    + `Use exactly these required transport fields: ${mapping}. Each field's value is its complete qualification entry. `
-    + 'These field names are transport mapping only, not semantic slot identifiers.';
+  return `${system}\n\nProvider wire-format override evidence-pool-v1: return wireVersion "evidence-pool-v1" `
+    + `and qualifications as an object with exactly these fields: ${mapping}. `
+    + 'For each item, choose one to four distinct original candidateIndex values in pool. '
+    + 'Each field returns value and evidenceSlots, zero-based positions from 0 through pool.length-1, not original candidate IDs. '
+    + 'At least one field must reference a pool slot per item, even when all values are null or unknown; '
+    + 'unused pool members are not citations. Cite only actual supporting evidence. '
+    + 'The pool and item fields are transport references, not new source identities.';
 }
 
 function normalizeQualificationSlots(method, input, output, schema, diagnose) {
   if (method !== 'qualifyCandidates') return output;
   const reject = () => { diagnose('output_shape'); fail('invalid_model_output'); };
-  if (!schemaAccepts(schema, output)) reject();
-  const expected = input.items.map(item => qualificationSlot(item.itemIndex));
-  const qualifications = input.items.map((item, position) => {
-    const value = output.qualifications[expected[position]];
-    if (value.itemIndex !== item.itemIndex) reject();
-    return value;
-  });
-  return { qualifications };
+  let decoded;
+  try { decoded = decodeQualificationEvidencePool(input, output); } catch { reject(); }
+  if (decoded.qualifications.some((entry) => !schemaAccepts(
+    schema.properties.qualifications.properties[qualificationSlot(entry.itemIndex)], entry))) reject();
+  return decoded;
 }
 
 function normalizeClassificationWire(method, output, schema, wire, diagnose) {

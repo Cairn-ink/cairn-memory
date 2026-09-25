@@ -64,6 +64,7 @@
   "adapters/mcp/server.mjs",
   "adapters/openai/classification-wire.mjs",
   "adapters/openai/index.mjs",
+  "adapters/openai/qualification-evidence-pool.mjs",
   "adapters/openai/profiles.mjs",
   "adapters/openai/schemas.mjs",
   "plugins/cairn-memory/lib/redact.mjs",

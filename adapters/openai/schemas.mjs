@@ -42,8 +42,8 @@ const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const qualificationSlots = (items, variants) => object(Object.fromEntries(
   items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
-// Preserve the fully expanded schema for local response validation. The
-// provider wire form below only replaces repeated, identical field schemas.
+// Preserve the fully expanded candidate-ID schema for local validation after
+// the named provider pool wire has been decoded back into this exact shape.
 export function qualificationCandidatesInlineSchema(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
   const items = Array.from(list(input.items));
@@ -83,24 +83,29 @@ export function qualificationCandidatesInlineSchema(input) {
   return object({ qualifications: qualificationSlots(items, variants) });
 }
 
-function compactQualificationCandidatesSchema(inline) {
-  const definitions = {};
+function qualificationEvidencePoolSchema(inline) {
+  const evidenceSlots = minimum => ({ ...array({ type: 'integer', minimum: 0, maximum: 3 }, 4), minItems: minimum });
+  const field = (known, unknown) => ({ anyOf: [
+    object({ value: known, evidenceSlots: evidenceSlots(1) }),
+    object({ value: unknown, evidenceSlots: evidenceSlots(0) }),
+  ] });
+  const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
+  const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
+  const definitions = { text160: descriptive(160), text120: descriptive(120),
+    attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
+    commitment: categorical(['adopted', 'considered', 'rejected']) };
   const slots = inline.properties.qualifications.properties;
-  const compactSlots = Object.fromEntries(Object.entries(slots).map(([name, slot], position) => {
-    const properties = { ...slot.properties };
-    for (const [suffix, field, aliases] of [
-      ['text160', 'subject', ['subject', 'property', 'value']],
-      ['text120', 'scope', ['scope', 'applies']],
-    ]) {
-      const key = `q${position}_${suffix}`;
-      definitions[key] = properties[field];
-      for (const alias of aliases) properties[alias] = { $ref: `#/$defs/${key}` };
-    }
-    return [name, { ...slot, properties }];
+  const entries = Object.fromEntries(Object.entries(slots).map(([name, slot]) => {
+    const candidateIds = slot.properties.subject.anyOf[0].properties.evidenceIndices.items.enum;
+    return [name, object({ itemIndex: slot.properties.itemIndex,
+      pool: { ...array(constrained(integer, candidateIds), 4), minItems: 1 },
+      subject: { $ref: '#/$defs/text160' }, property: { $ref: '#/$defs/text160' },
+      scope: { $ref: '#/$defs/text120' }, applies: { $ref: '#/$defs/text120' },
+      value: { $ref: '#/$defs/text160' }, attribution: { $ref: '#/$defs/attribution' },
+      commitment: { $ref: '#/$defs/commitment' } })];
   }));
-  return { ...inline, properties: { ...inline.properties,
-    qualifications: { ...inline.properties.qualifications, properties: compactSlots } },
-  $defs: definitions };
+  return { ...object({ wireVersion: { type: 'string', enum: ['evidence-pool-v1'] },
+    qualifications: object(entries) }), $defs: definitions };
 }
 
 function exactData(value, fields) {
@@ -257,7 +262,7 @@ export function schemasFor(method, input) {
       fromReceipt: constrained(integer, receiptIndices), toReceipt: constrained(integer, receiptIndices) }), 10) });
   }
   if (method === 'qualifyCandidates') {
-    return compactQualificationCandidatesSchema(qualificationCandidatesInlineSchema(input));
+    return qualificationEvidencePoolSchema(qualificationCandidatesInlineSchema(input));
   }
   if (method === 'qualify') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();

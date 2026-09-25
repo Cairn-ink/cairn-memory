@@ -9,6 +9,7 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { createExperimentBudget, inspectExperimentBudgetSnapshot,
   reopenExperimentBudget, transitionExperimentBudgetCaps } from '../index.mjs';
 import { authorizeBenchmarkBudgetExtension, authorizeBenchmarkExtension,
@@ -189,9 +190,9 @@ test('B3 old grants reject chain while explicit target baseline keeps only old r
     const unknown = { value: 'unknown', evidenceIndices: [] };
     const empty = { value: null, evidenceIndices: [] };
     const output = body.text.format.name === 'cairn_qualifyCandidates'
-      ? { qualifications: { item_0: { itemIndex: 0, subject: empty, property: empty,
-        scope: empty, applies: empty, value: empty, attribution: unknown,
-        commitment: unknown } } }
+      ? qualificationPoolWire(JSON.parse(body.input[0].content[0].text), { qualifications: [{ itemIndex: 0,
+        subject: empty, property: empty, scope: empty, applies: empty, value: empty,
+        attribution: unknown, commitment: unknown }] })
       : { items: [] };
     return Response.json({ id: 'resp_synthetic', object: 'response',
       model: f.policy.cairnGeneration.model, status: 'completed', error: null,

@@ -66,6 +66,19 @@ historic method, real-provider token savings and strict-schema compatibility
 remain unverified. The consumed attempts are not reclassified or retried, and
 there is no new semantic score or quality claim.
 
+The next closed six-case source-pair development run completed its wrapper but
+resolved zero cases in both arms: eight arm ingestions reached qualification
+request bounds, four reached the qualification compiler's then-generic
+rejection, and no answer or judge call occurred. The frozen old cohorts are not
+relabelled or retried. The [evidence-pool-v1 offline repair](qualification-evidence-pool.md)
+shrinks one fixed five-item synthetic qualification request enough to reach
+fake HTTP and compile exact anchors, and adds finite source-free compiler
+failure categories. It does not identify the old compiler subreasons, prove
+real-provider strict-schema behavior, or resolve any benchmark case. The
+maximum-size unique-source synthetic fixture (five items × four 800-unit
+excerpts) still exceeds the unchanged local budget and refuses without
+truncation or fallback.
+
 New installed source-pair launches can retain bounded, source-free model
 failure events separately by case and arm, but the earlier halted R5 run did
 not collect them. Its prefix `invalid_model_output` remains unattributed.

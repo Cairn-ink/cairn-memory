@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { buildArtifact, command, packageName } from '../build.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 
 test('W8/W9 installed core and actual adapter select a synthetic tail window through fake HTTP', { timeout: 90000 }, async t => {
   const artifact = buildArtifact();
@@ -36,9 +37,9 @@ test('W8/W9 installed core and actual adapter select a synthetic tail window thr
     } else if (body.text.format.name === 'cairn_qualifyCandidates') {
       const candidate = wire.items[0].candidates[0].candidateIndex;
       const field = (value, indices = []) => ({ value, evidenceIndices: indices });
-      output = { qualifications: { item_0: { itemIndex: 0,
+      output = qualificationPoolWire(wire, { qualifications: [{ itemIndex: 0,
         subject: field(null), property: field(null), scope: field(null), applies: field(null),
-        value: field(null, [candidate]), attribution: field('unknown'), commitment: field('unknown') } } };
+        value: field(null, [candidate]), attribution: field('unknown'), commitment: field('unknown') }] });
     } else if (body.text.format.name === 'cairn_classify') {
       output = { items: wire.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
     } else assert.fail('Unexpected installed model method');

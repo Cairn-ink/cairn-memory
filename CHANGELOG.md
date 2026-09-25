@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — bounded evidence-pool qualification wire
+
+- Version the candidate-qualification provider response as `evidence-pool-v1`:
+  per-item original candidate IDs are selected once, fields cite their pool
+  slots, and the adapter decodes to the unchanged inline validator and core
+  compiler. Synthetic fake-HTTP, guard and installed controls include the
+  formerly over-budget five-item fixture and exact source anchors. The
+  maximum-size unique-source synthetic fixture (5×4×800) still refuses
+  locally; real-provider schema behavior, benchmark resolution and quality
+  remain unmeasured. No model,
+  request schedule, budget, ledger, scorer or paid cohort changes.
+
 ## Unreleased — bounded qualification request wire
 
 - Factor repeated candidate-qualification strict-schema fields with local
