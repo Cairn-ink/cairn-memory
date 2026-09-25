@@ -1,0 +1,46 @@
+name: Publish to MCP Registry
+
+# Manual dispatch only. Publishing lists the server on the public registry
+# and every aggregator that mirrors it, and ROADMAP.md has not yet cleared
+# broad promotion, so no tag or push starts this on its own. Once that gate
+# is lifted, publishing on `v*` tags needs three changes together: a
+# `push: tags: ["v*"]` trigger here, a tag ruleset so only maintainers can
+# create or update `v*` tags, and `v*` tags allowed in the mcp-registry
+# environment. See docs/registry.md.
+#
+# The ink.cairn namespace comes from the DNS TXT record at the cairn.ink
+# apex; the job logs in with the matching private key from the
+# MCP_REGISTRY_PRIVATE_KEY secret of the mcp-registry environment. See
+# docs/registry.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: mcp-registry
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install pinned mcp-publisher
+        run: sh scripts/install-mcp-publisher.sh
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+
+      - name: Log in with cairn.ink DNS
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "::error::The MCP_REGISTRY_PRIVATE_KEY secret of the mcp-registry environment is empty or not set; see docs/registry.md."
+            exit 1
+          fi
+          ./mcp-publisher login dns --domain cairn.ink --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+
+      - name: Publish
+        run: ./mcp-publisher publish

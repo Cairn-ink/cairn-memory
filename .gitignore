@@ -5,6 +5,7 @@ coverage/
 .env
 .env.*
 !.env.example
+*.pem
 .claude/settings.local.json
 *.sqlite
 *.sqlite-*
@@ -15,3 +16,6 @@ __pycache__/
 
 # rendered frames for docs/demo/cairn-memory-loop.gif
 docs/demo/frames/
+
+# local copy of the registry publisher produced by scripts/install-mcp-publisher.sh
+/mcp-publisher
