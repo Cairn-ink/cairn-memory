@@ -55,6 +55,16 @@ larger cohort fits them. It also grants no monetary or request authority and
 does not establish benchmark quality. Current coverage is synthetic and
 offline; any paid larger-cohort run remains separately gated.
 
+The [fresh six-case development smoke](fresh-reliability-smoke.md) has an
+offline-tested wrapper and a privately frozen new roster, but no real-model
+result yet. Its dry-run does not issue or prove a case-deadline capability;
+launch is a separate one-shot action. Even if all six cases complete, this
+selected small roster cannot establish comparative superiority, population
+accuracy, installed Hermes behavior or that historical failures were repaired.
+It exercises embedded default capture and recall, without native v2
+qualification, explicit recovery or a capture invocation deadline. The old
+30-case counts remain unchanged.
+
 The public-comparison provenance adapter previously expected only capture's
 first 800-unit normalized source prefix. When that prefix ended in whitespace,
 admission's existing second canonicalization trimmed it before storage and the
