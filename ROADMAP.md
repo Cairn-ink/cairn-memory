@@ -37,6 +37,45 @@ reliability work below without declaring older failure gates resolved.
 
 ### Current checkpoint — 2026-09-26
 
+PR #233's adaptive catalog and PR #235's distinct opt-in guard remain accepted
+offline candidates, not a merged release; defaults and bounds are unchanged.
+The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
+record H's one completed installed adaptive compatibility check on three fresh
+synthetic cases: one inline and two catalog. All three count, generation and
+installed-core compilation paths completed with exact original anchors. Local
+count-body estimates were 2,084/4,739/4,707; observed provider counts were
+1,630/3,985/3,951. The provider selected 1/5/5 user-role anchors and distinct
+receipts from 1/80/80 supplied candidates. The third request contained mixed
+roles, but did not receive an assistant selection. Separate fake-HTTP checks
+proved assistant-source mapping. This is narrow wire/compiler compatibility,
+not semantic quality, retrieval, all-role selection, capacity or a new score.
+
+The helper passed final 25/25 synthetic tests on both Node versions, independent
+Standards/Spec reviews and primary inspection. Its first fake positive test
+selected only users; that coverage gap was corrected before acceptance. An
+initial actual dry-run rejected file mode 0644 without claim or HTTP. Primary
+changed only the mode to 0600; key-free read-only preflight then passed. One
+subsequent launch consumed the fixed marker: H and its fixtures are closed and
+must not be rerun, even in dry-run mode. Six physical requests (three count,
+three generation) reserved US$0.030000; US$0.005905 new actual cost is known
+and three count-route costs remain unknown. No answer, judge or holdout call
+was made.
+
+The fresh read-only audit found the prior 12,708-request prefix unchanged:
+12,714 terminal requests, US$86.576460 reserved, US$113.423540 remaining and
+zero pending under unchanged US$200/50,000-request authority. Protect at least
+US$70 for the comparator and US$10 for host work. The 130 exclusions and old
+cohorts stay closed; the original reserved 30 remain untouched for one jointly
+frozen S3 Cairn/comparator protocol, with separate S2 development. Next, the
+isolated B1–B11 mixed-ledger integration is in implementation, not accepted;
+the actual ledger is not migrated, and old v1 guards reject embedding v2.
+Distinct transport, runner, fairness and complete resource freezes follow B's
+separate acceptance. S2–S5 and S3 paired uncertainty, S4 growth and S5 onboarding
+gates remain open. This update authorizes no paid call, migration, holdout
+access, merge or release; PR #205's previous exact-head CI is historical.
+
+### Historical checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
+
 The [comparative reliability milestones](docs/plans/comparative-reliability-milestones.md)
 record PR #233's adaptive catalog (`cf42dff`) and PR #235's separate adaptive
 guard (`062b7da`) as accepted offline candidates. Each passed independent
@@ -46,10 +85,11 @@ offset identity and prior defaults and bounds. The new grant is distinct from
 the old v1 grant. These mechanics establish no semantic quality, all-unique
 capacity repair, release or new score.
 
-The fresh three-fixture installed adaptive compatibility helper is in
-implementation and has not been accepted or launched. Primary offline checks
-on both Node versions covered 76 installed/source files, one inline case and
-two inline-refused/catalog-fit cases, each catalog case retaining 80 candidate
+At that recorded check, the fresh three-fixture installed adaptive
+compatibility helper was in implementation and had not been accepted or
+launched. Primary offline checks on both Node versions covered 76
+installed/source files, one inline case and two inline-refused/catalog-fit
+cases, each catalog case retaining 80 candidate
 identities across four unique texts. Count-body estimates were
 2,084/4,739/4,707; installed fake HTTP selected exact mixed-role receipt
 anchors and conserved six fake requests and 30,000 synthetic microUSD per run.

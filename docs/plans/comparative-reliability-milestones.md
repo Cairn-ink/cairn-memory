@@ -4,9 +4,10 @@ Status: proposed sequence; the finite S1 mechanical repair/recovery gate is
 accepted on the current candidate. Semantic reliability and the S2–S5 product
 milestones remain open; the S1–S5 sequence has not passed as a whole. See the
 latest checkpoint and resume protocol below. Evidence-pool, adaptive catalog
-and adaptive guard candidates are accepted offline; installed adaptive provider
-compatibility remains pending. Older execution snapshots are explicitly
-historical. Re-check live PR and CI state before resuming.
+and adaptive guard candidates are accepted offline; H's installed adaptive
+provider compatibility check is complete and closed, not a semantic score.
+Older execution snapshots are explicitly historical. Re-check live PR and CI
+state before resuming.
 Goal: a lightweight, source-backed memory layer for Hermes and other agent
 harnesses, evaluated against existing solutions under matched conditions.
 
@@ -40,7 +41,48 @@ harnesses, evaluated against existing solutions under matched conditions.
 - Publish no raw case/source data, IDs, credentials, private paths or ledger
   contents. This checkpoint authorizes no new paid call, rerun, merge or release.
 
-### Next checkpoint requirements — adaptive runtime accepted, installed check pending
+### Next checkpoint requirements — H terminal compatibility, mixed accounting next
+
+Prospective docs-only scope: this plan, ROADMAP and limitations, preserving every
+earlier checkpoint as dated history. Record H's one completed installed/provider
+compatibility attempt: three fresh synthetic cases, one inline and two catalog;
+all three compiled exact original anchors. Local count-body estimates were
+2084/4739/4707 and observed provider counts1630/3985/3951. Supplied candidates
+were1/80/80; selected anchors/receipts1/5/5, all user-role. Mixed roles were
+present in the third request, but the provider did not select assistant anchors;
+do not imply all-role selection or semantic correctness. Separate fake-HTTP
+controls verified exact selected assistant mapping and source identity.
+
+Record both-node primary25/25 helper tests, independent Standards/Spec PASS on
+final bytes, retained first-user-only positive-test gap and its correction.
+Actual dry-run initially rejected original helper mode0644; primary corrected
+to0600 without content changes, and key-free preflight passed before any claim
+or HTTP. That refusal was prelaunch, not a paid retry. One later launch consumed
+the fixed marker; never rerun it, including its dry-run.
+
+Six physical requests (three count/three generation) reserved US$0.03. Known
+new actual costUS$0.005905 plus three unknown count costs; preserve the full
+reservation, no refund. Fresh readonly audit:12714 requests,US$86.576460
+reserved,US$113.423540 remaining,0pending and full old12708-row prefix unchanged.
+CumulativeUS$200/50000 and protectedUS$70 comparator+US$10 host remain unchanged.
+No answer/judge, historical corpus or holdout was used. This is compatible
+installed wire/compiler evidence, not an accuracy, retrieval or capacity score.
+
+Next offline accounting packet B1–B11 has been assigned in an isolated
+dependent branch: integrate prior explicit embedding migration with G's newer
+bound ledger, add distinct readonly-v2/bound-v2 APIs, preserve v1 rejection and
+all historical rows. Implementation is in progress, not accepted; no actual
+ledger migration or new transport authority. Then distinct mixed grant/UDS
+transport, matched runner/resource/fairness freeze, S3 once on the original30,
+and S4/S5. S2 remains development only. Preserve existing thresholds and old
+scores; no new statistic, parity claim, holdout reselection, rerun or tuning.
+
+Only public source-free aggregates; no private paths, helper contents, source
+IDs/text, ledger contents or credentials. PR205's prior4ec173c green is historical
+after edits. Both-node generic/JSON/pinned-plugin gates, primary direct checks,
+two independent fixed-base reviews and all exact-head CI before ready; no merge.
+
+### Historical checkpoint requirements — adaptive runtime accepted, installed check pending
 
 Checkpoint scope: synchronize this plan, ROADMAP and limitations only. Preserve
 all prior evidence as dated history. Record accepted PR #233 at `cf42dff` and
@@ -179,7 +221,60 @@ do not rerun failures or replace them. Public reports may show redacted stage
 labels and aggregates, never source/answer text, case IDs or private paths. If
 retained evidence cannot support a cause, mark it unknown rather than infer it.
 
-## Latest checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
+## Latest checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
+
+PR #233's adaptive catalog and PR #235's separate guard remain accepted offline
+candidates, not a merged release. The distinct opt-in grant and prior default
+bounds are unchanged.
+
+The separately frozen H check completed once on three fresh synthetic cases:
+one inline and two text-catalog. All three provider count, generation and
+installed-core compilation paths completed with exact original source anchors.
+Local count-body estimates were 2,084/4,739/4,707; provider counts were
+1,630/3,985/3,951. Supplied candidates were 1/80/80, while the provider
+selected 1/5/5 anchors and distinct receipts, all user-role. The third request
+contained mixed roles, but the provider did not select an assistant anchor.
+Separate fake-HTTP controls proved exact assistant-source mapping. Neither
+the actual nor fake path establishes all-role selection, semantic correctness,
+retrieval, general capacity or a new score.
+
+The final private helper passed 25/25 synthetic tests on each of Node 22.16
+and 24.15, independent Standards/Spec reviews and primary inspection. Its
+first positive fake response selected only user candidates; that coverage gap
+was corrected before acceptance. A first actual dry-run rejected helper file
+mode 0644; primary changed only its mode to 0600, then key-free read-only
+preflight passed before any claim or HTTP. That refusal was prelaunch, not a
+paid retry. One subsequent launch consumed the fixed marker. H is closed:
+never rerun that helper, including its dry-run, or its fixtures.
+
+The terminal attempt made six physical requests, three count and three
+generation, reserving US$0.030000. Known new actual cost was US$0.005905;
+three count-route costs remain unknown, so the entire reservation stands.
+Primary's fresh read-only audit verified the unchanged 12,708-request prefix,
+the source-free report and consumed marker: 12,714 terminal requests,
+US$86.576460 reserved, US$113.423540 remaining and zero pending. The
+US$200/50,000-request authority and protected US$70 comparator plus US$10
+installed-host allocations are unchanged. No answer, judge, historical corpus
+or holdout case was used.
+
+The next separate offline packet B1–B11 is implementing mixed request/embedding
+accounting on an isolated dependent branch. It is not accepted, and the actual
+ledger has not been migrated: old v1 guards still reject embedding v2. After
+that packet passes its own gates, freeze a distinct Cairn/Mem0 transport,
+runner, fair source/answer/scorer protocol and complete joint S3/development/
+host resource ceilings. The 130 prior exclusions and all consumed cohorts stay
+closed; the original reserved 30 remain untouched for one jointly frozen S3
+run, never S2 tuning. S2–S5 and the whole S1–S5 sequence remain open. This
+documentation update authorizes no paid call, ledger migration, holdout access,
+merge or release. PR #205's prior exact-head CI is historical for the new head.
+
+For this documentation candidate, generic tests passed 106/106, JSON validation
+passed and pinned Claude Code 2.1.260 marketplace plus strict plugin validation
+passed on both Node 22.16 and 24.15. These local gates do not replace primary
+inspection, two independent fixed-base reviews or exact-head CI for the new
+documentation commit.
+
+## Historical checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
 
 PR #233 (`cf42dff`) and PR #235 (`062b7da`) passed independent Standards and
 Spec reviews and 21/21 exact-head CI checks each. Both were ready and

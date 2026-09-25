@@ -68,7 +68,45 @@ score. The plan's MemPalace figures are retrieval-only, project-reported metrics
 with a different scorer and denominator; they cannot establish answer accuracy
 or product parity for Cairn. The old cases remain read-only for stage tracing.
 
-### Latest checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
+### Latest checkpoint — 2026-09-26 (H terminal compatibility; mixed accounting next)
+
+PR #233's adaptive catalog and PR #235's distinct opt-in guard remain accepted
+offline candidates, not a merged release; defaults and bounds are unchanged.
+The one-shot installed adaptive compatibility check H completed three fresh
+synthetic cases: one inline and two catalog, each through provider count,
+generation and exact-source installed-core compilation. Local count-body
+estimates were 2,084/4,739/4,707, versus provider counts of
+1,630/3,985/3,951. The provider selected 1/5/5 user-role anchors and distinct
+receipts from 1/80/80 supplied candidates. Mixed roles were present in the
+third request, but no assistant anchor was selected by the provider; separate
+fake-HTTP controls verified assistant-source mapping. This is wire/compiler
+compatibility only, not semantic correctness, retrieval, all-role selection,
+general capacity or a new benchmark score.
+
+The final helper passed 25/25 synthetic checks on both Node versions and
+independent Standards/Spec review. Its initial fake positive-test gap (only
+user selections) was corrected. The first actual dry-run rejected helper
+mode 0644 before any claim or HTTP; primary changed only file mode to 0600,
+then key-free read-only preflight passed. One subsequent launch consumed the
+fixed marker. H and its fixtures must not be rerun, including by dry-run.
+The six physical requests reserved US$0.030000; US$0.005905 new actual cost
+is known and three count-route costs remain unknown, with no refund.
+
+The fresh read-only audit preserved the prior 12,708-request prefix and found
+12,714 terminal requests, US$86.576460 reserved, US$113.423540 remaining and
+zero pending under the unchanged US$200/50,000-request authority. Protect at
+least US$70 for comparator and US$10 for host work. The 130 exclusions and
+consumed cohorts remain closed; the original reserved 30 are untouched for
+one jointly frozen S3 Cairn/comparator run, not S2 tuning. Isolated B1–B11
+mixed request/embedding ledger integration is still being implemented, not
+accepted; the actual ledger was not migrated, and old v1 guards reject
+embedding v2. Distinct transport, runner, fairness and resource freezes are
+still required. S2–S5 remain open; no answer/judge or holdout case was used,
+and this documentation update authorizes no paid call, migration, holdout
+access, merge or release. See the
+[current milestone checkpoint](plans/comparative-reliability-milestones.md).
+
+### Historical checkpoint — 2026-09-26 (adaptive runtime accepted; installed check pending)
 
 PR #233 (`cf42dff`) and PR #235 (`062b7da`) passed independent Standards/Spec
 reviews and 21/21 exact-head CI each; both were ready and unmerged at the
@@ -77,10 +115,11 @@ offset identities and old defaults/bounds, and the separate adaptive guard
 requires a distinct opt-in grant. Neither is a release, semantic-quality
 result, all-unique capacity fix or new benchmark score.
 
-The three-fixture installed adaptive compatibility helper remains in
-implementation and has not been accepted or launched. Primary offline
-preflight on Node 22.16 and 24.15 checked 76 installed/source files, one
-inline fixture and two inline-refused/catalog-fit fixtures. Each catalog
+At that recorded check, the three-fixture installed adaptive compatibility
+helper remained in implementation and had not been accepted or launched.
+Primary offline preflight on Node 22.16 and 24.15 checked 76
+installed/source files, one inline fixture and two inline-refused/catalog-fit
+fixtures. Each catalog
 fixture retains 80 candidate identities across four unique texts. Count-body
 estimates were 2,084/4,739/4,707; installed fake HTTP selected exact
 mixed-role receipt anchors with six fake requests and 30,000 synthetic
@@ -123,7 +162,7 @@ remained in implementation and a distinct capability/profile and installed,
 configuration and experiment pins were prerequisites to paid use.
 
 Primary and independent read-only terminal audits confirmed the old
-12,702-request prefix intact. Cumulative accounting is now 12,708 terminal
+12,702-request prefix intact. Cumulative accounting was then 12,708 terminal
 requests, US$86.546460 conservatively reserved, US$113.453540 remaining and
 zero pending under unchanged US$200/50,000-request authority. Protect at least
 US$70 for the comparator and US$10 for installed host work. The stale six-case
