@@ -82,8 +82,11 @@ reliability work below without declaring older failure gates resolved.
    Preserve the original failed run and spending; offline tests are not scores.
 2. Review/merge the verified native-provider candidate and its dependent
    native deadline/recovery candidate. The separately frozen
-   [six-case development smoke](docs/fresh-reliability-smoke.md) now has a
-   synthetic, guarded wrapper; its fresh real-model result remains pending.
+   [six-case development smoke](docs/evidence/fresh-reliability-smoke.md)
+   reached 6/6 generated and judged answers in each arm, passing its completion
+   checkpoint on the unmerged PR #217 runtime. This small development result
+   does not pass semantic, installed-host, S2–S5 or matched-comparator gates;
+   fairness and shared-guard prerequisites still block a scored Mem0 run.
    Evaluate interactive Hermes chat and additional host/platform coverage
    separately.
 3. Complete independent onboarding and propose publication with honest limits.

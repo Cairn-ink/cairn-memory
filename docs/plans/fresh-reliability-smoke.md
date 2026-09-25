@@ -247,3 +247,14 @@ for actual missing-key and credential-equals-error-code coverage; the final
 focused correction suite then passed 15/15 on both runtimes. No unresolved gate
 failure was observed. The primary retains ownership of final candidate review, independent
 fixed-base Standards/Spec review, private preflight and any paid launch.
+
+## Dated result pointer — 2026-09-25
+
+The one-shot development smoke on runtime
+`45eca22639836e8035c3ccbbe6403a9f5c076b1d` is now terminal: all three
+arms generated and judged 6/6 answers, passing the predeclared completion
+checkpoint. The [redacted aggregate result](../evidence/fresh-reliability-smoke.md)
+records outcomes, bounded coverage, truncation and conservative accounting.
+The implementation checkpoint above is historical prelaunch evidence; this
+result neither reruns the six nor establishes semantic, installed-host, S2–S5
+or matched-comparator readiness.
