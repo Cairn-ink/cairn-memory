@@ -80,15 +80,16 @@ function snapshot(value, state, depth = 0) {
   if (state.ancestors.has(value)) fail('invalid_input');
   const prototype = Object.getPrototypeOf(value);
   if (Array.isArray(value)) {
-    if (prototype !== Array.prototype || !Number.isSafeInteger(value.length)
-      || value.length > MAX_NODES) fail('invalid_input');
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    if (Reflect.ownKeys(descriptors).length !== value.length + 1
-      || !Object.hasOwn(descriptors, 'length')) fail('invalid_input');
+    const length = value.length;
+    if (prototype !== Array.prototype || !Number.isSafeInteger(length)
+      || length > MAX_NODES) fail('invalid_input');
+    const keys = Reflect.ownKeys(value);
+    if (keys.length !== length + 1 || !keys.includes('length')) fail('invalid_input');
+    if (length > MAX_NODES - state.nodes) fail('input_limit_exceeded');
     state.ancestors.add(value);
     const result = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = descriptors[index];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
       if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
         fail('invalid_input');
       result.push(snapshot(descriptor.value, state, depth + 1));
@@ -97,15 +98,17 @@ function snapshot(value, state, depth = 0) {
     return result;
   }
   if (prototype !== Object.prototype && prototype !== null) fail('invalid_input');
-  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = Reflect.ownKeys(value);
+  if (keys.length > MAX_NODES - state.nodes) fail('input_limit_exceeded');
   state.ancestors.add(value);
   const result = Object.create(null);
-  for (const key of Reflect.ownKeys(descriptors)) {
-    const descriptor = descriptors[key];
-    if (typeof key !== 'string' || !descriptor.enumerable
-      || !Object.hasOwn(descriptor, 'value')) fail('invalid_input');
+  for (const key of keys) {
+    if (typeof key !== 'string') fail('invalid_input');
     state.bytes += byteLength(key);
     if (state.bytes > MAX_INPUT_BYTES) fail('input_limit_exceeded');
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !descriptor.enumerable
+      || !Object.hasOwn(descriptor, 'value')) fail('invalid_input');
     Object.defineProperty(result, key, { value: snapshot(descriptor.value, state, depth + 1),
       enumerable: true, configurable: true, writable: true });
   }

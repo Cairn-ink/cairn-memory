@@ -359,6 +359,37 @@ test('P1/P8 invalid own data and bounded inputs fail without getter invocation o
 
 const MixedSourceErrorLike = { name: 'MixedSourceError' };
 
+test('P1 rejects an over-wide plain object before reading its property descriptors', () => {
+  const keys = Array.from({ length: 200_001 }, (_, index) => `k${index}`);
+  let ownKeyReads = 0, descriptorReads = 0;
+  const wide = new Proxy({}, { ownKeys() { ownKeyReads++; return keys; },
+    getOwnPropertyDescriptor() {
+      descriptorReads++;
+      return { value: 1, writable: true, enumerable: true, configurable: true };
+    } });
+  error({ history: null, question: wide, namespace: null }, 'input_limit_exceeded');
+  assert.equal(ownKeyReads, 1);
+  assert.equal(descriptorReads, 0);
+});
+
+test('P1 rejects extra array own keys before descriptors or getters run', () => {
+  const input = fixture();
+  let getterReads = 0, ownKeyReads = 0, descriptorReads = 0;
+  Object.defineProperty(input.history.sessions, 'extra', { enumerable: true,
+    get() { getterReads++; return 'never read'; } });
+  input.history.sessions = new Proxy(input.history.sessions, {
+    ownKeys(target) { ownKeyReads++; return Reflect.ownKeys(target); },
+    getOwnPropertyDescriptor(target, key) {
+      descriptorReads++;
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+  });
+  error(input, 'invalid_input');
+  assert.equal(ownKeyReads, 1);
+  assert.equal(descriptorReads, 0);
+  assert.equal(getterReads, 0);
+});
+
 test('P8 empty/redacted source and malformed namespace/roles refuse, never trim', () => {
   const fullyRedacted = fixture([session('redacted', 0, '2023/10/14 (Sat) 09:30',
     [['user', 'sk-' + 'A'.repeat(18)]])]);

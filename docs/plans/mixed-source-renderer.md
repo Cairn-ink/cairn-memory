@@ -203,8 +203,8 @@ both Node 22.16.0 and 24.15.0:
 
 These tests used synthetic local data and no provider key, paid request, corpus
 or holdout. Full logs remain in the private verification archive. They do not
-verify v2. The v2 P10 pre-commit matrix passed on both Node 22.16.0 and
-24.15.0 after the amendment:
+verify v2. The superseded v2 candidate `c34bfca` passed the P10 pre-commit
+matrix on both Node 22.16.0 and 24.15.0 after the amendment:
 
 - Focused `node --test evaluation/longmemeval/test/mixed-source.test.mjs`:
   15/15 each; full `npm run test:longmemeval`: 143/143 each.
@@ -216,12 +216,41 @@ verify v2. The v2 P10 pre-commit matrix passed on both Node 22.16.0 and
   marketplace validation passed on each runtime with `npm run validate --prefix
   tools/plugin-validation`.
 
-Full v2 logs remain in the private verification archive. The v2 candidate SHA
-and independent reviews are pending the scoped local commit and fixed-point
-review.
+Full v2 logs remain in the private verification archive. Those runs do not
+verify the later P1 width correction; its separate final matrix is recorded
+below.
+
 Before the v2 implementation, the minimal P3 boundary regression failed twice
 with `render_normalization_mismatch`. The first v2 focused run passed 14/15:
 its one failed assertion expected global backtracking and two chunks, while
 the approved greedy policy correctly produced three lossless chunks. The
 expectation was corrected, with no further renderer change, before the final
 15/15 runs on both runtimes.
+
+The later P1 width review found that materializing all own property descriptors
+could allocate past the declared node budget before rejection. Snapshot now
+checks own-key width against the remaining node budget before descriptor reads,
+and reads each descriptor after its key-byte charge. Array own-key count is
+checked before any element descriptor read. Synthetic proxy tests first failed
+with 200001 object descriptor reads and four array descriptor reads, then
+passed with zero descriptor reads on those rejection paths. `Reflect.ownKeys`
+still allocates a key list and invokes proxy traps; these limits bound traversal
+and cloning work, not total JavaScript process memory or proxy side effects.
+The P1-focused Node 22.16.0 test passed 2/2 after this correction, and the
+full focused suite passed 17/17 on both Node 22.16.0 and 24.15.0.
+
+Final P10 pre-commit verification after the P1 correction passed on both Node
+22.16.0 and 24.15.0:
+
+- Focused `node --test evaluation/longmemeval/test/mixed-source.test.mjs`:
+  17/17 each; full `npm run test:longmemeval`: 145/145 each.
+- Synthetic ingestion, comparison and public LongMemEval demos: all passed on
+  each runtime.
+- `npm test`: 112/112 each; `npm run validate`: JSON and version checks passed
+  on each runtime.
+- Pinned `npm ci --prefix tools/plugin-validation` succeeded; strict plugin and
+  marketplace validation passed on each runtime with `npm run validate --prefix
+  tools/plugin-validation`.
+
+The private verification archive retains exact command logs. Candidate SHA and
+independent review evidence belong to the delivery handoff.

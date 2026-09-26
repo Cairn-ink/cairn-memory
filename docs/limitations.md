@@ -610,7 +610,10 @@ or authorize a provider call. Exact date parsing may reject histories that
 earlier preparation retained as opaque strings. Its bounded greedy partition
 can also reject an otherwise valid normalized turn; such a preflight failure
 leaves a future fixed-N case unresolved, rather than dropping source from one
-arm. No semantic score, parity or installed behavior follows from renderer tests.
+arm. The renderer's node and byte caps bound traversal and cloned data, not
+all JavaScript process memory or side effects of Proxy traps during own-key
+inspection. No semantic score, parity or installed behavior follows from
+renderer tests.
 
 ## Where the evidence lives
 
