@@ -599,6 +599,17 @@ core timer. This supports local continuation accounting, not a guarantee
 about remote abort or eventual provider billing; foreign and external aborts
 still halt globally.
 
+The [pure mixed-source renderer](plans/mixed-source-renderer.md) can prepare
+identical bounded user/assistant role-and-content batches for a future
+controlled Cairn/Mem0 comparison using synthetic source histories. Its
+date-as-content header is synthetic metadata, not an original quotation;
+normalization can prevent exact raw-span attribution. It does not run Mem0,
+retrieve evidence, map generated memories back to source IDs, answer or judge
+questions, estimate complete joint resource needs, inspect the held-out roster
+or authorize a provider call. Exact date parsing may reject histories that
+earlier preparation retained as opaque strings. No semantic score, parity or
+installed behavior follows from renderer tests.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
