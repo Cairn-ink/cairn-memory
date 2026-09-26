@@ -134,6 +134,16 @@ and a ceiling below them does not guarantee completion. Earmarked funds and
 phase caps do not replace verified native configuration, the full common
 protocol, actual artifact and source-only checks before the untouched roster.
 
+PR243's first LongMemEval Node24 CI run (`36263553569`) failed before the
+projection tests: the evaluation-only import chain could not resolve the
+existing OpenAI adapter's `tiktoken` dependency. The paired Node22 matrix leg
+was cancelled, not passed or failed. The LongMemEval CI job and contributor
+instructions now require the adapter's existing locked isolated install before
+tests; a dependency-free checkout reproduced the failure and the same suite
+passed after that install. This is a test prerequisite correction, not evidence
+about projection arithmetic, real resource fit or benchmark quality. The public
+core installation and its dependency surface remain unchanged.
+
 The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
 performance test at its unchanged five-second child-process timeout; the other
 223 adapter tests passed. A controlled two-CPU diagnostic reproduced that timeout

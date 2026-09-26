@@ -67,6 +67,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
+      - run: npm ci --prefix adapters/openai
       # Reference-rendering tests invoke the runner's Python 3, standard library only.
       - run: python3 --version
       - run: npm run test:longmemeval

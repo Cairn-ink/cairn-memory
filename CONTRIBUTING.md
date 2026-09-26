@@ -46,12 +46,15 @@ synthetic SQLite database and handcrafted trusted inferred items, not extraction
 For capture changes also run `npm run demo:capture` on both core runtime versions.
 Its injected scripted extractor verifies source binding and lifecycle, not model quality.
 
-For `evaluation/longmemeval` changes, run `npm run test:longmemeval` and
-`npm run demo:longmemeval-ingestion` on Node 22.16 and 24, in addition to the
-generic checks above. Tests cover preparation and source-mapped ingestion;
-the demo uses scripted models and a fresh synthetic SQLite store. No downloaded
-corpus, provider key or paid run is required. See `docs/longmemeval-ingestion.md`
-for source reconstruction, normalization and remaining evaluation boundaries.
+For `evaluation/longmemeval` changes, first install the existing locked isolated
+OpenAI adapter dependency set with `npm ci --prefix adapters/openai`, then run
+`npm run test:longmemeval` and `npm run demo:longmemeval-ingestion` on Node
+22.16 and 24, in addition to the generic checks above. Tests cover preparation
+and source-mapped ingestion; the demo uses scripted models and a fresh synthetic
+SQLite store. No downloaded corpus, provider key or paid run is required. The
+install is for evaluation imports only; it does not change the public core's
+dependency surface. See `docs/longmemeval-ingestion.md` for source
+reconstruction, normalization and remaining evaluation boundaries.
 
 For comparison/scoring changes, also run `npm run demo:longmemeval-comparison`
 on both runtimes. The same `test:longmemeval` suite includes these tests. This
