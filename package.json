@@ -11,10 +11,12 @@
     "test:live-evidence-offline": "node --test evaluation/live/test/*.test.mjs",
     "test": "node --test plugins/cairn-memory/test/*.test.mjs evaluation/architecture/test/*.test.mjs",
     "demo:architecture-boundaries": "node evaluation/architecture/cli.mjs",
+    "demo:synthetic-lineage": "node evaluation/architecture/synthetic-lineage-cli.mjs",
     "test:longmemeval": "node --test evaluation/longmemeval/test/*.test.mjs",
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",
     "demo:longmemeval-ingestion": "node evaluation/longmemeval/demo.mjs",
     "demo:longmemeval-comparison": "node evaluation/longmemeval/comparison-demo.mjs",
+    "demo:longmemeval-public": "node evaluation/longmemeval/public-demo.mjs",
     "test:core": "node --test core/test/*.test.mjs",
     "demo:store": "node examples/local-store.mjs",
     "demo:history": "node examples/historical-evidence.mjs",
@@ -35,9 +37,10 @@
     "eval:semantic": "node examples/semantic-evaluation.mjs",
     "test:openai": "npm test --prefix adapters/openai",
     "validate": "node scripts/validate-json.mjs",
-    "test:experiment-budget": "node --test evaluation/experiment-budget/test/ledger.test.mjs",
+    "test:experiment-budget": "node --test evaluation/experiment-budget/test/ledger.test.mjs evaluation/experiment-budget/test/bound-ledger.test.mjs",
+    "test:benchmark-budget-extension": "node --test evaluation/experiment-budget/test/budget-extension-guard.test.mjs",
     "demo:experiment-budget": "node evaluation/experiment-budget/example.mjs",
-    "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs evaluation/experiment-budget/test/reconciliation-guard.test.mjs evaluation/experiment-budget/test/qualification-denial.test.mjs evaluation/experiment-budget/test/qualification-guard.test.mjs evaluation/experiment-budget/test/candidate-qualification-denial.test.mjs evaluation/experiment-budget/test/candidate-qualification-guard.test.mjs evaluation/experiment-budget/test/rationale-guard.test.mjs evaluation/experiment-budget/test/rationale-models-guard.test.mjs evaluation/experiment-budget/test/basis-models-guard.test.mjs evaluation/experiment-budget/test/checklist-selection-guard.test.mjs",
+    "test:experiment-request-guard": "node --test evaluation/experiment-budget/test/request-guard.test.mjs evaluation/experiment-budget/test/reconciliation-guard.test.mjs evaluation/experiment-budget/test/qualification-denial.test.mjs evaluation/experiment-budget/test/qualification-guard.test.mjs evaluation/experiment-budget/test/candidate-qualification-denial.test.mjs evaluation/experiment-budget/test/candidate-qualification-guard.test.mjs evaluation/experiment-budget/test/rationale-guard.test.mjs evaluation/experiment-budget/test/rationale-models-guard.test.mjs evaluation/experiment-budget/test/basis-models-guard.test.mjs evaluation/experiment-budget/test/checklist-selection-guard.test.mjs evaluation/experiment-budget/test/benchmark-guard.test.mjs evaluation/experiment-budget/test/case-deadline-guard.test.mjs evaluation/experiment-budget/test/transport-diagnostics.test.mjs evaluation/experiment-budget/test/request-allowance-guard.test.mjs evaluation/experiment-budget/test/budget-extension-guard.test.mjs evaluation/experiment-budget/test/chained-budget-extension.test.mjs evaluation/experiment-budget/test/qualified-source-pair-guard.test.mjs evaluation/experiment-budget/test/qualified-source-pair-parent-inspection.test.mjs evaluation/experiment-budget/test/adaptive-source-pair-guard.test.mjs",
     "demo:experiment-request-guard": "node evaluation/experiment-budget/request-guard-example.mjs"
   }
 }

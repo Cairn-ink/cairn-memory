@@ -7,11 +7,13 @@ import { denseArray, fail, object } from './validation.mjs';
 const system = readFileSync(new URL('./prompts/qualify-memories.md', import.meta.url), 'utf8');
 
 /** Produce inspectable model assertions, never trusted identity or retirement authority. */
-export async function qualifyExtractedItems(model, items) {
+export async function qualifyExtractedItems(model, items, deadline) {
+  deadline?.check();
   const input = { items: items.map((item, itemIndex) => ({ itemIndex, content: item.content,
     kind: item.kind, sources: item.receipts.map(({ role, excerpt }, receiptIndex) =>
       ({ receiptIndex, role, excerpt })) })) };
-  const output = await callModel(model, 'qualify', system, input, { failureCode: 'qualification_failed' });
+  const output = await callModel(model, 'qualify', system, input,
+    { failureCode: 'qualification_failed', deadline });
   try {
     object(output, ['qualifications']);
     const entries = denseArray(output.qualifications, items.length, items.length);
@@ -24,8 +26,11 @@ export async function qualifyExtractedItems(model, items) {
       qualificationSources(item.content, item.receipts);
       qualifications.set(entry.itemIndex, qualificationInput(entry.qualification, item.receipts));
     }
-    return items.map((item, index) => ({ ...item, qualification: qualifications.get(index) }));
+    const qualified = items.map((item, index) => ({ ...item, qualification: qualifications.get(index) }));
+    deadline?.check();
+    return qualified;
   } catch {
+    deadline?.check();
     emitDiagnostic(model, 'qualify', 'core_validation', 'invalid_qualification');
     fail('invalid_model_output');
   }

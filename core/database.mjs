@@ -9,9 +9,10 @@ import { migrateVersion9 } from './claim-qualification-schema.mjs';
 import { migrateVersion10 } from './qualified-transition-schema.mjs';
 import { migrateVersion11 } from './rationale-schema.mjs';
 import { migrateVersion12 } from './staged-evidence-schema.mjs';
+import { migrateVersion13 } from './classification-journal-schema.mjs';
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 13;
+const VERSION = 14;
 
 function createVersion3(db) {
   db.exec(`
@@ -237,10 +238,12 @@ function migrateVersion7(db) {
   installIndexReaders(db, true);
 }
 
-export function transaction(db, work) {
+export function transaction(db, work, check) {
+  check?.();
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = work();
+    check?.();
     db.exec("COMMIT");
     return result;
   } catch (error) {
@@ -271,14 +274,21 @@ export function openDatabase(path) {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if (appId === APPLICATION_ID && version === VERSION) return;
+      if (appId === APPLICATION_ID && version === 13) {
+        migrateVersion13(db);
+        db.exec(`PRAGMA user_version = ${VERSION}`);
+        return;
+      }
       if (appId === APPLICATION_ID && version === 12) {
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
       if (appId === APPLICATION_ID && version === 11) {
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -286,6 +296,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -294,6 +305,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -303,6 +315,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -313,6 +326,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -324,6 +338,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -339,6 +354,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -353,6 +369,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -366,6 +383,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -378,6 +396,7 @@ export function openDatabase(path) {
         migrateVersion10(db);
         migrateVersion11(db);
         migrateVersion12(db);
+        migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
         return;
       }
@@ -394,6 +413,7 @@ export function openDatabase(path) {
       migrateVersion10(db);
       migrateVersion11(db);
       migrateVersion12(db);
+      migrateVersion13(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

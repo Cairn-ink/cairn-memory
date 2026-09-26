@@ -13,6 +13,13 @@ persistence. Scripted completion responses choose tool names and arguments.
 The final scripted answer alone is not evidence: assertions must inspect the
 actual tool-result messages, memory IDs, revisions and Source Receipts.
 
+The newer native-only `test_capture_recovery.py` uses the same pinned AIAgent
+entrypoint for an explicit `cairn_classify_unfiled_memories` dispatch after a
+cold keyless admission inspection. Its fake provider supplies classification
+only at that step. The test asserts the actual tool result, unchanged receipts
+and initial journal, and a stale-reference rejection without another model
+call. It does not test natural tool selection or a real provider response.
+
 ## Run and observed coverage
 
 Prepare the pinned host and dependencies as in

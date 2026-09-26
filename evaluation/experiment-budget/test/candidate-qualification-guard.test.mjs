@@ -8,6 +8,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { createOpenAIModel } from '../../../adapters/openai/index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL } from '../../../adapters/openai/profiles.mjs';
 import { schemasFor } from '../../../adapters/openai/schemas.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
+import { createQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
 import { createExperimentBudget, reopenExperimentBudget } from '../index.mjs';
 import * as guards from '../request-guard.mjs';
 import { experimentPolicy } from '../../live/session.mjs';
@@ -30,7 +32,7 @@ const request = (value = body()) => ({ method: 'POST', redirect: 'error', signal
   headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
 const response = () => ({ object: 'response', model: DEFAULT_MODEL, status: 'completed', error: null, incomplete_details: null,
   output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text',
-    text: JSON.stringify({ qualifications: Object.fromEntries(output().qualifications.map(item => ['item_' + item.itemIndex, item])) }) }] }],
+    text: JSON.stringify(qualificationPoolWire(input(), output())) }] }],
   usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });
 const fake = (calls) => async (url, options) => { calls.push({ url, body: JSON.parse(options.body) });
   return Response.json(url === urls.count ? { object: 'response.input_tokens', input_tokens: 100 } : response()); };
@@ -72,6 +74,35 @@ test('CG1 all four old guards deny candidate count/generation after new capabili
   }
   assert.throws(() => make({ ...f, candidateQualificationExtension: qualificationExtension }, fetchImpl));
   assert.throws(() => guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension: f.candidateQualificationExtension }));
+  assert.equal(state(f.ledger).requestCount, 0);
+});
+
+test('CG1 actual opt-in catalog adapter wire remains denied by every old guard without reservation', async () => {
+  const catalog = createQualificationTextCatalog(input()).catalog;
+  const unguarded = [];
+  const model = createOpenAIModel({ apiKey: key, qualificationInputMode: 'adaptive-text-catalog-v1',
+    fetchImpl: fake(unguarded) });
+  assert.deepEqual(await model.qualifyCandidates({ system: 'Synthetic.', input: catalog,
+    maxOutputTokens: 1024, signal: new AbortController().signal }), output());
+  assert.equal(unguarded.length, 2);
+  assert.equal(JSON.parse(unguarded[0].body.input[0].content[0].text).inputMode, 'text-catalog-v1');
+  const f = fixture(); const extension = guards.authorizeExtractionModelExtension(f.authorization);
+  const reconciliationExtension = guards.authorizeReconciliationExtension({ ...f.authorization, extension });
+  const qualificationExtension = guards.authorizeQualificationExtension(f.authorization);
+  const base = { ledger: f.ledger, policy: f.policy, fetchImpl: () => assert.fail('No guarded transport') };
+  const all = [guards.createExperimentRequestGuard(base),
+    guards.createExtendedExperimentRequestGuard({ ...base, extension }),
+    guards.createReconciliationExperimentRequestGuard({ ...base, extension, reconciliationExtension }),
+    guards.createQualificationExperimentRequestGuard({ ...base, qualificationExtension }),
+    make(f, base.fetchImpl)];
+  for (const guard of all) {
+    try {
+      for (const wire of unguarded) {
+        await assert.rejects(guard.cairnFetch(wire.url, request(wire.body)), { code: 'unsupported_request' });
+      }
+      assert.equal(guard.getState().requestCount, 0);
+    } finally { guard.close(); }
+  }
   assert.equal(state(f.ledger).requestCount, 0);
 });
 

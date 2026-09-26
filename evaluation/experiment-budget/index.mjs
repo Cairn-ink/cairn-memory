@@ -1,6 +1,7 @@
 import { closeSync, lstatSync, mkdirSync, openSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
 
 const APPLICATION_ID = 0x43454247;
 const SCHEMA_VERSION = 1;
@@ -325,21 +326,46 @@ function publicState({ run, attempts }) {
   });
 }
 
-function openHandle(db, expected) {
+function openHandle(db, expected, bound = null) {
   let closed = false;
-  const access = (mode, work) => {
+  const access = (mode, work, expectedAfter = null) => {
     if (closed) fail('ledger_closed');
-    return withTransaction(db, mode, () => {
-      const state = readValidatedState(db);
-      assertConfiguration(state, expected);
-      return work(state);
-    });
+    if (bound === null) {
+      return withTransaction(db, mode, () => {
+        const state = readValidatedState(db);
+        assertConfiguration(state, expected);
+        return work(state);
+      });
+    }
+    try {
+      const completed = withTransaction(db, mode, () => {
+        inspectTransitionLocation(expected, bound.identity);
+        const state = readValidatedState(db);
+        assertConfiguration(state, expected);
+        if (JSON.stringify(publicState(state)) !== bound.witness) fail('invalid_ledger');
+        const result = work(state);
+        const after = readValidatedState(db);
+        assertConfiguration(after, expected);
+        inspectTransitionLocation(expected, bound.identity);
+        const actual = JSON.stringify(publicState(after));
+        const intended = expectedAfter === null ? bound.witness : JSON.stringify(expectedAfter(state, result));
+        if (actual !== intended) fail('invalid_ledger');
+        return { result, witness: actual };
+      });
+      bound.witness = completed.witness;
+      return completed.result;
+    } catch (error) {
+      closed = true;
+      try { db.close(); } catch { /* The first transaction failure remains authoritative. */ }
+      throw mapError(error);
+    }
   };
   return Object.freeze({
     reserve(options) {
       validateExactObject(options, ['attemptId', 'channel', 'reservedMicroUsd']);
       const attemptId = validateUuid(options.attemptId);
-      if (!CHANNEL_SET.has(options.channel)) fail('invalid_options');
+      const channel = bound === null ? null : options.channel;
+      if (!CHANNEL_SET.has(bound === null ? options.channel : channel)) fail('invalid_options');
       const reservedMicroUsd = validateSafeInteger(options.reservedMicroUsd);
       return access('write', (current) => {
         if (current.attempts.some((attempt) => attempt.attempt_id === attemptId)) {
@@ -352,17 +378,22 @@ function openHandle(db, expected) {
         }
         db.prepare(`INSERT INTO attempts
           (attempt_id, channel, reserved_micro_usd, outcome, actual_micro_usd)
-          VALUES (?, ?, ?, NULL, NULL)`).run(attemptId, options.channel, reservedMicroUsd);
+          VALUES (?, ?, ?, NULL, NULL)`).run(attemptId,
+          bound === null ? options.channel : channel, reservedMicroUsd);
         db.prepare(`UPDATE run_config SET reserved_micro_usd = reserved_micro_usd + ?,
           request_count = request_count + 1 WHERE singleton = 1`).run(reservedMicroUsd);
         readValidatedState(db);
         return publicAttempt({
           attempt_id: attemptId,
-          channel: options.channel,
+          channel: bound === null ? options.channel : channel,
           reserved_micro_usd: reservedMicroUsd,
           outcome: null,
           actual_micro_usd: null,
         });
+      }, (current, attempt) => {
+        const prior = publicState(current);
+        return { ...prior, reservedMicroUsd: prior.reservedMicroUsd + reservedMicroUsd,
+          requestCount: prior.requestCount + 1, attempts: [...prior.attempts, attempt] };
       });
     },
 
@@ -373,7 +404,8 @@ function openHandle(db, expected) {
         : ['attemptId', 'outcome'];
       validateExactObject(options, keys);
       const attemptId = validateUuid(options.attemptId);
-      if (!OUTCOME_SET.has(options.outcome)) fail('invalid_options');
+      const outcome = bound === null ? null : options.outcome;
+      if (!OUTCOME_SET.has(bound === null ? options.outcome : outcome)) fail('invalid_options');
       const actualMicroUsd = hasOwn(options, 'actualMicroUsd')
         ? validateSafeInteger(options.actualMicroUsd)
         : null;
@@ -382,12 +414,18 @@ function openHandle(db, expected) {
         if (!attempt) fail('attempt_not_found');
         if (attempt.outcome !== null) fail('attempt_terminal');
         db.prepare(`UPDATE attempts SET outcome = ?, actual_micro_usd = ?
-          WHERE attempt_id = ?`).run(options.outcome, actualMicroUsd, attemptId);
+          WHERE attempt_id = ?`).run(bound === null ? options.outcome : outcome, actualMicroUsd, attemptId);
         if (actualMicroUsd !== null && actualMicroUsd > attempt.reserved_micro_usd) {
           db.prepare(`UPDATE run_config SET state = 'overrun' WHERE singleton = 1`).run();
         }
         readValidatedState(db);
-        return publicAttempt({ ...attempt, outcome: options.outcome, actual_micro_usd: actualMicroUsd });
+        return publicAttempt({ ...attempt,
+          outcome: bound === null ? options.outcome : outcome, actual_micro_usd: actualMicroUsd });
+      }, (current, result) => {
+        const prior = publicState(current);
+        return { ...prior,
+          state: actualMicroUsd !== null && actualMicroUsd > result.reservedMicroUsd ? 'overrun' : prior.state,
+          attempts: prior.attempts.map((attempt) => attempt.attemptId === attemptId ? result : attempt) };
       });
     },
 
@@ -428,6 +466,192 @@ function constructDatabase(filename, options = {}) {
     try { db?.close(); } catch { /* Return only a fixed construction failure. */ }
     throw mapError(error);
   }
+}
+
+// Only the explicit cap-transition APIs use this existing-only writable open.
+// The older create/reopen behavior is intentionally unchanged.
+function constructExistingWritableDatabase(filename) {
+  const url = pathToFileURL(filename);
+  url.searchParams.set('mode', 'rw');
+  return constructDatabase(url.href);
+}
+
+function inspectTransitionLocation(config, original = null) {
+  inspectExistingLocation(config);
+  let directory;
+  let database;
+  try {
+    directory = lstatSync(config.directory);
+    database = lstatSync(config.filename);
+  } catch { fail('unsafe_database_file'); }
+  if (!directory.isDirectory() || directory.isSymbolicLink()
+    || !database.isFile() || database.isSymbolicLink() || database.nlink !== 1) {
+    fail('unsafe_database_file');
+  }
+  const identity = Object.freeze({ directoryDev: directory.dev, directoryIno: directory.ino,
+    databaseDev: database.dev, databaseIno: database.ino });
+  if (original && Object.keys(identity).some((key) => identity[key] !== original[key])) {
+    fail('unsafe_database_file');
+  }
+  return identity;
+}
+
+function snapshotExactConfiguration(value) {
+  try {
+    validateExactObject(value, ['directory', 'runId', 'limitMicroUsd', 'requestCap']);
+    const detached = { directory: value.directory, runId: value.runId,
+      limitMicroUsd: value.limitMicroUsd, requestCap: value.requestCap };
+    return validateConfiguration(detached);
+  } catch (error) {
+    if (error instanceof ExperimentBudgetError) throw error;
+    fail('invalid_options');
+  }
+}
+
+export function openBoundExperimentBudget(options) {
+  let config;
+  let authorize;
+  try {
+    validateExactObject(options, ['configuration', 'authorize']);
+    config = snapshotExactConfiguration(options.configuration);
+    authorize = options.authorize;
+    if (typeof authorize !== 'function') fail('invalid_options');
+  } catch (error) {
+    throw mapError(error);
+  }
+  const identity = inspectTransitionLocation(config);
+  const db = constructExistingWritableDatabase(config.filename);
+  try {
+    const witness = withTransaction(db, 'write', () => {
+      inspectTransitionLocation(config, identity);
+      const state = readValidatedState(db);
+      assertConfiguration(state, config);
+      if (state.run.state !== 'open' || state.attempts.some((row) => row.outcome === null)) {
+        fail('budget_blocked');
+      }
+      const original = JSON.stringify(publicState(state));
+      if (authorize(publicState(state)) !== undefined) fail('ledger_failed');
+      inspectTransitionLocation(config, identity);
+      const after = readValidatedState(db);
+      assertConfiguration(after, config);
+      if (JSON.stringify(publicState(after)) !== original) fail('invalid_ledger');
+      return original;
+    });
+    return openHandle(db, config, { identity, witness });
+  } catch (error) {
+    try { db.close(); } catch { /* The authorization failure remains authoritative. */ }
+    throw mapError(error);
+  }
+}
+
+function snapshotTransitionOptions(options) {
+  try {
+    validateExactObject(options, ['oldConfiguration', 'newConfiguration', 'expectedCheckpoint', 'authorize']);
+    const oldConfigurationValue = options.oldConfiguration;
+    const newConfigurationValue = options.newConfiguration;
+    const checkpoint = options.expectedCheckpoint;
+    const authorize = options.authorize;
+    const oldConfiguration = snapshotExactConfiguration(oldConfigurationValue);
+    const newConfiguration = snapshotExactConfiguration(newConfigurationValue);
+    validateExactObject(checkpoint, ['requestCount', 'reservedMicroUsd']);
+    const requestCount = validateSafeInteger(checkpoint.requestCount);
+    const reservedMicroUsd = validateSafeInteger(checkpoint.reservedMicroUsd);
+    if (oldConfiguration.directory !== newConfiguration.directory
+      || oldConfiguration.runId !== newConfiguration.runId
+      || oldConfiguration.limitMicroUsd >= newConfiguration.limitMicroUsd
+      || oldConfiguration.requestCap >= newConfiguration.requestCap
+      || requestCount > oldConfiguration.requestCap
+      || reservedMicroUsd > oldConfiguration.limitMicroUsd
+      || typeof authorize !== 'function') fail('invalid_options');
+    return { oldConfiguration, newConfiguration, checkpoint: Object.freeze({ requestCount,
+      reservedMicroUsd }), authorize };
+  } catch (error) {
+    if (error instanceof ExperimentBudgetError) throw error;
+    fail('invalid_options');
+  }
+}
+
+function checkpointPrefix(state, checkpoint) {
+  const prefix = state.attempts.slice(0, checkpoint.requestCount);
+  if (prefix.length !== checkpoint.requestCount
+    || prefix.some((attempt) => attempt.outcome === null)
+    || prefix.reduce((sum, attempt) => sum + attempt.reservedMicroUsd, 0)
+      !== checkpoint.reservedMicroUsd) fail('configuration_mismatch');
+  return Object.freeze(prefix);
+}
+
+export function inspectExperimentBudgetSnapshot(configuration) {
+  const config = snapshotExactConfiguration(configuration);
+  const identity = inspectTransitionLocation(config);
+  const db = constructDatabase(config.filename, { readOnly: true });
+  let result;
+  let operationError;
+  try {
+    result = withTransaction(db, 'read', () => {
+      inspectTransitionLocation(config, identity);
+      const state = readValidatedState(db);
+      assertConfiguration(state, config);
+      inspectTransitionLocation(config, identity);
+      return publicState(state);
+    });
+  } catch (error) { operationError = mapError(error); }
+  try { db.close(); } catch (error) { if (!operationError) operationError = mapError(error); }
+  if (operationError) throw operationError;
+  return result;
+}
+
+export function transitionExperimentBudgetCaps(options) {
+  const { oldConfiguration, newConfiguration, checkpoint, authorize } = snapshotTransitionOptions(options);
+  const identity = inspectTransitionLocation(oldConfiguration);
+  const db = constructExistingWritableDatabase(oldConfiguration.filename);
+  let result;
+  let operationError;
+  try {
+    result = withTransaction(db, 'write', () => {
+      inspectTransitionLocation(oldConfiguration, identity);
+      const current = readValidatedState(db);
+      if (current.run.run_id !== oldConfiguration.runId) fail('run_mismatch');
+      const oldCaps = current.run.limit_micro_usd === oldConfiguration.limitMicroUsd
+        && current.run.request_cap === oldConfiguration.requestCap;
+      const newCaps = current.run.limit_micro_usd === newConfiguration.limitMicroUsd
+        && current.run.request_cap === newConfiguration.requestCap;
+      if (!oldCaps && !newCaps) fail('configuration_mismatch');
+      if (current.run.state !== 'open' || current.attempts.some((attempt) => attempt.outcome === null)) {
+        fail('budget_blocked');
+      }
+      const state = publicState(current);
+      const prefix = checkpointPrefix(state, checkpoint);
+      if (oldCaps && (state.requestCount !== checkpoint.requestCount
+        || state.reservedMicroUsd !== checkpoint.reservedMicroUsd)) fail('configuration_mismatch');
+      const callbackResult = authorize(Object.freeze({ mode: oldCaps ? 'transition' : 'replay', state,
+        checkpointAttempts: prefix }));
+      if (callbackResult !== undefined) fail('ledger_failed');
+      inspectTransitionLocation(oldConfiguration, identity);
+      const afterCallback = readValidatedState(db);
+      if (JSON.stringify(publicState(afterCallback)) !== JSON.stringify(state)) fail('invalid_ledger');
+      if (oldCaps) {
+        const changed = db.prepare(`UPDATE run_config SET limit_micro_usd = ?, request_cap = ?
+          WHERE singleton = 1 AND run_id = ? AND limit_micro_usd = ? AND request_cap = ?
+            AND reserved_micro_usd = ? AND request_count = ? AND state = 'open'`).run(
+          newConfiguration.limitMicroUsd, newConfiguration.requestCap,
+          oldConfiguration.runId, oldConfiguration.limitMicroUsd, oldConfiguration.requestCap,
+          checkpoint.reservedMicroUsd, checkpoint.requestCount);
+        if (Number(changed.changes) !== 1) fail('configuration_mismatch');
+      }
+      const after = readValidatedState(db);
+      assertConfiguration(after, newConfiguration);
+      if (after.run.reserved_micro_usd !== state.reservedMicroUsd
+        || after.run.request_count !== state.requestCount
+        || JSON.stringify(publicState(after).attempts) !== JSON.stringify(state.attempts)) {
+        fail('invalid_ledger');
+      }
+      inspectTransitionLocation(oldConfiguration, identity);
+      return publicState(after);
+    });
+  } catch (error) { operationError = mapError(error); }
+  try { db.close(); } catch (error) { if (!operationError) operationError = mapError(error); }
+  if (operationError) throw operationError;
+  return result;
 }
 
 export function createExperimentBudget(options) {
