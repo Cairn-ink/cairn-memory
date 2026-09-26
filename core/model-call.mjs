@@ -2,6 +2,11 @@ import { countTokens } from './model-budget.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 
+// Internal cross-layer provenance only. There is deliberately no setter and
+// this predicate is not re-exported from the public core entry point.
+const coreDeadlineSignals = new WeakSet();
+export const isCoreModelDeadlineSignal = (signal) => coreDeadlineSignals.has(signal);
+
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
   { validateFresh = () => {}, failureCode = 'recall_failed' } = {}) {
@@ -22,7 +27,11 @@ export async function callModel(model, method, system, input,
     output = await Promise.race([
       Promise.resolve().then(() => model[method]({ ...structuredClone(request), signal: controller.signal })),
       new Promise((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(new MemoryStoreError('model_timeout')); }, 30_000);
+        timer = setTimeout(() => {
+          coreDeadlineSignals.add(controller.signal);
+          controller.abort();
+          reject(new MemoryStoreError('model_timeout'));
+        }, 30_000);
       }),
     ]);
   } catch (error) {
