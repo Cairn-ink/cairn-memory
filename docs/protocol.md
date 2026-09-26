@@ -14,6 +14,15 @@ bounded ordinals, arm/phase, counts and closed outcome reasons; they are not
 hosted telemetry or a public core/plugin/MCP field. A revocation signal fences
 late in-process requests but is not evidence that a native child exited.
 
+The separate contained native gateway keeps source text in one fresh private
+case store and sends only W-validated Mem0 chat/embedding bodies through the
+active X scope. Its artifact and configuration SHA-256 values are private
+local identity metadata, not signatures, public protocol fields, or proof of
+an immutable host. The normalized native result has only ordered bounded
+`{id,memory,score,attributedTo}` entries and a verified count of native-returned
+ADD records; it does not infer source provenance, timestamps, missing facts,
+or a quality score. Synthetic fake-provider tests do not authorize paid work.
+
 
 ### Optional embedded indexed source-window boundary
 

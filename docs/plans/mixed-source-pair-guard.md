@@ -229,6 +229,14 @@ Next gates: contained key-owning UDS gateway with pinned native fakewire;
 common source/context/scorer/runner; freeze and source-free feasibility of
 originalreserved30 and remainingUS$200 cumulative budget; one paired S3 run.
 
+Y follow-on narrows the first gate to a local fake-provider native transport.
+The mixed case handle alone gains no-argument `halt()`: while its scope is
+current and open it sets irreversible global halt and aborts scope work, even
+after a local seal; stale/closed handles are inert. It adds no dispatch,
+reset, or arbitrary reap authority and does not change any old-v1 profile.
+The gateway owns native process closure; X's revocation signal by itself
+remains only an in-process fence. See [Y](mem0-native-gateway.md).
+
 ## Preimplementation feasibility record
 
 Primary read current B4/M/W and private guard scope/transport paths. Author's

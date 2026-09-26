@@ -113,6 +113,14 @@ the supplied current suffix or digest, bind a new grant, or authorize transport.
 The separately versioned offline mixed guard now binds that full history from
 B4's authentic in-transaction snapshot, under a private one-shot claim. It
 still does not authenticate an installed native child or contain its requests.
+The separate [contained native gateway](plans/mem0-native-gateway.md) now
+rehashes a local pinned Mem0/Python installation and exercises real native
+add/get/search under Linux bwrap and a private AF_UNIX fake-provider gateway.
+It verifies returned ADD persistence, scoped accounting, child exit and its
+owned process-group disappearance for that run. These local checks assume a
+trusted OS and same-UID host; they are not an immutable artifact, general
+sandbox guarantee, credential owner, paid launch, source-provenance renderer,
+matched-resource comparison, or semantic quality measurement.
 
 The [controlled Mem0 text-wire profile](plans/mem0-wire-contract.md) validates
 synthetic chat and embedding JSON, pinned token counts, bounded response shape

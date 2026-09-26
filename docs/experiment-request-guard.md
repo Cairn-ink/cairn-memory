@@ -651,6 +651,20 @@ verify the declared artifact
 hashes against an installation, grant a paid launch or measure quality. See
 [its acceptance contract](plans/mixed-source-pair-guard.md).
 
+The separate [contained native gateway](plans/mem0-native-gateway.md) now
+inspects a pinned local Mem0/Python installation, rehashes before/after one
+case, and runs actual Mem0 add/get/search in a fresh bwrap child behind a
+private AF_UNIX listener. Only the current mixed generation/Mem0 scope can
+dispatch its chat and embedding wire through this listener; X remains the
+authoritative route and accounting guard. Its narrowly trusted `handle.halt()`
+irreversibly closes paid work after a global native/cleanup fault even if a
+local case was already sealed. A successful gateway return requires the child
+and its owned process group to be gone, guarded attempts settled, and the
+temporary listener closed. Tests use local fake provider responses only. This
+does not own credentials, use an operator ledger, run a common scorer, or
+grant a paid campaign; same-UID hostile host mutation and OS compromise are
+outside its trusted-host boundary.
+
 Never create a new ledger to replenish an existing experiment. Historical
 spending authority is not renewed by a merge, passing tests or this policy.
 There are no paid runs, user profiles, production writes, release or deployment

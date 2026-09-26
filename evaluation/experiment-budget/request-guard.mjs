@@ -3680,7 +3680,16 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
       lastScopeSnapshot = scopeSnapshot(scope);
       const handle = Object.freeze({ snapshot: () => scopeSnapshot(scope),
         revocationSignal: scope.controller.signal,
-        revoke: () => { if (scope.open && scope === activeScope) sealScope(scope, 'cancelled'); } });
+        revoke: () => { if (scope.open && scope === activeScope) sealScope(scope, 'cancelled'); },
+        // Restrictive authority for a trusted native gateway only. A locally
+        // sealed case can still discover an unreaped child or unsettled work.
+        halt: () => {
+          if (!scope.open || scope !== activeScope) return;
+          halted = true;
+          // Keep the existing local status/reason (if any); global halt wins
+          // at the enclosing accounting boundary without minting a case reason.
+          scope.controller.abort('paid_work_halted');
+        } });
       let value;
       let callbackError = false;
       try { value = await storage.run(scope, () => operation(handle)); }

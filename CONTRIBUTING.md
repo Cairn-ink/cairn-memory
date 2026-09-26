@@ -121,6 +121,15 @@ the isolated OpenAI adapter dependencies above. These exercise guarded fake HTTP
 and synthetic ledgers, not paid requests or a configured Hermes profile. See
 `docs/experiment-request-guard.md`; passing this gate does not authorize a live run.
 
+For the evaluation-only native Mem0 gateway, additionally run
+`npm run test:mem0-native-gateway` on both Node 22.16 and 24. Its explicit
+`npm run test:mem0-native-local` gate also requires pinned local
+`CAIRN_MEM0_NATIVE_VENV_ROOT` and `CAIRN_MEM0_NATIVE_PYTHON_ROOT`, Linux
+`bwrap`, and both Node versions. Missing prerequisites fail this gate rather
+than count as a skip. Both suites use new synthetic ledgers and fake HTTP; the
+local gate imports installed Mem0 but never uses a provider key or operational
+ledger. This is containment/accounting verification, not permission to spend.
+
 For public pilot runner changes (`evaluation/live/public-pilot.mjs`,
 `evaluation/live/public-pilot-merge.mjs`, `evaluation/live/public-pilot-cli.mjs`
 and their tests), run `npm run test:live-evidence-offline` on Node 22.16 and 24

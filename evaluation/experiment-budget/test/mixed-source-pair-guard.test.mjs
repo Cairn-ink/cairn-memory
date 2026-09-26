@@ -879,7 +879,7 @@ test('X9 concurrency, closure and bounded source-free snapshots', async t => {
   });
   await guard.withCaseScope(capability.schedule[0], async () => {});
   const outcome = await guard.withCaseScope(capability.schedule[1], async handle => {
-    assert.deepEqual(Object.keys(handle), ['snapshot', 'revocationSignal', 'revoke']);
+    assert.deepEqual(Object.keys(handle), ['snapshot', 'revocationSignal', 'revoke', 'halt']);
     assert.equal(handle.snapshot().status, 'active');
     const first = guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
       request(embedding(['a'])));
