@@ -156,6 +156,25 @@ and a ceiling below them does not guarantee completion. Earmarked funds and
 phase caps do not replace verified native configuration, the full common
 protocol, actual artifact and source-only checks before the untouched roster.
 
+The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
+an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.
+Its `apiKey` parameter serves Cairn and shared answer/judge requests; the
+native child uses a local-only dummy key and requires a separately trusted
+parent-side credential broker at a later launch gate. No credential is passed
+into that child here. The runner can await core work, owned guarded promises,
+X accounting and native cleanup; it cannot attest an abort-ignoring physical
+fetch's settlement. The guard fences late responses, and local tests must
+release such test doubles and check for no late dispatch or database progress.
+An X-authenticated local deadline can leave unknown actual cost while retaining
+full reservation; other unknown outcomes globally stop. A failed native HTTP
+timeout that races X's own timer may be an ambiguous external abort, not an
+authenticated local deadline, and is never promoted by error text alone. The
+v2 native configuration adds a fixed five-second local child/socket transport
+grace so X normally owns the provider deadline, without extending that X
+deadline or guaranteeing cross-process scheduling under starvation.
+Synthetic admission and source-receipt checks cannot prove real-model support,
+retrieval usefulness, parity, resource fit or semantic answer quality.
+
 PR243's first LongMemEval Node24 CI run (`36263553569`) failed before the
 projection tests: the evaluation-only import chain could not resolve the
 existing OpenAI adapter's `tiktoken` dependency. The paired Node22 matrix leg

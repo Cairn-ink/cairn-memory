@@ -222,7 +222,7 @@ serialized object has ordered `entries` and installed distribution `metadata`
 name/version triples. The separate installed `mem0/` file-only digest omits
 `__pycache__/` and `.pyc` under domain `cairn.mem0.native.source-tree.v1`.
 The configuration digest uses the same tag/newline/JSON/newline format under
-`cairn.mem0.native.configuration.v1`; the frozen template includes the fixed
+`cairn.mem0.native.configuration.v2` after the M7c amendment below; the frozen template includes the fixed
 local HTTP base URL `http://unix-gateway/v1`. The native input's serialized
 `{batches,query}` cap is 8 MiB; the fixed parent-to-child wrapper has a
 separate 2 KiB allowance. These hashes identify a trusted local installation,
@@ -423,3 +423,25 @@ validation, synthetic budget and guard demos, and pinned marketplace/strict
 plugin validation also passed on both Nodes. The private verification archive
 retains terminal logs for these runs. Independent primary acceptance and both
 whole-base review axes remain separate delivery gates.
+
+## M7c local transport timeout correction (mixed-runner dependent candidate)
+
+The mixed runner's real native fake-HTTP integration exposed a race between
+three equal 1000 ms deadlines: child SDK/httpx, gateway idle socket, and X's
+authoritative provider attempt. Root independently reproduced a global unknown
+with X's scope still active. A child-only +5000 ms diagnostic remained RED;
+child plus idle-socket +5000 ms reached X's authentic local deadline. The
+original failed probes remain retained; an occasional equal-timer pass is not
+proof of ordering. This amendment supersedes earlier wording that forbade any
+timeout extension only for local IPC waiting, not for provider authority.
+
+The v2 hashed configuration binds `timeoutPolicy` as
+`x-provider-local-transport-grace-v1`, fixed `localTransportGraceMs:5000`, and
+`localTransportTimeoutMs:httpTimeoutMs+5000`. The child input protocol v2
+passes only the explicit local timeout to httpx/OpenAI (integer 5001–115000,
+not bool). The gateway idle socket uses that derived value. Header/body/request
+receive deadlines, whole-child watchdog, kill/reap, X provider deadline,
+reservations and zero retries remain unchanged. This bounded mitigation gives
+X's timer room to establish its existing local outcome; extreme scheduling or
+Y-first faults can still halt globally. Old configuration digests and grants
+cannot be reused, and no real provider or credential is introduced.

@@ -136,6 +136,16 @@ skip. Both suites use new synthetic ledgers and fake HTTP; the
 local gate imports installed Mem0 but never uses a provider key or operational
 ledger. This is containment/accounting verification, not permission to spend.
 
+For the controlled mixed Cairn/Mem0 runner, additionally run
+`npm run demo:longmemeval-mixed` and the explicit `npm run test:mixed-native-local`
+on Node 22.16 and 24.15 after `npm ci --prefix adapters/openai`. The demo is
+pre-grant preparation/packing only. The local test requires the same pinned
+native roots and Linux containment prerequisites as the Y gate, and exercises
+fresh real Cairn and native Mem0 through one synthetic X ledger with fake HTTP.
+Missing prerequisites fail, never skip as a pass. Do not supply a live key,
+corpus or operational ledger. These gates do not establish a semantic score,
+credential broker, resource fit or paid-run authorization.
+
 For public pilot runner changes (`evaluation/live/public-pilot.mjs`,
 `evaluation/live/public-pilot-merge.mjs`, `evaluation/live/public-pilot-cli.mjs`
 and their tests), run `npm run test:live-evidence-offline` on Node 22.16 and 24

@@ -78,9 +78,12 @@ export function mem0NativeConfiguration(options) {
     || childTimeoutMs > 3_600_000
     || !Number.isSafeInteger(httpTimeoutMs) || httpTimeoutMs < 1
     || httpTimeoutMs > 110_000) fail('invalid_native_configuration');
-  const configuration = deepFreeze({ version: 'cairn-mem0-native-configuration-v1',
+  const configuration = deepFreeze({ version: 'cairn-mem0-native-configuration-v2',
     wireProfile: structuredClone(mem0WireProfile()), topK, threshold,
-    childTimeoutMs, httpTimeoutMs, terminationPolicy: 'owned-group-immediate-kill-v1',
+    childTimeoutMs, httpTimeoutMs,
+    timeoutPolicy: 'x-provider-local-transport-grace-v1',
+    localTransportGraceMs: 5_000, localTransportTimeoutMs: httpTimeoutMs + 5_000,
+    terminationPolicy: 'owned-group-immediate-kill-v1',
     termGraceMs: 0, reapMs: 5_000,
     inputBytes: MAX_INPUT, outputBytes: 2 * 1024 * 1024, stderrBytes: 64 * 1024,
     connectionLimit: 4, headerLimit: 40, headerBytes: 16 * 1024,
@@ -98,9 +101,23 @@ export function mem0NativeConfiguration(options) {
     transportPolicy: 'private-uds-v1',
     containmentPolicy: 'bwrap-user-net-pid-ipc-root-readonly-v1' });
   const result = Object.freeze({ configuration,
-    configurationSha256: digest('cairn.mem0.native.configuration.v1', configuration) });
+    configurationSha256: digest('cairn.mem0.native.configuration.v2', configuration) });
   identities.set(result, true);
   return result;
+}
+
+// The same current-file and opaque-identity check is available before X enters
+// its first case scope. A check inside an active Y scope retains Y's halt rule.
+export function checkedMem0NativeConfiguration(descriptor) {
+  if (!identities.has(descriptor)) fail('native_configuration_identity_required');
+  const { configuration, configurationSha256 } = descriptor;
+  const currentChildSha256 = childSha256();
+  if (currentChildSha256 !== configuration.childSourceSha256
+    || digest('cairn.mem0.native.configuration.v2', configuration) !== configurationSha256
+    || JSON.stringify(configuration.wireProfile) !== JSON.stringify(mem0WireProfile())) {
+    fail('native_configuration_changed');
+  }
+  return descriptor;
 }
 
 function inputSnapshot(value) {
@@ -157,18 +174,9 @@ export async function runMem0NativeCase(options) {
     || typeof guard?.getState !== 'function' || typeof guard?.attempts !== 'function'
     || guard.isHalted?.()) fail('native_guard_required');
   const scope = scopeIdentity(capability, handle);
-  if (!identities.has(suppliedConfiguration)) {
-    handle.halt(); fail('native_configuration_identity_required');
-  }
-  const { configuration, configurationSha256 } = suppliedConfiguration;
-  let currentChildSha256;
-  try { currentChildSha256 = childSha256(); }
-  catch { handle.halt(); fail('native_child_source_invalid'); }
-  if (currentChildSha256 !== configuration.childSourceSha256
-    || digest('cairn.mem0.native.configuration.v1', configuration) !== configurationSha256
-    || JSON.stringify(configuration.wireProfile) !== JSON.stringify(mem0WireProfile())) {
-    handle.halt(); fail('native_configuration_changed');
-  }
+  let configuration, configurationSha256;
+  try { ({ configuration, configurationSha256 } = checkedMem0NativeConfiguration(suppliedConfiguration)); }
+  catch (error) { handle.halt(); throw error; }
   const manifest = capability.manifest?.mem0;
   if (manifest?.version !== '2.2.0'
     || manifest.sourceTreeSha256 !== artifact?.sourceTreeSha256

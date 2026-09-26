@@ -312,7 +312,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   server.maxHeadersCount = 0;
   server.headersTimeout = configuration.headerTimeoutMs;
   server.requestTimeout = configuration.httpTimeoutMs;
-  server.timeout = configuration.httpTimeoutMs;
+  server.timeout = configuration.localTransportTimeoutMs;
   server.on('connection', connection => {
     if (connections.size >= configuration.connectionLimit) {
       firstFault('native_connection_cap');
@@ -350,10 +350,10 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     if (!pinnedChildSource(childFile, configuration.childSourceSha256)) {
       fail('native_child_source_changed');
     }
-    const childInput = Buffer.from(JSON.stringify({ version: 'cairn-mem0-native-child-input-v1',
+    const childInput = Buffer.from(JSON.stringify({ version: 'cairn-mem0-native-child-input-v2',
       socket: '/case/gateway.sock', store: '/case/store', userId: scope.caseId,
       topK: configuration.topK, threshold: configuration.threshold,
-      httpTimeoutMs: configuration.httpTimeoutMs, input }), 'utf8');
+      localTransportTimeoutMs: configuration.localTransportTimeoutMs, input }), 'utf8');
     // The separately validated input may use all 8 MiB; the fixed trusted
     // protocol envelope has a further 2 KiB allowance, never arbitrary data.
     if (childInput.length > configuration.inputBytes + 2048) fail('native_input_exceeded');

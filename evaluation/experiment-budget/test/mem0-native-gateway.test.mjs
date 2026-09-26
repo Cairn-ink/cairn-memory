@@ -12,7 +12,8 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { PassThrough, Writable } from 'node:stream';
 import { checkedMem0NativeArtifact, inspectMem0NativeArtifact } from '../mem0-native-artifact.mjs';
-import { mem0NativeConfiguration, runMem0NativeCase } from '../mem0-native-gateway.mjs';
+import { checkedMem0NativeConfiguration, mem0NativeConfiguration,
+  runMem0NativeCase } from '../mem0-native-gateway.mjs';
 import { runNativeGatewayKernel } from '../mem0-native-runtime.mjs';
 import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
 
@@ -115,12 +116,19 @@ test('Y3/Y4 rejects getters, unknown config keys and both lone surrogate forms b
   { code: 'invalid_native_options' });
   const configuration = mem0NativeConfiguration({ topK: 1, threshold: 0,
     childTimeoutMs: 1000, httpTimeoutMs: 1000 });
+  assert.equal(checkedMem0NativeConfiguration(configuration), configuration);
+  assert.throws(() => checkedMem0NativeConfiguration(structuredClone(configuration)),
+    { code: 'native_configuration_identity_required' });
   assert.equal(configuration.configuration.settings.optionalSpacy, 'unavailable-required-v1');
   assert.equal(configuration.configuration.terminationPolicy, 'owned-group-immediate-kill-v1');
   assert.equal(configuration.configuration.termGraceMs, 0);
+  assert.equal(configuration.configuration.version, 'cairn-mem0-native-configuration-v2');
+  assert.equal(configuration.configuration.timeoutPolicy, 'x-provider-local-transport-grace-v1');
+  assert.equal(configuration.configuration.localTransportGraceMs, 5000);
+  assert.equal(configuration.configuration.localTransportTimeoutMs, 6000);
   const withoutNlpPolicy = structuredClone(configuration.configuration);
   delete withoutNlpPolicy.settings.optionalSpacy;
-  const staleDigest = createHash('sha256').update(`cairn.mem0.native.configuration.v1\n${
+  const staleDigest = createHash('sha256').update(`cairn.mem0.native.configuration.v2\n${
     JSON.stringify(withoutNlpPolicy)}\n`).digest('hex');
   assert.notEqual(configuration.configurationSha256, staleDigest);
   assert.equal(configuration.configuration.childSourceSha256, createHash('sha256')
@@ -257,9 +265,9 @@ mem0.Memory = Memory
 sys.modules["httpx"] = httpx
 sys.modules["mem0"] = mem0
 run = runpy.run_path(sys.argv[1])["run"]
-case = {"version": "cairn-mem0-native-child-input-v1", "socket": "/case/gateway.sock",
+case = {"version": "cairn-mem0-native-child-input-v2", "socket": "/case/gateway.sock",
         "store": "/case/store", "userId": "synthetic-case", "topK": 3,
-        "threshold": 0, "httpTimeoutMs": 1000,
+        "threshold": 0, "localTransportTimeoutMs": 6000,
         "input": {"batches": [[{"role": "user", "content": "Synthetic."}]],
                   "query": "Synthetic?"}}
 try:
@@ -293,9 +301,9 @@ mem0.Memory = Memory
 sys.modules["mem0"] = mem0
 sys.modules["httpx"] = types.ModuleType("httpx")
 run = runpy.run_path(sys.argv[1])["run"]
-case = {"version": "cairn-mem0-native-child-input-v1", "socket": "/case/gateway.sock",
+case = {"version": "cairn-mem0-native-child-input-v2", "socket": "/case/gateway.sock",
         "store": "/case/store", "userId": "synthetic-case", "topK": 3,
-        "threshold": 0, "httpTimeoutMs": 1000,
+        "threshold": 0, "localTransportTimeoutMs": 6000,
         "input": {"batches": [[{"role": "user", "content": "Synthetic."}]],
                   "query": "Synthetic?"}}
 try: run(case)
@@ -761,6 +769,30 @@ test('Y13 fifth idle UDS connection globally halts before physical dispatch', as
     }), { code: 'callback_failed' });
     assert.equal(f.guard.isHalted(), true);
     assert.equal(f.guard.attempts().length, 0);
+  } finally { f.guard.close(); }
+});
+
+test('Y16 idle UDS socket timeout is a Y-first global fault before X dispatch', async t => {
+  const f = controlledHarness(t, () => assert.fail('idle socket reached provider'),
+    { httpTimeoutMs: 100, childTimeoutMs: 10_000 });
+  assert.equal(f.configuration.configuration.localTransportTimeoutMs, 5_100);
+  const started = Date.now();
+  try {
+    await assert.rejects(f.run(async socketPath => {
+      const socket = net.createConnection(socketPath);
+      socket.on('error', () => {});
+      await new Promise(resolve => socket.once('connect', resolve));
+      await new Promise(resolve => socket.once('close', resolve));
+      return output();
+    }), { code: 'callback_failed' });
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed >= 4_500 && elapsed < 9_800,
+      `idle socket must expire at derived local timeout before child watchdog: ${elapsed}ms`);
+    assert.equal(f.guard.isHalted(), true);
+    assert.equal(f.guard.attempts().length, 0);
+    assert.equal(existsSync(f.lastCaseRoot()), false);
+    await assert.rejects(f.guard.withCaseScope(f.capability.schedule[1], async () => 'denied'),
+      { code: 'paid_work_halted' });
   } finally { f.guard.close(); }
 });
 

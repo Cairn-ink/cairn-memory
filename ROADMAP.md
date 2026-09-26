@@ -93,6 +93,12 @@ reliability work below without declaring older failure gates resolved.
    evidence is recorded in the plan. Its real pinned local fake-provider
    tests are an engineering gate only; matched-resource comparison, semantic
    quality, a paid grant and broad-promotion readiness remain unestablished.
+   The [controlled mixed runner candidate](docs/plans/mixed-comparison-runner.md)
+   adds source-only Cairn/Mem0 preparation, actual-core/native fake-HTTP local
+   integration and fixed-N official-style scoring as a separate offline gate.
+   It does not supply an operational credential broker, prove source selection
+   or model answers, or authorize a paid cohort. Its synthetic pre-grant demo
+   and explicit pinned-native local test must not be conflated with a score.
 2. Review/merge the verified native-provider candidate and its dependent
    native deadline/recovery candidate. The separately frozen
    [six-case development smoke](docs/fresh-reliability-smoke.md) now has a

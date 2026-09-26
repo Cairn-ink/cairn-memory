@@ -38,8 +38,9 @@ def run(case):
     # This private protocol is supplied only by the trusted parent. The child
     # cannot select its identity, roots, provider endpoint, or ledger authority.
     if not isinstance(case, dict) or set(case) != {
-        "version", "socket", "store", "userId", "topK", "threshold", "httpTimeoutMs", "input"
-    } or case["version"] != "cairn-mem0-native-child-input-v1":
+        "version", "socket", "store", "userId", "topK", "threshold",
+        "localTransportTimeoutMs", "input"
+    } or case["version"] != "cairn-mem0-native-child-input-v2":
         abort("invalid_native_input")
     socket = bounded_text(case["socket"], 512)
     store = bounded_text(case["store"], 512)
@@ -50,7 +51,8 @@ def run(case):
         abort("invalid_native_input")
     if not isinstance(case["threshold"], (int, float)) or not 0 <= case["threshold"] <= 1:
         abort("invalid_native_input")
-    if not isinstance(case["httpTimeoutMs"], int) or not 1 <= case["httpTimeoutMs"] <= 3600000:
+    local_timeout = case["localTransportTimeoutMs"]
+    if type(local_timeout) is not int or not 5001 <= local_timeout <= 115000:
         abort("invalid_native_input")
     value = case["input"]
     if not isinstance(value, dict) or set(value) != {"batches", "query"}:
@@ -88,11 +90,11 @@ def run(case):
     }
     memory = Memory.from_config(config)
     client = httpx.Client(transport=httpx.HTTPTransport(uds=socket, retries=0, trust_env=False),
-                          trust_env=False, timeout=case["httpTimeoutMs"] / 1000)
+                          trust_env=False, timeout=local_timeout / 1000)
     memory.llm.client = memory.llm.client.with_options(
-        http_client=client, max_retries=0, timeout=case["httpTimeoutMs"] / 1000)
+        http_client=client, max_retries=0, timeout=local_timeout / 1000)
     memory.embedding_model.client = memory.embedding_model.client.with_options(
-        http_client=client, max_retries=0, timeout=case["httpTimeoutMs"] / 1000)
+        http_client=client, max_retries=0, timeout=local_timeout / 1000)
     verified = 0
     try:
         for batch in value["batches"]:

@@ -168,6 +168,24 @@ planning-only arithmetic for a fixed Cairn/Mem0 roster. It uses caller-supplied
 snapshots of the accepted request and wire profiles to report conditional
 request and reservation ceilings, including native fallback and both arms'
 answer/judge work. It does not read a ledger or a dated campaign audit, grant
+transport or establish a scored result.
+
+The [controlled mixed runner](plans/mixed-comparison-runner.md) has three
+separate APIs: `prepareMixedComparison` accepts only source histories/questions,
+`runMixedGeneration` consumes a supplied X guard and the pinned native identity,
+and `scoreMixedGeneration` accepts evaluator labels only after generation ends.
+The exact common answer JSON is `{evidence:[{text}],currentQuestion:{text,date}}`;
+the Cairn text is verified receipt excerpts joined per recalled card, while
+the Mem0 text is the native returned memory string. Those are different evidence
+semantics even though the outer request shape matches. Cairn-origin diagnostics
+retain every matching indexed-window classification and offset; model summaries
+and origin metadata never become answer evidence. Local fake-HTTP tests exercise
+both fresh engines under one synthetic ledger, and the pre-grant demo dispatches
+nothing. Scoring retains fixed N and a full correct/incorrect/unresolved 3×3
+table; unresolved cases are not silently counted wrong. Native transport needs
+trusted parent-side credential injection at a later launch gate; the child holds
+only a local dummy key. Neither this runner nor its synthetic tests authorize a
+paid campaign, verify real semantic answers, or establish matched performance.
 money, predict completion, or score answer quality. Before an untouched roster
 is used, the full common protocol, actual artifact/configuration and source-only
 checks still need independent verification. Earmarks or phase caps alone do not
