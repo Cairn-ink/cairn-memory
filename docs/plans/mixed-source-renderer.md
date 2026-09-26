@@ -150,6 +150,33 @@ two nonauthor exact-base reviews; correct/retest/rereview; scoped PRmain and all
 latesthead CIgreen/mergeable before READY. No merge/release/deploy. This is pure
 preparation mechanics, not semantic accuracy, parity, resource feasibility or S3.
 
+## P3/P6 amendment — v2 stable greedy partition
+
+The original P3 size-maximal chunk and bare `}` suffix conflict with P4 capture
+parity for some fully normalized sources. A chunk can create a new redaction
+boundary; the bare suffix can be consumed by assignment redaction. This
+amendment supersedes only those P3/P6 rules before a renderer is used for a
+comparison. The wrapper prefix remains exact; the suffix is the ASCII string
+` }` (one space then `}`). The space is synthetic metadata outside the body.
+The version and all four hash domains advance to v2.
+
+For each normalized turn position, choose the longest code-point-aligned,
+nonempty next body whose decorated message fits 4000 UTF-16 units and whose
+exact capture normalization leaves the entire decorated message unchanged.
+Try candidate ends in descending order, starting at the largest fitting end.
+Before each normalization probe, charge the candidate rendered UTF-16 length
+against a per-case 32 × 2^20 UTF-16 code-unit aggregate probe budget. This is
+a work bound, not a byte or memory-usage measure. Exceeding it throws
+`render_probe_limit_exceeded`; finding no stable prefix throws
+`render_normalization_mismatch`. No chunk is omitted, overlapped, rewritten or
+silently trimmed. The concatenated bodies must equal the complete normalized
+turn, and the unchanged planner must still accept each as one raw/normalized
+capture message before either prospective arm can run. This greedy bounded
+policy does not guarantee that every otherwise valid normalized string is
+partitionable. Its explicit preflight failure leaves a future fixed-N case
+unresolved; it is not evidence of corrupt source text. The static policy and
+digest describe the new suffix, algorithm and probe budget.
+
 ## Implementation record (after frozen contract)
 
 The source audit found that JavaScript negative zero passed the contiguous
@@ -161,7 +188,8 @@ every submitted planner window against its original source coordinates and
 classification. It also exercises malformed opaque IDs, discontinuous indices,
 negative zero, and the session cap.
 
-P10 pre-commit verification passed on both Node 22.16.0 and 24.15.0:
+The superseded v1 candidate `e06bec4` passed P10 pre-commit verification on
+both Node 22.16.0 and 24.15.0:
 
 - `node --test evaluation/longmemeval/test/mixed-source.test.mjs`: 10/10 each.
 - `npm run test:longmemeval`: 138/138 each.
@@ -173,7 +201,27 @@ P10 pre-commit verification passed on both Node 22.16.0 and 24.15.0:
   validate --prefix tools/plugin-validation` passed strict plugin and marketplace
   validation on each runtime.
 
-These tests use synthetic local data and no provider key, paid request, corpus
-or holdout. Full logs remain in the private verification archive. The exact
-candidate SHA and independent review evidence are supplied by the delivery
-handoff after the scoped local commit.
+These tests used synthetic local data and no provider key, paid request, corpus
+or holdout. Full logs remain in the private verification archive. They do not
+verify v2. The v2 P10 pre-commit matrix passed on both Node 22.16.0 and
+24.15.0 after the amendment:
+
+- Focused `node --test evaluation/longmemeval/test/mixed-source.test.mjs`:
+  15/15 each; full `npm run test:longmemeval`: 143/143 each.
+- Synthetic ingestion, comparison and public LongMemEval demos: all passed on
+  each runtime.
+- `npm test`: 112/112 each; `npm run validate`: JSON and version checks passed
+  on each runtime.
+- Pinned `npm ci --prefix tools/plugin-validation` succeeded; strict plugin and
+  marketplace validation passed on each runtime with `npm run validate --prefix
+  tools/plugin-validation`.
+
+Full v2 logs remain in the private verification archive. The v2 candidate SHA
+and independent reviews are pending the scoped local commit and fixed-point
+review.
+Before the v2 implementation, the minimal P3 boundary regression failed twice
+with `render_normalization_mismatch`. The first v2 focused run passed 14/15:
+its one failed assertion expected global backtracking and two chunks, while
+the approved greedy policy correctly produced three lossless chunks. The
+expectation was corrected, with no further renderer change, before the final
+15/15 runs on both runtimes.

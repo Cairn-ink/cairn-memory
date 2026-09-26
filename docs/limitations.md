@@ -607,8 +607,10 @@ normalization can prevent exact raw-span attribution. It does not run Mem0,
 retrieve evidence, map generated memories back to source IDs, answer or judge
 questions, estimate complete joint resource needs, inspect the held-out roster
 or authorize a provider call. Exact date parsing may reject histories that
-earlier preparation retained as opaque strings. No semantic score, parity or
-installed behavior follows from renderer tests.
+earlier preparation retained as opaque strings. Its bounded greedy partition
+can also reject an otherwise valid normalized turn; such a preflight failure
+leaves a future fixed-N case unresolved, rather than dropping source from one
+arm. No semantic score, parity or installed behavior follows from renderer tests.
 
 ## Where the evidence lives
 
