@@ -110,11 +110,19 @@ export function compileQualificationCandidates(output, snapshot) {
   } catch { fail('invalid_model_output'); }
 }
 
-export async function qualifyCandidateItems(model, items) {
+export async function qualifyCandidateItems(model, items, deadline) {
+  deadline?.check();
   const snapshot = createQualificationCandidateSnapshot(items);
-  const output = await callModel(model, 'qualifyCandidates', system, snapshot.input, { failureCode: 'qualification_failed' });
-  try { return compileQualificationCandidates(output, snapshot); }
+  deadline?.check();
+  const output = await callModel(model, 'qualifyCandidates', system, snapshot.input,
+    { failureCode: 'qualification_failed', deadline });
+  try {
+    const result = compileQualificationCandidates(output, snapshot);
+    deadline?.check();
+    return result;
+  }
   catch {
+    deadline?.check();
     emitDiagnostic(model, 'qualifyCandidates', 'core_validation', 'invalid_qualification');
     fail('invalid_model_output');
   }

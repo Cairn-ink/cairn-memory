@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createOpenAIModel } from '../index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, EXPERIMENTAL_EXTRACTION_MODEL } from '../profiles.mjs';
-import { schemas, schemasFor } from '../schemas.mjs';
+import { qualificationCandidatesInlineSchema, schemas, schemasFor } from '../schemas.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
@@ -63,7 +64,7 @@ test('candidate qualification uses identical count/generate baseline model frami
 
 test('dynamic candidate schema requires same-item candidate indices and known-value evidence without weakening legacy schemas', () => {
   assert.equal(Object.hasOwn(schemas, 'qualifyCandidates'), false);
-  const schema = schemasFor('qualifyCandidates', input()); assert.equal(accepts(schema, wire()), true);
+  const schema = qualificationCandidatesInlineSchema(input()); assert.equal(accepts(schema, wire()), true);
   const slots = schema.properties.qualifications.properties;
   assert.deepEqual(slots.item_0.properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [0, 1]);
   assert.deepEqual(slots.item_1.properties.subject.anyOf[0].properties.evidenceIndices.items.enum, [2]);
@@ -84,6 +85,43 @@ test('dynamic candidate schema requires same-item candidate indices and known-va
   ]) { const value = wire(); mutate(value); assert.equal(accepts(schema, value), false); }
   const duplicate = output(); duplicate.qualifications[1] = duplicate.qualifications[0];
   assert.equal(accepts(schema, duplicate), false, 'Provider schema must require unique complete item coverage');
+});
+
+test('compact qualification wire schema expands to frozen original inline schemas', () => {
+  const ids = [0, 3, 7, 11, 19];
+  const groups = [[2], [13, 17], [20, 27, 31], [40, 45, 51, 59], [80]];
+  // Literal digests were measured from schemasFor on the fixed pre-repair base,
+  // independently of the new inline builder and reference expansion.
+  const originalSha256 = [
+    'b70271382ced8c013faa6920b5b05f618cf87fad2cec8cc8f4ec31c3bbfbdc28',
+    '9fd3fac08aea024f79b83c4c55f99cbb997323047897ee380f900708af52c4a5',
+    '317d3afe781f0c540b114a88d9f7c2bdf706a471d24cc7c36636991dee30d91c',
+    'd83e9a1de9b27bf1a70ac4475742f0d932ac33a1da30510899d7dbb1413e1ed8',
+    '408a2a8ad9293f7f37d47e417f150d63330e002935a510432b71f8a46598f4c4',
+  ];
+  for (let count = 1; count <= 5; count++) {
+    const data = { items: ids.slice(0, count).map((itemIndex, position) => ({ itemIndex,
+      candidates: groups[position].map(candidateIndex => ({ candidateIndex })) })) };
+    const wireSchema = schemasFor('qualifyCandidates', data);
+    const definitions = wireSchema.$defs;
+    const expand = (node) => {
+      if (Array.isArray(node)) return node.map(expand);
+      if (node === null || typeof node !== 'object') return node;
+      if (Object.hasOwn(node, '$ref')) {
+        assert.deepEqual(Object.keys(node), ['$ref']);
+        assert.match(node.$ref, /^#\/\$defs\/q[0-4]_text(?:120|160)$/u);
+        const key = node.$ref.slice('#/$defs/'.length);
+        assert.ok(Object.hasOwn(definitions, key));
+        return expand(definitions[key]);
+      }
+      return Object.fromEntries(Object.entries(node).filter(([key]) => key !== '$defs')
+        .map(([key, value]) => [key, expand(value)]));
+    };
+    const expanded = expand(wireSchema);
+    const digest = createHash('sha256').update(JSON.stringify(expanded)).digest('hex');
+    assert.equal(digest, originalSha256[count - 1], `original inline schema for ${count} items`);
+    assert.deepEqual(expanded, qualificationCandidatesInlineSchema(data));
+  }
 });
 
 test('candidate qualification normalizes reordered named slots and rejects invalid mappings without retry', async () => {

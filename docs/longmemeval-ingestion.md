@@ -16,7 +16,8 @@ changing source under existing event IDs is not a supported resume strategy.
 Every original turn retains its role, session occurrence, original date and
 raw text. Oversized turns are split on Unicode code-point boundaries, with
 UTF-16 offsets mapping each derived message back to its original turn interval.
-Repeated original session IDs remain separate indexed occurrences. Derived IDs
+Repeated original session IDs remain separate indexed occurrences. Prepared
+v2 histories expose opaque occurrence IDs, not those original labels. Derived IDs
 are deterministic and bounded for the core; dates remain source-map metadata,
 not invented extra dialogue fed to the extractor.
 
@@ -102,3 +103,42 @@ guarantee or evidence that real users save time. The separate
 answering and evaluator-only scoring with offline tests. Actual-model scoring,
 a frozen live judge and separately authorized paid runs remain later steps.
 Preserve blocked/failed cases in evaluation denominators.
+
+The optional [indexed-window provenance path](indexed-window-provenance.md) is
+separately versioned and requires explicit core opt-in. The default plan and
+ingestion path continue to use their original digest and response contract.
+
+## Qualified-prefix control (offline only)
+
+`planQualifiedPrefixLongMemEvalCase({history, namespace})` and
+`ingestQualifiedPrefixLongMemEvalCase({history, namespace, capture})` provide a
+separate source-bound-v2 ingestion control for a future matched prefix-versus-
+window comparison. The plan schema is
+`cairn-longmemeval-qualified-prefix-ingestion-plan-v1`. Open the injected core
+with `captureQualification: 'source-bound-v2'` and **no**
+`captureSourcePolicy`. The plan's `captureSourcePolicy: 'retained-prefix-v1'`
+is an evaluation label; it must not be passed to the core constructor or to
+`captureSnapshot`.
+
+The control keeps the legacy raw partition, deterministic identities, source
+map and complete normalized capture messages. It recomputes each batch with
+the actual v3 qualified snapshot digest and stores a detached canonical
+`retainedMessages` view plus the host-derived `retainedSourceWindow`. The view
+exposes at most the first 800 UTF-16 units of each normalized/redacted message,
+while the digest still binds its full content, including an omitted tail. A
+qualified preflight failure blocks the whole case before callbacks; it never
+falls back to the default digest or raises limits.
+
+Every successful callback response must contain exact retained-window metadata
+for the submitted batch, including processing, duplicate and partial
+classification. Missing, extra, wrong-order or mixed-policy metadata is an
+unknown malformed response; failure envelopes have no success metadata. The
+caller is responsible for injecting the intended trusted core. Metadata checks
+reject ordinary unqualified core responses, but cannot authenticate a
+deliberately fabricated callback envelope. Outcomes describe the submitted
+view, not semantic source coverage or what an earlier duplicate extraction
+actually read.
+
+This path has no answer runner or scorer and does not establish a quality gain.
+The default and indexed planners/ingesters remain separately versioned; no
+old six- or 30-case result is reinterpreted.

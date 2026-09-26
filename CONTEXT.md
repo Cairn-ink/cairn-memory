@@ -32,6 +32,16 @@ Source text and speaker roles supplied by a memory client as claims about a
 conversation, not an authenticated transcript or execution permission.
 _Avoid_: Verified human statement, authenticated consent
 
+**Initial classification attempt**:
+The first model-backed placement attempt associated with one newly captured
+admission batch, distinct from later explicit classification of its memories.
+_Avoid_: Batch completion, latest filing
+
+**Filing**:
+The current organization of an active memory under topics, which does not
+establish how or whether its original capture batch was classified.
+_Avoid_: Classification success, verified truth
+
 **Staged evidence**:
 Submitted evidence retained separately while its interpretation is incomplete or
 unsuccessful; it is not an admitted assertion, authenticated record or permission.

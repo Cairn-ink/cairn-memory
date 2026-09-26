@@ -2,6 +2,21 @@ import { boundedText, identifier, revision, fail } from './validation.mjs';
 
 export const isSourceContext = mode => ['source-evidence', 'rationale-evidence'].includes(mode);
 
+/** Validate one authoritative stored receipt without claiming source-set completeness. */
+export function validateSourceReceipt(memoryId, receipt, receiptKey) {
+  try {
+    identifier(memoryId); identifier(receipt.id);
+    if (receipt.memory_id !== memoryId) fail('storage_error');
+    const source = { client: receipt.client, sessionId: receipt.session_id,
+      eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
+    for (const key of ['client', 'sessionId', 'eventId']) identifier(source[key]);
+    if (!['user', 'assistant'].includes(source.role) || typeof source.excerpt !== 'string' ||
+        !source.excerpt.isWellFormed() || boundedText(source.excerpt, 800) !== source.excerpt ||
+        receipt.receipt_key !== receiptKey(source)) fail('storage_error');
+    return { id: receipt.id, role: source.role, excerpt: source.excerpt };
+  } catch { fail('storage_error'); }
+}
+
 // Called only inside the authoritative runtime transaction. Interpretation
 // fields and source identity metadata never enter this closed usage projection.
 export function sourceEvidence(memory, receipts, receiptCount, receiptKey) {
@@ -12,16 +27,10 @@ export function sourceEvidence(memory, receipts, receiptCount, receiptKey) {
         !Number.isSafeInteger(receiptCount) || receiptCount < 1 || receipts.length !== receiptCount) fail('storage_error');
     const seen = new Set();
     const sources = receipts.map(receipt => {
-      identifier(receipt.id);
-      if (seen.has(receipt.id) || receipt.memory_id !== memory.id) fail('storage_error');
-      seen.add(receipt.id);
-      const source = { client: receipt.client, sessionId: receipt.session_id,
-        eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
-      for (const key of ['client', 'sessionId', 'eventId']) identifier(source[key]);
-      if (!['user', 'assistant'].includes(source.role) || typeof source.excerpt !== 'string' ||
-          !source.excerpt.isWellFormed() || boundedText(source.excerpt, 800) !== source.excerpt ||
-          receipt.receipt_key !== receiptKey(source)) fail('storage_error');
-      return { id: receipt.id, role: source.role, excerpt: source.excerpt };
+      const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+      if (seen.has(source.id)) fail('storage_error');
+      seen.add(source.id);
+      return source;
     });
     return { memory: { id: memory.id, revision: memory.revision, currentness: memory.currentness },
       receipts: sources, receiptCount, interpretationStatus: 'omitted', sourceSelectionCoverage: 'unassessed' };
