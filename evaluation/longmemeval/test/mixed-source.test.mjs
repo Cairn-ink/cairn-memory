@@ -62,7 +62,7 @@ const assertOriginEvidence = (input, output) => {
         assert.equal(row.bodyStart, `[session-date: ${renderedSession.date}; clock: dataset-local] source{`.length);
         assert.equal(chunk.content.slice(0, row.bodyStart),
           `[session-date: ${renderedSession.date}; clock: dataset-local] source{`);
-        assert.equal(chunk.content.slice(row.bodyEnd), '}');
+        assert.equal(chunk.content.slice(row.bodyEnd), ' }');
         const body = chunk.content.slice(row.bodyStart, row.bodyEnd);
         assert.equal(body, normalized.slice(row.normalizedStart, row.normalizedEnd));
         rebuilt += body;
@@ -74,8 +74,23 @@ const assertOriginEvidence = (input, output) => {
   }
   assert.equal(renderedTurnCount, output.originMap.turns.length);
   assert.equal(renderedTurnCount, output.renderedHistory.sessions.flatMap((s) => s.turns).length);
+  assert.deepEqual(output.mem0Input.batches,
+    output.cairnPlan.batches.map((batch) => batch.captureInput.messages.map(({ role, content }) =>
+      ({ role, content }))));
+  const plannerSources = output.cairnPlan.batches.flatMap((batch) => batch.sourceMap);
+  assert.equal(plannerSources.length, renderedTurnCount);
   let mappedWindows = 0;
   for (const [batchIndex, batch] of output.cairnPlan.batches.entries()) {
+    for (const source of batch.sourceMap) {
+      const message = batch.captureInput.messages[source.messageIndex];
+      const captured = batch.normalizedCapture.messages[source.messageIndex];
+      assert.equal(source.chunkIndex, 0);
+      assert.equal(source.rawStartUtf16, 0);
+      assert.equal(source.rawEndUtf16, message.content.length);
+      assert.equal(source.rawContent, message.content);
+      assert.equal(captured.content, message.content);
+      assert.equal(captured.role, message.role);
+    }
     for (const [windowIndex, window] of batch.indexedWindows.entries()) {
       mappedWindows++;
       const row = output.originMap.windows.find((entry) =>
@@ -186,7 +201,7 @@ test('P2 strict Gregorian dates, leap day and dataset-local floating clock', () 
 test('P3 exact decorated 4000 boundary, astral, CJK and normalization inflation', () => {
   const date = '2023-10-14 09:30';
   const prefix = `[session-date: ${date}; clock: dataset-local] source{`;
-  const maxBody = 4000 - prefix.length - 1;
+  const maxBody = 4000 - prefix.length - 2;
   const body = 'x'.repeat(maxBody);
   const exact = prepareMixedSourceCase(fixture([session('exact', 0,
     '2023/10/14 (Sat) 09:30', [['user', body]])]));
@@ -196,18 +211,74 @@ test('P3 exact decorated 4000 boundary, astral, CJK and normalization inflation'
     '2023/10/14 (Sat) 09:30', [['assistant', body + '🧭漢字']])]));
   assert.equal(more.renderedHistory.sessions[0].turns.length, 2);
   assert.equal(more.renderedHistory.sessions[0].turns.map((turn) =>
-    turn.content.slice(prefix.length, -1)).join(''), body + '🧭漢字');
+    turn.content.slice(prefix.length, -2)).join(''), body + '🧭漢字');
   assert.ok(more.renderedHistory.sessions[0].turns.every((turn) => turn.content.length <= 4000));
   const crossing = prepareMixedSourceCase(fixture([session('crossing', 0,
     '2023/10/14 (Sat) 09:30', [['user', 'x'.repeat(maxBody - 1) + '🧭z']])]));
   assert.deepEqual(crossing.renderedHistory.sessions[0].turns.map((turn) =>
-    turn.content.slice(prefix.length, -1)), ['x'.repeat(maxBody - 1), '🧭z']);
+    turn.content.slice(prefix.length, -2)), ['x'.repeat(maxBody - 1), '🧭z']);
   const inflated = prepareMixedSourceCase(fixture([session('inflated', 0,
     '2023/10/14 (Sat) 09:30', [['user', 'ﬃ'.repeat(3000)]])]));
   assert.ok(inflated.renderedHistory.sessions[0].turns.length >= 3);
   assert.equal(inflated.renderedHistory.sessions[0].turns.map((turn) =>
-    turn.content.slice(prefix.length, -1)).join(''), 'ffi'.repeat(3000));
+    turn.content.slice(prefix.length, -2)).join(''), 'ffi'.repeat(3000));
   assert.ok(inflated.originMap.windows.some((row) => row.classification === 'normalized-source'));
+});
+
+test('P3 stable whole turn partitions a token at a new redaction boundary without loss', () => {
+  const prefix = '[session-date: 2023-10-14 09:30; clock: dataset-local] source{';
+  const maxBody = 4000 - prefix.length - 2;
+  const source = 'a'.repeat(maxBody) + 'sk-' + 'A'.repeat(18);
+  assert.equal(normalize(source), source);
+  const input = fixture([session('boundary-token', 0, '2023/10/14 (Sat) 09:30',
+    [['user', source]])]);
+  const result = prepareMixedSourceCase(input);
+  assertOriginEvidence(input, result);
+  const bodies = result.renderedHistory.sessions[0].turns.map((turn) =>
+    turn.content.slice(prefix.length, -2));
+  assert.equal(bodies.length, 3);
+  assert.equal(bodies[0], 'a'.repeat(maxBody));
+  assert.equal(bodies[1], 'sk-' + 'A'.repeat(15));
+  assert.equal(bodies[2], 'AAA');
+  assert.equal(bodies.join(''), source);
+});
+
+test('P3 stable fixed-width token backs off an end boundary', () => {
+  const prefix = '[session-date: 2023-10-14 09:30; clock: dataset-local] source{';
+  const maxBody = 4000 - prefix.length - 2;
+  const token = 'AKIA' + 'A'.repeat(16);
+  const source = 'a'.repeat(maxBody - token.length - 1) + ' ' + token + 'x';
+  assert.equal(normalize(source), source);
+  const input = fixture([session('end-boundary-token', 0, '2023/10/14 (Sat) 09:30',
+    [['assistant', source]])]);
+  const result = prepareMixedSourceCase(input);
+  assertOriginEvidence(input, result);
+  assert.deepEqual(result.renderedHistory.sessions[0].turns.map((turn) =>
+    turn.content.slice(prefix.length, -2)), [source.slice(0, maxBody - 1),
+    source.slice(maxBody - 1)]);
+});
+
+test('P3 spaced metadata suffix preserves a stable short assignment', () => {
+  const source = 'password: [REDACTED]';
+  assert.equal(normalize(source), source);
+  const input = fixture([session('short-assignment', 0, '2023/10/14 (Sat) 09:30',
+    [['user', source]])]);
+  const result = prepareMixedSourceCase(input);
+  assertOriginEvidence(input, result);
+  assert.equal(result.renderedHistory.sessions[0].turns.length, 1);
+  assert.ok(result.renderedHistory.sessions[0].turns[0].content.endsWith(`${source} }`));
+});
+
+test('P3 greedy partition backs off an internal space and preserves it in the next body', () => {
+  const prefix = '[session-date: 2023-10-14 09:30; clock: dataset-local] source{';
+  const maxBody = 4000 - prefix.length - 2;
+  const source = 'a'.repeat(maxBody - 1) + ' b';
+  const input = fixture([session('space-boundary', 0, '2023/10/14 (Sat) 09:30',
+    [['user', source]])]);
+  const result = prepareMixedSourceCase(input);
+  assertOriginEvidence(input, result);
+  assert.deepEqual(result.renderedHistory.sessions[0].turns.map((turn) =>
+    turn.content.slice(prefix.length, -2)), ['a'.repeat(maxBody - 1), ' b']);
 });
 
 test('P3–P5 metadata is not source, normalization is disclosed, duplicate text remains distinct', () => {
@@ -243,6 +314,10 @@ test('P6 canonical digests bind original and rendered data but ignore object key
   assert.equal(first.originalHistoryDigest, second.originalHistoryDigest);
   assert.equal(mixedSourcePolicy(), first.policy);
   assert.equal(Object.isFrozen(first.policy.date), true);
+  assert.equal(first.version, 'cairn-lme-mixed-source-v2');
+  assert.equal(first.policy.rendering.suffix, ' }');
+  assert.equal(first.policy.limits.partitionProbeUtf16, 32 * 1024 * 1024);
+  assert.ok(Object.values(first.policy.hashDomains).every((domain) => domain.endsWith('.v2')));
   const altered = clone(input);
   altered.history.sessions[0].turns[0].content += '!';
   assert.notEqual(prepareMixedSourceCase(altered).caseDigest, first.caseDigest);
@@ -309,6 +384,16 @@ test('P1/P4/P8 bound query, traversal and rendered normalization inflation befor
   const inflated = fixture([session('huge-inflation', 0, '2023/10/14 (Sat) 09:30',
     [['user', '\uFDFA'.repeat(300_000)]])]);
   error(inflated, 'render_limit_exceeded');
+});
+
+test('P3/P8 adversarial stable turns exhaust the finite partition probe budget explicitly', () => {
+  const prefix = '[session-date: 2023-10-14 09:30; clock: dataset-local] source{';
+  const maxBody = 4000 - prefix.length - 2;
+  const trap = 'a'.repeat(maxBody) + 'sk-' + 'A'.repeat(18) + 'a'.repeat(maxBody);
+  assert.equal(normalize(trap), trap);
+  const turns = Array.from({ length: 6 }, () => ['user', trap]);
+  const input = fixture([session('probe-cap', 0, '2023/10/14 (Sat) 09:30', turns)]);
+  error(input, 'render_probe_limit_exceeded');
 });
 
 test('P1/P8 reject nonenumerable fields, sparse turns and excluded invalid source', () => {

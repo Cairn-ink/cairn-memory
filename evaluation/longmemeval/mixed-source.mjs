@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 import { planIndexedWindowLongMemEvalCase } from './ingestion.mjs';
 
-export const MIXED_SOURCE_VERSION = 'cairn-lme-mixed-source-v1';
+export const MIXED_SOURCE_VERSION = 'cairn-lme-mixed-source-v2';
 const CASE_ID = /^lme-case-[a-f0-9]{64}$/u;
 const SESSION_ID = /^lme-session-[a-f0-9]{64}$/u;
 const TURN_ID = /^lme-turn-[a-f0-9]{64}$/u;
@@ -15,14 +15,15 @@ const MAX_DEPTH = 16;
 const MAX_SESSIONS = 2_500;
 const MAX_TURNS = 60_000;
 const MAX_MESSAGE = 4_000;
+const MAX_PARTITION_PROBE_UTF16 = 32 * 1024 * 1024;
 const MAX_QUERY_BYTES = 16 * 1024;
 const MAX_BATCHES = 2_500;
 const PREFIX = (date) => `[session-date: ${date}; clock: dataset-local] source{`;
-const SUFFIX = '}';
-const POLICY_DOMAIN = 'cairn.lme.mixed-source.policy.v1';
-const HISTORY_DOMAIN = 'cairn.lme.mixed-source.original-history.v1';
-const TURN_DOMAIN = 'cairn.lme.mixed-source.rendered-turn.v1';
-const CASE_DOMAIN = 'cairn.lme.mixed-source.case.v1';
+const SUFFIX = ' }';
+const POLICY_DOMAIN = 'cairn.lme.mixed-source.policy.v2';
+const HISTORY_DOMAIN = 'cairn.lme.mixed-source.original-history.v2';
+const TURN_DOMAIN = 'cairn.lme.mixed-source.rendered-turn.v2';
+const CASE_DOMAIN = 'cairn.lme.mixed-source.case.v2';
 
 export class MixedSourceError extends Error {
   constructor(code) { super(code); this.name = 'MixedSourceError'; this.code = code; }
@@ -48,9 +49,11 @@ const policyBody = freeze({ version: MIXED_SOURCE_VERSION,
     canonicalLabel: 'YYYY-MM-DD HH:mm' },
   normalization: 'NFKC;redactSecrets;Unicode-whitespace-to-ASCII-space;trim',
   rendering: { prefix: '[session-date: ${YYYY-MM-DD HH:mm}; clock: dataset-local] source{',
-    suffix: '}', roles: ['user', 'assistant'], chunks: 'maximal-code-point;full-turn-first' },
+    suffix: ' }', roles: ['user', 'assistant'],
+    chunks: 'greedy-longest-capture-stable-code-point-prefix;full-turn-first' },
   limits: { inputUtf8Bytes: MAX_INPUT_BYTES, traversalDepth: MAX_DEPTH, traversalNodes: MAX_NODES,
     sessions: MAX_SESSIONS, originalTurns: MAX_TURNS, messageUtf16: MAX_MESSAGE,
+    partitionProbeUtf16: MAX_PARTITION_PROBE_UTF16,
     batchMessages: 24, batchUtf16: 20_000, indexedWindowUtf16: 800,
     indexedWindowsPerBatch: 64, batches: MAX_BATCHES, queryUtf16: MAX_MESSAGE,
     queryUtf8Bytes: MAX_QUERY_BYTES, mem0InputUtf8Bytes: MAX_INPUT_BYTES },
@@ -159,16 +162,26 @@ function renderTurn(content, normalized, date, origin, budget) {
   let start = 0;
   while (start < normalized.length) {
     let end = start;
+    const ends = [];
     while (end < normalized.length) {
       const pointLength = normalized.codePointAt(end) > 0xffff ? 2 : 1;
       if (end + pointLength - start > maxBody) break;
       end += pointLength;
+      ends.push(end);
     }
-    if (end === start) fail('render_limit_exceeded');
+    if (ends.length === 0) fail('render_limit_exceeded');
+    let rendered;
+    for (let index = ends.length - 1; index >= 0; index--) {
+      end = ends[index];
+      const candidate = prefix + normalized.slice(start, end) + SUFFIX;
+      if (candidate.length > MAX_MESSAGE) fail('render_limit_exceeded');
+      if (budget.probedUtf16 + candidate.length > MAX_PARTITION_PROBE_UTF16)
+        fail('render_probe_limit_exceeded');
+      budget.probedUtf16 += candidate.length;
+      if (normalize(candidate) === candidate) { rendered = candidate; break; }
+    }
+    if (!rendered) fail('render_normalization_mismatch');
     const body = normalized.slice(start, end);
-    const rendered = prefix + body + SUFFIX;
-    if (rendered.length > MAX_MESSAGE || normalize(rendered) !== rendered)
-      fail('render_normalization_mismatch');
     // This is a lower bound on the eventual JSON wire size. Reject expanded
     // source before building a complete plan; the exact JSON bound remains below.
     budget.renderedBytes += byteLength(rendered);
@@ -206,7 +219,7 @@ export function prepareMixedSourceCase(options) {
   const cutoff = parseDate(question.date);
   const seenSessions = new Set(), seenTurns = new Set();
   const renderedSessions = [], sessionOrigins = [], turnOrigins = [];
-  const renderBudget = { renderedBytes: 0, renderedMessages: 0 };
+  const renderBudget = { renderedBytes: 0, renderedMessages: 0, probedUtf16: 0 };
   let originalTurnCount = 0, excludedFutureSessions = 0;
   for (const [sessionIndex, session] of history.sessions.entries()) {
     exact(session, ['session_index', 'session_id', 'date', 'turns'], 'invalid_history');

@@ -183,7 +183,11 @@ unchanged, equal-minute sessions remain, and malformed or ambiguous dates fail.
 Each included original turn is normalized with the existing capture expression
 (NFKC, secret redaction, Unicode whitespace folding and trim). It is split on
 code-point boundaries, then each chunk receives an explicit synthetic
-`[session-date: YYYY-MM-DD HH:mm; clock: dataset-local] source{...}` wrapper.
+`[session-date: YYYY-MM-DD HH:mm; clock: dataset-local] source{... }` wrapper.
+The v2 renderer greedily chooses the longest next chunk that survives capture
+normalization unchanged, with a 32 × 2^20 UTF-16 code-unit aggregate probe
+cap. Otherwise valid source can fail preflight when no stable greedy cut is
+found or the probe cap is reached; that future fixed-N case stays unresolved.
 The original user/assistant role is preserved. The existing indexed-window
 planner must accept every already-bounded message without splitting or changing
 its text. The returned `mem0Input.batches` strips only Cairn's message IDs, so
