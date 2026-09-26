@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync,
@@ -79,6 +80,32 @@ test('Y2 sparse over-limit artifact rejects by stat before reading payload', t =
   assert.throws(() => inspectMem0NativeArtifact(roots), { code: 'artifact_byte_cap' });
 });
 
+test('Y3 inspected artifact rejects an optional spaCy import path before launch', t => {
+  const roots = miniature(t);
+  const packageRoot = join(roots.venvRoot, 'lib/python3.11/site-packages/spacy');
+  mkdirSync(packageRoot);
+  writeFileSync(join(packageRoot, '__init__.py'), '# synthetic optional NLP\n');
+  assert.throws(() => inspectMem0NativeArtifact(roots), { code: 'optional_nlp_available' });
+});
+
+test('Y3 optional spaCy modules, extensions and distributions reject in both hashed roots', t => {
+  for (const [role, relative, content] of [
+    ['venvRoot', 'lib/python3.11/site-packages/spacy.py', '# synthetic\n'],
+    ['venvRoot', 'lib/python3.11/site-packages/spacy.cpython-311-x86_64-linux-gnu.so', 'synthetic'],
+    ['pythonRoot', 'lib/python3.11/spacy/__init__.py', '# synthetic\n'],
+    ['pythonRoot', 'lib/python3.11/site-packages/other-1.dist-info/METADATA',
+      'Name: SpAcY\nVersion: 1\n'],
+  ]) {
+    const roots = miniature(t);
+    const target = join(roots[role], relative);
+    const inspected = inspectMem0NativeArtifact(roots);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, content);
+    assert.throws(() => inspectMem0NativeArtifact(roots), { code: 'optional_nlp_available' });
+    assert.throws(() => checkedMem0NativeArtifact(inspected), { code: 'optional_nlp_available' });
+  }
+});
+
 test('Y3/Y4 rejects getters, unknown config keys and both lone surrogate forms before dispatch', async () => {
   assert.throws(() => mem0NativeConfiguration({ topK: 1, threshold: 0,
     childTimeoutMs: 1000, get httpTimeoutMs() { throw new Error('getter ran'); } }),
@@ -88,6 +115,16 @@ test('Y3/Y4 rejects getters, unknown config keys and both lone surrogate forms b
   { code: 'invalid_native_options' });
   const configuration = mem0NativeConfiguration({ topK: 1, threshold: 0,
     childTimeoutMs: 1000, httpTimeoutMs: 1000 });
+  assert.equal(configuration.configuration.settings.optionalSpacy, 'unavailable-required-v1');
+  assert.equal(configuration.configuration.terminationPolicy, 'owned-group-immediate-kill-v1');
+  assert.equal(configuration.configuration.termGraceMs, 0);
+  const withoutNlpPolicy = structuredClone(configuration.configuration);
+  delete withoutNlpPolicy.settings.optionalSpacy;
+  const staleDigest = createHash('sha256').update(`cairn.mem0.native.configuration.v1\n${
+    JSON.stringify(withoutNlpPolicy)}\n`).digest('hex');
+  assert.notEqual(configuration.configurationSha256, staleDigest);
+  assert.equal(configuration.configuration.childSourceSha256, createHash('sha256')
+    .update(readFileSync(new URL('../testing/mem0-native-child.py', import.meta.url))).digest('hex'));
   for (const bad of ['\ud800', '\udc00']) {
     await assert.rejects(runMem0NativeCase({ artifact: {}, configuration,
       guard: {}, handle: {}, input: { batches: [[{ role: 'user', content: bad }]],
@@ -238,6 +275,44 @@ function projectedNative(row) {
   assert.equal(result.status, 0, 'synthetic Python projection fixture exits cleanly');
   return JSON.parse(result.stdout);
 }
+const PYTHON_NLP_PREFLIGHT = `import importlib.machinery, json, runpy, sys, types
+calls = {"from_config": 0}
+class Finder:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "spacy":
+            if sys.argv[2] == "finder_error": raise RuntimeError("resolution_failed")
+            return importlib.machinery.ModuleSpec(fullname, None)
+sys.meta_path.insert(0, Finder())
+class Memory:
+    @classmethod
+    def from_config(cls, _):
+        calls["from_config"] += 1
+        raise RuntimeError("from_config_called")
+mem0 = types.ModuleType("mem0")
+mem0.Memory = Memory
+sys.modules["mem0"] = mem0
+sys.modules["httpx"] = types.ModuleType("httpx")
+run = runpy.run_path(sys.argv[1])["run"]
+case = {"version": "cairn-mem0-native-child-input-v1", "socket": "/case/gateway.sock",
+        "store": "/case/store", "userId": "synthetic-case", "topK": 3,
+        "threshold": 0, "httpTimeoutMs": 1000,
+        "input": {"batches": [[{"role": "user", "content": "Synthetic."}]],
+                  "query": "Synthetic?"}}
+try: run(case)
+except Exception as error: print(json.dumps({"calls": calls, "code": str(error)}))
+`;
+test('Y9 child refuses detectable spaCy before Mem0 configuration or API calls', () => {
+  const childFile = new URL('../testing/mem0-native-child.py', import.meta.url).pathname;
+  for (const mode of ['available', 'finder_error']) {
+    const result = spawnSync('/usr/bin/python3',
+      ['-I', '-B', '-c', PYTHON_NLP_PREFLIGHT, childFile, mode],
+      { encoding: 'utf8', timeout: 3000,
+        env: { PATH: '/usr/bin:/bin', PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, mode);
+    assert.deepEqual(JSON.parse(result.stdout),
+      { calls: { from_config: 0 }, code: 'optional_nlp_available' }, mode);
+  }
+});
 const chatBody = () => JSON.stringify({ model: 'gpt-4.1-mini-2025-04-14', messages: [
   { role: 'system', content: 'Synthetic system.' },
   { role: 'user', content: 'Synthetic user.' }], max_tokens: 2000,
@@ -786,12 +861,16 @@ for (const [name, raw] of [
   });
 }
 
-test('Y13 controlled unreaped child globally halts after finite TERM/KILL window', async t => {
+test('Y13 controlled unreaped child globally halts after finite immediate KILL window', async t => {
   const f = controlledHarness(t, () => assert.fail('unreaped child reached provider'),
     { childTimeoutMs: 50 });
+  const signals = [];
   try {
-    await assert.rejects(f.run(() => new Promise(() => {}), () => {}),
+    await assert.rejects(f.run(() => new Promise(() => {}), (_child, signal) => {
+      signals.push(signal);
+    }),
       { code: 'callback_failed' });
+    assert.deepEqual(signals, ['SIGKILL']);
     assert.equal(f.guard.isHalted(), true);
     assert.equal(f.guard.attempts().length, 0);
   } finally {

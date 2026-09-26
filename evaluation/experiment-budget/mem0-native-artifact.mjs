@@ -74,6 +74,14 @@ function digest(tag, value) {
   return createHash('sha256').update(`${tag}\n${JSON.stringify(value)}\n`).digest('hex');
 }
 
+function optionalNlpEntry(relative) {
+  const importRoot = /^(?:lib|lib64)\/python3\.11\/(?:site-packages\/)?(.+)$/u.exec(relative)?.[1];
+  if (!importRoot) return false;
+  return importRoot === 'spacy' || importRoot.startsWith('spacy/')
+    || /^spacy(?:\.py|\.pyc|(?:\.[^/]+)?\.so|\.pyd)$/iu.test(importRoot)
+    || /^spacy[-_.][^/]+\.dist-info(?:\/|$)/iu.test(importRoot);
+}
+
 function scan(venvRoot, pythonRoot) {
   const roots = { venv: venvRoot, python: pythonRoot };
   const entries = [];
@@ -113,6 +121,7 @@ function scan(venvRoot, pythonRoot) {
         try { stat = fs.lstatSync(file); } catch { fail('artifact_unreadable'); }
         if (entries.length >= MAX_ENTRIES) fail('artifact_entry_cap');
         const slashRelative = relative.split(path.sep).join('/');
+        if (optionalNlpEntry(slashRelative)) fail('optional_nlp_available');
         if (stat.isSymbolicLink()) {
           let literal;
           let target;
@@ -137,14 +146,16 @@ function scan(venvRoot, pythonRoot) {
           if (bytes > MAX_BYTES) fail('artifact_byte_cap');
           const hash = hashFile(file, stat.size);
           entries.push([role, slashRelative, 'file', stat.mode & 0o111, stat.size, hash]);
-          if (role === 'venv' && /(^|\/)[^/]+\.dist-info\/METADATA$/.test(slashRelative)) {
+          if (/(^|\/)[^/]+\.dist-info\/METADATA$/.test(slashRelative)) {
             let data;
             if (stat.size > 1024 * 1024) fail('invalid_artifact_metadata');
             try { data = fs.readFileSync(file, 'utf8'); } catch { fail('artifact_unreadable'); }
             const packageName = /^Name:\s*(.+)$/m.exec(data)?.[1]?.trim();
             const version = /^Version:\s*(.+)$/m.exec(data)?.[1]?.trim();
             if (!packageName || !version) fail('invalid_artifact_metadata');
-            metadata.push([slashRelative, packageName, version]);
+            if (packageName.toLowerCase().replace(/[-_.]+/gu, '-') === 'spacy')
+              fail('optional_nlp_available');
+            if (role === 'venv') metadata.push([slashRelative, packageName, version]);
           }
         } else fail('invalid_artifact_entry');
       }

@@ -332,7 +332,7 @@ group absence after close. For TERM/KILL, the fixture also requires `close`
 within five seconds, before a forked child could finish its six-second sleep;
 leader `exit` alone is insufficient evidence that inherited pipes closed.
 
-On the final author candidate, Node 22.16 and 24.15 each passed the portable
+On the superseded `82692ef` author candidate, Node 22.16 and 24.15 each passed the portable
 gateway suite (41/41), pinned local native/containment suite (8/8), budget
 suite (58/58), request guard suite (285/285), offline live-evidence suite
 (340 pass, 30 expected skips), and generic `npm test` (112/112). JSON
@@ -342,3 +342,84 @@ plugin validation passed on both Nodes. Python AST parsing and
 verification archive retains terminal logs for these final runs. Primary
 acceptance and both independent fixed-diff review axes remain separate
 delivery gates.
+
+Independent Spec review of `82692ef` found the Y3/Y9 no-optional-spaCy
+requirement was only descriptive: a synthetic inspected artifact containing
+`spacy/__init__.py` was accepted, and a child with a synthetic import finder
+advertising `spacy` reached `Memory.from_config` once. Both tests were red
+before correction. Inspection now rejects ordinary importable spaCy package,
+module, extension and distribution layouts under the two hashed Python 3.11
+roots, including a distribution whose canonical metadata name is `spacy`.
+The child additionally refuses a detectable spaCy import resolution (or a
+resolution error) before importing Mem0/httpx or configuring Mem0. The closed
+configuration binds `optionalSpacy: unavailable-required-v1` and the updated
+child source hash. Focused synthetic tests pass with zero Mem0 configuration
+or API calls on the refusal path. This is a trusted-local fail-closed guard,
+not proof against hostile same-UID mutation, custom import hooks or every
+possible Python import path. Both-Node final-candidate gates, primary
+acceptance and both independent reviews must use the corrected candidate.
+
+## DRI amendment Y16 — startup cancellation, before corrective implementation
+
+2026-09-27: supersedes only Y3's TERM grace and Y12's TERM-then-KILL policy.
+Original Node24 actual native gate failed 7/8: a 1ms cancellation killed the
+bwrap leader but left namespace PID1 waiting on its startup eventfd and holding
+stdio. Retain the failure; it is not resolved by a passing rerun. A minimized
+production-argument probe blocked bwrap startup with test-only info/block FDs.
+TERM reproduced the pinned init survivor and absent close in 3/3 runs; replacing
+only the signal with KILL gave absent init and close before cleanup in 3/3.
+Private diagnostic pidfd cleanup was used only for those same validated test
+processes, not a new production supervisor or public authority.
+
+- Abort/timeout/fault cleanup sends one immediate SIGKILL to the original
+  owned detached process group, only while the leader is not observed exited
+  or closed. Never signal a numeric PID/PGID after observed exit, and never
+  accept caller process identity. Normal successful completion is unchanged.
+- Hash the new behavior explicitly as terminationPolicy
+  `owned-group-immediate-kill-v1`, termGraceMs0, reapMs5000 in configuration.
+  No new caller option, retry, timeout extension, native store reuse or grant.
+  These are disposable private per-case stores; abort does not promise graceful
+  persistence. Parent guarded attempts still drain and settle under existing
+  deadlines; kill does not forgive unknown usage or waive a global failure.
+- Regression must exercise the actual kernel stop path and controlled real
+  bwrap startup ordering, not merely assert a string literal. Test-only helpers
+  may pin the owned namespace init for cleanup; production APIs/mounts/FDs stay
+  unchanged. Establish RED before fix and GREEN after, retain no-post-exit-
+  signal and held-pipe/global-failure cases, plus original actual native gate
+  on both Node versions. Missing prerequisites remain explicit local failure.
+- A process that exited independently with descendants/stdio outstanding is
+  still a global uncertainty with retained private root, not success. No
+  unref/pipe destruction/forced success may mask a remaining process. The
+  acceptance claim is the demonstrated controlled abort race, not universal
+  protection from hostile same-UID mutation or every OS timing race.
+- Copy this amendment verbatim into the tracked plan before code. Record cause,
+  RED/GREEN and original failure in limitations/plan, update changed gate record
+  in ROADMAP. Full Y15 verification, new clean candidate, both independent
+  whole-base review axes and primary acceptance are required before delivery.
+
+The original post-no-NLP Node 24 native matrix ended 7/8, not green: the
+1 ms watchdog case reported `callback_failed`; the child held stdio open until
+its exact namespace-init process was safely terminated by a diagnostic pidfd.
+The ordinary parent sent TERM to the original group, exited, and left init
+waiting on bwrap's startup eventfd. This failure remains part of the evidence.
+Three private test-only probes using the production bwrap argument builder and
+the same blocked startup ordering each reproduced TERM leader exit with the
+pinned init still live and no `close` after 500 ms; three changing only TERM to
+KILL each observed init gone and `close` before test cleanup. A new focused
+test drove the actual gateway kernel's stop path through that blocked real
+bwrap ordering: before correction it failed with the pinned namespace init
+still alive, then passed on both Node versions after immediate owned-group
+KILL, without invoking Mem0 or a provider. The test-only helper holds a pidfd
+for safe cleanup if the regression fails; the green assertion requires that
+the helper find the init already gone. The gate uses host `/usr/bin/python3`
+with `os.pidfd_open` and
+`signal.pidfd_send_signal` only for the local startup regression's exact-process
+test cleanup; missing support fails that explicit gate rather than skipping.
+On the corrected Y16 candidate, Node 22.16 and 24.15 each passed pinned local
+native/containment (9/9), portable
+gateway (44/44), budget (58/58), request guard (285/285), offline live-evidence
+(340 pass, 30 expected skips), and generic `npm test` (112/112). JSON
+validation, synthetic budget and guard demos, and pinned marketplace/strict
+plugin validation also passed on both Nodes. The private verification archive
+retains terminal logs for these runs. Independent primary acceptance and both
+whole-base review axes remain separate delivery gates.

@@ -125,8 +125,11 @@ For the evaluation-only native Mem0 gateway, additionally run
 `npm run test:mem0-native-gateway` on both Node 22.16 and 24. Its explicit
 `npm run test:mem0-native-local` gate also requires pinned local
 `CAIRN_MEM0_NATIVE_VENV_ROOT` and `CAIRN_MEM0_NATIVE_PYTHON_ROOT`, Linux
-`bwrap`, and both Node versions. Missing prerequisites fail this gate rather
-than count as a skip. Both suites use new synthetic ledgers and fake HTTP; the
+`bwrap`, and both Node versions. The Y16 startup regression additionally needs
+host `/usr/bin/python3` with `os.pidfd_open` and
+`signal.pidfd_send_signal`; this is test-only and does not change the pinned
+Mem0 interpreter. Missing prerequisites fail this gate rather than count as a
+skip. Both suites use new synthetic ledgers and fake HTTP; the
 local gate imports installed Mem0 but never uses a provider key or operational
 ledger. This is containment/accounting verification, not permission to spend.
 

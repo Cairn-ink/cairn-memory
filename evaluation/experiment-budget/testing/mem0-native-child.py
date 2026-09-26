@@ -1,6 +1,7 @@
 """Contained, single-case Mem0 2.2.0 worker. No provider credentials or network fallback."""
 
 import json
+import importlib.util
 import os
 import sys
 
@@ -54,6 +55,15 @@ def run(case):
     value = case["input"]
     if not isinstance(value, dict) or set(value) != {"batches", "query"}:
         abort("invalid_native_input")
+
+    # The pinned installation must not activate Mem0's optional entity NLP.
+    # Refuse even an unexpected import resolution before importing Mem0.
+    try:
+        spacy_available = importlib.util.find_spec("spacy") is not None
+    except Exception:
+        abort("optional_nlp_available")
+    if spacy_available:
+        abort("optional_nlp_available")
 
     # Import after MEM0_DIR and all cache roots were set by the isolated parent
     # environment. The only writable paths are private to this one case.

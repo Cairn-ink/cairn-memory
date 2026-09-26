@@ -80,6 +80,14 @@ reliability work below without declaring older failure gates resolved.
    ready. Then run a separately frozen and authorized fixed pilot before broader
    architecture work.
    Preserve the original failed run and spending; offline tests are not scores.
+   The separate [contained native Mem0 gateway candidate](docs/plans/mem0-native-gateway.md)
+   has a synthetic no-optional-spaCy preflight gate in its inspected artifact,
+   hashed configuration and child startup. Its immediate owned-group abort
+   policy addresses a retained bwrap startup race: an earlier Node 24 local
+   gate failed 7/8, and controlled TERM/KILL plus actual-kernel regression
+   evidence is recorded in the plan. Its real pinned local fake-provider
+   tests are an engineering gate only; matched-resource comparison, semantic
+   quality, a paid grant and broad-promotion readiness remain unestablished.
 2. Review/merge the verified native-provider candidate and its dependent
    native deadline/recovery candidate. The separately frozen
    [six-case development smoke](docs/fresh-reliability-smoke.md) now has a

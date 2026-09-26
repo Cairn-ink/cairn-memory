@@ -121,6 +121,20 @@ owned process-group disappearance for that run. These local checks assume a
 trusted OS and same-UID host; they are not an immutable artifact, general
 sandbox guarantee, credential owner, paid launch, source-provenance renderer,
 matched-resource comparison, or semantic quality measurement.
+The no-optional-spaCy condition is checked through ordinary package/module
+and distribution layouts in the hashed roots and again at child import
+resolution before Mem0 configuration. These are preflight checks on a trusted
+local installation, not universal proof against hostile import hooks or
+same-UID mutation, and they do not establish native semantic behavior.
+An earlier Node 24 local native gate failed 7/8 when a 1 ms timeout sent TERM
+during bwrap startup: its outer leader exited, but namespace PID 1 remained
+blocked on the startup eventfd and kept stdio open. A scoped pidfd diagnostic
+cleaned that exact process; the failure was not reclassified as a pass. The
+corrected disposable-case abort policy sends immediate KILL only to the
+original owned group while its leader is still observed live. Controlled
+real-bwrap and actual-kernel startup tests reproduced the old failure and
+passed under the correction. This is not universal protection against every
+OS race, nor permission to signal a numeric group after leader exit.
 
 The [controlled Mem0 text-wire profile](plans/mem0-wire-contract.md) validates
 synthetic chat and embedding JSON, pinned token counts, bounded response shape

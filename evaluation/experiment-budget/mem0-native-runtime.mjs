@@ -235,7 +235,6 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   let stopping = false;
   let terminationAt = null;
   let watchdog;
-  let termTimer;
   let stopResolver;
   const stopped = new Promise(resolve => { stopResolver = resolve; });
   const firstFault = code => {
@@ -250,16 +249,12 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     stopping = true;
     terminationAt = Date.now();
     stopResolver();
-    // Once the leader exits, its numeric PID/PGID can be recycled even while
-    // inherited pipes delay `close`. Never signal that number again.
+    // These stores are disposable. Kill the original owned group at once so
+    // bwrap's namespace init cannot be stranded during early startup. Once
+    // the leader exits, its numeric PID/PGID can be recycled; never signal it.
     if (child && !childExited && !childClosed
       && Number.isSafeInteger(child.pid) && child.pid > 0) {
-      try { stopChild(child, 'SIGTERM'); } catch { firstFault('native_terminate_failed'); }
-      termTimer = setTimeout(() => {
-        if (!childExited && !childClosed) {
-          try { stopChild(child, 'SIGKILL'); } catch { firstFault('native_kill_failed'); }
-        }
-      }, configuration.termGraceMs);
+      try { stopChild(child, 'SIGKILL'); } catch { firstFault('native_kill_failed'); }
     }
   };
   const onRevoke = () => { terminate(); };
@@ -427,7 +422,6 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
       processGroupQuiescent = hostGroupGone && !forceProcessGroupLiveForTest;
       if (!processGroupQuiescent) firstFault('native_process_group_live');
     }
-    clearTimeout(termTimer);
     try {
       const closed = await within(closeServer(server, connections), configuration.reapMs);
       if (closed.timedOut) firstFault('native_listener_cleanup_failed');

@@ -1,8 +1,13 @@
 // Explicit LOCAL native gate. Missing installed prerequisites fail, never skip.
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { dirname } from 'node:path';
+import readline from 'node:readline';
 import test from 'node:test';
-import { inspectMem0NativeArtifact } from '../mem0-native-artifact.mjs';
+import { checkedMem0NativeArtifact, inspectMem0NativeArtifact } from '../mem0-native-artifact.mjs';
 import { mem0NativeConfiguration, runMem0NativeCase } from '../mem0-native-gateway.mjs';
+import { bubblewrapArguments, runNativeGatewayKernel } from '../mem0-native-runtime.mjs';
 import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
 
 function installed() {
@@ -155,4 +160,118 @@ test('Y14 short native watchdog reaps child with large synthetic piped input', a
     const next = await f.guard.withCaseScope(f.capability.schedule[1], async () => 'next');
     assert.equal(next.status, 'completed');
   } finally { f.guard.close(); }
+});
+
+test('Y16 actual kernel kills an owned bwrap group before blocked startup can orphan init', async t => {
+  const artifact = installed();
+  const roots = checkedMem0NativeArtifact(artifact);
+  const configuration = configured();
+  const f = nativeFixture(t, { artifact, configuration, httpTimeoutMs: 10_000,
+    fetchImpl: () => assert.fail('blocked startup reached provider') });
+  const childFile = new URL('../testing/mem0-native-child.py', import.meta.url).pathname;
+  const pinFile = new URL('../testing/mem0-native-startup-pidfd.py', import.meta.url).pathname;
+  const signals = [];
+  let child, helper, helperClosed, helperLines, currentHandle, caseRoot;
+  let childClosed = false;
+  let readyResolve, readyReject;
+  const startupReady = new Promise((resolve, reject) => {
+    readyResolve = resolve; readyReject = reject;
+  });
+  const bounded = (promise, milliseconds, code) => {
+    let timer;
+    return Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(code)), milliseconds);
+    })]).finally(() => clearTimeout(timer));
+  };
+  const helperLine = async () => {
+    const next = await bounded(helperLines.next(), 3_000, 'pidfd_helper_timeout');
+    if (next.done) throw new Error('pidfd_helper_closed');
+    return JSON.parse(next.value);
+  };
+  const startChild = ({ socket, store }) => {
+    caseRoot = dirname(socket);
+    const args = bubblewrapArguments({ roots, childFile, socket, store });
+    const separator = args.lastIndexOf('--');
+    const interpreter = args[separator + 1];
+    args.splice(separator + 1, args.length, interpreter, '-I', '-B', '-c',
+      'import sys; sys.stdin.buffer.read()');
+    args.splice(separator, 0, '--info-fd', '3', '--userns-block-fd', '4');
+    child = spawn('bwrap', args, { env: {}, detached: true,
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] });
+    child.once('close', () => { childClosed = true; });
+    let info = '';
+    child.stdio[3].setEncoding('utf8');
+    child.stdio[3].on('data', chunk => { info += chunk; });
+    child.stdio[3].once('end', async () => {
+      try {
+        const reported = JSON.parse(info)['child-pid'];
+        assert.ok(Number.isSafeInteger(reported) && reported > 0);
+        helper = spawn('/usr/bin/python3', ['-I', '-B', pinFile,
+          String(reported), String(child.pid), caseRoot, childFile],
+        { env: { PATH: '/usr/bin:/bin', PYTHONDONTWRITEBYTECODE: '1' },
+          stdio: ['pipe', 'pipe', 'pipe'] });
+        helperClosed = once(helper, 'close');
+        helperLines = readline.createInterface({ input: helper.stdout })[Symbol.asyncIterator]();
+        const ready = await helperLine();
+        assert.equal(ready.ready?.pid, reported);
+        assert.equal(ready.ready?.ppid, child.pid);
+        readyResolve();
+      } catch (error) { readyReject(error); }
+    });
+    child.once('error', readyReject);
+    return child;
+  };
+  const stopChild = (owned, signal) => {
+    signals.push(signal);
+    process.kill(-owned.pid, signal);
+  };
+  let scopeWork;
+  let pinned = false;
+  let observed = null;
+  let closeBeforeCleanup = false;
+  let cleanupResult = null;
+  let scopeResult;
+  try {
+    scopeWork = f.guard.withCaseScope(f.capability.schedule[0], handle => {
+      currentHandle = handle;
+      return runNativeGatewayKernel({ artifact, roots, configuration: configuration.configuration,
+        childFile, guard: f.guard, handle,
+        input: { batches: [[{ role: 'user', content: 'Synthetic.' }]], query: 'Synthetic?' },
+        scope: { caseId: f.capability.schedule[0].caseId } }, { startChild, stopChild });
+    });
+    await bounded(startupReady, 5_000, 'blocked_startup_not_ready');
+    pinned = true;
+    currentHandle.revoke();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    helper.stdin.write('probe\n');
+    observed = await helperLine();
+    closeBeforeCleanup = childClosed;
+  } finally {
+    try {
+      if (pinned) {
+        helper.stdin.write('cleanup\n');
+        cleanupResult = await helperLine();
+      }
+      if (helper) {
+        helper.stdin.end();
+        await bounded(helperClosed, 3_000, 'pidfd_helper_unclosed');
+      }
+      child?.stdio[4].end();
+      if (scopeWork) scopeResult = await bounded(scopeWork, 12_000,
+        'kernel_startup_cleanup_timeout');
+    } finally {
+      f.guard.close();
+    }
+  }
+  assert.equal(scopeResult.status, 'failed');
+  assert.equal(scopeResult.reason, 'cancelled');
+  assert.equal(cleanupResult?.cleanup, 'already_gone',
+    'test-only pidfd cleanup must not repair a production cancellation');
+  assert.equal(observed?.probe, null, 'namespace init must be gone before test cleanup');
+  assert.equal(closeBeforeCleanup, true, 'bwrap stdio must close before test cleanup');
+  let groupGone = false;
+  try { process.kill(-child.pid, 0); }
+  catch (error) { if (error?.code === 'ESRCH') groupGone = true; else throw error; }
+  assert.equal(groupGone, true, 'owned numeric group must be absent after close');
+  assert.deepEqual(signals, ['SIGKILL']);
 });
