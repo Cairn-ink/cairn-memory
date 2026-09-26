@@ -291,14 +291,29 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
   } finally { await transport.drain(); }
 }
 
+const RETAINED_ATTEMPT_STAGE_LIMIT = 64;
+
+export function summarizeAttemptsForOrdinal(attempts, ordinal) {
+  const summary = { requests: 0, reservedMicroUsd: 0, knownActualMicroUsd: 0,
+    unknownActualCount: 0, retainedStageCount: 0, omittedStageCount: 0, stages: [] };
+  for (const item of attempts) {
+    if (item.ordinal !== ordinal) continue;
+    summary.requests++;
+    summary.reservedMicroUsd += item.reservedMicroUsd;
+    summary.knownActualMicroUsd += item.actualMicroUsd ?? 0;
+    if (item.actualMicroUsd === null) summary.unknownActualCount++;
+    if (summary.stages.length < RETAINED_ATTEMPT_STAGE_LIMIT) {
+      summary.stages.push({ stage: item.stage, outcome: item.outcome,
+        reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd });
+    }
+  }
+  summary.retainedStageCount = summary.stages.length;
+  summary.omittedStageCount = summary.requests - summary.retainedStageCount;
+  return summary;
+}
+
 function attemptDiagnostics(guard, ordinal) {
-  const attempts = guard.attempts().filter(item => item.ordinal === ordinal);
-  return { requests: attempts.length,
-    reservedMicroUsd: attempts.reduce((sum, item) => sum + item.reservedMicroUsd, 0),
-    knownActualMicroUsd: attempts.reduce((sum, item) => sum + (item.actualMicroUsd ?? 0), 0),
-    unknownActualCount: attempts.filter(item => item.actualMicroUsd === null).length,
-    stages: attempts.map(item => ({ stage: item.stage, outcome: item.outcome,
-      reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd })) };
+  return summarizeAttemptsForOrdinal(guard.attempts(), ordinal);
 }
 
 async function nativeCase({ guard, apiKey, plan, nativeArtifact, nativeConfiguration,

@@ -2,18 +2,127 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 
-import { prepareMixedComparison } from '../mixed-generation.mjs';
+import { prepareMixedComparison, summarizeAttemptsForOrdinal } from '../mixed-generation.mjs';
 import { packMixedAnswer } from '../mixed-answer.mjs';
 import { verifyMixedCapturePlan } from '../mixed-plan.mjs';
 import { prepareMixedSourceCase } from '../mixed-source.mjs';
 import { officialJudgeRequest } from '../official-scoring.mjs';
+import { scoreMixedGeneration } from '../mixed-scoring.mjs';
+import { freeze, hash, reportSnapshot } from '../mixed-validation.mjs';
 import { completionOnce, trackedTransport } from '../mixed-transport.mjs';
-import { sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
+import { evaluatorRow, sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
 
 const descriptors = () => ({ nativeArtifact: { sourceTreeSha256: '1'.repeat(64),
   dependencyLockSha256: '2'.repeat(64) },
 nativeConfiguration: { configurationSha256: '3'.repeat(64), configuration: {} },
 cairnRuntimeArtifactSha256: '4'.repeat(64) });
+
+test('D1/D2 attempt diagnostics retain the first 64 and count every outcome and price', () => {
+  const attempt = (ordinal, index, outcome, actualMicroUsd) => ({ ordinal,
+    stage: `stage-${index}`, outcome, reservedMicroUsd: index + 1, actualMicroUsd });
+  for (const count of [0, 1, 64, 65]) {
+    const attempts = Array.from({ length: count }, (_, index) =>
+      attempt(3, index, index % 3 === 0 ? 'failed'
+        : index % 3 === 1 ? 'unknown' : 'succeeded', index % 2 ? null : index + 2));
+    attempts.splice(Math.min(count, 5), 0, attempt(4, 999, 'succeeded', 999));
+    const summary = summarizeAttemptsForOrdinal(attempts, 3);
+    assert.equal(summary.requests, count);
+    assert.equal(summary.retainedStageCount, Math.min(count, 64));
+    assert.equal(summary.omittedStageCount, Math.max(count - 64, 0));
+    assert.equal(summary.stages.length, Math.min(count, 64));
+    assert.deepEqual(summary.stages.map(item => item.stage),
+      Array.from({ length: Math.min(count, 64) }, (_, index) => `stage-${index}`));
+    assert.equal(summary.reservedMicroUsd, count * (count + 1) / 2);
+    assert.equal(summary.knownActualMicroUsd, attempts.filter(item => item.ordinal === 3)
+      .reduce((sum, item) => sum + (item.actualMicroUsd ?? 0), 0));
+    assert.equal(summary.unknownActualCount, Math.floor(count / 2));
+    if (count) assert.deepEqual(summary.stages[0], { stage: 'stage-0', outcome: 'failed',
+      reservedMicroUsd: 1, actualMicroUsd: 2 });
+    if (count >= 5) {
+      assert.deepEqual(summary.stages.slice(1, 5).map(item =>
+        [item.outcome, item.actualMicroUsd]), [
+        ['unknown', null], ['succeeded', 4], ['failed', null], ['unknown', 6],
+      ]);
+    }
+  }
+});
+
+test('D3 old unbounded 50001-entry stage shape exceeds the fixed report envelope', () => {
+  const stage = { stage: 'answer', outcome: 'succeeded',
+    reservedMicroUsd: 1, actualMicroUsd: 1 };
+  assert.throws(() => reportSnapshot({ stages: Array.from({ length: 50_001 },
+    () => stage) }), { code: 'invalid_mixed_report' });
+});
+
+test('D3 394629 synthetic attempts across 60 arms pass report snapshot and real scorer', async () => {
+  const armCount = 60, requestCount = 394_629;
+  const sourceIds = Array.from({ length: armCount / 2 }, (_, index) =>
+    `synthetic_bounded_${index}`);
+  const prepared = prepareMixedComparison({ sourceCases: sourceIds.map(sourceRow),
+    armOrders: sourceIds.map(() => ['cairn', 'mem0']), ...descriptors() });
+  const attempts = [];
+  let retainedTotal = 0, omittedTotal = 0;
+  const expected = Array.from({ length: armCount }, () =>
+    ({ requests: 0, reservedMicroUsd: 0, knownActualMicroUsd: 0,
+      unknownActualCount: 0 }));
+  for (let index = 0; index < requestCount; index++) {
+    const ordinal = index % armCount;
+    const isSentinel = index === requestCount - 1;
+    const reservedMicroUsd = isSentinel ? 123_456 : index % 7 + 1;
+    const actualMicroUsd = isSentinel ? 98_765 : index % 4 === 0 ? null : index % 5 + 1;
+    attempts.push({ ordinal, stage: isSentinel ? 'late-sentinel' : `stage-${index}`,
+      outcome: index % 3 === 0 ? 'failed' : index % 3 === 1 ? 'unknown' : 'succeeded',
+      reservedMicroUsd, actualMicroUsd });
+    expected[ordinal].requests++;
+    expected[ordinal].reservedMicroUsd += reservedMicroUsd;
+    expected[ordinal].knownActualMicroUsd += actualMicroUsd ?? 0;
+    if (actualMicroUsd === null) expected[ordinal].unknownActualCount++;
+  }
+  const cases = sourceIds.map((sourceId, index) => ({
+    questionId: prepared.roster[index].questionId,
+    question: { text: 'What synthetic fact?', date: '2024-01-02 10:00' },
+    caseDigest: prepared.preflight[index].caseDigest,
+    preflight: { status: 'ready', reason: null },
+    arms: ['cairn', 'mem0'].map((name, position) => {
+      const ordinal = index * 2 + position;
+      const diagnostics = summarizeAttemptsForOrdinal(attempts, ordinal);
+      assert.deepEqual({ requests: diagnostics.requests,
+        reservedMicroUsd: diagnostics.reservedMicroUsd,
+        knownActualMicroUsd: diagnostics.knownActualMicroUsd,
+        unknownActualCount: diagnostics.unknownActualCount }, expected[ordinal]);
+      assert.equal(diagnostics.retainedStageCount, 64);
+      assert.equal(diagnostics.omittedStageCount, expected[ordinal].requests - 64);
+      retainedTotal += diagnostics.retainedStageCount;
+      omittedTotal += diagnostics.omittedStageCount;
+      assert.deepEqual(diagnostics.stages.map(item => item.stage),
+        Array.from({ length: 64 }, (_, offset) => `stage-${ordinal + offset * armCount}`));
+      assert.equal(diagnostics.stages.some(item => item.stage === 'late-sentinel'), false);
+      return { name, status: 'blocked', reason: 'global_halt', answer: null,
+        scope: null, diagnostics: { attempts: diagnostics } };
+    }),
+  }));
+  const report = freeze(reportSnapshot({ schemaVersion: 'cairn-lme-mixed-generation-v1',
+    manifest: prepared.manifest, roster: prepared.roster,
+    manifestDigest: hash('cairn.lme.mixed.manifest.v1', prepared.manifest),
+    rosterDigest: hash('cairn.lme.mixed-source-pair.roster.v1', prepared.roster),
+    cases, halted: true, haltReason: 'global_halt' }));
+  assert.equal(retainedTotal, armCount * 64);
+  assert.equal(omittedTotal, requestCount - retainedTotal);
+  assert.equal(report.cases[14].arms[0].diagnostics.attempts.requests,
+    expected[28].requests);
+  const generation = prepared.roster.flatMap(row => row.armOrder.map(name => ({
+    phase: 'generation', caseId: row.arms.find(item => item.name === name).scopeId })));
+  const schedule = [...generation, ...generation.map(item => ({ ...item, phase: 'scoring' }))];
+  const guard = { mixedSourcePairCapability: { manifest: prepared.manifest,
+    roster: prepared.roster, schedule }, caseOutcomes: () => ({ scopes: [] }),
+  caseScopeSnapshot: () => null };
+  const scored = await scoreMixedGeneration({ generationReport: report,
+    evaluatorRows: sourceIds.map(evaluatorRow), referenceRenderings: undefined,
+    guard, apiKey: 'synthetic-only' });
+  assert.equal(scored.summary.fixedN, 30);
+  assert.equal(scored.summary.perArm.cairn.unresolved, 30);
+  assert.equal(scored.summary.perArm.mem0.unresolved, 30);
+});
 
 test('M2/M3 source-only preparation freezes exact public projection and fixed roster', () => {
   const row = sourceRow();
