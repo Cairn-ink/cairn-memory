@@ -9,6 +9,7 @@ import { createExperimentBudget } from '../../evaluation/experiment-budget/index
 import { createExperimentRequestGuard, authorizeCandidateQualificationExtension } from '../../evaluation/experiment-budget/request-guard.mjs';
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { getSourceSupportPilotPins, runSourceSupportPilot } from '../../evaluation/live/source-support-pilot.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 
 let artifact, executable;
 before(() => {
@@ -70,7 +71,7 @@ for (const mode of ['success', 'capture-invalid', 'recall-invalid', 'transport']
           : { refs: input.candidates.slice(0, input.limit).map(item => ({ namespaceIndex: item.namespaceIndex, memoryId: item.memory.id, revision: item.memory.revision })) };
       }
       if (payload.text.format.name === 'cairn_qualifyCandidates') {
-        output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+        output = qualificationPoolWire(input, output);
       }
       return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
         output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],

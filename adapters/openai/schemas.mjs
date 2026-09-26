@@ -1,4 +1,5 @@
 import { denseArray, identifier, revision } from '../../core/validation.mjs';
+import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
 
 const string = { type: 'string' };
 const integer = { type: 'integer', minimum: 0 };
@@ -42,7 +43,85 @@ const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const qualificationSlots = (items, variants) => object(Object.fromEntries(
   items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
-function checklistRecord(value, fields) {
+// Preserve the fully expanded candidate-ID schema for local validation after
+// the named provider pool wire has been decoded back into this exact shape.
+export function qualificationCandidatesInlineSchema(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+  if (Object.hasOwn(input, 'inputMode')) invalid();
+  const items = Array.from(list(input.items));
+  if (!items.length || items.length > 5) invalid();
+  const itemIndices = items.map(item => index(item?.itemIndex));
+  if (sorted(itemIndices).length !== items.length) invalid();
+  const allCandidateIndices = new Set();
+  const variants = items.map(item => {
+    const candidates = Array.from(list(item.candidates));
+    if (!candidates.length) invalid();
+    const candidateIndices = candidates.map(candidate => {
+      const candidateIndex = index(candidate?.candidateIndex);
+      if (allCandidateIndices.has(candidateIndex)) invalid();
+      allCandidateIndices.add(candidateIndex);
+      return candidateIndex;
+    });
+    // Core checks duplicate selections, aggregate anchor count and complete
+    // item coverage. The provider schema restricts each field to this item's
+    // candidates without claiming that a selected quote entails the value.
+    const field = (known, unknown) => ({ anyOf: [
+      object({ value: known, evidenceIndices: {
+        ...array(constrained(integer, candidateIndices), 4), minItems: 1,
+      } }),
+      object({ value: unknown, evidenceIndices: {
+        ...array(constrained(integer, candidateIndices), 4), minItems: 0,
+      } }),
+    ] });
+    const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
+    const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
+    return object({ itemIndex: constrained(integer, [item.itemIndex]),
+      subject: descriptive(160), property: descriptive(160),
+      scope: descriptive(120), applies: descriptive(120), value: descriptive(160),
+      attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
+      commitment: categorical(['adopted', 'considered', 'rejected']),
+    });
+  });
+  return object({ qualifications: qualificationSlots(items, variants) });
+}
+
+function qualificationEvidencePoolSchema(inline) {
+  const evidenceSlots = minimum => ({ ...array({ type: 'integer', minimum: 0, maximum: 3 }, 4), minItems: minimum });
+  const field = (known, unknown) => ({ anyOf: [
+    object({ value: known, evidenceSlots: evidenceSlots(1) }),
+    object({ value: unknown, evidenceSlots: evidenceSlots(0) }),
+  ] });
+  const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
+  const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
+  const definitions = { text160: descriptive(160), text120: descriptive(120),
+    attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
+    commitment: categorical(['adopted', 'considered', 'rejected']) };
+  const slots = inline.properties.qualifications.properties;
+  const entries = Object.fromEntries(Object.entries(slots).map(([name, slot]) => {
+    const candidateIds = slot.properties.subject.anyOf[0].properties.evidenceIndices.items.enum;
+    return [name, object({ itemIndex: slot.properties.itemIndex,
+      pool: { ...array(constrained(integer, candidateIds), 4), minItems: 1 },
+      subject: { $ref: '#/$defs/text160' }, property: { $ref: '#/$defs/text160' },
+      scope: { $ref: '#/$defs/text120' }, applies: { $ref: '#/$defs/text120' },
+      value: { $ref: '#/$defs/text160' }, attribution: { $ref: '#/$defs/attribution' },
+      commitment: { $ref: '#/$defs/commitment' } })];
+  }));
+  return { ...object({ wireVersion: { type: 'string', enum: ['evidence-pool-v1'] },
+    qualifications: object(entries) }), $defs: definitions };
+}
+
+/** Opt-in catalog schema; the ordinary schemasFor path remains guard-safe. */
+export function schemasForQualificationInput(input) {
+  if (!input || typeof input !== 'object' || !Object.hasOwn(input, 'inputMode')) {
+    return schemasFor('qualifyCandidates', input);
+  }
+  try {
+    const { expanded } = snapshotQualificationTextCatalog(input);
+    return qualificationEvidencePoolSchema(qualificationCandidatesInlineSchema(expanded));
+  } catch { invalid(); }
+}
+
+function exactData(value, fields) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
       Reflect.ownKeys(value).length !== fields.length) invalid();
@@ -50,6 +129,40 @@ function checklistRecord(value, fields) {
     const descriptor = Object.getOwnPropertyDescriptor(value, field);
     if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
   }
+}
+
+/** A detached indexed envelope, checked before serialization can erase bad fields. */
+export function snapshotIndexedExtractInput(input) {
+  exactData(input, ['inputMode', 'messages']);
+  if (input.inputMode !== 'indexed-windows-v1') invalid();
+  const messages = input.messages;
+  try { denseArray(messages, 1, 64); } catch { invalid(); }
+  if (Reflect.ownKeys(messages).length !== messages.length + 1) invalid();
+  const copied = [];
+  let messageIndex = -1, groupUnits = 0, totalUnits = 0, role;
+  for (let position = 0; position < messages.length; position++) {
+    const descriptor = Object.getOwnPropertyDescriptor(messages, String(position));
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+    const message = descriptor.value;
+    exactData(message, ['index', 'messageIndex', 'role', 'content']);
+    if (message.index !== position || !Number.isSafeInteger(message.messageIndex) ||
+        message.messageIndex < 0 || message.messageIndex > 23 ||
+        !['user', 'assistant'].includes(message.role) ||
+        typeof message.content !== 'string' || !message.content.length ||
+        !message.content.isWellFormed() || message.content.length > 800) invalid();
+    if (message.messageIndex !== messageIndex) {
+      if (message.messageIndex !== messageIndex + 1) invalid();
+      messageIndex = message.messageIndex; groupUnits = 0; role = message.role;
+    } else if (message.role !== role) invalid();
+    groupUnits += message.content.length; totalUnits += message.content.length;
+    if (groupUnits > 4000 || totalUnits > 20000) invalid();
+    copied.push({ index: position, messageIndex, role: message.role, content: message.content });
+  }
+  return { inputMode: 'indexed-windows-v1', messages: copied };
+}
+
+function checklistRecord(value, fields) {
+  exactData(value, fields);
 }
 
 function checklistSchema(input) {
@@ -162,42 +275,7 @@ export function schemasFor(method, input) {
       fromReceipt: constrained(integer, receiptIndices), toReceipt: constrained(integer, receiptIndices) }), 10) });
   }
   if (method === 'qualifyCandidates') {
-    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
-    const items = Array.from(list(input.items));
-    if (!items.length || items.length > 5) invalid();
-    const itemIndices = items.map(item => index(item?.itemIndex));
-    if (sorted(itemIndices).length !== items.length) invalid();
-    const allCandidateIndices = new Set();
-    const variants = items.map(item => {
-      const candidates = Array.from(list(item.candidates));
-      if (!candidates.length) invalid();
-      const candidateIndices = candidates.map(candidate => {
-        const candidateIndex = index(candidate?.candidateIndex);
-        if (allCandidateIndices.has(candidateIndex)) invalid();
-        allCandidateIndices.add(candidateIndex);
-        return candidateIndex;
-      });
-      // Core checks duplicate selections, aggregate anchor count and complete
-      // item coverage. The provider schema restricts each field to this item's
-      // candidates without claiming that a selected quote entails the value.
-      const field = (known, unknown) => ({ anyOf: [
-        object({ value: known, evidenceIndices: {
-          ...array(constrained(integer, candidateIndices), 4), minItems: 1,
-        } }),
-        object({ value: unknown, evidenceIndices: {
-          ...array(constrained(integer, candidateIndices), 4), minItems: 0,
-        } }),
-      ] });
-      const descriptive = maximum => field({ type: 'string', minLength: 1, maxLength: maximum }, { type: 'null' });
-      const categorical = values => field({ type: 'string', enum: values }, { type: 'string', enum: ['unknown'] });
-      return object({ itemIndex: constrained(integer, [item.itemIndex]),
-        subject: descriptive(160), property: descriptive(160),
-        scope: descriptive(120), applies: descriptive(120), value: descriptive(160),
-        attribution: categorical(['direct', 'reported', 'quoted', 'proposed']),
-        commitment: categorical(['adopted', 'considered', 'rejected']),
-      });
-    });
-    return object({ qualifications: qualificationSlots(items, variants) });
+    return qualificationEvidencePoolSchema(qualificationCandidatesInlineSchema(input));
   }
   if (method === 'qualify') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
@@ -244,10 +322,32 @@ export function schemasFor(method, input) {
     }), transitionMaximum) });
   }
   if (!Object.hasOwn(schemas, method)) invalid();
-  if (method === 'extract') return structuredClone(schemas.extract);
+  if (method === 'extract') {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
+    if (Object.hasOwn(input, 'inputMode')) {
+      const indexed = snapshotIndexedExtractInput(input);
+      const schema = structuredClone(schemas.extract);
+      schema.properties.items.items.properties.sourceIndices.items.maximum = indexed.messages.length - 1;
+      return schema;
+    }
+    const messages = list(input.messages);
+    if (messages.length > 24) invalid();
+    for (let position = 0; position < messages.length; position++) {
+      const message = messages[position];
+      if (!Object.hasOwn(messages, position) || index(message?.index) !== position ||
+          !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') invalid();
+    }
+    const schema = structuredClone(schemas.extract);
+    if (messages.length) schema.properties.items.items.properties.sourceIndices.items.maximum = messages.length - 1;
+    else schema.properties.items.maxItems = 0;
+    return schema;
+  }
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
   if (method === 'classify') {
-    const memoryIds = sorted(list(input.memories).map((memory) => id(memory?.id)));
+    const memories = list(input.memories);
+    if (memories.length > 5 || Object.keys(memories).length !== memories.length) invalid();
+    const memoryIds = memories.map((memory) => id(memory?.id));
+    if (new Set(memoryIds).size !== memoryIds.length) invalid();
     const l1 = []; const l2 = [];
     if (typeof input.mapExhausted !== 'boolean') invalid();
     for (const item of list(input.map)) {
@@ -260,8 +360,8 @@ export function schemasFor(method, input) {
     const variants = [object(existing)];
     if (input.mapExhausted) variants.push(object({ ...existing,
       newL1: { anyOf: [object(topic), object({ ...topic, newL2Title: { ...string } })] } }));
-    return object({ items: { ...array({ anyOf: variants }, Math.min(5, memoryIds.length)),
-      minItems: memoryIds.length ? 1 : 0 } });
+    return object({ items: { ...array({ anyOf: variants }, memoryIds.length),
+      minItems: memoryIds.length } });
   }
   const namespaces = []; const memoryIds = []; const revisions = [];
   let maximum;
