@@ -50,6 +50,11 @@ reliability work below without declaring older failure gates resolved.
    dataset, model/configuration, scorer and comparison arms, publish per-case
    failures and independently review the result. Offline scripted demos are not
    a measured score, and this baseline authorizes no paid run.
+   The planning-only mixed resource projection adds an isolated OpenAI adapter
+   dependency prerequisite to the LongMemEval CI job. PR243's first Node24
+   LongMemEval run (`36263553569`) failed without it; the paired Node22 leg was
+   cancelled. Installing the existing locked dependency set repairs that test
+   gate, not semantic readiness, real resource fit or paid-run authorization.
    The separately versioned offline three-arm comparison and string-reference
    official-style scorer now have synthetic integration coverage; without the
    optional sidecar below, non-string reference parity remains unresolved.
