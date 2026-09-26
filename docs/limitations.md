@@ -175,6 +175,14 @@ deadline or guaranteeing cross-process scheduling under starvation.
 Synthetic admission and source-receipt checks cannot prove real-model support,
 retrieval usefulness, parity, resource fit or semantic answer quality.
 
+An M12b scripted mixed-scoring test exposed a valid Python-issued non-string
+reference capability being rejected before judging: the validated evaluator
+snapshot had null-prototype objects, while the existing strict capability
+binding expected ordinary JSON objects. Cloning only after full validation
+restored the detached representation without weakening that binding. Genuine
+and wrong-bound capability checks now pass under fake HTTP; they add no
+measured comparison score or real-model quality evidence.
+
 PR243's first LongMemEval Node24 CI run (`36263553569`) failed before the
 projection tests: the evaluation-only import chain could not resolve the
 existing OpenAI adapter's `tiktoken` dependency. The paired Node22 matrix leg
