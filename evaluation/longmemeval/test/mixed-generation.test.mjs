@@ -29,6 +29,27 @@ test('M2/M3 source-only preparation freezes exact public projection and fixed ro
   assert.equal(result.preflight[0].status, 'ready');
 });
 
+test('M3 fixed protocol and scope golden is accepted by actual X authority', t => {
+  // SHA256(JSON.stringify([domain, canonical-sorted value])); fixed sourceRow(),
+  // 1/2/3/5 descriptors, and Cairn-first schedule. These are literal goldens,
+  // not expected values recomputed with the production hash helper.
+  const fixture = syntheticMixedFixture(t, { artifact: descriptors().nativeArtifact,
+    configuration: descriptors().nativeConfiguration, sourceCases: [sourceRow()],
+    armOrders: [['cairn', 'mem0']], fetchImpl: () => assert.fail('no HTTP') });
+  try {
+    const row = fixture.prepared.roster[0];
+    assert.equal(row.protocolDigest,
+      'c17b0f19ad124db5fc85231a49e4ef1e36706af7078b07f1ef79c90d27c24efc');
+    assert.deepEqual(row.arms.map(item => item.scopeId), [
+      'lme-case-60944a186cb2b615f6b643cecc585fb79be01d6739b468228b46b0d88e1f9f73',
+      'lme-case-15015798b217141bb54a70b1682ec77d61e7f16acf3ff4d7cdd99f7ec1698629',
+    ]);
+    assert.deepEqual(fixture.capability.schedule.slice(0, 2).map(item => item.caseId),
+      row.arms.map(item => item.scopeId));
+    assert.deepEqual(fixture.capability.roster, fixture.prepared.roster);
+  } finally { fixture.guard.close(); }
+});
+
 test('M2 duplicate IDs, evaluator labels, getters and overwidth arrays reject pre-work', () => {
   const row = sourceRow();
   assert.throws(() => prepareMixedComparison({ sourceCases: [row, row],

@@ -631,3 +631,91 @@ corpus, credential, or actual-ledger activity was performed. The optional
 isolated current-child-source module-copy probe was not added; the mandatory
 before-first-arm artifact drift and existing current-file configuration
 identity checks remain in scope, with no claim that an unrun probe passed.
+
+### M11 answer and judge evidence completion
+
+The nonempty actual native mixed test now checks the complete answer request
+for both arms: the exact shared model/options and system instruction, ordered
+JSON user payload, original question and canonical date, authoritative Cairn
+source excerpt, and the native returned `Synthetic memory fact.` string without
+rewriting it as Cairn evidence. It still denies model-summary poison in Cairn's
+answer evidence. Through the real `scoreMixedGeneration` path, a priced but
+invalid completed first judge response is locally unresolved with
+`attempted:true`; the next declared judge runs exactly once and fixed N is
+preserved. A separate malformed-usage first judge produces a terminal unknown
+actual/full-reserve X attempt and a global halt; no second judge is attempted.
+
+Both pinned Node versions passed the six affected gates: `npm test` (112),
+`npm run validate`, `test:longmemeval` (173), `test:mixed-native-local` (13),
+`demo:longmemeval-mixed`, and strict plugin validation. No runtime, pricing,
+grant, native policy, or scorer implementation changed in this correction.
+The first focused malformed-judge test had an over-specific expected completed
+scope count after X's global halt; its raw RED is retained, and only that
+test assertion was removed. Earlier full M11 and M12a evidence remains
+unchanged; these are synthetic local results, not paid or quality evidence.
+
+### M12b — genuine non-string reference regression correction
+
+The finite M11 coverage audit exposed a product failure in the new mixed scorer:
+an actual Python-issued, evaluator-bound non-string rendering was rejected as
+`reference_rendering_unverified`, with zero judge attempts. Main independently
+reproduced the original positive test on Node24 before any runtime correction.
+This is not a semantic-model failure or a reason to weaken source binding.
+
+The bounded correction may change only `mixed-scoring.mjs`'s validated evaluator
+representation, plus the existing tests/evidence. Discriminate the hypotheses
+using the real capability: the original plain evaluator, the detached
+null-prototype equivalent, and a `structuredClone` of that validated equivalent.
+If the representation difference is confirmed, return a recursively frozen
+`structuredClone` of the fully snapshot/schema-validated evaluator rows so the
+existing strict resolver receives the same ordinary JSON object representation
+as its issuer. Never pass original mutable caller data, alter reference values,
+forge capabilities, loosen the shared resolver, or replace its equality rule.
+
+Acceptance: genuine number and/or list reference reaches the actual mixed judge
+with the exact Python-rendered text; wrong/missing capabilities and changed
+reference values remain unresolved without judge dispatch. Original mutation,
+accessor, sparse/nonfinite and fixed-N checks remain. Re-run the original red
+test, the full LongMemEval and native mixed suites, generic/JSON checks and
+comparison/public/mixed demos on both pinned Nodes; strict plugin validation
+also remains required. Core/adapter/ledger code is unchanged, so earlier
+unaffected gates retain their scoped evidence. Freeze only after passing, then
+repeat main acceptance and both independent full-base review axes.
+
+### M11 finite audit and M12b verification
+
+Focused synthetic tests now pin a literal prepared case protocol digest and
+both scope IDs that the actual X grant accepts. They reject JSON-cloned and
+reused prepared identities before work, and prove source/question mutation
+after preparation cannot change Cairn capture count/generation, native
+extraction, either answer request, or the report. Cairn count, generation,
+and answer unsettled-accounting failures each retain the entered scope and
+globally block the later arm. A `length` finish reason and an answer exceeding
+512 counted tokens remain local unresolved without that arm's judge request.
+The real three-case scorer denies reordered case reports before any judge,
+asserts every 3-by-3 table cell including zeros, and checks per-arm,
+per-category and empty-category/null-denominator summaries. Separate frozen
+report tests deny changed IDs, arm order/status, accessors, sparse arrays and
+nonfinite values before judge work.
+
+The M12b original Python-sidecar positive RED and an independent main-agent
+RED are retained in the private verification archive. The three-way probe
+showed a genuine plain evaluator resolves, the equal-value null-prototype
+snapshot fails strict capability binding, and a clone of the validated
+snapshot resolves. The only runtime change rehydrates and freezes fully
+validated, detached evaluator rows in `mixed-scoring.mjs`; it neither passes
+mutable caller data nor weakens the shared verifier. After that change, the
+mixed scorer makes both actual judge requests with `[1, 2]` rendered by
+Python. In a separate four-case genuine-generation run, forged, missing,
+cross-bound and changed-reference tokens all remain unresolved without any
+judge reservation or dispatch. Earlier test-only REDs for null-prototype
+assertions are retained and were corrected without runtime changes.
+
+Both Node 22.16.0 and 24.15.0 passed serial affected gates after the fix:
+`npm test` (112), `npm run validate`, `npm run test:longmemeval` (175),
+`npm run test:mixed-native-local` (20), the comparison, public and mixed
+LongMemEval demos, and strict pinned plugin validation. Raw logs remain in
+the private verification archive. Core, adapter, X ledger, provider policy,
+and native runtime files were not changed in this correction; their earlier
+full-suite evidence is unchanged. No paid calls, corpus, holdout, operational
+ledger or provider credentials were used.

@@ -46,6 +46,25 @@ test('M9 fixed-N halted scoring keeps every arm unresolved with undefined render
   assert.equal(scored.summary.outcomeTable.unresolved.unresolved, 1);
   assert.equal(scored.summary.commonResolvedN, 0);
   assert.equal(scored.haltReason, 'global_halt');
+  const plain = value => JSON.parse(JSON.stringify(value));
+  assert.deepEqual(plain(scored.summary.perArm.cairn), { correct: 0, incorrect: 0,
+    unresolved: 1, accuracyFixedN: 0, accuracyResolved: null, resolvedFraction: 0 });
+  assert.deepEqual(plain(scored.summary.outcomeTable), {
+    correct: { correct: 0, incorrect: 0, unresolved: 0 },
+    incorrect: { correct: 0, incorrect: 0, unresolved: 0 },
+    unresolved: { correct: 0, incorrect: 0, unresolved: 1 },
+  });
+  assert.equal(Object.keys(scored.summary.byCategory).length, 6);
+  assert.deepEqual(plain(scored.summary.byCategory['single-session-user']), {
+    fixedN: 1, perArm: { cairn: plain(scored.summary.perArm.cairn),
+      mem0: plain(scored.summary.perArm.mem0) } });
+  for (const [name, category] of Object.entries(scored.summary.byCategory)) {
+    if (name === 'single-session-user') continue;
+    assert.equal(category.fixedN, 0);
+    for (const arm of Object.values(category.perArm)) assert.deepEqual(plain(arm),
+      { correct: 0, incorrect: 0, unresolved: 0, accuracyFixedN: null,
+        accuracyResolved: null, resolvedFraction: null });
+  }
 });
 
 test('M9 forged successful answer without authentic X scope is rejected before judge', async () => {
@@ -63,4 +82,32 @@ test('M9 forged successful answer without authentic X scope is rejected before j
 test('M10 report detachment refuses a value beyond the fixed UTF-8 cap', () => {
   assert.throws(() => reportSnapshot({ text: 'x'.repeat(32 * 1024 * 1024 + 1) }),
     { code: 'invalid_mixed_report' });
+});
+
+test('M9/M10 malformed frozen report identity, order, status, and data deny before judge', async () => {
+  const { report, guard } = fixture();
+  guard.judgeFetch = () => assert.fail('malformed report must not reach judge');
+  for (const [name, mutate] of [
+    ['case ID', value => { value.cases[0].questionId = `lme-case-${'0'.repeat(64)}`; }],
+    ['arm order', value => { value.cases[0].arms.reverse(); }],
+    ['status', value => { value.cases[0].arms[0].status = 'completed'; }],
+    ['nonfinite diagnostic', value => { value.cases[0].arms[0].diagnostics.count = Infinity; }],
+    ['sparse cases', value => { delete value.cases[0]; }],
+  ]) {
+    const changed = structuredClone(report);
+    mutate(changed);
+    freeze(changed);
+    await assert.rejects(scoreMixedGeneration({ generationReport: changed,
+      evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+      guard, apiKey: 'synthetic-only' }), { code: 'invalid_mixed_report' }, name);
+  }
+  let getterCalled = false;
+  const accessor = { ...report };
+  Object.defineProperty(accessor, 'cases', { enumerable: true,
+    get() { getterCalled = true; throw Error('must not call getter'); } });
+  Object.freeze(accessor);
+  await assert.rejects(scoreMixedGeneration({ generationReport: accessor,
+    evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+    guard, apiKey: 'synthetic-only' }), { code: 'invalid_mixed_report' });
+  assert.equal(getterCalled, false);
 });

@@ -157,7 +157,10 @@ function validateEvaluators(rows, report) {
     if (!(scalar(reference) || Array.isArray(reference) && reference.length > 0
       && reference.every(scalar))) fail('invalid_evaluator_rows');
   }
-  return freeze(fixed);
+  // The Python-issued capability binds ordinary JSON objects. The strict
+  // snapshot above has null-prototype containers; rehydrate only after full
+  // validation, keeping the detached values and exact resolver comparison.
+  return freeze(structuredClone(fixed));
 }
 
 const unresolved = (stage, reason, attempted = false) => ({ status: 'unresolved',
