@@ -161,6 +161,30 @@ request cap, so a separate same-dollar schema-2 cap extension, verified native
 configuration, the full common protocol, actual artifact and source-only checks
 remain necessary before a paid pilot.
 
+The [same-dollar request-cap transition](plans/mixed-request-cap-v2.md) adds
+an explicit schema-2 allowance without increasing the US$200 monetary limit,
+resetting reservations or rewriting earlier authorization records. Its full
+history digest necessarily changes because it includes the request cap; the
+allowance binds old- and new-cap prefix digests over the same retained rows.
+This is an operator transition, not permission to retry failed questions.
+Synthetic checks do not establish that an operational transition has occurred.
+Only the new parent assertion uses the larger bounded lineage envelope; old
+parent behavior remains unchanged. A 420,000-row synthetic check reached a
+fake physical request, but the whole check took roughly 84–100 seconds and
+about 3 GiB resident memory. Repeated full-history validation remains quadratic
+over a growing campaign. These are evaluation-accounting costs, not measured
+memory-engine performance or a practical throughput guarantee.
+
+[Mixed attempt diagnostics](plans/mixed-bounded-attempt-diagnostics.md) retain
+all numeric request/cost/unknown-usage aggregates but only the first 64 detailed
+attempt stages per arm. `retainedStageCount` and `omittedStageCount` explicitly
+describe that sample; use the guard and ledger artifacts for the full trail.
+This prevents an unbounded duplicate diagnostics list from exhausting the
+fixed report envelope after generation. Synthetic large-report validation is
+not a completed paid run or a semantic score. Unexpected process death before
+the generator returns still does not supply per-case generation checkpoints or
+authorize resuming the consumed cohort.
+
 The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
 an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.
 Its `apiKey` parameter serves Cairn and shared answer/judge requests; the

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — bounded mixed-evaluation resources
+
+- Tighten the conditional fact-embedding cost ceiling using the accepted
+  response-byte bound while retaining batch and fallback request counts.
+- Add an explicit same-dollar schema-2 request-cap allowance that preserves
+  prior authorization records, attempt history and cumulative reservations.
+- Bound duplicated report details to the first 64 attempt stages per arm,
+  with explicit omitted counts and complete numeric totals. Full attempt
+  records remain in the guard and ledger. These evaluation-only changes do
+  not change memory algorithms, model prompts or scoring, or establish parity.
+
 ## Unreleased — opt-in bounded keyset source candidates
 
 - Add a trusted embedded-core constructor policy for explicit source-context
