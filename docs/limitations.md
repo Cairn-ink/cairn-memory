@@ -148,13 +148,18 @@ separate work.
 The [mixed resource projection](plans/mixed-resource-projection.md) is a pure
 conditional money/request ceiling for a supplied fixed roster and accepted
 profile snapshots, not a new quality score or launch authorization. It never
-reads the last dated campaign audit or an operational ledger. The conservative
-native reservation intentionally adds mutually incompatible maximum token
-paths, including all fallback singleton embeddings, so it is not an expected
-invoice; a ceiling above available funds does not prove the run cannot fit,
-and a ceiling below them does not guarantee completion. Earmarked funds and
-phase caps do not replace verified native configuration, the full common
-protocol, actual artifact and source-only checks before the untouched roster.
+reads the last dated campaign audit or an operational ledger. The v2
+[aggregate fact-payload correction](plans/mixed-resource-byte-bound.md) uses
+the accepted native chat response's complete byte cap to bound fact embedding
+tokens across each pass. It still reserves both attempted batches and all
+possible singleton fallbacks, including previously successful chunks; the
+historical v1 independent token-maxima projection is retained, not rewritten.
+Neither version is an expected invoice: a ceiling above available funds does
+not prove the run cannot fit, and a ceiling below them does not guarantee
+completion. The unchanged fixed-30 request ceiling still exceeds the existing
+request cap, so a separate same-dollar schema-2 cap extension, verified native
+configuration, the full common protocol, actual artifact and source-only checks
+remain necessary before a paid pilot.
 
 The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
 an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.

@@ -2,7 +2,7 @@ import { experimentPolicy } from '../live/session.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
 
-export const MIXED_RESOURCE_VERSION = 'mixed-resource-projection-v1';
+export const MIXED_RESOURCE_VERSION = 'mixed-resource-projection-v2';
 export const NATIVE_PROFILE = 'mem0-2.2.0-infer-add-no-nlp-v1';
 
 export class MixedResourceError extends Error {
@@ -89,6 +89,10 @@ const ceilPrice = (tokens, price) => (BigInt(tokens) * BigInt(price.microUsdNume
   + BigInt(price.tokenDenominator) - 1n) / BigInt(price.tokenDenominator);
 const stage = (requests, reservation) => ({ requests: checked(requests),
   reservedMicroUsd: checked(requests * reservation) });
+const aggregateFactStage = (batches, callsPerBatch, reservePerBatch) => ({
+  requests: checked(batches * callsPerBatch),
+  reservedMicroUsd: checked(batches * reservePerBatch),
+});
 const sum = stages => ({ requests: checked(stages.reduce((acc, item) => acc + BigInt(item.requests), 0n)),
   reservedMicroUsd: checked(stages.reduce((acc, item) => acc + BigInt(item.reservedMicroUsd), 0n)) });
 
@@ -120,11 +124,17 @@ export function projectMixedResources(options) {
   const singletonReserve = [BigInt(embedding.minimumReservedMicroUsd),
     ceilPrice(embedding.maxItemInputTokens, embedding.inputPrice)]
     .reduce((a, b) => a > b ? a : b);
-  const batchReserve = [BigInt(embedding.minimumReservedMicroUsd),
-    ceilPrice(embedding.maxInputTokens, embedding.inputPrice)]
-    .reduce((a, b) => a > b ? a : b);
   const factBatchCalls = (BigInt(chat.maxFacts) + BigInt(embedding.maxItems) - 1n)
     / BigInt(embedding.maxItems);
+  // The accepted chat response contains every extracted fact, and its forwarded
+  // canonical JSON is capped in UTF-8 bytes. Each byte-BPE token consumes at
+  // least one fact-text byte. A later failed chunk can trigger a fresh singleton
+  // pass over *all* facts, so reserve each pass independently. For m nonempty
+  // requests, sum ceil(tokens_i / 50) <= ceil(totalTokens / 50) + m - 1.
+  // Complete profile equality above pins the minimum embedding reserve to 1.
+  const factPassBase = ceilPrice(chat.maxResponseBytes, embedding.inputPrice);
+  const batchFactReserve = factPassBase + (factBatchCalls - 1n);
+  const singletonFactReserve = factPassBase + BigInt(chat.maxFacts) - 1n;
 
   const cairnStages = {
     extractionCount: stage(batches, countReserve),
@@ -145,8 +155,9 @@ export function projectMixedResources(options) {
   const mem0Stages = {
     addQueryEmbedding: stage(batches, singletonReserve),
     addChat: stage(batches, BigInt(chat.reservedMicroUsd)),
-    factBatchEmbedding: stage(batches * factBatchCalls, batchReserve),
-    fallbackSingletonEmbedding: stage(batches * BigInt(chat.maxFacts), singletonReserve),
+    factBatchEmbedding: aggregateFactStage(batches, factBatchCalls, batchFactReserve),
+    fallbackSingletonEmbedding: aggregateFactStage(batches, BigInt(chat.maxFacts),
+      singletonFactReserve),
     searchEmbedding: stage(cases, singletonReserve),
     answer: stage(cases, answerReserve),
     judge: stage(cases, judgeReserve),

@@ -1,5 +1,10 @@
 # Mixed comparison resource projection — R contract
 
+The original R1–R10 arithmetic and verification record below describe v1.
+The [aggregate fact-payload bound](mixed-resource-byte-bound.md) supersedes
+only the fact-embedding money ceilings in v2; all request counts, profile and
+method assumptions remain unchanged. See the v2 amendment below.
+
 Planning-only contract, before corpus/holdout preparation. This packet is a
 pure arithmetic projection, not an operational grant, ledger reader, launcher,
 source tokenizer, scorer or guarantee of completion. No paid calls are allowed.
@@ -146,7 +151,7 @@ Profile fields and physical work map as follows:
 | `policy.cairnCount.reservedMicroUsd`, `policy.cairnGeneration.reservedMicroUsd` | Cairn reservation | Extraction, qualification and classification: one count plus one generation each per admitted batch; two selection rounds plus ranking: one count plus one generation each per case. |
 | `stages.answer.reservedMicroUsd`, `stages.judge.reservedMicroUsd` | Both arms' answer/judge reservation | One answer and one judge for each arm and each fixed case. |
 | `wireProfile.chat.reservedMicroUsd`, `chat.maxFacts` | Native add chat and fallback width | One add chat and up to 256 fresh fallback singleton embeddings per batch, including embeddings from previously successful fact chunks. |
-| `wireProfile.embedding.maxItemInputTokens`, `maxInputTokens`, `maxItems`, `minimumReservedMicroUsd`, `inputPrice` | Integer-ceiling singleton and batch reservations | One add-query singleton, `ceil(maxFacts/maxItems)` max-token fact batches, and all fallback singletons per batch; one search singleton per case. |
+| `wireProfile.embedding.maxItemInputTokens`, `maxInputTokens`, `maxItems`, `minimumReservedMicroUsd`, `inputPrice` | Historical v1 independent maximum-token reservations | One add-query singleton, `ceil(maxFacts/maxItems)` max-token fact batches, and all fallback singletons per batch; one search singleton per case. V2 retains these requests but prices each fact family against the accepted aggregate chat-response byte cap. |
 
 The accepted profiles currently yield 5,000 µUSD for each Cairn count or
 generation call, 50,820 for each answer, 10,400 for each judge, 16,308 for a
@@ -263,3 +268,38 @@ The complete R9 matrix was repeated on the ROADMAP-corrected tree on Node
 22.16 and 24.15: locked adapter install, focused 10/10, LongMemEval 138/138,
 generic 112/112, three demos, JSON and pinned strict plugin/marketplace all
 passed on each runtime. Raw logs remain in the private verification archive.
+
+## V2 aggregate fact-payload bound (dependent correction)
+
+The v1 arithmetic above conservatively charged three fact-batch embedding
+requests at 300,000 tokens each and 256 singleton fallbacks at 8,192 tokens
+each, as if those maxima could occur simultaneously. The accepted native chat
+response instead has a complete canonical forwarded limit of 262,144 UTF-8
+bytes. Its at most 256 fact texts are disjoint decoded substrings of that
+representation. In the pinned Mem0 2.2.0 no-NLP path, `Memory.add(infer=True)`
+embeds exactly that extracted text list in chunks of 100; if a later chunk
+fails, it may embed the *entire* list again one text at a time. A byte-BPE
+token consumes at least one source byte, and the embedder's LF-to-space
+replacement does not increase UTF-8 bytes. Thus each full pass has at most
+262,144 input tokens, while both passes and all 259 physical requests remain
+in the ceiling.
+
+For at most `m` nonempty embedding requests, total priced reservation is at
+most `ceil(262144/50) + m - 1` microUSD under the accepted one-micro minimum.
+The fact-batch family is therefore 3 requests / 5,245 µUSD per source batch;
+the full singleton fallback is 256 requests / 5,498 µUSD. Both together are
+10,743 µUSD, not the historical v1 59,984 µUSD. The unchanged other stages
+give N1/B1 278 requests / 209,819 µUSD and N30/B30 8,340 requests /
+6,294,570 µUSD. The arithmetic fixture N30/B1477 yields 394,689 requests /
+89,084,675 µUSD. These are conditional ceilings, not observed charges,
+quality scores or completion promises. Old v1 reports and ledger reservations
+are not rewritten or refunded.
+
+The corrected projection is explicitly `mixed-resource-projection-v2`.
+Accepted profile equality, bounded input snapshots, request counts, no-NLP
+artifact verification and all downstream grant gates remain. In particular,
+the fixed-30 request ceiling still exceeds the existing request cap; this
+repair does not supply the separate same-dollar schema-2 cap extension or
+authorize paid execution. The frozen implementation and verification evidence
+is recorded in the dependent
+[byte-bound plan](mixed-resource-byte-bound.md).
