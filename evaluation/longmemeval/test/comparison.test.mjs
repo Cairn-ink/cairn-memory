@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -98,6 +98,43 @@ test('C01-C04/C07: actual public core maps exact receipts and keeps all arms ans
   assert.match(cairnEvidence[0].text, /Memory: The launch color is amber/u);
   assert.ok(!JSON.stringify(calls).includes(sourceQuestionId));
   assert.ok(!JSON.stringify(calls).includes('reference_answer'));
+});
+
+test('C1: legacy comparison matches the actual core canonical stored receipt', async (t) => {
+  const fixtures = [
+    { name: 'non-whitespace-boundary', source: `${'x'.repeat(799)}zy` },
+    { name: 'whitespace-boundary', source: `${'x'.repeat(799)} y` },
+  ];
+  for (const fixture of fixtures) {
+    const root = mkdtempSync(join(tmpdir(), 'cairn-comparison-receipt-canonical-'));
+    let core;
+    t.after(() => { core?.close(); rmSync(root, { recursive: true, force: true }); });
+    const sourceId = `comparison-receipt-${fixture.name}`;
+    const fixtureQuestionId = opaqueQuestionId(sourceId);
+    const fixtureNamespace = { ownerId: 'comparison-tests', scope: 'project',
+      projectId: fixtureQuestionId };
+    const fixtureHistory = { question_id: fixtureQuestionId, sessions: [{ session_index: 0,
+      session_id: 'synthetic-session', date: 'Tuesday', turns: [{
+        turn_id: stableTurnId(sourceId, 0, 'synthetic-session', 0),
+        role: 'user', content: fixture.source,
+      }] }] };
+    const model = { contextWindow: 8192, countTokens: () => 1,
+      extract: () => ({ items: [{ content: 'synthetic memory', kind: 'fact', confidence: 1,
+        sourceIndices: [0] }] }),
+      classify: ({ input }) => ({ items: input.memories.map((memory) => ({ memoryId: memory.id,
+        parentIds: [], newL1: { title: 'Synthetic', parentL2Ids: [] } })) }),
+      select: selectAll,
+      rank: rankAll,
+    };
+    core = openMemoryCore({ path: join(root, 'memory.sqlite'), model });
+    const run = await runLongMemEvalComparison({ history: fixtureHistory,
+      question: { question_id: fixtureQuestionId, text: 'Synthetic question?', date: 'Saturday' },
+      namespace: fixtureNamespace, core,
+      answer: async () => ({ text: 'synthetic answer' }), countTokens: () => 1,
+      answerModel: 'synthetic-answer-v1', limits: { ...limits } });
+    const cairn = run.arms.find((arm) => arm.name === 'cairn');
+    assert.equal(cairn.status, 'completed', `${fixture.name}: ${cairn.error?.code}`);
+  }
 });
 
 test('C02/C03: lexical ties follow source order and evidence is omitted whole', async () => {

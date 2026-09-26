@@ -59,6 +59,24 @@ doing so changes the scope used to retrieve existing project memories.
 | Service outage disrupts work | Bounded timeouts and fail-open hooks | Capture may be delayed until a later hook retry |
 | Telemetry reveals content | Strict content-free schema; disable switch | Service sees IP-level network metadata inherent to an HTTP request |
 
+### Optional OpenAI classification transport
+
+The source-runnable OpenAI adapter's classification method replaces only target
+memory IDs and visible catalog-MOC IDs with short request-local aliases before
+its provider count and generation calls. This reduces repeated wire literals; it
+does not anonymize provider input or change the untrusted-source boundary. The
+same memory content, MOC titles and metadata are sent, and identifier-looking
+text inside content or titles is deliberately unchanged.
+
+Memory and MOC aliases are role-separated and decoded only through maps closed
+over one invocation. The reverse maps are not included in provider requests,
+written to the local store or emitted in diagnostics/telemetry. Malformed,
+unknown, cross-role and raw UUID output references fail closed before core can
+persist a placement. The original durable IDs remain in core and SQLite. Other
+model methods and the hosted plugin wire are unchanged. `store:false` and
+ephemeral local maps do not guarantee provider-side zero retention; the provider
+still receives the aliased request's personal text and ordinary network metadata.
+
 ## Disable automatic behavior
 
 Run `/cairn-memory:pause` to pause both automatic capture and recall, and `/cairn-memory:resume` to restore them. Disable telemetry independently in plugin configuration. Uninstalling the plugin stops future local processing; use `forget_memory` or the hosted memory UI when available to remove already stored Memories.

@@ -12,6 +12,7 @@ import { createExperimentRequestGuard, authorizeQualificationExtension } from '.
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { createQualificationLiveSession } from '../../evaluation/live/qualification-session.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 import { getQualificationPilotPins, runQualificationPilot } from '../../evaluation/live/qualification-pilot.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -253,7 +254,7 @@ test('installed v2 MCP launcher captures and cold-replays without granting a pai
       output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
     }
     if (payload.text.format.name === 'cairn_qualifyCandidates') {
-      output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+      output = qualificationPoolWire(input, output);
     }
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
       incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
@@ -457,17 +458,17 @@ test('installed v2 core and adapter compile source selections without model offs
       if(method==='cairn_extract')output={items:[{content:source,kind:'preference',confidence:0.9,sourceIndices:[0]}]};
       else if(method==='cairn_qualifyCandidates'){
         assert.deepEqual(Object.keys(input),['items']);
-        output={qualifications:input.items.map(item=>{
+        output={wireVersion:'evidence-pool-v1',qualifications:Object.fromEntries(input.items.map(item=>{
           assert.deepEqual(Object.keys(item).sort(),['candidates','content','itemIndex','kind']);
           assert.deepEqual(Object.keys(item.candidates[0]).sort(),['candidateIndex','role','text']);
           assert.equal(item.candidates[0].text,source);
-          const known=value=>({value,evidenceIndices:[item.candidates[0].candidateIndex]});
-          const unknown=()=>({value:null,evidenceIndices:[]});
-          return{itemIndex:item.itemIndex,subject:known('user'),property:known('caption tone'),
-            scope:unknown(),applies:unknown(),value:known('calm'),attribution:known('direct'),commitment:known('adopted')};
-        })};
+          const known=value=>({value,evidenceSlots:[0]});
+          const unknown=()=>({value:null,evidenceSlots:[]});
+          return['item_'+item.itemIndex,{itemIndex:item.itemIndex,pool:[item.candidates[0].candidateIndex],
+            subject:known('user'),property:known('caption tone'),scope:unknown(),applies:unknown(),
+            value:known('calm'),attribution:known('direct'),commitment:known('adopted')}];
+        }))};
       }else{assert.equal(method,'cairn_classify');output={items:input.memories.map(m=>({memoryId:m.id,parentIds:[]}))};}
-      if(method==='cairn_qualifyCandidates')output.qualifications=Object.fromEntries(output.qualifications.map(item=>['item_'+item.itemIndex,item]));
       return Response.json({object:'response',model:payload.model,status:'completed',error:null,incomplete_details:null,
         output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(output)}]}],
         usage:{input_tokens:120,output_tokens:100,total_tokens:220}});
@@ -629,6 +630,10 @@ test('archive inspection and installed hashes prove the explicit single-source r
     assert.equal(/\.(?:sqlite|db|tgz)$/.test(path), false, path);
   }
   for (const path of runtimeFiles) assert.ok(artifact.files.includes(path), path);
+  assert.ok(artifact.files.includes('adapters/openai/qualification-evidence-pool.mjs'));
+  assert.equal(artifact.files.includes('adapters/openai/test/qualification-pool-wire.mjs'), false);
+  assert.equal(artifact.sourceHashes['adapters/openai/qualification-evidence-pool.mjs'],
+    hash(new URL('../../adapters/openai/qualification-evidence-pool.mjs', import.meta.url)));
   assert.ok(artifact.files.includes('core/query-candidates.mjs'),
     'installed recall must include the new shared candidate scorer');
   for (const [path, expected] of Object.entries(artifact.sourceHashes)) {
