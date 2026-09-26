@@ -163,6 +163,16 @@ neither downloads a corpus nor discovers credentials or runs a provider by defau
 
 See [acceptance and verification](plans/longmemeval-comparison.md).
 
+The separate [mixed resource projection](plans/mixed-resource-projection.md) is
+planning-only arithmetic for a fixed Cairn/Mem0 roster. It uses caller-supplied
+snapshots of the accepted request and wire profiles to report conditional
+request and reservation ceilings, including native fallback and both arms'
+answer/judge work. It does not read a ledger or a dated campaign audit, grant
+money, predict completion, or score answer quality. Before an untouched roster
+is used, the full common protocol, actual artifact/configuration and source-only
+checks still need independent verification. Earmarks or phase caps alone do not
+establish feasibility.
+
 An [offline indexed-window provenance path](indexed-window-provenance.md) is
 separate from the default prefix-receipt comparison and is not accepted by the
 official scorer or the live paid runner.
