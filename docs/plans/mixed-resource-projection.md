@@ -90,6 +90,28 @@ and source-only checks remain necessary before touching the untouched roster.
 The maximum conservative native reservation intentionally overcounts token
 maxima that cannot all occur together; it is not an expected invoice.
 
+## R10 amendment — isolated dependency prerequisite, before CI correction
+
+PR243's first Node24 LongMemEval CI run failed before the new tests with
+ERR_MODULE_NOT_FOUND for tiktoken imported transitively from the existing
+OpenAI adapter. Local tests had that isolated dependency set installed; CI's
+LongMemEval job did not. Preserve this exact failed run36263553569 and the
+matrix-cancelled Node22 result. This is a missing declared prerequisite, not
+an arithmetic failure or a flaky timing retry.
+
+Permit only one narrow addition to .github/workflows/ci.yml: install the
+existing locked isolated OpenAI adapter dependency set in the LongMemEval job
+before its tests. No new package/version, root install, credential, key, skipped
+test or profile duplication. Add the same prerequisite to CONTRIBUTING's LME
+instructions and explain the correction in this tracked plan/limitations.
+All imported live constructors remain uncalled; this component is evaluation-
+only, not part of the public core installation. Reproduce RED in a fresh
+dependency-free scoped checkout, then the same suite GREEN after that exact
+locked install. Do not remove or rename shared node_modules to manufacture RED.
+Run updated R9 on both Nodes, inspect actual diff, freeze a new candidate and
+rerun both independent whole-base reviews and primary acceptance before pushing.
+Full latest-head CI still required; no rerun of unchanged failed CI as a fix.
+
 ## Implementation record (appended after the unchanged R contract)
 
 Actual implementation dispatch: G6 Sol/high in the isolated
@@ -184,3 +206,45 @@ archive alongside all passing gate logs. `scripts/README.md` is absent in this
 tree; the inspected JSON validation entrypoint is `scripts/validate-json.mjs`.
 The local candidate commit ID and private log directory are in the handoff;
 no branch push or paid operation occurred here.
+
+### R10 CI prerequisite correction
+
+The first PR243 run `36263553569` failed its Node24 LongMemEval job before the
+new test body: the `mixed-resource.mjs` import of `experimentPolicy()` reaches
+`evaluation/live/session.mjs`, which imports `adapters/openai/index.mjs`;
+`mem0WireProfile()` also resolves `tiktoken` through that adapter's isolated
+dependency set. The existing adapter requires `tiktoken`. Node22 in that matrix
+was cancelled,
+not green. No constructor or transport was called. The prior author matrix
+was green because `adapters/openai/node_modules` had been installed locally.
+
+The tight original-symptom loop was `npm run test:longmemeval` under Node
+24.15 in a fresh sibling checkout made from the fixed commit without any
+`node_modules`: it failed `ERR_MODULE_NOT_FOUND` for `tiktoken` at the adapter
+import (128 pass, 1 fail). An earlier temporary checkout under `/tmp` falsely
+passed because `/tmp/node_modules` was in Node's upward resolution path; it
+was excluded from evidence. In the same dependency-free sibling checkout,
+`npm ci --prefix adapters/openai` using the existing lockfile followed by the
+same suite passed 138/138. The prediction that a missing isolated install was
+the cause was confirmed; no package version, runtime price or projection code
+changed. The failed CI run itself remains failed.
+
+Changed call path and gate ownership: only the `longmemeval` job in
+`.github/workflows/ci.yml` gains the exact locked install before its Python
+check and tests. `CONTRIBUTING.md` now states the same prerequisite for local
+LongMemEval maintainers. The `live-evidence-offline`, `openai-offline`, MCP and
+experiment-request-guard jobs already install that dependency separately;
+root generic/core jobs do not import this evaluation-only projection and are
+unchanged. The full LongMemEval test suite is the correct regression seam for
+the CI import graph; an isolated arithmetic unit test could not catch the
+missing job prerequisite. The limitations entry retains the first CI failure
+without treating it as an arithmetic or quality result.
+
+Updated R9 gates on the corrected tree passed serially on both Node 22.16 and
+24.15 after the exact `npm ci --prefix adapters/openai` prerequisite: focused
+10/10, LongMemEval 138/138, generic 112/112, all three LongMemEval demos,
+JSON validation, and pinned strict marketplace/plugin validation. The original
+failed CI and the contaminated first local checkout are not counted as passes.
+The fixed candidate SHA and private raw logs are supplied in the handoff.
+Primary acceptance, both independent whole-base reviews and latest-head CI
+remain separate gates.
