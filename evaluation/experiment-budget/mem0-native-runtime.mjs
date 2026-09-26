@@ -211,7 +211,8 @@ function requestBody(request, maximum, configuration) {
 }
 
 export async function runNativeGatewayKernel({ artifact, roots, configuration, childFile,
-  guard, handle, input, scope }, { startChild = realStartChild, stopChild = realStopChild } = {}) {
+  guard, handle, input, scope }, { startChild = realStartChild, stopChild = realStopChild,
+    forceProcessGroupLiveForTest = false } = {}) {
   const profile = mem0WireProfile();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-y-'));
   fs.chmodSync(root, 0o700);
@@ -399,9 +400,14 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
       const reaped = await within(childClose, remaining);
       if (reaped.timedOut || !childClosed) firstFault('native_reap_failed');
     }
-    if (childClosed && startChild === realStartChild
-      && !await ownProcessGroupGone(child, configuration.reapMs)) {
-      firstFault('native_process_group_live');
+    let processGroupQuiescent = child === null;
+    if (childClosed) {
+      // The controlled child is an in-process double. Production always probes
+      // the owned OS group; the private test seam can only force non-quiescence.
+      const hostGroupGone = startChild !== realStartChild
+        || await ownProcessGroupGone(child, configuration.reapMs);
+      processGroupQuiescent = hostGroupGone && !forceProcessGroupLiveForTest;
+      if (!processGroupQuiescent) firstFault('native_process_group_live');
     }
     clearTimeout(termTimer);
     try {
@@ -425,7 +431,8 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
         firstFault('native_accounting_unsettled');
       }
     } catch { firstFault('native_accounting_unsettled'); }
-    if ((!child || childClosed) && drained && !server.listening && connections.size === 0) {
+    if ((!child || childClosed) && processGroupQuiescent && drained
+      && !server.listening && connections.size === 0) {
       try { fs.rmSync(root, { recursive: true, force: false }); clean = true; }
       catch { firstFault('native_cleanup_failed'); }
     } else firstFault('native_reap_failed');

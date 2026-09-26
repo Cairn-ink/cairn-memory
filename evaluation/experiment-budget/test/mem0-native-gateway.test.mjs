@@ -92,6 +92,10 @@ test('Y3/Y4 rejects getters, unknown config keys and both lone surrogate forms b
       guard: {}, handle: {}, input: { batches: [[{ role: 'user', content: bad }]],
         query: 'synthetic' } }), { code: 'invalid_native_input' });
   }
+  await assert.rejects(runMem0NativeCase({ artifact: {}, configuration,
+    guard: {}, handle: {}, input: { batches: [[{ role: 'user', content: 'Synthetic.' }]],
+      query: 'Synthetic?' }, forceProcessGroupLiveForTest: true }),
+  { code: 'invalid_native_options' });
   assert.equal(readFileSync(new URL('../testing/mem0-native-child.py', import.meta.url), 'utf8')
     .includes('Memory.from_config'), true);
 });
@@ -156,7 +160,8 @@ function controlledChild(operate) {
   };
 }
 
-function controlledHarness(t, fetchImpl, { childTimeoutMs = 5000, httpTimeoutMs = 1000 } = {}) {
+function controlledHarness(t, fetchImpl, { childTimeoutMs = 5000, httpTimeoutMs = 1000,
+  forceProcessGroupLiveForTest = false } = {}) {
   const roots = miniature(t);
   const artifact = inspectMem0NativeArtifact(roots);
   const configuration = mem0NativeConfiguration({ topK: 3, threshold: 0,
@@ -178,7 +183,7 @@ function controlledHarness(t, fetchImpl, { childTimeoutMs = 5000, httpTimeoutMs 
       { startChild: settings => {
         lastCaseRoot = dirname(settings.socket);
         return (startChildOverride ?? controlledChild(operate))(settings);
-      }, stopChild });
+      }, stopChild, forceProcessGroupLiveForTest });
     });
   return { ...fixture, run, artifact, configuration, roots,
     useSyntheticChildFile: value => { activeChildFile = value; },
@@ -215,7 +220,28 @@ test('Y13 controlled process double crosses real UDS and X accounting inside ALS
     assert.equal(wrapped.value.status, 'completed');
     assert.equal(fake.requests.length, 1);
     assert.equal(f.guard.attempts().filter(attempt => attempt.outcome === null).length, 0);
+    assert.equal(existsSync(f.lastCaseRoot()), false);
   } finally { f.guard.close(); }
+});
+
+test('Y12 closed child with live owned group halts globally and retains private root', async t => {
+  const f = controlledHarness(t, () => assert.fail('live group reached provider'),
+    { forceProcessGroupLiveForTest: true });
+  try {
+    await assert.rejects(f.run(() => output()), { code: 'callback_failed' });
+    assert.equal(f.guard.isHalted(), true);
+    const caseRoot = f.lastCaseRoot();
+    assert.ok(caseRoot);
+    assert.equal(existsSync(caseRoot), true);
+    assert.equal(f.guard.attempts().length, 0);
+    await assert.rejects(f.guard.withCaseScope(f.capability.schedule[1], async () => 'denied'),
+      { code: 'paid_work_halted' });
+  } finally {
+    f.guard.close();
+    const caseRoot = f.lastCaseRoot();
+    // This controlled child is an in-process double with no live OS group.
+    if (caseRoot && existsSync(caseRoot)) rmSync(caseRoot, { recursive: true });
+  }
 });
 
 test('Y13 malformed child route is global with zero provider dispatch', async t => {

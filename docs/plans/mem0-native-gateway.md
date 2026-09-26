@@ -232,7 +232,9 @@ header count (40), per-header value bound (256 characters) and header deadline
 (`min(2000,httpTimeoutMs)`), so those transport bounds cannot silently drift.
 The production launcher additionally verifies that its own detached process
 group no longer exists after child close, within the bounded reap interval;
-the internal process double does not use that host PID probe.
+the internal process double does not use that host PID probe. A deny-only
+internal test seam can force a still-live group for cleanup testing; it cannot
+attest that a group exited, and the public case helper accepts no such option.
 The configuration fingerprints the 16 KiB HTTP parser header-block cap and
 `bwrap-user-net-pid-ipc-root-readonly-v1` containment policy. Node's implicit
 header-count truncation is disabled so the explicit 40-header check sees the
@@ -266,8 +268,32 @@ operational ledger, corpus, or paid request.
 The resumed author also parsed `testing/mem0-native-child.py` with Python's
 `ast.parse` without generating bytecode; `git diff --check` passed. Raw logs for
 the resumed Node 24 `npm test`, JSON, demos, and both pinned plugin checks are
-in `/tmp/cairn-y-verification.SsAk7Y/`. The earlier terminal results and the
+in a private verification archive. The earlier terminal results and the
 resumed budget, guard, and live-offline results were preserved as terminal
 command outcomes in the agent handoff/tool transcript, not inferred from partial
 logs. Primary acceptance and
 both independent fixed-diff review axes remain separate delivery gates.
+
+Primary source inspection of candidate `9a255d47a1c2bb1ba11ae9af83f6da0c6d00b894`
+found a Y12 cleanup fault: an owned process group still live after child close
+halted X but did not prevent removal of the private case root. The retained
+focused test was red on Node 22 (`Missing expected rejection`) before the
+kernel observed the test-only flag. A controlled mutation of the corrected
+kernel removed only the root-cleanup quiescence condition: the same test then
+failed specifically because the root was absent (`false !== true`) despite the
+global halt. Restoring the condition restored 2/2 focused passes for the
+live-group and ordinary-cleanup cases; the runtime source SHA-256 returned to
+its pre-mutation value. The test's internal
+flag can only force non-quiescence, and the public helper rejects it. The full
+affected gates, independent acceptance, and both review axes must use the new
+candidate rather than the pre-correction results above.
+
+After restoring the cleanup condition, both Node 22.16 and 24.15 passed the
+corrected portable gateway suite (30/30), pinned local native/containment
+suite (7/7), budget suite (58/58), request guard suite (285/285), and generic
+`npm test` (112/112). JSON validation, the budget and guard demos, and pinned
+marketplace/strict plugin validation passed on both Nodes. The prior live
+offline results remain pre-correction evidence; this correction changes only
+the native runtime's private cleanup predicate, its focused test, and this
+plan. The private verification archive retains the corrected terminal logs
+and the cleanup-predicate mutation failure.
