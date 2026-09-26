@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { chmodSync, closeSync, constants, fsyncSync, lstatSync, mkdtempSync, openSync,
   readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { setImmediate } from 'node:timers/promises';
@@ -539,6 +541,17 @@ test('G6 real capture persists timeout boundary, continues next case, and never 
 });
 
 test('D6 invocation deadline reaches the real adapter guard as a core abort, not a transport failure', async t => {
+  const clock = globalThis[Symbol.for('cairn.test.d6.clock')];
+  if (!clock) {
+    const child = fileURLToPath(new URL('../testing/d6-clock-child.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, ['--test', '--test-name-pattern=^D6 invocation deadline', child],
+      { encoding: 'utf8', timeout: 15_000, env: {} });
+    assert.equal(result.status, 0, `D6 clock child failed: ${result.error?.code ?? ''}\n`
+      + `${(result.stdout ?? '').slice(-4000)}\n${(result.stderr ?? '').slice(-2000)}`);
+    assert.match(result.stdout ?? '', /CAIRN_D6_CLOCK_CHILD_PASS/u);
+    return;
+  }
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const f = fixture(t, { stageTimeoutMs: 60_000 });
   let releaseLate;
   let notifyStalled;
@@ -572,6 +585,8 @@ test('D6 invocation deadline reaches the real adapter guard as a core abort, not
     const first = core.capture(captureInput(11));
     assert.equal(await Promise.race([stalled.then(() => true), first.then(() => false)]), true,
       'the fake generation request must begin before the invocation expires');
+    clock.advance(1_001);
+    t.mock.timers.tick(1_001);
     assert.deepEqual(await first, { ok: false, error: { code: 'model_timeout', retryable: false } });
     assert.equal(scope.snapshot().status, 'timed_out');
   });
@@ -597,6 +612,7 @@ test('D6 invocation deadline reaches the real adapter guard as a core abort, not
   assert.deepEqual(calls, ['count', 'extract', 'count', 'extract', 'count', 'classify']);
   assert.equal(guard.caseTimeouts()[0].termination, 'core_deadline');
   assert.equal(guard.isHalted(), false);
+  process.stdout.write('CAIRN_D6_CLOCK_CHILD_PASS\n');
 });
 
 test('G3/G5 malformed, oversized, count-overlimit and usage-bound failures are global', async (t) => {

@@ -18,10 +18,12 @@ import {
   ExperimentBudgetError,
   inspectExperimentBudgetSnapshot,
   inspectEmbeddingExperimentBudgetSnapshot,
+  projectEmbeddingBudgetCapPrefix,
   openBoundExperimentBudget,
   openBoundEmbeddingExperimentBudget,
   reopenExperimentBudget,
   transitionExperimentBudgetCaps,
+  transitionEmbeddingExperimentBudgetRequestCap,
 } from './index.mjs';
 import {
   DEFAULT_MODEL,
@@ -63,6 +65,7 @@ const BENCHMARK_KIND = Object.freeze({
 const BENCHMARK_REQUEST_ALLOWANCE_VERSION = 'benchmark-request-allowance-v1';
 const BENCHMARK_BUDGET_EXTENSION_VERSION = 'benchmark-budget-extension-v1';
 const BENCHMARK_BUDGET_CHAIN_VERSION = 'benchmark-budget-chain-v1';
+const BENCHMARK_REQUEST_CAP_V2_VERSION = 'benchmark-request-cap-v2';
 const CASE_DEADLINE_VERSION = 'case-deadline-v1';
 const SOURCE_PAIR_VERSION = 'qualified-source-pair-case-v1';
 const SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-v1';
@@ -1833,6 +1836,167 @@ export function loadChainedBenchmarkBudgetExtension(options) {
   return deepFreeze(extension);
 }
 
+function requestCapV2Filename(directory, parentAuthorizationId) {
+  return path.join(directory, `experiment-benchmark-request-cap-v2-${parentAuthorizationId}.json`);
+}
+
+function requestCapV2Configuration(options) {
+  const snapshot = detachEmbeddingLineage(options);
+  exactKeys(snapshot, ['oldLedger', 'policy', 'parentBudgetExtension', 'authorizationId',
+    'newRequestCap', 'expectedCheckpoint', 'expectedOldHistorySha256'], 'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  const oldLedger = structuredClone(snapshot.oldLedger);
+  oldLedger.directory = path.resolve(oldLedger.directory);
+  const parentBudgetExtension = snapshotExtension(snapshot.parentBudgetExtension);
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (oldLedger.limitMicroUsd !== 200_000_000
+    || typeof snapshot.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1)
+    || snapshot.newRequestCap <= oldLedger.requestCap
+    || !safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > oldLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > oldLedger.limitMicroUsd
+    || typeof snapshot.expectedOldHistorySha256 !== 'string'
+    || !SHA256_HEX.test(snapshot.expectedOldHistorySha256)) fail('invalid_extension');
+  verifyChainedBudgetExtension(parentBudgetExtension, oldLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < parentBudgetExtension.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < parentBudgetExtension.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, oldLedger,
+    ledger: { ...oldLedger, requestCap: snapshot.newRequestCap }, policy, parentBudgetExtension,
+    checkpoint: snapshot.expectedCheckpoint, expectedOldHistorySha256: snapshot.expectedOldHistorySha256 });
+}
+
+function requestCapV2Record(config, witness, checkpointAttempts) {
+  return { version: BENCHMARK_REQUEST_CAP_V2_VERSION, authorizationId: config.authorizationId,
+    priorLedger: config.oldLedger, ledger: config.ledger, policy: config.policy,
+    method: BENCHMARK_KIND.method, stages: config.parentBudgetExtension.stages,
+    parentBudgetExtension: config.parentBudgetExtension, checkpoint: config.checkpoint,
+    oldPrefixHistorySha256: witness.oldPrefixHistorySha256,
+    newPrefixHistorySha256: witness.newPrefixHistorySha256,
+    historicalDigest: historicalDigest(checkpointAttempts) };
+}
+
+function verifyRequestCapV2(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method',
+    'stages', 'parentBudgetExtension', 'checkpoint', 'oldPrefixHistorySha256',
+    'newPrefixHistorySha256', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_REQUEST_CAP_V2_VERSION
+    || typeof extension.authorizationId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(extension.authorizationId)
+    || typeof extension.oldPrefixHistorySha256 !== 'string'
+    || !SHA256_HEX.test(extension.oldPrefixHistorySha256)
+    || typeof extension.newPrefixHistorySha256 !== 'string'
+    || !SHA256_HEX.test(extension.newPrefixHistorySha256)
+    || typeof extension.historicalDigest !== 'string'
+    || !SHA256_HEX.test(extension.historicalDigest)) fail('invalid_extension');
+  let priorLedger;
+  let currentLedger;
+  let expectedLedger;
+  try {
+    validateConstructor({ ledger: extension.priorLedger, policy: extension.policy, fetchImpl: () => {} });
+    validateConstructor({ ledger: extension.ledger, policy: extension.policy, fetchImpl: () => {} });
+    priorLedger = structuredClone(extension.priorLedger);
+    currentLedger = structuredClone(extension.ledger);
+    expectedLedger = structuredClone(ledger);
+    for (const item of [priorLedger, currentLedger, expectedLedger]) {
+      item.directory = path.resolve(item.directory);
+    }
+  } catch { fail('invalid_extension'); }
+  const parent = snapshotExtension(extension.parentBudgetExtension);
+  verifyChainedBudgetExtension(parent, priorLedger, policy);
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (canonical(currentLedger) !== canonical(expectedLedger)
+    || canonical(extension.policy) !== canonical(policy)
+    || currentLedger.directory !== priorLedger.directory
+    || currentLedger.runId !== priorLedger.runId
+    || currentLedger.limitMicroUsd !== 200_000_000
+    || priorLedger.limitMicroUsd !== 200_000_000
+    || currentLedger.requestCap <= priorLedger.requestCap
+    || extension.method !== BENCHMARK_KIND.method
+    || canonical(extension.stages) !== canonical(parent.stages)
+    || !safeInteger(extension.checkpoint.requestCount)
+    || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > priorLedger.requestCap
+    || extension.checkpoint.reservedMicroUsd > priorLedger.limitMicroUsd
+    || extension.checkpoint.requestCount < parent.checkpoint.requestCount
+    || extension.checkpoint.reservedMicroUsd < parent.checkpoint.reservedMicroUsd
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.parentBudgetAuthorizationId !== undefined
+      && parent.authorizationId !== expected.parentBudgetAuthorizationId)) fail('invalid_extension');
+  readBinding(requestCapV2Filename(currentLedger.directory, parent.authorizationId), extension);
+  return extension;
+}
+
+export function authorizeChainedBenchmarkRequestCapV2(options) {
+  const config = requestCapV2Configuration(options);
+  const filename = requestCapV2Filename(config.ledger.directory,
+    config.parentBudgetExtension.authorizationId);
+  let callbackFailure;
+  let extension;
+  try {
+    transitionEmbeddingExperimentBudgetRequestCap({ oldConfiguration: config.oldLedger,
+      newConfiguration: config.ledger, expectedCheckpoint: config.checkpoint,
+      expectedOldHistorySha256: config.expectedOldHistorySha256,
+      authorize({ mode, state, checkpointAttempts, witness }) {
+        try {
+          verifyChainedBudgetExtension(config.parentBudgetExtension, config.oldLedger, config.policy);
+          verifyBenchmarkCheckpoint(config.parentBudgetExtension.parentBudgetExtension, state);
+          verifyExtensionCheckpoint(config.parentBudgetExtension, state);
+          const parentPrefix = historicalRows(state).slice(0,
+            config.parentBudgetExtension.checkpoint.requestCount);
+          if (historicalDigest(parentPrefix) !== config.parentBudgetExtension.historicalDigest) {
+            fail('policy_mismatch');
+          }
+          extension = requestCapV2Record(config, witness, checkpointAttempts);
+          let existing;
+          try { existing = lstatSync(filename); }
+          catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+          if (existing) syncAuthorizationBinding(config.ledger.directory, filename, extension);
+          else {
+            if (mode !== 'transition') fail('policy_mismatch');
+            writeAuthorizationBinding(config.ledger.directory, filename, extension);
+            readBinding(filename, extension);
+          }
+        } catch (error) {
+          if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+          throw error;
+        }
+      } });
+  } catch (error) {
+    if (callbackFailure) throw callbackFailure;
+    throw error;
+  }
+  return deepFreeze(extension);
+}
+
+export function loadChainedBenchmarkRequestCapV2(options) {
+  const snapshot = detachEmbeddingLineage(options);
+  exactKeys(snapshot, ['ledger', 'policy', 'parentBudgetAuthorizationId', 'authorizationId', 'stages'],
+    'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  for (const id of [snapshot.parentBudgetAuthorizationId, snapshot.authorizationId]) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u.test(id)) {
+      fail('invalid_extension');
+    }
+  }
+  const ledger = structuredClone(snapshot.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const extension = snapshotExtension(readBinding(requestCapV2Filename(ledger.directory,
+    snapshot.parentBudgetAuthorizationId)));
+  verifyRequestCapV2(extension, ledger, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(snapshot.stages)) fail('policy_mismatch');
+  const state = inspectEmbeddingExperimentBudgetSnapshot(ledger);
+  assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger, policy,
+    benchmarkExtension: extension, snapshot: state });
+  return deepFreeze(extension);
+}
+
 // A separate operator action. It grants exactly the two chat-completion stages
 // below and never alters an older capability file or the ledger allowance.
 export function authorizeBenchmarkExtension(options) {
@@ -2024,7 +2188,7 @@ function adaptivePairContext(value, roster) {
   return deepFreeze(detached);
 }
 
-function verifyPairParent(extension, ledger, policy, state) {
+function verifyPairParent(extension, ledger, policy, state, issuedSnapshot = null) {
   if (extension?.version === BENCHMARK_BUDGET_EXTENSION_VERSION
     && ledger.limitMicroUsd === 100_000_000) {
     verifyBudgetExtension(extension, ledger, policy);
@@ -2039,6 +2203,28 @@ function verifyPairParent(extension, ledger, policy, state) {
     verifyExtensionCheckpoint(extension, state);
     const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
     if (historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+    return;
+  }
+  if (extension?.version === BENCHMARK_REQUEST_CAP_V2_VERSION
+    && ledger.limitMicroUsd === 200_000_000) {
+    verifyRequestCapV2(extension, ledger, policy);
+    const parent = extension.parentBudgetExtension;
+    verifyBenchmarkCheckpoint(parent.parentBudgetExtension, state);
+    verifyExtensionCheckpoint(parent, state);
+    const parentPrefix = historicalRows(state).slice(0, parent.checkpoint.requestCount);
+    if (historicalDigest(parentPrefix) !== parent.historicalDigest) fail('policy_mismatch');
+    verifyExtensionCheckpoint(extension, state);
+    const prefix = historicalRows(state).slice(0, extension.checkpoint.requestCount);
+    if (historicalDigest(prefix) !== extension.historicalDigest) fail('policy_mismatch');
+    let witness;
+    try {
+      witness = projectEmbeddingBudgetCapPrefix({ snapshot: issuedSnapshot,
+        oldRequestCap: extension.priorLedger.requestCap,
+        newRequestCap: extension.ledger.requestCap, checkpoint: extension.checkpoint });
+    } catch { fail('policy_mismatch'); }
+    if (witness.oldPrefixHistorySha256 !== extension.oldPrefixHistorySha256
+      || witness.newPrefixHistorySha256 !== extension.newPrefixHistorySha256
+      || issuedSnapshot.historySha256 !== state.historySha256) fail('policy_mismatch');
     return;
   }
   fail('invalid_capability');
@@ -2069,15 +2255,17 @@ export function inspectQualifiedSourcePairParent(options) {
 
 // Only this read-only v2 assertion uses descriptor-first detachment. Existing
 // constructors deliberately retain their reviewed input and error behavior.
-function detachEmbeddingLineage(value) {
+function detachEmbeddingLineage(value, captureSnapshot = null, envelope = null) {
+  const maxBytes = envelope === 'request-cap-v2' ? 64 * 1024 * 1024 : 16 * 1024 * 1024;
+  const maxVisited = envelope === 'request-cap-v2' ? 3_000_000 : 1_000_000;
   const limits = { visited: 0, bytes: 0, ancestors: new WeakSet() };
   const addBytes = (text) => {
     limits.bytes += Buffer.byteLength(text, 'utf8');
-    if (limits.bytes > 16 * 1024 * 1024) fail('invalid_options');
+    if (limits.bytes > maxBytes) fail('invalid_options');
   };
   const visit = (input, depth) => {
     limits.visited += 1;
-    if (depth > 32 || limits.visited > 1_000_000) fail('invalid_options');
+    if (depth > 32 || limits.visited > maxVisited) fail('invalid_options');
     if (input === null || typeof input === 'boolean') return input;
     if (typeof input === 'string') { addBytes(input); return input; }
     if (typeof input === 'number' && Number.isFinite(input)) return input;
@@ -2088,7 +2276,7 @@ function detachEmbeddingLineage(value) {
     limits.ancestors.add(input);
     const names = Reflect.ownKeys(input);
     const count = array ? input.length : names.length;
-    if (count > 1_000_000 - limits.visited
+    if (count > maxVisited - limits.visited
       || (array && (names.length !== count + 1 || names.at(-1) !== 'length'))) {
       fail('invalid_options');
     }
@@ -2099,6 +2287,7 @@ function detachEmbeddingLineage(value) {
       if (typeof name !== 'string' || (array && name !== String(index))) fail('invalid_options');
       const descriptor = descriptors[name];
       if (!descriptor?.enumerable || !own(descriptor, 'value')) fail('invalid_options');
+      if (depth === 0 && name === 'snapshot' && captureSnapshot) captureSnapshot(descriptor.value);
       addBytes(name);
       output[name] = visit(descriptor.value, depth + 1);
     }
@@ -2106,6 +2295,16 @@ function detachEmbeddingLineage(value) {
     return output;
   };
   return visit(value, 0);
+}
+
+function embeddingParentEnvelope(options) {
+  if (!isPlainObject(options)) return null;
+  const extension = Object.getOwnPropertyDescriptor(options, 'benchmarkExtension');
+  if (!extension?.enumerable || !own(extension, 'value')
+    || !isPlainObject(extension.value)) return null;
+  const version = Object.getOwnPropertyDescriptor(extension.value, 'version');
+  return version?.enumerable && own(version, 'value')
+    && version.value === BENCHMARK_REQUEST_CAP_V2_VERSION ? 'request-cap-v2' : null;
 }
 
 function validateEmbeddingLineageSnapshot(snapshot, ledger) {
@@ -2153,7 +2352,9 @@ function validateEmbeddingLineageSnapshot(snapshot, ledger) {
 // and original prefix, never the authenticity of a supplied current suffix.
 export function assertChainedBenchmarkParentForEmbeddingSnapshot(options) {
   let detached;
-  try { detached = detachEmbeddingLineage(options); }
+  let issuedSnapshot;
+  try { detached = detachEmbeddingLineage(options,
+    (snapshot) => { issuedSnapshot = snapshot; }, embeddingParentEnvelope(options)); }
   catch (error) {
     if (error instanceof ExperimentRequestGuardError) throw error;
     fail('invalid_options');
@@ -2172,8 +2373,9 @@ export function assertChainedBenchmarkParentForEmbeddingSnapshot(options) {
   }
   const extension = snapshotExtension(detached.benchmarkExtension);
   if (ledger.limitMicroUsd !== 200_000_000
-    || extension.version !== BENCHMARK_BUDGET_CHAIN_VERSION) fail('invalid_capability');
-  verifyPairParent(extension, ledger, policy, detached.snapshot);
+    || ![BENCHMARK_BUDGET_CHAIN_VERSION, BENCHMARK_REQUEST_CAP_V2_VERSION]
+      .includes(extension.version)) fail('invalid_capability');
+  verifyPairParent(extension, ledger, policy, detached.snapshot, issuedSnapshot);
 }
 
 const MIXED_AUTHORIZATION_KEYS = Object.freeze(['ledger', 'policy', 'benchmarkExtension',
