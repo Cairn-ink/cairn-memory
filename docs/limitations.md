@@ -123,6 +123,17 @@ measure recall. The mixed guard composes it with B4 only for synthetic fake-HTTP
 tests; a contained gateway, real compatibility and measured parity remain
 separate work.
 
+The [mixed resource projection](plans/mixed-resource-projection.md) is a pure
+conditional money/request ceiling for a supplied fixed roster and accepted
+profile snapshots, not a new quality score or launch authorization. It never
+reads the last dated campaign audit or an operational ledger. The conservative
+native reservation intentionally adds mutually incompatible maximum token
+paths, including all fallback singleton embeddings, so it is not an expected
+invoice; a ceiling above available funds does not prove the run cannot fit,
+and a ceiling below them does not guarantee completion. Earmarked funds and
+phase caps do not replace verified native configuration, the full common
+protocol, actual artifact and source-only checks before the untouched roster.
+
 The first PR233 CI run (`36148762416`) failed the OpenAI Node22.16 tokenizer
 performance test at its unchanged five-second child-process timeout; the other
 223 adapter tests passed. A controlled two-CPU diagnostic reproduced that timeout
