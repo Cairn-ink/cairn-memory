@@ -21,11 +21,15 @@ const fixtures = [
   { id: 'paraphrase-control', size: 16, placement: 'late', query: 'vehicle caretaker', targets: ['Mira maintains the automobile.'] },
   { id: 'multi-evidence-late', size: 224, placement: 'late', query: 'Juniper owner deadline',
     targets: ['Mira is the Juniper owner.', 'The Juniper deadline is Thursday.'] },
+  { id: 'receipt-only-late', size: 224, placement: 'late', contextMode: 'source-evidence',
+    query: 'Where is the violet keystone?',
+    targets: ['The violet keystone is stored in the synthetic east cabinet.'],
+    targetBodies: ['A compressed storage note without identifying terms.'] },
 ];
 
-function admit(core, ns, content, eventId) {
+function admit(core, ns, content, eventId, source = content) {
   return unwrap(core.admit({ namespace: ns, memory: { content, kind: 'fact' },
-    receipts: [{ client: 'moc-diagnostic', sessionId: 'synthetic', eventId, role: 'user', excerpt: content }] }));
+    receipts: [{ client: 'moc-diagnostic', sessionId: 'synthetic', eventId, role: 'user', excerpt: source }] }));
 }
 function place(core, admitted, title, groups) {
   const id = groups.get(title);
@@ -60,8 +64,8 @@ function corpus(core) {
   } while (cursor);
   return memories;
 }
-function oracle(targetIds, observations) {
-  return { contextWindow: 100000, countTokens: () => 1,
+function oracle(targetIds, observations, countTokens) {
+  return { contextWindow: 100000, countTokens,
     select: ({ input }) => {
       const visible = input.maps.flatMap(map => map.items.map(item => {
         const value = ref(item); return value ? { namespaceIndex: map.namespaceIndex, ...value } : null;
@@ -80,12 +84,13 @@ function oracle(targetIds, observations) {
 /** Explicit visibility oracle: knows targets, but can only select visible refs.
  * This tests an architectural upper bound, NOT model relevance or answer quality.
  */
-export async function runMocRetrievalDiagnostic({ directory } = {}) {
+export async function runMocRetrievalDiagnostic({ directory, countTokens = () => 1,
+  counter = 'synthetic-constant-one; row-ceiling control, not provider token accounting' } = {}) {
   const stat = lstatSync(directory);
   if (!stat.isDirectory() || realpathSync(directory) !== directory || (stat.mode & 0o777) !== 0o700
     || readdirSync(directory).length) throw new Error('unsafe_diagnostic_directory');
-  const report = { version: 'moc-architecture-diagnostic-v1', providerRequests: 0,
-    counter: 'synthetic-constant-one; row-ceiling control, not provider token accounting',
+  const report = { version: 'moc-architecture-diagnostic-v2', providerRequests: 0,
+    counter,
     model: 'target-ID visibility oracle; NOT a semantic-quality model', outputLimit: 12,
     lexicalWork: 'full active corpus in temporary FTS5; not equal candidate work to bounded MOC', cases: [], classification: [] };
   for (const fixture of fixtures) {
@@ -93,7 +98,7 @@ export async function runMocRetrievalDiagnostic({ directory } = {}) {
     const started = performance.now();
     const database = path.join(directory, `${fixture.id}.sqlite`);
     const ids = new Set(), observations = [], groups = new Map();
-    const model = oracle(ids, observations);
+    const model = oracle(ids, observations, countTokens);
     const entry = { ...fixture, status: 'failed' };
     report.cases.push(entry);
     try {
@@ -104,7 +109,8 @@ export async function runMocRetrievalDiagnostic({ directory } = {}) {
           fixture.placement === 'early' ? 'ZZZ archived notes' : 'AAA archived notes', groups);
       }
       for (const [index, content] of fixture.targets.entries()) {
-        const memory = admit(core, namespace, content, `target-${index}`);
+        const body = fixture.targetBodies?.[index] ?? content;
+        const memory = admit(core, namespace, body, `target-${index}`, content);
         ids.add(memory.memory.id);
         if (fixture.placement !== 'unfiled') place(core, memory, fixture.placement === 'early' ? 'AAA Juniper project'
           : fixture.placement === 'misfiled' ? 'ZZZ recipes' : 'ZZZ Juniper project', groups);
@@ -117,12 +123,16 @@ export async function runMocRetrievalDiagnostic({ directory } = {}) {
       const fullMap = inventory(core);
       entry.targetIds = [...ids];
       entry.coldDirectReadSupported = fixture.targets.every((content, index) =>
-        unwrap(core.get({ namespace, memoryId: entry.targetIds[index] })).memory.content === content);
+        unwrap(core.get({ namespace, memoryId: entry.targetIds[index] })).memory.content ===
+          (fixture.targetBodies?.[index] ?? content));
+      entry.coldSourceReadSupported = fixture.targets.every((content, index) =>
+        unwrap(core.get({ namespace, memoryId: entry.targetIds[index] })).receipts.some(receipt => receipt.excerpt === content));
       entry.fullInventoryCount = fullMap.ids.length;
       entry.targetMapPages = entry.targetIds.map(id => fullMap.pages.findIndex(page => page.items.some(item => ref(item)?.memoryId === id)) + 1);
       entry.allTargetsInventoried = entry.targetIds.every(id => fullMap.ids.includes(id));
       const mocStarted = performance.now();
-      entry.recall = await core.recall({ readSet: [namespace], query: fixture.query, limit: 12 });
+      entry.recall = await core.recall({ readSet: [namespace], query: fixture.query, limit: 12,
+        ...(fixture.contextMode ? { contextMode: fixture.contextMode } : {}) });
       entry.mocElapsedMs = performance.now() - mocStarted;
       entry.observations = observations;
       const visible = new Set(observations.flatMap(item => item.visibleIds ?? []));
@@ -139,7 +149,7 @@ export async function runMocRetrievalDiagnostic({ directory } = {}) {
   }
   for (const size of [1, 101]) {
     const observations = [];
-    const model = { contextWindow: 100000, countTokens: () => 1, classify: ({ input }) => {
+    const model = { contextWindow: 100000, countTokens, classify: ({ input }) => {
       observations.push({ mapExhausted: input.mapExhausted, mapItemCount: input.map.length,
         mocCount: input.map.filter(item => item.type === 'moc').length });
       return { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [], newL1: { title: 'First category', parentL2Ids: [] } })) };

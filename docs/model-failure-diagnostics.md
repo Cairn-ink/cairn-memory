@@ -36,12 +36,18 @@ Each event is a frozen object with exactly four fields:
 | --- | --- |
 | `adapter` | `response_envelope`, `response_usage`, `response_message`, `response_content`, `output_json`, `output_shape`, `output_bounds`, `request_invalid`, `request_bounds`, `token_count_response`, `transport_failure`, `response_body_bounds`, `response_json`, `model_cancelled` |
 | `core_call` | `model_not_configured`, `context_budget_exceeded`, `token_count_unavailable`, `model_timeout`, `model_cancelled`, `provider_failure`, `adapter_output_invalid`, `output_serialization`, `output_bounds` |
-| `core_validation` | `invalid_extraction`, `invalid_classification`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
+| `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, `invalid_extraction_text`, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
 
 An adapter failure can also produce a core-call event. These are failing
 boundaries, not unique-operation counters. Success is silent. Invalid input
 before a model boundary need not emit an event. Event values describe checks,
 not semantic truth or the provider's underlying root cause.
+
+Extraction categories describe only the first core validation boundary that
+rejected the returned object. They contain no returned values, indices or text.
+`invalid_extraction_source_range`, for example, does not retain which index was
+outside the current request's source window. Older retained artifacts may use
+the legacy catchall `invalid_extraction`; its exact branch cannot be recovered.
 
 ## Privacy and authority
 
@@ -60,8 +66,8 @@ This is an in-process preview extension, not a hosted HTTP protocol change.
 ## Evidence boundary and next step
 
 Offline synthetic tests verify observation and unchanged failures, not recall
-quality. The original #40 failure omitted nested causes, so its particular
-`invalid_model_output` cannot be attributed retroactively. The experiment runner
+quality. Historical failures that retained only `invalid_extraction` cannot be
+attributed retroactively. The experiment runner
 now supports opt-in bounded collection and preserves nested ingestion summary
 causes. These enable a newly frozen, authorized live diagnostic run; they do not
 replace one. Do not overwrite old results or repeat a paid run until it passes.
