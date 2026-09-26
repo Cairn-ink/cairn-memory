@@ -46,6 +46,16 @@ const RATIONALE_MODELS_KIND = Object.freeze({
 const BASIS_MODELS_KIND = Object.freeze({
   filename: 'experiment-basis-models-extension.json', method: 'cairn_reviewBasis',
 });
+const BENCHMARK_KIND = Object.freeze({
+  filename: 'experiment-benchmark-extension.json', method: 'benchmark',
+});
+const BENCHMARK_STAGES = Object.freeze(['answer', 'judge']);
+const BENCHMARK_MODELS = Object.freeze({
+  answer: Object.freeze(['gpt-4.1-mini-2025-04-14']),
+  judge: Object.freeze(['gpt-4o-2024-08-06']),
+});
+const STAGE_BODY_KEYS = Object.freeze(['max_tokens', 'messages', 'model', 'n', 'store', 'stream', 'temperature']);
+const STAGE_ROLES = new Set(['system', 'user', 'assistant']);
 const isModelControl = kind => kind === RATIONALE_MODELS_KIND || kind === BASIS_MODELS_KIND;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const OPENAI_MODELS = new Set([DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL]);
@@ -1007,5 +1017,322 @@ function constructGuard(options, extension = null, reconciliation = null, qualif
       ledger.close();
     },
     policy,
+  });
+}
+
+// Benchmark answer/judge stages share the historical ledger through its fixed
+// `host-completion` channel; the stage identity, model and prices live in this
+// separate immutable extension and in the guard's own per-attempt record.
+function validateStage(name, value) {
+  exactKeys(value, CHANNEL_KEYS, 'invalid_extension');
+  if (value.endpoint !== POLICY_ENDPOINTS.hostCompletion
+    || typeof value.model !== 'string'
+    || !MODEL_PATTERN.test(value.model)
+    || !BENCHMARK_MODELS[name].includes(value.model)
+    || !safeInteger(value.reservedMicroUsd, 1)
+    || !safeInteger(value.maxRequestBytes, 1)
+    || !safeInteger(value.maxResponseBytes, 1)
+    || !safeInteger(value.timeoutMs, 1) || value.timeoutMs > 2_147_483_647
+    || !safeInteger(value.maxInputTokens, 1)
+    || !safeInteger(value.maxOutputTokens, 1)
+    || !safeInteger(value.inputTokenFraming)) {
+    fail('invalid_extension');
+  }
+  for (const price of [value.inputPrice, value.outputPrice]) {
+    exactKeys(price, PRICE_KEYS, 'invalid_extension');
+    if (!safeInteger(price.microUsdNumerator) || !safeInteger(price.tokenDenominator, 1)) fail('invalid_extension');
+  }
+  const upper = pricedUpperBound(value);
+  if (upper > BigInt(MAX_SAFE_INTEGER) || BigInt(value.reservedMicroUsd) < upper) fail('invalid_extension');
+}
+
+function benchmarkConfiguration(options) {
+  // Reuse the exact baseline gate; the two chat stages grant no Cairn method or extraction model.
+  const { version, authorizationId, ledger, policy } = extensionConfiguration({ ledger: options.ledger,
+    policy: options.policy, authorizationId: options.authorizationId });
+  let stages;
+  try { stages = structuredClone(options.stages); } catch { fail('invalid_extension'); }
+  exactKeys(stages, BENCHMARK_STAGES, 'invalid_extension');
+  for (const name of BENCHMARK_STAGES) validateStage(name, stages[name]);
+  return { version, authorizationId, ledger, policy, method: BENCHMARK_KIND.method, stages: deepFreeze(stages) };
+}
+
+function verifyBenchmarkExtension(extension, ledger, policy) {
+  exactKeys(extension, ['version', 'authorizationId', 'ledger', 'policy', 'method', 'stages', 'checkpoint'],
+    'invalid_extension');
+  const expected = benchmarkConfiguration({ ledger, policy,
+    authorizationId: extension.authorizationId, stages: extension.stages });
+  exactKeys(extension.checkpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (!safeInteger(extension.checkpoint.requestCount) || !safeInteger(extension.checkpoint.reservedMicroUsd)
+    || extension.checkpoint.requestCount > ledger.requestCap
+    || extension.checkpoint.reservedMicroUsd > ledger.limitMicroUsd
+    || canonical(extension) !== canonical({ ...expected, checkpoint: extension.checkpoint })) fail('invalid_extension');
+  readBinding(path.join(expected.ledger.directory, BINDING_FILENAME), { version: 1, runId: ledger.runId, policy });
+  readBinding(path.join(expected.ledger.directory, BENCHMARK_KIND.filename), extension);
+}
+
+// A separate operator action. It grants exactly the two chat-completion stages
+// below and never alters an older capability file or the ledger allowance.
+export function authorizeBenchmarkExtension(options) {
+  exactKeys(options, ['ledger', 'policy', 'authorizationId', 'stages']);
+  const configuration = benchmarkConfiguration(options);
+  const ledger = reopenExperimentBudget(configuration.ledger);
+  let lock;
+  try {
+    lock = new DatabaseSync(path.join(configuration.ledger.directory, 'experiment-budget.sqlite'));
+    lock.exec('BEGIN IMMEDIATE');
+    readBinding(path.join(configuration.ledger.directory, BINDING_FILENAME),
+      { version: 1, runId: configuration.ledger.runId, policy: configuration.policy });
+    const state = ledger.getState();
+    if (state.state !== 'open' || state.attempts.some((attempt) => attempt.outcome === null)) fail('extension_busy');
+    const filename = path.join(configuration.ledger.directory, BENCHMARK_KIND.filename);
+    let existing;
+    try { existing = lstatSync(filename); }
+    catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+    if (existing) {
+      const extension = readBinding(filename);
+      verifyBenchmarkExtension(extension, configuration.ledger, configuration.policy);
+      verifyExtensionCheckpoint(extension, state);
+      if (extension.authorizationId !== configuration.authorizationId
+        || canonical(extension.stages) !== canonical(configuration.stages)) fail('policy_mismatch');
+      return deepFreeze(extension);
+    }
+    const extension = { ...configuration,
+      checkpoint: { requestCount: state.requestCount, reservedMicroUsd: state.reservedMicroUsd } };
+    writeAuthorizationBinding(configuration.ledger.directory, filename, extension);
+    verifyBenchmarkExtension(extension, configuration.ledger, configuration.policy);
+    verifyExtensionCheckpoint(extension, state);
+    return deepFreeze(extension);
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError || error instanceof ExperimentBudgetError) throw error;
+    fail('unsafe_policy_binding');
+  } finally {
+    if (lock) { try { lock.exec('ROLLBACK'); } catch { /* No ledger writes were made. */ } lock.close(); }
+    ledger.close();
+  }
+}
+
+function validateStageBody(body, stage) {
+  exactKeys(body, STAGE_BODY_KEYS, 'unsupported_request');
+  if (body.model !== stage.model || body.n !== 1 || body.temperature !== 0
+    || body.store !== false || body.stream !== false
+    || !safeInteger(body.max_tokens, 1) || body.max_tokens > stage.maxOutputTokens
+    || !Array.isArray(body.messages) || body.messages.length < 1 || body.messages.length > 128) {
+    fail('unsupported_request');
+  }
+  for (const message of body.messages) {
+    exactKeys(message, ['content', 'role'], 'unsupported_request');
+    if (!STAGE_ROLES.has(message.role) || typeof message.content !== 'string') fail('unsupported_request');
+  }
+  let localTokens;
+  try { localTokens = localCounter.countTokens(JSON.stringify(body.messages)); }
+  catch { fail('unsupported_request'); }
+  if (localTokens + stage.inputTokenFraming > stage.maxInputTokens) fail('input_bound_exceeded');
+}
+
+function usageRecord(kind, json) {
+  if (kind === 'cairnCount') return null;
+  return kind === 'hostCompletion'
+    ? { inputTokens: json.usage.prompt_tokens, outputTokens: json.usage.completion_tokens }
+    : { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens };
+}
+
+export function createBenchmarkExperimentRequestGuard(options) {
+  exactKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'fetchImpl']);
+  const benchmark = snapshotExtension(options.benchmarkExtension);
+  return constructBenchmarkGuard({ ledger: options.ledger, policy: options.policy, fetchImpl: options.fetchImpl },
+    benchmark);
+}
+
+function constructBenchmarkGuard(options, benchmark) {
+  const policy = validateConstructor(options);
+  const ledgerConfiguration = structuredClone(options.ledger);
+  let ledger;
+  try { ledger = reopenExperimentBudget(ledgerConfiguration); }
+  catch (error) {
+    if (error instanceof ExperimentBudgetError) throw error;
+    fail('ledger_failed');
+  }
+  const inFlightIds = new Set();
+  const records = [];
+  let closed = false;
+  let inFlight = 0;
+  let halted = false;
+  // Any unsettled ledger attempt that is not currently in flight on this guard halts new paid work,
+  // including this guard's own attempt whose settlement failed to persist.
+  const unsettled = (state) => state.attempts.some((attempt) =>
+    attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
+  const verify = () => {
+    verifyBenchmarkExtension(benchmark, ledgerConfiguration, policy);
+    const state = ledger.getState();
+    verifyExtensionCheckpoint(benchmark, state);
+    return state;
+  };
+  try { if (unsettled(verify())) halted = true; }
+  catch (error) { ledger.close(); throw error; }
+  const stages = benchmark.stages;
+  const fetchImpl = options.fetchImpl;
+
+  const send = async (stage, kind, channel, snapshot, requestedOutputTokens) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    // Snapshotting caller-owned request/header objects can execute accessors.
+    // Recheck the capability and the shared ledger after those callbacks, before reserving.
+    if (unsettled(verify())) { halted = true; fail('paid_work_halted'); }
+    const attemptId = randomUUID();
+    const startedAt = Date.now();
+    ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd });
+    inFlightIds.add(attemptId);
+    const record = { attemptId, stage, ledgerChannel: CHANNELS[kind], model: channel.model,
+      endpoint: channel.endpoint, reservedMicroUsd: channel.reservedMicroUsd,
+      rates: { inputPrice: { ...channel.inputPrice }, outputPrice: { ...channel.outputPrice } },
+      outcome: null, actualMicroUsd: null, usage: null, startedAt, settledAt: null, elapsedMs: null };
+    records.push(record);
+    inFlight += 1;
+    const controller = new AbortController();
+    const externalAbort = () => controller.abort('request_aborted');
+    snapshot.signal.addEventListener('abort', externalAbort, { once: true });
+    if (snapshot.signal.aborted) externalAbort();
+    const timer = setTimeout(() => controller.abort('request_timeout'), channel.timeoutMs);
+    let settled = false;
+    const settle = (outcome, actualMicroUsd, usage = null) => {
+      if (settled) return;
+      settled = true;
+      if (outcome === 'unknown' || (actualMicroUsd !== null && actualMicroUsd > channel.reservedMicroUsd)) {
+        halted = true;
+      }
+      // Observed token counts survive a failed ledger write so an operator can settle by hand;
+      // outcome and cost stay null until the ledger accepted them.
+      record.usage = usage;
+      try {
+        ledger.recordOutcome(actualMicroUsd === null
+          ? { attemptId, outcome }
+          : { attemptId, outcome, actualMicroUsd });
+      } catch (error) {
+        // The attempt stays unsettled in the ledger; no later paid work may proceed.
+        halted = true;
+        throw error;
+      }
+      record.outcome = outcome;
+      record.actualMicroUsd = actualMicroUsd;
+      record.settledAt = Date.now();
+      record.elapsedMs = record.settledAt - startedAt;
+      deepFreeze(record);
+    };
+    try {
+      let response;
+      try {
+        const pending = Promise.resolve().then(() => {
+          if (controller.signal.aborted) fail(abortError(controller.signal));
+          return fetchImpl(channel.endpoint, {
+            method: 'POST',
+            redirect: 'error',
+            signal: controller.signal,
+            headers: snapshot.headers,
+            body: snapshot.bodyText,
+          });
+        });
+        pending.then((late) => {
+          if (controller.signal.aborted) {
+            try { Promise.resolve(late?.body?.cancel()).catch(() => {}); } catch { /* Late cleanup only. */ }
+          }
+        }, () => {});
+        response = await raceAbort(pending, controller.signal);
+      } catch (error) {
+        settle('unknown', null);
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('transport_failed');
+      }
+      if (!(response instanceof Response)) {
+        settle('unknown', null);
+        fail('transport_failed');
+      }
+      let bytes;
+      try { bytes = await readBounded(response, channel.maxResponseBytes, controller.signal); }
+      catch (error) {
+        settle('unknown', null);
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('transport_failed');
+      }
+      if (response.redirected || response.status < 200 || response.status >= 300) {
+        settle('failed', null);
+        fail('http_failed');
+      }
+      let json;
+      let usage;
+      try {
+        json = parseResponseJson(bytes);
+        usage = parseUsage(json, kind, channel, requestedOutputTokens);
+      } catch (error) {
+        settle('unknown', null);
+        if (error instanceof ExperimentRequestGuardError) throw error;
+        fail('invalid_response');
+      }
+      settle('succeeded', usage.actualMicroUsd, usageRecord(kind, json));
+      if (!usage.withinBounds
+        || (usage.actualMicroUsd !== null && usage.actualMicroUsd > channel.reservedMicroUsd)) {
+        fail('usage_bound_exceeded');
+      }
+      try {
+        return new Response(bytes, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      } catch { fail('invalid_response'); }
+    } finally {
+      clearTimeout(timer);
+      snapshot.signal.removeEventListener('abort', externalAbort);
+      inFlightIds.delete(attemptId);
+      inFlight -= 1;
+    }
+  };
+
+  const cairnFetch = (kind) => async (url, requestOptions) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    verify();
+    const channel = policy[kind];
+    const snapshot = requestSnapshot(url, requestOptions, channel);
+    validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration');
+    return send(CHANNELS[kind], kind, channel, snapshot,
+      kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0);
+  };
+  const stageFetch = (name) => async (url, requestOptions) => {
+    if (closed) fail('guard_closed');
+    if (halted) fail('paid_work_halted');
+    verify();
+    const stage = stages[name];
+    const snapshot = requestSnapshot(url, requestOptions, stage);
+    validateStageBody(snapshot.body, stage);
+    return send(name, 'hostCompletion', stage, snapshot, snapshot.body.max_tokens);
+  };
+
+  return Object.freeze({
+    cairnFetch(url, requestOptions) {
+      const text = url instanceof URL ? url.href : url;
+      if (text === policy.cairnCount.endpoint) return cairnFetch('cairnCount')(url, requestOptions);
+      if (text === policy.cairnGeneration.endpoint) return cairnFetch('cairnGeneration')(url, requestOptions);
+      fail('invalid_request');
+    },
+    answerFetch: stageFetch('answer'),
+    judgeFetch: stageFetch('judge'),
+    async hostFetch() { fail('unsupported_request'); },
+    getState() {
+      if (closed) fail('guard_closed');
+      return ledger.getState();
+    },
+    attempts() {
+      return Object.freeze(records.map((record) => deepFreeze(structuredClone(record))));
+    },
+    isHalted() { return halted; },
+    close() {
+      if (closed) return;
+      if (inFlight !== 0) fail('guard_busy');
+      closed = true;
+      ledger.close();
+    },
+    policy,
+    stages,
   });
 }

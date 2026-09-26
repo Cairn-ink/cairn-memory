@@ -10,8 +10,10 @@ import { parseArguments } from '../cli.mjs';
 import {
   MAX_INPUT_BYTES,
   opaqueQuestionId,
+  opaqueSessionId,
   prepareLongMemEval,
   stableTurnId,
+  stableTurnIdV2,
 } from '../prepare.mjs';
 
 const digest = (value) => createHash('sha256').update(value).digest('hex');
@@ -99,6 +101,12 @@ test('CLI module is import-safe and its parser retains repeated explicit questio
   ]).questionIds, ['first', 'second']);
 });
 
+test('v1 turn helper remains source-label-sensitive while v2 turn identity is label-independent', () => {
+  assert.notEqual(stableTurnId('case', 0, 'first', 0), stableTurnId('case', 0, 'second', 0));
+  assert.match(stableTurnIdV2('case', 0, 0), /^lme-turn-[a-f0-9]{64}$/u);
+  assert.notEqual(stableTurnIdV2('case', 0, 0), stableTurnIdV2('case', 1, 0));
+});
+
 test('prepares answer-blind model files and private evaluator data without truncation', async (t) => {
   const directory = await workspace(t);
   const input = await writeDataset(directory);
@@ -118,7 +126,9 @@ test('prepares answer-blind model files and private evaluator data without trunc
   assert.deepEqual(Object.keys(histories[0]), ['question_id', 'sessions']);
   assert.deepEqual(Object.keys(histories[0].sessions[0]), ['session_index', 'session_id', 'date', 'turns']);
   assert.deepEqual(histories[0].sessions.map((session) => session.session_index), [0, 1]);
-  assert.deepEqual(histories[0].sessions.map((session) => session.session_id), ['session-later', 'session-earlier']);
+  assert.deepEqual(histories[0].sessions.map((session) => session.session_id), [
+    opaqueSessionId('temporal-case', 0), opaqueSessionId('temporal-case', 1),
+  ]);
   assert.deepEqual(Object.keys(histories[0].sessions[0].turns[0]), ['turn_id', 'role', 'content']);
   assert.deepEqual(Object.keys(questions[0]), ['question_id', 'text', 'date']);
   assert.deepEqual(Object.keys(evaluators[0]), [
@@ -136,9 +146,10 @@ test('prepares answer-blind model files and private evaluator data without trunc
   ]);
   assert.equal(questions[1].date, 'not parsed as a date');
   assert.deepEqual(evaluators[0].turn_labels, [
-    { turn_id: stableTurnId('temporal-case', 0, 'session-later', 0), has_answer: true },
-    { turn_id: stableTurnId('temporal-case', 0, 'session-later', 1), has_answer: false },
+    { turn_id: stableTurnIdV2('temporal-case', 0, 0), has_answer: true },
+    { turn_id: stableTurnIdV2('temporal-case', 0, 1), has_answer: false },
   ]);
+  assert.deepEqual(evaluators[0].answer_session_ids, [opaqueSessionId('temporal-case', 0)]);
   assert.deepEqual(evaluators[1].answer_session_ids, []);
   assert.deepEqual(evaluators[1].turn_labels, []);
 
@@ -149,6 +160,8 @@ test('prepares answer-blind model files and private evaluator data without trunc
     'TURN_ANNOTATION_POISON',
     'TOP_LEVEL_ANNOTATION_POISON',
     'SUPPLIED_SUMMARY_POISON',
+    'session-later',
+    'session-earlier',
   ]) {
     assert.doesNotMatch(historyText + questionText, new RegExp(poison));
   }
@@ -206,8 +219,8 @@ test('preserves identical repeated source sessions as distinct indexed occurrenc
     session_id,
     date,
   })), [
-    { session_index: 0, session_id: 'abstention-session', date: 'also not parsed' },
-    { session_index: 1, session_id: 'abstention-session', date: 'a different preserved date' },
+    { session_index: 0, session_id: opaqueSessionId('missing-memory_abs', 0), date: 'also not parsed' },
+    { session_index: 1, session_id: opaqueSessionId('missing-memory_abs', 1), date: 'a different preserved date' },
   ]);
   assert.notEqual(histories[0].sessions[0].turns[0].turn_id, histories[0].sessions[1].turns[0].turn_id);
   assert.equal(result.manifest.sizes.source_duplicate_session_id_occurrence_count, 1);
@@ -263,7 +276,7 @@ test('manifest records provenance, pilot identity, exact artifact hashes and mea
   const output = path.join(directory, 'prepared');
   const manifest = JSON.parse(await readFile(path.join(output, 'manifest.json'), 'utf8'));
 
-  assert.equal(manifest.schema_version, 'cairn-longmemeval-preparation-v1');
+  assert.equal(manifest.schema_version, 'cairn-longmemeval-preparation-v2');
   assert.equal(manifest.preparation_kind, 'pilot');
   assert.equal(manifest.dataset.declared_variant, 's-cleaned');
   assert.equal(manifest.dataset.declared_revision, 'upstream-revision-abc123');
@@ -273,6 +286,15 @@ test('manifest records provenance, pilot identity, exact artifact hashes and mea
   assert.match(manifest.dataset.oracle_warning, /do-not-certify-oracle/);
   assert.deepEqual(manifest.selection.source_question_ids, ['temporal-case']);
   assert.equal(manifest.selection.count, 1);
+  assert.deepEqual(manifest.session_id_map, [{
+    question_id: opaqueQuestionId('temporal-case'), source_question_id: 'temporal-case',
+    occurrences: [
+      { session_index: 0, source_session_id: 'session-later',
+        session_id: opaqueSessionId('temporal-case', 0) },
+      { session_index: 1, source_session_id: 'session-earlier',
+        session_id: opaqueSessionId('temporal-case', 1) },
+    ],
+  }]);
   assert.deepEqual(manifest.boundaries.model_facing_files, ['history.jsonl', 'questions.jsonl']);
 
   for (const artifact of Object.values(manifest.artifacts)) {
