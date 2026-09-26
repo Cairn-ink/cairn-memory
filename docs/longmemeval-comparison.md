@@ -168,7 +168,10 @@ planning-only arithmetic for a fixed Cairn/Mem0 roster. It uses caller-supplied
 snapshots of the accepted request and wire profiles to report conditional
 request and reservation ceilings, including native fallback and both arms'
 answer/judge work. It does not read a ledger or a dated campaign audit, grant
-transport or establish a scored result.
+money, predict completion, or score answer quality. Before an untouched roster
+is used, the full common protocol, actual artifact/configuration and source-only
+checks still need independent verification. Earmarks or phase caps alone do not
+establish feasibility.
 
 The [controlled mixed runner](plans/mixed-comparison-runner.md) has three
 separate APIs: `prepareMixedComparison` accepts only source histories/questions,
@@ -186,10 +189,6 @@ table; unresolved cases are not silently counted wrong. Native transport needs
 trusted parent-side credential injection at a later launch gate; the child holds
 only a local dummy key. Neither this runner nor its synthetic tests authorize a
 paid campaign, verify real semantic answers, or establish matched performance.
-money, predict completion, or score answer quality. Before an untouched roster
-is used, the full common protocol, actual artifact/configuration and source-only
-checks still need independent verification. Earmarks or phase caps alone do not
-establish feasibility.
 
 An [offline indexed-window provenance path](indexed-window-provenance.md) is
 separate from the default prefix-receipt comparison and is not accepted by the

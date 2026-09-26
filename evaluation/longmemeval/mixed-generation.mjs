@@ -11,9 +11,9 @@ import { checkedMem0NativeConfiguration, runMem0NativeCase } from '../experiment
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { experimentPolicy } from '../live/session.mjs';
-import { ingestIndexedWindowLongMemEvalCase,
-  planIndexedWindowLongMemEvalCase } from './ingestion.mjs';
+import { ingestIndexedWindowLongMemEvalCase } from './ingestion.mjs';
 import { verifiedEvidence } from './mixed-evidence.mjs';
+import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
   MIXED_ANSWER_TIMEOUT_MS, packMixedAnswer } from './mixed-answer.mjs';
 import { prepareMixedSourceCase, mixedSourcePolicy } from './mixed-source.mjs';
@@ -261,9 +261,8 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     sourceCandidatePolicy: 'bounded-keyset-v1' });
   holdCore(core);
   try {
-    const planned = planIndexedWindowLongMemEvalCase({ history: plan.renderedHistory,
-      namespace: row.namespace });
-    if (!isDeepStrictEqual(planned, plan.cairnPlan)) fail('planner_mismatch');
+    verifyMixedCapturePlan({ history: plan.renderedHistory, namespace: row.namespace,
+      expectedPlan: plan.cairnPlan });
     const ingested = await ingestIndexedWindowLongMemEvalCase({ history: plan.renderedHistory,
       namespace: row.namespace, capture: input => core.capture(input) });
     if (!isDeepStrictEqual(ingested.plan, plan.cairnPlan)

@@ -1,6 +1,14 @@
 // Explicit local gate: missing pinned native prerequisites fail rather than skip.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync,
+  writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { setImmediate } from 'node:timers/promises';
 
 import { inspectMem0NativeArtifact } from '../../experiment-budget/mem0-native-artifact.mjs';
 import { mem0NativeConfiguration } from '../../experiment-budget/mem0-native-gateway.mjs';
@@ -10,6 +18,174 @@ import { prepareMixedSourceCase } from '../mixed-source.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from '../public-comparison.mjs';
 import { evaluatorRow, fakeMixedHttp, sourceRow,
   syntheticMixedFixture } from './mixed-fixture.mjs';
+
+const nativeRequire = createRequire(new URL('../../../adapters/openai/package.json', import.meta.url));
+const nativeEncoder = nativeRequire('tiktoken').get_encoding('cl100k_base');
+
+function miniatureNativeArtifact(t) {
+  const root = mkdtempSync(join(tmpdir(), 'cairn-mixed-artifact-drift-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const venvRoot = join(root, 'venv'), pythonRoot = join(root, 'python');
+  for (const directory of [join(venvRoot, 'bin'),
+    join(venvRoot, 'lib/python3.11/site-packages/mem0/memory'),
+    join(venvRoot, 'lib/python3.11/site-packages/mem0ai-2.2.0.dist-info'),
+    join(pythonRoot, 'bin'), join(pythonRoot, 'lib/python3.11/encodings')]) {
+    mkdirSync(directory, { recursive: true });
+  }
+  const main = join(venvRoot, 'lib/python3.11/site-packages/mem0/memory/main.py');
+  writeFileSync(join(venvRoot, 'pyvenv.cfg'), `home = ${join(pythonRoot, 'bin')}\n`);
+  writeFileSync(main, 'value = 1\n');
+  writeFileSync(join(venvRoot, 'lib/python3.11/site-packages/mem0ai-2.2.0.dist-info/METADATA'),
+    'Name: mem0ai\nVersion: 2.2.0\n');
+  writeFileSync(join(pythonRoot, 'bin/python3.11'), '#!/fake\n');
+  writeFileSync(join(pythonRoot, 'lib/python3.11/encodings/__init__.py'), '# synthetic\n');
+  symlinkSync(join(pythonRoot, 'bin/python3.11'), join(venvRoot, 'bin/python'));
+  return { artifact: inspectMem0NativeArtifact({ venvRoot, pythonRoot }), main };
+}
+
+test('M12a valid P batch over native 8192-token serialization denies both arms without HTTP',
+  async t => {
+    assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
+    const row = sourceRow();
+    row.history.sessions[0].turns = Array.from({ length: 5 }, (_, index) => ({
+      turn_id: `lme-turn-${String(index + 1).repeat(64)}`, role: 'user',
+      content: '漢'.repeat(3000) }));
+    const source = prepareMixedSourceCase(row);
+    assert.equal(source.cairnPlan.executable, true);
+    assert.equal(source.mem0Input.batches.length, 1);
+    const nativeSerialized = source.mem0Input.batches[0]
+      .map(message => `${message.role}: ${message.content}\n`).join('');
+    assert.ok(nativeEncoder.encode(nativeSerialized, [], []).length > 8192);
+    const artifact = inspectMem0NativeArtifact({
+      venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+      pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+    const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+      childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+    const fake = fakeMixedHttp();
+    const fixture = syntheticMixedFixture(t, { artifact, configuration,
+      sourceCases: [row], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl });
+    try {
+      assert.equal(fixture.prepared.counts.fixedN, 1);
+      assert.equal(fixture.prepared.preflight[0].reason, 'native_static_input_exceeded');
+      assert.equal(fixture.prepared.counts.batchCounts[0], 0);
+      const generation = await runMixedGeneration({ prepared: fixture.prepared,
+        guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      assert.equal(generation.halted, false);
+      assert.deepEqual(generation.cases[0].arms.map(arm => arm.status), ['failed', 'failed']);
+      assert.deepEqual(generation.cases[0].arms.map(arm => arm.reason),
+        ['native_static_input_exceeded', 'native_static_input_exceeded']);
+      assert.equal(fake.calls.length, 0);
+      assert.equal(fixture.guard.attempts().length, 0);
+      assert.equal(fixture.guard.caseOutcomes().scopes.length, 2);
+    } finally { fixture.guard.close(); }
+  });
+
+test('M12a inspected native artifact drift is denied before Cairn-first scope and HTTP', async t => {
+  const { artifact, main } = miniatureNativeArtifact(t);
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const fake = fakeMixedHttp();
+  const fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl });
+  try {
+    writeFileSync(main, 'value = 2\n');
+    await assert.rejects(runMixedGeneration({ prepared: fixture.prepared,
+      guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root }),
+    { code: 'artifact_changed' });
+    assert.equal(fake.calls.length, 0);
+    assert.equal(fixture.guard.caseOutcomes().scopes.length, 0);
+    assert.equal(fixture.guard.attempts().length, 0);
+  } finally { fixture.guard.close(); }
+});
+
+test('M12a actual Cairn model deadline settles X/core before next arm and late fetch', async t => {
+  assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
+  const artifact = inspectMem0NativeArtifact({
+    venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  let fetchEntered, releasePhysical;
+  const entered = new Promise(resolve => { fetchEntered = resolve; });
+  let held = false;
+  let fixture;
+  let firstEmbeddingChecked = false;
+  const coreClose = [];
+  const fake = fakeMixedHttp(url => {
+    if (url.endsWith('/responses/input_tokens') && !held) {
+      held = true;
+      fetchEntered();
+      return new Promise(resolve => { releasePhysical = resolve; });
+    }
+    if (url.endsWith('/embeddings') && !firstEmbeddingChecked) {
+      firstEmbeddingChecked = true;
+      assert.equal(coreClose.length, 1, 'core must close before next physical arm request');
+      assert.equal(coreClose[0].scopes.length, 1);
+      assert.equal(coreClose[0].scopes[0].status, 'failed');
+      assert.equal(coreClose[0].scopes[0].reason, 'deadline');
+      assert.ok(coreClose[0].attempts.length > 0
+        && coreClose[0].attempts.every(attempt => attempt.outcome !== null));
+    }
+    return undefined;
+  });
+  fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl });
+  const originalClose = DatabaseSync.prototype.close;
+  DatabaseSync.prototype.close = function() {
+    let isCore = false;
+    try { isCore = this.prepare("SELECT name FROM sqlite_master WHERE name='memories'").get()
+      ?.name === 'memories'; } catch { /* A closing non-core connection has no memory schema. */ }
+    if (isCore) coreClose.push({ scopes: fixture.guard.caseOutcomes().scopes,
+      attempts: fixture.guard.attempts() });
+    return originalClose.call(this);
+  };
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const running = runMixedGeneration({ prepared: fixture.prepared,
+      guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+    await entered;
+    assert.equal(fake.calls.some(call => call.route === '/v1/embeddings'), false);
+    t.mock.timers.tick(30_000);
+    const generation = await running;
+    assert.equal(generation.halted, false, JSON.stringify(generation.cases));
+    assert.deepEqual(generation.cases[0].arms.map(arm => arm.status), ['failed', 'completed']);
+    assert.equal(firstEmbeddingChecked, true);
+    assert.equal(generation.cases[0].arms[0].scope.reason, 'deadline');
+    assert.equal(coreClose.length, 1);
+    assert.equal(coreClose[0].scopes[0].status, 'failed');
+    assert.equal(coreClose[0].scopes[0].reason, 'deadline');
+    assert.equal(coreClose[0].attempts[0].outcome, 'unknown');
+    assert.equal(coreClose[0].attempts[0].actualMicroUsd, null);
+    assert.ok(coreClose[0].attempts[0].reservedMicroUsd > 0);
+    assert.equal(fixture.guard.caseOutcomes().scopes.length, 2);
+    const storeFolder = readdirSync(fixture.root).find(name => name.startsWith('mixed-cairn-'));
+    assert.ok(storeFolder);
+    const store = join(fixture.root, storeFolder, 'store.db');
+    assert.equal(existsSync(store), true);
+    const memoryCount = () => {
+      const database = new DatabaseSync(store, { readOnly: true });
+      try { return database.prepare('SELECT count(*) AS n FROM memories').get().n; }
+      finally { database.close(); }
+    };
+    const storeDigest = () => readdirSync(join(fixture.root, storeFolder)).sort().map(name => [name,
+      createHash('sha256').update(readFileSync(join(fixture.root, storeFolder, name)))
+        .digest('hex')]);
+    const before = { requests: fake.calls.length, attempts: fixture.guard.attempts(),
+      scopes: fixture.guard.caseOutcomes().scopes, memories: memoryCount(),
+      store: storeDigest() };
+    assert.equal(before.memories, 0);
+    releasePhysical(Response.json({ object: 'response.input_tokens', input_tokens: 100 }));
+    await setImmediate(); await setImmediate();
+    assert.equal(fake.calls.length, before.requests);
+    assert.deepEqual(fixture.guard.attempts(), before.attempts);
+    assert.deepEqual(fixture.guard.caseOutcomes().scopes, before.scopes);
+    assert.equal(memoryCount(), before.memories);
+    assert.deepEqual(storeDigest(), before.store);
+  } finally {
+    DatabaseSync.prototype.close = originalClose;
+    fixture.guard.close();
+  }
+});
 
 test('M8 empty Cairn recall still permits an empty-evidence answer; native remains real', async t => {
   assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT,

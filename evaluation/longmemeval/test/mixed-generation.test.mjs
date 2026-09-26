@@ -4,6 +4,8 @@ import { setImmediate } from 'node:timers/promises';
 
 import { prepareMixedComparison } from '../mixed-generation.mjs';
 import { packMixedAnswer } from '../mixed-answer.mjs';
+import { verifyMixedCapturePlan } from '../mixed-plan.mjs';
+import { prepareMixedSourceCase } from '../mixed-source.mjs';
 import { officialJudgeRequest } from '../official-scoring.mjs';
 import { completionOnce, trackedTransport } from '../mixed-transport.mjs';
 import { sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
@@ -53,6 +55,17 @@ test('M2/P errors become fixed-N preflight failure after valid identity', () => 
   assert.equal(result.preflight[0].status, 'failed');
   assert.equal(result.preflight[0].caseDigest, null);
   assert.equal(result.counts.batchCounts[0], 0);
+});
+
+test('M12a production pre-capture planner rejects a changed expected plan', () => {
+  const row = sourceRow();
+  const prepared = prepareMixedSourceCase(row);
+  assert.deepEqual(verifyMixedCapturePlan({ history: prepared.renderedHistory,
+    namespace: row.namespace, expectedPlan: prepared.cairnPlan }), prepared.cairnPlan);
+  const changed = structuredClone(prepared.cairnPlan);
+  changed.batches[0].batchIndex += 1;
+  assert.throws(() => verifyMixedCapturePlan({ history: prepared.renderedHistory,
+    namespace: row.namespace, expectedPlan: changed }), { code: 'planner_mismatch' });
 });
 
 for (const [stage, deadlineMs] of [['answer', 180_000], ['judge', 60_000]]) {

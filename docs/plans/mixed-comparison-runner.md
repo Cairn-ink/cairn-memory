@@ -507,6 +507,35 @@ a deadline. Explicitly test a Y-first transport failure still halts globally.
 Remove all temporary DEBUG-M7b probes and the test-only Atomics stall.
 Run both runtime native gates and all M11 gates; retain original RED evidence.
 
+### M12a independent-review correction contract
+
+The first fixed-candidate review at c7ee7e7 found missing direct evidence, not
+a demonstrated production failure. Before the next candidate, add: a valid
+P source batch whose native serialization exceeds 8192 tokens and is denied
+for both arms with zero provider calls; current-file native artifact drift
+denied before a Cairn-first arm; and an actual Cairn capture model timeout
+with pending guarded adapter work, terminal accounting before next scope and
+no database/dispatch progression from a subsequently released physical fetch.
+Use only synthetic fixtures, actual X/core/Y boundaries and a controlled clock
+when necessary. Never edit the shared pinned native roots or tracked runtime
+files to induce drift; use a fresh miniature artifact or isolated temporary
+module tree. Test configuration current-child-source drift in an isolated tree
+if needed to establish its own check, not by mutating this worktree mid-test.
+
+The public prepared identity cannot carry a planner mismatch under the fixed
+deterministic planner. Permit one private `mixed-plan.mjs` helper to own the
+existing actual planner recomputation and exact comparison, called by the
+production Cairn path before capture. A direct negative test supplies a changed
+expected plan to this same helper. Do not add a public planner/core factory or
+weaken prepared identity; label direct private seam evidence honestly.
+
+Fix the comparison-document paragraph splice. Keep the three small public
+option readers unchanged in this correction: their duplication is a nonblocking
+maintainability heuristic, and it does not justify changing validated boundaries
+while closing these concrete gaps. Run affected suites on both pinned Node
+versions, preserve first failures, freeze and repeat both whole-base review
+axes and primary key-path acceptance before push. No paid readiness claim.
+
 ### Candidate implementation and verification evidence
 
 Implementation dispatch was GPT-6 Sol/high. The production entrypoints are
@@ -562,3 +591,43 @@ after the final report-cap and idle-socket tests; all other Node 22 gates had
 already passed on unchanged code. Raw per-gate logs and the earlier RED logs
 are retained in a private verification archive. No provider call, dataset,
 holdout, actual campaign ledger, credential, or old experiment helper was used.
+
+### M12a correction evidence
+
+The review gap was coverage, not an observed production failure. The private
+`mixed-plan.mjs` now owns the same deterministic planner recomputation and
+exact comparison used by the Cairn production path before capture; a direct
+test supplies a changed expected plan and observes `planner_mismatch`. This
+does not create a public way to alter a prepared plan.
+
+One valid P case renders one native batch with more
+than 8192 tokens in the exact role/content serialization measured by the
+pinned `cl100k_base` tokenizer. Its fixed roster remains one case, both arms
+fail `native_static_input_exceeded`, and the actual X guard records two failed
+scopes with zero physical HTTP calls and zero reserved attempts. A separate
+fresh miniature inspected native artifact is changed only inside its owned
+temporary tree; `runMixedGeneration` rejects `artifact_changed` before a
+Cairn-first scope or any HTTP dispatch. No shared pinned artifact or tracked
+child file is modified.
+
+An actual core capture count request was held in an abort-ignoring fake
+physical fetch. A controlled clock fired core's model deadline; X recorded a
+terminal unknown/full-reserve attempt and failed local scope. At the first
+subsequent Mem0 embedding dispatch, the Cairn store had already closed after
+the sole failed scope and all then-existing attempts were terminal. Releasing
+the old physical response after the run did not change dispatch count, X
+attempts/scopes, memory rows, or the SHA-256 digest of every closed store file
+(including any WAL/SHM file present). This tests the observable guarded/core
+boundary, not inaccessible physical settlement. The comparison document's
+resource-projection sentence was restored intact.
+
+Both Node 22.16.0 and 24.15.0 passed the affected correction gates:
+`npm test` (112), `npm run validate`, `test:longmemeval` (173),
+`test:mem0-native-gateway` (45), `test:mixed-native-local` (11),
+`test:core` (728), `demo:longmemeval-mixed`, and strict pinned plugin
+validation. Raw logs are held in a private verification archive. The
+unaffected M11 gates retain their prior both-runtime evidence; no new paid,
+corpus, credential, or actual-ledger activity was performed. The optional
+isolated current-child-source module-copy probe was not added; the mandatory
+before-first-arm artifact drift and existing current-file configuration
+identity checks remain in scope, with no claim that an unrun probe passed.
