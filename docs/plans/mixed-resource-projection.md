@@ -104,6 +104,9 @@ existing locked isolated OpenAI adapter dependency set in the LongMemEval job
 before its tests. No new package/version, root install, credential, key, skipped
 test or profile duplication. Add the same prerequisite to CONTRIBUTING's LME
 instructions and explain the correction in this tracked plan/limitations.
+Per CONTRIBUTING's gate-change rule, also add a narrow ROADMAP prerequisite
+note retaining the failed run and no semantic-readiness claim (R10 review
+clarification, before the documentation correction).
 All imported live constructors remain uncalled; this component is evaluation-
 only, not part of the public core installation. Reproduce RED in a fresh
 dependency-free scoped checkout, then the same suite GREEN after that exact
@@ -248,3 +251,15 @@ failed CI and the contaminated first local checkout are not counted as passes.
 The fixed candidate SHA and private raw logs are supplied in the handoff.
 Primary acceptance, both independent whole-base reviews and latest-head CI
 remain separate gates.
+
+The first R10 whole-base Standards review identified the missing `ROADMAP.md`
+gate-change note required by `CONTRIBUTING.md`. The narrow next-gate note now
+retains PR243's failed Node24 run and cancelled Node22 leg, identifies the
+locked adapter install as a test prerequisite, and makes no semantic-readiness
+or paid-run claim. R projection arithmetic and CI runtime wiring are unchanged
+by this review correction. Both independent review axes must recheck the new
+fixed candidate.
+The complete R9 matrix was repeated on the ROADMAP-corrected tree on Node
+22.16 and 24.15: locked adapter install, focused 10/10, LongMemEval 138/138,
+generic 112/112, three demos, JSON and pinned strict plugin/marketplace all
+passed on each runtime. Raw logs remain in the private verification archive.
