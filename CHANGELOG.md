@@ -1,5 +1,439 @@
 # Changelog
 
+## Unreleased — explicit adaptive qualified source-pair guard
+
+- Add a distinct, roster-bound adaptive capability and one-shot guard for
+  inline and strict catalog qualification. Synthetic 100M/200M parent-ledger,
+  phase-quota and installed local-archive controls retain source anchors and
+  existing request bounds. Old grants continue to deny catalog traffic. No
+  default route, paid launch or model-quality result follows.
+
+## Unreleased — optional adaptive qualification text catalog
+
+- Add an explicit adapter opt-in that checks inline qualification first, then
+  shares exact repeated candidate text through a strict first-occurrence catalog
+  when needed. Original candidate IDs, roles, evidence-pool response decoding,
+  compiler and receipt anchors remain unchanged. Synthetic repeated-source
+  capture/fake-HTTP tests fit with one count and one generation; all-unique
+  oversized sources still refuse locally. Old guards deny named catalog mode.
+  No model, budget, paid cohort, default route or quality claim changes.
+
+## Unreleased — bounded evidence-pool qualification wire
+
+- Version the candidate-qualification provider response as `evidence-pool-v1`:
+  per-item original candidate IDs are selected once, fields cite their pool
+  slots, and the adapter decodes to the unchanged inline validator and core
+  compiler. Synthetic fake-HTTP, guard and installed controls include the
+  formerly over-budget five-item fixture and exact source anchors. The
+  maximum-size unique-source synthetic fixture (5×4×800) still refuses
+  locally; real-provider schema behavior, benchmark resolution and quality
+  remain unmeasured. No model,
+  request schedule, budget, ledger, scorer or paid cohort changes.
+
+## Unreleased — bounded qualification request wire
+
+- Factor repeated candidate-qualification strict-schema fields with local
+  `$defs`/`$ref` while retaining the exact expanded response constraints and
+  one count/generation pair. A complete-wire local 6,000-token check now refuses
+  oversized qualification before HTTP; guard/provider ceilings remain unchanged.
+  Synthetic source-qualified captures and cold receipt/anchor checks pass. The
+  halted seven-request development attempt remains failed and this does not
+  establish provider compatibility, answer quality or a new paid result.
+
+## Unreleased — offline qualified source-pair cohort preparation
+
+- Add pure ID/type-only development and reserved-holdout allocation with a new
+  fixed seed and reproducibility digests, plus source-derived two-arm request
+  and full-reservation ceilings. Synthetic planners and a fake-HTTP actual-core
+  control establish only bounded mechanics; no corpus, ledger, key or paid run
+  is used. Old fresh-smoke selection and three-arm projection are unchanged.
+
+## Unreleased — offline installed qualified source-pair launcher
+
+- Add a private, closed-plan installed two-arm launcher with read-only monetary
+  parent preflight, one consumed guarded claim, synchronous conservative phase
+  quotas and fixed-roster terminal accounting. Synthetic installed-core and
+  fake-HTTP tests do not authorize a paid run or establish answer quality.
+- Bridge genuine deadlines from the verified installed core to the pair-only
+  guard with a file-checked opaque token; external aborts stay globally fatal.
+
+## Unreleased — offline qualified source-pair guarded transport
+
+- Add a separately claimed, compact two-arm capability and one-connection
+  bound ledger witness for synthetic qualified-prefix versus indexed-window
+  generation and official-style scoring. Actual adapter wire, local cores,
+  fail-closed accounting, races and deadline behavior are tested without a
+  provider. Old guards and protocols remain unchanged. This is not a paid
+  launch, frozen roster, installed host grant or quality claim.
+
+## Unreleased — offline chained benchmark budget prerequisite
+
+- Add an existing-only ledger-owned cap transition and read-only snapshot,
+  plus a separately bound US$100→US$200 benchmark chain token.
+  Synthetic persistence, crash, race and old-capability tests preserve prior
+  history and denials. This does not grant a paid comparison, indexed capture
+  transport, new roster or actual operator-ledger transition.
+
+## Unreleased — qualified source-pair official-style scoring
+
+- Add a separate strict offline scorer and fixed-roster aggregate for the
+  qualified two-arm protocol. It reuses the pinned official judge semantics,
+  binds reports to a separately supplied trusted protocol, schedules both
+  scoring scopes, and preserves unresolved cases in fixed denominators.
+  Synthetic N reports, evaluator-bound Python sidecar and fake-HTTP scoped
+  guard tests do not establish model accuracy or authorize a paid comparison.
+  The legacy three-arm scorer, core, guard and live routes remain unchanged.
+
+## Unreleased — qualified source-pair generation protocol
+
+- Add a separate deterministic, two-arm offline generation protocol for
+  source-bound-v2 qualified first-prefix versus indexed-window receipts. Its
+  scoped execution reports finite halts and source-only evidence; the legacy
+  three-arm comparison, scorer, paid guard and core defaults remain unchanged.
+  Synthetic checks do not establish answer quality or authorize paid use.
+
+## Unreleased — qualified-prefix ingestion control
+
+- Add separately versioned offline LongMemEval planning and ingestion using
+  source-bound-v2's actual retained first-800-unit view and v3 replay digest.
+  It is a control prerequisite, not a scored comparison or new core/default,
+  live, paid or provider path.
+
+## Unreleased — opt-in indexed source windows
+
+- Add a trusted embedded-core `captureSourcePolicy: 'indexed-windows-v1'`
+  option only with v2 qualification. Canonical source windows can bind a
+  scripted selected tail passage to the original message receipt; the default
+  first-prefix path and provider/model/token limits remain unchanged.
+- Add narrow OpenAI adapter indexed-envelope validation and synthetic core,
+  fake-HTTP and installed-artifact regressions. This is not semantic-quality,
+  benchmark, hosted-host or comparator evidence. Staged evidence and rationale
+  integration remain unsupported.
+- Add separately versioned offline LongMemEval planning, ingestion and public
+  comparison for exact indexed-window receipt provenance. The default evaluator,
+  scorer and live/paid routes remain unchanged and reject the new report.
+
+## Unreleased — native Hermes capture deadline and explicit recovery
+
+- Add optional `capture_deadline_ms` as a canonical decimal profile string
+  (1–110000) for v2 capture and independent
+  `classification_recovery: guarded-v1`. Native discovery exposes five tools
+  by default, six with capture, seven with recovery or eight with both. The
+  installed MCP owns schemas and operations; passive hooks and defaults stay
+  unchanged.
+- Native classification alone joins capture in the extended 120/125/135-second
+  SDK/helper/provider transport envelope. Only explicit capture, recall and
+  classification receive the dedicated Cairn model key. Pinned Hermes tests
+  exercise setup, guarded discovery, installed deadline/partial-admission
+  lifecycle, cold keyless inspection and scripted explicit recovery with fake
+  provider responses. These checks do not establish a hard return deadline,
+  spending cap, natural model tool choice or semantic quality.
+
+## Unreleased — explicit local MCP capture deadline
+
+- Accept trusted `captureDeadlineMs` on the local MCP server and canonical
+  `--capture-deadline-ms` (1–120000) only with opted-in v1/v2 capture. The host
+  forwards the existing core invocation budget; omitted defaults, tool schemas
+  and non-capture operations are unchanged. Check-config remains keyless and
+  syntax-only.
+- Offline SDK stdio and installed-CLI/fake-HTTP tests cover entered-stage
+  pre-admission timeout, durable post-admission partial success, cold keyless
+  inspection and explicit classification without source replay. The original
+  journal is not recovery history. This is cooperative, not a hard return or
+  API spending cap. Native Hermes forwarding is covered separately above;
+  semantic quality remains separate.
+
+## Unreleased — opt-in capture invocation deadline
+
+- Add a trusted embedded-core `captureDeadlineMs` constructor option for one
+  monotonic, invocation-local budget across capture stages, retaining the
+  existing 30-second per-model ceiling. Precommit checks roll back late
+  capture-owned writes; post-admission expiry preserves receipts and reports
+  classification or rationale failure. Core defaults remain unchanged; local
+  MCP exposure is tracked above. This is cooperative, not a hard response-time
+  or quality claim.
+
+## Unreleased — initial capture classification journal
+
+- Add a v14 source-free, exact-batch journal for the initial classification of
+  newly captured admissions. Admission and its initial row commit atomically;
+  successful placement and its status commit together, including no-op
+  placement. A crash can remain in-flight, and applied does not imply filed.
+- Opt-in `includeInitialClassification: true` on core and local MCP admission
+  inspection reports only the original attempt's bounded status. Default
+  responses are unchanged; manual/legacy or changed-member claims remain
+  unknown. Explicit recovery never rewrites the initial result. Synthetic
+  core, SDK and installed-artifact checks cover cold reads and source receipts.
+  This is not a retry queue, whole-capture deadline or semantic-quality claim.
+
+## Unreleased — bounded transport observations
+
+- Add optional `bounded-v1` transport milestones to the one-shot case-deadline
+  guard and `--transport-diagnostics bounded-v1` to the guarded public-pilot
+  runner. Only private generation diagnostics gain bounded, content-free rows;
+  default output, scoring and request/accounting rules are unchanged. This is
+  not a provider-root-cause finding or a core timeout/quality fix.
+
+## Unreleased — capture admission inspection
+
+- Add keyless `core.inspectAdmission` and an opt-in local MCP
+  `inspect_capture_admission` read of existing committed admission membership.
+  It reports admission-only absent/pending/completed state, bounded suppression
+  count and fresh current member refs or closed non-actionable positions; the
+  classification outcome remains unknown. No capture replay, lease mutation,
+  new schema or automatic provider request is introduced.
+- Synthetic core, SDK-MCP and actual installed-artifact regressions cover cold
+  interruption before classification and explicit guarded classification with
+  unchanged source receipts. Durable classification journaling, whole-capture
+  timeout and semantic quality remain unresolved.
+
+## Unreleased — explicit local MCP classification
+
+- Add an opt-in `classify_unfiled_memories` tool for one to five inspected,
+  current unfiled references in the configured namespace. It composes existing
+  core classification and placement guards, reports actual resulting filing
+  state, and leaves capture and receipts untouched.
+- Synthetic SDK, stdio and race checks cover cold recovery and stale or deleted
+  references. No batch journal, automatic retry, provider-quality claim or
+  repair of historical evaluation outcomes is included.
+
+## Unreleased — classification batch cardinality
+
+- Bind the optional OpenAI classification response schema to exactly the
+  distinct zero-to-five target memories in its detached request snapshot.
+  Duplicate or oversized direct adapter target lists fail before HTTP.
+  Existing ID, topic-level and core exact-coverage validation still rejects
+  malformed outputs; failed filing retains admitted memories as unfiled.
+- Synthetic fake-HTTP and core regressions prove the outgoing cardinality and
+  preserved partial-capture boundary. No benchmark result, ingestion halt,
+  provider profile, prompt, budget or retry behavior changes; the historical
+  malformed output is not attributed to this gap.
+
+## Unreleased — extraction source-index domain
+
+- Bind the optional OpenAI extract response schema to canonical batch-local
+  source indices. Empty direct adapter requests permit only empty extraction;
+  malformed source snapshots fail before HTTP. Count and generation share the
+  detached request schema. Core source validation and receipt construction,
+  prompts, models, budgets, retry policy and admission are unchanged.
+- Fake-HTTP regression proves the previous schema admitted a nonexistent index.
+  The three retained range failures have no saved offending indices, so their
+  exact cause and any historical or semantic repair remain unproven.
+
+## Unreleased — complementary source-evidence ranking candidate
+
+- Revise only the explicit source-evidence rank prompt to prefer a nonredundant
+  set that jointly covers directly requested facts, events, scopes and changed
+  reasons, while preserving proposal/adoption and reason/decision distinctions.
+  Empty and unrelated-source behavior, selection, limits, validation, storage,
+  other rank prompts and public wire contracts are unchanged.
+- Retain the exact previous prompt plus twelve wholly synthetic, expectation-
+  separated cases for a future paired comparison. Offline actual-core tests
+  verify receipt/ref plumbing and failure boundaries only; no provider call,
+  semantic improvement, historical benchmark repair or causal claim is included.
+
+## Unreleased — explicit prepared benchmark cohort bound
+
+- Add an explicit `maxCases`/`--max-prepared-cases` loader ceiling for the
+  private public pilot, capped at 500 while preserving the seven-case default,
+  artifact byte limits, digest and identity checks, and evaluator separation.
+- Dry-run and durable operator metadata record the effective ceiling. Synthetic
+  keyless tests cover an eight-case cohort without granting budget, requests,
+  retries, resume, replacement, transport, or any benchmark-quality claim.
+
+## Unreleased — bounded benchmark monetary extension
+
+- Add one explicit operator-only, same-ledger transition to raise both finite
+  benchmark ceilings while preserving the run identity, complete accounting
+  history, original grants and fixed transport policy.
+- The public-pilot CLI can load an already-issued extension but never creates
+  one. Offline synthetic crash, race and stale-authority tests grant no paid
+  execution, retry, resume or campaign-ledger mutation.
+
+## Unreleased — benchmark request allowance
+
+- Add an explicit operator-only, cap-increase transaction for an existing
+  benchmark grant. It preserves the campaign's monetary limit and complete
+  charged history, writes a separate immutable derived authorization, and does
+  not replace older policy, benchmark or case-capability files.
+- The public-pilot CLI can explicitly load an already-issued allowance without
+  increasing the cap itself. Keyless dry-run and offline synthetic tests verify
+  the boundary; no paid execution, provider result or retry is included.
+
+## Unreleased — one-shot case-deadline public pilot
+
+- Add an explicit complete CLI opt-in that binds the public pilot to a one-shot
+  case-deadline capability, exact generation/scoring roster and identity across
+  private artifacts and offline merge. Trusted case timeouts retain fixed
+  denominators and partial judgments while all other unknowns still halt.
+- Opt-in dry-runs are keyless and non-consuming; live opt-in output is new-only
+  and cannot resume, retry or reset a claim. Verification uses synthetic fake
+  HTTP and temporary ledgers only and makes no provider-result or quality claim.
+
+## Unreleased — explicit case-deadline request guard
+
+- Add an explicit, one-shot case-deadline capability and request-guard API for
+  prospective benchmark evaluation. It is verified offline with synthetic data;
+  existing guard defaults and live runners remain unchanged, with no provider-
+  result or quality claim.
+
+## Unreleased — explicit answer boundary v2
+
+- Add an experimental, explicit `cairn-longmemeval-public-answer-v2` option to
+  the offline public comparison and guarded private pilot. It places quoted
+  evidence before a separate current question/date for all three arms while
+  preserving v1 as the byte- and shape-compatible default.
+- Scoring, aggregation, resume, CLI, and offline merge retain and validate v2
+  identity, including failed, blocked, and zero-score runs. V1 and v2 results
+  are intentionally non-comparable; no provider result or quality claim is
+  included.
+
+## Unreleased — private capture-admission observation
+
+- Fresh public-pilot cases now retain a separately versioned, bounded private
+  capture-admission subsection that distinguishes completed empty admission,
+  suppression, accepted references, duplicate replay, failure and partial
+  classification. It contains primitive counts/categories only, caps records at
+  64 with explicit drops, and treats malformed projections as unavailable.
+- The admitted-reference count is neither newly created memories nor retained-
+  message coverage. Observation preserves capture responses, exceptions,
+  requests, accounting, scoring and aggregate/report output. Missing new
+  observations in legacy artifacts remain unavailable; no source retention,
+  retry, capture policy, benchmark mode or public core/wire contract changes.
+
+## Unreleased — public pilot rejection diagnostics
+
+- Public-pilot cases now write a bounded private `diagnostics.json` with fixed
+  categorical adapter/core stage, layer and reason observations plus per-answer
+  `stop`/`length` completion diagnostics. Overflow and unavailable states are
+  explicit; no raw provider/model text or case context is retained.
+- Ordinary answer objects, scoring inputs and outputs, provider payloads,
+  models, policy, limits, reservations, accounting and halt behavior remain
+  unchanged. Legacy artifacts without diagnostics remain unavailable; offline
+  synthetic evidence does not establish a historical rejection cause or score
+  improvement.
+- Prospective extraction validation now distinguishes fixed output/item shape,
+  text/value, source-shape, duplicate-source and source-range categories in the
+  same private observer. Public errors, admission, fail-stop ingestion and
+  retry behavior are unchanged; legacy `invalid_extraction` events cannot be
+  attributed retroactively.
+
+## Unreleased — classification request-local wire aliases
+
+- The optional OpenAI adapter now sends deterministic request-local,
+  role-separated aliases for classification target-memory IDs and catalog-MOC
+  IDs, validates provider output against the exact alias schema, then decodes
+  authoritative reference fields before existing core validation and storage.
+- Classification candidate/card/MOC content, order, titles, metadata,
+  `mapExhausted`, durable IDs and MOC policy are unchanged. Unknown, cross-role
+  and raw UUID output references fail closed. Other adapter methods keep their
+  prior wire formats.
+- Original core/adapter 6,000-local-token preflights, the 7,024 provider-input
+  ceiling, 1,024 output cap, model policy, reservations, no-retry/no-truncation
+  behavior and benchmark halt policy remain unchanged. Offline fake-HTTP/local-
+  tokenizer tests show transport reduction only; aliases are not anonymization,
+  and no historical provider count, failure cause or benchmark score is claimed.
+
+## Unreleased — benchmark count diagnostics
+
+- Benchmark-guard count attempts now retain a finite private diagnostic for an
+  HTTP-2xx body that reaches parsing: exact structurally validated counts record
+  `within_limit` or `input_limit_exceeded` with the configured limit, while
+  malformed or structurally invalid bodies record `invalid_count_response`
+  without an observed count. Duplicate top-level keys are invalid for this
+  diagnostic path.
+- The 7,024 ceiling, unknown/null settlement and whole-run halt remain unchanged;
+  successful count cost is still unknown. Ordinary adapter/core errors, generic
+  guard behavior, ledger schema, reservations and retry policy are unchanged.
+  The public pilot's existing private per-case accounting preserves the new
+  record without raw provider data. Offline fake-HTTP evidence only: no paid
+  call, new score or historical failure reconstruction.
+
+## Unreleased — public pilot runner and paired report
+
+- Add `evaluation/live/public-pilot.mjs`: a benchmark live session that binds
+  the real OpenAI adapter and the answer/judge stages to the P1 benchmark
+  guard, and `runPublicPilot`, which runs the public comparison and the
+  official-style scorer per prepared v2 case with a fresh private store,
+  per-case 0600 artifacts (run record, exact answer requests, truncation and
+  evidence accounting, guard accounting, timings, scoring), projected-cap and
+  ledger-allowance checks before every case, a halt on any guard halt, an
+  atomic checkpoint with no replay on resume, and a redacted `report.json`.
+- Add `evaluation/live/public-pilot-cli.mjs` with `--dry-run` projections and
+  explicit operator inputs only; the key is read from `OPENAI_API_KEY` inside
+  `main()` and used solely in the Authorization header. A resume is refused
+  (`run_directory_mismatch`) when limits, judge timeout, caps or stage policy
+  differ from what the directory's manifest recorded; blocked reasons are
+  counted once per case.
+- Add `evaluation/live/public-pilot-merge.mjs` (`mergePublicPilotRuns`, CLI
+  `--merge dir,dir --output dir`): an offline merge of completed batch
+  directories into one paired report, refusing mismatched configurations,
+  overlapping case lists, incomplete sources, non-integer run and per-stage
+  totals, and an output directory that is or sits inside a source, with no
+  key, ledger or call.
+- Answer requests are labelled by the run's own arm order rather than by the
+  evidence shape, so a Cairn arm that retrieved nothing is no longer recorded
+  as the no-memory arm and contributes an all-zero packed truncation row. A
+  resumed run refuses a completed or failed case whose accounting, request or
+  truncation file is missing (`invalid_checkpoint`), since both can follow real
+  spend and only a blocked case legitimately has its generation record alone,
+  and an `aggregate.json` left without a `report.json` is reported as
+  `aggregate_without_report`.
+- `aggregateOfficialScores` additionally reports a `common` bucket (cases in
+  which all three arms resolved, per arm, per type and abstention overlay,
+  `null` accuracy at zero); existing buckets are unchanged. `pilotEvaluatorFor`
+  exposes a loaded pilot's private evaluator read-only. Offline synthetic tests
+  only; no paid call, key discovery or ledger change is added.
+
+## Unreleased — guarded benchmark answer/judge transport
+
+- The experiment request guard gains an immutable benchmark extension
+  (`experiment-benchmark-extension.json`) that binds a separate answer stage
+  (`gpt-4.1-mini-2025-04-14`) and official judge stage (`gpt-4o-2024-08-06`)
+  with their own prices, bounds and per-request reservations. Both stages
+  reserve on the existing ledger's fixed `host-completion` channel before every
+  send; the ledger schema, history and allowance are unchanged.
+- `createBenchmarkExperimentRequestGuard` exposes `answerFetch`, `judgeFetch`
+  and baseline `cairnFetch`, denies the host channel, passes stage bodies
+  through with an explicit allowlist (`temperature: 0`, `n: 1`, `max_tokens`,
+  `store: false`, `stream: false`), records each attempt's stage, model, rate
+  assumptions and priced usage without bodies or keys, and halts all further
+  paid work after any unknown outcome, overrun or any unsettled attempt not in
+  flight on this guard. Offline synthetic tests only; no live command, key
+  discovery or paid call is added.
+
+## Unreleased — evaluator-only Python reference rendering
+
+- Add an opt-in offline reference-rendering sidecar from checksum-bound raw
+  JSON, preserving official Python number and array formatting without
+  changing preparation v2 or model-facing history/question files.
+- Scoring may consume loader-issued evaluator-bound rendering capabilities;
+  absent a verified capability, non-string references remain unresolved.
+  This is scoring infrastructure, not a measured accuracy result.
+
+## Unreleased — offline public benchmark infrastructure
+
+- Add a separately versioned Cairn/source-evidence, full-history and no-memory
+  comparison API, with source dates, provenance checks and whole-request
+  context preflight. Legacy comparison and live-pilot behavior are unchanged.
+- Add pinned upstream LongMemEval judge prompts, string-reference parity
+  fixtures and fixed-roster scoring with unresolved cases retained. Numeric
+  and array references remain unverified; no real-model score is claimed.
+- Add `npm run demo:longmemeval-public`: synthetic actual-core integration
+  with scripted answer/judge callbacks, no keys or provider calls.
+
+## Unreleased — LongMemEval session-label blinding
+
+- Preparation v2 replaces raw model-facing session labels with deterministic
+  opaque occurrence IDs and uses label-independent turn IDs. The private
+  manifest holds the raw-to-opaque map; evaluator evidence IDs use opaque
+  labels so retrieved/packed coverage remains joinable without changing the
+  strict evaluator record shape.
+- The live-pilot loader accepts v2, validates the map and derived IDs, and
+  rejects old v1 artifacts. Old preparations require regeneration from a
+  reviewed pinned source. Synthetic offline regression checks do not measure
+  real-model answer quality or authorize a paid benchmark run.
+
 ## Unreleased — direct premise challenges in decision context
 
 - The local rationale decision-context read now includes a stored direct
@@ -534,6 +968,25 @@ reliability.
   the required index is missing. No new migration, public-map change or scoring
   change is included. Frozen v1 evidence remains unchanged; offline tests do not
   establish model-quality or latency improvements.
+
+## Unreleased — bounded source-aware recall candidates
+
+- For explicit `source-evidence` and `rationale-evidence` recall only, rank
+  private navigation candidates by the maximum literal overlap of the generated
+  body and first four stable-ID retained receipt excerpts. A strictly winning
+  receipt supplies the existing 120-code-point query preview; body and receipt
+  ties keep the body, and receipt ties keep the first stable ID.
+- Keep the 1,024-memory scan, two select calls, page/token/reference limits,
+  public maps, classification, default recall and automatic rationale discovery
+  unchanged. Source cursors bind mode, policy and the four-receipt limit; existing
+  epoch/revision/final-read fences cover later use. A fifth-receipt-only match
+  remains a documented heuristic miss, not invented incomplete map coverage.
+- Validate every bounded candidate receipt against its authoritative stored
+  identity, memory binding, canonical excerpt and receipt key before it can reach
+  selection; corrupted rows fail closed even when the selector would return empty.
+- This widens opt-in selector exposure to bounded retained personal source text.
+  Offline synthetic and local-tokenizer checks establish reachability and bounds,
+  not semantic relevance, provider cost, latency or answer quality.
 
 ## Unreleased — bounded query-aware candidates
 
