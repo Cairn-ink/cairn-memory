@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync,
@@ -149,7 +150,10 @@ function controlledChild(operate) {
       child.stdout.end(value === undefined ? undefined
         : Buffer.isBuffer(value) ? value : JSON.stringify(value));
       child.stderr.end();
-      setImmediate(() => child.emit('close', code, null));
+      setImmediate(() => {
+        child.emit('exit', code, null);
+        child.emit('close', code, null);
+      });
     };
     child.stdin.once('finish', () => {
       Promise.resolve().then(() => operate(socket)).then((value) => {
@@ -192,6 +196,48 @@ function controlledHarness(t, fetchImpl, { childTimeoutMs = 5000, httpTimeoutMs 
 
 const output = () => ({ version: 'cairn-mem0-native-result-v1',
   verifiedAddRecords: 0, results: [] });
+const nativeRow = attributedTo => ({ id: 'synthetic-id', memory: 'Synthetic fact.',
+  score: 0.5, attributedTo });
+const PYTHON_PROJECTION = `import json, runpy, sys, types
+row = json.load(sys.stdin)
+class Client:
+    def __init__(self, **_): pass
+    def with_options(self, **_): return self
+    def close(self): pass
+class Memory:
+    @classmethod
+    def from_config(cls, _): return cls()
+    def __init__(self):
+        self.llm = types.SimpleNamespace(client=Client())
+        self.embedding_model = types.SimpleNamespace(client=Client())
+    def add(self, *_args, **_kwargs): return {"results": []}
+    def search(self, *_args, **_kwargs): return {"results": [row]}
+httpx = types.ModuleType("httpx")
+httpx.Client = Client
+httpx.HTTPTransport = lambda **_kwargs: object()
+mem0 = types.ModuleType("mem0")
+mem0.Memory = Memory
+sys.modules["httpx"] = httpx
+sys.modules["mem0"] = mem0
+run = runpy.run_path(sys.argv[1])["run"]
+case = {"version": "cairn-mem0-native-child-input-v1", "socket": "/case/gateway.sock",
+        "store": "/case/store", "userId": "synthetic-case", "topK": 3,
+        "threshold": 0, "httpTimeoutMs": 1000,
+        "input": {"batches": [[{"role": "user", "content": "Synthetic."}]],
+                  "query": "Synthetic?"}}
+try:
+    print(json.dumps({"ok": True, "value": run(case)}, ensure_ascii=True))
+except Exception as error:
+    print(json.dumps({"ok": False, "error": type(error).__name__}))
+`;
+function projectedNative(row) {
+  const childFile = new URL('../testing/mem0-native-child.py', import.meta.url).pathname;
+  const result = spawnSync('/usr/bin/python3', ['-I', '-B', '-c', PYTHON_PROJECTION, childFile],
+    { input: JSON.stringify(row), encoding: 'utf8', timeout: 3000,
+      env: { PATH: '/usr/bin:/bin', PYTHONDONTWRITEBYTECODE: '1' } });
+  assert.equal(result.status, 0, 'synthetic Python projection fixture exits cleanly');
+  return JSON.parse(result.stdout);
+}
 const chatBody = () => JSON.stringify({ model: 'gpt-4.1-mini-2025-04-14', messages: [
   { role: 'system', content: 'Synthetic system.' },
   { role: 'user', content: 'Synthetic user.' }], max_tokens: 2000,
@@ -222,6 +268,81 @@ test('Y13 controlled process double crosses real UDS and X accounting inside ALS
     assert.equal(f.guard.attempts().filter(attempt => attempt.outcome === null).length, 0);
     assert.equal(existsSync(f.lastCaseRoot()), false);
   } finally { f.guard.close(); }
+});
+
+test('Y10 parent accepts native empty attribution through actual gateway result', async t => {
+  const f = controlledHarness(t, () => assert.fail('attribution projection reached provider'));
+  try {
+    const wrapped = await f.run(() => ({ ...output(), results: [nativeRow('')] }));
+    assert.equal(wrapped.status, 'completed');
+    assert.equal(wrapped.value.value.results[0].attributedTo, '');
+    assert.equal(f.guard.isHalted(), false);
+  } finally { f.guard.close(); }
+});
+
+test('Y10 Python child projects empty attribution through actual run path', () => {
+  const projected = projectedNative({ id: 'synthetic-id', memory: 'Synthetic fact.',
+    score: 0.5, attributed_to: '' });
+  assert.equal(projected.ok, true);
+  assert.equal(projected.value.results[0].attributedTo, '');
+});
+
+for (const [name, attribution] of [
+  ['null', null], ['200 UTF-16 units', '😀'.repeat(100)],
+]) {
+  test(`Y10 parent preserves ${name} attribution`, async t => {
+    const f = controlledHarness(t, () => assert.fail('attribution reached provider'));
+    try {
+      const wrapped = await f.run(() => ({ ...output(), results: [nativeRow(attribution)] }));
+      assert.equal(wrapped.status, 'completed');
+      assert.equal(wrapped.value.value.results[0].attributedTo, attribution);
+    } finally { f.guard.close(); }
+  });
+}
+
+for (const [name, attribution] of [
+  ['non-string', 42], ['over 200 UTF-16 units', '😀'.repeat(101)],
+  ['lone surrogate', '\ud800'],
+]) {
+  test(`Y10 parent rejects ${name} attribution globally`, async t => {
+    const f = controlledHarness(t, () => assert.fail('bad attribution reached provider'));
+    try {
+      await assert.rejects(f.run(() => ({ ...output(), results: [nativeRow(attribution)] })),
+        { code: 'callback_failed' });
+      assert.equal(f.guard.isHalted(), true);
+      assert.equal(f.guard.attempts().length, 0);
+    } finally { f.guard.close(); }
+  });
+}
+
+test('Y10 actual Python projection uses UTF-16 bounds and rejects malformed text', () => {
+  const base = { id: 'synthetic-id', memory: 'Synthetic fact.', score: 0.5 };
+  for (const [name, row, expectedAttribution] of [
+    ['missing attribution', base, null],
+    ['null attribution', { ...base, attributed_to: null }, null],
+    ['200-unit attribution', { ...base, attributed_to: '😀'.repeat(100) }, '😀'.repeat(100)],
+    ['200-unit ID', { ...base, id: '😀'.repeat(100) }, null],
+    ['65536-unit memory', { ...base, memory: '😀'.repeat(32768) }, null],
+  ]) {
+    const projected = projectedNative(row);
+    assert.equal(projected.ok, true, name);
+    assert.equal(projected.value.results[0].attributedTo, expectedAttribution, name);
+    assert.equal(projected.value.results[0].id, row.id, name);
+    assert.equal(projected.value.results[0].memory, row.memory, name);
+  }
+  for (const [name, row] of [
+    ['non-string attribution', { ...base, attributed_to: 42 }],
+    ['202-unit attribution', { ...base, attributed_to: '😀'.repeat(101) }],
+    ['lone-surrogate attribution', { ...base, attributed_to: '\ud800' }],
+    ['202-unit ID', { ...base, id: '😀'.repeat(101) }],
+    ['empty ID', { ...base, id: '' }],
+    ['lone-surrogate ID', { ...base, id: '\ud800' }],
+    ['65538-unit memory', { ...base, memory: '😀'.repeat(32769) }],
+    ['empty memory', { ...base, memory: '' }],
+    ['lone-surrogate memory', { ...base, memory: '\ud800' }],
+  ]) {
+    assert.equal(projectedNative(row).ok, false, name);
+  }
 });
 
 test('Y12 closed child with live owned group halts globally and retains private root', async t => {
@@ -597,8 +718,52 @@ function sendRaw(socketPath, raw) {
   });
 }
 
+test('Y6/Y11 malformed framing on an accepted socket after local seal is global', async t => {
+  let handle;
+  const f = controlledHarness(t, () => assert.fail('late malformed frame reached provider'));
+  try {
+    await assert.rejects(f.run(async socketPath => {
+      const socket = net.createConnection(socketPath);
+      socket.on('error', () => {});
+      await new Promise(resolve => socket.once('connect', resolve));
+      handle.revoke();
+      socket.end('NOT HTTP\r\n\r\n');
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return output();
+    }, child => { setTimeout(() => child.complete(143), 100); },
+    current => { handle = current; }), { code: 'callback_failed' });
+    assert.equal(f.guard.isHalted(), true);
+    assert.equal(f.guard.attempts().length, 0);
+    await assert.rejects(f.guard.withCaseScope(f.capability.schedule[1], async () => 'denied'),
+      { code: 'paid_work_halted' });
+  } finally { f.guard.close(); }
+});
+
 const rawRequest = (headers, body) => `POST /v1/chat/completions HTTP/1.1\r\n` +
   `Host: unix-gateway\r\n${headers}\r\n${body}`;
+
+test('Y6/Y11 malformed accepted JSON body after local seal is global', async t => {
+  let handle;
+  const f = controlledHarness(t, () => assert.fail('late malformed JSON reached provider'));
+  try {
+    await assert.rejects(f.run(async socketPath => {
+      const socket = net.createConnection(socketPath);
+      socket.on('error', () => {});
+      await new Promise(resolve => socket.once('connect', resolve));
+      socket.write(rawRequest('Authorization: Bearer local-only-dummy-key\r\n'
+        + 'Content-Type: application/json\r\nContent-Length: 1\r\n', ''));
+      await new Promise(resolve => setTimeout(resolve, 20));
+      handle.revoke();
+      socket.end('{');
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return output();
+    }, child => { setTimeout(() => child.complete(143), 120); },
+    current => { handle = current; }), { code: 'callback_failed' });
+    assert.equal(f.guard.isHalted(), true);
+    assert.equal(f.guard.attempts().length, 0);
+  } finally { f.guard.close(); }
+});
+
 for (const [name, raw] of [
   ['unknown identity header', rawRequest('Authorization: Bearer local-only-dummy-key\r\n'
     + 'Content-Type: application/json\r\nContent-Length: 2\r\nX-Other-Identity: spoof\r\n', '{}')],
@@ -634,6 +799,35 @@ test('Y13 controlled unreaped child globally halts after finite TERM/KILL window
     const caseRoot = f.lastCaseRoot();
     // The process is an in-process test double, never an OS child; after the
     // asserted global halt its exact private synthetic root is safe to remove.
+    if (caseRoot && existsSync(caseRoot)) rmSync(caseRoot, { recursive: true });
+  }
+});
+
+test('Y12 exited leader with held stdio is never signalled again and remains global', async t => {
+  const f = controlledHarness(t, () => assert.fail('exited child reached provider'),
+    { childTimeoutMs: 50 });
+  const signals = [];
+  const exitedWithHeldStdio = () => {
+    const child = new EventEmitter();
+    child.pid = 987654;
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.stdin.once('finish', () => setImmediate(() => child.emit('exit', 0, null)));
+    return child;
+  };
+  try {
+    await assert.rejects(f.run(() => new Promise(() => {}),
+      (_child, signal) => { signals.push(signal); }, () => {}, f.guard,
+      exitedWithHeldStdio), { code: 'callback_failed' });
+    assert.deepEqual(signals, [], 'a reaped leader PID must not receive TERM or KILL');
+    assert.equal(f.guard.isHalted(), true);
+    assert.equal(f.guard.attempts().length, 0);
+    assert.equal(existsSync(f.lastCaseRoot()), true);
+  } finally {
+    f.guard.close();
+    const caseRoot = f.lastCaseRoot();
+    // This process is an in-process double; no host PID or group was signalled.
     if (caseRoot && existsSync(caseRoot)) rmSync(caseRoot, { recursive: true });
   }
 });

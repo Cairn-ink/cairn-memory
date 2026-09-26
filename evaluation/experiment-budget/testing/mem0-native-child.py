@@ -15,10 +15,15 @@ def abort(code):
     raise ValueError(code)
 
 
-def bounded_text(value, maximum):
-    if not isinstance(value, str) or not value or len(value) > maximum:
+def bounded_text(value, maximum, allow_empty=False):
+    if not isinstance(value, str) or (not allow_empty and not value):
         abort("invalid_native_output")
-    value.encode("utf-8", "strict")
+    try:
+        units = len(value.encode("utf-16-le", "strict")) // 2
+    except UnicodeError:
+        abort("invalid_native_output")
+    if units > maximum:
+        abort("invalid_native_output")
     return value
 
 
@@ -114,7 +119,7 @@ def run(case):
                 abort("invalid_native_search")
             attribution = item.get("attributed_to")
             if attribution is not None:
-                bounded_text(attribution, 200)
+                bounded_text(attribution, 200, allow_empty=True)
             projected.append({"id": bounded_text(item.get("id"), 200),
                               "memory": record_content(item), "score": score,
                               "attributedTo": attribution})

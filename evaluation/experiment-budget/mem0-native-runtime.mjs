@@ -116,7 +116,7 @@ function validOutput(value, topK) {
       || !wellFormed(item.memory)
       || typeof item.score !== 'number' || !Number.isFinite(item.score)
       || !(item.attributedTo === null || (typeof item.attributedTo === 'string'
-        && item.attributedTo.length > 0 && item.attributedTo.length <= 200
+        && item.attributedTo.length <= 200
         && wellFormed(item.attributedTo)))) {
       fail('native_output_invalid');
     }
@@ -163,7 +163,7 @@ function boundedBody(request, maximum, timeoutMs) {
     };
     const onData = chunk => {
       size += chunk.length;
-      if (size > maximum) finish(new Error('oversize'));
+      if (size > maximum) finish(new Mem0NativeRuntimeError('native_http_invalid'));
       else chunks.push(chunk);
     };
     const onEnd = () => finish(null, Buffer.concat(chunks));
@@ -226,6 +226,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   let fault = null;
   let child = null;
   let childClose = null;
+  let childExited = false;
   let childClosed = false;
   let stdout = [];
   let stdoutBytes = 0;
@@ -249,10 +250,13 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     stopping = true;
     terminationAt = Date.now();
     stopResolver();
-    if (child && !childClosed && Number.isSafeInteger(child.pid) && child.pid > 0) {
+    // Once the leader exits, its numeric PID/PGID can be recycled even while
+    // inherited pipes delay `close`. Never signal that number again.
+    if (child && !childExited && !childClosed
+      && Number.isSafeInteger(child.pid) && child.pid > 0) {
       try { stopChild(child, 'SIGTERM'); } catch { firstFault('native_terminate_failed'); }
       termTimer = setTimeout(() => {
-        if (!childClosed) {
+        if (!childExited && !childClosed) {
           try { stopChild(child, 'SIGKILL'); } catch { firstFault('native_kill_failed'); }
         }
       }, configuration.termGraceMs);
@@ -274,8 +278,11 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
         const expected = requestBody(request, limit, configuration);
         const bytes = await boundedBody(request, limit, configuration.httpTimeoutMs);
         if (bytes.length !== expected) fail('native_http_invalid');
-        const body = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-        JSON.parse(body);
+        let body;
+        try {
+          body = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          JSON.parse(body);
+        } catch { fail('native_http_invalid'); }
         if (handle.snapshot().status !== 'active') fail('native_scope_closed');
         const controller = new AbortController();
         const fetch = route === 'chat' ? guard.mem0ChatFetch : guard.mem0EmbeddingFetch;
@@ -291,7 +298,10 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
           response.end(result);
         } else fail('native_response_disconnect');
       } catch (error) {
-        if (handle.snapshot().status === 'active' || guard.isHalted()) {
+        // Complete framing/JSON faults remain global after a local seal;
+        // expected transport cancellation from revoke is still locally sealed.
+        if (error?.code === 'native_http_invalid'
+          || handle.snapshot().status === 'active' || guard.isHalted()) {
           firstFault(error?.code === 'native_scope_closed' ? 'native_scope_closed' : 'native_gateway_failed');
           handle.halt();
         }
@@ -319,9 +329,14 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     connection.once('close', () => connections.delete(connection));
     if (stopping || handle.snapshot().status !== 'active') connection.destroy();
   });
-  server.on('clientError', () => {
-    if (stopping || handle.snapshot().status !== 'active') return;
-    firstFault('native_http_invalid'); handle.halt(); terminate();
+  server.on('clientError', (error, connection) => {
+    connection.destroy();
+    // Parser faults remain global while the listener exists, even if a prior
+    // priced response locally sealed this scope. A reset caused by tearing
+    // down a revoked connection is expected cancellation, not a new fault.
+    if ((stopping || handle.snapshot().status !== 'active')
+      && error?.code === 'ECONNRESET') return;
+    firstFault('native_http_invalid'); terminate();
   });
   server.on('timeout', connection => {
     if (!stopping && handle.snapshot().status === 'active') firstFault('native_http_timeout');
@@ -349,7 +364,10 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     if (childInput.length > configuration.inputBytes + 2048) fail('native_input_exceeded');
     child = startChild({ roots, childFile, socket, store });
     childClose = new Promise((resolve) => {
-      child.once('close', (code, signal) => { childClosed = true; resolve({ code, signal }); });
+      child.once('exit', () => { childExited = true; });
+      child.once('close', (code, signal) => {
+        childExited = true; childClosed = true; resolve({ code, signal });
+      });
       child.once('error', () => { firstFault('native_spawn_failed'); terminate(); });
     });
     child.stdout.on('data', chunk => {

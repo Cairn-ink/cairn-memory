@@ -235,6 +235,16 @@ group no longer exists after child close, within the bounded reap interval;
 the internal process double does not use that host PID probe. A deny-only
 internal test seam can force a still-live group for cleanup testing; it cannot
 attest that a group exited, and the public case helper accepts no such option.
+TERM and KILL target the original owned detached group only while its leader
+has not emitted `exit`. An `exit` can precede `close` while a descendant holds
+stdio, so no numeric PID/PGID signal is sent after `exit`. After `close`, a
+read-only process-group occupancy check may be ambiguous because the numeric
+group ID can be reused. An occupied or uncertain group halts X and retains the
+private case root; it is never treated as quiescent or signalled by number.
+The pinned bwrap containment gate checks forked descendants under normal
+application exit and owned live-group TERM/KILL, then requires the numeric
+group to be absent after close. These checks do not establish recovery from an
+anomalous surviving group on a different host.
 The configuration fingerprints the 16 KiB HTTP parser header-block cap and
 `bwrap-user-net-pid-ipc-root-readonly-v1` containment policy. Node's implicit
 header-count truncation is disabled so the explicit 40-header check sees the
@@ -297,3 +307,38 @@ offline results remain pre-correction evidence; this correction changes only
 the native runtime's private cleanup predicate, its focused test, and this
 plan. The private verification archive retains the corrected terminal logs
 and the cleanup-predicate mutation failure.
+
+Independent Spec review identified a Y10 mismatch in that candidate: the
+contract allows empty `attributedTo`, but both parent and child rejected it.
+Focused tests through the actual parent gateway and the child's `run` path
+were red (`callback_failed` and failed Python projection). The correction
+allows empty and null/missing attribution while retaining nonempty ID/memory,
+well-formed Unicode, and UTF-16 limits. Focused boundary cases cover a
+200-unit astral value, 202-unit rejection, non-string and lone-surrogate
+attribution, and ID/memory bounds through the child projection.
+
+Author testing also reproduced late malformed HTTP after local seal: accepted
+UDS malformed request framing and an accepted invalid JSON body each returned
+local cancellation before the correction (`Missing expected rejection`). Parser
+faults and explicit body/framing/JSON faults now halt globally even after seal;
+an already revoked valid in-flight request remains a local cancellation. A
+separate controlled `exit`-before-`close` test was red because both TERM and
+KILL were sent to the old numeric group; it now proves no signal after leader
+exit, bounded global halt, and private-root retention when stdio never closes.
+An initial same-namespace attempt to signal PID 1 was an invalid containment
+probe, not evidence of a production leak. The corrected bwrap fork probes use
+normal application exit and live owned outer-group TERM/KILL; all require
+group absence after close. For TERM/KILL, the fixture also requires `close`
+within five seconds, before a forked child could finish its six-second sleep;
+leader `exit` alone is insufficient evidence that inherited pipes closed.
+
+On the final author candidate, Node 22.16 and 24.15 each passed the portable
+gateway suite (41/41), pinned local native/containment suite (8/8), budget
+suite (58/58), request guard suite (285/285), offline live-evidence suite
+(340 pass, 30 expected skips), and generic `npm test` (112/112). JSON
+validation, synthetic budget and guard demos, and pinned marketplace/strict
+plugin validation passed on both Nodes. Python AST parsing and
+`git diff --check` passed without generating bytecode. The private
+verification archive retains terminal logs for these final runs. Primary
+acceptance and both independent fixed-diff review axes remain separate
+delivery gates.
