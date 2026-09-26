@@ -21,6 +21,7 @@ def test_native_qualified_capture_and_scripted_agent_dispatch(isolated_profile, 
     preload = r"""
       import assert from 'node:assert/strict';
       import {appendFileSync,existsSync} from 'node:fs';
+      import {qualificationPoolWire} from __WIRE_HELPER__;
       const log=__LOG__, forbid=__FORBID__;
       globalThis.fetch=async(url,request)=>{
         assert.equal(existsSync(forbid),false,'cold provider request forbidden');
@@ -61,12 +62,14 @@ def test_native_qualified_capture_and_scripted_agent_dispatch(isolated_profile, 
             result={refs:input.candidates.map(i=>({namespaceIndex:i.namespaceIndex,memoryId:i.memory.id,revision:i.memory.revision}))};break;
           default:assert.fail('Unexpected model method');
         }
-        if(method==='cairn_qualifyCandidates')result.qualifications=Object.fromEntries(result.qualifications.map(item=>['item_'+item.itemIndex,item]));
+        if(method==='cairn_qualifyCandidates')result=qualificationPoolWire(input,result);
         return Response.json({object:'response',model:body.model,status:'completed',error:null,incomplete_details:null,
           output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(result)}]}],
           usage:{input_tokens:100,output_tokens:100,total_tokens:200}});
       };
-    """.replace("__LOG__", json.dumps(str(log))).replace("__FORBID__", json.dumps(str(forbid)))
+    """.replace("__LOG__", json.dumps(str(log))).replace("__FORBID__", json.dumps(str(forbid))).replace(
+        "__WIRE_HELPER__", json.dumps((Path(__file__).parents[3] / "adapters" / "openai" / "test" /
+                                       "qualification-pool-wire.mjs").as_uri()))
     encoded = base64.b64encode(preload.encode()).decode()
     wrapper = home / "synthetic-node"
     wrapper.write_text("#!/bin/sh\nexec " + shlex.quote(node) + " " + shlex.quote(

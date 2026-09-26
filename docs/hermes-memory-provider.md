@@ -2,10 +2,85 @@
 
 See [setup and boundaries](../integrations/hermes/cairn/README.md). This is a
 third-party `memory.provider: cairn` plugin, not a manual MCP config entry or a
-Hermes core change. The installed public core executes the five default tools;
-explicit native `capture_qualification: source-bound-v2` adds submitted capture
-as a sixth tool. The historical evidence below predates this opt-in and does not
-certify its semantic quality.
+Hermes core change. The installed public core executes five default tools;
+explicit native `capture_qualification: source-bound-v2` adds submitted capture,
+and independent `classification_recovery: guarded-v1` adds admission inspection
+and explicit classification. The inventories are five, six, seven or eight tools
+for neither, capture, recovery or both settings. A v2-only optional
+`capture_deadline_ms` string (1–110000) adds no tool. See the setup guide for
+configuration, restart and cost boundaries. Historical evidence below predates
+these opt-ins and does not certify semantic quality.
+
+## Experimental source-candidate profile opt-in
+
+`source_candidate_policy: bounded-keyset-v1` is an independent optional native
+profile field. Hermes validates it on load/save, and its bridge validates and
+forwards the exact installed MCP `--source-candidate-policy bounded-keyset-v1`
+flag for schema listing and tool calls. It does not add a tool or make source
+recall the default: only a recall resolved to `source-evidence` or
+`rationale-evidence` activates the larger local candidate window. Body/default
+recall, explicit context and qualification precedence, the five-tool inventory
+and per-call namespace binding remain. The [source-context boundary](source-evidence-context.md)
+describes the literal first-four-receipt score, 20,000-row scan, top-1,024
+retention, existing model exposure bounds and incomplete-coverage cases.
+
+The focused `test_source_candidate_policy.py` uses the pinned native
+MemoryManager and scripted AIAgent, an inspected locally installed archive,
+installed public-core admission and fake HTTP. It is a synthetic diagnostic of
+one source beyond the old 1,024-ID prefix and a cold-session source recall,
+not natural model choice, semantic relevance or a default-policy result.
+The full six-file canonical host gate is the five-file command below with
+`/absolute/cairn/integrations/hermes/test/test_source_candidate_policy.py`
+added before `--file-retries 0`; use both documented Node executables.
+The final six-file offline matrix passed **24/24 tests on each of Node 22.16.0
+and 24.15.0**, with `--file-retries 0`, against an inspected local archive
+(`f71e099152520feac8efcd0fd022a028feb94fbb2ac3590983d33ce21f864b3c`).
+Two older fake-provider fixtures initially returned an obsolete qualification
+wire shape and failed locally with `invalid_model_output`; their synthetic
+responses now use the already accepted test-only evidence-pool encoder. The
+installed adapter, core and host runtime were not changed for that correction.
+The pinned source archive's optional bytecode precompile still emits its known
+`.git` warning; the runner's six test files completed successfully. No user
+profile, real provider request or paid call was used.
+
+## Native deadline and recovery offline gate
+
+The focused `test_capture_recovery.py` uses the real pinned Hermes
+MemoryManager and scripted AIAgent routing, an SDK subprocess and a locally
+installed, hash-checked Cairn archive. A test-only Node wrapper supplies fake
+provider responses; no real model key or paid call is used. It proves a
+pre-admission extraction stall returns a core timeout with no new memory or
+receipt, while a separate post-admission classification stall reports partial
+success and retains sources. After the fake output actually completes, a new
+keyless manager inspects the exact batch without source text or model traffic.
+A scripted AIAgent dispatch then classifies the fresh unfiled reference without
+replaying capture; content, receipts and the original initial journal remain
+unchanged. A stale reference rejects before another model request. This is
+mechanical evidence, not natural tool choice, general semantic quality or a
+hard wall-clock guarantee.
+
+From the pinned Hermes checkout, pass all five native files to its canonical
+runner with retries disabled and the separately installed local executable:
+
+```sh
+scripts/run_tests.sh /absolute/cairn/integrations/hermes/test/test_provider.py \
+  /absolute/cairn/integrations/hermes/test/test_agent_conversation.py \
+  /absolute/cairn/integrations/hermes/test/test_qualified_provider.py \
+  /absolute/cairn/integrations/hermes/test/test_qualified_conversation.py \
+  /absolute/cairn/integrations/hermes/test/test_capture_recovery.py \
+  --file-retries 0 -- --cairn-executable /absolute/installed/bin/cairn-memory.mjs \
+  --cairn-node /absolute/node -q -p no:cacheprovider
+```
+
+The five-file matrix passed **22 tests on each of Node 22.16.0 and 24.15.0**
+with `--file-retries 0`. The independently built private archive was
+`f77d837dc8940e94535d227e27e272863ffc47c5af0397d21a7e6e4398a5b8ad`;
+all 72 listed packaged source-file hashes matched the offline installation.
+The canonical runner's optional bytecode precompile prints a `.git` warning
+for this source archive, while the test subprocesses complete successfully.
+Generic, JSON, strict plugin, MCP and artifact gates and the synthetic
+store/admission/MOC/capture demos passed on both Node versions. No provider
+credential, user profile, paid request or release action was used.
 
 Newer [agent-loop verification](hermes-agent-loop.md) also covers the actual
 AIAgent conversation loop for native-provider and general MCP-client routes,

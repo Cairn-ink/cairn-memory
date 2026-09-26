@@ -23,6 +23,26 @@ preview, append the flag/value pair to the generated `stdio.args` in your MCP
 client (or invoke the installed executable with them); the installer receipt
 itself remains unchanged.
 
+The separate experimental `--source-candidate-policy bounded-keyset-v1` flag
+selects a larger **local** source-candidate examination for explicit
+`source-evidence` or `rationale-evidence` recall. Programmatic hosts may pass
+`sourceCandidatePolicy: 'bounded-keyset-v1'` to `createCairnServer`. It is
+independent of `--recall-context`, capture and source snapshot. Add the flag
+explicitly to an installed local executable's startup arguments; the installer
+does not set it. `--check-config` reports it when present without opening storage
+or contacting a provider. Default/body recall remains on its old path even if
+the server has this setting. Tool arguments cannot set the policy or owner.
+The core scans at most 20,000 current physical rows per authorized namespace,
+in 256-row keyset pages, and keeps at most 1,024 literal-score candidates.
+It scores the body and first four retained receipts; a source excerpt supplies
+the visible 120-code-point label only when it strictly beats the body score.
+Literal Unicode runs are not stemming or semantic search, and contiguous CJK
+text is not segmented into words. The selector still sees at most two existing
+100-item/4,000-token pages, not all scanned sources. Model-facing and final
+response bounds, namespace authority, retention and normal provider costs are
+unchanged. Incomplete coverage, missed meaning and latency remain possible;
+this is neither a default promotion nor an accuracy or service-level claim.
+
 The thin MCP host exposes the existing public core; it is not a second engine
 or a client that requires a Cairn cloud account. This package provides source-run
 stdio transport. Registry packaging, named-client compatibility and remote
@@ -84,6 +104,8 @@ npm ci --prefix adapters/openai
 node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user
 # Optional source-first presentation for recall_memory:
 node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --recall-context source-evidence
+# Independent experimental source-candidate opt-in; only source-context recall activates it:
+node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --source-candidate-policy bounded-keyset-v1
 ```
 
 The database parent directory must exist and be controlled by you. Supply
@@ -113,6 +135,8 @@ someone who can edit your process configuration or read your database file.
 | recall_memory | query, optional limit (1–12), includeQualification, contextMode, selectionMode | Same bounded model-driven core recall; source qualification defaults on with qualified capture unless source context is resolved |
 | inspect_memory | memoryId with optional receiptLimit/receiptCursor/includeQualification, OR limit/cursor/states | Page through receipts and optional qualification for one memory, or list this namespace with optional active/historical filtering |
 | capture_memory (opt-in only) | batchId, messages containing role/content | Explicitly submitted extraction and source qualification; no automatic retirement |
+| inspect_capture_admission (opt-in only) | batchId, optional includeInitialClassification boolean | Keyless admission status, bounded fresh member refs and optional initial capture-attempt status; overall classification stays unknown |
+| classify_unfiled_memories (opt-in only) | refs: 1–5 unique memoryId/revision pairs | Explicit, guarded model classification and placement of current unfiled memories |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
@@ -125,6 +149,78 @@ Tool results carry the core success/error envelope as JSON text. Memory content
 and receipts are explicitly untrusted data, not instructions for the client.
 Tool receipt text is the supplied assertion, not proof that the assertion is true
 or an authenticated transcript of what a human said.
+
+### Explicit classification of unfiled memories
+
+Add `--classification-recovery guarded-v1`, or set
+`classificationRecovery: 'guarded-v1'` on `createCairnServer`, to expose
+`inspect_capture_admission` and `classify_unfiled_memories`. The option is
+independent of capture and adds two tools to the five-tool default. A keyless
+server still offers inspection; calling classification without a model returns
+`model_not_configured`. `--check-config` reports the option and whether a model
+key is present without opening the database or contacting a provider.
+
+To recover a lost capture response, call
+`inspect_capture_admission` with `{"batchId":"the-original-batch-id"}`. The
+read uses the server's fixed namespace and local MCP client; it does not call
+capture or a provider, claim an expired lease, or retry anything. `absent` and
+`pending` return no members. `completed` means admission committed, not that
+classification succeeded. It returns the existing bounded `suppressedCount`
+and at most five committed distinct members in stored order. A current member
+contains only `status: "current"`, `memoryId`, its **fresh** `revision`, and
+per-member `filing.status`; a historical, forgotten or missing member is
+`status: "closed"` with no actionable ref. No content, receipts, digest,
+lease token or submitted source text is returned. Empty members can mean an
+empty completion or all inputs suppressed; the count distinguishes these.
+Classification remains `{"status":"unknown"}` even when every member is
+filed or an empty-parent proposal leaves a member unfiled. Neither state
+proves classification succeeded or failed.
+
+For batches created by the current capture path, pass
+`{"batchId":"the-original-batch-id","includeInitialClassification":true}`
+to read only the initial attempt's durable status. It can be `not_started`,
+`in_flight_or_interrupted`, `applied`, `skipped_already_filed`, `failed`,
+`skipped_empty` or `unknown`. The last covers old/manual claims and batches
+whose original members changed, were forgotten, became historical or are no
+longer available. The in-flight state is not proof a process is still running;
+an applied no-parent proposal can remain unfiled. The default response is
+unchanged. This read never supplies an old revision or provider error and
+does not authorize a retry. The separate general-ref classification tool
+does not rewrite the original batch outcome.
+
+Inspect each memory first, then explicitly submit its current reference:
+
+```json
+{"refs":[{"memoryId":"id-from-inspection","revision":1}]}
+```
+
+The tool accepts one to five distinct references in the server's configured
+namespace. It checks all are present, active, at those exact revisions and
+unfiled before contacting the model. The model sees bounded current memory
+content, classification metadata and the existing topic catalog; this may incur provider
+charges, and this host has no account spending cap. The core checks revisions
+again during classification and atomic placement. Concurrent calls may both
+spend model requests. If one changes placement, the other's stale guards stop
+a conflicting change; no-op proposals can both succeed. A stale reference must
+be inspected again; an already filed memory is ineligible. The tool never
+retries automatically.
+A correction invalidates its old reference, while a fresh inspected reference
+to the corrected active unfiled memory can be classified without changing its
+corrected content or source receipts.
+
+The result reports `status: "applied"` for the placement operation and returns
+actual memory revisions, filing statuses and placement metadata. An applied
+proposal with no parent can leave a memory unfiled. Another explicit request
+with the same refs can classify it again. Applied does not certify filing quality
+or source truth. This tool does not extract, admit, recapture,
+change receipts, review rationale, prove a failed capture batch or treat
+remembered consent as authority. Capture duplicate behavior is unchanged.
+The initial capture attempt has a durable bounded journal, but it is not a
+recovery queue or durable history of explicit retries. There is still no
+default whole-capture 30-second deadline; the optional invocation budget below
+is separate from this explicit classification tool and does not make S1 complete.
+The native Hermes provider can expose these two installed MCP tools through
+its independent `classification_recovery: guarded-v1` profile setting.
 
 If a trusted local caller uses [core supersession](supersession.md), inspection
 also includes labeled historical memories. List pages remain metadata-only;
@@ -230,6 +326,47 @@ extraction uses those same retained prefixes; tail-only facts are unavailable.
 Full-text changes still conflict with an existing batch ID. This field describes
 source retention, not semantic completeness or how an older duplicate was
 originally extracted. The client cannot override the source window.
+
+### Optional capture invocation deadline
+
+To bound one explicitly submitted capture across its stages, configure the
+local server with `--capture-qualification source-bound-v2` and
+`--capture-deadline-ms 120000` (`source-bound-v1` is also accepted), or set both
+`captureQualification` and the integer `captureDeadlineMs` (1–120000) on
+`createCairnServer`. Append the flag
+and value to an installed executable's MCP startup arguments; this is not an
+`install:preview` option or a `capture_memory` argument. `--check-config`
+reports the number only when configured, without opening storage or contacting
+a provider. Omitting it leaves the tool inventory, schemas and default capture
+behavior unchanged. It does not enable capture, inspection or recovery by
+itself; capture qualification must be selected explicitly.
+The separate [native Hermes provider](../integrations/hermes/cairn/README.md)
+accepts a profile string from 1 through 110000 with v2 capture, leaving a
+nominal margin below its SDK timeout. Its recovery setting is also an explicit
+profile opt-in; these MCP flags do not configure a Hermes profile.
+
+The shared core uses one monotonic cooperative budget per capture, including
+extraction, qualification, admission, initial classification and any configured
+automatic rationale. Each model call keeps its 30-second ceiling. An expiry
+before admission returns `model_timeout` without committing new memories or
+receipts; after admission it preserves committed receipts and reports downstream
+classification or rationale failure separately. A response timeout is not
+proof of rollback. For an uncertain response, enable the separate
+`--classification-recovery guarded-v1` inspection and explicit classification
+tools. Inspect the exact original batch keylessly, then explicitly classify only
+fresh current unfiled refs if
+appropriate. No extraction, admission or classification is automatically
+retried. A successful empty-parent classification may still leave a memory
+unfiled; later explicit filing changes its revision and makes the original
+initial-attempt status publicly unknown without rewriting that journal row.
+
+Synchronous token counting and SQLite work are checked cooperatively, not
+preempted mid-instruction. Leave a suitable client transport timeout margin for
+startup, synchronous work and cleanup; the existing longer-client-timeout advice
+still applies. This option is neither a hard wall-clock return guarantee nor an
+API spending cap. The native Hermes provider forwards its separately validated
+v2-only profile string up to 110000 milliseconds; these mechanical checks do
+not establish semantic capture quality or S1 completion.
 
 ### Optional staged source inspection
 

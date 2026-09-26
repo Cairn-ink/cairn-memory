@@ -7,48 +7,69 @@ import { reconcileCapture } from './ordered-capture.mjs';
 import { qualifyExtractedItems } from './automatic-qualification.mjs';
 import { qualifyCandidateItems } from './qualification-candidates.mjs';
 import { reviewCapturedRationale } from './automatic-rationale.mjs';
+import { extractedWindowItems, sourceWindowCatalog } from './source-windows.mjs';
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
+const windowSystem = readFileSync(new URL('./prompts/extract-source-windows.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
-async function classifyAdmission(model, namespace, admission, operations) {
+async function classifyAdmission(model, namespace, admission, operations, key, deadline) {
   if (!admission.memories.length) return { status: 'skipped', reason: 'empty' };
+  let attemptToken;
   try {
+    deadline?.check();
     const guards = [];
     for (const admitted of admission.memories) {
       const { memory } = unwrap(operations.get({ namespace, memoryId: admitted.id }));
       if (memory.revision !== admitted.revision) fail('revision_conflict');
       if (memory.filing.status === 'unfiled') guards.push({ memoryId: admitted.id, revision: admitted.revision });
     }
-    if (!guards.length) return { status: 'skipped', reason: 'already_filed' };
+    const started = unwrap(operations.beginInitialClassification({ ...key,
+      admitted: admission.memories.map(({ id, revision }) => ({ memoryId: id, revision })),
+      selected: guards }));
+    if (started.skipped) return { status: 'skipped', reason: 'already_filed' };
+    attemptToken = started.token;
+    deadline?.check();
     if (typeof model?.classify !== 'function') {
       emitDiagnostic(model, 'classify', 'core_call', 'model_not_configured');
       fail('model_not_configured');
     }
     const mapped = unwrap(operations.map({ namespace, purpose: 'classification' }));
+    deadline?.check();
     const classified = unwrap(await operations.classifyPlacement({ namespace,
       memoryIds: guards.map((guard) => guard.memoryId), expectedMemoryRevisions: guards,
       mapRevision: mapped.indexRevision }));
-    const placed = unwrap(operations.applyPlacement({ namespace, proposal: classified.proposal,
+    deadline?.check();
+    const placed = unwrap(operations.applyInitialPlacement({ ...key, token: attemptToken,
+      proposal: classified.proposal,
       expectedMemoryRevisions: classified.basedOn.memoryRevisions,
       expectedIndexRevision: classified.basedOn.indexRevision }));
     return { status: 'applied', memoryRevisions: placed.memories.map((memory) =>
       ({ memoryId: memory.id, revision: memory.revision })), indexRevision: placed.indexRevision };
   } catch (error) {
+    if (attemptToken) {
+      try { unwrap(operations.failInitialClassification({ ...key, token: attemptToken })); }
+      catch { /* A failed receipt write cannot replace the original failure. */ }
+    }
     const code = error instanceof MemoryStoreError ? error.code : 'classification_failed';
     return { status: 'failed', error: { code, retryable: code === 'storage_busy' } };
   }
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations, captureQualification, captureRationale, captureEvidence }) {
-  const snapshot = captureSnapshot(input, captureQualification);
-  const retained = captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+export async function captureMessages({ model, input, operations, captureQualification,
+  captureSourcePolicy, captureRationale, captureEvidence, deadline }) {
+  deadline?.check();
+  const snapshot = captureSnapshot(input, captureQualification, captureSourcePolicy);
+  deadline?.check();
+  const catalog = captureSourcePolicy ? sourceWindowCatalog(snapshot) : null;
+  const retained = !catalog && captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  deadline?.check();
   const sourceMessages = retained?.messages ?? snapshot.messages;
   // Retention coverage of this submitted snapshot, not an attestation of which
   // extraction policy executed an earlier duplicate batch.
-  const coverage = retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {};
+  const coverage = catalog?.coverage ?? (retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {});
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
@@ -60,22 +81,27 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const owned = { ...key, token: claim.token };
   let finished;
   try {
-    const output = await callModel(model, 'extract', retained ? retainedSystem : system, {
-      messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })),
-    }, { failureCode: 'extraction_failed' });
-    let items;
-    try { items = extractedItems(output, snapshot, retained?.messages); }
-    catch (error) { emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction'); throw error; }
+    deadline?.check();
+    const output = await callModel(model, 'extract', catalog ? windowSystem : retained ? retainedSystem : system,
+      catalog?.input ?? { messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })) },
+      { failureCode: 'extraction_failed', deadline });
+    let items = catalog ? extractedWindowItems(output, snapshot, catalog,
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot, retained?.messages,
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason));
+    deadline?.check();
     // Do not start another interpretation stage after explicit discard/forget.
     // A provider request already in flight cannot be recalled by local deletion.
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
-      ? await qualifyCandidateItems(model, items) : await qualifyExtractedItems(model, items);
+      ? await qualifyCandidateItems(model, items, deadline) : await qualifyExtractedItems(model, items, deadline);
+    deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
+      deadline?.check();
       const judged = captureQualification
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
-        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery });
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline });
+      deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
   } catch (error) {
@@ -86,9 +112,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
   }
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };
-  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations);
+  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline);
   const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
-    classification, sourceMessages, operations }) : undefined;
+    classification, sourceMessages, operations, deadline }) : undefined;
   return { duplicate: false, admission, classification,
     ...(captureRationale ? { rationale } : {}),
     ...coverage,

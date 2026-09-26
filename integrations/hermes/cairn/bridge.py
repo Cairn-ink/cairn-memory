@@ -21,15 +21,30 @@ async def exchange(request):
         if request["capture_qualification"] != "source-bound-v2":
             raise ValueError("invalid_capture_configuration")
         args += ["--capture-qualification", "source-bound-v2"]
-    capture = request["operation"] == "call" and request.get("name") == "capture_memory"
+    if "capture_deadline_ms" in request:
+        deadline = request["capture_deadline_ms"]
+        if (request.get("capture_qualification") != "source-bound-v2" or not isinstance(deadline, str)
+                or not deadline.isascii() or not deadline or deadline[0] not in "123456789"
+                or not deadline.isdecimal() or len(deadline) > 6 or int(deadline) > 110000):
+            raise ValueError("invalid_capture_configuration")
+        args += ["--capture-deadline-ms", deadline]
+    if "classification_recovery" in request:
+        if request["classification_recovery"] != "guarded-v1":
+            raise ValueError("invalid_recovery_configuration")
+        args += ["--classification-recovery", "guarded-v1"]
+    if "source_candidate_policy" in request:
+        if request["source_candidate_policy"] != "bounded-keyset-v1":
+            raise ValueError("invalid_source_candidate_configuration")
+        args += ["--source-candidate-policy", "bounded-keyset-v1"]
+    uses_extended_timeout = request["operation"] == "call" and request.get("name") in {"capture_memory", "classify_unfiled_memories"}
     parameters = StdioServerParameters(command=request["node_path"],
         args=args,
         env={"OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", "")})
     with open(os.devnull, "w", encoding="utf-8") as errors:
-        with anyio.fail_after(CAPTURE_HELPER_TIMEOUT_SECONDS if capture else HELPER_TIMEOUT_SECONDS):
+        with anyio.fail_after(CAPTURE_HELPER_TIMEOUT_SECONDS if uses_extended_timeout else HELPER_TIMEOUT_SECONDS):
             async with stdio_client(parameters, errlog=errors) as streams:
                 async with ClientSession(*streams,
-                                         read_timeout_seconds=CAPTURE_SDK_TIMEOUT_SECONDS if capture else SDK_TIMEOUT_SECONDS) as session:
+                                         read_timeout_seconds=CAPTURE_SDK_TIMEOUT_SECONDS if uses_extended_timeout else SDK_TIMEOUT_SECONDS) as session:
                     await session.initialize()
                     if request["operation"] == "list":
                         result = await session.list_tools()

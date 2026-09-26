@@ -12,6 +12,7 @@ import { createExperimentRequestGuard, authorizeQualificationExtension } from '.
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { createQualificationLiveSession } from '../../evaluation/live/qualification-session.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 import { getQualificationPilotPins, runQualificationPilot } from '../../evaluation/live/qualification-pilot.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -253,7 +254,7 @@ test('installed v2 MCP launcher captures and cold-replays without granting a pai
       output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
     }
     if (payload.text.format.name === 'cairn_qualifyCandidates') {
-      output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+      output = qualificationPoolWire(input, output);
     }
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
       incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
@@ -457,17 +458,17 @@ test('installed v2 core and adapter compile source selections without model offs
       if(method==='cairn_extract')output={items:[{content:source,kind:'preference',confidence:0.9,sourceIndices:[0]}]};
       else if(method==='cairn_qualifyCandidates'){
         assert.deepEqual(Object.keys(input),['items']);
-        output={qualifications:input.items.map(item=>{
+        output={wireVersion:'evidence-pool-v1',qualifications:Object.fromEntries(input.items.map(item=>{
           assert.deepEqual(Object.keys(item).sort(),['candidates','content','itemIndex','kind']);
           assert.deepEqual(Object.keys(item.candidates[0]).sort(),['candidateIndex','role','text']);
           assert.equal(item.candidates[0].text,source);
-          const known=value=>({value,evidenceIndices:[item.candidates[0].candidateIndex]});
-          const unknown=()=>({value:null,evidenceIndices:[]});
-          return{itemIndex:item.itemIndex,subject:known('user'),property:known('caption tone'),
-            scope:unknown(),applies:unknown(),value:known('calm'),attribution:known('direct'),commitment:known('adopted')};
-        })};
+          const known=value=>({value,evidenceSlots:[0]});
+          const unknown=()=>({value:null,evidenceSlots:[]});
+          return['item_'+item.itemIndex,{itemIndex:item.itemIndex,pool:[item.candidates[0].candidateIndex],
+            subject:known('user'),property:known('caption tone'),scope:unknown(),applies:unknown(),
+            value:known('calm'),attribution:known('direct'),commitment:known('adopted')}];
+        }))};
       }else{assert.equal(method,'cairn_classify');output={items:input.memories.map(m=>({memoryId:m.id,parentIds:[]}))};}
-      if(method==='cairn_qualifyCandidates')output.qualifications=Object.fromEntries(output.qualifications.map(item=>['item_'+item.itemIndex,item]));
       return Response.json({object:'response',model:payload.model,status:'completed',error:null,incomplete_details:null,
         output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(output)}]}],
         usage:{input_tokens:120,output_tokens:100,total_tokens:220}});
@@ -629,6 +630,13 @@ test('archive inspection and installed hashes prove the explicit single-source r
     assert.equal(/\.(?:sqlite|db|tgz)$/.test(path), false, path);
   }
   for (const path of runtimeFiles) assert.ok(artifact.files.includes(path), path);
+  assert.ok(artifact.files.includes('adapters/openai/qualification-evidence-pool.mjs'));
+  assert.ok(artifact.files.includes('core/qualification-text-catalog.mjs'));
+  assert.equal(artifact.sourceHashes['core/qualification-text-catalog.mjs'],
+    hash(new URL('../../core/qualification-text-catalog.mjs', import.meta.url)));
+  assert.equal(artifact.files.includes('adapters/openai/test/qualification-pool-wire.mjs'), false);
+  assert.equal(artifact.sourceHashes['adapters/openai/qualification-evidence-pool.mjs'],
+    hash(new URL('../../adapters/openai/qualification-evidence-pool.mjs', import.meta.url)));
   assert.ok(artifact.files.includes('core/query-candidates.mjs'),
     'installed recall must include the new shared candidate scorer');
   for (const [path, expected] of Object.entries(artifact.sourceHashes)) {
@@ -643,6 +651,37 @@ test('archive inspection and installed hashes prove the explicit single-source r
   assert.ok(statSync(installation.executable).mode & 0o111);
   t.diagnostic(JSON.stringify({ artifactPath: artifact.artifactPath, sha256: artifact.sha256,
     installationPath: installation.directory, executable: installation.executable, runtime: process.version }));
+});
+
+test('installed adaptive qualifier selects a repeated-source catalog and retains original anchors', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import { createHash } from 'node:crypto';
+    import { qualifyCandidateItems } from './node_modules/${packageName}/core/qualification-candidates.mjs';
+    import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const text=Array.from({length:13},(_,i)=>createHash('sha256').update('same-'+i).digest('hex')).join('').slice(0,800);
+    const items=Array.from({length:5},(_,i)=>({content:'Synthetic '+i,kind:'fact',confidence:0.8,
+      receipts:Array.from({length:4},(_,r)=>({client:'synthetic',sessionId:'session',eventId:'event-'+i+'-'+r,
+        role:r%2?'assistant':'user',excerpt:text}))}));
+    let sends=0; const model=createOpenAIModel({apiKey:'synthetic',qualificationInputMode:'adaptive-text-catalog-v1',
+      fetchImpl:async(url,options)=>{sends++;const body=JSON.parse(options.body);
+        const input=JSON.parse(body.input[0].content[0].text);
+        assert.equal(input.inputMode,'text-catalog-v1');assert.equal(input.texts.length,4);
+        if(url.endsWith('/input_tokens'))return Response.json({object:'response.input_tokens',input_tokens:120});
+        const fields=['subject','property','scope','applies','value','attribution','commitment'];
+        const output={wireVersion:'evidence-pool-v1',qualifications:Object.fromEntries(input.items.map(entry=>[
+          'item_'+entry.itemIndex,{itemIndex:entry.itemIndex,pool:[entry.candidates[0].candidateIndex],
+            ...Object.fromEntries(fields.map(field=>[field,{value:['attribution','commitment'].includes(field)?'unknown':null,
+              evidenceSlots:field==='subject'?[0]:[]}]))}]))};
+        return Response.json({object:'response',model:body.model,status:'completed',error:null,incomplete_details:null,
+          output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(output)}]}],
+          usage:{input_tokens:120,output_tokens:80,total_tokens:200}});
+      }});
+    const result=await qualifyCandidateItems(model,items);assert.equal(result.length,5);assert.equal(sends,2);
+    for(let i=0;i<5;i++){assert.equal(result[i].qualification.anchors[0].text,text.slice(0,200));
+      assert.equal(result[i].receipts[0].eventId,'event-'+i+'-0');}
+    console.log('installed_adaptive_catalog_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_adaptive_catalog_passed');
 });
 
 test('production shrinkwrap installs only the exact reviewed closure with upstream notices', () => {
