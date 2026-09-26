@@ -25,6 +25,15 @@ import {
   createExperimentRequestGuard,
   createExtendedExperimentRequestGuard,
   authorizeExtractionModelExtension,
+  authorizeReconciliationExtension,
+  createReconciliationExperimentRequestGuard,
+  authorizeQualificationExtension,
+  createQualificationExperimentRequestGuard,
+  authorizeCandidateQualificationExtension,
+  createCandidateQualificationExperimentRequestGuard,
+  authorizeBenchmarkExtension,
+  authorizeCaseDeadlineCapability,
+  createCaseDeadlineExperimentRequestGuard,
 } from '../request-guard.mjs';
 
 const secret = 'synthetic-secret-never-expose';
@@ -202,6 +211,100 @@ function extractionBody(model = LUNA_EXTRACTION_MODEL, generation = true) {
     ...(model === DEFAULT_MODEL ? {} : { reasoning: { effort: 'none' } }),
     ...(generation ? { max_output_tokens: 1024, store: false, stream: false } : {}) };
 }
+
+test('W10: existing grant factories deny actual indexed extract count and generation before reservation or forwarding', async (t) => {
+  const captured = [];
+  const adapter = createOpenAIModel({ apiKey: secret, fetchImpl: async (url, request) => {
+    captured.push({ url, body: JSON.parse(request.body) });
+    return Response.json(url === urls.count ? countEnvelope() : generationEnvelope('extract'));
+  } });
+  const invoke = input => adapter.extract({ system: 'Synthetic system.', input, maxOutputTokens: 1024,
+    signal: new AbortController().signal });
+  for (const count of [1, 25]) await invoke({ inputMode: 'indexed-windows-v1',
+    messages: Array.from({ length: count }, (_, index) =>
+      ({ index, messageIndex: Math.floor(index / 4), role: 'user', content: `Synthetic window ${index}.` })) });
+  const indexed = captured.splice(0);
+  assert.deepEqual(indexed.map(item => item.url), [urls.count, urls.generation, urls.count, urls.generation]);
+  assert.equal(indexed[2].body.text.format.schema.properties.items.items.properties.sourceIndices.items.maximum, 24);
+  await invoke({ messages: [{ index: 0, role: 'user', content: 'Synthetic legacy.' }] });
+  const ordinary = captured.splice(0);
+
+  for (const grant of ['default', 'reconciliation', 'qualification', 'candidate-qualification']) {
+    const { ledger } = workspace(t, { limitMicroUsd: 100_000 });
+    const configured = policy();
+    const transportCalls = [];
+    const fetchImpl = fakeOpenAI(transportCalls);
+    let guard;
+    if (grant === 'default') guard = createExperimentRequestGuard({ ledger, policy: configured, fetchImpl });
+    if (grant === 'reconciliation') {
+      createExperimentRequestGuard({ ledger, policy: configured, fetchImpl }).close();
+      const extension = authorizeExtractionModelExtension({ ledger, policy: configured,
+        authorizationId: 'synthetic-extraction-for-windows-denial' });
+      const reconciliationExtension = authorizeReconciliationExtension({ ledger, policy: configured,
+        extension, authorizationId: 'synthetic-reconciliation-for-windows-denial' });
+      guard = createReconciliationExperimentRequestGuard({ ledger, policy: configured,
+        extension, reconciliationExtension, fetchImpl });
+    }
+    if (grant === 'qualification') {
+      createExperimentRequestGuard({ ledger, policy: configured, fetchImpl }).close();
+      const qualificationExtension = authorizeQualificationExtension({ ledger, policy: configured,
+        authorizationId: 'synthetic-qualification-for-windows-denial' });
+      guard = createQualificationExperimentRequestGuard({ ledger, policy: configured,
+        qualificationExtension, fetchImpl });
+    }
+    if (grant === 'candidate-qualification') {
+      createExperimentRequestGuard({ ledger, policy: configured, fetchImpl }).close();
+      const candidateQualificationExtension = authorizeCandidateQualificationExtension({ ledger, policy: configured,
+        authorizationId: 'synthetic-candidate-qualification-for-windows-denial' });
+      guard = createCandidateQualificationExperimentRequestGuard({ ledger, policy: configured,
+        candidateQualificationExtension, fetchImpl });
+    }
+    t.after(() => guard.close());
+    for (const item of indexed) await assert.rejects(guard.cairnFetch(item.url, options(item.body)),
+      guardError('unsupported_request'), `${grant}/${item.url}`);
+    assert.equal(transportCalls.length, 0, grant);
+    assert.equal(guard.getState().requestCount, 0, grant);
+    assert.equal(guard.getState().reservedMicroUsd, 0, grant);
+    assert.deepEqual(guard.getState().attempts, [], grant);
+    await guard.cairnFetch(ordinary[0].url, options(ordinary[0].body));
+    await guard.cairnFetch(ordinary[1].url, options(ordinary[1].body));
+    assert.deepEqual(transportCalls.map(item => item.url), [urls.count, urls.generation], grant);
+    assert.equal(guard.getState().requestCount, 2, grant);
+  }
+
+  // The live benchmark's scoped transport has its own entrypoint; it must not
+  // turn the same adapter wire format into an implicit paid extraction grant.
+  for (const item of indexed.slice(2)) {
+    const { ledger } = workspace(t, { limitMicroUsd: 1_000_000, requestCap: 20 });
+    const configured = policy();
+    const calls = [];
+    const fetchImpl = fakeOpenAI(calls);
+    createExperimentRequestGuard({ ledger, policy: configured, fetchImpl }).close();
+    const stage = (model) => ({ endpoint: urls.host, model, reservedMicroUsd: 50_000,
+      maxRequestBytes: 100_000, maxResponseBytes: 65_536, timeoutMs: 5_000,
+      maxInputTokens: 100_000, maxOutputTokens: 512, inputTokenFraming: 1_024,
+      inputPrice: { microUsdNumerator: 2, tokenDenominator: 5 },
+      outputPrice: { microUsdNumerator: 8, tokenDenominator: 5 } });
+    const benchmarkExtension = authorizeBenchmarkExtension({ ledger, policy: configured,
+      authorizationId: 'synthetic-benchmark-for-windows-denial', stages: {
+        answer: stage('gpt-4.1-mini-2025-04-14'), judge: stage('gpt-4o-2024-08-06'),
+      } });
+    const caseDeadlineCapability = authorizeCaseDeadlineCapability({ ledger, policy: configured,
+      benchmarkExtension, authorizationId: 'synthetic-deadline-for-windows-denial',
+      executionId: 'synthetic-window-execution', checkpoint: { requestCount: 0, reservedMicroUsd: 0 },
+      schedule: [{ phase: 'generation', caseId: 'case-a' }, { phase: 'scoring', caseId: 'case-a' }] });
+    const guard = createCaseDeadlineExperimentRequestGuard({ ledger, policy: configured,
+      benchmarkExtension, caseDeadlineCapability, fetchImpl });
+    t.after(() => guard.close());
+    await guard.withCaseScope({ phase: 'generation', caseId: 'case-a' }, async () => {
+      await assert.rejects(guard.cairnFetch(item.url, options(item.body)), guardError('unsupported_request'));
+    });
+    assert.equal(calls.length, 0, item.url);
+    assert.equal(guard.getState().requestCount, 0, item.url);
+    assert.equal(guard.getState().reservedMicroUsd, 0, item.url);
+    assert.deepEqual(guard.getState().attempts, [], item.url);
+  }
+});
 
 function extendedWorkspace(t, overrides = {}) {
   const { ledger } = workspace(t, { limitMicroUsd: 30_000, ...overrides });

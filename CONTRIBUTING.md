@@ -46,18 +46,27 @@ synthetic SQLite database and handcrafted trusted inferred items, not extraction
 For capture changes also run `npm run demo:capture` on both core runtime versions.
 Its injected scripted extractor verifies source binding and lifecycle, not model quality.
 
-For `evaluation/longmemeval` changes, run `npm run test:longmemeval` and
-`npm run demo:longmemeval-ingestion` on Node 22.16 and 24, in addition to the
-generic checks above. Tests cover preparation and source-mapped ingestion;
-the demo uses scripted models and a fresh synthetic SQLite store. No downloaded
-corpus, provider key or paid run is required. See `docs/longmemeval-ingestion.md`
-for source reconstruction, normalization and remaining evaluation boundaries.
+For `evaluation/longmemeval` changes, first install the existing locked isolated
+OpenAI adapter dependency set with `npm ci --prefix adapters/openai`, then run
+`npm run test:longmemeval` and `npm run demo:longmemeval-ingestion` on Node
+22.16 and 24, in addition to the generic checks above. Tests cover preparation
+and source-mapped ingestion; the demo uses scripted models and a fresh synthetic
+SQLite store. No downloaded corpus, provider key or paid run is required. The
+install is for evaluation imports only; it does not change the public core's
+dependency surface. See `docs/longmemeval-ingestion.md` for source
+reconstruction, normalization and remaining evaluation boundaries.
 
 For comparison/scoring changes, also run `npm run demo:longmemeval-comparison`
 on both runtimes. The same `test:longmemeval` suite includes these tests. This
 demo compares three synthetic arms using scripted models and the real local
 core; its diagnostic scores are not measured real-model accuracy. See
 `docs/longmemeval-comparison.md` for scorer and model-facing data separation.
+For the separately versioned public comparison/scorer, also run
+`npm run demo:longmemeval-public` on both runtimes. This synthetic demo verifies
+source-only evidence and official-style prompt plumbing, not real-model quality.
+The optional reference-sidecar tests invoke Python 3 (standard library only)
+on synthetic JSON. Install Python 3 for the LongMemEval maintainer test suite;
+the public memory core and ordinary scorer do not invoke Python.
 
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.
@@ -114,6 +123,16 @@ and `npm run demo:experiment-request-guard` on Node 22.16 and 24, after installi
 the isolated OpenAI adapter dependencies above. These exercise guarded fake HTTP
 and synthetic ledgers, not paid requests or a configured Hermes profile. See
 `docs/experiment-request-guard.md`; passing this gate does not authorize a live run.
+
+For public pilot runner changes (`evaluation/live/public-pilot.mjs`,
+`evaluation/live/public-pilot-merge.mjs`, `evaluation/live/public-pilot-cli.mjs`
+and their tests), run `npm run test:live-evidence-offline` on Node 22.16 and 24
+with both adapters installed, plus `npm run test:longmemeval` and
+`npm run demo:longmemeval-public` on both runtimes when the common bucket of
+`aggregateOfficialScores` changes. These suites use fake HTTP only and never
+read an environment key; see `docs/public-pilot-runner.md`. Passing them does
+not authorize a paid run, which needs an operator-supplied key, the existing
+campaign ledger and a frozen manifest.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 
