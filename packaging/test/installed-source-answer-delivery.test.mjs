@@ -8,6 +8,7 @@ import { command } from '../build.mjs';
 import { installPreview } from '../install-preview.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
 import { deliverInstalledSourceAnswer, SOURCE_ANSWER_MODEL } from '../../evaluation/live/installed-source-answer-delivery.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 
 const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
@@ -50,7 +51,7 @@ test('ISAD5 generated installed command captures, restarts and delivers actual M
         default: assert.fail('unexpected model method');
       }
       if (payload.text.format.name === 'cairn_qualifyCandidates') {
-        output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+        output = qualificationPoolWire(input, output);
       }
       return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
         output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
