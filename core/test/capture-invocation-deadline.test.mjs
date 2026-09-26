@@ -331,25 +331,33 @@ test('D3 initial journal begin rolls back to not_started and never calls classif
   } finally { delayed.restore(); }
 });
 
-test('D3 placement expiry rolls back filing and applied journal while retaining admission', async t => {
-  const model = scripted();
-  model.classify = ({ input: request }) => ({ items: request.memories.map(memory => ({
-    memoryId: memory.id, parentIds: [], newL1: { title: 'Synthetic deadline topic', parentL2Ids: [] },
-  })) });
-  const { core, db } = fixture(t, { model, captureDeadlineMs: 600 });
-  const delayed = delayAfterSql("SET status='applied',final_refs", 900);
-  try {
-    const result = ok(await core.capture(input('placement-precommit')));
-    assert.equal(delayed.reached(), 1);
-    assert.equal(result.classification.status, 'failed');
-    assert.equal(result.classification.error.code, 'model_timeout');
-    assert.equal(count(db, 'mocs'), 0);
-    assert.equal(count(db, 'receipts'), 1);
-    const member = ok(core.get({ namespace, memoryId: result.admission.memories[0].id })).memory;
-    assert.equal(member.filing.status, 'unfiled');
-    assert.equal(db.prepare("SELECT status FROM capture_initial_classification WHERE event_id='placement-precommit'")
-      .get().status, 'failed');
-  } finally { delayed.restore(); }
+test('D3 placement expiry rolls back filing and applied journal while retaining admission', () => {
+  const child = fileURLToPath(new URL('../testing/capture-placement-clock-child.mjs', import.meta.url));
+  const run = mutation => spawnSync(process.execPath,
+    [child, ...(mutation ? ['remove-post-work-check'] : [])],
+    { encoding: 'utf8', env: {}, timeout: 10_000 });
+  const real = run(false);
+  assert.equal(real.status, 0, real.stderr);
+  const observed = JSON.parse(real.stdout);
+  assert.equal(observed.classified, 1);
+  assert.equal(observed.reached, 1);
+  assert.deepEqual(observed.inside, { mocs: 1, journal: 'applied' });
+  assert.equal(observed.memories, 1);
+  assert.equal(observed.receipts, 1);
+  assert.equal(observed.mocs, 0);
+  assert.equal(observed.filing, 'unfiled');
+  assert.equal(observed.journal, 'failed');
+  assert.equal(observed.classification?.error?.code, 'model_timeout');
+  const mutant = run(true);
+  assert.equal(mutant.status, 2, mutant.stderr);
+  assert.match(mutant.stderr, /PLACEMENT_ROLLBACK_ASSERTION_FAILED:placement MOC must roll back/u);
+  const counterfactual = JSON.parse(mutant.stdout);
+  assert.equal(counterfactual.classified, 1);
+  assert.equal(counterfactual.reached, 1);
+  assert.deepEqual(counterfactual.inside, { mocs: 1, journal: 'applied' });
+  assert.equal(counterfactual.memories, 1);
+  assert.equal(counterfactual.receipts, 1);
+  assert.ok(counterfactual.mocs > 0, 'the removed post-work check permits a durable placement');
 });
 
 test('D3/D4 rationale commit expiry rolls back edges but keeps admitted sources and applied placement', async t => {

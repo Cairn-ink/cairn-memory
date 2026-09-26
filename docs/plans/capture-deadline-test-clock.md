@@ -1,5 +1,80 @@
 # Cumulative capture deadline test scheduling isolation
 
+## PR 245 placement boundary amendment (frozen before implementation)
+
+CI run 36272536418, Node 24.21.0 job 108489088380 failed the existing
+`D3 placement expiry rolls back filing and applied journal while retaining
+admission`: target SQL count was zero rather than one. Core had 727 passes
+and this one failure; Node 22 was cancelled, not a pass. Candidate
+582fd12529f4f13c3aeef236c5ddd1c00b6caba3 contains no core runtime changes
+relative to mixed-runner base 30bd041d231d12441cc1568dd17814a812136ada.
+
+Primary reproduced the same assertion on Node 24.15 with an actual-core
+synthetic probe: a 650 ms pre-classification pause exhausts the 600 ms fixture
+deadline before target SQL; no pause reaches the SQL and rolls back. Both
+retain one receipt, zero MOCs and a failed classification journal. This
+supports a scheduling-sensitive test, not a demonstrated rollback defect;
+it does not identify the exact scheduling delay in the remote CI run.
+
+- C10 Preserve the placement proof: classification is called, the applied-journal
+  SQL executes exactly once inside the real transaction, then the shared
+  capture deadline expires before commit. Classification returns model_timeout;
+  filing and applied journal roll back while admission survives (one memory,
+  one receipt, zero MOCs, unfiled memory, failed classification journal).
+- C11 Use an isolated test child with a controlled monotonic clock installed
+  before importing the real core. Advance beyond the configured deadline only
+  after the target SQL executes. A large fixture-only deadline may protect
+  real model timers from incidental scheduling; no production changes or
+  shared parent clock patching. Keep other real-time cases unchanged.
+- C12 A counterfactual import-hook mutation removing only the transaction's
+  post-work deadline check must fail the durable rollback assertions. Assert
+  exactly one matched mutation. No production source files are rewritten.
+- C13 Allowlist: this plan, core/test/capture-invocation-deadline.test.mjs,
+  and one narrowly named placement-clock child under core/testing/. No corpus,
+  live key, operational ledger, paid request or production access.
+- C14 Run focused real and mutant cases, complete deadline file, full core,
+  demo:store, demo:capture, npm test and validate on Node 22.16 and 24.15.
+  Primary reruns key paths; both independent axes review the entire original
+  mixed base to final candidate. Update draft PR 245 only after those gates;
+  monitor all latest-head CI. Retain the original red; never certify a rerun
+  alone. No semantic-score improvement is claimed from this test correction.
+
+Implementation owner: GPT-6 Sol/high (resume_p6); primary owns acceptance.
+Earlier C6-C9 evidence below remains historical, not new-head certification.
+
+### PR 245 placement correction evidence
+
+The unchanged focused wall-clock test passed locally on Node 24.15 but failed
+in CI on Node 24.21. A private actual-core diagnostic reproduced its exact
+`0 !== 1` SQL-reach assertion with a 550–650 ms pre-classification pause;
+without that pause or with 450 ms, the SQL was reached and rollback held.
+The controlled pre-import monotonic-clock probe separated these paths:
+pre-phase 0/450/550 ms reached placement SQL and rolled back after the
+post-SQL clock advance; 650 ms expired before SQL. All cases retained one
+receipt and zero durable MOCs. This identifies a scheduling-sensitive
+fixture, not the exact remote scheduler event. The two private diagnostic
+artifacts have SHA-256 `78f6736fecdc434776ed2e755a019f3bb4464630b16f545df3dd467eb505e49a`
+and `179fddc0cd8afe2262cfd037faa82d71eac12d461eff9d5f31bb884146859774`.
+
+The corrected parent test invokes a private isolated child with the real
+core imported after its controlled monotonic clock. It uses a fixture-only
+120,000 ms budget and advances 120,001 ms only after the real applied-journal
+SQL `run` executes. Before the advance, the same transaction sees a MOC and
+an applied journal; after it, the result is `model_timeout`, with one memory,
+one receipt, zero MOCs, unfiled memory and failed journal. A synchronous
+import-hook counterfactual removes exactly the one transaction post-work
+deadline check; it reaches the same SQL and fails the durable rollback
+assertion with a filed memory, MOC and applied journal. No production source,
+default deadline or other real-time test was changed.
+
+On Node 22.16.0 and 24.15.0, the direct child passed and counterfactual
+failed as intended; focused parent, complete deadline file (19/19), full
+`test:core` (728/728), `demo:store`, `demo:capture`, `npm test` and
+`npm run validate` all passed serially. Raw logs are retained in a private
+verification archive. These are local synthetic results, not a claim that
+the old CI failure was reproduced on Node 24.21 or that latest-head CI has
+passed. No provider, corpus, credential or operational ledger was used.
+
 Additional CI delivery failure in PR #218, separate from the request-guard
 Promise ownership failure. Original review base remains
 `45eca22639836e8035c3ccbbe6403a9f5c076b1d`. This contract is frozen before
