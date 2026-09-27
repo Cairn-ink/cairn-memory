@@ -144,8 +144,10 @@ test('W3/W4 deterministic synthetic report separates prompt/schema, actual basel
     const first = await buildDirectCandidateReport();
     const second = await buildDirectCandidateReport();
     assert.deepEqual(first, second);
+    // Current mechanics include the revised shared guide. The historical
+    // pre-clarification report digest was 1a122f3b5b37c8f7c5a6a072543db38288ba2ef5c574e836ec47c1a5b7da2772.
     assert.equal(createHash('sha256').update(JSON.stringify(first)).digest('hex'),
-      '1a122f3b5b37c8f7c5a6a072543db38288ba2ef5c574e836ec47c1a5b7da2772');
+      '0d51d4febb34a547ff07049ec09b547d73efc78af2f94fa0e7e0272ef08a0230');
     assert.equal(first.fixtures.length, 8);
     for (const row of first.fixtures) {
       assert.deepEqual(row.candidateCounts,

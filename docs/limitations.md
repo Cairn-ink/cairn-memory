@@ -864,6 +864,27 @@ narrow reference fix, semantic clarification and capacity gate, followed by
 reviewed NEW held-out evidence, a completion-gated fixed-N comparison, and
 ordinary installed Hermes/MCP validation. Overall reliability remains unfinished.
 
+The [decision-commitment guidance](plans/qualification-meaning-guidance.md)
+now distinguishes source commitment to a choice or settled preference from an
+observation or dated feeling. Unknown commitment retains useful descriptors;
+claimant and explicit material event/decision/import times remain source-backed
+interpretations. This narrows earlier ambiguous guidance without revalidating
+immutable records or changing historical scores. Synthetic checks establish
+storage, recall projection and existing trusted-transition constraints, not
+model adherence or semantic improvement. A NEW held-out semantic experiment
+remains required before quality claims.
+Unknown observations remain retrievable, but factual assertion alone does not
+authorize retirement through `transitionQualified`'s adopted-choice gate. That
+policy does not itself resolve evolving facts; existing trusted correction and
+other update paths are unchanged. Reliable factual state updates remain unproven.
+
+On the unchanged twelve offline ingestion-design fixtures, bounded qualification
+still completes 11/12 with 26 count/generation pairs; generation input increases
+62,217 → 64,590 tokens (3.8%) and serialized input work 124,044 → 128,790.
+No new refusal or partition occurs in these fixtures, but this is not a general
+fit guarantee. The existing multi-source refusal and legal-long output exceeding
+1,024 tokens remain; no budget or default changes accompany the guidance.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
