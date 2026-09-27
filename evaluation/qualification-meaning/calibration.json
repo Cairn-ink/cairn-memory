@@ -1,0 +1,413 @@
+{
+  "version": "qualification-meaning-calibration-v1",
+  "purpose": "Eight independent source/output examples for grader calibration before scoring. These examples are not in fixtures.mjs and are an evaluation oracle; never send them or their expected ratings to extraction or qualification models.",
+  "projectionShape": {
+    "sourceMessages": "An ordered array of exact retained-source message projections; sourceIndex is the zero-based position in this array.",
+    "outputProjection": "An object with cards. Each card has content, all seven qualification fields, contentEvidenceIndices, and fieldEvidenceIndices keyed by each qualification field. The indices identify the exact cited source messages for the content and each field. Empty output is cards: [].",
+    "qualificationFields": [
+      "subject",
+      "property",
+      "scope",
+      "applies",
+      "value",
+      "attribution",
+      "commitment"
+    ],
+    "ratingRule": "expectedRatings contains one boolean for each rubric dimension. reasons contains one concise source-grounded reason for each corresponding boolean. Do not infer a coverage failure solely from an incorrect extra commitment when the useful source proposition remains represented."
+  },
+  "examples": [
+    {
+      "id": "observation-wrongly-adopted",
+      "polarity": "negative",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "At noon, the ink-mill humidity gauge showed 61%."
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "At noon, the ink-mill humidity gauge showed 61%.",
+            "qualification": {
+              "subject": "ink-mill humidity gauge",
+              "property": "humidity reading",
+              "scope": "ink mill",
+              "applies": "at noon",
+              "value": "61%",
+              "attribution": "direct",
+              "commitment": "adopted"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [0],
+              "property": [0],
+              "scope": [0],
+              "applies": [0],
+              "value": [0],
+              "attribution": [0],
+              "commitment": [0]
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": false,
+        "uncertaintyPreserved": false,
+        "attributionPreserved": true,
+        "scopeTimePreserved": true,
+        "usefulCoverage": true,
+        "evidenceEntails": false
+      },
+      "reasons": {
+        "supportedMeaning": "The reading is supported, but the source does not state a settled choice or preference; adopted adds unsupported meaning.",
+        "uncertaintyPreserved": "The card converts a plain observation into a decision commitment.",
+        "attributionPreserved": "The reading remains attributed to the direct user message and no other claimant is introduced.",
+        "scopeTimePreserved": "The ink mill and noon observation time are preserved.",
+        "usefulCoverage": "The useful 61% observation remains represented; the incorrect extra commitment does not by itself erase coverage.",
+        "evidenceEntails": "Source 0 entails the reading but does not entail an adopted stance."
+      }
+    },
+    {
+      "id": "unknown-observation-useful",
+      "polarity": "positive",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "At 14:20 on 2026-04-06, the east cistern meter read 38 liters."
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "At 14:20 on 2026-04-06, the east cistern meter read 38 liters.",
+            "qualification": {
+              "subject": "east cistern meter",
+              "property": "volume reading",
+              "scope": "east cistern",
+              "applies": "2026-04-06 at 14:20",
+              "value": "38 liters",
+              "attribution": "direct",
+              "commitment": "unknown"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [0],
+              "property": [0],
+              "scope": [0],
+              "applies": [0],
+              "value": [0],
+              "attribution": [0],
+              "commitment": []
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": true,
+        "uncertaintyPreserved": true,
+        "attributionPreserved": true,
+        "scopeTimePreserved": true,
+        "usefulCoverage": true,
+        "evidenceEntails": true
+      },
+      "reasons": {
+        "supportedMeaning": "The content and non-unknown fields restate the measured value and its source-supported context.",
+        "uncertaintyPreserved": "The card preserves a definite reported reading and leaves decision commitment unknown.",
+        "attributionPreserved": "The reading remains a direct user-reported observation.",
+        "scopeTimePreserved": "The cistern, date, and time are preserved.",
+        "usefulCoverage": "Unknown commitment does not erase the useful, dated sensor reading.",
+        "evidenceEntails": "Source 0 supports the content and each populated field; the unknown commitment has no citation requirement."
+      }
+    },
+    {
+      "id": "explicit-preference-adopted-correctly",
+      "polarity": "positive",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "For my pressed-flower catalog, I prefer a foldout index to a website."
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "For the pressed-flower catalog, the user prefers a foldout index instead of a website.",
+            "qualification": {
+              "subject": "user",
+              "property": "index format preference",
+              "scope": "pressed-flower catalog",
+              "applies": null,
+              "value": "foldout index rather than website",
+              "attribution": "direct",
+              "commitment": "adopted"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [0],
+              "property": [0],
+              "scope": [0],
+              "applies": [],
+              "value": [0],
+              "attribution": [0],
+              "commitment": [0]
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": true,
+        "uncertaintyPreserved": true,
+        "attributionPreserved": true,
+        "scopeTimePreserved": true,
+        "usefulCoverage": true,
+        "evidenceEntails": true
+      },
+      "reasons": {
+        "supportedMeaning": "The source explicitly states this scoped preference.",
+        "uncertaintyPreserved": "A settled preference is correctly marked adopted; no implementation or mandate is claimed.",
+        "attributionPreserved": "The user remains the preference holder and claimant.",
+        "scopeTimePreserved": "The preference remains limited to the pressed-flower catalog.",
+        "usefulCoverage": "The chosen format and alternative are both represented.",
+        "evidenceEntails": "Source 0 supports the content and every populated field."
+      }
+    },
+    {
+      "id": "third-party-choice-transferred-to-reporter",
+      "polarity": "negative",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "Nilo wrote in their notebook, “For my own recipe zine, I chose a red wool cover.”"
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "The user chose a red wool cover for the recipe zine.",
+            "qualification": {
+              "subject": "user",
+              "property": "cover choice",
+              "scope": "recipe zine",
+              "applies": null,
+              "value": "red wool cover",
+              "attribution": "direct",
+              "commitment": "adopted"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [0],
+              "property": [0],
+              "scope": [0],
+              "applies": [],
+              "value": [0],
+              "attribution": [0],
+              "commitment": [0]
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": false,
+        "uncertaintyPreserved": true,
+        "attributionPreserved": false,
+        "scopeTimePreserved": true,
+        "usefulCoverage": false,
+        "evidenceEntails": false
+      },
+      "reasons": {
+        "supportedMeaning": "Nilo's choice is explicit, but the card asserts a different chooser: the reporting user.",
+        "uncertaintyPreserved": "The source contains an explicit choice, so adopted is the correct stance for the represented choice itself.",
+        "attributionPreserved": "The source claimant is Nilo, while the card transfers the choice to the user.",
+        "scopeTimePreserved": "The recipe-zine scope is retained and no unsupported date is added.",
+        "usefulCoverage": "The content loses the required claimant identity; this is a material omitted proposition, not merely a field-placement difference.",
+        "evidenceEntails": "Source 0 entails Nilo's choice, not a choice by the user."
+      }
+    },
+    {
+      "id": "modal-cause-made-certain",
+      "polarity": "negative",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "The hum from the ion printer might come from its cooling fan; we have not isolated the cause."
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "The ion printer hum is caused by its cooling fan.",
+            "qualification": {
+              "subject": "ion printer",
+              "property": "humming cause",
+              "scope": "ion printer",
+              "applies": null,
+              "value": "cooling fan",
+              "attribution": "direct",
+              "commitment": "unknown"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [0],
+              "property": [0],
+              "scope": [0],
+              "applies": [],
+              "value": [0],
+              "attribution": [0],
+              "commitment": []
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": false,
+        "uncertaintyPreserved": false,
+        "attributionPreserved": true,
+        "scopeTimePreserved": true,
+        "usefulCoverage": false,
+        "evidenceEntails": false
+      },
+      "reasons": {
+        "supportedMeaning": "The fan is only a possible cause; the card states it as established.",
+        "uncertaintyPreserved": "The source's might and not-isolated qualifiers are removed.",
+        "attributionPreserved": "The user's tentative report remains in the same speaker position.",
+        "scopeTimePreserved": "The printer remains the subject and no dates or broader scope are invented.",
+        "usefulCoverage": "The uncertainty is part of the required proposition, but the card omits it and presents a materially different causal claim.",
+        "evidenceEntails": "Source 0 explicitly leaves the cause unisolated and does not entail certainty."
+      }
+    },
+    {
+      "id": "decision-date-confused-with-effective-date",
+      "polarity": "negative",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "The committee voted on 2026-06-12 to begin using cork tiles in the dance room on 2026-07-01."
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "The committee began using cork tiles in the dance room on 2026-06-12.",
+            "qualification": {
+              "subject": "committee",
+              "property": "dance-room flooring",
+              "scope": "dance room",
+              "applies": "2026-06-12",
+              "value": "cork tiles",
+              "attribution": "direct",
+              "commitment": "adopted"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [0],
+              "property": [0],
+              "scope": [0],
+              "applies": [0],
+              "value": [0],
+              "attribution": [0],
+              "commitment": [0]
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": false,
+        "uncertaintyPreserved": false,
+        "attributionPreserved": true,
+        "scopeTimePreserved": false,
+        "usefulCoverage": false,
+        "evidenceEntails": false
+      },
+      "reasons": {
+        "supportedMeaning": "The vote is supported, but completed use on the vote date is not stated.",
+        "uncertaintyPreserved": "The source records an adopted decision to start later; the card strengthens it into completed execution.",
+        "attributionPreserved": "The committee remains the decision maker.",
+        "scopeTimePreserved": "The decision date 2026-06-12 replaces the stated start date 2026-07-01.",
+        "usefulCoverage": "The effective date and distinction between vote and use are required propositions and are omitted or changed.",
+        "evidenceEntails": "Source 0 supports the vote and planned start date, not actual use beginning on 2026-06-12."
+      }
+    },
+    {
+      "id": "assistant-only-proposal-genuinely-empty",
+      "polarity": "positive",
+      "sourceMessages": [
+        {
+          "role": "assistant",
+          "content": "Maybe add a felt wrap to the choir's tuning-fork case; this is only an idea from me."
+        }
+      ],
+      "outputProjection": {
+        "cards": []
+      },
+      "expectedRatings": {
+        "supportedMeaning": true,
+        "uncertaintyPreserved": true,
+        "attributionPreserved": true,
+        "scopeTimePreserved": true,
+        "usefulCoverage": true,
+        "evidenceEntails": true
+      },
+      "reasons": {
+        "supportedMeaning": "The zero-card result makes no assertion about the idea or a user's position.",
+        "uncertaintyPreserved": "The result does not convert an assistant's idea into a user decision.",
+        "attributionPreserved": "No claimant is asserted or transferred.",
+        "scopeTimePreserved": "The result makes no scope or time claim.",
+        "usefulCoverage": "This is a genuinely empty result on the rubric's explicit assistant-only proposal exception.",
+        "evidenceEntails": "There are no card claims or qualification values requiring cited evidence."
+      }
+    },
+    {
+      "id": "unknown-only-card-is-not-empty",
+      "polarity": "negative",
+      "sourceMessages": [
+        {
+          "role": "user",
+          "content": "At 07:30 on 2026-05-09, the old theater clock stopped at 06:55."
+        }
+      ],
+      "outputProjection": {
+        "cards": [
+          {
+            "content": "Unknown.",
+            "qualification": {
+              "subject": null,
+              "property": null,
+              "scope": null,
+              "applies": null,
+              "value": null,
+              "attribution": "unknown",
+              "commitment": "unknown"
+            },
+            "contentEvidenceIndices": [0],
+            "fieldEvidenceIndices": {
+              "subject": [],
+              "property": [],
+              "scope": [],
+              "applies": [],
+              "value": [0],
+              "attribution": [],
+              "commitment": []
+            }
+          }
+        ]
+      },
+      "expectedRatings": {
+        "supportedMeaning": true,
+        "uncertaintyPreserved": true,
+        "attributionPreserved": true,
+        "scopeTimePreserved": true,
+        "usefulCoverage": false,
+        "evidenceEntails": true
+      },
+      "reasons": {
+        "supportedMeaning": "Unknown values make no unsupported factual assertion.",
+        "uncertaintyPreserved": "The card makes no stronger claim or decision commitment.",
+        "attributionPreserved": "No claimant or subject is asserted.",
+        "scopeTimePreserved": "No scope or time is asserted, so none is broadened or changed.",
+        "usefulCoverage": "A non-empty all-unknown card is not the assistant-only empty-result exception and omits the useful clock observation.",
+        "evidenceEntails": "Unknown values and the generic word Unknown assert no proposition requiring a citation."
+      }
+    }
+  ]
+}

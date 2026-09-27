@@ -1,0 +1,203 @@
+{
+  "version": "qualification-meaning-rubric-v1",
+  "purpose": "Blind semantic scoring for a separate synthetic source-only held-out cohort. This is an evaluation oracle: never include it in extraction or qualification model input.",
+  "design": {
+    "fixtureCount": 12,
+    "predeclaredRepetitionsPerFixture": 2,
+    "attempts": 24,
+    "denominatorRule": "Keep all 24 fixed attempts, including refusals, timeouts, malformed or incomplete output, and other failures. Do not retry, replace, or remove an attempt.",
+    "blinding": "Two independent agent raters score every attempt. Show each rater only retained source messages, anonymized output cards and their cited passages, this rubric, and the calibration set before scored work. Hide repetition IDs and cost or usage details. Record each rater's ratings and source-cited notes before adjudication. Preserve and disclose disagreements; the primary agent adjudicates against the cited retained messages. A single-arm cohort cannot establish arm blinding or causal improvement.",
+    "mechanicalCompletion": {
+      "type": "boolean",
+      "definition": "True only when the attempt completes its source-bound-v2 extraction and bounded qualification contract and returns a usable result. This is a process outcome, not a semantic judgment; an output is not mechanically complete merely because its content seems correct."
+    },
+    "adoptionDefinition": "Adopted means the source states a selected choice or a settled preference for the selected subject/property/value. A direct, explicit preference is a settled position and can be adopted without implying implementation, a mandate, or completed execution. Reporting an observation or event as true, experiencing a mood, making a suggestion, considering an option, or quoting another person's claim does not by itself establish the recording user's adoption. A third party may have adopted their own choice; preserve that claimant without transferring it to the reporter. Commitment applies to the selected claim, not every premise or clause in a mixed card.",
+    "speakerClaimantSubjectRule": "Keep three roles distinct: the message speaker/recording author (as shown by the source role), the claimant whose belief, proposal, report, or choice is represented, and the subject whose property or state is described. A user message can report a third party's choice; an assistant message can contain an assistant proposal. Receipt role alone cannot supply a claimant omitted from usable card content.",
+    "semanticDimensions": {
+    "supportedMeaning": "Every material card assertion and every non-null/non-unknown qualification value must be supported by, and not contradict, the retained messages. Adopted is valid for a represented third-party choice when the third party remains its claimant; it is unsupported only when the source's choice or adoption is transferred to another person, such as the reporting user. A false adopted value on an observation, mood, or suggestion is unsupported meaning even if its underlying content is otherwise reproduced.",
+      "uncertaintyPreserved": "Preserve certainty, negation, modality, conditions, and the source's stance toward a choice. Keep proposed, considered, rejected, undecided, and adopted distinct. Do not turn a possibility into a confirmed cause, an observation into an adopted choice, or an explicit selection into an unsupported hedge. For a mixed card, assess commitment on the selected property/value rather than applying it to all clauses.",
+      "attributionPreserved": "Keep the recording speaker, claimant, and subject attached to their own roles. Preserve who suggested, reported, stated, or chose something, including a named third party inside a user message or a proposal spoken by the assistant. Do not use a receipt's role as a substitute for claimant information absent from card content and meaningful qualification.",
+      "scopeTimePreserved": "Keep project, environment, item, person, application period, and other stated scope. Distinguish when an event happened, when a choice was made, when a source was imported, and when a choice applies or becomes effective. Do not imply current or general validity from a dated or narrow statement; do not invent missing dates or broaden an unspecified period.",
+    "usefulCoverage": "Represent every required proposition in card content or meaningful qualification. Paraphrases and different field placement are acceptable; do not demand exact wording, a single-card layout, or an adopted field on every card. Grade coverage separately from stance correctness: an extraneous false adopted value does not by itself erase coverage when the useful source proposition is still represented, though it can fail supportedMeaning, uncertaintyPreserved, and evidenceEntails. Unknown on an individual field is acceptable when the source does not establish it, and unknown commitment does not erase useful observations, events, or moods. Unknown never supplies a required proposition; an explicit choice or settled preference can be represented as adopted in content even when a field is unknown or describes a separate premise. A suggestion, consideration, rejection, observation, or mood must retain its actual status. Empty output fails coverage except for the explicitly named assistant-only empty-result exception; unknown-only cards are not empty and fail coverage.",
+      "evidenceEntails": "Check the cited passages for the card content and the evidence cited for each non-null/non-unknown field value. The evidence must entail the assertion together with relevant claimant, uncertainty, scope, time, and commitment. A valid source index, an adjacent but irrelevant passage, or support that exists only in an uncited message is insufficient. Unknown values may have no citation where the output contract permits it."
+    },
+    "semanticRatingType": "Each of the six semantic dimensions is boolean for a mechanically completed attempt. Set all six to null only when mechanicalCompletion is false.",
+    "emptyAndUnknownRule": "An empty result fails usefulCoverage for all fixtures except assistant-clipboard-suggestion, where a genuinely empty result is correct because the only source is an assistant proposal with no user response and the empty result makes no claim. That genuine empty result may pass all six semantic dimensions. An unknown-only card is not a genuinely empty result and fails usefulCoverage. Unknown commitment is acceptable for observations and moods only when their useful supported meaning is still represented; it is not a substitute for an explicit adopted choice, settled preference, proposal, consideration, rejection, claimant, or required time distinction.",
+    "failedAttemptRule": "When mechanicalCompletion is false, set all six semantic dimensions to null, set fullSuccess to false, and retain the attempt in the 24-attempt denominator. Do not infer semantic success from the absence of usable output.",
+    "fullSuccessRule": "For a mechanically completed attempt, fullSuccess is true only when all six semantic dimensions are true. Failed attempts are full-success failures even though their semantic dimensions are unscored.",
+    "recording": "Record mechanicalCompletion separately; each semantic dimension is true or false for completed attempts and null only under failedAttemptRule. Preserve brief source-cited notes for unsupported assertions, attribution/time errors, and material omissions. Record fullSuccess by fullSuccessRule. Keep raw independent ratings unchanged and identify any primary adjudication separately.",
+    "calibrationRule": "Before seeing scored outputs, each rater reviews the eight independent examples in calibration.json and records understanding of the six dimensions. Calibration examples are not members of the 12-fixture cohort and must not be shown to extraction or qualification models.",
+    "interpretationLimit": "This one-arm source-interpretation cohort can diagnose errors on these synthetic short cases. It does not establish answer accuracy, real-world reliability, statistical superiority, causal improvement, or broad model quality. Agent raters may share model-family limitations; disclose that limitation and retain disagreements."
+  },
+  "cases": [
+    {
+      "id": "alpine-seed-record-preference",
+      "requiredPropositions": [
+        "The user prefers handwritten accession slips to a spreadsheet for the alpine seed archive.",
+        "The preference is scoped to that archive; the source says the user's other collections use spreadsheets without stating a preference for them."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not generalize the preference to all collections or all recordkeeping.",
+        "Do not say the user implemented or mandated handwritten slips.",
+        "Do not label the preference unknown merely because no implementation is described."
+      ],
+      "attributionTimeScopeCaveats": "The user directly states a settled preference for one named archive. This explicit preference qualifies as adopted without implying that a process has been implemented."
+    },
+    {
+      "id": "seed-tray-sensor-reading",
+      "requiredPropositions": [
+        "At 09:10 on 2026-04-18, the south-window seed tray soil sensor displayed 23°C."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not infer an adopted preference, decision, or instruction from the sensor reading.",
+        "Do not imply that 23°C is a usual, current, or later reading."
+      ],
+      "attributionTimeScopeCaveats": "This is a directly reported observation at a specific time. Preserve the subject, location, value, and date; commitment to a choice is not established."
+    },
+    {
+      "id": "dated-voiceover-mood-zh",
+      "requiredPropositions": [
+        "After recording the narration for 《霧港》 on 2026-07-03, the user felt at ease.",
+        "The source limits this to that day's mood and says it is not the user's usual personality."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not turn a one-day feeling into a stable trait or preference.",
+        "Do not drop the date or attribute a choice or decision to the mood."
+      ],
+      "attributionTimeScopeCaveats": "The Traditional Chinese source describes a dated, temporary mood after a specific recording session. Preserve its one-day limit; mood does not establish an adopted position."
+    },
+    {
+      "id": "map-finish-considered-rejected",
+      "requiredPropositions": [
+        "Rust-red ink is being considered for the Harbor Loop walking map.",
+        "Reflective foil was ruled out after a night-visibility test.",
+        "The user has not chosen either finish."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not mark the considered ink as adopted.",
+        "Do not describe rejected reflective foil as selected or still under consideration.",
+        "Do not invent a chosen alternative or a decision date."
+      ],
+      "attributionTimeScopeCaveats": "The user states two different option stances in one message: rust-red ink is under consideration and reflective foil is rejected. Neither option is selected. A faithful card may represent these in separate items or together without collapsing their statuses."
+    },
+    {
+      "id": "assistant-clipboard-suggestion",
+      "requiredPropositions": [
+        "The assistant suggested adding a rain hood to the tally clipboard for the bird-count walk.",
+        "The source does not contain user approval or adoption."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not attribute the suggestion to the user.",
+        "Do not infer user preference, approval, adoption, implementation, or an existing rain hood."
+      ],
+      "attributionTimeScopeCaveats": "The sole message has role assistant and explicitly calls this only the assistant's idea. Preserve the assistant as proposer; absence of a user response is not approval.",
+      "emptyResultException": {
+        "allowed": true,
+        "whenCorrect": "The result contains zero cards and therefore makes no claim that the user holds, accepted, or acted on the assistant's suggestion.",
+        "ratingsWhenCorrect": {
+          "supportedMeaning": true,
+          "uncertaintyPreserved": true,
+          "attributionPreserved": true,
+          "scopeTimePreserved": true,
+          "usefulCoverage": true,
+          "evidenceEntails": true
+        },
+        "notEquivalentTo": "A non-empty card that says unknown or repeats only non-informative unknown fields; that output is not empty and fails usefulCoverage."
+      }
+    },
+    {
+      "id": "inez-courtyard-selection",
+      "requiredPropositions": [
+        "Inez chose a woven reed screen for her own courtyard.",
+        "Inez's choice is not for the shared atrium."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not attribute Inez's choice to the user who recorded the message.",
+        "Do not apply the reed screen choice to the shared atrium.",
+        "Do not weaken Inez's explicit choice into a mere possibility."
+      ],
+      "attributionTimeScopeCaveats": "A user message reports Inez's quoted first-person choice. The claimant and chooser is Inez, while the message speaker is the user; the subject of the choice is Inez's own courtyard."
+    },
+    {
+      "id": "planetarium-route-decision-premise-zh",
+      "requiredPropositions": [
+        "The group chose the west stairway as the entrance route for the planetarium open day in September 2026.",
+        "The stated reason is that the west stairway is darker and suitable for telescope demonstrations."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not describe the east stairway or another route as chosen.",
+        "Do not treat the lighting premise as a separate adopted preference or policy.",
+        "Do not extend the route choice beyond this open day."
+      ],
+      "attributionTimeScopeCaveats": "The Traditional Chinese source combines a group decision with its premise. The route choice is adopted for the named event; the darkness/suitability premise remains a distinct supporting proposition rather than another adopted choice."
+    },
+    {
+      "id": "atlas-paper-choice-reason-revised",
+      "requiredPropositions": [
+        "Pearlescent gray stock remains the team's choice for the atlas proofs.",
+        "The original claim that it dries faster than matte stock was corrected: it dries slower.",
+        "The team explicitly keeps the choice despite the invalidated speed rationale, and no replacement rationale is supplied."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not replace pearlescent gray with matte stock or infer a reversal.",
+        "Do not preserve the faster-drying claim as true.",
+        "Do not invent a new reason for keeping pearlescent gray."
+      ],
+      "attributionTimeScopeCaveats": "The second message corrects the supplier's premise, while the team explicitly keeps the original choice for the atlas proofs. Preserve both the changed factual premise and unchanged decision."
+    },
+    {
+      "id": "dated-recital-envelope-choice",
+      "requiredPropositions": [
+        "The museum team selected indigo envelopes on 2026-03-08.",
+        "The selection applies only to invitations for the poetry reading on 2026-05-02.",
+        "Invitations for the June lecture remain cream."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not confuse the 2026-03-08 decision date with the 2026-05-02 event/application date.",
+        "Do not apply indigo envelopes to the June lecture or all museum mail.",
+        "Do not claim that the invitations were already printed or sent."
+      ],
+      "attributionTimeScopeCaveats": "The source distinguishes selection date, event date, and application scope. June is a separate event whose envelopes remain cream; no year is specified for that June lecture."
+    },
+    {
+      "id": "imported-rain-gauge-event",
+      "requiredPropositions": [
+        "The user's field journal reports a repair of a brass rain gauge during the Bellglass Point restoration walk on 2023-04-02.",
+        "The repair account was imported from the user's field journal on 2026-08-19."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not treat the import date as the repair date.",
+        "Do not imply that the user currently owns, uses, or maintains the gauge.",
+        "Do not turn this historical event into a preference or settled practice."
+      ],
+      "attributionTimeScopeCaveats": "The source dates importing this repair account from the user's field journal to 2026-08-19; it does not say that the entire journal was imported. Preserve this import date separately from the 2023-04-02 repair date."
+    },
+    {
+      "id": "mountain-exhibition-caption-preference-zh",
+      "requiredPropositions": [
+        "The user settled on vertical subtitle layout for the 《遠山》 exhibition.",
+        "That settled preference applies only to this exhibition; the touring version remains undecided."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not treat the preference as general for all exhibitions or touring editions.",
+        "Do not label the explicit settled preference unknown because implementation is not described.",
+        "Do not claim the touring version uses vertical layout."
+      ],
+      "attributionTimeScopeCaveats": "The Traditional Chinese source explicitly says the layout is settled for one exhibition and limits its scope. A settled scoped preference is adopted, without implying broader policy or completed production."
+    },
+    {
+      "id": "foldout-stock-proposal-adopted-zh",
+      "requiredPropositions": [
+        "Lin Yi-an proposed changing the 《溪徑》 foldout's coated paper to sugarcane paper on 2026-04-10.",
+        "The user decided to adopt sugarcane paper on 2026-04-12.",
+        "The adopted choice applies only to versions printed after 2026-05-01."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not attribute the proposal or final decision to the wrong person.",
+        "Do not treat Lin Yi-an's proposal date as the user's decision date.",
+        "Do not claim that earlier versions or unrelated publications use sugarcane paper."
+      ],
+      "attributionTimeScopeCaveats": "The Traditional Chinese messages name a third-party proposer, a later user decision, and a still later application period. Preserve all three roles/times; adoption is explicit for the user and scoped to the foldout versions printed after the stated date."
+    }
+  ]
+}
