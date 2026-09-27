@@ -10,9 +10,13 @@ const core = openMemoryCore({ path, model,
 Omit `captureQualification`, `captureEvidence` and `captureRationale` entirely;
 even own explicit-undefined values are invalid. This policy rejects any own
 `causal` field on capture, including undefined, before admission or model work.
-There is no new default, MCP/Hermes flag, benchmark mode or silent fallback from
+There is no new default, MCP/Hermes flag or silent fallback from
 failed qualification. Inherited source policies do not opt in. In this explicit
 lane, inherited enrichment settings are ignored, never activated.
+
+The evaluation-only [mixed comparison profile](longmemeval-comparison.md#explicit-indexed-evidence-mixed-profile)
+now selects this lane explicitly with a separately bound preparation, capability
+and resource projection. It does not alter the embedded core or host defaults.
 
 The same [canonical indexed windows](retained-source-windows.md), extractor
 prompt and wire are reused. Core normalizes and redacts up to 24 submitted

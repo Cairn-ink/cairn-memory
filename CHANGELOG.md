@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — explicit indexed evidence comparison
+
+- Add opt-in `comparisonProfile: 'indexed-evidence-v1'` to mixed comparison
+  preparation and resource projection, with separately bound identities and
+  strict source-only ingestion metadata. The mixed guard denies qualifier work
+  for this profile. Qualified defaults, native comparator, completion/fixed-N
+  gates, prices and caps remain unchanged. Synthetic fake-HTTP coverage is not
+  a semantic score, paid launch, host promotion or complete source archive.
+
 ## Unreleased — opt-in indexed evidence capture
 
 - Add the explicit embedded `indexed-evidence-v1` capture source policy: shared

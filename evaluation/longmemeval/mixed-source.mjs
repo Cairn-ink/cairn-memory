@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
-import { planIndexedWindowLongMemEvalCase } from './ingestion.mjs';
+import { planIndexedWindowLongMemEvalCase, planIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 
 export const MIXED_SOURCE_VERSION = 'cairn-lme-mixed-source-v2';
 const CASE_ID = /^lme-case-[a-f0-9]{64}$/u;
@@ -204,7 +204,8 @@ function renderTurn(content, normalized, date, origin, budget) {
   return { normalized, rendered: result };
 }
 
-export function prepareMixedSourceCase(options) {
+export function prepareMixedSourceCase(options, comparisonProfile) {
+  if (comparisonProfile !== undefined && comparisonProfile !== 'indexed-evidence-v1') fail('invalid_options');
   let data;
   try { data = snapshot(options, { nodes: 0, bytes: 0, ancestors: new WeakSet() }); }
   catch (error) { if (error instanceof MixedSourceError) throw error; fail('invalid_input'); }
@@ -259,7 +260,8 @@ export function prepareMixedSourceCase(options) {
   if (renderedSessions.length === 0) fail('no_eligible_history');
   const renderedHistory = { question_id: history.question_id, sessions: renderedSessions };
   let cairnPlan;
-  try { cairnPlan = planIndexedWindowLongMemEvalCase({ history: renderedHistory, namespace }); }
+  try { cairnPlan = (comparisonProfile === 'indexed-evidence-v1'
+    ? planIndexedEvidenceLongMemEvalCase : planIndexedWindowLongMemEvalCase)({ history: renderedHistory, namespace }); }
   catch { fail('planner_failed'); }
   if (!cairnPlan.executable || cairnPlan.batches.length > MAX_BATCHES)
     fail('planner_limit_exceeded');

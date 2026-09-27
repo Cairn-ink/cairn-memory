@@ -109,12 +109,13 @@ function add(configuration, amount, outcome, actual) {
 }
 
 export function syntheticMixedFixture(t, { artifact, configuration, sourceCases,
-  armOrders, fetchImpl, httpTimeoutMs = 10_000 }) {
+  armOrders, fetchImpl, httpTimeoutMs = 10_000, comparisonProfile }) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-mixed-runner-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const prepared = prepareMixedComparison({ sourceCases, armOrders,
     nativeArtifact: artifact, nativeConfiguration: configuration,
-    cairnRuntimeArtifactSha256: '5'.repeat(64) });
+    cairnRuntimeArtifactSha256: '5'.repeat(64),
+    ...(comparisonProfile === undefined ? {} : { comparisonProfile }) });
   const first = { directory: join(root, 'ledger'), runId: randomUUID(),
     limitMicroUsd: 50_000_000, requestCap: 5 };
   createExperimentBudget(first).close();
