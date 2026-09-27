@@ -79,8 +79,9 @@ hosted and the two local-core clients, unless expressly identified as shared pau
 a verified fresh single-client installation.** Fresh Claude-only and Codex-only
 installs automatically create their `project-key` on first use without pairing,
 as the released Claude identity module does today, subject to the detection below.
-Claude, fresh or upgraded, retains exactly its current root until pairing:
-`CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory")`. Thus
+Claude's released root selection is
+`CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory")`. An upgrade
+retains its already-used root until pairing, including the legacy gap below. Thus
 `tmpdir()` is the existing fallback only when `homedir()` returns a falsy value;
 it is not a catch-all for home-directory errors. Codex-only setup uses a private
 durable Cairn root, default `~/.cairn-memory`, and reuses its own existing key.
@@ -100,9 +101,14 @@ These are current unversioned Claude docs, not evidence of every older host vers
 Before any Codex setup writes, check that one exact plugin key path (or this
 plugin's explicitly supplied `CLAUDE_PLUGIN_DATA/project-key`), Cairn registration
 and `join(homedir() || tmpdir(), ".cairn-memory", "project-key")`. This is a known-file check, never a
-host directory search. An unknown home, installation origin or overridden Claude
-location makes the plugin path undetermined: setup must ask **whether the person
-uses Cairn in Claude Code before creating anything**. Yes means `pairing_needed`;
+host directory search. If the installed origin cannot be confirmed as the standard
+`cairn-memory@cairn-memory` marketplace entry, setup must ask **whether the person
+uses Cairn in Claude Code before creating anything**. Ask also when the home or
+plugin location is undetermined. Non-standard cases include
+`CLAUDE_CODE_PLUGIN_CACHE_DIR` relocating the plugins root, `--plugin-dir` / `@inline`
+installs (the data directory is then `cairn-memory-inline`), and other marketplaces
+or origins such as `@synced`; see the loading reference above. A missing standard
+path does not confirm a standard origin. Yes means `pairing_needed`;
 request the exact existing root in the pairing flow. No permits fresh setup only
 if the other checks find no existing key/client. Unreadable state is an error,
 not absence. Never inspect host credential configs or transcript directories.
@@ -111,12 +117,27 @@ For a newly added client, an existing key, a registered other client, or two roo
 requires explicit pairing adopting an existing root/key. A registered sole client
 continues using its own key. The newcomer does no memory work and reports
 `pairing_needed`; hooks still exit successfully. **The already-working client keeps
-working.** If upgraded Claude finds Codex registered first, Claude is the newcomer
-and cannot generate a key or use memory without pairing; Codex continues working.
+working.** Registration order alone does not make upgraded Claude a newcomer.
+If Claude had no existing key/use, it cannot generate a key or start memory without
+pairing; Codex continues working. If Claude already used its own key before the
+upgrade, both clients are established: each keeps using its own existing key,
+neither creates a new key, and both show a visible `pairing_needed` conflict status.
+With different keys, project identities differ and there is no cross-tool sharing
+until the person explicitly chooses the root/key in the pairing flow (E4).
 Un-upgraded Claude with `CLAUDE_PLUGIN_DATA` unset already uses `~/.cairn-memory`,
 also Codex's default: its key still triggers pairing, never implicit sharing.
 Upgrade Claude and stop old workers before activating shared controls; 0.1.0 does
-not understand the pairing record. Until then Codex remains memory-disabled.
+not understand the pairing record. In this Claude-first case, newly added Codex
+remains memory-disabled until pairing.
+
+**Residual legacy gap:** if Codex installs first in `~/.cairn-memory`, then 0.1.0
+Claude runs on a host that does not export `CLAUDE_PLUGIN_DATA`, Claude implicitly
+uses the same key. Version 0.1.0 cannot detect the other client or require pairing.
+On later upgrade, Claude must preserve that already-used root/key, create no new
+key, and report `pairing_needed` alongside Codex until explicit adoption through
+the pairing flow. Identity already coincides in this case; coordinated shared
+controls are not established. An upgrade must not silently move Claude to a newly
+exported plugin data directory and create a different key.
 
 CX-2 creates these proposed coordination files, separate from the selected key root:
 
@@ -156,9 +177,10 @@ Adopt the explicitly selected existing Claude root/key where durable; otherwise
 pairing requires stopped hosts/workers, an exclusive migration lock, no-clobber
 copy to a private durable root and configuration of both hooks before resume.
 Do not adopt temporary storage as a new paired root. With conflicting keys/roots,
-the newcomer stays memory-disabled with visible `pairing_conflict` status until
-**the person pairing explicitly chooses** which existing root/key both will adopt;
-the established client continues until the agreed stopped-worker pairing step.
+both clients show `pairing_needed` with conflict detail until **the person pairing
+explicitly chooses** which existing root/key both will adopt. A newcomer stays
+memory-disabled; established clients each keep their existing memory access until
+the agreed stopped-worker pairing step. No client loses memory it already had.
 Preserve the unselected state; no automatic history merge or key overwrite. Missing
 adopted keys/mismatched records likewise require explicit repair, never regeneration.
 The repository maintainer sets policy, not the person's key selection.
@@ -471,9 +493,15 @@ Record exact runtimes/platforms; mock success is not a host or semantic-quality 
   requires pairing, never key creation. Cover falsy home and nonstandard origin.
 - Un-upgraded Claude key in `~/.cairn-memory`: Codex enters pairing without implicit
   control sharing. Old Claude continues until explicit upgrade/stopped-worker adoption.
-- Codex registered first, then upgraded Claude: only Claude is memory-disabled
-  until paired. Two-root conflicts preserve working-client behavior until the
-  person chooses; neither automatic key replacement nor merging is allowed.
+- Codex registered first, then upgraded Claude: if Claude already used a different
+  key, both retain their own existing memory access, create no key, and show
+  `pairing_needed` conflict status until the person's explicit choice. Project IDs
+  differ and there is no cross-tool sharing. Only a Claude client with no prior
+  key/use is memory-disabled as a newcomer; no automatic key replacement or merge.
+- Codex first, then 0.1.0 Claude without `CLAUDE_PLUGIN_DATA`: legacy Claude uses
+  the same default-root key without pairing. On upgrade, preserve both clients'
+  access to that key, show `pairing_needed` in both, and require explicit adoption
+  before shared controls; never create a key in a newly exported plugin data root.
 - Unpaired single-client key deletion recreates it on the next use, as today.
   Paired deletion fails with `paired_key_missing`; original-key restore preserves
   IDs, while explicit reset requires fresh pairing and discloses changed scope.
@@ -537,8 +565,8 @@ repository)**; the coordinator maintains it. Its private URL/path was not suppli
 to this packet: obtain that pointer at execution, rather than invent a public link.
 Snapshot **as of sibling `cc0f31e`, to verify at execution** for
 `docs/plans/session-episodes.md` (SE-1…SE-5): `docs/protocol.md`, `docs/privacy.md`,
-`packaging/artifact-files.json`, `.github/workflows/ci.yml`, root `package.json`
-and `packaging/test/**`. The sibling does not edit Claude `hooks/**` in this snapshot.
+`packaging/artifact-files.json`, `.github/workflows/ci.yml`, root `package.json`,
+`CHANGELOG.md` and `packaging/test/**`. The sibling does not edit Claude `hooks/**` in this snapshot.
 Across both plans, **only one open PR at a time may edit each shared file**,
 including CI and release files. The repository maintainer (coordinator) sets the
 order and hands ownership to the next package after the preceding PR closes/lands;
@@ -555,7 +583,8 @@ Remaining **to verify** gates: 0.150 minimum and exact 0.157.1 format/lifecycle/
 privileges; same PID namespace and platform publication/permission semantics;
 hosted 0.2.0 deployment; A7 authority evaluation; sibling context/end semantics.
 The person pairing resolves conflicting keys through an explicit flow choice;
-the newcomer remains memory-disabled until then; the established client continues.
+newcomers remain memory-disabled until then; established clients keep their own
+existing keys and memory access, with visible `pairing_needed` conflict status.
 Paired key loss disables both memory clients until explicit repair. The repository
 maintainer sets conflict policy and resolves repository boundaries only. Path aliases/cross-machine pairing
 are excluded. Claude installer automation for `pairing_record` remains **to verify**.
