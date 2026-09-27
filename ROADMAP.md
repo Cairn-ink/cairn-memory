@@ -16,11 +16,13 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
-- The [offline ingestion design comparison](docs/plans/ingestion-design-comparison.md)
-  remains **revise before live test**: selected combined requests save local
-  input work, but current bounded partition completes a synthetic multi-source
-  case combined refuses. Scripted output plumbing establishes no semantic
-  winner or default change; fresh paired interpretation scoring is still needed.
+- The [paired ingestion semantic probe](docs/evidence/ingestion-semantic-probe.md)
+  concludes **do not adopt combined**: mechanical completion was 23/24 baseline
+  and 24/24 combined, but useful coverage was 19/24 and 18/24, failing the frozen
+  adoption hypothesis. Strict all-six agent-rated success was 11/24 and 12/24;
+  same-model-family judgments and two repetitions per synthetic scenario do not
+  establish broad superiority. The prior offline multi-source fit refusal and
+  1,024-token output limit remain. No engine or default changes.
 
 - Public SQLite core: capture orchestration, MOC organization, bounded recall,
   inspection, correction, deletion suppression and namespace isolation.
@@ -67,6 +69,17 @@ reliability work below without declaring older failure gates resolved.
    dataset, model/configuration, scorer and comparison arms, publish per-case
    failures and independently review the result. Offline scripted demos are not
    a measured score, and this baseline authorizes no paid run.
+   The ingestion probe sequences a separate semantics-preserving repeated-field
+   reference fix, then clarification of nondecision commitment, claimant and
+   time preservation, and scalable bounded ingestion/output capacity. Preserve
+   pool uniqueness, all bounds and foreign-citation rejection. After offline
+   checks and independent review, freeze NEW held-out paid cases with a new
+   reviewed operator manifest and budget audit within the already authorized
+   cumulative US$200 cap. The completed one-shot manifest supplies no additional
+   dispatch or consumed official-case replay. Only after completion
+   gating return to an official-style Cairn/Mem0 fixed-N score, then ordinary
+   installed Hermes/MCP validation. Post-hoc commitment sensitivity and fewer
+   requests do not replace the failed frozen coverage gate or finish reliability.
    The planning-only mixed resource projection adds an isolated OpenAI adapter
    dependency prerequisite to the LongMemEval CI job. PR243's first Node24
    LongMemEval run (`36263553569`) failed without it; the paired Node22 leg was
