@@ -1,8 +1,11 @@
 # Privacy and threat model
 
-This page describes the hosted plugin path. The separate, source-runnable local
-storage preview has no outbound processing or telemetry; its database contents,
-trust boundaries, and deletion limits are documented in [Local store](local-store.md).
+This page describes the hosted plugin path and explicitly marked proposed local
+changes below. Current local storage and deletion boundaries are documented in
+[Local store](local-store.md); local model/MCP data exposure is documented in
+[Protocol](protocol.md). Core has no network client or telemetry, but a configured
+injected model adapter can send source text to its provider. Local storage alone
+is not a promise of offline interpretation.
 
 The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 
@@ -91,3 +94,67 @@ then inspect and remove only the affected stale lock and its matching recovery
 artifacts. Keep `control.json`, `paused`, cursor files, and identity keys intact.
 Automatic hooks remain fail-open; explicit control commands report failure if
 they cannot acquire the control lock.
+
+## Proposed session episodes (local core)
+
+This is the explicit threat-model update for the proposed
+[session-episode contract](plans/session-episodes.md), not shipped behavior.
+Core opts in with `sessionEpisodes: {mode:'episode-v1'}` and v2 capture/staging;
+`draftEveryBatches` defaults to 8 and accepts integers 2–16. The **one-brain
+configuration** is the product setup in which one person's Claude Code, Codex and
+chat tools share one memory. It enables episodes by default with automatic capture
+and discloses their retention. Staging alone never enables durable episodes.
+Hosted behavior/schemas and telemetry are unchanged.
+Intentional diary entry is consent to organize an ordinary submitted source,
+not permission to share personal content or authenticate its claimed roles.
+
+| Added or expanded field | Threat, control and residual limit | Gates |
+| --- | --- | --- |
+| Session identity/key | Dedicated private-store HMAC over namespace/client/session, no new raw session or reverse map. Not reversible encoding, encryption or anonymity: stable linkage remains and key holders can test guesses; old receipts are unchanged. | E1 |
+| Namespace/project, generation and origin/end signals | Cross-scope leakage or forged triggers can bypass entry controls or inflate call cost. Claude/Codex client contracts bind trusted metadata, stop/pause generations and real lifecycle signals. No thread IDs, personal fallback or shared scope; controls cannot stop other devices. | E1/E3/E6/E11 |
+| Event/receipt/revision times, ordinals and draft markers | Reveal routines and may imply false chronology. Validate UTC, preserve unknown/partial time, keep scheduling counters and consumed-trigger markers local; submitted clocks are unauthenticated. | E3/E9 |
+| Client key/display label | Reveals tool use or identifying prose. Bounded host-configured labels, no user/device/path/version data, exact namespace/client filtering; label is not authenticated identity. | E1/E2/E9 |
+| Type/language, gist/outcome/step, correction pins and procedural tags | Sensitive diary/habit descriptions, unsupported claims or instruction injection. Bounded source-anchored interpretations and untrusted framing; no truth or execution authority. Only the freshly classified batch may skip extraction. Automatic tags require episode-v1; explicit remember tags work independently. Legacy automatic prompts/outputs/fields/digests remain unchanged without the option. | E2/E8/E10 |
+| Retained source passages, anchors/digests and memory lineage | More personal text persists than memory extraction selects. Bounded selected passages survive temporary staging; conversation deletion suppresses derived memories and invalidates dependent episodes, including copied sources. Hashes are guessable and redaction is best-effort. | E4/E7 |
+| Model/profile/prompt-version, policy, action IDs, gap and release/bypass status | Processing records may leak secrets or hide failure. Bounded nonsecret IDs/finite codes only, no raw errors/prompts/responses. Debounced attempts have durable caps. Capacity first releases oldest admitted episode-only backlog with explicit gaps, then bypasses new staging if needed; ordinary admission continues even under sustained interpretation failure. Content-free fences survive. | E1/E3/E4/E4a/E8 |
+| Time/startup reads and tag revisions | May expose unrelated personal data or erase relationship evidence. Exact scope, hard budgets, group opt-outs, final freshness checks and untrusted-data framing; tag-only sidecar updates preserve conflict/rationale links. Host interpretation remains untrusted. | E9/E10/E11 |
+
+The injected episode-interpretation port receives bounded redacted source text,
+claimed roles, request-local references and untrusted prior editing context.
+Metadata identities/timestamps/control tokens remain local; source text can still
+contain personal information or undetected secrets. Drop oldest prior cited
+sources first to fit the prompt, record exclusions, and never treat omitted
+passages or prior prose as evidence. Additional configured-provider exposure is
+bounded by the plan's per-session attempt formula. Reads use only a local exact
+counter, with no generation. No paid call is authorized by this documentation.
+
+Reuse the existing pause/cursor barrier above for all drafts, including lazy work.
+Project stop fences unfinished work; entry producers must never backfill paused
+text. Local controls cannot retract previously transmitted requests. Selected
+passages have no automatic age TTL. Episode-mode staging's 24-hour deadline is an
+upper bound on live payloads, not guaranteed retention: pressure can release
+admitted-but-undrafted/failed interpretation evidence sooner. Normal release
+still occurs atomically after admission and selected-passage disposition complete.
+At capacity, release eligible episode-mode payloads oldest-first (staging time,
+then client/event ID), record gaps and fence in-flight drafts; never reclaim
+unadmitted or ordinary staged-v1 payloads. If space still fails, register the new
+batch without episode staging and run normal extraction/admission, with a visible
+gap. Releases, gaps and registration commit atomically; replay cannot repeat them
+or restore text. No alternative source store or new model trigger is introduced.
+
+Inspection distinguishes `released` from `not-staged`; both have null source views
+and `expiresAt:null`, with content-free reason/admission/coverage metadata.
+Completed replay survives release; deletion fences still win. Protected pending
+admissions retain their lease/backpressure rules, and legacy staging is unchanged;
+neither justifies rejecting a new episode-mode batch for episode staging pressure.
+E4a requires >64 captures with N=16, two concurrent sessions, about 16 KiB payloads,
+sustained interpreter failure, protected-capacity bypass and crash/restart tests.
+Conversation deletion clears descriptive policy/correction metadata as well as
+prose/sources, and conservatively forgets even multi-source derived memories.
+Existing namespace-wide staged purges and source-consumer invalidation still apply.
+
+No new field enters telemetry, payload logs or raw exception text. E1–E11 require
+fake-provider payload and persisted-row inspection on Node 22.16 and 24. Private
+filesystem and old-process migration precautions remain; SQLite free pages,
+journals, snapshots, backups and provider/caller copies may retain bytes. No
+secure-erasure, complete-history or semantic-fidelity guarantee follows.
