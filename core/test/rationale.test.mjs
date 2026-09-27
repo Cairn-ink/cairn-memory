@@ -139,7 +139,8 @@ test('R9 schema 11 upgrade preserves previous state and migration failure is ato
   const f = fixture(t); f.core.close();
   const removeNewSchema = () => {
     for (const row of f.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'rationale_%'").all()) f.db.exec(`DROP TRIGGER ${row.name}`);
-    f.db.exec('DROP TABLE staged_capture_evidence; DROP TABLE staged_capture_clocks; DROP TABLE rationale_edges; PRAGMA user_version=11');
+    // This synthetic downgrade must remove every post-v11 table before reopening.
+    f.db.exec('DROP TABLE capture_initial_classification; DROP TABLE staged_capture_evidence; DROP TABLE staged_capture_clocks; DROP TABLE rationale_edges; PRAGMA user_version=11');
   };
   removeNewSchema();
   const before = f.db.prepare('SELECT * FROM memories ORDER BY id').all();
@@ -151,7 +152,7 @@ test('R9 schema 11 upgrade preserves previous state and migration failure is ato
   assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name LIKE 'rationale_%'").get().n, 0);
   f.db.exec('DROP TABLE rationale_edges');
   const migrated = openMemoryCore({ path: f.path }); t.after(() => migrated.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 13);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 14);
   assert.deepEqual(f.db.prepare('SELECT * FROM memories ORDER BY id').all(), before);
   assert.deepEqual(f.db.prepare('SELECT * FROM receipts ORDER BY id').all(), receipts);
   assert.deepEqual(f.db.prepare('SELECT * FROM store_metadata').all(), identity);

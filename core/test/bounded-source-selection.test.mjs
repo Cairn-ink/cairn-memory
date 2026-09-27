@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../index.mjs';
 import { recallMemories } from '../recall.mjs';
@@ -14,13 +15,14 @@ function fixture(t) {
   const model = { contextWindow: 8192, countTokens: () => 1,
     select: request => { calls.push(request); return { refs: [] }; },
     rank: request => { calls.push(request); return { refs: refs(request.input.candidates).slice(0, request.input.limit) }; } };
-  const core = openMemoryCore({ path: join(mkdtempSync(join(tmpdir(), 'cairn-source-scan-')), 'memory.sqlite'), model });
+  const path = join(mkdtempSync(join(tmpdir(), 'cairn-source-scan-')), 'memory.sqlite');
+  const core = openMemoryCore({ path, model });
   t.after(() => core.close());
   const admit = (content, ns = namespace) => ok(core.admit({ namespace: ns, memory: { content, kind: 'context' },
     receipts: [{ client: 'synthetic', sessionId: 'synthetic', eventId: content, role: 'user', excerpt: content }] })).memory;
   const recall = extra => core.recall({ readSet: [namespace], query: '我選了哪個工具？理由有什麼需要重新確認？',
     contextMode: 'source-evidence', selectionMode: 'bounded-source-scan', ...extra });
-  return { core, model, calls, admit, recall };
+  return { core, model, calls, admit, recall, path };
 }
 
 test('BS1 complete small MOC sends both contradictory Chinese sources to rank, not summary select', async t => {
@@ -116,4 +118,31 @@ test('BS10 source correction during rank invalidates the complete-map result', a
     return { refs: refs(input.candidates) };
   };
   assert.equal((await f.recall({ contextMode: 'rationale-evidence' })).error.code, 'revision_conflict');
+});
+
+test('BS11 fifth receipt does not invent incomplete map coverage and complete-map rank fetches all sources', async t => {
+  const f = fixture(t);
+  let memory = f.admit('Stable generated interpretation.');
+  for (let i = 2; i <= 5; i++) memory = ok(f.core.admit({ namespace,
+    memory: { content: 'Stable generated interpretation.', kind: 'context' },
+    receipts: [{ client: 'synthetic', sessionId: 'synthetic', eventId: `source-${i}`,
+      role: 'user', excerpt: i === 5 ? 'violet keystone only in the fifth receipt' : `Bounded source ${i}` }],
+  })).memory;
+  const db = new DatabaseSync(f.path); t.after(() => db.close());
+  const sources = ['Stable generated interpretation.', 'source-2', 'source-3', 'source-4', 'source-5'];
+  for (const [index, eventId] of sources.entries()) {
+    assert.equal(db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND event_id=?')
+      .run(`stable-${index + 1}`, memory.id, eventId).changes, 1);
+  }
+  const stable = db.prepare('SELECT id,excerpt FROM receipts WHERE memory_id=? ORDER BY id').all(memory.id);
+  assert.deepEqual(stable.map(source => source.id), ['stable-1', 'stable-2', 'stable-3', 'stable-4', 'stable-5']);
+  assert.equal(stable.slice(0, 4).some(source => /violet|keystone/u.test(source.excerpt)), false);
+  assert.match(stable[4].excerpt, /violet keystone/u);
+  const result = ok(await f.recall({ query: 'violet keystone' }));
+  assert.deepEqual(result.selection, { mode: 'bounded-source-scan', strategy: 'complete-map', semanticCoverage: 'unassessed' });
+  assert.equal(result.coverage, 'complete');
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].input.candidates[0].receipts.length, 5);
+  assert.equal(result.memories[0].receipts.length, 5);
+  assert.ok(result.memories[0].receipts.some(source => source.excerpt.includes('fifth receipt')));
 });

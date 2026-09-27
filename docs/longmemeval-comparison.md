@@ -76,6 +76,14 @@ The scorer accepts both older outcomes without `errorStage` and new bounded
 stage-bearing outcomes. The extra field does not change scores or eligibility;
 unknown stages and inconsistent stage/status/error combinations are rejected.
 
+Cairn evidence accepts only the core's exact stored receipt excerpt. Capture
+normalizes and truncates the source view to complete code points; admission then
+canonicalizes that bounded excerpt again, which can trim whitespace exposed at
+the 800-UTF-16-unit boundary. The comparator derives that single stored form
+with the same two bounded operations. It does not accept prefixes, substrings,
+whitespace-insensitive matches or alternate normalizations, and its existing
+event, session, role and namespace checks remain unchanged.
+
 Lexical ranking counts unique overlapping question/turn tokens after NFKC,
 lowercasing and Unicode letter/number tokenization. Zero-overlap turns are not
 candidates. Ties retain source order; `lexicalLimit` bounds the ranked candidates
@@ -89,6 +97,11 @@ Import `scoreLongMemEvalComparison` from `evaluation/longmemeval/scoring.mjs`.
 After generation, call it with exactly `{run, evaluator}`. `evaluator` is the
 matching prepared evaluator record with `question_id`, `source_question_id`,
 `question_type`, `reference_answer`, `answer_session_ids` and `turn_labels`.
+For preparation v2, `answer_session_ids` contains opaque session-occurrence IDs
+matching the prepared history. Raw source labels stay in the private manifest
+map, never in generation. Earlier v1 artifacts need regeneration; a hand-built
+legacy in-memory history can still exercise diagnostic APIs but is not v2
+benchmark evidence.
 Case identity and referenced source coordinates are checked before scoring.
 An in-memory record is not a signed artifact: retain its preparation hashes and
 run provenance separately instead of treating schema validation as authenticity.
@@ -149,3 +162,86 @@ seven-case pilot must never be presented as the full dataset. This package
 neither downloads a corpus nor discovers credentials or runs a provider by default.
 
 See [acceptance and verification](plans/longmemeval-comparison.md).
+
+The separate [mixed resource projection](plans/mixed-resource-projection.md) is
+planning-only arithmetic for a fixed Cairn/Mem0 roster. It uses caller-supplied
+snapshots of the accepted request and wire profiles to report conditional
+request and reservation ceilings, including native fallback and both arms'
+answer/judge work. It does not read a ledger or a dated campaign audit, grant
+money, predict completion, or score answer quality. Before an untouched roster
+is used, the full common protocol, actual artifact/configuration and source-only
+checks still need independent verification. Earmarks or phase caps alone do not
+establish feasibility.
+
+The v3 projection accounts for up to five qualifier count/generation pairs
+per source batch after bounded singleton preflight; v1/v2 historical ceilings
+and grants are not upgraded. Fresh launches must recheck phase, case, money
+and request caps against the versioned plan.
+
+The [controlled mixed runner](plans/mixed-comparison-runner.md) has three
+separate APIs: `prepareMixedComparison` accepts only source histories/questions,
+`runMixedGeneration` consumes a supplied X guard and the pinned native identity,
+and `scoreMixedGeneration` accepts evaluator labels only after generation ends.
+The exact common answer JSON is `{evidence:[{text}],currentQuestion:{text,date}}`;
+the Cairn text is verified receipt excerpts joined per recalled card, while
+the Mem0 text is the native returned memory string. Those are different evidence
+semantics even though the outer request shape matches. Cairn-origin diagnostics
+retain every matching indexed-window classification and offset; model summaries
+and origin metadata never become answer evidence. Local fake-HTTP tests exercise
+both fresh engines under one synthetic ledger, and the pre-grant demo dispatches
+nothing. Scoring retains fixed N and a full correct/incorrect/unresolved 3×3
+table; unresolved cases are not silently counted wrong. Native transport needs
+trusted parent-side credential injection at a later launch gate; the child holds
+only a local dummy key. Neither this runner nor its synthetic tests authorize a
+paid campaign, verify real semantic answers, or establish matched performance.
+
+An [offline indexed-window provenance path](indexed-window-provenance.md) is
+separate from the default prefix-receipt comparison and is not accepted by the
+official scorer or the live paid runner.
+The [qualified source-pair generator](qualified-source-pair.md) separately
+compares qualified prefix and indexed source exposure in two offline generation
+arms. It does not relabel or score either three-arm public report.
+
+## Pure mixed-source preparation (not a comparison runner)
+
+`evaluation/longmemeval/mixed-source.mjs` exports `mixedSourcePolicy()` and
+`prepareMixedSourceCase({history, question, namespace})`. This evaluation-only
+adapter accepts strict prepared-v2 identities, a project namespace and the
+exact `YYYY/MM/DD (Ddd) HH:mm` date form. Dates are compared as floating
+dataset-local calendar minutes, not host or UTC instants. Sessions after the
+question minute are excluded from both prospective arms; source order is
+unchanged, equal-minute sessions remain, and malformed or ambiguous dates fail.
+
+Each included original turn is normalized with the existing capture expression
+(NFKC, secret redaction, Unicode whitespace folding and trim). It is split on
+code-point boundaries, then each chunk receives an explicit synthetic
+`[session-date: YYYY-MM-DD HH:mm; clock: dataset-local] source{... }` wrapper.
+The v2 renderer greedily chooses the longest next chunk that survives capture
+normalization unchanged, with a 32 × 2^20 UTF-16 code-unit aggregate probe
+cap. Otherwise valid source can fail preflight when no stable greedy cut is
+found or the probe cap is reached; that future fixed-N case stays unresolved.
+The original user/assistant role is preserved. The existing indexed-window
+planner must accept every already-bounded message without splitting or changing
+its text. The returned `mem0Input.batches` strips only Cairn's message IDs, so
+its ordered roles and content match the planner's submitted capture messages;
+`mem0Input.query` contains only normalized question text and canonical date.
+No prepared reference answer, evaluator label, fake system turn or native
+timestamp is added.
+
+The frozen private result schema is `version`, `policy`, `originalQuestion`,
+`canonicalQuestionDate`, `renderedHistory`, `cairnPlan`, `mem0Input`, `counts`,
+`originalHistoryDigest`, `caseDigest` and `originMap`. The origin map has
+`sessions`, `turns` and `windows`. A session row has rendered/original indices,
+original session ID and original date. A turn row has rendered turn ID,
+original session/turn indices and IDs, normalized UTF-16 start/end, rendered
+body start/end and `normalizationChanged`. A window row has batch/window
+indices, rendered turn ID, classification and nullable original UTF-16
+start/end. Counts report original/eligible/future-excluded sessions, original/
+rendered turns, batches and windows. Each window is `metadata-or-mixed`,
+`normalized-source` or `original-source`. Only an unchanged source-text window
+whose exact original substring matches receives original UTF-16 offsets.
+Receipt selection, source use and Mem0 provenance are not inferred from this
+preparation. All text, IDs and maps are private; public reporting uses counts
+only. The versioned SHA-256 domains and exact policy are in the module and
+the [frozen P contract](plans/mixed-source-renderer.md). These digests bind
+preparation data, not a future answer/scorer protocol or a paid grant.

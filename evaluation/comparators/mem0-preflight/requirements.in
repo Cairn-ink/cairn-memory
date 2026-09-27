@@ -1,0 +1,4 @@
+# Actual Mem0 OSS Python engine wheel corresponding to the official v2.2.0 tag.
+# The installed wheel is hash-pinned in requirements.lock; the verifier also
+# checks the source tree identity against commit 47a69e1e72dc562b6fdd49a9ef892229afc7508a.
+mem0ai==2.2.0

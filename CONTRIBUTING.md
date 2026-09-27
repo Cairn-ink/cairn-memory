@@ -46,18 +46,27 @@ synthetic SQLite database and handcrafted trusted inferred items, not extraction
 For capture changes also run `npm run demo:capture` on both core runtime versions.
 Its injected scripted extractor verifies source binding and lifecycle, not model quality.
 
-For `evaluation/longmemeval` changes, run `npm run test:longmemeval` and
-`npm run demo:longmemeval-ingestion` on Node 22.16 and 24, in addition to the
-generic checks above. Tests cover preparation and source-mapped ingestion;
-the demo uses scripted models and a fresh synthetic SQLite store. No downloaded
-corpus, provider key or paid run is required. See `docs/longmemeval-ingestion.md`
-for source reconstruction, normalization and remaining evaluation boundaries.
+For `evaluation/longmemeval` changes, first install the existing locked isolated
+OpenAI adapter dependency set with `npm ci --prefix adapters/openai`, then run
+`npm run test:longmemeval` and `npm run demo:longmemeval-ingestion` on Node
+22.16 and 24, in addition to the generic checks above. Tests cover preparation
+and source-mapped ingestion; the demo uses scripted models and a fresh synthetic
+SQLite store. No downloaded corpus, provider key or paid run is required. The
+install is for evaluation imports only; it does not change the public core's
+dependency surface. See `docs/longmemeval-ingestion.md` for source
+reconstruction, normalization and remaining evaluation boundaries.
 
 For comparison/scoring changes, also run `npm run demo:longmemeval-comparison`
 on both runtimes. The same `test:longmemeval` suite includes these tests. This
 demo compares three synthetic arms using scripted models and the real local
 core; its diagnostic scores are not measured real-model accuracy. See
 `docs/longmemeval-comparison.md` for scorer and model-facing data separation.
+For the separately versioned public comparison/scorer, also run
+`npm run demo:longmemeval-public` on both runtimes. This synthetic demo verifies
+source-only evidence and official-style prompt plumbing, not real-model quality.
+The optional reference-sidecar tests invoke Python 3 (standard library only)
+on synthetic JSON. Install Python 3 for the LongMemEval maintainer test suite;
+the public memory core and ordinary scorer do not invoke Python.
 
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.
@@ -114,6 +123,38 @@ and `npm run demo:experiment-request-guard` on Node 22.16 and 24, after installi
 the isolated OpenAI adapter dependencies above. These exercise guarded fake HTTP
 and synthetic ledgers, not paid requests or a configured Hermes profile. See
 `docs/experiment-request-guard.md`; passing this gate does not authorize a live run.
+
+For the evaluation-only native Mem0 gateway, additionally run
+`npm run test:mem0-native-gateway` on both Node 22.16 and 24. Its explicit
+`npm run test:mem0-native-local` gate also requires pinned local
+`CAIRN_MEM0_NATIVE_VENV_ROOT` and `CAIRN_MEM0_NATIVE_PYTHON_ROOT`, Linux
+`bwrap`, and both Node versions. The Y16 startup regression additionally needs
+host `/usr/bin/python3` with `os.pidfd_open` and
+`signal.pidfd_send_signal`; this is test-only and does not change the pinned
+Mem0 interpreter. Missing prerequisites fail this gate rather than count as a
+skip. Both suites use new synthetic ledgers and fake HTTP; the
+local gate imports installed Mem0 but never uses a provider key or operational
+ledger. This is containment/accounting verification, not permission to spend.
+
+For the controlled mixed Cairn/Mem0 runner, additionally run
+`npm run demo:longmemeval-mixed` and the explicit `npm run test:mixed-native-local`
+on Node 22.16 and 24.15 after `npm ci --prefix adapters/openai`. The demo is
+pre-grant preparation/packing only. The local test requires the same pinned
+native roots and Linux containment prerequisites as the Y gate, and exercises
+fresh real Cairn and native Mem0 through one synthetic X ledger with fake HTTP.
+Missing prerequisites fail, never skip as a pass. Do not supply a live key,
+corpus or operational ledger. These gates do not establish a semantic score,
+credential broker, resource fit or paid-run authorization.
+
+For public pilot runner changes (`evaluation/live/public-pilot.mjs`,
+`evaluation/live/public-pilot-merge.mjs`, `evaluation/live/public-pilot-cli.mjs`
+and their tests), run `npm run test:live-evidence-offline` on Node 22.16 and 24
+with both adapters installed, plus `npm run test:longmemeval` and
+`npm run demo:longmemeval-public` on both runtimes when the common bucket of
+`aggregateOfficialScores` changes. These suites use fake HTTP only and never
+read an environment key; see `docs/public-pilot-runner.md`. Passing them does
+not authorize a paid run, which needs an operator-supplied key, the existing
+campaign ledger and a frozen manifest.
 
 Please keep pull requests focused. A protocol change should include its schema, documentation, and conformance tests in the same PR.
 

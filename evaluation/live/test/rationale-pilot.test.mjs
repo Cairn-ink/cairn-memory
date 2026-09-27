@@ -10,6 +10,7 @@ import { createExperimentRequestGuard, authorizeRationaleExtension } from '../..
 import { experimentPolicy } from '../session.mjs';
 import { getRationalePilotPins, runRationalePilot } from '../rationale-pilot.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
+import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 
 // Installed tests require explicit cache preparation; the ordinary suite keeps
 // preflight coverage without downloading or installing a package implicitly.
@@ -48,9 +49,8 @@ function setup(mode = 'success') {
     assert.equal(/"rubric"|"forbidden"|"expected"/.test(JSON.stringify(input)), false);
     if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
     const method = payload.text.format.name.slice(6);
-    const output = mode === 'invalid-output' && calls === 2 ? { items: 'invalid' } : await mock[method]({ input });
-    if (method === 'qualifyCandidates') output.qualifications = Object.fromEntries(
-      output.qualifications.map(item => [`item_${item.itemIndex}`, item]));
+    let output = mode === 'invalid-output' && calls === 2 ? { items: 'invalid' } : await mock[method]({ input });
+    if (method === 'qualifyCandidates') output = qualificationPoolWire(input, output);
     return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null, incomplete_details: null,
       output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } });

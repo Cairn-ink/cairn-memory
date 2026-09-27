@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
-import { QUERY_SCAN_LIMIT } from './query-candidates.mjs';
+import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT,
+  BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
+import { validateSourceReceipt } from './source-evidence.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -16,7 +18,7 @@ const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
 export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts,
-  assertIndexAvailable, rationaleStorage }) {
+  assertIndexAvailable, rationaleStorage, receiptKey, classificationJournal }) {
   // Read authority is generation-owned; writes below continue targeting declarations.
   // Title validity deliberately consults every original source binding.
   function projectPrepare(sql) {
@@ -130,9 +132,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     return result;
   }
 
-  function applyPlacement(ns, proposal, guards, expectedIndex) {
+  function applyPlacement(ns, proposal, guards, expectedIndex, initialClassification) {
     return transaction(db, () => {
       assertEpochValue(ns, expectedIndex);
+      if (initialClassification) classificationJournal.assertPlacement(ns, initialClassification,
+        initialClassification.token, guards);
       const items = proposal.items;
       const expected = guardsMap(guards);
       if (expected.size !== items.length || items.some((item) => !expected.has(item.memoryId))) {
@@ -217,6 +221,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (!changed) {
         const resultMemories = items.map(({ memoryId }) => memoryDto(memories.get(memoryId), true));
         const refs = items.flatMap(({ memoryId }) => currentMemoryRefs(ns, memoryId).map(memoryRef));
+        if (initialClassification) classificationJournal.completePlacement(ns, initialClassification,
+          initialClassification.token);
         return { memories: resultMemories, createdMocs: [], refs, indexRevision: expectedIndex };
       }
 
@@ -288,9 +294,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         .map(({ id }) => mocDto(db.prepare("SELECT * FROM mocs WHERE id = ?").get(id)));
       const refs = items.flatMap(({ memoryId }) => currentMemoryRefs(ns, memoryId).map(memoryRef));
       refs.push(...writtenEdges.map(edgeRef));
+      if (initialClassification) classificationJournal.completePlacement(ns, initialClassification,
+        initialClassification.token);
       return { memories: items.map(({ memoryId }) => memoryDto(memories.get(memoryId), true)),
         createdMocs: created, refs, indexRevision };
-    });
+    }, initialClassification?.deadline?.check);
   }
 
   function linkMocs(ns, input) {
@@ -352,28 +360,115 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
-  function queryCandidateRows(ns, { score, memoryLabel }) {
+  function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
+    sourceCandidatePolicy = null }) {
     return transaction(db, () => {
+      if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
+      const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
+      if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
+        fail('invalid_input');
+      }
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       // The existing partial index excludes history/tombstones before traversal.
       // Require that access path: a missing index must not trigger a full scan.
       // Projection-rejected current rows still consume the bounded allowance.
-      const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness FROM memories
-        INDEXED BY capture_current_memories WHERE ${namespaceWhere}
-          AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
-        .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
+      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT id,memory_id,receipt_key,
+        client,session_id,event_id,role,excerpt FROM receipts INDEXED BY capture_memory_receipts
+        WHERE memory_id = ? ORDER BY id LIMIT ?`);
       const eligible = [];
-      for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
-        if (memory.deleted || memory.currentness !== 'current') continue;
-        // Respect active-generation membership, never bypass its read authority.
-        if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
-          AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
-        eligible.push({ memory, score: score(memory.content) });
+      const scoreMemory = (memory) => {
+        const bodyScore = score(memory.content);
+        let candidateScore = bodyScore;
+        let winningExcerpt;
+        if (receiptSources) {
+          const receipts = receiptSources.all(memory.id, sourceReceiptLimit);
+          for (const receipt of receipts) {
+            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+            const receiptScore = score(source.excerpt);
+            // Stable receipt-ID order and strict improvement preserve the first
+            // receipt on ties and retain the body label on a body/receipt tie.
+            if (receiptScore > candidateScore) {
+              candidateScore = receiptScore;
+              winningExcerpt = source.excerpt;
+            }
+          }
+        }
+        return { memory, score: candidateScore, winningExcerpt };
+      };
+      const compare = (left, right) => right.score - left.score ||
+        (left.memory.id < right.memory.id ? -1 : left.memory.id > right.memory.id ? 1 : 0);
+      let scanExhausted;
+      if (keyset) {
+        const { scan, page, top } = BOUNDED_KEYSET_SOURCE_CANDIDATES;
+        const physicalPage = db.prepare(`SELECT id, revision FROM memories
+          INDEXED BY capture_current_memories WHERE ${namespaceWhere}
+            AND deleted = 0 AND currentness = 'current' AND id > ? ORDER BY id LIMIT ?`);
+        const sentinel = db.prepare(`SELECT id FROM memories INDEXED BY capture_current_memories
+          WHERE ${namespaceWhere} AND deleted = 0 AND currentness = 'current' AND id > ?
+          ORDER BY id LIMIT 1`);
+        const projected = projectPrepare(`SELECT id, revision, content FROM memories
+          WHERE ${namespaceWhere} AND id = ? AND revision = ?
+            AND deleted = 0 AND currentness = 'current'`);
+        let lastId = '';
+        let visited = 0;
+        let more = false;
+        let pruned = false;
+        while (visited < scan) {
+          const limit = Math.min(page, scan - visited);
+          const batch = physicalPage.all(...boundary(ns), lastId, limit);
+          if (batch.length === 0) break;
+          for (const physical of batch) {
+            visited += 1;
+            lastId = physical.id;
+            // The physical page has IDs only: excluded revisions never expose
+            // content to the scorer or cause a receipt read.
+            const memory = projected.get(...boundary(ns), physical.id, physical.revision);
+            if (!memory) continue;
+            const candidate = scoreMemory(memory);
+            if (eligible.length === top && compare(candidate, eligible.at(-1)) >= 0) {
+              pruned = true;
+              continue;
+            }
+            let low = 0;
+            let high = eligible.length;
+            while (low < high) {
+              const middle = (low + high) >>> 1;
+              if (compare(candidate, eligible[middle]) < 0) high = middle;
+              else low = middle + 1;
+            }
+            eligible.splice(low, 0, candidate);
+            if (eligible.length > top) { eligible.pop(); pruned = true; }
+          }
+          if (batch.length < limit) break;
+        }
+        if (visited === scan) more = Boolean(sentinel.get(...boundary(ns), lastId));
+        // Scorers are private, but their callbacks must not turn a stale page
+        // into a plausible current result before the model/cursor checks.
+        if (epoch(ns) !== currentEpoch) fail('index_revision_conflict');
+        scanExhausted = !more && !pruned;
+        for (const candidate of eligible) {
+          candidate.sourceLabel = candidate.winningExcerpt === undefined
+            ? undefined : memoryLabel(candidate.winningExcerpt);
+        }
+      } else {
+        const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness FROM memories
+          INDEXED BY capture_current_memories WHERE ${namespaceWhere}
+            AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
+          .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
+        for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
+          if (memory.deleted || memory.currentness !== 'current') continue;
+          // Respect active-generation membership, never bypass its read authority.
+          if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
+            AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
+          const candidate = scoreMemory(memory);
+          eligible.push({ ...candidate, sourceLabel: candidate.winningExcerpt === undefined
+            ? undefined : memoryLabel(candidate.winningExcerpt) });
+        }
+        scanExhausted = scanned.length <= QUERY_SCAN_LIMIT;
       }
-      eligible.sort((a, b) => b.score - a.score ||
-        (a.memory.id < b.memory.id ? -1 : a.memory.id > b.memory.id ? 1 : 0));
-      const rows = eligible.map(({ memory }) => {
+      eligible.sort(compare);
+      const rows = eligible.map(({ memory, sourceLabel }) => {
         const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
           JOIN mocs parent ON parent.id = r.moc_id
           WHERE r.memory_id = ? AND r.memory_revision = ? AND ${qualifiedNamespace('parent')}
@@ -381,11 +476,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           ORDER BY parent.canonical_title, parent.id LIMIT 1`)
           .get(memory.id, memory.revision, ...boundary(ns));
         return { item: placement
-          ? { type: 'ref', ref: memoryRef(placement), label: memoryLabel(memory.content) }
+          ? { type: 'ref', ref: memoryRef(placement), label: sourceLabel ?? memoryLabel(memory.content) }
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
-            label: memoryLabel(memory.content) } };
+            label: sourceLabel ?? memoryLabel(memory.content) } };
       });
-      return { rows, epoch: currentEpoch, scanExhausted: scanned.length <= QUERY_SCAN_LIMIT };
+      return { rows, epoch: currentEpoch, scanExhausted };
     });
   }
 

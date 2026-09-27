@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { parseConfiguration } from '../cli.mjs';
 import { createCairnServer } from '../server.mjs';
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
@@ -116,5 +117,62 @@ test('invalid programmatic recallContext rejects before opening a database', () 
   for (const recallContext of [undefined, null, false, '', 'rationale-evidence', 'SOURCE-EVIDENCE']) {
     assert.throws(() => createCairnServer({ ...base, recallContext }), /invalid_mcp_configuration/);
     assert.deepEqual(readdirSync(directory), []);
+  }
+});
+
+test('capture deadline CLI is canonical, capture-only, syntax-only and omitted by default', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cairn-deadline-config-'));
+  const path = join(directory, 'memory.sqlite');
+  const base = ['--db', path, '--owner', 'synthetic-owner'];
+  assert.equal(Object.hasOwn(JSON.parse(run(['--check-config', ...base]).stdout), 'captureDeadlineMs'), false);
+  for (const mode of ['source-bound-v1', 'source-bound-v2']) for (const bound of ['1', '120000']) {
+    const flags = [...base, '--capture-qualification', mode, '--capture-deadline-ms', bound];
+    assert.equal(parseConfiguration(flags).captureDeadlineMs, Number(bound));
+    for (const key of ['', 'synthetic-secret']) {
+      const result = run(['--check-config', ...flags], key);
+      assert.equal(result.status, 0, result.stderr);
+      const report = JSON.parse(result.stdout);
+      assert.equal(report.captureDeadlineMs, Number(bound));
+      assert.equal(report.capture, key ? 'configured-not-verified' : 'model_not_configured');
+      assert.equal(report.databaseOpened, false);
+      assert.equal(report.providerContacted, false);
+      assert.equal(result.stdout.includes('synthetic-secret'), false);
+      assert.deepEqual(readdirSync(directory), []);
+    }
+  }
+  for (const tail of [[], ['0'], ['120001'], ['01'], ['+1'], ['-1'], [' 1'], ['1 '],
+    ['1.0'], ['1e2'], ['１２'], ['999999999999999999999'], ['1', '--capture-deadline-ms', '1']]) {
+    const result = run(['--check-config', ...base, '--capture-qualification', 'source-bound-v1',
+      '--capture-deadline-ms', ...tail]);
+    assert.equal(result.status, 1, JSON.stringify(tail));
+    assert.equal(result.stdout, '');
+    assert.deepEqual(readdirSync(directory), []);
+  }
+  for (const flags of [['--capture-deadline-ms', '1'],
+    ['--capture-qualification', 'wrong', '--capture-deadline-ms', '1']]) {
+    assert.equal(run(['--check-config', ...base, ...flags]).status, 1);
+    assert.deepEqual(readdirSync(directory), []);
+  }
+  assert.match(run(['--help']).stdout, /--capture-deadline-ms/);
+});
+
+test('programmatic capture deadline is strict, own-property only, and invalid before storage', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cairn-deadline-constructor-'));
+  const path = join(directory, 'memory.sqlite');
+  const base = { path, namespace: { ownerId: 'synthetic-owner', scope: 'personal', projectId: null },
+    captureQualification: 'source-bound-v1' };
+  for (const captureDeadlineMs of [undefined, null, false, '1', 0, -1, 120001, 1.1, NaN, Infinity]) {
+    assert.throws(() => createCairnServer({ ...base, captureDeadlineMs }), /invalid_mcp_configuration/);
+    assert.deepEqual(readdirSync(directory), []);
+  }
+  assert.throws(() => createCairnServer({ path, namespace: base.namespace, captureDeadlineMs: 1 }),
+    /invalid_mcp_configuration/);
+  assert.deepEqual(readdirSync(directory), []);
+  const inherited = Object.assign(Object.create({ captureDeadlineMs: 0 }), base);
+  const ordinary = createCairnServer(inherited);
+  await ordinary.close();
+  for (const captureDeadlineMs of [1, 120000]) {
+    const server = createCairnServer({ ...base, captureDeadlineMs });
+    await server.close();
   }
 });

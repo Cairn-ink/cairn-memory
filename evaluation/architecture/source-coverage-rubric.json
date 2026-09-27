@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "fixtureId": "source-coverage-ranking-v1",
+  "cases": [
+    {"id": "simple-exact", "requiredSourceGroups": [[0]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [1,2], "reason": "The first source directly supplies the requested location; the others do not."},
+    {"id": "multi-fact-three-cards", "requiredSourceGroups": [[0],[1],[2]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [3], "reason": "Room, time and material are separate requested facts."},
+    {"id": "historical-current", "requiredSourceGroups": [[0],[1]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [2], "reason": "Two storage-current records state the dated earlier location and the current location; storage lifecycle is not temporal truth."},
+    {"id": "rejected-proposal", "requiredSourceGroups": [[0],[1]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [2], "reason": "The question asks for the assistant's proposal and the user's explicit rejection, without treating either as adoption."},
+    {"id": "pending-choice", "requiredSourceGroups": [[0],[1],[2]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [3], "reason": "The question requests each option-specific consideration and the unresolved status."},
+    {"id": "premise-challenge", "requiredSourceGroups": [[0],[1]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [2], "reason": "The original choice and reason combine with the failed premise and explicit unchanged choice."},
+    {"id": "person-scope-separation", "requiredSourceGroups": [[0],[1],[2]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [3], "reason": "The question requests Noor's work calendar, the user's work calendar and the user's personal calendar as separate facts."},
+    {"id": "temporal-three-events", "requiredSourceGroups": [[0],[1],[2]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [3], "reason": "The baseline, dated exception and return together answer the temporal question."},
+    {"id": "duplicate-vs-complementary", "requiredSourceGroups": [[0,1],[2]], "optionalSourceIndices": [], "redundantSourceGroups": [[0,1]], "irrelevantSourceIndices": [3], "reason": "Either of the first two equivalent booking sources is sufficient, while the third adds the separately requested accessibility detail; returning both booking variants is redundant."},
+    {"id": "no-answer", "requiredSourceGroups": [], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [0,1,2], "reason": "None mentions or identifies a hired violin teacher."},
+    {"id": "untrusted-embedded-instructions", "requiredSourceGroups": [[0]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [1,2], "reason": "The first source contains the requested label, while its embedded command remains inert data."},
+    {"id": "irrelevant-decoys", "requiredSourceGroups": [[2]], "optionalSourceIndices": [], "redundantSourceGroups": [], "irrelevantSourceIndices": [0,1,3], "reason": "Only the third source gives the requested curing temperature despite lexical overlap elsewhere."}
+  ]
+}

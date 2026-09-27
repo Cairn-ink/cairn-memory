@@ -15,7 +15,7 @@ import { isDeepStrictEqual, TextDecoder } from 'node:util';
 
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
 export const CORE_MESSAGE_LIMIT_UTF16_CHARACTERS = 4_000;
-export const SCHEMA_VERSION = 'cairn-longmemeval-preparation-v1';
+export const SCHEMA_VERSION = 'cairn-longmemeval-preparation-v2';
 
 const QUESTION_TYPES = new Set([
   'single-session-user',
@@ -250,11 +250,19 @@ export const stableTurnId = (sourceQuestionId, sessionIndex, sourceSessionId, tu
   return `lme-turn-${sha256(coordinates)}`;
 };
 
+// v2 identity is tied only to case and occurrence coordinates, never source labels.
+export const opaqueSessionId = (sourceQuestionId, sessionIndex) =>
+  `lme-session-${sha256(JSON.stringify([sourceQuestionId, sessionIndex]))}`;
+
+export const stableTurnIdV2 = (sourceQuestionId, sessionIndex, turnIndex) =>
+  `lme-turn-${sha256(JSON.stringify(['v2', sourceQuestionId, sessionIndex, turnIndex]))}`;
+
 const projectSelected = (data, selectedIds) => {
   const selected = data.filter((instance) => selectedIds.has(instance.question_id));
   const histories = [];
   const questions = [];
   const evaluators = [];
+  const sessionIdMap = [];
   const blockers = [];
   const stats = {
     selected_question_count: selected.length,
@@ -272,6 +280,7 @@ const projectSelected = (data, selectedIds) => {
   for (const instance of selected) {
     const questionId = opaqueQuestionId(instance.question_id);
     const sessions = [];
+    const sessionOccurrences = [];
     const turnLabels = [];
     const selectedSessionIds = new Set();
     for (let sessionIndex = 0; sessionIndex < instance.haystack_sessions.length; sessionIndex += 1) {
@@ -280,8 +289,11 @@ const projectSelected = (data, selectedIds) => {
         stats.selected_duplicate_session_id_occurrence_count += 1;
       }
       selectedSessionIds.add(sourceSessionId);
+      const sessionId = opaqueSessionId(instance.question_id, sessionIndex);
+      sessionOccurrences.push({ session_index: sessionIndex,
+        source_session_id: sourceSessionId, session_id: sessionId });
       const turns = instance.haystack_sessions[sessionIndex].map((turn, turnIndex) => {
-        const turnId = stableTurnId(instance.question_id, sessionIndex, sourceSessionId, turnIndex);
+        const turnId = stableTurnIdV2(instance.question_id, sessionIndex, turnIndex);
         const contentUtf16 = turn.content.length;
         const contentUtf8 = utf8Bytes(turn.content);
         stats.selected_turn_count += 1;
@@ -307,7 +319,7 @@ const projectSelected = (data, selectedIds) => {
       });
       sessions.push({
         session_index: sessionIndex,
-        session_id: sourceSessionId,
+        session_id: sessionId,
         date: instance.haystack_dates[sessionIndex],
         turns,
       });
@@ -317,16 +329,19 @@ const projectSelected = (data, selectedIds) => {
     stats.selected_question_utf8_bytes += utf8Bytes(instance.question);
     histories.push({ question_id: questionId, sessions });
     questions.push({ question_id: questionId, text: instance.question, date: instance.question_date });
+    sessionIdMap.push({ question_id: questionId, source_question_id: instance.question_id,
+      occurrences: sessionOccurrences });
     evaluators.push({
       question_id: questionId,
       source_question_id: instance.question_id,
       question_type: instance.question_type,
       reference_answer: instance.answer,
-      answer_session_ids: [...instance.answer_session_ids],
+      answer_session_ids: instance.answer_session_ids.map((sourceSessionId) =>
+        sessionOccurrences.find((occurrence) => occurrence.source_session_id === sourceSessionId).session_id),
       turn_labels: turnLabels,
     });
   }
-  return { selected, histories, questions, evaluators, blockers, stats };
+  return { selected, histories, questions, evaluators, sessionIdMap, blockers, stats };
 };
 
 const jsonLines = (records) => `${records.map((record) => JSON.stringify(record)).join('\n')}\n`;
@@ -405,6 +420,7 @@ export async function prepareLongMemEval(options) {
       question_ids: projected.histories.map((record) => record.question_id),
       count: projected.selected.length,
     },
+    session_id_map: projected.sessionIdMap,
     artifacts,
     sizes: { ...sourceStats, ...projected.stats },
     compatibility: {

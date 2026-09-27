@@ -164,3 +164,57 @@ test('SE5 tokenizer mutation cannot replace fetched sources after budget measure
   };
   error(fetch(f.core, memory)); assert.equal(changed, true);
 });
+
+test('SCR3 complementary refs receive full retained sources and survive the authoritative final read without added calls or wider caps', async t => {
+  const f = fixture(t, { rank: ({ input }) => ({ refs: ['Room Fern', 'cobalt sample'].map(fragment => {
+    const candidate = input.candidates.find(item => item.receipts.some(source => source.excerpt.includes(fragment)));
+    return { namespaceIndex: candidate.namespaceIndex, memoryId: candidate.memory.id, revision: candidate.memory.revision };
+  }) }) });
+  const first = admit(f.core, 'The synthetic workshop meets in Room Fern.', { receipts: [
+    receipt('The synthetic workshop meets in Room Fern.', 'room'),
+    receipt('Room Fern is on the second floor.', 'floor', 'assistant'),
+  ], memory: { content: 'Synthetic room interpretation.', kind: 'context' } });
+  admit(f.core, 'The synthetic workshop cafeteria closes at 16:00.', {
+    receipts: [receipt('The synthetic workshop cafeteria closes at 16:00.', 'decoy')],
+    memory: { content: 'Synthetic cafeteria interpretation.', kind: 'context' },
+  });
+  const third = admit(f.core, 'Bring the cobalt sample to the synthetic workshop.', {
+    receipts: [receipt('Bring the cobalt sample to the synthetic workshop.', 'material')],
+    memory: { content: 'Synthetic material interpretation.', kind: 'context' },
+  });
+  const envelope = await recall(f.core, { query: 'Where is the synthetic workshop and what should I bring?', limit: 3 });
+  assert.equal(envelope.ok, true, JSON.stringify({ envelope, calls: f.calls }));
+  const result = envelope.value;
+  const selections = f.calls.filter(call => call.method === 'select');
+  const ranks = f.calls.filter(call => call.method === 'rank');
+  assert.equal(selections.length, 1); assert.equal(ranks.length, 1);
+  assert.equal(selections[0].input.maxRefs, 24);
+  assert.equal(ranks[0].input.limit, 3); assert.equal(ranks[0].input.candidates.length, 3);
+  const roomCandidate = ranks[0].input.candidates.find(item => item.memory.id === first.id);
+  assert.deepEqual(roomCandidate.receipts.map(item => ({ role: item.role, excerpt: item.excerpt }))
+    .sort((a, b) => a.excerpt.localeCompare(b.excerpt)), [
+    { role: 'assistant', excerpt: 'Room Fern is on the second floor.' },
+    { role: 'user', excerpt: 'The synthetic workshop meets in Room Fern.' },
+  ]);
+  assert.deepEqual(result.memories.map(item => item.memory.id), [first.id, third.id]);
+  assert.deepEqual(result.memories[0].receipts, roomCandidate.receipts);
+  assert.deepEqual(result.memories[1].receipts.map(source => source.excerpt),
+    ['Bring the cobalt sample to the synthetic workshop.']);
+});
+
+test('SCR3 source-evidence rank still rejects out-of-pool, duplicate and stale refs', async t => {
+  for (const failure of ['out-of-pool', 'duplicate', 'stale']) {
+    let rankCalls = 0;
+    const f = fixture(t, { rank: ({ input }) => {
+      rankCalls++;
+      const ref = { namespaceIndex: input.candidates[0].namespaceIndex,
+        memoryId: input.candidates[0].memory.id, revision: input.candidates[0].memory.revision };
+      if (failure === 'out-of-pool') ref.memoryId = 'synthetic-not-in-candidate-pool';
+      if (failure === 'stale') ref.revision++;
+      return { refs: failure === 'duplicate' ? [ref, { ...ref }] : [ref] };
+    } });
+    admit(f.core, `Synthetic ${failure} source.`);
+    error(await recall(f.core, { limit: 3 }), 'invalid_model_output');
+    assert.equal(rankCalls, 1);
+  }
+});
