@@ -36,6 +36,19 @@ are observations, not causal proof; absence is not success. The fields do not
 grant authority, alter default behavior, relax validation, add retries, or
 change public core/plugin/MCP/HTTP or hosted telemetry schemas.
 
+For future `qualifyCandidates` failures, the trusted model diagnostic observer
+can further distinguish a parsed non-object root (`output_shape`), invalid
+evidence-pool wire/member shape (`qualification_wire_shape`), pool identity or
+membership (`qualification_pool_mapping`), evidence-slot mapping
+(`qualification_slot_mapping`), and decoded inline value/schema rejection
+(`qualification_value_shape`). These are fixed reason categories, never copied
+provider fields or exception messages. The same bounded `{version,stage,layer,reason}`
+event envelope applies; no source text, IDs, pool contents, field values,
+response bodies or keys enter it. Observation cannot change validation,
+requests, retry behavior, scoring or admission, and does not prove which actor
+caused a malformed output. No public core/plugin/MCP/HTTP or hosted telemetry
+schema changes.
+
 
 ### Optional embedded indexed source-window boundary
 

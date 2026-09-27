@@ -99,3 +99,24 @@ test('invalid pools, slots, coverage and accessor fields are rejected without re
   assert.throws(() => decodeQualificationEvidencePool(data, accessor), /invalid_pool_output/u);
   assert.equal(getterCalls, 0);
 });
+
+test('Q2 decoder preserves no-observer error shape and reports only a fixed category', async () => {
+  const data = input(1), malformed = encode(inline(data));
+  malformed.qualifications.item_3.pool = [2, 2];
+  let baseline;
+  for (const observer of [undefined, () => { throw Error('SYNTHETIC_PROVIDER_PRIVATE'); },
+    async () => { throw Error('SYNTHETIC_PROVIDER_PRIVATE'); }]) {
+    assert.throws(() => decodeQualificationEvidencePool(data, malformed, observer), error => {
+      const shape = JSON.stringify({ name: error.name, message: error.message });
+      baseline ??= shape;
+      assert.equal(shape, baseline);
+      assert.equal(error.message, 'invalid_pool_output');
+      return true;
+    });
+  }
+  const events = [];
+  assert.throws(() => decodeQualificationEvidencePool(data, malformed,
+    reason => events.push(reason)), /invalid_pool_output/u);
+  assert.deepEqual(events, ['qualification_pool_mapping']);
+  assert.equal(JSON.stringify(events).includes('SYNTHETIC_PROVIDER_PRIVATE'), false);
+});

@@ -195,6 +195,18 @@ future runs. Synthetic tests distinguish several boundaries but do not prove
 which one occurred in the old 30 cases, fix capture, improve answer quality or
 authorize a new run.
 
+The completed N1 single synthetic-case diagnostic retained a narrower but
+still inconclusive boundary: Cairn completed three ingestion batches, then
+batch index 3 failed with `invalid_model_output` during `qualifyCandidates`;
+the adapter reported `output_shape` and the core reported
+`adapter_output_invalid`. Mem0 completed, and the mixed runner did not halt.
+That finite trace did not retain the response body and cannot establish which
+field was malformed, whether the provider or another boundary caused it, or
+what would happen for a different case. The dependent
+[qualification output diagnostics](plans/qualification-output-diagnostics.md)
+split future local shape observations without reclassifying N1, changing
+capture acceptance, improving measured quality or authorizing a replay.
+
 The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
 an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.
 Its `apiKey` parameter serves Cairn and shared answer/judge requests; the

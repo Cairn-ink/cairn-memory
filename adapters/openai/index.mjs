@@ -57,11 +57,15 @@ function catalogInstructions(system) {
 
 function normalizeQualificationSlots(method, input, output, schema, diagnose) {
   if (method !== 'qualifyCandidates') return output;
-  const reject = () => { diagnose('output_shape'); fail('invalid_model_output'); };
+  const reject = reason => { diagnose(reason); fail('invalid_model_output'); };
   let decoded;
-  try { decoded = decodeQualificationEvidencePool(input, output); } catch { reject(); }
+  let decodeReason = 'qualification_wire_shape';
+  try { decoded = decodeQualificationEvidencePool(input, output, reason => { decodeReason = reason; }); }
+  catch { reject(decodeReason); }
   if (decoded.qualifications.some((entry) => !schemaAccepts(
-    schema.properties.qualifications.properties[qualificationSlot(entry.itemIndex)], entry))) reject();
+    schema.properties.qualifications.properties[qualificationSlot(entry.itemIndex)], entry))) {
+    reject('qualification_value_shape');
+  }
   return decoded;
 }
 

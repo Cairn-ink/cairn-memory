@@ -12,7 +12,9 @@ const reasons = {
     'invalid_reconciliation', 'invalid_rationale', 'malformed_refs', 'duplicate_ref',
     'non_visible_ref', 'namespace_selection_limit']),
   adapter: new Set(['response_envelope', 'response_usage', 'response_message', 'response_content',
-    'output_json', 'output_shape', 'output_bounds', 'request_invalid', 'request_bounds',
+    'output_json', 'output_shape', 'output_bounds', 'qualification_wire_shape',
+    'qualification_pool_mapping', 'qualification_slot_mapping', 'qualification_value_shape',
+    'request_invalid', 'request_bounds',
     'token_count_response', 'transport_failure', 'response_body_bounds', 'response_json', 'model_cancelled']),
 };
 

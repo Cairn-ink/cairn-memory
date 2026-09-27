@@ -3,12 +3,14 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { countOpenAITokens, createOpenAIModel } from '../index.mjs';
 import { DEFAULT_MODEL, LUNA_EXTRACTION_MODEL, EXPERIMENTAL_EXTRACTION_MODEL } from '../profiles.mjs';
 import { qualificationCandidatesInlineSchema, schemas, schemasFor } from '../schemas.mjs';
 import { decodeQualificationEvidencePool } from '../qualification-evidence-pool.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { callModel } from '../../../core/model-call.mjs';
 import { qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
 
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
@@ -47,6 +49,64 @@ function accepts(schema, value) {
   if (schema.type === 'integer') return Number.isSafeInteger(value) && value >= (schema.minimum ?? 0);
   return typeof value === 'string' && value.length >= (schema.minLength ?? 0) && value.length <= (schema.maxLength ?? Infinity);
 }
+
+test('Q3 real callModel and fake HTTP distinguish finite qualification output-shape boundaries', async () => {
+  const cases = [
+    ['output_shape', () => []],
+    ['qualification_wire_shape', () => { const value = wire(); delete value.qualifications.item_0; return value; }],
+    ['qualification_wire_shape', () => { const value = wire(); value.qualifications.item_0.extra = 'SYNTHETIC_PROVIDER_PRIVATE'; return value; }],
+    ['qualification_pool_mapping', () => { const value = wire(); value.qualifications.item_0.pool = [0, 0]; return value; }],
+    ['qualification_pool_mapping', () => { const value = wire(); value.qualifications.item_0.pool = [99]; return value; }],
+    ['qualification_pool_mapping', () => { const value = wire(); value.qualifications.item_0.itemIndex = 1; return value; }],
+    ['qualification_slot_mapping', () => { const value = wire(); value.qualifications.item_0.value.evidenceSlots = [0, 0]; return value; }],
+    ['qualification_slot_mapping', () => { const value = wire(); value.qualifications.item_0.value.evidenceSlots = [1]; return value; }],
+    ['qualification_value_shape', () => { const value = wire(); value.qualifications.item_0.value.value = 'x'.repeat(161); return value; }],
+  ];
+  for (const [reason, makeOutput] of cases) {
+    const events = [], calls = [];
+    const model = createOpenAIModel({ apiKey: 'synthetic-only', onDiagnostic: event => events.push(event),
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body);
+        calls.push(url.endsWith('/input_tokens') ? 'count' : 'generation');
+        assert.ok(calls.length <= 2, 'no retry');
+        return Response.json(url.endsWith('/input_tokens')
+          ? { object: 'response.input_tokens', input_tokens: 120 }
+          : envelope(body.model, makeOutput()));
+      } });
+    await assert.rejects(callModel(model, 'qualifyCandidates', 'Synthetic system', input()),
+      error => error.code === 'invalid_model_output');
+    assert.deepEqual(calls, ['count', 'generation']);
+    assert.deepEqual(events, [
+      { version: 1, stage: 'qualifyCandidates', layer: 'adapter', reason },
+      { version: 1, stage: 'qualifyCandidates', layer: 'core_call', reason: 'adapter_output_invalid' },
+    ]);
+    assert.equal(JSON.stringify(events).includes('SYNTHETIC_PROVIDER_PRIVATE'), false);
+  }
+});
+
+test('Q2 qualification observation cannot change rejection or retry behavior', async () => {
+  let baseline;
+  for (const onDiagnostic of [undefined, () => { throw Error('synthetic-private'); },
+    async () => { throw Error('synthetic-private'); }]) {
+    const calls = [];
+    const model = createOpenAIModel({ apiKey: 'synthetic-only', onDiagnostic,
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body);
+        calls.push(url.endsWith('/input_tokens') ? 'count' : 'generation');
+        assert.ok(calls.length <= 2);
+        const invalid = wire(); invalid.qualifications.item_0.pool = [0, 0];
+        return Response.json(url.endsWith('/input_tokens')
+          ? { object: 'response.input_tokens', input_tokens: 120 } : envelope(body.model, invalid));
+      } });
+    await assert.rejects(callModel(model, 'qualifyCandidates', 'Synthetic system', input()), error => {
+      const shape = JSON.stringify({ name: error.name, message: error.message, code: error.code });
+      baseline ??= shape;
+      assert.equal(shape, baseline);
+      return true;
+    });
+    assert.deepEqual(calls, ['count', 'generation']);
+  }
+});
 
 test('candidate qualification uses identical count/generate baseline model framing across extraction profiles', async () => {
   const bodies = [];
@@ -193,6 +253,46 @@ test('source-bound capture admits normalized slots and exact replay stays offlin
     messages: [{ ...capture.messages[0], content: 'I prefer the Juniper ferry.' }] });
   assert.deepEqual(conflict, { ok: false, error: { code: 'event_payload_conflict', retryable: false } });
   assert.equal(calls.length, beforeReplay);
+});
+
+test('Q4 actual capture rejects invalid qualification wire before admission or classification', async t => {
+  const events = [], methods = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic-only', onDiagnostic: event => events.push(event),
+    fetchImpl: async (url, options) => {
+      const body = JSON.parse(options.body);
+      if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+      methods.push(body.text.format.name);
+      const value = JSON.parse(body.input[0].content[0].text);
+      if (body.text.format.name === 'cairn_extract') return Response.json(envelope(body.model,
+        { items: [{ content: value.messages[0].content, kind: 'preference', confidence: 0.9,
+          sourceIndices: [0] }] }));
+      assert.equal(body.text.format.name, 'cairn_qualifyCandidates');
+      const invalid = wire({ qualifications: value.items.map(item => ({ itemIndex: item.itemIndex,
+        ...Object.fromEntries(fields.map(field => [field, { value: null,
+          evidenceIndices: field === 'value' ? [item.candidates[0].candidateIndex] : [] }])) })) }, value);
+      delete invalid.qualifications.item_0;
+      return Response.json(envelope(body.model, invalid));
+    } });
+  const path = join(mkdtempSync(join(tmpdir(), 'cairn-qualification-shape-')), 'memory.sqlite');
+  const core = openMemoryCore({ path, model, captureQualification: 'source-bound-v2' });
+  t.after(() => core.close());
+  const namespace = { ownerId: 'shape-test', scope: 'personal', projectId: null };
+  const result = await core.capture({ namespace, client: 'synthetic', sessionId: 'session',
+    eventId: 'batch', messages: [{ id: 'source', role: 'user', content: 'Synthetic preference.' }] });
+  assert.deepEqual(result, { ok: false, error: { code: 'invalid_model_output', retryable: false } });
+  assert.deepEqual(methods, ['cairn_extract', 'cairn_qualifyCandidates']);
+  assert.deepEqual(events, [
+    { version: 1, stage: 'qualifyCandidates', layer: 'adapter', reason: 'qualification_wire_shape' },
+    { version: 1, stage: 'qualifyCandidates', layer: 'core_call', reason: 'adapter_output_invalid' },
+  ]);
+  const listed = core.list({ namespace, limit: 10 });
+  assert.equal(listed.ok, true);
+  assert.deepEqual(listed.value.memories, []);
+  const db = new DatabaseSync(path, { readOnly: true });
+  t.after(() => db.close());
+  assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 0);
+  assert.equal(db.prepare('SELECT count(*) n FROM memories').get().n, 0);
+  assert.equal(db.prepare('SELECT count(*) n FROM receipts').get().n, 0);
 });
 
 test('malformed candidate snapshots and local bounds reject before any HTTP', async () => {
