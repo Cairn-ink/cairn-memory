@@ -24,7 +24,18 @@ Update `docs/protocol.md` for the finite observer threat boundary and `docs/limi
 
 ## Q6 — Delivery evidence
 
-Keep the diff to the adapter/decoder, finite vocabulary, their tests and those two docs. Run applicable OpenAI, core, generic, validation, demo, LongMemEval and qualification-wire installed offline gates on both pinned Node versions with synthetic data only. Freeze one local candidate commit against the stated base for primary acceptance and independent Standards/Spec reviews; do not push or merge before that handoff.
+Keep the diff to the adapter/decoder, finite vocabulary, their tests, the two boundary docs,
+and downstream installed-launch assertions that consume the changed diagnostic category.
+The existing `{qualifications:{}}` installed fixture is a wire/member-shape failure,
+so it must assert `qualification_wire_shape`, while retaining its separate
+core-validation, arm-isolation and refused-generation assertions. The
+public-pilot runner's current capture path does not enable candidate
+qualification; its separate finite observer filter is not broadened for an
+unreached path. Run applicable OpenAI, core, generic, validation, demo,
+LongMemEval and qualification-wire installed offline gates, including the full
+artifact suite, on both pinned Node versions with synthetic data only. Freeze
+one local candidate commit against the stated base for primary acceptance and
+independent Standards/Spec reviews; do not push or merge before that handoff.
 
 ## Verification record
 
@@ -51,3 +62,15 @@ and candidate each passed that full test file alone (~17.5 s); the serial
 whole-core gates passed. This is retained as a scheduling-sensitive failed
 precondition, not described as a product fix or erased by a green rerun. No
 paid call, original N1 replay, credential or operational data was used.
+
+CI exposed a downstream assertion omitted from the first Q candidate: the
+installed-launch fixture intentionally returns `{qualifications:{}}`, but two
+O2/O4 assertions still expected the old shared `output_shape` reason. The
+initial artifact matrix therefore passed 82/84. The exact two cases were
+reproduced locally with `node --test --test-name-pattern='O2/O4 installed
+adapter|O4 failed-arm diagnostics'
+packaging/test/qualified-source-pair-launch.test.mjs` (0/2), then passed
+(2/2) after asserting the new `qualification_wire_shape` and unchanged
+`adapter_output_invalid` pair. The full `npm run test:artifact` matrix then
+passed 84/84 on each pinned Node runtime. This was a downstream expectation
+correction, not a runtime decoder, observer or launch behavior change.

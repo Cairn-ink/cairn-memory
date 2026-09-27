@@ -308,7 +308,11 @@ test('O2/O4 installed adapter and core qualification failures stay in their own 
     const firstDiagnostics = JSON.parse(readFileSync(path.join(first, 'diagnostics.json'), 'utf8'));
     const secondDiagnostics = JSON.parse(readFileSync(path.join(second, 'diagnostics.json'), 'utf8'));
     assert.ok(firstDiagnostics.arms['qualified-prefix'].events.some((event) =>
-      event.stage === 'qualifyCandidates' && event.layer === 'adapter' && event.reason === 'output_shape'));
+      event.stage === 'qualifyCandidates' && event.layer === 'adapter'
+        && event.reason === 'qualification_wire_shape'));
+    assert.ok(firstDiagnostics.arms['qualified-prefix'].events.some((event) =>
+      event.stage === 'qualifyCandidates' && event.layer === 'core_call'
+        && event.reason === 'adapter_output_invalid'));
     assert.ok(firstDiagnostics.arms['indexed-windows'].events.some((event) =>
       event.stage === 'qualifyCandidates' && event.layer === 'core_validation'
         && event.reason === 'qualification_citation_integrity'));
@@ -497,7 +501,10 @@ test('O4 failed-arm diagnostics survive a refused generation record',
     const diagnostics = JSON.parse(readFileSync(path.join(first, 'diagnostics.json'), 'utf8'));
     assert.ok(diagnostics.arms['qualified-prefix'].events.some((event) =>
       event.stage === 'qualifyCandidates' && event.layer === 'adapter'
-        && event.reason === 'output_shape'));
+        && event.reason === 'qualification_wire_shape'));
+    assert.ok(diagnostics.arms['qualified-prefix'].events.some((event) =>
+      event.stage === 'qualifyCandidates' && event.layer === 'core_call'
+        && event.reason === 'adapter_output_invalid'));
   });
 
 test('L3 terminal persistence failure retains the earlier global halt and consumed marker',
