@@ -42,4 +42,3 @@ export function draft(f, registered, input, overrides = {}) {
   return { claim, commit, writer };
 }
 export const inspect = (f, id, extra = {}) => ok(f.core.getEpisode({ namespace: ns, episodeId: id, ...extra }));
-
