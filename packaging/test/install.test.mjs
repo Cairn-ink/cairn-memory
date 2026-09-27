@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import test, { before } from 'node:test';
+import test, { after, before } from 'node:test';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName, runtimeFiles } from '../build.mjs';
 import { createExperimentBudget } from '../../evaluation/experiment-budget/index.mjs';
 import { createExperimentRequestGuard, authorizeQualificationExtension } from '../../evaluation/experiment-budget/request-guard.mjs';
@@ -24,7 +24,21 @@ const hash = (path) => createHash('sha256').update(readFileSync(path)).digest('h
 let artifact;
 let installation;
 
-function install(archive, directory = mkdtempSync(join(tmpdir(), 'cairn-installed-preview-'))) {
+// All consumers share this install until the file-level after hook runs.
+const fileWorkspace = createTestWorkspace({ after }, { prefix: 'cairn-installed-file-' });
+const workspaces = new WeakMap();
+function workspace(t) {
+  if (!workspaces.has(t)) workspaces.set(t, createTestWorkspace(t, { prefix: 'cairn-installed-test-' }));
+  return workspaces.get(t);
+}
+function temporary(t, prefix) {
+  const owner = t ? workspace(t) : fileWorkspace;
+  const child = createTestWorkspace(null, { prefix, parent: owner.path });
+  owner.defer(child.cleanup);
+  return child.path;
+}
+
+function install(archive, directory = temporary(null, 'cairn-installed-preview-')) {
   if (!existsSync(join(directory, 'package.json'))) writeFileSync(join(directory, 'package.json'),
     JSON.stringify({ name: 'synthetic-local-install', private: true, version: '0.0.0' }), { flag: 'wx' });
   assert.equal(command('npm', ['prefix', '--prefix', directory], directory, archive.userconfig).trim(), directory);
@@ -44,7 +58,7 @@ async function connect(t, installed, databasePath, { owner = 'synthetic-installe
     args: [installed.executable, '--db', databasePath, '--owner', owner, ...(project ? ['--project', project] : [])],
     cwd: installed.directory, env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
   const client = new Client({ name: 'synthetic-installed-client', version: '1.0.0' });
-  t.after(async () => { await client.close(); });
+  workspace(t).defer(async () => { await client.close(); });
   await client.connect(transport);
   return client;
 }
@@ -60,8 +74,8 @@ async function call(client, name, args = {}) {
 const ok = (result) => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 
 for (const mode of ['success', 'invalid-first-qualification', 'transport-failure']) {
-  test(`installed qualification pilot retains all six cases with ${mode} fake upstream`, async () => {
-    const root = mkdtempSync(join(tmpdir(), 'cairn-installed-qualification-pilot-'));
+  test(`installed qualification pilot retains all six cases with ${mode} fake upstream`, async t => {
+    const root = temporary(t, 'cairn-installed-qualification-pilot-');
     const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 1000 };
     createExperimentBudget(ledger).close();
     const policy = experimentPolicy();
@@ -138,8 +152,8 @@ for (const mode of ['success', 'invalid-first-qualification', 'transport-failure
   });
 }
 
-test('installed qualification pilot preserves a partial intent without sending or repairing it', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'cairn-pilot-partial-intent-'));
+test('installed qualification pilot preserves a partial intent without sending or repairing it', async t => {
+  const root = temporary(t, 'cairn-pilot-partial-intent-');
   const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 1000 };
   createExperimentBudget(ledger).close();
   createExperimentRequestGuard({ ledger, policy: experimentPolicy(), fetchImpl: () => assert.fail('No setup transport') }).close();
@@ -156,7 +170,7 @@ test('installed qualification pilot preserves a partial intent without sending o
 });
 
 test('installed qualified MCP launcher uses the shared capability guard through an authenticated proxy', async (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'cairn-qualified-guard-install-'));
+  const root = temporary(t, 'cairn-qualified-guard-install-');
   const ledger = { directory: join(root, 'ledger'), runId: randomUUID(), limitMicroUsd: 50_000_000, requestCap: 100 };
   createExperimentBudget(ledger).close();
   const policy = experimentPolicy();
@@ -186,8 +200,9 @@ test('installed qualified MCP launcher uses the shared capability guard through 
           content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
         usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
     } });
+  workspace(t).defer(() => session.close());
   const proxy = await startExperimentProxy({ session });
-  t.after(async () => { await proxy.close(); session.close(); });
+  workspace(t).defer(() => proxy.close());
   assert.notEqual(proxy.token, parentKey);
   const config = join(root, 'launcher.json');
   writeFileSync(config, JSON.stringify({ version: 1, packageRoot: installation.packagePath, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
@@ -199,7 +214,7 @@ test('installed qualified MCP launcher uses the shared capability guard through 
       cwd: installation.directory,
       env: { CAIRN_LIVE_CONFIG: config, OPENAI_API_KEY: proxy.token, NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
     const client = new Client({ name: 'synthetic-guard-install', version: '1.0.0' });
-    t.after(() => client.close()); await client.connect(transport); return client;
+    workspace(t).defer(() => client.close()); await client.connect(transport); return client;
   };
   let client = await start();
   const request = { batchId: 'guarded-installed-batch', messages: [{ role: 'user', content: '週報請用繁體中文。' }] };
@@ -231,7 +246,7 @@ test('installed qualified MCP launcher uses the shared capability guard through 
 });
 
 test('installed v2 MCP launcher captures and cold-replays without granting a paid method', async (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'cairn-installed-v2-mcp-'));
+  const root = temporary(t, 'cairn-installed-v2-mcp-');
   const databasePath = join(root, 'memory.sqlite');
   let sends = 0; let readOnly = false; let active;
   const proxy = await startExperimentProxy({ session: { request: async (route, body) => {
@@ -261,7 +276,8 @@ test('installed v2 MCP launcher captures and cold-replays without granting a pai
         content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
       usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
   } } });
-  t.after(async () => { if (active) await active.close(); await proxy.close(); });
+  workspace(t).defer(() => proxy.close());
+  workspace(t).defer(async () => { if (active) await active.close(); });
   const config = join(root, 'transport.json');
   writeFileSync(config, JSON.stringify({ version: 1, packageRoot: installation.packagePath, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
   const start = async (mode = 'source-bound-v2') => {
@@ -346,7 +362,7 @@ test('installed MCP captures qualified submitted text and reopens without new pr
       args: [fixturePath, databasePath, tracePath, ...(deny ? ['deny'] : [])],
       cwd: directory, env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
     const client = new Client({ name: 'synthetic-qualified-install', version: '1.0.0' });
-    t.after(() => client.close());
+    workspace(t).defer(() => client.close());
     await client.connect(transport);
     return client;
   };
@@ -716,8 +732,8 @@ test('production shrinkwrap installs only the exact reviewed closure with upstre
   }
 });
 
-test('installed executable provides help and non-mutating configuration diagnostics', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'cairn-installed-check-'));
+test('installed executable provides help and non-mutating configuration diagnostics', t => {
+  const directory = temporary(t, 'cairn-installed-check-');
   const path = join(directory, 'memory.sqlite');
   const help = command(process.execPath, [installation.executable, '--help'],
     installation.directory, artifact.userconfig);
@@ -762,7 +778,7 @@ test('installed adapter resolves the diagnostic helper and emits only the finite
 });
 
 test('installed executable completes actual SDK stdio lifecycle, restart and scoped revision rejection', { timeout: 30000 }, async (t) => {
-  const path = join(mkdtempSync(join(tmpdir(), 'cairn-installed-data-')), 'memory.sqlite');
+  const path = join(temporary(t, 'cairn-installed-data-'), 'memory.sqlite');
   const first = await connect(t, installation, path, { project: 'harbor' });
   assert.deepEqual((await first.listTools()).tools.map((tool) => tool.name).sort(),
     ['correct_memory', 'forget_memory', 'inspect_memory', 'recall_memory', 'remember_memory']);
@@ -798,8 +814,8 @@ test('installed executable completes actual SDK stdio lifecycle, restart and sco
 });
 
 test('same-schema version upgrade and local uninstall preserve the separately selected memory database', { timeout: 30000 }, async (t) => {
-  const upgraded = install(artifact);
-  const path = join(mkdtempSync(join(tmpdir(), 'cairn-upgrade-data-')), 'memory.sqlite');
+  const upgraded = install(artifact, temporary(t, 'cairn-upgrade-install-'));
+  const path = join(temporary(t, 'cairn-upgrade-data-'), 'memory.sqlite');
   const first = await connect(t, upgraded, path);
   const content = 'Synthetic upgrade persistence marker.';
   const saved = ok(await call(first, 'remember_memory', { content })).memory;
@@ -829,8 +845,8 @@ test('preview builder rejects release-like or path-shaped versions', () => {
   }
 });
 
-test('an ancestor npm project is never modified by a fresh explicitly scoped child install', () => {
-  const ancestor = mkdtempSync(join(tmpdir(), 'cairn-ancestor-regression-'));
+test('an ancestor npm project is never modified by a fresh explicitly scoped child install', t => {
+  const ancestor = temporary(t, 'cairn-ancestor-regression-');
   const manifestPath = join(ancestor, 'package.json');
   writeFileSync(manifestPath, JSON.stringify({ name: 'synthetic-ancestor-do-not-modify',
     version: '0.0.0', private: true, dependencies: {} }));

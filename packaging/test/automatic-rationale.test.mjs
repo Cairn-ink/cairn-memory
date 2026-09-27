@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -15,7 +15,8 @@ const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
 const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
 
 for (const directOnly of [false, true]) test(`installed adapter/core/MCP retains ${directOnly ? 'direct-only challenge' : 'support-chain'} rationale through cold replay`, { timeout: 60000 }, async t => {
-  const artifact = buildArtifact(); const root = mkdtempSync(join(tmpdir(), 'cairn-installed-rationale-'));
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-installed-rationale-' });
+  const root = workspace.path; const artifact = buildArtifact();
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-rationale', private: true, version: '0.0.0' }), { flag: 'wx' });
   command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], root, artifact.userconfig);
   const packageRoot = join(root, 'node_modules', packageName); const path = join(root, 'memory.sqlite');
@@ -40,9 +41,10 @@ for (const directOnly of [false, true]) test(`installed adapter/core/MCP retains
       output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } });
   } } });
+  workspace.defer(() => proxy.close());
   const config = join(root, 'transport.json');
   writeFileSync(config, JSON.stringify({ version: 1, packageRoot, proxyUrl: proxy.url }), { mode: 0o600, flag: 'wx' });
-  let active; t.after(async () => { if (active) await active.close(); await proxy.close(); });
+  let active; workspace.defer(async () => { if (active) await active.close(); });
   const start = async key => {
     active = new Client({ name: 'installed-rationale-test', version: '1.0.0' });
     await active.connect(new StdioClientTransport({ command: process.execPath,
