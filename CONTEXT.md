@@ -42,6 +42,12 @@ The current organization of an active memory under topics, which does not
 establish how or whether its original capture batch was classified.
 _Avoid_: Classification success, verified truth
 
+**Session episode**:
+A bounded, source-anchored model interpretation of one captured session. Its
+retained source passages are independent of memory admission and are not source
+receipts or verified assertions. Semantic support remains unassessed.
+_Avoid_: Verified activity log, complete transcript, current assertion
+
 **Staged evidence**:
 Submitted evidence retained separately while its interpretation is incomplete or
 unsuccessful; it is not an admitted assertion, authenticated record or permission.

@@ -17,8 +17,11 @@ export function openMemoryStore(input) {
     return Object.freeze({
       remember(input) {
         runtime.ready();
-        const value = memoryInput(input);
-        return runtime.admit(ns, { ...value, receipts: [value.receipt] },
+        const tagged = input !== null && typeof input === 'object' && Object.hasOwn(input, 'procedural');
+        const { procedural, ...memory } = tagged ? input : {};
+        const value = memoryInput(tagged ? memory : input);
+        return runtime.admit(ns, { ...value, receipts: [value.receipt],
+          ...(tagged ? { procedural } : {}) },
           { legacy: true }).legacyMemory;
       },
 

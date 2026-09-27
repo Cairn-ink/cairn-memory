@@ -1,0 +1,676 @@
+{
+  "base": "93e52b7afb298d728cb4831c34bbda6dcf750704",
+  "sourceHashes": {
+    "plugins/cairn-memory/lib/capture-cursor.mjs": "8c5ff5ba87e85604c3119b86137057710736fa351362220a343e8c075e1cd467",
+    "plugins/cairn-memory/lib/capture-event.mjs": "e8523cef22f6a5d153b0652e1d5abff178ba52dfab0dda2e1754a74934af2d30",
+    "plugins/cairn-memory/lib/config.mjs": "e0cd0b8c69a9b56265d2db4ae477c5aa3719a0f7eb7851155ff3d9ac43dca0d3",
+    "plugins/cairn-memory/lib/control-state.mjs": "2921078bae31ac35e5273dcf5ab11857bf753c50e7e384c52f1758b01ec79916",
+    "plugins/cairn-memory/lib/file-lock.mjs": "a9026e7cbf285bb3aa1bfe60628ba41bf885c53e9ba922a7958e444f18dfb521",
+    "plugins/cairn-memory/lib/http.mjs": "da22fd81f46671f60bac4c0af0d52bfd33518ed41cf2896a1d241425dcd1c5ba",
+    "plugins/cairn-memory/lib/identity.mjs": "d86697c1366233021cf1e7699476078338bf2c61694718a7e80cb3b0762d5c4d",
+    "plugins/cairn-memory/lib/recall-query.mjs": "87d606696185da8c0455889c9cf359116f82f70b3a92a1153629026b5406f765",
+    "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
+    "plugins/cairn-memory/lib/transcript.mjs": "50fbb331029031b105cf93013168ac7e1561e22cbc1384a81e4c5b71753633ce",
+    "plugins/cairn-memory/lib/version.mjs": "655f09054c579267c5836e266dea5fc64b6d6c237c77421767d6f47f931059b1",
+    "plugins/cairn-memory/scripts/hook.mjs": "85c6c1af3c07b68d451447a952e80583aa2c7a4c7f86301699aa20c0579b14e7",
+    "plugins/cairn-memory/scripts/launch-capture.mjs": "a628fc0642ca625b5be9b3eb6fa0770e19a19e9386021ddf8f3f1f5508e10f30"
+  },
+  "mechanisms": {
+    "redaction": [
+      "[REDACTED] [REDACTED] [REDACTED]",
+      "[REDACTED] [REDACTED]",
+      "[REDACTED] [REDACTED]",
+      "[REDACTED]",
+      "[REDACTED]",
+      "api_token=[REDACTED] client_secret:[REDACTED] password=[REDACTED]",
+      "unchanged 中文 🙂 \u0000 ﷽",
+      "42",
+      "null"
+    ],
+    "identities": [
+      "5c52cc5edea667c25e4b5ad8fec8c4b145ffdbc8e1e6f1d991a05c987de74782",
+      "89837be0dee0f7625844472d4fbd1fdc12136a6be4eb8d19221f8d3b44509aca",
+      "64bd18b4ff6fb7863df03c98b6b434e22f0211091620ab23c6c12fac34f2318a",
+      null,
+      "275412c5823e84cf772f99241903e6e3f1cc31f1ec7fbddf628d9efc880655a3"
+    ],
+    "installId": "12345678-1234-4234-8234-123456789abc",
+    "projectKeyBytes": " 12345678-1234-4234-8234-123456789abc\n",
+    "cursorPath": "sessions/44b6c59a516d5b66d16f861ddb211b0de8e3cd5d05bbe1ddd07a5235be2bd8a5.json",
+    "cursorFiles": [
+      {
+        "bytes": "{\"offset\":0}",
+        "value": {
+          "offset": 0,
+          "generation": "initial",
+          "discardUntilNewline": false
+        },
+        "mode": 384
+      },
+      {
+        "bytes": "{\"offset\":15,\"generation\":\"initial\",\"discardUntilNewline\":true,\"pendingEnd\":30}",
+        "value": {
+          "offset": 15,
+          "generation": "initial",
+          "discardUntilNewline": true,
+          "pendingEnd": 30
+        },
+        "mode": 384
+      },
+      {
+        "bytes": "{\"offset\":30,\"generation\":\"11111111-1111-4111-8111-111111111111\",\"discardUntilNewline\":false}",
+        "value": {
+          "offset": 30,
+          "generation": "11111111-1111-4111-8111-111111111111",
+          "discardUntilNewline": false
+        },
+        "mode": 384
+      }
+    ],
+    "invalidCursors": [
+      null,
+      null,
+      null,
+      {
+        "offset": 4,
+        "generation": "initial",
+        "discardUntilNewline": false
+      },
+      {
+        "offset": 4,
+        "generation": "initial",
+        "discardUntilNewline": false
+      }
+    ],
+    "states": [
+      {
+        "paused": false,
+        "generation": "initial",
+        "valid": true
+      },
+      {
+        "paused": true,
+        "generation": "legacy-ac1b5c0961a7269b6a053ee64276ed0e20a7f48aefb9f67519539d23aaf10149",
+        "valid": true
+      },
+      {
+        "paused": true,
+        "generation": "11111111-1111-4111-8111-111111111111",
+        "valid": true
+      },
+      {
+        "paused": false,
+        "generation": "11111111-1111-4111-8111-111111111111",
+        "valid": true
+      },
+      {
+        "paused": true,
+        "generation": "invalid",
+        "valid": false
+      }
+    ],
+    "pausedBytes": "{\"version\":1,\"paused\":true,\"generation\":\"11111111-1111-4111-8111-111111111111\"}",
+    "resumedBytes": "{\"version\":1,\"paused\":false,\"generation\":\"11111111-1111-4111-8111-111111111111\"}",
+    "active": true,
+    "stale": false,
+    "runs": 1,
+    "locked": true,
+    "lockHeld": true,
+    "queries": [
+      null,
+      null,
+      {
+        "hash": "4d9f9ec1503614631ed8c6f0a29e7cb2d20ffaba2ad7f440ad99ff2c41b3fa56",
+        "units": 23
+      },
+      {
+        "hash": "2ffba2e9d24912be00fa3722e6f808c63a3f7fb9b16b47f23b29b3477489dc82",
+        "units": 4000
+      }
+    ],
+    "requests": [
+      {
+        "url": "https://synthetic.invalid/base/capture",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer synthetic-token"
+        },
+        "body": "{\"content\":\"中文🙂\\n\"}",
+        "hasSignal": true
+      },
+      {
+        "url": "https://synthetic.invalid/base/empty",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "hasSignal": true
+      },
+      {
+        "url": "https://synthetic.invalid/base/error",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer synthetic-token"
+        },
+        "body": "{}",
+        "hasSignal": true
+      }
+    ],
+    "replies": [
+      {
+        "accepted": true
+      },
+      null,
+      "http_503",
+      "missing_token"
+    ]
+  },
+  "hosted": {
+    "requests": [
+      {
+        "path": "/api/memory/capture",
+        "bytes": 42790,
+        "sha256": "cc4d7358fa5c4877c7700ad347b406ceb914dcdd2cd7df33bf0d28323bb91c37",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "790d43ed043cdc8dafe3bc4a4a57ba482e7a2e24761ab013f5912b2e1ad378c3",
+        "messages": [
+          {
+            "id": "4a1ceabe7ba202bcd4dab5cc6719d5efc46c094ad70bbeaf77641b61420b26c6",
+            "role": "user",
+            "units": 20000
+          },
+          {
+            "id": "synthetic-1",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-2",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "5fc814d9a7bb379b2210006b69808cff12a471020810b5ea6710885f0566addc",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-4",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-5",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "35078c7d2eb30483ff7bcbcabf7db7cfedc22c03373dfdde6f6c141b5e262017",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-7",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-8",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "8cc7e681a4853cc3799e02e682ec4b1fde48620fb143ce41d35615066a06bc05",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-10",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-11",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "fe9ace2219487363a810a97870a4d3fef33db8adac3913e5cec4cbce76479403",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-13",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-14",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "d69f8958a2b5dbb2ee3f54764dfbd06b1406c011d34e4ce8ffa388c56445772f",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-16",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-17",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "1d54dd58ac4118120cf578631db0b84b8965bccdc580274768de5be6b2356360",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-19",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-20",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "2ae1c99177c31230cc9c7918d0fc15d9dfef759820804ba3ed71624fbb41bb89",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-22",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-23",
+            "role": "assistant",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 376,
+        "sha256": "b1f343ad3b2fae166d38290537710b556e965a71a615aecf7dd9ce3485480651",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "e7a9d1ba567ed70e94d01d9295880ac2442ee48b13b5be46565a38c695642862",
+        "messages": [
+          {
+            "id": "0e925c4dfbc130e9a6e75a2428bdac3d348ed5810e1750acc3ed3493e3088a55",
+            "role": "user",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 42790,
+        "sha256": "cc4d7358fa5c4877c7700ad347b406ceb914dcdd2cd7df33bf0d28323bb91c37",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "790d43ed043cdc8dafe3bc4a4a57ba482e7a2e24761ab013f5912b2e1ad378c3",
+        "messages": [
+          {
+            "id": "4a1ceabe7ba202bcd4dab5cc6719d5efc46c094ad70bbeaf77641b61420b26c6",
+            "role": "user",
+            "units": 20000
+          },
+          {
+            "id": "synthetic-1",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-2",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "5fc814d9a7bb379b2210006b69808cff12a471020810b5ea6710885f0566addc",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-4",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-5",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "35078c7d2eb30483ff7bcbcabf7db7cfedc22c03373dfdde6f6c141b5e262017",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-7",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-8",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "8cc7e681a4853cc3799e02e682ec4b1fde48620fb143ce41d35615066a06bc05",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-10",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-11",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "fe9ace2219487363a810a97870a4d3fef33db8adac3913e5cec4cbce76479403",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-13",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-14",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "d69f8958a2b5dbb2ee3f54764dfbd06b1406c011d34e4ce8ffa388c56445772f",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-16",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-17",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "1d54dd58ac4118120cf578631db0b84b8965bccdc580274768de5be6b2356360",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-19",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-20",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "2ae1c99177c31230cc9c7918d0fc15d9dfef759820804ba3ed71624fbb41bb89",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-22",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-23",
+            "role": "assistant",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 376,
+        "sha256": "b1f343ad3b2fae166d38290537710b556e965a71a615aecf7dd9ce3485480651",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "e7a9d1ba567ed70e94d01d9295880ac2442ee48b13b5be46565a38c695642862",
+        "messages": [
+          {
+            "id": "0e925c4dfbc130e9a6e75a2428bdac3d348ed5810e1750acc3ed3493e3088a55",
+            "role": "user",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 42790,
+        "sha256": "cc4d7358fa5c4877c7700ad347b406ceb914dcdd2cd7df33bf0d28323bb91c37",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "790d43ed043cdc8dafe3bc4a4a57ba482e7a2e24761ab013f5912b2e1ad378c3",
+        "messages": [
+          {
+            "id": "4a1ceabe7ba202bcd4dab5cc6719d5efc46c094ad70bbeaf77641b61420b26c6",
+            "role": "user",
+            "units": 20000
+          },
+          {
+            "id": "synthetic-1",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-2",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "5fc814d9a7bb379b2210006b69808cff12a471020810b5ea6710885f0566addc",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-4",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-5",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "35078c7d2eb30483ff7bcbcabf7db7cfedc22c03373dfdde6f6c141b5e262017",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-7",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-8",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "8cc7e681a4853cc3799e02e682ec4b1fde48620fb143ce41d35615066a06bc05",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-10",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-11",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "fe9ace2219487363a810a97870a4d3fef33db8adac3913e5cec4cbce76479403",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-13",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-14",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "d69f8958a2b5dbb2ee3f54764dfbd06b1406c011d34e4ce8ffa388c56445772f",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-16",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-17",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "1d54dd58ac4118120cf578631db0b84b8965bccdc580274768de5be6b2356360",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-19",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-20",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "2ae1c99177c31230cc9c7918d0fc15d9dfef759820804ba3ed71624fbb41bb89",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-22",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-23",
+            "role": "assistant",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 376,
+        "sha256": "b1f343ad3b2fae166d38290537710b556e965a71a615aecf7dd9ce3485480651",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "e7a9d1ba567ed70e94d01d9295880ac2442ee48b13b5be46565a38c695642862",
+        "messages": [
+          {
+            "id": "0e925c4dfbc130e9a6e75a2428bdac3d348ed5810e1750acc3ed3493e3088a55",
+            "role": "user",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 321,
+        "sha256": "36eac7734874b4b1ad73bd1dda326bade30eba08c6388428abf37acb3f494cda",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "70a7d8092cd28e5254d58e7b2d2fea12229a3b19e27e620ee824f6de67be9bf7",
+        "messages": [
+          {
+            "id": "synthetic-25",
+            "role": "assistant",
+            "units": 32
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/recall",
+        "bytes": 134,
+        "sha256": "db13692e5b0c9fb06c0a9cc27353c35c6c3b8af8a545eb5fb8397bb6569a1729",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": null,
+        "eventId": null,
+        "messages": null
+      }
+    ],
+    "cursorPath": "sessions/44b6c59a516d5b66d16f861ddb211b0de8e3cd5d05bbe1ddd07a5235be2bd8a5.json",
+    "cursorFiles": [
+      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":44507}",
+      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":44507}",
+      "{\"offset\":44507,\"generation\":\"initial\",\"discardUntilNewline\":false}",
+      "{\"offset\":44624,\"generation\":\"initial\",\"discardUntilNewline\":false}"
+    ],
+    "outcomes": [
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ]
+  }
+}

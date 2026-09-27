@@ -176,3 +176,17 @@ fake-provider payload and persisted-row inspection on Node 22.16 and 24. Private
 filesystem and old-process migration precautions remain; SQLite free pages,
 journals, snapshots, backups and provider/caller copies may retain bytes. No
 secure-erasure, complete-history or semantic-fidelity guarantee follows.
+
+### SE-1 implementation boundary
+
+The episode persistence/inspection, correction/deletion and explicit procedural-tag
+subset above is now implemented locally. Episode capture/interpretation and trusted
+producer integrations remain proposed. Opening the store eagerly upgrades to v15 in either mode;
+mode-on capture is unavailable until SE-2; staging alone still never enables it.
+Hosts must stop/drain older connections before upgrade; already-open old processes
+are not retroactively fenced. Feature-off access retains deletion/source fences.
+New retained passages are source evidence, not receipts for remembered assertions.
+Capacity release and bypass leave content-free gaps and no active expiry, while
+conversation deletion suppresses even multi-source/historical derived memories.
+Inspection and tag writes invoke no model. Existing source/prompt/receipt contents
+remain unchanged when neither opt-in is used.
