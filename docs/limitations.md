@@ -104,8 +104,10 @@ outcomes, original rowid gaps, one shared request/money cap and foreign-edit
 fencing. Migration is opt-in and irreversible for old v1 readers: existing
 request guards reject v2 before claim or transport. The new handle is an
 accounting seam only, not a mixed-engine grant, credential owner or Mem0
-transport. No operator ledger has been migrated for this work and no provider
-request, recall comparison or quality result follows from these tests.
+transport. That original offline implementation packet migrated no operator
+ledger; its synthetic tests alone establish no provider request, recall
+comparison or quality result. Later operational evidence is separate from
+these migration tests; see the [historical S3 result](plans/s3-paired-result.md).
 The [mixed embedding lineage assertion](embedding-ledger-migration.md) can
 check a supplied v2 snapshot against the existing 200M parent and original
 historical prefix without opening a ledger. Its success does not authenticate
@@ -348,12 +350,16 @@ larger cohort fits them. It also grants no monetary or request authority and
 does not establish benchmark quality. Current coverage is synthetic and
 offline; any paid larger-cohort run remains separately gated.
 
-The [fresh six-case development smoke](fresh-reliability-smoke.md) has an
-offline-tested wrapper and a privately frozen new roster, but no real-model
-result yet. Its dry-run does not issue or prove a case-deadline capability;
-launch is a separate one-shot action. Even if all six cases complete, this
-selected small roster cannot establish comparative superiority, population
-accuracy, installed Hermes behavior or that historical failures were repaired.
+The [fresh six-case development smoke](fresh-reliability-smoke.md) reached a
+terminal real-model result on 2026-09-25 at runtime
+`45eca22639836e8035c3ccbbe6403a9f5c076b1d`: every arm generated and
+judged 6/6 answers. The [archived aggregate](evidence/fresh-reliability-smoke.md)
+records Cairn 2 correct/4 wrong/0 unresolved, full history 3/3/0, and no
+memory 0/6/0. Its dry-run did not issue or prove a case-deadline capability;
+the one-shot launch was separate. This selected small default-core roster
+cannot establish comparative superiority, population accuracy, installed
+Hermes behavior or that historical failures were repaired; it is distinct
+from the later [official six-type qualification pilot](evidence/qualification-official-pilot.md).
 The offline genuine-core-timeout smoke test now drives the real core timer in
 an isolated test-only process and confirms five later cases continue; it does
 not calibrate a 30-second wall-clock deadline. Its earlier Node 24 full-suite
@@ -369,7 +375,9 @@ fake facts are not recall accuracy or a matched competitor result. Mem0 OSS at
 this pin rejects direct timestamp/reference-date parameters and does not
 return exact source spans. Its default extraction uses the run date unless a
 separate fair replay treatment is frozen. The child-process socket check is
-not a paid-run outbound or cost guard. S3 comparison remains pending.
+not a paid-run outbound or cost guard. At that preflight checkpoint S3 was
+pending; the later terminal fixed-30 outcome is recorded separately in the
+[historical S3 result](plans/s3-paired-result.md).
 
 The public-comparison provenance adapter previously expected only capture's
 first 800-unit normalized source prefix. When that prefix ended in whitespace,
@@ -718,13 +726,18 @@ combined with this v2 roster or identity. Any future score requires a new
 prospectively frozen and independently reviewed protocol and separate
 authorization.
 
-## Offline chained benchmark budget is not a transport grant
+## Chained benchmark budget is not a transport grant
 
-The separately versioned US$100→US$200 benchmark chain has only
-synthetic temporary-ledger evidence. It has not been applied to the operator
-ledger and does not select a fresh roster, a request schedule, source-policy
-transport, retries, models, provider prices or any paid request. Unknown
-historical costs and reservations remain charged; the prior experiment ledger
+The separately versioned `benchmark-budget-chain-v1` US$100→US$200 chain was
+first validated with synthetic temporary ledgers. A later one-time operational
+cap transition used `authorizeChainedBenchmarkBudgetExtension` and retained
+the completed US$100 history under the US$200 ceiling; see the
+[historical milestone record](plans/comparative-reliability-milestones.md).
+That record is not a current balance audit or permission to repeat the
+transition, change the ledger, or spend. The chain itself does not select a
+fresh roster, a request schedule, source-policy transport, retries, models,
+provider prices or any paid request. Unknown historical costs and reservations
+remain charged; the prior experiment ledger
 must not be reset. Old benchmark and scoped capabilities do not inherit the
 chain, although the generic baseline guard can still be explicitly configured
 with a valid new ledger configuration for its unchanged routes. Existing-only

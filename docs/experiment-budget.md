@@ -13,9 +13,13 @@ that same ledger with the same immutable run identity, limit and request cap.
 Creating a fresh ledger is not permission to refill historical spending authority.
 The benchmark's separately audited extension conditionally changed the
 existing run from the fixed cumulative US$50 ceiling to US$100 while retaining
-every row and binding. A separately bound US$100→US$200 chain is now an offline
-prerequisite only; it has not been applied to an operator ledger or granted
-transport. Neither transition is exposed by the ordinary constructors; see
+every row and binding. A separately bound `benchmark-budget-chain-v1`
+US$100→US$200 chain was first validated offline, then applied once through
+`authorizeChainedBenchmarkBudgetExtension` while retaining the completed
+US$100 history; see the [historical milestone record](plans/comparative-reliability-milestones.md).
+That record is not a current balance audit or permission to repeat the
+transition, change the ledger, spend, or grant transport. Neither transition
+is exposed by the ordinary constructors; see
 [the guarded benchmark contract](experiment-request-guard.md#benchmark-monetary-budget-extension).
 
 ## Accounting contract

@@ -131,12 +131,17 @@ reliability work below without declaring older failure gates resolved.
    slot failures remain unresolved.
    Installed Hermes, MOC candidate visibility, source fidelity and lightweight
    latency/request/cost gates remain separate.
-2. Review/merge the verified native-provider candidate and its dependent
-   native deadline/recovery candidate. The separately frozen
-   [six-case development smoke](docs/fresh-reliability-smoke.md) now has a
-   synthetic, guarded wrapper; its fresh real-model result remains pending.
+2. Use the merged native provider and the consolidated deadline/recovery
+   implementation as the baseline for further installed-host and interactive
+   validation. The separately frozen
+   [six-case development smoke](docs/fresh-reliability-smoke.md) reached a
+   [terminal scored result](docs/evidence/fresh-reliability-smoke.md) on
+   2026-09-25: all three arms generated and judged 6/6 answers (Cairn 2/4/0,
+   full history 3/3/0, no memory 0/6/0 correct/wrong/unresolved). This earlier
+   default-core development cohort is not the later official-six qualification
+   pilot and does not establish semantic acceptance or installed-host readiness.
    Evaluate interactive Hermes chat and additional host/platform coverage
-   separately.
+   separately from the development smoke.
 3. Complete independent onboarding and propose publication with honest limits.
 4. Run the [14-day adoption experiment](docs/plans/local-memory-plg.md) only after
    approval: activation and useful sourced recall first; stars are secondary.
