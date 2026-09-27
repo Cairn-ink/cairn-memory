@@ -662,6 +662,17 @@ verify the declared artifact
 hashes against an installation, grant a paid launch or measure quality. See
 [its acceptance contract](plans/mixed-source-pair-guard.md).
 
+The explicit evaluation-only `indexed-evidence-v1` comparison profile binds
+`comparisonProfile`, `captureSourcePolicy: 'indexed-evidence-v1'` and
+`qualificationInputProfile: 'not-requested'` together in the mixed manifest.
+Its method profile is `cairn-mem0-indexed-evidence-source-pair-v1`; the qualifier
+route is removed before both count and generation reservation/transport. Cairn
+extract/classify/select/rank, native Mem0, common answer/judge, original caps,
+one-attempt transport and stop rules remain. Missing, unknown or cross-profile
+metadata fails capability validation; the ordinary qualified capability retains
+its original wire. This is an explicit new grant identity, never a fallback or
+an extension of an old grant. See the [comparison contract](plans/indexed-evidence-comparison.md).
+
 The separate [contained native gateway](plans/mem0-native-gateway.md) now
 inspects a pinned local Mem0/Python installation, rehashes before/after one
 case, and runs actual Mem0 add/get/search in a fresh bwrap child behind a

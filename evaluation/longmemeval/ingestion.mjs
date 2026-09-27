@@ -417,6 +417,20 @@ export function planIndexedWindowLongMemEvalCase(options) {
       rawReconstruction: blockers.length === 0 ? 'exact-from-source-map' : 'exact-from-source-turns' } });
 }
 
+// Same source partition/catalog, with the separately bound evidence-only replay digest.
+export function planIndexedEvidenceLongMemEvalCase(options) {
+  const indexed = planIndexedWindowLongMemEvalCase(options);
+  const { captureQualification: _qualification, ...plan } = indexed;
+  const batches = indexed.batches.map(batch => {
+    const snapshot = captureSnapshot(batch.captureInput, undefined, 'indexed-evidence-v1');
+    return { ...batch, normalizedCapture: { ...batch.normalizedCapture,
+      payloadDigest: snapshot.payloadDigest } };
+  });
+  return deepFreeze({ ...plan,
+    schemaVersion: 'cairn-longmemeval-indexed-evidence-ingestion-plan-v1',
+    captureSourcePolicy: 'indexed-evidence-v1', qualificationStatus: 'not-requested', batches });
+}
+
 export function planQualifiedPrefixLongMemEvalCase(options) {
   const legacy = planLongMemEvalCase(options);
   const blockers = structuredClone(legacy.blockers);
@@ -495,13 +509,15 @@ const validMemoryIds = (value) => Array.isArray(value)
 const RESPONSE_METADATA = Object.freeze({
   legacy: Object.freeze({ field: null }),
   indexed: Object.freeze({ field: 'sourceWindowCatalog' }),
+  evidence: Object.freeze({ field: 'sourceWindowCatalog', qualificationStatus: 'not-requested' }),
   qualifiedPrefix: Object.freeze({ field: 'retainedSourceWindow' }),
 });
 
 const validResponseMetadata = (value, mode, expected) => {
   if (mode === RESPONSE_METADATA.legacy) return true;
-  if (mode === RESPONSE_METADATA.indexed) {
-    return exactResponseObject(value.sourceWindowCatalog,
+  if (mode === RESPONSE_METADATA.indexed || mode === RESPONSE_METADATA.evidence) {
+    return (mode !== RESPONSE_METADATA.evidence || value.qualificationStatus === 'not-requested')
+      && exactResponseObject(value.sourceWindowCatalog,
       ['version', 'maxUnitsPerWindow', 'messageCount', 'windowCount', 'semanticCoverage'])
       && Object.keys(expected).every((key) => value.sourceWindowCatalog[key] === expected[key]);
   }
@@ -529,9 +545,11 @@ const classifyCaptureResponse = (response, mode, expectedMetadata) => {
   const value = response.value;
   if (!validResponseMetadata(value, mode, expectedMetadata)) return null;
   const exactSuccess = (keys) => exactResponseObject(value,
-    mode.field === null ? keys : [...keys, mode.field]);
+    mode.field === null ? keys : [...keys, mode.field,
+      ...(mode === RESPONSE_METADATA.evidence ? ['qualificationStatus'] : [])]);
   const withMetadata = (classified) => mode.field === null ? classified
-    : { ...classified, [mode.field]: structuredClone(value[mode.field]) };
+    : { ...classified, [mode.field]: structuredClone(value[mode.field]),
+      ...(mode === RESPONSE_METADATA.evidence ? { qualificationStatus: 'not-requested' } : {}) };
   if (exactSuccess(['processing']) && value.processing === true) {
     return withMetadata({ status: 'unknown', error: { code: 'capture_processing', retryable: false } });
   }
@@ -579,6 +597,7 @@ const classifyCaptureResponse = (response, mode, expectedMetadata) => {
     admission: structuredClone(value.admission),
     classification: { status: 'failed', error: safeError(classification.error, 'classification_failed') },
     ...(mode.field === null ? {} : { [mode.field]: structuredClone(value[mode.field]) }),
+    ...(mode === RESPONSE_METADATA.evidence ? { qualificationStatus: 'not-requested' } : {}),
   } });
   return null;
 };
@@ -621,6 +640,10 @@ export function ingestLongMemEvalCase(options) {
 
 export function ingestIndexedWindowLongMemEvalCase(options) {
   return ingestCase(options, planIndexedWindowLongMemEvalCase, RESPONSE_METADATA.indexed);
+}
+
+export function ingestIndexedEvidenceLongMemEvalCase(options) {
+  return ingestCase(options, planIndexedEvidenceLongMemEvalCase, RESPONSE_METADATA.evidence);
 }
 
 export function ingestQualifiedPrefixLongMemEvalCase(options) {

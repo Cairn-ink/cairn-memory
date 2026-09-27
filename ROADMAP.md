@@ -16,6 +16,13 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The explicit [indexed-evidence comparison profile](docs/plans/indexed-evidence-comparison.md)
+  is a separately identified offline checkpoint using the same public core and
+  native comparator. Qualification is absent, while partial capture still blocks
+  answers and fixed-N failures remain. Next is a separately frozen fresh pilot
+  with complete execution, followed by retention/retrieval/answer/cost diagnosis;
+  installed MCP/Hermes and current-decision reliability remain open gates.
+
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
   completed, five failed and six blocked outcomes. Mechanical completion and

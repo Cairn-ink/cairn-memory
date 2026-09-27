@@ -10,7 +10,7 @@ import { checkedMem0NativeConfiguration, runMem0NativeCase } from '../experiment
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { experimentPolicy } from '../live/session.mjs';
-import { ingestIndexedWindowLongMemEvalCase } from './ingestion.mjs';
+import { ingestIndexedWindowLongMemEvalCase, ingestIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 import { createMixedModelDiagnosticObserver,
   summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
 import { verifiedEvidence } from './mixed-evidence.mjs';
@@ -108,7 +108,9 @@ function staticNativeFit(input) {
   return true;
 }
 
-function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256 }) {
+function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256,
+  comparisonProfile }) {
+  const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   if (typeof cairnRuntimeArtifactSha256 !== 'string' || !SHA256.test(cairnRuntimeArtifactSha256)) {
     fail('invalid_cairn_artifact_descriptor');
   }
@@ -129,6 +131,13 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     recallContextMode: 'source-evidence', recallSelectionMode: 'bounded-source-scan',
     experimentPolicy: experimentPolicy(), stages: benchmarkStagePolicy(),
     wireProfile: mem0WireProfile() };
+  if (evidenceOnly) {
+    context.version = 'mixed-indexed-evidence-context-v1';
+    context.comparisonProfile = comparisonProfile;
+    context.cairnQualification = 'not-requested';
+    context.captureSourcePolicy = 'indexed-evidence-v1';
+    delete context.qualificationDispatchPolicy;
+  }
   const answer = { version: 'mixed-answer-v1', model: MIXED_ANSWER_MODEL,
     instruction: PUBLIC_ANSWER_INSTRUCTION, contextWindow: MIXED_ANSWER_CONTEXT_WINDOW,
     outputTokens: MIXED_ANSWER_OUTPUT_TOKENS, timeoutMs: MIXED_ANSWER_TIMEOUT_MS,
@@ -142,21 +151,32 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     qualificationInputMode: 'adaptive-text-catalog-v1',
     extractionModel: DEFAULT_MODEL, rationaleModel: DEFAULT_MODEL, basisModel: DEFAULT_MODEL,
     modelProfile: modelProfile() };
+  if (evidenceOnly) {
+    cairnAdapter.version = 'mixed-indexed-evidence-cairn-adapter-v1';
+    cairnAdapter.comparisonProfile = comparisonProfile;
+    delete cairnAdapter.qualificationInputMode;
+    delete cairnAdapter.rationaleModel;
+    delete cairnAdapter.basisModel;
+  }
   return freeze({ sourceProtocolSha256: mixedSourcePolicy().digest,
     contextProtocolSha256: hash(CONTEXT_DOMAIN, context),
     answerProtocolSha256: hash(ANSWER_DOMAIN, answer),
     scorerProtocolSha256: hash(SCORER_DOMAIN, scorer),
     cairn: { runtimeArtifactSha256: cairnRuntimeArtifactSha256,
       adapterConfigurationSha256: hash(CAIRN_ADAPTER_DOMAIN, cairnAdapter),
-      qualificationInputProfile: 'adaptive-text-catalog-v1',
-      captureSourcePolicy: 'indexed-windows-v1' },
+      qualificationInputProfile: evidenceOnly ? 'not-requested' : 'adaptive-text-catalog-v1',
+      captureSourcePolicy: evidenceOnly ? 'indexed-evidence-v1' : 'indexed-windows-v1',
+      ...(evidenceOnly ? { comparisonProfile } : {}) },
     mem0: { version: '2.2.0', sourceTreeSha256, dependencyLockSha256,
       configurationSha256, wireProfile: structuredClone(mem0WireProfile()) } });
 }
 
 export function prepareMixedComparison(options) {
+  const profileDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'comparisonProfile');
   const raw = ownOptions(options, ['sourceCases', 'armOrders', 'nativeArtifact',
-    'nativeConfiguration', 'cairnRuntimeArtifactSha256'], 'invalid_mixed_preparation');
+    'nativeConfiguration', 'cairnRuntimeArtifactSha256',
+    ...(profileDescriptor ? ['comparisonProfile'] : [])], 'invalid_mixed_preparation');
+  if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
   dense(source.armOrders, source.sourceCases.length, source.sourceCases.length,
@@ -177,7 +197,7 @@ export function prepareMixedComparison(options) {
   for (const [index, row] of source.sourceCases.entries()) {
     let plan = null, reason = null;
     try {
-      plan = prepareMixedSourceCase(row);
+      plan = prepareMixedSourceCase(row, raw.comparisonProfile);
       if (!staticNativeFit(plan.mem0Input)) { plan = null; reason = 'native_static_input_exceeded'; }
     } catch (error) {
       reason = typeof error?.code === 'string' && /^[a-z0-9_]{1,80}$/u.test(error.code)
@@ -198,7 +218,8 @@ export function prepareMixedComparison(options) {
       arms: ARM_NAMES.map(name => ({ name,
         scopeId: `lme-case-${hash(SCOPE_DOMAIN, [questionId, name])}` })) });
   }
-  const projection = freeze({ schemaVersion: PREPARATION_VERSION,
+  const projection = freeze({ schemaVersion: raw.comparisonProfile
+    ? 'cairn-lme-mixed-indexed-evidence-preparation-v1' : PREPARATION_VERSION,
     manifest, roster, counts: { fixedN: source.sourceCases.length, batchCounts }, preflight });
   PREPARED.set(projection, { sourceCases: source.sourceCases, armOrders: source.armOrders,
     plans, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
@@ -258,17 +279,21 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
   allowedLocalOrdinals }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
+  const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
+  const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   const model = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
-    qualificationInputMode: 'adaptive-text-catalog-v1',
+    ...(evidenceOnly ? {} : { qualificationInputMode: 'adaptive-text-catalog-v1' }),
     onDiagnostic: modelDiagnostics.onDiagnostic });
   const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
-    captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1',
+    ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
+      : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
     sourceCandidatePolicy: 'bounded-keyset-v1' });
   holdCore(core);
   try {
     verifyMixedCapturePlan({ history: plan.renderedHistory, namespace: row.namespace,
-      expectedPlan: plan.cairnPlan });
-    const ingested = await ingestIndexedWindowLongMemEvalCase({ history: plan.renderedHistory,
+      expectedPlan: plan.cairnPlan, comparisonProfile });
+    const ingested = await (evidenceOnly ? ingestIndexedEvidenceLongMemEvalCase
+      : ingestIndexedWindowLongMemEvalCase)({ history: plan.renderedHistory,
       namespace: row.namespace, capture: input => core.capture(input) });
     const ingestion = summarizeMixedIngestionStop(ingested, plan.cairnPlan);
     if (ingestion.kind !== 'capture_outcome'
