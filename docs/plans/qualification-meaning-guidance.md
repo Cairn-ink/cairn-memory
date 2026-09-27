@@ -239,3 +239,61 @@ does not authorize trusted retirement or solve evolving factual state. No
 ROADMAP gate change, new paid evidence or historical rescoring occurs. Independent
 Standards/Spec review and primary final-candidate reruns remain delivery gates;
 M8 measured semantic improvement remains separate and unproven.
+
+## Second correction round — downstream CI measurement assertions
+
+PR261's CI run `36335748607`, job `108666147662`, failed three current
+qualified-source budget measurement assertions on Node24. The Node22 matrix
+job was cancelled by fail-fast; cancellation is not a pass. This downstream
+test file was outside the earlier full OpenAI/core/artifact checks. Primary
+reproduced it and assigned a separate bounded correction on base
+`66a86f9393bad505143599802df734016405b763`; this is the second correction round,
+distinct from the earlier adapter expectation refresh.
+
+Worker reproduced **4 pass / 3 fail of 7 on both Node22.16.0 and24.15.0 before
+editing** `evaluation/live/test/qualified-source-budget-boundary.test.mjs`:
+
+- `D1 within-limit indexed source-qualified capture reaches normal guarded generation`:
+  current complete qualifier count 4,031, old expectation 3,952.
+- `D1 prompt-shaped indexed qualification does not globally halt on a valid source batch`:
+  current complete qualifier count 4,039, old expectation 3,960.
+- `D2 item, candidate, and evidence dimensions isolate qualification request growth`:
+  same current count 4,039 versus old 3,960; local input is 2,578 versus old 2,499.
+
+Only the accepted-base shared prompt bytes were substituted in an in-process
+reader for a diagnostic run, without changing any source file or runtime code.
+That diagnostic makes all original **7/7 pass on both** and isolates the +79
+shared-guidance tokens. The original historical measurements are retained in
+comments. Only four CURRENT expected-count assertions were refreshed; schema,
+source evidence, serializers, authority, caps and behavior are unchanged.
+
+Updated checks pass **7/7 on both**. Existing assertions still require schema
+1,369 tokens, schema contribution 1,366, evidence contribution 1,016 (full)
+and 332 (one source), local limit 6,000 and guarded count/generation ceilings
+7,024. Three count/generation method pairs retain their original order;
+cold-store receipts and exact anchors remain checked. Oversized extraction,
+maximum qualifier and full-wire local refusal tests are unchanged and pass.
+
+The affected OpenAI measurement and budget-boundary command passes **39/39
+with zero skipped on both runtimes**:
+
+```sh
+node --test adapters/openai/test/direct-candidate-wire-experiment.test.mjs adapters/openai/test/qualification-text-catalog.test.mjs adapters/openai/test/qualification-candidates.test.mjs adapters/openai/test/usage-bounds.test.mjs
+```
+
+Full `npm run test:live-evidence-offline` now passes on **both Node22.16.0 and
+24.15.0: 370 tests, 340 passed, zero failed, 30 expected opt-in installed skips**.
+The 30 skips are reported separately from the previously passed full installed
+artifact 84/84 gates; no skipped test is counted as an installed pass. There
+were no further failures or changes to expectations after the targeted checks.
+The correction is scoped to this test file and this plan. Final primary reruns
+and new independent Standards/Spec review must inspect the exact new committed
+candidate before delivery resumes. Old CI failure/cancellation remains historical
+until primary pushes a new reviewed candidate and its CI runs complete.
+
+Actual local RED/base-prompt diagnostic/GREEN outputs:
+`/tmp/meaning-guidance-ci-boundary-{red,base,green}-{22,24}.log`.
+Full-suite summaries: `/tmp/meaning-guidance-ci-full-live-{22,24}.log`;
+affected OpenAI measurements: `/tmp/meaning-guidance-ci-adapter-{22,24}.log`.
+No live API calls, user data, operational ledger, frozen fixture/rubric/report,
+historical score, or runtime/prompt/schema/cap changes occur in this correction.
