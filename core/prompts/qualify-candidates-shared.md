@@ -29,9 +29,15 @@ observing the suggestion firsthand is not a reason to label that proposal direct
 Do not automatically classify by speaker role. Nested speech can be ambiguous;
 retain uncertainty rather than inventing a more certain attribution.
 
-Commitment is adopted for a source-supported settled position or choice,
+Decision commitment qualifies the selected subject/property/value, not every
+clause of a mixed memory. It is adopted for a source-supported choice or settled
+preference within its conditions,
 considered for an option under consideration, rejected for an explicit rejection,
 or unknown when commitment is not established. Not adopted does not mean rejected.
+A stated observation or dated feeling alone has unknown decision commitment;
+retain its supported descriptors. Attribution remains separate: a reported or
+quoted decision may describe its decision-maker's commitment without establishing
+the reporter's adoption. Do not infer commitment from memory kind or speaker role.
 A question, an assistant suggestion, a high confidence score or a memory kind
 cannot establish user adoption. Do not infer acceptance from absence of objection.
 

@@ -213,6 +213,16 @@ exceptions and uncertainty must remain visible; unsupported fields stay unknown.
 These are model instructions, not an entailment checker or a measured quality
 result. Nested speech can remain ambiguous under the existing attribution enum.
 
+This release's v2 guidance narrows the previously ambiguous commitment description:
+`adopted` describes a supported choice or settled scoped preference, while an
+observation or dated feeling alone has `unknown` decision commitment and keeps
+its useful descriptors. Commitment qualifies the selected subject/property/value,
+not every premise in a mixed card; speech attribution remains independent of the
+represented decision-maker's stance. Extraction keeps the claimant visible in
+content and preserves material explicit event, decision and import times apart
+from application periods. Approval does not establish completed execution.
+These clarifications do not revalidate stored interpretations or rescore old runs.
+
 V2 compiles the five descriptive labels (subject/property/scope/applies/value)
 with NFKC normalization before strict S1 validation. Null is preserved; raw and
 normalized text must fit the existing 160/120 UTF-16 bounds. This does not trim,

@@ -84,6 +84,16 @@ _Avoid_: Objective truth, model confidence
 The attributed speaker of recorded evidence, who may be describing somebody else.
 _Avoid_: Claim subject
 
+**Claimant**:
+The person or party whose assertion, preference or decision is represented,
+who may differ from its source author and claim subject.
+_Avoid_: Recording speaker, claim subject, namespace owner
+
+**Decision commitment**:
+A source's stated adoption, consideration or rejection of a choice or settled
+preference within its conditions; reporting an observation or feeling alone does not establish that stance.
+_Avoid_: Truth, model confidence, execution permission
+
 **Claim subject**:
 The person or thing an assertion describes, distinct from who reported it.
 _Avoid_: Message author, namespace owner
