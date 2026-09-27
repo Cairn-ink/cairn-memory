@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — opt-in episode storage
+
+- Add the local episode storage and inspection foundation: source-bound retained
+  passages, revision-guarded corrections, conversation deletion with derived-memory
+  suppression, and durable capture controls. Episode payload capacity reclaims only
+  admitted episode backlog, then bypasses staging while preserving admission.
+- Add explicitly sourced procedural tags with independent revisions; tag-only
+  edits preserve memory content and relationship evidence. Untagged, episode-off
+  stores retain their existing behavior. Episode capture and interpretation, range
+  reads, startup context, and provider/MCP integrations remain later packages.
+- Upgrade older committed local databases atomically to v15 on open in either
+  mode. Hosts must stop/drain older connections before upgrading. Pause allows
+  already accepted work to finish; project stop fences unfinished work. Receipt
+  additions preserve episode interpretations and explicit procedural tags.
+
 ## Unreleased — explicit indexed evidence comparison
 
 - Add opt-in `comparisonProfile: 'indexed-evidence-v1'` to mixed comparison
@@ -25,21 +40,6 @@
   journal mode, schemas, reservations and public errors remain unchanged. Failed
   settlement still halts paid work with a pending reservation; this correction
   does not recover historical accounting or authorize retries or another run.
-
-## Unreleased — opt-in episode storage
-
-- Add the local episode storage and inspection foundation: source-bound retained
-  passages, revision-guarded corrections, conversation deletion with derived-memory
-  suppression, and durable capture controls. Episode payload capacity reclaims only
-  admitted episode backlog, then bypasses staging while preserving admission.
-- Add explicitly sourced procedural tags with independent revisions; tag-only
-  edits preserve memory content and relationship evidence. Untagged, episode-off
-  stores retain their existing behavior. Episode capture and interpretation, range
-  reads, startup context, and provider/MCP integrations remain later packages.
-- Upgrade older committed local databases atomically to v15 on open in either
-  mode. Hosts must stop/drain older connections before upgrading. Pause allows
-  already accepted work to finish; project stop fences unfinished work. Receipt
-  additions preserve episode interpretations and explicit procedural tags.
 
 ## Unreleased — decision commitment and claimant guidance
 

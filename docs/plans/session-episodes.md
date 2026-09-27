@@ -589,7 +589,8 @@ Storage-scope coverage only; capture/interpretation, range/startup and episode
 provider/MCP integration remain SE-2–SE-5. K3 uses eager atomic v15 upgrades.
 All CI run steps passed on Node 22.16; core, MCP, experiment-budget,
 experiment-request-guard and live-evidence-offline also passed on Node 24.15.
-Core passed 800/800 on both runtimes and 800/800 in a fresh depth-1 Node 22 clone.
+Core passed 800/800 on both runtimes and in a fresh depth-1 Node 22 clone before
+main integration, and 815/815 after it.
 The base binary rejects v15 on both runtimes; hosts must stop/drain older connections.
 Artifact and installed synthetic-rationale gates passed on both runtimes.
 Whitespace checks passed. No semantic-fidelity or paid-pilot claim is made.
