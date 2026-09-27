@@ -21,6 +21,8 @@
     "demo:longmemeval-mixed": "node evaluation/longmemeval/mixed-demo.mjs",
     "test:mixed-native-local": "node --test evaluation/longmemeval/testing/mixed-native.test.mjs",
     "test:core": "node --test core/test/*.test.mjs",
+    "demo:episodes": "node examples/session-episodes.mjs",
+    "test:episodes": "node --test core/test/episode-capture.test.mjs core/test/episode-concurrency.test.mjs core/test/procedural-capture.test.mjs core/test/episode-mode-parity.test.mjs",
     "demo:store": "node examples/local-store.mjs",
     "demo:history": "node examples/historical-evidence.mjs",
     "demo:moc": "node examples/moc-placement.mjs",

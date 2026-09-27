@@ -153,7 +153,7 @@ test('E11 mode validation is snapshotted and mode-on capture is deferred to SE-2
   for(const n of [1,17,2.5,null]) assert.throws(()=>openMemoryCore({path:':memory:',...options,sessionEpisodes:{mode:'episode-v1',draftEveryBatches:n}}),/invalid_input/);
   assert.throws(()=>openMemoryCore({path:':memory:',sessionEpisodes:{mode:'episode-v1'}}),/invalid_input/);
   const f=fixture(t),core=openMemoryCore({path:f.path,...options});t.after(()=>core.close());
-  assert.equal((await core.capture({})).error.code,'episode_capture_not_available');
+  assert.equal((await core.capture({})).error.code,'invalid_input');
 });
 
 test('E2/E9 field limits reject atomically; inspection returns whole source prefixes under 64KiB',t=>{

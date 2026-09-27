@@ -76,5 +76,10 @@
   "adapters/openai/schemas.mjs",
   "plugins/cairn-memory/lib/redact.mjs",
   "evaluation/live/diagnostics.mjs",
-  "LICENSE"
+  "LICENSE",
+  "core/episode-input.mjs",
+  "core/episode-capture.mjs",
+  "core/prompts/interpret-episode.md",
+  "core/prompts/extract-episode-sources.md",
+  "core/prompts/qualify-episode-candidates.md"
 ]

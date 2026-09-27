@@ -96,14 +96,14 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1 or v3–v14 format performs an atomic upgrade to v15, retaining
+Opening the committed v1 or v3–v15 format performs an atomic upgrade to v16, retaining
 existing memory/source data, revisions and suppression. Back up the file while
 all older-runtime processes and connections (including idle readers) are closed
 before upgrading meaningful data. The host must stop/drain those connections
 before opening the store for upgrade, even with episodes disabled. No request
 performs a lazy upgrade. Mixed-version coexistence is unsupported;
 an already-open old process is not retroactively fenced. Older binaries cannot
-open v15; there is no downgrade tool. Existing receipts remain unordered; no past
+open v16; there is no downgrade tool. Existing receipts remain unordered; no past
 chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
@@ -141,7 +141,7 @@ The local envelope facade adds `getEpisode`, `correctEpisode`,
 `releaseEpisodeCorrection`, `forgetEpisode`, `getCaptureControl`,
 `setCapturePaused`, `setProjectCapture`, and `setProceduralMemory`. No HTTP/MCP
 schema or provider interface is widened. `getEpisode` needs no model or mode
-option on a v15 store. It takes the plan's exact namespace/episode ID and
+option on a v16 store. It takes the plan's exact namespace/episode ID and
 independent source/memory/policy limits/cursors (20 default, 50 maximum).
 `{episode,sources,memoryLinks,policies,status}` returns each page as
 `{items,nextCursor,exhausted}`. Signed cursors bind store, namespace, episode,
@@ -184,7 +184,7 @@ memory revision, receipts and conflict/qualification/rationale links. Filing
 preserves tags; content correction and forgetting clear them. Deduplicated
 admission adding receipts preserves tags and dependent episodes while retaining
 existing conflict/rationale/qualification invalidation semantics.
-Automatic tag proposal remains SE-2; legacy automatic outputs still reject tags.
+Automatic tag proposals require episode-v1; legacy automatic outputs still reject tags.
 
 The operation envelope uses these episode-specific error codes (opening failures
 throw instead). They never expose raw database or provider errors.
@@ -199,9 +199,18 @@ throw instead). They never expose raw database or provider errors.
 | `episode_processing` | Another live session writer owns the episode. Retry after it completes/expires. |
 | `stale_episode` | The draft claim expired, was consumed, or lost its revision/source fence. Discard its result. |
 | `episode_step_conflict` | A draft would replace an existing open next step without a supported disposition transition. |
-| `episode_capture_not_available` | SE-1 supplies storage only; public episode capture awaits SE-2. |
+| `episode_sources_unavailable` | Explicit keep has no currently retained source passages. |
 
 An admission with a live admission lease can finish after its session writer
 expires. Deletion, forgetting, explicit discard and project stop remain closed
 fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
 and cannot reopen them or erase a capacity gap.
+
+The v16 `episode_messages` ledger has `(episode_id,message_id)` identity and stores
+`first_event_id` plus HMAC-SHA256 using the existing private episode key over
+`["m1", role, canonicalText, eventTimeOrNull]`. Its rows register atomically with the
+batch. Matching identities count zero; different digests reject with
+`event_payload_conflict`. It holds no source plaintext or role and survives deletion
+as content-free fence metadata. Upgrading v15 creates an empty ledger; earlier
+messages are not reconstructed. Both v14 and v15 opens upgrade eagerly to v16,
+including feature-off opens, with foreign keys on and rollback on failure.

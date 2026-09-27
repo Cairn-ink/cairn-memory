@@ -9,6 +9,7 @@ import { isSourceContext } from './source-evidence.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
+import { captureEpisodeMessages, endEpisode, keepEpisodeCapture } from './episode-capture.mjs';
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
@@ -419,9 +420,9 @@ export function openMemoryCore(input) {
     });
   }
 
-  function admissionItems(input) {
+  function admissionItems(input, episode = false) {
     return denseArray(input, 0, 5).map((item) => {
-      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification']);
+      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : [])]);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
       const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
@@ -429,7 +430,8 @@ export function openMemoryCore(input) {
       const conflictHints = contractConflictHints(item.conflictHints);
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
-      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints, qualification };
+      return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints, qualification,
+        ...(episode && Object.hasOwn(item,'procedural') ? { procedural: item.procedural } : {}) };
     });
   }
 
@@ -440,7 +442,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = admissionItems(input.items);
+      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
       return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
@@ -787,16 +789,17 @@ export function openMemoryCore(input) {
     });
   }
 
-  async function capture(input) {
+  async function capture(input, keepInput) {
     try {
-      const deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
+      let deadline = sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
       runtime.ready();
-      if (sessionEpisodes) throw new MemoryStoreError('episode_capture_not_available');
-      object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
+      if (!keepInput) object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', ...(sessionEpisodes ? ['episodeContext'] : ['causal'])]);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
-      return success(await captureMessages({ model, captureQualification, captureSourcePolicy,
+      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
+        runtime, ns, sessionEpisodes, keepInput,
+        startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
@@ -838,6 +841,26 @@ export function openMemoryCore(input) {
               invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline)),
           } } }));
     } catch (error) { return failure(error); }
+  }
+
+  async function endEpisodeSession(input) {
+    try {
+      runtime.ready();
+      if (!sessionEpisodes) throw new MemoryStoreError('episode_mode_required');
+      object(input, ['namespace','client','sessionId','generation','eventId']);
+      const ns=contractNamespace(input.namespace);
+      for (const key of ['client','sessionId','generation','eventId']) contractId(input[key]);
+      return success(await endEpisode({runtime,ns,model,input}));
+    } catch(error) { return failure(error); }
+  }
+  async function keepEpisode(input) {
+    try {
+      runtime.ready();
+      if (!sessionEpisodes) throw new MemoryStoreError('episode_mode_required');
+      object(input, ['namespace','episodeId','expectedRevision','actionId']);
+      contractId(input.episodeId); contractId(input.actionId); contractRevision(input.expectedRevision);
+      return await capture({namespace:input.namespace}, {...input});
+    } catch(error) { return failure(error); }
   }
 
   async function classifyPlacementValidated(input, deadline) {
@@ -904,7 +927,9 @@ export function openMemoryCore(input) {
         bindings[name] = binding; pages[name] = { limit: count, after: cursor?.a.id, epoch: cursor?.e };
       }
       const result = runtime.getEpisode(ns, { episodeId }, pages);
-      const output = { episode: result.episode };
+      const output = { episode: result.episode, ...(result.keepActions.length ? { keepActions: {
+        items: result.keepActions.slice(0,20).map(action => ({ ...action, policy: 'explicit-keep', sourceCoverage: 'retained-passages-at-revision' })),
+        exhausted: result.keepActions.length <= 20 } } : {}) };
       for (const [name, key, idKey] of [['source','sources','id'],['memory','memoryLinks','id'],['policy','policies','position']]) {
         const values = result[key].slice(0,pages[name].limit), exhausted = result[key].length <= pages[name].limit;
         output[key] = { items: values, exhausted, nextCursor: exhausted ? null : encodeCursor({ ...bindings[name], e: result.epoch, a: { id: values.at(-1)[idKey] } }) };
@@ -929,7 +954,7 @@ export function openMemoryCore(input) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,
-    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture, classifyPlacement, rebuildIndex,
+    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture: input => capture(input), keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();

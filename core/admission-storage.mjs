@@ -7,7 +7,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes }) {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage }) {
   const read = (ns, input) => db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
     .get(...key(ns, input));
   const live = (row, input, now) => row?.state === "pending" &&
@@ -114,6 +114,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       const entries = activeItems.map((item) => {
         const result = admitMutation(ns, item);
         const memoryId = result.memory.id;
+        if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);
         return { memoryId, hints: item.conflictHints, item,
           insertedReceiptIds: result.insertedReceiptIds };

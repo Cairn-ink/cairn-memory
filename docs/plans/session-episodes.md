@@ -595,6 +595,54 @@ The base binary rejects v15 on both runtimes; hosts must stop/drain older connec
 Artifact and installed synthetic-rationale gates passed on both runtimes.
 Whitespace checks passed. No semantic-fidelity or paid-pilot claim is made.
 
+### SE-2 verification
+
+Episode capture now orchestrates the independent session writer, interpretation
+attempt and admission lease. First/periodic/PreCompact/end/lazy attempts use durable
+markers; only a newly classified current batch receives quick policy. Interpretation
+failure falls through to ordinary admission. Both existing storage completion seams
+release staging once admission and selected-passage disposition are complete.
+Automatic procedural proposals use the v2 candidate path only in episode-v1.
+Explicit keep uses retained passages, a revision-bound action journal and ordinary
+admission; completed or failed action replay makes no additional model call.
+
+The durable message identity decision adds one STRICT table in schema v16. Each
+per-episode message ID binds an HMAC of canonical role/text/event time and its first
+event ID, without storing plaintext text or role. Identical overlaps count zero;
+changed bindings reject atomically; partial overlaps count once. These content-free
+rows survive release, restart and conversation deletion. Eager v14/v15 upgrades run
+atomically with foreign keys on. The v15 step creates an empty ledger: detection
+covers post-upgrade registrations only. Committed synthetic fixtures and the frozen
+v15 opener require no Git history, archive or network access at test time.
+
+| SE-2 responsibility / touched gate | Tests (under `core/test/`) |
+| --- | --- |
+| HMAC receipt identity, local-only metadata and content-free ledger; E1 | `episode-capture.test.mjs`: fresh quick/provider payload inspection, ledger row inspection and deletion; `procedural-capture.test.mjs`: HMAC receipts; inherited identity/key tests in `episode-storage.test.mjs` |
+| Strict interpretation fields, mixed scripts, malformed Unicode, foreign/split anchors and source bounds; E2 | `episode-capture.test.mjs`: malformed/oversized outputs, language/source examples, foreign and split-surrogate anchors; inherited storage field/pin tests |
+| First/periodic N2/8/16, B1/8/9/17, first+PreCompact coalescing, end/lazy caps, reopened sessions, overlap/restart; E3 | `episode-capture.test.mjs`: scheduling and message identity cases; `episode-concurrency.test.mjs`: crash/replay and end/lazy races |
+| Throw/timeout/malformed/budget fallback, mandatory source budget and prior trimming; E4 | `episode-capture.test.mjs`: failure after old quick, actual mock-timer abort with fresh admission lease, prior-only overflow and visible gaps |
+| Heavy day, N16/140 approximately 16 KiB payloads, two sessions/processes, sustained failure, protected bypass, N8/129 baseline, both release orders and stale draft fence; E4a | `episode-capture.test.mjs`, `episode-concurrency.test.mjs`; inherited `episode-capacity.test.mjs` and `episode-staging-release.test.mjs` retain count/byte/minimal-prefix, legacy protection, expiry and rollback gates |
+| Two processes, expired worker, crash after interpretation before admission lease, replay and callback fences; E5 | `episode-concurrency.test.mjs`: IPC barriers without sleep synchronization, stale worker, overlap registered between validation and reservation, end/lazy, forget/discard/stop/pause and correction during keep |
+| Paused/project-stop/re-enable generations and no personal fallback; E6 | `episode-capture.test.mjs`: synthetic Claude/Codex producer bindings, withheld partial text and restart; `episode-concurrency.test.mjs`: in-flight pause versus stop |
+| Conversation deletion, kept-memory lineage/suppression, correction and retained-source invalidation; E7 | `episode-capture.test.mjs`: deletion leaves content-free ledger; `episode-concurrency.test.mjs`: keep correction/deletion; inherited multi-source/historical/feature-off storage tests |
+| Fresh quick only, seven ordinary debounced batches with seven qualification calls and admissions, old-context anchor rejection, non-retroactive end policy, keep source coverage/replay/failure; E8 | `episode-capture.test.mjs`, `episode-concurrency.test.mjs` |
+| Event-time validation and existing episode inspection; E9 | `episode-capture.test.mjs`; inherited `episode-storage.test.mjs` inspection/cursor tests. Range reads and startup context remain the retrieval package |
+| Automatic tags in episode-v1, exact receipt binding, invalid-kind/foreign rejection and legacy byte parity; E10 | `procedural-capture.test.mjs`, `episode-mode-parity.test.mjs`: committed v14/v15 fixtures and indexed-evidence getter rejection; inherited `procedural-storage.test.mjs` checks tag-only preservation and mutation invalidation |
+| Eager v16 migration/rollback, older-opener exclusion, atomic registration, release/replay and shipped files; E11 | `episode-migration.test.mjs`, `episode-capture.test.mjs`, `episode-concurrency.test.mjs`; existing artifact suite checks the updated allowlist. Provider/MCP generation remains separate work |
+
+Main integration preserves the already-implemented release calls rather than adding
+second releases. Admission lineage now resolves actual message receipt IDs rather
+than assuming the batch event ID is the receipt event ID. The former mode-unavailable
+test now validates malformed input. Existing current-version assertions advance to
+16; the synthetic v11 rationale fixture also drops the new message ledger before
+reopening, as it already did for the earlier episode tables.
+
+The four new suites run under `test:core`; `demo:episodes` is registered on both CI
+core runtimes. The demo verifies retained passage inspection, quick policy, keep,
+release and replay with a scripted port. No paid calls, real data, hosted changes,
+provider default, semantic-fidelity claim or trusted-producer compatibility claim
+is introduced.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,

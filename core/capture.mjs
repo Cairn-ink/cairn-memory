@@ -11,6 +11,7 @@ import { extractedWindowItems, sourceWindowCatalog } from './source-windows.mjs'
 
 const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');
 const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');
+const episodeSystem = readFileSync(new URL('./prompts/extract-episode-sources.md', import.meta.url), 'utf8');
 const windowSystem = readFileSync(new URL('./prompts/extract-source-windows.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
@@ -59,9 +60,9 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureSourcePolicy, captureRationale, captureEvidence, deadline }) {
+  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun }) {
   deadline?.check();
-  const snapshot = captureSnapshot(input, captureQualification, captureSourcePolicy);
+  const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
   deadline?.check();
   const catalog = captureSourcePolicy ? sourceWindowCatalog(snapshot) : null;
   const retained = !catalog && captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
@@ -73,7 +74,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     ...(captureSourcePolicy === 'indexed-evidence-v1' ? { qualificationStatus: 'not-requested' } : {}) };
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
-  const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
+  const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
     : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }))
       : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
@@ -83,7 +84,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
   let finished;
   try {
     deadline?.check();
-    const output = await callModel(model, 'extract', catalog ? windowSystem : retained ? retainedSystem : system,
+    const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', episodeRun ? episodeSystem : catalog ? windowSystem : retained ? retainedSystem : system,
       catalog?.input ?? { messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })) },
       { failureCode: 'extraction_failed', deadline });
     let items = catalog ? extractedWindowItems(output, snapshot, catalog,
@@ -95,7 +96,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items, deadline,
-        captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined)
+        captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined, Boolean(episodeRun))
       : await qualifyExtractedItems(model, items, deadline);
     deadline?.check();
     if (snapshot.causal) {

@@ -497,12 +497,20 @@ export function createMemoryRuntime(input) {
   stagedEvidence.setEpisodes(episodes);
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes,
+    classificationJournal, episodes, proceduralStorage,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
   return Object.freeze({
+    prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },
+    failEpisodeKeep(ns,input,code) { ready(); return episodes.failKeep(ns,input,code); },
+    assertEpisodeKeep(ns,input) { ready(); return episodes.assertKeep(ns,input); },
+    validateEpisodeBatch(ns, input) { ready(); return episodes.validateBatch(ns, input); },
+    episodeCaptureState(ns, input) { ready(); return episodes.captureState(ns, input); },
+    pendingEpisodeSession(ns, input) { ready(); return episodes.pendingSession(ns, input); },
+    episodeDraftSnapshot(ns, input) { ready(); return episodes.draftSnapshot(ns, input); },
+    settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
     reserveEpisodeBatch(ns, input) { ready(); return episodes.reserveBatch(ns, input); },
     setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },

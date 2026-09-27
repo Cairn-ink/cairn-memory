@@ -1,5 +1,5 @@
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
-import { standardInlineQualificationPrompt } from './qualification-candidates-prompt.mjs';
+import { standardInlineQualificationPrompt, qualificationCandidatesPrompt } from './qualification-candidates-prompt.mjs';
 import { boundedText, denseArray, fail, object } from './validation.mjs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
@@ -9,7 +9,8 @@ import { isPromise } from 'node:util/types';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
-const system = standardInlineQualificationPrompt;
+const legacySystem = standardInlineQualificationPrompt;
+const episodeSystem = qualificationCandidatesPrompt(new URL('./prompts/qualify-episode-candidates.md', import.meta.url));
 const exact = (value, keys) => {
   object(value, keys);
   if (keys.some(key => !Object.hasOwn(value, key))) fail('invalid_model_output');
@@ -71,7 +72,7 @@ function canonicalLabel(value, limit) {
 }
 
 /** Compile selected evidence and canonical labels; never infer semantic support. */
-function compileQualification(output, snapshot, onFailure) {
+function compileQualification(output, snapshot, onFailure, episode = false) {
   let reason = 'invalid_qualification';
   const reject = (category) => { reason = category; fail('invalid_model_output'); };
   try {
@@ -79,7 +80,8 @@ function compileQualification(output, snapshot, onFailure) {
     const entries = denseArray(output.qualifications, snapshot.items.length, snapshot.items.length);
     const compiled = new Map();
     for (const entry of entries) {
-      exact(entry, ['itemIndex', ...FIELDS]);
+      object(entry, ['itemIndex', ...FIELDS, ...(episode ? ['procedural'] : [])]);
+      if (['itemIndex', ...FIELDS].some(key => !Object.hasOwn(entry,key))) reject('qualification_binding');
       const index = entry.itemIndex;
       if (!Number.isSafeInteger(index) || index < 0 || index >= snapshot.items.length || compiled.has(index)) {
         reject('qualification_binding');
@@ -125,9 +127,20 @@ function compileQualification(output, snapshot, onFailure) {
           slot: Object.fromEntries(['subject', 'property', 'scope', 'applies'].map(field => [field, values[field]])),
           value: values.value, attribution: values.attribution, commitment: values.commitment, anchors }, snapshot.items[index].receipts);
       } catch { reject('qualification_binding'); }
-      compiled.set(index, qualification);
+      let procedural;
+      if (Object.hasOwn(entry, 'procedural')) {
+        if (!['instruction','preference'].includes(snapshot.items[index].kind)) reject('qualification_binding');
+        exact(entry.procedural, ['evidenceIndices']);
+        const references = denseArray(entry.procedural.evidenceIndices, 1, 4);
+        if (new Set(references).size !== references.length || references.some(id => !Number.isSafeInteger(id) || !candidates.has(id))) reject('qualification_citation_integrity');
+        procedural = { anchors: references.map(id => {
+          const { receiptIndex, start, end } = candidates.get(id);
+          return { receiptIndex, start, end };
+        }) };
+      }
+      compiled.set(index, { qualification, ...(procedural ? { procedural } : {}) });
     }
-    return snapshot.items.map((item, index) => ({ ...item, qualification: compiled.get(index) }));
+    return snapshot.items.map(({ proceduralProposal, ...item }, index) => ({ ...item, ...compiled.get(index) }));
   } catch {
     try { onFailure?.(reason); } catch { /* Diagnostics cannot change validation. */ }
     fail('invalid_model_output');
@@ -187,8 +200,9 @@ function singletonSnapshot(snapshot, index) {
       candidates: source.candidates }] } });
 }
 
-export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence) {
+export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence, episode = false) {
   deadline?.check();
+  const system = episode ? episodeSystem : legacySystem;
   const snapshot = createQualificationCandidateSnapshot(items);
   deadline?.check();
   let input = snapshot.input;
@@ -239,7 +253,7 @@ export async function qualifyCandidateItems(model, items, deadline, assertCaptur
     let reason = 'invalid_qualification';
     try {
       results.push(...compileQualification(output, planned.snapshot,
-        (category) => { reason = category; }));
+        (category) => { reason = category; }, episode));
       deadline?.check();
     }
     catch {

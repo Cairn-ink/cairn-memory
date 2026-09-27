@@ -70,7 +70,8 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
     object(output, ['items']);
     return denseArray(output.items, 0, 5).map((item) => {
       reason = 'invalid_extraction_item_shape';
-      object(item, ['content', 'kind', 'confidence', 'sourceIndices']);
+      object(item, ['content', 'kind', 'confidence', 'sourceIndices', ...(snapshot.sessionEpisodes ? ['procedural'] : [])]);
+      if (Object.hasOwn(item, 'procedural') && (item.procedural !== true || !['preference','instruction'].includes(item.kind))) fail('invalid_model_output');
       reason = 'invalid_extraction_text';
       if ((snapshot.captureQualification || snapshot.captureSourcePolicy === 'indexed-evidence-v1') &&
           (typeof item.content !== 'string' || !item.content.isWellFormed())) {
@@ -97,6 +98,7 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
           excerpt: retainedMessages === undefined ? boundedText(message.content, 800, true) : message.content };
       });
       return { content, kind: item.kind, confidence: item.confidence, receipts,
+        ...(snapshot.sessionEpisodes && item.procedural === true ? { proceduralProposal: true } : {}),
         ...(snapshot.causal ? { sourceIndices: [...indices] } : {}) };
     });
   } catch {

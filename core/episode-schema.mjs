@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { fail } from './validation.mjs';
 
-export const EPISODE_SCHEMA_VERSION = 15;
+export const EPISODE_SCHEMA_VERSION = 16;
 export const ADMISSION_LEASE_MS = 125_000;
 export const STAGED_PAYLOAD_MAX_BYTES = 128 * 1024;
 export const HEX_DIGEST = /^[0-9a-f]{64}$/;
@@ -99,5 +99,18 @@ export function migrateVersion14(db) {
       positive INTEGER NOT NULL CHECK(positive IN (0,1)), origin TEXT CHECK(origin IN ('model','explicit')), anchors TEXT) STRICT;
   `);
   db.prepare('INSERT INTO episode_identity VALUES(1,?)').run(randomBytes(32).toString('hex'));
+  if (db.prepare('PRAGMA foreign_key_check').all().length) fail('storage_error');
+}
+
+/** v15 has no historical message ledger: only post-upgrade registrations enter it. */
+export function migrateVersion15(db) {
+  if (db.prepare('PRAGMA foreign_keys').get().foreign_keys !== 1) fail('storage_error');
+  db.exec(`CREATE TABLE episode_messages (
+    episode_id TEXT NOT NULL REFERENCES session_episodes(id),
+    message_id TEXT NOT NULL CHECK(length(message_id) BETWEEN 1 AND 200),
+    digest TEXT NOT NULL CHECK(${digestCheck('digest')}),
+    first_event_id TEXT NOT NULL,
+    PRIMARY KEY(episode_id,message_id)
+  ) STRICT;`);
   if (db.prepare('PRAGMA foreign_key_check').all().length) fail('storage_error');
 }

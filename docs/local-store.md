@@ -4,7 +4,7 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14 data now upgrades it to v15 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15 data now upgrades it to v16 for
 [episode storage and explicit procedural tags](#episode-storage-foundation-se-1),
 [opt-in staged capture evidence](staged-capture-evidence.md),
 [source-backed proposed rationale](source-backed-rationale.md),
@@ -14,7 +14,7 @@ v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14 data now upgrades it to v15 for
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md), [admission claims](admission-claims.md) and
 the bounded [initial capture classification journal](capture.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v15.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v16.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
@@ -214,16 +214,16 @@ has no telemetry at all. See [acceptance and dependency provenance](plans/local-
 `openMemoryCore` also requires `captureQualification:'source-bound-v2'` and
 `captureEvidence:'staged-v1'`. N means `draftEveryBatches`, the draft interval in accepted batches; it is
 snapshotted per session, integer 2–16.
-This package supplies persistence and management, not the SE-2 capture pipeline.
-A mode-on `capture` returns `episode_capture_not_available` until that package
-lands. Mode-off capture remains unchanged. No provider calls are added.
+Episode mode now enables debounced capture through an injected interpretation port,
+quick handling, explicit keep and automatic source-bound procedural tags.
+Mode-off capture remains unchanged. See [capture](capture.md#opt-in-session-episodes).
 
-Every open atomically upgrades an older committed format to v15, including with
+Every open atomically upgrades an older committed format to v16, including with
 episodes off. Explicit procedural tags are available immediately in both modes;
 no request triggers a lazy upgrade. Inspection and memory correction/forgetting
 still enforce episode dependencies with the feature off. The host must stop/drain
 **all** older-runtime processes and connections, including idle readers, before
-opening the store for upgrade. Older binaries reject v15 on subsequent opens;
+opening the store for upgrade. Older binaries reject v16 on subsequent opens;
 an already-open old process is not retroactively fenced. There is no downgrade.
 
 The upgrade runs within the existing immediate transaction with foreign keys on.
@@ -238,3 +238,12 @@ exact namespace, client and host session. New episode rows retain only the deriv
 `s1:` identity. Missing or corrupt keys fail closed. Retained passages have no age
 TTL; conversation deletion and source invalidation remove them logically. Old
 receipts are unchanged; backups and SQLite free pages remain outside erasure claims.
+
+The v15-to-v16 step adds one empty STRICT `episode_messages` table, atomically
+with the version update and foreign-key check. The v14 upgrade runs both migrations
+in the same transaction. Existing episodes are not backfilled: overlap detection
+covers only messages registered after the upgrade. The ledger retains message ID,
+first event ID and a keyed digest of canonical role/text/event time, never plaintext
+text or role. It survives staging release and conversation deletion as content-free
+replay metadata. Episode-off capture never writes it. Older binaries refuse v16 with
+`unsupported_database`; stop and drain older connections before upgrading.
