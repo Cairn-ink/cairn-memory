@@ -178,6 +178,42 @@ per source batch after bounded singleton preflight; v1/v2 historical ceilings
 and grants are not upgraded. Fresh launches must recheck phase, case, money
 and request caps against the versioned plan.
 
+### Explicit indexed-evidence mixed profile
+
+`prepareMixedComparison({...options, comparisonProfile: 'indexed-evidence-v1'})`
+selects the public core's already explicit evidence-only capture lane. Omit the
+option to retain the qualified protocol and its existing digests. Own undefined,
+unknown profile values and extra options reject during preparation. Preparation
+is separately identified as `cairn-lme-mixed-indexed-evidence-preparation-v1`;
+the context and adapter digests bind the named profile, `not-requested`
+qualification and `indexed-evidence-v1` capture policy. Generator/scorer report
+envelopes remain v1 and bind the complete manifest; they cannot mix profiles.
+
+The matching X capability uses method profile
+`cairn-mem0-indexed-evidence-source-pair-v1`, allowing Cairn extract/classify/
+select/rank count and generation plus the common answer/judge stages. It denies
+qualification, reconciliation, relation and basis requests before reservation or
+HTTP. An old guard cannot consume new preparation. The source partition, dates,
+redaction, exact receipt verifier, native Mem0 configuration, common answer and
+fixed-N scoring are shared. Alternating declared arm orders remain explicit.
+
+Pass that same `comparisonProfile` to `projectMixedResources` to obtain
+`mixed-indexed-evidence-resource-projection-v1`. Qualification stages are absent;
+all extraction/classification/selection/ranking, answer/judge and full native
+embedding fallback ceilings remain. Omitting the option preserves v3 exactly.
+This pure ceiling does not verify an artifact, read a ledger or authorize spend.
+
+The completion gate stays strict: failed extraction, partial classification or
+processing blocks later batches and the case's answer. Persisted partial source
+does not become complete. Empty successful extraction can complete with empty
+answer evidence; that is mechanical completion, not useful retention. The
+synthetic real-core/pinned-native fake-HTTP seam demonstrates qualified failure
+and explicit source-lane success, tail retention and conflicting dated sources;
+it supplies no semantic improvement, raw archive, new paid result, host flag or
+qualification/current-decision remedy. A fresh independently frozen pilot and
+later installed host/lifecycle acceptance remain separate gates. See the
+[bounded contract](plans/indexed-evidence-comparison.md).
+
 The [controlled mixed runner](plans/mixed-comparison-runner.md) has three
 separate APIs: `prepareMixedComparison` accepts only source histories/questions,
 `runMixedGeneration` consumes a supplied X guard and the pinned native identity,

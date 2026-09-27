@@ -1,5 +1,17 @@
 # Known limitations
 
+The opt-in [indexed-evidence mixed comparison profile](longmemeval-comparison.md#explicit-indexed-evidence-mixed-profile)
+has bounded synthetic coverage through the actual public core and pinned native
+Mem0 with fake HTTP. It omits qualification explicitly, retains the strict
+mechanical gate and full fixed-N failures, and separately projects every allowed
+route and native fallback. Selected receipts can still omit necessary source;
+classification and recall can fail, and conflicting dated choices remain
+unresolved evidence. Successful empty extraction is not useful retention. This
+does not repair qualified semantics, establish a measured quality/cost result,
+authorize a paid run or expose a host flag. Frozen historical results remain
+unchanged; a new independently frozen pilot and installed-host acceptance are
+still required.
+
 This is the one place where Cairn Memory records what does not yet work, what
 the frozen evaluations found, and which claims the evidence does not support.
 The README links here from its first screen and stays short. A PR that adds or

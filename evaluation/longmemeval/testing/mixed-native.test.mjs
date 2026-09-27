@@ -26,6 +26,109 @@ import { evaluatorRow, fakeMixedHttp, sourceRow,
 const nativeRequire = createRequire(new URL('../../../adapters/openai/package.json', import.meta.url));
 const nativeEncoder = nativeRequire('tiktoken').get_encoding('cl100k_base');
 
+function indexedResponse(body, output) {
+  return Response.json({ object: 'response', model: body.model, status: 'completed',
+    error: null, incomplete_details: null, output: [{ type: 'message', role: 'assistant',
+      status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+    usage: { input_tokens: 100, output_tokens: 5, total_tokens: 105 } });
+}
+
+test('C1-C7 actual qualified failure and explicit indexed-evidence success share source/native/common scoring', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const row = sourceRow();
+  row.history.sessions[0].turns[0].content = 'x'.repeat(850) + ' Earlier choice: Friday.' + 'y'.repeat(850);
+  row.history.sessions.push({ session_index: 1, session_id: `lme-session-${'d'.repeat(64)}`,
+    date: '2024/01/02 (Tue) 09:00', turns: [{ turn_id: `lme-turn-${'e'.repeat(64)}`,
+      role: 'user', content: 'Changed choice: Saturday.' }] });
+  for (const comparisonProfile of [undefined, 'indexed-evidence-v1']) {
+    const fake = fakeMixedHttp((_url, body) => {
+      if (!_url.endsWith('/responses')) return;
+      if (body.text?.format.name === 'cairn_qualifyCandidates') return indexedResponse(body, {});
+      if (body.text?.format.name === 'cairn_extract') {
+        const input = JSON.parse(body.input[0].content[0].text);
+        const windows = input.windows ?? input.messages;
+        assert.ok(windows, JSON.stringify(input));
+        const selected = windows.findIndex(window => window.content.includes('choice:'));
+        assert.ok(selected >= 0);
+        return indexedResponse(body, { items: [{ content: 'GENERATED_SUMMARY_POISON', kind: 'context',
+          confidence: 0.9, sourceIndices: [selected] }] });
+      }
+    }, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact, configuration, sourceCases: [row],
+      armOrders: [comparisonProfile ? ['mem0', 'cairn'] : ['cairn', 'mem0']],
+      comparisonProfile, fetchImpl: fake.fetchImpl });
+    try {
+      const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+        apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      assert.equal(generation.halted, false, JSON.stringify(generation.cases));
+      const cairn = generation.cases[0].arms[0], mem0 = generation.cases[0].arms[1];
+      assert.equal(mem0.status, 'completed', JSON.stringify(mem0));
+      assert.equal(cairn.status, comparisonProfile ? 'completed' : 'failed', JSON.stringify(cairn));
+      if (comparisonProfile) {
+        assert.equal(fake.calls.some(call => call.body.text?.format.name === 'cairn_qualifyCandidates'), false);
+        assert.equal(cairn.diagnostics.captureBatches, 2);
+        assert.equal(cairn.diagnostics.admittedMemories, 2);
+        const answer = fake.calls.filter(call => call.body.messages?.[0]?.content === PUBLIC_ANSWER_INSTRUCTION)
+          .map(call => JSON.parse(call.body.messages[1].content))
+          .find(input => input.evidence.some(unit => unit.text.includes('Earlier choice:')));
+        assert.ok(answer);
+        assert.ok(answer.evidence.some(unit => unit.text.includes('Changed choice: Saturday.')));
+        assert.ok(answer.evidence.every(unit => !unit.text.includes('GENERATED_SUMMARY_POISON')));
+        assert.ok(cairn.diagnostics.provenance.some(item => item.coordinates.some(coordinate =>
+          coordinate.windowIndex > 0 && coordinate.originalEndUtf16 > 850)));
+      } else {
+        assert.equal(cairn.reason, 'ingestion_incomplete');
+        assert.equal(fake.calls.filter(call => call.route === '/v1/responses'
+          && call.body.text?.format.name === 'cairn_extract').length, 1);
+      }
+      const scored = await scoreMixedGeneration({ generationReport: generation,
+        evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+        guard: fixture.guard, apiKey: 'synthetic-only' });
+      assert.equal(scored.summary.fixedN, 1);
+      assert.equal(scored.summary.perArm.cairn.unresolved, comparisonProfile ? 0 : 1);
+      assert.equal(scored.summary.commonResolvedN, comparisonProfile ? 1 : 0);
+    } finally { fixture.guard.close(); }
+  }
+});
+
+for (const fault of ['classification', 'extraction', 'empty']) {
+  test(`C5/C7 indexed-evidence actual native pair retains ${fault} outcome in fixed N`, async t => {
+    const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+      pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+    const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+      childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+    const fake = fakeMixedHttp((_url, body) => {
+      if (!_url.endsWith('/responses')) return;
+      if (body.text?.format.name === 'cairn_extract' && fault !== 'classification')
+        return indexedResponse(body, fault === 'empty' ? { items: [] }
+          : { items: [{ content: 'bad', kind: 'context', confidence: 1, sourceIndices: [999] }] });
+      if (body.text?.format.name === 'cairn_classify' && fault === 'classification')
+        return indexedResponse(body, { items: [{ memoryId: 'forged', parentIds: [] }] });
+    }, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact, configuration, sourceCases: [sourceRow()],
+      armOrders: [['cairn', 'mem0']], comparisonProfile: 'indexed-evidence-v1', fetchImpl: fake.fetchImpl });
+    try {
+      const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+        apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      assert.equal(generation.halted, false);
+      assert.equal(generation.cases[0].arms[0].status, fault === 'empty' ? 'completed' : 'failed');
+      assert.equal(generation.cases[0].arms[1].status, 'completed');
+      assert.equal(fake.calls.some(call => call.body.text?.format.name === 'cairn_qualifyCandidates'), false);
+      const answers = fake.calls.filter(call => call.body.messages?.[0]?.content === PUBLIC_ANSWER_INSTRUCTION);
+      assert.equal(answers.length, fault === 'empty' ? 2 : 1);
+      if (fault === 'empty') assert.deepEqual(JSON.parse(answers[0].body.messages[1].content).evidence, []);
+      const scored = await scoreMixedGeneration({ generationReport: generation,
+        evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+        guard: fixture.guard, apiKey: 'synthetic-only' });
+      assert.equal(scored.summary.fixedN, 1);
+      assert.equal(scored.summary.perArm.cairn.unresolved, fault === 'empty' ? 0 : 1);
+    } finally { fixture.guard.close(); }
+  });
+}
+
 function miniatureNativeArtifact(t) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-mixed-artifact-drift-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
