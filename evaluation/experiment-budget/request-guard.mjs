@@ -3667,7 +3667,16 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
       try { ledger.recordOutcome(actualMicroUsd === null
         ? { attemptId: record.attemptId, outcome }
         : { attemptId: record.attemptId, outcome, actualMicroUsd }); }
-      catch (error) { halted = true; throw error; }
+      catch (error) {
+        const allowed = ['ledger_busy', 'invalid_ledger', 'ledger_closed', 'configuration_mismatch'];
+        const code = error instanceof ExperimentBudgetError
+          ? Object.getOwnPropertyDescriptor(error, 'code')?.value : null;
+        record.settlementFailure = { operation: 'record_outcome',
+          category: allowed.includes(code) ? code : 'ledger_failed' };
+        deepFreeze(record);
+        halted = true;
+        throw error;
+      }
       record.outcome = outcome;
       record.actualMicroUsd = actualMicroUsd;
       deepFreeze(record);
