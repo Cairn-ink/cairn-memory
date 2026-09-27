@@ -1,12 +1,17 @@
 # Codex hooks client design contract
 
-Base: `b8af5cda1820fd0bb385aca784c2d2ee8c036b36` (#175 merged).
-Code and evidence were examined at this base. The branch was then integrated with
-main at `e7c4ecc47d4e632e4b78209bb3c176da7437f078` (#256 merged, docs only).
-No code changed between these bases.
+Base: `b8af5cd` (#175 merged), where evidence was first examined.
+The branch was integrated with main at `e7c4ecc` (#256, docs only), then `9b00753`
+(#257, the reliability backlog). #257 changed code, including cited
+`core/capture-input.mjs`, `adapters/mcp/cli.mjs`, `packaging/artifact-files.json`,
+`docs/privacy.md` and `docs/protocol.md`.
+The coordinator and reviewers rechecked at `9b00753`: the 4,000/20,000-unit limits,
+30 s model call and 125 s admission lease, MCP's `OPENAI_API_KEY`, packaging's
+redactor allowlist, privacy's telemetry and one-brain statements, and protocol
+versioning. The 112-test result uses the code at `9b00753`.
 
 Status: proposed, docs-only contract against `codex-cli 0.157.1`, researched 2026-09-27.
-Revision: owner billing decision, runtime usage guards and client-boundary reliability.
+Revision: public quota protocol ownership, integrated evidence and deadline-review inputs.
 Nothing here claims a shipped client.
 
 A person switching between Claude Code and Codex must use one memory target and
@@ -67,10 +72,12 @@ npm channel below. Plugin-loaded code remains compatible with Node
 
 **D1: preserve the released Claude hosted path.** Extraction/pairing must retain
 its hosted payloads, event identity, normal retries, cursor profile and transport behavior.
-The owner's billing revision adds only quota-refusal scheduling/status and the shared
-background-worker cap to upgraded Claude hosted hooks; this is an explicit D1
-exception, not a change to payload bounds or wire session IDs. Released 0.1.0
-does not gain these controls retroactively; report that limitation until upgraded.
+The owner's hosted free-quota decision requires clients to honor refusals: the
+**explicit D1 exception** for upgraded Claude on the hosted target is quota-refusal
+handling (no cursor advance, no retry storm, visible `quota_reached`, resume gate)
+and the shared background-worker cap. Payload bounds and wire session IDs remain
+unchanged. The released 0.1.0 plugin's behavior is unchanged; these controls apply
+only after upgrade, and status must report the limitation until then.
 Shared state controls are the explicitly agreed integration change. Profile choice
 is fixed by host and installed target, never by conversation text:
 
@@ -399,6 +406,17 @@ The sibling's episode configuration is one such addition, so it needs that revie
 before any client enables episodes through LAC; with HMA it also covers cold
 host-CLI startup, every model call and cancellation/termination within that budget.
 
+Review inputs at `9b00753` (#257): [createCaptureDeadline](../../core/capture-deadline.mjs)
+provides an opt-in invocation-local capture deadline; [MCP CLI](../../adapters/mcp/cli.mjs)
+exposes `--capture-deadline-ms` with a 120,000 ms maximum, while its help advises
+at least 180 s for opted-in capture across four bounded model stages. Episode-v1
+requires source-bound-v2 qualification and staging. The bounded deadline review
+must reconcile that 180 s guidance and 120 s invocation maximum with LAC's 150 s
+per-capture budget, plus host-CLI startup/model/termination latency. This conflict
+is unresolved here; do not infer a safe configuration or change LAC's budgets.
+The coordinator assigns the review owner, who must resolve and validate these
+inputs before any client enables the affected episode configuration.
+
 A kill/outage can still interrupt paid work before admission, permitting another
 model charge on retry. For an uncertain LAC attempt, persist a content-free
 not-before deadline at least 125 s after failure; do not poll/rebill immediately.
@@ -460,8 +478,24 @@ as documented in [privacy](../privacy.md#local-state).
 The shared port is `recall(query, binding, limits, signal)` and
 `capture(batch, binding, eventId, signal)`, plus the sibling's optional ports.
 Validate replies; distinguish acknowledgement, processing, quota refusal, unavailable
-and error. Hosted quota response fields/reset semantics are **to verify** against
-the deployed wire contract; do not invent wire fields or treat HTTP 429 as success.
+and error. **Public protocol first:** CX-4 publishes quota-refusal/reset semantics
+in `docs/protocol.md`, both response schemas and conformance tests in one PR,
+before any client depends on them. Proposed 0.2.0 refusal: HTTP 429 with
+`error: "quota_reached"` and optional `resetAt`, a validated finite UTC RFC 3339
+time. A refusal contains no success fields, memories or acknowledgement; an absent
+reset means unknown. Test both endpoints, strict unknown-field rejection, valid/
+missing/invalid resets and refusal versus success/processing, using
+`plugins/cairn-memory/test/protocol.test.mjs` and the hosted transport tests.
+
+Under [protocol versioning](../protocol.md#versioning), optional additive response
+fields alone may land in 0.1.x. This proposed alternative refusal shape omits
+currently required success fields, and both existing response schemas reject
+unknown fields: it is a breaking response contract, not an optional-field patch.
+Include it in CX-4's already proposed 0.2.0 breaking release alongside the new
+capture client, preserving the old success shapes and documenting compatibility.
+Whether hosted deployment implements that published contract remains **to verify**;
+CX-4 publication and confirmed service support must both precede client enablement.
+An unrecognized HTTP 429 is never success or permission to retry without bounds.
 Bindings/target capabilities come from installation, never model arguments. Target
 migration/dual writing/fallback are outside this packet.
 
@@ -495,7 +529,11 @@ validated reset time if supplied, otherwise “reset unknown”; never guess. Th
 person may resume using the shared control, at or after a known reset; an unknown
 reset requires explicit resume. Resume permits one eligible attempt, not polling;
 a repeated refusal closes the gate again. Do not switch target/authentication or
-silently purchase more quota. Exact service refusal/reset mapping is **to verify**.
+silently purchase more quota. CX-4 owns the public refusal/reset contract above;
+hosted implementation of that published contract remains **to verify**.
+These refusal rules and the shared concurrency cap below also apply to upgraded
+Claude hosted clients as the explicit D1 exception: the owner's free-quota policy
+requires honoring refusals. Released 0.1.0 behavior remains unchanged.
 
 The open-source local npm path's proposed default is the person's logged-in
 `claude -p` host, with no API key needed for that mode, processing evidence from
@@ -533,7 +571,8 @@ structured output and cancellation/child termination. If isolation cannot be
 verified, the adapter stays unavailable. Scripted fake processes, no real hosts
 or subscriptions in CI, test every supported port and failure boundary.
 
-A cold headless process cannot satisfy the 2 s prompt-recall request budget.
+A cold headless process is not expected to meet the 2 s prompt-recall request
+budget; **to verify in F0**, which measures the pinned installed path.
 Host-CLI automatic recall and SessionStart context therefore stay unavailable
 unless the actual installed path passes the existing hook budgets (and A7 for
 context); status states this, hooks fail open, and timeouts never extend budgets.
@@ -741,8 +780,8 @@ No column delegates an overlapping subtree to another worker.
 | F0 / CX-1 feasibility owner (gate) | `integrations/client/test/feasibility/**`; `docs/plans/codex-client.md` | Immediately after CX-1, before CX-2; pinned-host feasibility above. No production adapter or installer claim; no subscription execution without explicit authorization. |
 | CX-2 / pairing owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/**`, `plugins/cairn-memory/.claude-plugin/plugin.json`, `plugins/cairn-memory/README.md`; `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-1 and F0; explicit record/option delivery, joint-initialization API and pending-binding guard for CX-7, shared identity/pause, A2/A3. Own privacy's local-state list for install/pairing metadata and setup lock; own release records for the new user-visible Claude option. No real-user migration. |
 | CX-3 / Codex owner | `integrations/codex/**` including `test/fixtures/**` and `README.md`; `integrations/client/**` including `test/**`; `docs/plans/codex-client.md` | CX-2; primary parser evidence, common profile, new cursor/worker and shared runtime-usage guard, A1/A4/A5/A9 with stubs; no hosted enablement. |
-| CX-4 / protocol/quota owner | `schemas/capture-request.schema.json`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/test/**`; `packaging/**`; `integrations/client/transport-hosted.mjs`, `integrations/client/test/transport-hosted.test.mjs`; `docs/protocol.md`, `docs/architecture.md`, `docs/privacy.md`; release files below, including root `package.json` | CX-3; 0.2.0 breaking-version note and explicit upgraded-Claude quota/concurrency exception, matching version bumps and changelog in this same PR, truthful discriminator and Codex reader threat boundary. Hosted support is an external gate; no service code. |
-| HMA / host-model owner | `adapters/host-model/**` including `test/**` and `README.md`; `adapters/mcp/cli.mjs`, `adapters/mcp/test/host-model.test.mjs`; `docs/plans/codex-client.md`, `docs/privacy.md`; release files below | After CX-4 and F0; core injected-port adapter, scripted fakes, verified isolation/quota capabilities and API-key alternative. Uses CX-3 guard; no engine or hook logic. Own explicit MCP model selection, host-process/provider privacy notes and release records. No real host calls in CI; policy approval remains a release gate. |
+| CX-4 / protocol/quota owner | `schemas/capture-request.schema.json`, `schemas/capture-response.schema.json`, `schemas/recall-response.schema.json`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/test/**`; `packaging/**`; `integrations/client/transport-hosted.mjs`, `integrations/client/test/transport-hosted.test.mjs`; `docs/protocol.md`, `docs/architecture.md`, `docs/privacy.md`; release files below, including root `package.json` | CX-3; 0.2.0 breaking-version note for capture widening and quota refusal/reset response variants; public protocol, both response schemas and conformance tests land together before client dependence. Explicit upgraded-Claude quota/concurrency exception, matching version bumps and changelog in this same PR, truthful discriminator and Codex reader threat boundary. Hosted support is an external gate; no service code. |
+| HMA / host-model owner | `adapters/host-model/**` including `test/**` and `README.md`; `adapters/mcp/cli.mjs`, `adapters/mcp/test/host-model.test.mjs`; `docs/plans/codex-client.md`, `docs/privacy.md`; release files below | After CX-4, F0 and SE-5's MCP handoff; core injected-port adapter, scripted fakes, verified isolation/quota capabilities and API-key alternative. Uses CX-3 guard; no engine or hook logic. Own explicit MCP model selection, host-process/provider privacy notes and release records. No real host calls in CI; policy approval remains a release gate. |
 | LAC / local-capture owner | `adapters/local-capture/**` including `test/**` and `README.md`; `integrations/client/transport-local.mjs`, `integrations/client/test/transport-local.test.mjs`; `packaging/**` including `packaging/artifact-files.json`; `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-3/4, HMA for host-CLI mode, or configured API-key adapter; actual core integration for both clients, guarded model ports, deadlines and A6/A9. Before episodes, require SE capabilities and separate deadline review including host-CLI latency when used. Own the “local store not connected” correction, local capture privacy/threat-model change, its own changelog entry and required version bump in this PR. No engine changes. |
 | CX-5 / lifecycle-install owner | `integrations/codex/**`; `integrations/client/session-context.mjs`, `integrations/client/session-end.mjs`, `integrations/client/context-format.mjs`, `integrations/client/test/session-context.test.mjs`, `integrations/client/test/session-end.test.mjs`, `integrations/client/test/context-format.test.mjs`; `plugins/cairn-memory/hooks/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/lifecycle.test.mjs`, `plugins/cairn-memory/README.md`; `packaging/**`; root `README.md`; release files below | LAC, or completed hosted path with LAC explicitly deferred; sibling-agreed port DTOs and A7. Own root README's Codex automatic-hook status, its own changelog entry and required version bump. This owner alone implements sibling adapters in shared files; sibling authors supply the contract, not competing edits. Preserve Claude hosted behavior; its new episode hooks remain separate work. |
 | CX-7 / one-command setup and npm distribution owner | `integrations/setup/**`; `packaging/npm/**`; `packaging/artifact-files.json`, `packaging/README.md`; `scripts/validate-json.mjs`; `README.md`, `plugins/cairn-memory/README.md`, `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`; release files below | After CX-5 and F0 outcomes; HMA for the proposed local default (policy approval/pinned-host capabilities required), or explicit API-key alternative; [setup plan](one-command-setup.md), A8, CX-2 identity/controls and CX-5 registrations. One-brain episode disclosure/enablement depends on a local target, installed SE episode-v1 capability and LAC running the episode configuration that passed the separate bounded deadline review including host-CLI latency when used; the coordinator assigns its review owner. Missing any precondition means episodes unavailable. Own installer/bundle, installation/privacy/distribution docs, runtime/progress state, packaging README's no-npx boundary, and public-manifest version validation. Own changelog/synchronized bump; reviewable tarball only, separate publication approval. |
@@ -781,15 +820,16 @@ to this packet: obtain that pointer at execution, rather than invent a public li
 Snapshot **as of merged sibling `f1b577d` (#256), to verify at execution** for
 `docs/plans/session-episodes.md` (SE-1…SE-5): `docs/protocol.md`, `docs/privacy.md`,
 `packaging/artifact-files.json`, `.github/workflows/ci.yml`, root `package.json`,
-`CHANGELOG.md` and `packaging/test/**`. The sibling does not edit Claude `hooks/**` in this snapshot.
+`CHANGELOG.md`, `packaging/test/**` and `adapters/mcp/cli.mjs` (SE-5). The sibling
+does not edit Claude `hooks/**` in this snapshot.
 CX-7 now participates in the snapshot's `docs/privacy.md`, artifact file list,
 root `package.json` and `CHANGELOG.md` handoffs. The linked [setup plan](one-command-setup.md#cx-7-ownership-and-following-stages)
 shares this ledger, not another owner. Its `packaging/README.md`,
 `scripts/validate-json.mjs`, root `README.md` and `docs/architecture.md` handoffs
 also require the coordinator's umbrella-plan check; this does not assert additional
 sibling edits. HMA also joins the `docs/privacy.md` and release-record handoffs;
-its `adapters/mcp/cli.mjs` handoff must be checked against the umbrella plan and
-SE ownership before execution. F0 adds no sibling file ownership. The integrator retains CI ownership.
+SE-5 owns `adapters/mcp/cli.mjs` first, then hands it to HMA in the stated order.
+F0 adds no sibling file ownership. The integrator retains CI ownership.
 Across this contract, the setup plan and the sibling, **only one open PR at a time
 may edit each shared file**, including CI, version validation and release files.
 The repository maintainer (coordinator) sets the order and hands ownership to the
@@ -807,7 +847,8 @@ dependencies and exclusive file ownership. No sibling edits are authorized here.
 
 Remaining **to verify** gates: policy approval for subscription-backed processing;
 pinned HMA model ports/isolation/quota events and latency; finite daily-cap defaults;
-hosted quota/reset response mapping; Codex-only local model choice; F0 outcomes;
+hosted implementation of CX-4's published quota/reset contract; unresolved LAC
+180 s/120 s/150 s deadline reconciliation; Codex-only local model choice; F0 outcomes;
 0.150 minimum and exact 0.157.1 format/lifecycle/privileges; same PID namespace
 and platform publication/permission semantics;
 hosted 0.2.0 deployment; A7 authority evaluation; sibling context/end semantics.
@@ -830,8 +871,9 @@ tool/file/reasoning/image ingestion; target switching; episode implementation;
 paid experiments or production deployment. Existing semantic-quality failures
 remain failures; this contract does not certify source truth or adoption.
 
-Billing/reliability revision verification on Node `v22.16.0`: `npm test` exited 0
-(112 passed), `npm run validate` exited 0, and all 58 relative links and 36 anchors
+Public-protocol/deadline revision verification against code at `9b00753` on
+Node `v22.16.0`: `npm test` exited 0
+(112 passed), `npm run validate` exited 0, and all 61 relative links and 37 anchors
 in both plans resolved (exit 0).
 Working/staged `git diff --check` exited 0 before the new local commit.
 No Node 20/24 execution, F0/HMA host calls, new-client implementation or human

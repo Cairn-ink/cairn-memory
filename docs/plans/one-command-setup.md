@@ -1,12 +1,17 @@
 # One-command setup and npm distribution
 
-Base: `b8af5cda1820fd0bb385aca784c2d2ee8c036b36` (#175 merged).
-Code and evidence were examined at this base. The branch was then integrated with
-main at `e7c4ecc47d4e632e4b78209bb3c176da7437f078` (#256 merged, docs only).
-No code changed between these bases.
+Base: `b8af5cd` (#175 merged), where evidence was first examined.
+The branch was integrated with main at `e7c4ecc` (#256, docs only), then `9b00753`
+(#257, the reliability backlog). #257 changed code, including cited
+`core/capture-input.mjs`, `adapters/mcp/cli.mjs`, `packaging/artifact-files.json`,
+`docs/privacy.md` and `docs/protocol.md`.
+The coordinator and reviewers rechecked at `9b00753`: the 4,000/20,000-unit limits,
+30 s model call and 125 s admission lease, MCP's `OPENAI_API_KEY`, packaging's
+redactor allowlist, privacy's telemetry and one-brain statements, and protocol
+versioning. The 112-test result uses the code at `9b00753`.
 
 Status: proposed docs-only plan, researched 2026-09-27.
-Revision: owner billing decision, local host-model dependencies and reliability disclosures.
+Revision: integrated evidence, public quota protocol and deadline-review dependencies.
 Implements maintainer chichi's one-command decision through CX-7, after CX-5 and
 before CX-6 in the [Codex client package order](codex-client.md#ordered-packages-and-exclusive-file-ownership).
 This plan owns installer/distribution behavior; the [client contract](codex-client.md)
@@ -73,13 +78,15 @@ does not establish shared memory with those products.
    hosted processing uses the paid Cairn plan or bounded free quota, enforced by
    the service. Disclose quota-reached status, supplied reset time and explicit
    resume; no automatic target switch, cursor advance or retry storm on refusal.
+   Depend on CX-4's published 0.2.0 protocol, response schemas and conformance
+   tests first; hosted implementation of that contract remains **to verify**.
    The proposed open-source local default uses `claude -p` with the person's
    logged-in Claude plan, for either coding client's memory. Before consent say:
    “Local memory processing consumes your Claude plan quota and may reduce what
    is available for interactive use. You can choose API-key processing instead,
    billed by that provider.” Local storage is not offline inference. Offer the
    existing OpenAI adapter path; never silently substitute it or require an API
-   key for the approved host-plan mode. The host uses its own authentication;
+   key for host-plan mode, once approved. The host uses its own authentication;
    setup does not read/import host credentials, nor put provider keys on argv.
    API-key configuration uses the existing adapter's injected key mechanism
    (`OPENAI_API_KEY` for its current CLI), never the Cairn hosted token.
@@ -111,6 +118,11 @@ does not establish shared memory with those products.
    owner. It covers source-bound-v2 capture, staged-v1 staging and episode-interpretation
    calls and, in host-CLI mode, cold startup/model latency and termination within
    LAC's worker budget, as required by the sibling's [episode configuration](session-episodes.md#product-decisions-supplied-by-the-coordinator-2026-09-27).
+   The review must also reconcile #257's opt-in invocation-local capture deadline
+   (`--capture-deadline-ms` maximum 120,000 ms), MCP's at-least-180 s guidance for
+   four bounded stages, and LAC's 150 s per-capture budget. Episode-v1 requires
+   source-bound-v2 qualification; host-CLI latency must fit too. This remains
+   unresolved here and belongs to the coordinator-assigned deadline-review owner.
    If any precondition is absent, neither enable episodes nor describe them as
    active; status reports episodes as unavailable.
    The [privacy contract](../privacy.md#proposed-session-episodes-local-core)
@@ -334,7 +346,8 @@ reviewed episode configuration; a merged design contract is not that capability.
 
 Remaining **to verify**: subscription-policy approval; F0 pinned-host quota signals,
 model-port isolation and latency; finite daily-cap defaults; hosted quota/reset
-response mapping; Codex-only model path; local Claude token-field handling;
+implementation of CX-4's published contract; LAC's 180 s/120 s/150 s deadline
+reconciliation; Codex-only model path; local Claude token-field handling;
 exact npm name/availability, hosted OAuth, pinned-host
 Claude reconfiguration/hook delivery, install behavior when required `api_token`
 is omitted from `--config`, and Codex 0.157.1 PATH-helper side effects. The token
