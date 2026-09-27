@@ -101,11 +101,16 @@ reliability work below without declaring older failure gates resolved.
    and explicit pinned-native local test must not be conflated with a score.
    A fresh [six-batch synthetic canary](docs/evidence/qualification-canary.md)
    has since completed one paired question; this is technical feasibility,
-   not a benchmark result or repair of the earlier failed cases. The next
-   proposed gate is a separately sealed, authorized six-case pilot with one
-   case per official LongMemEval question type, followed only if scoreable by
-   a new fixed-30 comparison. Installed-host, source-fidelity and lightweight
-   resource gates remain separate.
+   not a benchmark result or repair of the earlier failed cases. The later
+   [fresh six-type official pilot](docs/evidence/qualification-official-pilot.md)
+   completed without a global halt but Cairn answered 0/6 and left all six
+   judgments unresolved; Mem0 answered 6/6 with four correct and two
+   incorrect, leaving common resolved denominator 0/6. Do not expand to a
+   fixed-30 comparison yet. First reproduce the context-fit and qualification
+   slot-mapping boundaries offline, review any product correction, then
+   consider a newly frozen feasibility probe without replaying consumed cases.
+   Installed Hermes, MOC candidate visibility, source fidelity and lightweight
+   latency/request/cost gates remain separate.
 2. Review/merge the verified native-provider candidate and its dependent
    native deadline/recovery candidate. The separately frozen
    [six-case development smoke](docs/fresh-reliability-smoke.md) now has a

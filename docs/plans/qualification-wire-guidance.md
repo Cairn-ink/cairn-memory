@@ -77,3 +77,58 @@ The [technical result](../evidence/qualification-canary.md) is limited to the
 N2 observation and the proposed next gate. For this docs-only edit, generic
 tests passed 112/112 and JSON/version validation passed on each of Node
 22.16 and 24.15; no runtime, scorer, model or provider test behavior changed.
+
+## E6–E10 — Official six-case pilot result record
+
+This documentation-only continuation starts from
+`8b7d8d347481c8560ca3ab254193f4d18d45d04e`. It does not modify the
+pilot's runtime, models, prompts, cases, evaluator, or budget policy.
+
+- E6: Record the completed pilot only after terminal generation, scoring and
+  accounting evidence has been inspected. Until then, label the result pending;
+  do not infer completion from a running process or requests already issued.
+  Describe six new official LongMemEval cases, one per official type, with
+  source-only deterministic selection and all previously frozen cases excluded.
+  Report the fixed six-case denominator without replacement or replay.
+- E7: Separate lifecycle completion, per-arm mechanical completion, scoreability,
+  correct/incorrect/unresolved counts, and the common resolved denominator.
+  Break failures down by the recorded stage and finite diagnostic category;
+  do not label an unresolved case an incorrect semantic judgment or infer a
+  specific model response that was not retained. Six cases are not a leaderboard
+  score, statistical parity evidence, or a product reliability guarantee.
+- E8: Publish only aggregate accounting verified against the unchanged prior
+  ledger prefix and the exact run tail. Separate conservative reservations from
+  known usage estimates and unknown usage; neither is an invoice. Omit private
+  paths, operational hashes, case identifiers, source text, model answers,
+  evaluator material and credentials from public evidence.
+- E9: Preserve S3, N1 and N2 outcomes. Update the limitations and roadmap with
+  the observed gate outcome and bounded next action: repair a mechanical failure
+  with an offline reproducer and independent review before fresh paid expansion;
+  otherwise assess feasibility of a fresh fixed-30 cohort, retaining its existing
+  scoreability rule. Keep semantic fidelity, MOC visibility, installed Hermes,
+  latency/request/cost evidence as separate unfinished gates unless independently
+  demonstrated. This document does not authorize another launch or a merge.
+- E10: Limit delivery to this plan, one technical result document, limitations
+  and roadmap. Run generic tests and validation on Node 22.16 and 24.15, obtain
+  independent Standards and Spec review of the same final commit, and check
+  latest-head CI before completing the PR handoff. No paid calls are needed to
+  verify the documentation itself.
+
+The [official-type pilot result](../evidence/qualification-official-pilot.md)
+records the terminal non-halted but mechanically incomplete run: Cairn 0/6
+answered and 6/6 unresolved, Mem0 6/6 answered with 4 correct and 2
+incorrect, and common resolved denominator 0/6. Independent aggregate review
+confirmed 976 settled new attempts, 5,582,424 micro-USD additional conservative
+reservation, and zero pending without changing the prior ledger prefix. These
+facts do not support a fresh fixed-30 expansion or a parity claim. The next
+gate is a synthetic offline context-fit and qualification-slot reproducer,
+followed by independent review of any product correction before a fresh probe.
+
+Routing and verification for E6–E10: bounded documentation implementation by
+G6 Sol/high from the fixed base above. The primary supplied terminal aggregates
+after an independent accounting check; the author did not open operational
+inputs. On both Node 22.16 and 24.15, `npm test` passed 112/112 and
+`npm run validate` passed JSON and version checks; raw logs are retained for
+review. The local candidate SHA is supplied in the fixed-point review handoff.
+No runtime, scorer, model, provider, corpus, evaluator or ledger file is
+changed by this packet.

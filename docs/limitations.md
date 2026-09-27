@@ -223,6 +223,22 @@ shared cap and zero-pending aggregate were checked independently. A separately
 sealed and authorized multi-type pilot remains necessary before any new
 fixed-30 comparison or broader quality claim.
 
+The later [fresh six-type official pilot](evidence/qualification-official-pilot.md)
+completed without a global halt but did not pass mechanical completion or
+paired scoreability. Cairn completed no full case ingestion or answer: all six
+judgments are unresolved, not incorrect. Four ingestions ended at a
+`qualifyCandidates` context-budget boundary and two at a finite
+qualification-slot mapping boundary followed by adapter-output rejection;
+the exact unretained response and underlying causes are unknown. Mem0 produced
+six answers, four judged correct and two incorrect, but the common resolved
+denominator is zero. This small pilot is neither a leaderboard result nor
+evidence of parity, source fidelity or product reliability. The 976 new
+requests all settled and added 5,582,424 micro-USD of conservative reservation,
+not a bill; 29 costs remain unknown. S3, N1 and N2 are unchanged. No fresh
+fixed-30 expansion follows this failed feasibility gate: context-fit and
+slot-mapping falsifiers, reviewed repair and a separately frozen new probe
+come first, without retrying these consumed cases.
+
 The [controlled mixed comparison runner](plans/mixed-comparison-runner.md)'s
 offline fake-HTTP tests are engineering evidence, not a measured Cairn/Mem0
 score.
