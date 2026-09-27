@@ -58,14 +58,19 @@ cause and select another new directory. Nothing edits the input file.
 
 | File | Allowed consumer | Contents |
 | --- | --- | --- |
-| `history.jsonl` | Future ingestion runner | Opaque case ID, original session IDs/dates, zero-based session occurrence index, stable turn IDs, roles and source content |
+| `history.jsonl` | Ingestion/answer runner | Opaque case and session IDs, original dates, zero-based session occurrence index, v2 stable turn IDs, roles and exact source content |
 | `questions.jsonl` | Future query runner | Opaque case ID, question text and date |
-| `evaluator.jsonl` | Evaluator only | Original/opaque ID mapping, question type, reference answer, evidence sessions and turn labels |
-| `manifest.json` | Operator/evaluator only | Revision/digest, selected original IDs, sizes, artifact hashes and compatibility blockers |
+| `evaluator.jsonl` | Evaluator only | Original/opaque case ID mapping, question type, reference answer, opaque evidence-session IDs and turn labels |
+| `manifest.json` | Operator/evaluator only | Revision/digest, selected original IDs, raw-to-opaque session occurrence map, sizes, artifact hashes and compatibility blockers |
 
-LongMemEval source IDs can end in `_abs`, exposing an abstention label. Model
-inputs therefore use deterministic hashed case IDs; original IDs stay in the
-evaluator and manifest. `has_answer`, reference answers, question types, supplied
+LongMemEval source question IDs can end in `_abs`, and source session IDs may
+encode an answer or abstention. Model inputs therefore use deterministic
+hashed case and session-occurrence IDs independent of raw session-ID strings.
+The private manifest's `session_id_map` records each selected source question,
+occurrence index, raw source session ID and opaque session ID. The evaluator's
+`answer_session_ids` uses those opaque IDs so the strict evaluator shape and
+retrieved/packed coverage join remain unchanged. Original question IDs stay
+in the evaluator and manifest. `has_answer`, reference answers, question types, supplied
 summaries and arbitrary extra fields never get copied into model input records.
 Correct answer text may naturally exist in the original conversation; preserving
 that source evidence is required, not annotation leakage. Hashing metadata does
@@ -73,10 +78,24 @@ not address possible model training contamination on a public benchmark.
 
 Some official S cases repeat a source session ID with identical session bodies
 but different dates. Each occurrence is retained in source order with its own
-`session_index`; turn IDs include that index so separate occurrences never
+`session_index`; v2 turn IDs include that index, not the raw ID, so separate occurrences never
 collapse. Duplicate occurrence counts are recorded. Conflicting bodies under a
 repeated ID, or an evidence session ID matching multiple occurrences, are
 rejected rather than silently deduplicated or disambiguated.
+
+Preparation now emits `cairn-longmemeval-preparation-v2`. Treat any prior v1
+output as **not session-label-blinded**: regenerate from the same reviewed,
+pinned source and selection into a new directory. Do not relabel old artifact
+files in place or claim their old hashes prove v2 identity. The live-pilot
+loader accepts v2 only and verifies the private map and public session/turn
+identities before generation; v1 fails closed. Hand-built legacy histories
+can still be used for offline diagnostic module tests, but are not prepared
+v2 benchmark artifacts. The exported four-argument `stableTurnId` remains the
+legacy v1 helper; `stableTurnIdV2` and `opaqueSessionId` produce v2 IDs.
+
+Blinding is a metadata boundary, not source-content scrubbing: a source turn
+that happens to spell a raw ID or the word “answer” stays verbatim. No
+lexical substring deny-list is applied to dialogue or question prose.
 
 All generated files are private (0600), in a private directory (0700). The CLI
 summary exposes counts and hashes, not content, original IDs or local paths.

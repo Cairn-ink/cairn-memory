@@ -36,6 +36,30 @@ Fresh work claims a fixed 125-second lease. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
 
+Trusted embedded callers may opt in with
+`openMemoryCore({ path, model, captureDeadlineMs: 120000 })`. The setting is
+snapshotted at construction, accepts an integer from 1 through 120000, and is
+not a capture-message field. The local MCP host now accepts the same trusted
+constructor setting or `--capture-deadline-ms` with an explicitly enabled v1/v2
+capture qualification mode. Omission retains the existing behavior. The native
+Hermes provider separately accepts a canonical decimal string
+`capture_deadline_ms` of 1–110000 only with v2 capture and forwards the fixed
+CLI flag; its ordinary transport limits do not change.
+Each capture then has one monotonic budget starting before input normalization
+and spanning extraction, optional qualification/reconciliation, admission,
+initial classification and automatic rationale. Every model call still has its
+own 30-second ceiling; the smaller remaining limit applies. Deadline checks
+before capture-owned transaction commits roll back late admission, placement or
+rationale writes. This is cooperative for synchronous token counting and SQLite,
+not a hard wall-clock response guarantee. Failure cleanup may run after expiry.
+Before admission, expiry returns `model_timeout`; after admission, committed
+receipts stay committed and classification or rationale reports failure honestly.
+No automatic retry, new provider allowance, or host default is implied.
+The native Hermes provider can independently enable admission inspection and
+explicit classification recovery through `classification_recovery: guarded-v1`.
+Its keyless inspection and model-backed placement retain the installed MCP
+schemas and revision guards. See the [native setup guide](../integrations/hermes/cairn/README.md).
+
 Successful new capture returns `{ duplicate: false, admission, classification }`.
 Admission contains `{ memories: [{id,revision}], suppressedCount,indexRevision }`.
 Classification is one of:
@@ -49,6 +73,18 @@ accepted memories; they remain inspectable. Applied revisions are the actual
 post-filing revisions, not the earlier admission snapshot. Concurrent correction
 or forgetting rejects stale filing. Retry classification explicitly from fresh
 state; capture replay does not rerun extraction or classification.
+
+New captures also commit a bounded, source-free **initial classification
+attempt** journal with their admission. Its status is `not_started` before
+model work, `in_flight_or_interrupted` while work is outstanding, then
+`applied`, `skipped_already_filed` or `failed`; empty admission records
+`skipped_empty`. A crash can leave the in-flight status indefinitely. The
+`applied` status is committed with placement, including a valid no-op with no
+parent, so it does not mean every member is filed or the model was correct.
+The journal is visible only through opt-in
+[admission inspection](admission-claims.md#read-committed-admission-membership).
+It does not retry capture or provide a classification task queue. Manual and
+pre-v14 admission claims have no recorded initial attempt.
 
 Pending replay returns `{processing:true}`. Completed replay returns
 `{duplicate:true,memoryIds,suppressedCount}`, even without a model/counter. IDs
@@ -149,6 +185,23 @@ to four distinct references from that item's candidates. Known values require
 evidence. Unknown values may cite context, and even all-unknown output must
 explicitly select at least one candidate overall. Four distinct candidates per
 qualification is the maximum; additional evidence rejects rather than being lost.
+
+An explicitly fit-capable qualifier first keeps the whole inline request if it
+fits, then the whole strict catalog if that fits. Only when neither fits does
+core preflight one request per original item (at most five), choosing inline
+then catalog for each before any model call. The local item index is rebased to
+zero in each request while original candidate IDs and receipt/source anchors
+stay bound to an immutable snapshot. All results must compile before admission;
+failure of any group rejects the batch without partial memories or a retry.
+Models without this fit capability retain one whole inline request. Each
+request retains the same token/output limits and original capture deadline.
+For staged evidence, the capture layer rechecks its scoped ownership immediately
+before each group, including the first after planning. Explicit discard or
+forget during an already-started request cannot recall that request, but blocks
+later groups and admission. The core model-call boundary checks again after
+token counting and in the invocation microtask, so a counter callback cannot
+send a discarded source to another model call.
+This is capacity handling, not evidence entailment or semantic verification.
 
 The v2 interpretation prompt evaluates descriptors independently: unknown
 commitment does not require dropping a supported subject, attribute or condition.

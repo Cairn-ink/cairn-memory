@@ -9,6 +9,7 @@ import { createExperimentBudget, reopenExperimentBudget } from '../../evaluation
 import { createExperimentRequestGuard, authorizeQualificationExtension } from '../../evaluation/experiment-budget/request-guard.mjs';
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
 import { getCandidateQualificationPilotPins, runCandidateQualificationPilot } from '../../evaluation/live/candidate-qualification-pilot.mjs';
+import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 
 let artifact, executable;
 before(() => {
@@ -71,7 +72,7 @@ for (const mode of ['success', 'invalid-first', 'transport']) {
         output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
       }
       if (payload.text.format.name === 'cairn_qualifyCandidates') {
-        output.qualifications = Object.fromEntries(output.qualifications.map(item => ['item_' + item.itemIndex, item]));
+        output = qualificationPoolWire(input, output);
       }
       return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
         incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',

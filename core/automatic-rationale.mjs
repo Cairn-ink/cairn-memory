@@ -3,9 +3,11 @@ import { MemoryStoreError, fail } from './validation.mjs';
 const unwrap = result => { if (!result.ok) fail(result.error.code); return result.value; };
 
 /** Best-effort post-admission work. A failed pass must never disguise saved memory. */
-export async function reviewCapturedRationale({ snapshot, admission, classification, sourceMessages, operations }) {
+export async function reviewCapturedRationale({ snapshot, admission, classification, sourceMessages,
+  operations, deadline }) {
   if (!admission.memories.length) return { status: 'skipped', reason: 'empty' };
   try {
+    deadline?.check();
     const guards = classification.status === 'applied'
       ? classification.memoryRevisions : admission.memories.map(({ id, revision }) => ({ memoryId: id, revision }));
     const refs = admission.memories.map(({ id, revision }) => {
@@ -18,6 +20,7 @@ export async function reviewCapturedRationale({ snapshot, admission, classificat
     let query = fullQuery.slice(0, 4000);
     if (!query.isWellFormed()) query = query.slice(0, -1);
     const discovered = unwrap(operations.discoverRationale({ namespace: snapshot.namespace, refs, query }));
+    deadline?.check();
     const reviewed = unwrap(await operations.reviewRationale({ namespace: snapshot.namespace, refs: discovered.refs }));
     return { status: 'reviewed', ...reviewed,
       discovery: { candidateCount: discovered.refs.length, scanExhausted: discovered.scanExhausted,

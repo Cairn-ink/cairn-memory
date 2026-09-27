@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import { callModel } from '../model-call.mjs';
+import { callModel, isCoreModelDeadlineSignal } from '../model-call.mjs';
 import { MemoryStoreError } from '../validation.mjs';
 
 const invoke = (callback, options) => callModel({ contextWindow: 8192,
@@ -14,10 +14,30 @@ test('trusted adapter budget/output errors retain only the narrow existing codes
     await assert.rejects(invoke(() => { throw { code, message: 'secret provider body' }; }),
       (error) => error.code === 'recall_failed' && !error.message.includes('secret'));
   }
-  for (const code of ['revision_conflict', 'storage_busy', 'not_found']) {
+  for (const code of ['revision_conflict', 'storage_busy', 'not_found', 'capture_evidence_closed']) {
     await assert.rejects(invoke(() => { throw new MemoryStoreError(code); },
       { failureCode: 'extraction_failed' }), (error) => error.code === 'extraction_failed');
   }
+});
+
+test('trusted invocation freshness failure keeps its code; forged model error does not', async () => {
+  let checks = 0; let modelCalls = 0;
+  const closed = new MemoryStoreError('capture_evidence_closed');
+  await assert.rejects(invoke(() => { modelCalls++; return {}; }, { validateFresh() {
+    if (++checks === 2) throw closed;
+  } }), error => error === closed);
+  assert.equal(checks, 2); assert.equal(modelCalls, 0);
+  await assert.rejects(invoke(() => { throw new MemoryStoreError('capture_evidence_closed'); },
+    { validateFresh: () => {} }), { code: 'recall_failed' });
+});
+
+test('deadline expiry after invocation freshness still wins before model dispatch', async () => {
+  let expired = false; let checks = 0; let modelCalls = 0;
+  const deadline = { expired: () => expired, remainingMs: () => 10_000 };
+  await assert.rejects(invoke(() => { modelCalls++; return {}; }, { deadline, validateFresh() {
+    if (++checks === 2) { expired = true; throw new MemoryStoreError('capture_evidence_closed'); }
+  } }), { code: 'model_timeout' });
+  assert.equal(modelCalls, 0);
 });
 
 test('adapter cancellation retains the existing explicit cancellation envelope', async () => {
@@ -45,4 +65,6 @@ test('one core deadline aborts a pending two-phase adapter without extending pha
   t.mock.timers.tick(1);
   await rejected;
   assert.equal(signal.aborted, true);
+  assert.equal(isCoreModelDeadlineSignal(signal), true);
+  assert.equal(isCoreModelDeadlineSignal(AbortSignal.abort('model_timeout')), false);
 });
