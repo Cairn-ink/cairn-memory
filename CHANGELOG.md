@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — decision commitment and claimant guidance
+
+- Clarify v2 source interpretation: settled scoped preferences and choices may
+  be adopted; observations and dated feelings alone retain useful descriptors
+  with unknown decision commitment. Apply commitment to the qualified claim,
+  preserve claimant attribution in content and distinguish material explicit
+  event/decision/import times from application periods. This narrows earlier
+  ambiguous guidance without changing schemas, legacy/v1 prompts, stored records,
+  authority or budgets. Semantic improvement and historical revalidation are not
+  established by the synthetic checks.
+
 ## Unreleased — repeated qualification field references
 
 - Accept repeated valid per-field evidence-pool slots after validating the

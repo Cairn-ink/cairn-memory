@@ -98,10 +98,11 @@ test('repeated 5x4x800 SHA source refuses inline but selects catalog with one co
   assert.deepEqual(sent, catalog);
   assert.equal(calls[0].body.instructions.includes('resolve textIndex through texts'), true);
   assert.equal(calls[0].body.instructions.includes('untrusted data'), true);
-  // The coherent standard pool framing adds 47 tokens versus the frozen 4757 body.
-  assert.equal(countOpenAITokens(JSON.stringify(calls[0].body)), 4804);
+  // Pool framing added 47 tokens to the historical 4757 body; the clarified
+  // decision-commitment guide adds another 79. This measures the current body.
+  assert.equal(countOpenAITokens(JSON.stringify(calls[0].body)), 4883);
   assert.equal(countOpenAITokens(JSON.stringify({ system: calls[0].body.instructions,
-    input: sent, maxOutputTokens: 1024 })), 2982);
+    input: sent, maxOutputTokens: 1024 })), 3061);
   const { max_output_tokens: max, store, stream, ...generationBase } = calls[1].body;
   assert.equal(max, 1024); assert.equal(store, false); assert.equal(stream, false);
   assert.deepEqual(generationBase, calls[0].body);

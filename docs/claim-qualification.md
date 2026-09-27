@@ -48,6 +48,15 @@ are unverified memory content. The receipt author role is derived from storage;
 it is distinct from the described claim subject. Null applicability is not
 silently replaced with delivery time. A single DTO cannot prove semantic atomicity.
 
+The v2 model guidance now describes decision commitment to the selected
+subject/property/value: a choice or settled preference may be adopted; an
+observation or dated feeling alone retains useful fields with unknown commitment.
+Reported/quoted attribution is independent of the represented claimant's stance,
+and adopted does not qualify every clause in a decision/premise mixture. This
+narrows ambiguous earlier guidance, without changing enums, validating historical
+interpretations, or backfilling immutable records. Unknown is not rejection and
+does not exclude a relevant memory from qualified recall.
+
 Each of 1–4 anchors selects one of this item's normalized receipts by zero-based
 `receiptIndex`. Safe-integer `start/end` are UTF-16 offsets into its canonical
 stored excerpt with `0 <= start < end`. Neither boundary may split a surrogate
