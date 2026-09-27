@@ -136,37 +136,44 @@ test('B2 all-unique oversized batch uses five preplanned real-wire singleton pai
   const candidateTexts = uniqueSnapshot.input.items.flatMap((entry) => entry.candidates.map((candidate) => candidate.text));
   assert.equal(candidateTexts.length, 80);
   assert.equal(new Set(candidateTexts).size, 80);
-  const calls = []; const planned = [];
-  const actual = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
-    fetchImpl: async (url, options) => {
-      const body = JSON.parse(options.body); calls.push({ url, body });
-      if (calls.length === 1) assert.deepEqual(planned.filter(input => input.items.length === 1)
-        .map(input => input.items[0].content), unique.map(entry => entry.content));
-      const group = JSON.parse(body.input[0].content[0].text);
-      assert.equal(group.items.length, 1);
-      assert.ok(countOpenAITokens(JSON.stringify(body)) <= 6000);
-      return Response.json(url.endsWith('/input_tokens')
-        ? { object: 'response.input_tokens', input_tokens: 120 }
-        : envelope(body.model, wire(group)));
+  const results = [];
+  for (const repeated of [false, true]) {
+    const calls = []; const planned = [];
+    const actual = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body); calls.push({ url, body });
+        if (calls.length === 1) assert.deepEqual(planned.filter(input => input.items.length === 1)
+          .map(input => input.items[0].content), unique.map(entry => entry.content));
+        const group = JSON.parse(body.input[0].content[0].text);
+        assert.equal(group.items.length, 1);
+        assert.ok(countOpenAITokens(JSON.stringify(body)) <= 6000);
+        const result = wire(group);
+        if (repeated) result.qualifications.item_0.subject.evidenceSlots = [0, 0];
+        return Response.json(url.endsWith('/input_tokens')
+          ? { object: 'response.input_tokens', input_tokens: 120 }
+          : envelope(body.model, result));
+      } });
+    const model = Object.freeze({ ...actual, fitsQualificationRequest(value) {
+      planned.push(structuredClone(value.input)); return actual.fitsQualificationRequest(value);
     } });
-  const model = Object.freeze({ ...actual, fitsQualificationRequest(value) {
-    planned.push(structuredClone(value.input)); return actual.fitsQualificationRequest(value);
-  } });
-  const qualified = await qualifyCandidateItems(model, unique);
-  assert.equal(qualified.length, 5);
-  assert.equal(calls.length, 10);
-  assert.deepEqual(calls.map((call) => call.url.endsWith('/input_tokens')),
-    [true, false, true, false, true, false, true, false, true, false]);
-  for (let index = 0; index < 5; index++) {
-    const countBody = calls[index * 2].body;
-    const group = JSON.parse(countBody.input[0].content[0].text);
-    assert.equal(group.items[0].itemIndex, 0);
-    assert.equal(group.items[0].candidates[0].candidateIndex,
-      uniqueSnapshot.input.items[index].candidates[0].candidateIndex);
-    assert.equal(qualified[index].qualification.anchors[0].text,
-      uniqueSnapshot.candidates[index][0].text);
-    assert.deepEqual(calls[index * 2 + 1].body.input, countBody.input);
+    const qualified = await qualifyCandidateItems(model, unique);
+    results.push(qualified);
+    assert.equal(qualified.length, 5);
+    assert.equal(calls.length, 10);
+    assert.deepEqual(calls.map((call) => call.url.endsWith('/input_tokens')),
+      [true, false, true, false, true, false, true, false, true, false]);
+    for (let index = 0; index < 5; index++) {
+      const countBody = calls[index * 2].body;
+      const group = JSON.parse(countBody.input[0].content[0].text);
+      assert.equal(group.items[0].itemIndex, 0);
+      assert.equal(group.items[0].candidates[0].candidateIndex,
+        uniqueSnapshot.input.items[index].candidates[0].candidateIndex);
+      assert.equal(qualified[index].qualification.anchors[0].text,
+        uniqueSnapshot.candidates[index][0].text);
+      assert.deepEqual(calls[index * 2 + 1].body.input, countBody.input);
+    }
   }
+  assert.deepEqual(results[1], results[0], 'Redundant singleton slots preserve exact source isolation');
 });
 
 test('B6 real core captures five distinct sources through ten qualifier fake-HTTP calls', async t => {

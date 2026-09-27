@@ -11,7 +11,7 @@ import { qualificationCandidatesInlineSchema, schemas, schemasFor } from '../sch
 import { decodeQualificationEvidencePool } from '../qualification-evidence-pool.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { callModel } from '../../../core/model-call.mjs';
-import { qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
+import { compileQualificationCandidates, createQualificationCandidateSnapshot, qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
 
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const input = () => ({ items: [
@@ -50,6 +50,60 @@ function accepts(schema, value) {
   return typeof value === 'string' && value.length >= (schema.minLength ?? 0) && value.length <= (schema.maxLength ?? Infinity);
 }
 
+test('valid repeated field slots retain first-seen original IDs and compile identical anchors without retry', async () => {
+  const items = [0, 1].map(itemIndex => ({ content: `Synthetic claim ${itemIndex}`, kind: 'context', confidence: 0.8,
+    receipts: [0, 1, 2, 3].map(receiptIndex => ({ client: 'synthetic', sessionId: 'session',
+      eventId: `source-${itemIndex}-${receiptIndex}`, role: 'user', excerpt: `Evidence ${itemIndex}-${receiptIndex}` })) }));
+  const snapshot = createQualificationCandidateSnapshot(items);
+  const itemsBefore = structuredClone(items), inputBefore = structuredClone(snapshot.input);
+  const results = [];
+  for (const repeated of [false, true]) {
+    const calls = [], events = [];
+    const result = { wireVersion: 'evidence-pool-v1', qualifications: Object.fromEntries(snapshot.input.items.map(item => {
+      const pool = [item.candidates[3].candidateIndex, item.candidates[1].candidateIndex];
+      return [`item_${item.itemIndex}`, { itemIndex: item.itemIndex, pool,
+        ...Object.fromEntries(fields.map(field => [field, { value: field === 'attribution' ? 'reported'
+          : field === 'commitment' ? 'unknown' : `Synthetic ${field}`,
+        evidenceSlots: repeated ? [1, 0, 1, 0] : [1, 0] }])) }];
+    })) };
+    const wireBefore = structuredClone(result);
+    const model = createOpenAIModel({ apiKey: 'synthetic-only', onDiagnostic: event => events.push(event),
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body); calls.push(url.endsWith('/input_tokens') ? 'count' : 'generation');
+        assert.ok(calls.length <= 2, 'No additional HTTP for redundant references');
+        return Response.json(url.endsWith('/input_tokens')
+          ? { object: 'response.input_tokens', input_tokens: 120 } : envelope(body.model, result));
+      } });
+    const decoded = await callModel(model, 'qualifyCandidates', 'Synthetic system', snapshot.input);
+    for (const item of decoded.qualifications) for (const field of fields) {
+      assert.deepEqual(item[field].evidenceIndices, [item.itemIndex * 4 + 1, item.itemIndex * 4 + 3]);
+    }
+    results.push(compileQualificationCandidates(decoded, snapshot));
+    assert.deepEqual(calls, ['count', 'generation']); assert.deepEqual(events, []);
+    assert.deepEqual(result, wireBefore);
+  }
+  assert.deepEqual(results[1], results[0]);
+  for (const [itemIndex, item] of results[1].entries()) {
+    assert.deepEqual(item.qualification.anchors.map(anchor => anchor.text), [`Evidence ${itemIndex}-1`, `Evidence ${itemIndex}-3`]);
+    assert.ok(item.qualification.anchors.every(anchor => JSON.stringify(anchor.fields) === JSON.stringify(fields)));
+  }
+  assert.deepEqual(items, itemsBefore); assert.deepEqual(snapshot.input, inputBefore);
+});
+
+test('unchanged core compiler rejects known values without evidence and wholly empty item evidence', () => {
+  const items = [{ content: 'Synthetic claim', kind: 'context', confidence: 0.8,
+    receipts: [{ client: 'synthetic', sessionId: 'session', eventId: 'source', role: 'user', excerpt: 'Synthetic source' }] }];
+  const snapshot = createQualificationCandidateSnapshot(items);
+  for (const known of [false, true]) {
+    const entry = { itemIndex: 0, ...Object.fromEntries(fields.map(field => [field, {
+      value: field === 'subject' && known ? 'Known subject'
+        : ['attribution', 'commitment'].includes(field) ? 'unknown' : null,
+      evidenceIndices: field === 'value' && known ? [0] : [],
+    }])) };
+    assert.throws(() => compileQualificationCandidates({ qualifications: [entry] }, snapshot), { code: 'invalid_model_output' });
+  }
+});
+
 test('Q3 real callModel and fake HTTP distinguish finite qualification output-shape boundaries', async () => {
   const cases = [
     ['output_shape', () => []],
@@ -58,7 +112,11 @@ test('Q3 real callModel and fake HTTP distinguish finite qualification output-sh
     ['qualification_pool_mapping', () => { const value = wire(); value.qualifications.item_0.pool = [0, 0]; return value; }],
     ['qualification_pool_mapping', () => { const value = wire(); value.qualifications.item_0.pool = [99]; return value; }],
     ['qualification_pool_mapping', () => { const value = wire(); value.qualifications.item_0.itemIndex = 1; return value; }],
-    ['qualification_slot_mapping', () => { const value = wire(); value.qualifications.item_0.value.evidenceSlots = [0, 0]; return value; }],
+    // Valid repeats now canonicalize; the original raw four-slot limit remains strict.
+    ['qualification_slot_mapping', () => { const value = wire(); value.qualifications.item_0.value.evidenceSlots = [0, 0, 0, 0, 0]; return value; }],
+    ...[-1, 1, 0.5, '0'].map(slot => ['qualification_slot_mapping', () => {
+      const value = wire(); value.qualifications.item_0.value.evidenceSlots = [0, 0, slot]; return value;
+    }]),
     ['qualification_slot_mapping', () => { const value = wire(); value.qualifications.item_0.value.evidenceSlots = [1]; return value; }],
     ['qualification_value_shape', () => { const value = wire(); value.qualifications.item_0.value.value = 'x'.repeat(161); return value; }],
   ];

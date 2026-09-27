@@ -45,9 +45,9 @@ export function decodeQualificationEvidencePool(input, output, onInvalid) {
     for (const field of FIELDS) {
       const selected = dataObject(entry[field], ['value', 'evidenceSlots'], reject);
       const slots = dataArray(selected.evidenceSlots, 0, 4, reject, 'qualification_slot_mapping');
-      if (new Set(slots).size !== slots.length || slots.some((slot) =>
+      if (slots.some((slot) =>
         !Number.isSafeInteger(slot) || slot < 0 || slot >= pool.length)) reject('qualification_slot_mapping');
-      decoded[field] = { value: selected.value, evidenceIndices: slots.map((slot) => pool[slot]) };
+      decoded[field] = { value: selected.value, evidenceIndices: [...new Set(slots)].map((slot) => pool[slot]) };
     }
     return decoded;
   }) };
