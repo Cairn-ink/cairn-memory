@@ -17,7 +17,9 @@ export function createTestWorkspace(t, { prefix = 'cairn-test-', parent = tmpdir
   let completion;
   const cleanup = () => {
     if (completion) return completion;
-    completion = (async () => {
+    // Publish the shared promise before invoking user callbacks: a callback may
+    // inspect cleanup() or attempt another defer() synchronously.
+    completion = Promise.resolve().then(async () => {
       const errors = [];
       while (deferred.length) {
         try { await deferred.pop()(); } catch (error) { errors.push(error); }
@@ -33,7 +35,7 @@ export function createTestWorkspace(t, { prefix = 'cairn-test-', parent = tmpdir
         await rm(path, { recursive: true, force: false });
       } catch (error) { errors.push(error); }
       if (errors.length) throw new AggregateError(errors, 'test_workspace_cleanup_failed');
-    })();
+    });
     return completion;
   };
   const workspace = { path, cleanup, defer(fn) {

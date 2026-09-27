@@ -32,6 +32,23 @@ test('failed close still attempts every close and removes scratch; rejection per
   assert.equal(existsSync(workspace.path), false);
 });
 
+test('cleanup shares its promise before callbacks and rejects late registration', async t => {
+  const workspace = createTestWorkspace(t);
+  let nested;
+  let calls = 0;
+  workspace.defer(() => {
+    calls++;
+    assert.throws(() => workspace.defer(() => {}), /test_workspace_cleanup_started/);
+    nested = workspace.cleanup();
+  });
+  const completion = workspace.cleanup();
+  assert.throws(() => workspace.defer(() => {}), /test_workspace_cleanup_started/);
+  await completion;
+  assert.equal(nested, completion);
+  assert.equal(calls, 1);
+  assert.equal(existsSync(workspace.path), false);
+});
+
 test('replacement directory is retained and nested symlink never follows sibling', async () => {
   const parent = createTestWorkspace(null);
   try {
