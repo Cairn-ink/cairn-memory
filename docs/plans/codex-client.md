@@ -2,7 +2,7 @@
 
 Status: proposed, docs-only contract against `codex-cli 0.157.1` and repository
 base `b8af5cda1820fd0bb385aca784c2d2ee8c036b36`, researched 2026-09-27.
-Revision: second independent review, candidate `2ef1a1a`.
+Revision: final independent re-review, candidate `13df423`.
 Nothing here claims a shipped client.
 
 A person switching between Claude Code and Codex must use one memory target and
@@ -75,32 +75,69 @@ hosted and the two local-core clients, unless expressly identified as shared pau
 
 ## Explicit pairing and project identity
 
-**D3 as scoped by E1: pairing is required when adding a second client, not for
-a fresh single-client installation.** Fresh Claude-only and Codex-only installs
-automatically create their `project-key` on first use, without a pairing record
-or extra confirmation, as the released Claude identity module does today.
+**D3 as scoped by E1/F1: pairing is required when adding a second client, not for
+a verified fresh single-client installation.** Fresh Claude-only and Codex-only
+installs automatically create their `project-key` on first use without pairing,
+as the released Claude identity module does today, subject to the detection below.
 Claude, fresh or upgraded, retains exactly its current root until pairing:
 `CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory")`. Thus
 `tmpdir()` is the existing fallback only when `homedir()` returns a falsy value;
 it is not a catch-all for home-directory errors. Codex-only setup uses a private
 durable Cairn root, default `~/.cairn-memory`, and reuses its own existing key.
 
-Adding a second client where a key already exists, or finding two roots, requires
-explicit pairing that adopts an existing root/key. Without it, the second client
-does no memory work and reports `pairing_needed`; hooks still exit successfully.
-Setup checks Cairn-owned installation metadata, the default root and explicitly
-supplied legacy Cairn roots, never host credential configs or transcript directories.
-Record the single-client/root binding automatically as content-free Cairn install
-metadata, not a pairing record. Serialize registration/first-use eligibility with
-one machine-local setup lock: concurrent fresh installs elect one initializer;
-the other requires pairing and cannot create a second key. Unknown legacy-root
-ownership is not proof of a fresh install; request the person's root selection.
+### Existing-client detection and state locations
 
-Proposed second-client pairing writes an owner-only (0600) `pairing.json` in an
-explicit private configuration directory. It contains a version, absolute shared state root,
-participating clients and an `adopt-existing` key policy, never a key/token or
-conversation. Pairing cannot authorize replacement of a missing key. This file's path
-is not discovered by scanning either host's configuration or session directories.
+Released 0.1.0 Claude writes no client-registration/pairing metadata; its telemetry
+`install-id` is not such a record. Absence of new metadata cannot prove freshness.
+Claude's [plugin manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference)
+documents `~/.claude/plugins/data/<id>/`, replacing characters outside letters,
+digits, `_` and `-` with `-`. The [loading reference](https://code.claude.com/docs/en/plugins/loading)
+defines marketplace IDs as `<name>@<marketplace>`. Applying those documented rules
+to this repository's `cairn-memory@cairn-memory` gives the exact standard key path
+`~/.claude/plugins/data/cairn-memory-cairn-memory/project-key`.
+These are current unversioned Claude docs, not evidence of every older host version.
+
+Before any Codex setup writes, check that one exact plugin key path (or this
+plugin's explicitly supplied `CLAUDE_PLUGIN_DATA/project-key`), Cairn registration
+and `join(homedir() || tmpdir(), ".cairn-memory", "project-key")`. This is a known-file check, never a
+host directory search. An unknown home, installation origin or overridden Claude
+location makes the plugin path undetermined: setup must ask **whether the person
+uses Cairn in Claude Code before creating anything**. Yes means `pairing_needed`;
+request the exact existing root in the pairing flow. No permits fresh setup only
+if the other checks find no existing key/client. Unreadable state is an error,
+not absence. Never inspect host credential configs or transcript directories.
+
+For a newly added client, an existing key, a registered other client, or two roots
+requires explicit pairing adopting an existing root/key. A registered sole client
+continues using its own key. The newcomer does no memory work and reports
+`pairing_needed`; hooks still exit successfully. **The already-working client keeps
+working.** If upgraded Claude finds Codex registered first, Claude is the newcomer
+and cannot generate a key or use memory without pairing; Codex continues working.
+Un-upgraded Claude with `CLAUDE_PLUGIN_DATA` unset already uses `~/.cairn-memory`,
+also Codex's default: its key still triggers pairing, never implicit sharing.
+Upgrade Claude and stop old workers before activating shared controls; 0.1.0 does
+not understand the pairing record. Until then Codex remains memory-disabled.
+
+CX-2 creates these proposed coordination files, separate from the selected key root:
+
+| File | Exact location and purpose |
+| --- | --- |
+| Install metadata | `join(homedir() || tmpdir(), ".cairn-memory-clients", "install.json")`: version, established client/root bindings and initialization state; no key/token/conversation. |
+| Pairing metadata | `join(homedir() || tmpdir(), ".cairn-memory-clients", "pairing.json")`: version, absolute shared root, participants and `adopt-existing` policy. Only explicit pairing creates it. |
+| Setup lock | `join(homedir() || tmpdir(), ".cairn-memory-clients", "setup.lock")`: process-owned lock for registration, key eligibility and pairing. |
+
+These paths stay unchanged when `CLAUDE_PLUGIN_DATA` is set; only Claude's key root
+uses that variable. The coordination directory is 0700, its files 0600, with owner/
+symlink validation. With falsy `homedir()`, all three locations use `tmpdir()`;
+legacy single-client operation remains supported, but pairing is unavailable until
+both hosts resolve the same durable home instead of this temporary fallback.
+Both hosts resolve the same coordination location; no per-host alternate registry.
+After read-only detection, take the setup lock and recheck before registering or
+creating a key. Concurrent fresh upgraded clients elect one initializer; the
+other needs pairing. Released Claude cannot honor this lock: setup must require
+it to be stopped during pairing, and never claim concurrent legacy setup is safe.
+Automatically register a fresh single client; a pairing record is still unnecessary.
+Metadata loss never authorizes ignoring an existing key or bypassing detection.
 
 Proposed Claude delivery is a `userConfig` option `pairing_record`, exposed as
 `CLAUDE_PLUGIN_OPTION_PAIRING_RECORD`. **To verify:** primary documentation and
@@ -119,8 +156,9 @@ Adopt the explicitly selected existing Claude root/key where durable; otherwise
 pairing requires stopped hosts/workers, an exclusive migration lock, no-clobber
 copy to a private durable root and configuration of both hooks before resume.
 Do not adopt temporary storage as a new paired root. With conflicting keys/roots,
-memory stays unavailable with visible `pairing_conflict` status until **the person
-pairing explicitly chooses** which existing root/key both clients will adopt.
+the newcomer stays memory-disabled with visible `pairing_conflict` status until
+**the person pairing explicitly chooses** which existing root/key both will adopt;
+the established client continues until the agreed stopped-worker pairing step.
 Preserve the unselected state; no automatic history merge or key overwrite. Missing
 adopted keys/mismatched records likewise require explicit repair, never regeneration.
 The repository maintainer sets policy, not the person's key selection.
@@ -133,20 +171,35 @@ Identical absolute cwd strings produce identical IDs in both clients. Do not add
 host names, change case, find git roots or resolve path aliases; different paths
 remain different scopes. The key stays local and separate from telemetry identity.
 
-For automatic single-client first use on a private local filesystem, or concurrent
-paired reads after adoption:
+### Key publication and lost-key repair
+
+For unpaired single-client use on a private local filesystem, or paired reads:
 
 1. Validate/create the bound root (0700), reject symlinks, wrong owners or
    unsafe permissions. Adopt/read only a valid regular 0600 `project-key`.
-2. Only fresh single-client first use permits creating a missing key. Each
-   same-client contender writes, flushes and closes a private exclusive file, then hard-links
-   it to `project-key` without replacing a winner. `EEXIST` means read the winner.
+2. An established unpaired single client may create or recreate a missing key,
+   including after deletion, as released Claude does. Initial eligibility still
+   requires the detection above; this is never permission for a second client.
+   Recreation changes project scope. Each same-client contender writes, flushes
+   and closes a private exclusive file, then hard-links it to `project-key` without
+   replacing a winner. `EEXIST` means read the winner.
 3. Sync publication and record initialized state before returning an ID or sending.
-   Recovery reuses a published key. Once initialized, or when pairing adopts a key,
-   missing/invalid state is an error, never permission to reinitialize. Clean only
-   one's own temporary file. Paired clients always read the adopted winner.
+   Recovery reuses a published key. An invalid existing key is always an error;
+   a missing key after initialization is an error **only for paired installs**.
+   Clean only one's own temporary file. Paired clients always read the adopted winner.
 4. A loser derives from the published winner, never a tentative key. Unsupported
-   atomic publication or durable state means memory unavailable, host fail-open.
+   atomic publication means memory unavailable, host fail-open. Paired state must
+   be durable; legacy unpaired Claude retains its documented temporary fallback.
+
+Paired key loss reports `paired_key_missing` to both clients and disables their
+memory operations without blocking either host. Repair requires the person to
+stop both clients/workers, take the setup lock and restore the original key from
+their backup into the recorded root with validated permissions, then verify shared
+project IDs before resuming. Without that key, remain disabled until the person
+explicitly chooses an identity reset: retain old state, invalidate the old pairing,
+initialize one new single-client root and pair the second client to it. Explain
+that old project memories are no longer addressable by the new identity; no silent
+regeneration, key overwrite, history migration or backfill. Reset starts at EOF.
 
 **To verify (0.157.1):** Codex hook processes and Claude workers share the same
 machine/PID namespace before using the current `kill(pid, 0)` lock-liveness test.
@@ -349,7 +402,7 @@ started may finish. See [pause limitations](../privacy.md#disable-automatic-beha
 | Control | Required behavior |
 | --- | --- |
 | Install/trust | Reviewed local artifact and target consent; fresh single-client key creation is automatic, second-client pairing explicit. Preserve other registrations. The person reviews current commands/events/budgets through `/hooks`. Never write the trust store or use the bypass flag. |
-| Disable/uninstall | Pause shared memory, stop affected workers, remove only this client's Cairn hooks/runtime, then explicitly resume the remaining client if wanted. Retain shared key/state and stored memories. No separate client-generation mechanism. |
+| Disable/uninstall | Pause shared memory, stop affected workers, remove only this client's Cairn hooks/runtime, then explicitly resume the remaining client if wanted. Retain shared key/state and stored memories; when adopting Claude's plugin data root, use its documented [--keep-data](https://code.claude.com/docs/en/plugins/manifest-reference) uninstall option or migrate before uninstall, because last uninstall otherwise deletes that directory. No separate client-generation mechanism. |
 | Stop capture for a project | While paused with workers stopped, add its opaque ID to a shared capture opt-out set; resume with the existing global EOF barrier. Both capture paths/end signals check it. Recall may remain enabled; state that clearly. No project-switching subsystem. |
 | Status | Show pairing-needed/ready, versions, target capability, pause/project capture state, token present/missing and bounded gap/error/progress counters. No conversation reads, keys/tokens/raw paths/session IDs. Hook trust is unknown unless an installed-version interface verifies it. |
 
@@ -401,11 +454,31 @@ Record exact runtimes/platforms; mock success is not a host or semantic-quality 
 | --- | --- |
 | A1 — Delivered-body privacy | Actual hook/worker → loopback HTTP; assert received capture/recall bodies, state and output contain no fake-secret/tool/reasoning/image/sandbox canaries. Check normalization before truncation, U+FDFA expansion, redaction-only/NUL rejection, UTF-16 boundaries and JSON escaping that reaches 64 KiB before 20,000 units. |
 | A2 — Pause | Pause from either host while the other waits; resume/restart; unseen sessions, split lines and delayed recall responses. No stale dispatch/injection, no paused backfill; first resumed capture records EOF only. |
-| A3 — Identity | Fresh Claude-only first run creates its key with no pairing; repeat for Codex-only and concurrent same-client first use. Concurrent different-client setup elects one initializer; the second returns `pairing_needed` with zero memory requests/key creation. After explicit adoption, >=16 mixed processes return the same project ID across restart. Test two-root conflicts staying unavailable until the person chooses, existing Claude root/option delivery, conflicting env/record, lost adopted key, creator crashes, permissions and PID namespace rejection. |
+| A3 — Identity | All A3 fixtures below; after explicit adoption, >=16 mixed processes return the same project ID across restart. Include root/option delivery, conflicting env/record, creator crashes, permissions and PID namespace rejection. |
 | A4 — Cursor | >24 messages, partial/malformed/oversized lines, appends and replacement; first/middle/last-batch timeouts, `processing`, lost reply and crash before cursor write. Stable IDs, no premature advance, idempotent receiver and eventual later-batch progress. Locally excluded records never masquerade as acknowledgement. |
 | A5 — Fail-open | Stalled/oversized stdin, null path, outage/auth failure, bad reply, spawn/lock/state failure and unsupported schema. Bounded successful hook exits, valid Stop JSON, no blocking output; explicit controls fail visibly. Check worker lifetime and LAC's >30 s scripted success, lease cooldown and termination. |
 | A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits/retries unchanged. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
 | A7 — Context authority/lifecycle | Framing/filter/size fixtures reject hostile authority/execution requests in recall and session context, without receipt stripping or stale injection. A positive fixture proves “Prefer diagrams.” survives unchanged as quoted preference data with its receipt, without becoming an authoritative directive. Keep defaults disabled until authorized pinned-host adversarial evaluation passes. Sibling conformance separately verifies context/end capability, deduplication and incomplete-capture semantics. |
+
+**A3 identity fixtures:**
+
+- Fresh Claude-only first run creates its key without pairing; repeat for Codex-only
+  and concurrent same-client use. Concurrent upgraded different-client setup elects
+  one initializer; the second reports `pairing_needed`, with no key or memory requests.
+- Released Claude key at the exact known plugin data path, with no registration:
+  Codex reports `pairing_needed`, creates no key, and Claude keeps working.
+- Undetermined Claude path: no setup writes before the question; a yes answer
+  requires pairing, never key creation. Cover falsy home and nonstandard origin.
+- Un-upgraded Claude key in `~/.cairn-memory`: Codex enters pairing without implicit
+  control sharing. Old Claude continues until explicit upgrade/stopped-worker adoption.
+- Codex registered first, then upgraded Claude: only Claude is memory-disabled
+  until paired. Two-root conflicts preserve working-client behavior until the
+  person chooses; neither automatic key replacement nor merging is allowed.
+- Unpaired single-client key deletion recreates it on the next use, as today.
+  Paired deletion fails with `paired_key_missing`; original-key restore preserves
+  IDs, while explicit reset requires fresh pairing and discloses changed scope.
+- Exact coordination paths stay independent of `CLAUDE_PLUGIN_DATA`; falsy home
+  uses the specified temporary paths for unpaired operation and rejects pairing.
 
 Parser fixtures additionally cover all excluded item families, bootstrap and
 compaction messages, duplicate representations, unknown fields/channels, Unicode,
@@ -432,7 +505,7 @@ No column delegates an overlapping subtree to another worker.
 | Package / sole owner | Allowed paths | Dependency / boundary |
 | --- | --- | --- |
 | CX-1 / shared-client owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/test/**`; `packaging/**` including `packaging/artifact-files.json` | Behavior-preserving extraction, compatibility exports, bundle parity and Node 20/22 hosted gates. |
-| CX-2 / pairing owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/**`, `plugins/cairn-memory/.claude-plugin/plugin.json`, `plugins/cairn-memory/README.md`; `docs/plans/codex-client.md` | CX-1; explicit record/option delivery, shared identity/pause, A2/A3; no real-user migration. |
+| CX-2 / pairing owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/**`, `plugins/cairn-memory/.claude-plugin/plugin.json`, `plugins/cairn-memory/README.md`; `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-1; explicit record/option delivery, shared identity/pause, A2/A3. Own privacy's local-state list for install/pairing metadata and setup lock; own release records for the new user-visible Claude option. No real-user migration. |
 | CX-3 / Codex owner | `integrations/codex/**` including `test/fixtures/**` and `README.md`; `integrations/client/**` including `test/**`; `docs/plans/codex-client.md` | CX-2; primary parser evidence, common profile, new cursor/worker, A1/A4/A5 with stubs; no hosted enablement. |
 | CX-4 / protocol owner | `schemas/capture-request.schema.json`; `plugins/cairn-memory/test/protocol.test.mjs`; `integrations/client/transport-hosted.mjs`, `integrations/client/test/transport-hosted.test.mjs`; `docs/protocol.md`, `docs/architecture.md`, `docs/privacy.md`; release files below, including root `package.json` | CX-3; 0.2.0 breaking-version note, matching version bumps and changelog in this same PR, truthful discriminator and Codex reader threat boundary. Hosted support is an external gate; no service code. |
 | LAC / local-capture owner | `adapters/local-capture/**` including `test/**` and `README.md`; `integrations/client/transport-local.mjs`, `integrations/client/test/transport-local.test.mjs`; `packaging/**` including `packaging/artifact-files.json`; `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-3/4; actual core integration for both clients, deadlines and A6. Own the “local store not connected” correction, local capture privacy/threat-model change, its own changelog entry and required version bump in this PR. No engine changes. |
@@ -440,7 +513,7 @@ No column delegates an overlapping subtree to another worker.
 | CX-6 / verification owner | `integrations/codex/test/**`, `integrations/client/test/**`, `adapters/local-capture/test/**`; `docs/plans/codex-client.md`, `docs/limitations.md`, `ROADMAP.md` | Previous packages; full runtime matrices and later separately authorized human evidence. No registry/release claim from mocks. |
 
 Every user-visible package owns its release records **in its own PR**, including
-CX-4, LAC and CX-5. These concrete release files supplement its row's allowed paths:
+CX-2, CX-4, LAC and CX-5. These concrete release files supplement its row's allowed paths:
 `CHANGELOG.md`, root `package.json`, `.claude-plugin/marketplace.json`,
 `plugins/cairn-memory/.claude-plugin/plugin.json` and
 `plugins/cairn-memory/lib/version.mjs`. Each package adds its own changelog entry
@@ -453,18 +526,23 @@ The integrator owns `.github/workflows/**` and schedules root script changes;
 the active package owner alone edits root `package.json`, including scripts/version,
 in that package's PR. No competing integrator version or file-list edit is allowed.
 Each row naming `packaging/**` owns its entire subtree exclusively.
-`docs/architecture.md`/`docs/privacy.md` pass from CX-4 to LAC; CX-6
-cannot edit them. If LAC is deferred, later execution takes that same ownership
-handoff; it must not change the docs before actually connecting the local flow.
+`docs/privacy.md` passes from CX-2 to CX-4 to LAC; `docs/architecture.md` passes
+from CX-4 to LAC. CX-6 cannot edit them. If LAC is deferred, later execution takes
+that same ownership handoff; it must not change the docs before connecting the flow.
 
 ### Cross-plan shared files
 
-The sibling `docs/plans/session-episodes.md` (SE-1…SE-5) also edits
-`docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json` and
-`plugins/cairn-memory/hooks/**`. Across both plans, **only one open PR at a time
-may edit each of these files**. The repository maintainer (coordinator) sets the
-order and hands ownership to the next package after the preceding PR closes/lands.
-Apply the same serialization to shared release files; rebase before the handoff.
+The authoritative file list lives in the **coordinator's umbrella plan (private
+repository)**; the coordinator maintains it. Its private URL/path was not supplied
+to this packet: obtain that pointer at execution, rather than invent a public link.
+Snapshot **as of sibling `cc0f31e`, to verify at execution** for
+`docs/plans/session-episodes.md` (SE-1…SE-5): `docs/protocol.md`, `docs/privacy.md`,
+`packaging/artifact-files.json`, `.github/workflows/ci.yml`, root `package.json`
+and `packaging/test/**`. The sibling does not edit Claude `hooks/**` in this snapshot.
+Across both plans, **only one open PR at a time may edit each shared file**,
+including CI and release files. The repository maintainer (coordinator) sets the
+order and hands ownership to the next package after the preceding PR closes/lands;
+this also serializes the integrator's CI edits. Rebase before each handoff.
 
 Proposed default order: **CX-1 → SE-1…SE-5 → CX-2 → CX-3 → CX-4 → LAC → CX-5 → CX-6**.
 This refines CX-2…CX-6/LAC by placing local transport before its installation gate.
@@ -477,8 +555,9 @@ Remaining **to verify** gates: 0.150 minimum and exact 0.157.1 format/lifecycle/
 privileges; same PID namespace and platform publication/permission semantics;
 hosted 0.2.0 deployment; A7 authority evaluation; sibling context/end semantics.
 The person pairing resolves conflicting keys through an explicit flow choice;
-memory remains unavailable until then. The repository maintainer sets conflict
-policy and resolves repository boundaries only. Path aliases/cross-machine pairing
+the newcomer remains memory-disabled until then; the established client continues.
+Paired key loss disables both memory clients until explicit repair. The repository
+maintainer sets conflict policy and resolves repository boundaries only. Path aliases/cross-machine pairing
 are excluded. Claude installer automation for `pairing_record` remains **to verify**.
 
 Non-goals: hosted service implementation/migration; UI; ChatGPT/other chat clients;
@@ -487,8 +566,8 @@ tool/file/reasoning/image ingestion; target switching; episode implementation;
 paid experiments or production deployment. Existing semantic-quality failures
 remain failures; this contract does not certify source truth or adoption.
 
-Round 2 verification on Node `v22.16.0`: `npm test` exited 0 (106 passed),
+Round 3 verification on Node `v22.16.0`: `npm test` exited 0 (106 passed),
 `npm run validate` exited 0, and all 19 relative Markdown links resolved (exit 0).
-Working/staged `git diff --check` must pass before the new local commit.
+Working/staged `git diff --check` exited 0 before the new local commit.
 No Node 20/24 execution, new-client implementation or human two-client acceptance
 is implied by these existing repository checks.
