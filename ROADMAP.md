@@ -106,9 +106,13 @@ reliability work below without declaring older failure gates resolved.
    completed without a global halt but Cairn answered 0/6 and left all six
    judgments unresolved; Mem0 answered 6/6 with four correct and two
    incorrect, leaving common resolved denominator 0/6. Do not expand to a
-   fixed-30 comparison yet. First reproduce the context-fit and qualification
-   slot-mapping boundaries offline, review any product correction, then
-   consider a newly frozen feasibility probe without replaying consumed cases.
+   fixed-30 comparison yet. The context-fit capacity boundary has been
+   reproduced offline, and the [bounded qualification partition](docs/plans/bounded-qualification-partitions.md)
+   passed engineering gates; neither establishes semantic accuracy or a paid
+   result. Qualification slot mapping and source fidelity still need separate
+   falsifiers and a reviewed product correction. Review the v3 resource/cap
+   projection and obtain a fresh grant before considering a newly frozen
+   feasibility probe; do not replay consumed cases.
    Installed Hermes, MOC candidate visibility, source fidelity and lightweight
    latency/request/cost gates remain separate.
 2. Review/merge the verified native-provider candidate and its dependent
