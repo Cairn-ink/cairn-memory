@@ -142,8 +142,8 @@ The local envelope facade adds `getEpisode`, `correctEpisode`,
 `setCapturePaused`, `setProjectCapture`, and `setProceduralMemory`. No HTTP/MCP
 schema or provider interface is widened. `getEpisode` needs no model or mode
 option on a v16 store. It takes the plan's exact namespace/episode ID and
-independent source/memory/policy limits/cursors (20 default, 50 maximum).
-`{episode,sources,memoryLinks,policies,status}` returns each page as
+independent source/memory/policy/keep limits/cursors (20 default, 50 maximum).
+`{episode,sources,memoryLinks,policies,keepActions,status}` returns each page as
 `{items,nextCursor,exhausted}`. Signed cursors bind store, namespace, episode,
 page kind, limit and epoch; mutation returns `cursor_stale`. Pages retain whole
 items under 64 KiB and report `budget_exhausted` when truncated. Source roles and
@@ -207,10 +207,46 @@ fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
 and cannot reopen them or erase a capacity gap.
 
 The v16 `episode_messages` ledger has `(episode_id,message_id)` identity and stores
-`first_event_id` plus HMAC-SHA256 using the existing private episode key over
+`first_event_id` and `coverage_event_id` plus HMAC-SHA256 using the existing private episode key over
 `["m1", role, canonicalText, eventTimeOrNull]`. Its rows register atomically with the
-batch. Matching identities count zero; different digests reject with
+batch. Completed or legitimately in-flight matching identities count zero; an
+abandoned/failed original without a live lease permits new registration while
+preserving the first event ID. Different digests reject with
 `event_payload_conflict`. It holds no source plaintext or role and survives deletion
 as content-free fence metadata. Upgrading v15 creates an empty ledger; earlier
 messages are not reconstructed. Both v14 and v15 opens upgrade eagerly to v16,
 including feature-off opens, with foreign keys on and rollback on failure.
+
+
+`endEpisodeSession({namespace,client,sessionId,generation,eventId})` is an
+explicit host signal in episode mode. Client keys use `[A-Za-z0-9._-]{1,64}`.
+It consumes at most one end allowance when undrafted evidence exists and never
+completes an admission or changes an already completed batch policy. Missing or
+capacity-bypassed evidence records its actual gap reason, not a token-budget error.
+
+`keepEpisode({namespace,episodeId,expectedRevision,actionId})` bypasses debounce
+and admits from currently retained passages, never interpretation prose. The
+opaque action binds exact source IDs, source revision and source fence in dedicated
+`episode_attempts.keep_*` columns; coverage remains inspectable after later drafts
+replace the passages. Source batches record `explicit-keep` in their policy ledger.
+Keep admissions use an internal client key outside the public identifier domain;
+no client event-ID prefix is reserved. Tokens remain opaque lease/action tokens.
+Terminal model-validation/source failures have explicit outcome/code columns;
+transient or unknown failures release the owned claim and allow the same action
+to retry. Busy cleanup is retried by its in-process owner with the original token;
+a crash still respects the bounded admission lease. Completed actions replay
+without model calls. Unknown errors retain the ordinary `storage_error` label.
+
+`getEpisode` includes `keepActions:{items,nextCursor,exhausted}`. Supply `keepLimit`
+(default 20, maximum 50) and `keepCursor` to page all actions by creation ordinal.
+Each item contains `actionKey`, `ordinal`, `createdAt`, `policy:'explicit-keep'`,
+`admission` (`pending`, `completed`, `failed` or `retryable`), nullable `errorCode`,
+and `sourceCoverage:{sourceIds,revision,sourceFence}`. Cursors share the existing
+namespace/episode/limit/epoch binding, stale-cursor checks and 64-KiB response budget.
+Source IDs are lineage metadata; this page does not retain additional source text.
+
+Gap reasons use a fixed vocabulary with codes at most 64 ASCII characters.
+Policy pages carry omissions separately as `omittedCount` and bounded
+`omittedMessageIndices` (positions 0–23). Pause permits registered work to finish;
+a stale-generation draft attempt consumes its marker, records `generation_conflict`
+and proceeds to admission. Project stop and deletion fences remain stronger.

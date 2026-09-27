@@ -604,7 +604,9 @@ failure falls through to ordinary admission. Both existing storage completion se
 release staging once admission and selected-passage disposition are complete.
 Automatic procedural proposals use the v2 candidate path only in episode-v1.
 Explicit keep uses retained passages, a revision-bound action journal and ordinary
-admission; completed or failed action replay makes no additional model call.
+admission; completed or terminally failed action replay makes no additional model
+call. Transient/unknown failures release their claim for retry. Dedicated keep
+columns retain source coverage and paged creation ordinals after later drafts.
 
 The durable message identity decision adds one STRICT table in schema v16. Each
 per-episode message ID binds an HMAC of canonical role/text/event time and its first
@@ -642,6 +644,13 @@ core runtimes. The demo verifies retained passage inspection, quick policy, keep
 release and replay with a scripted port. No paid calls, real data, hosted changes,
 provider default, semantic-fidelity claim or trusted-producer compatibility claim
 is introduced.
+
+Review corrections add regression coverage for pre-draft pause/stop and crash,
+consumed PreCompact replay, transient keep lock recovery, 27-action paging and
+coverage persistence, event-ID namespace isolation, frozen mode-off diagnostics,
+query-count parity, shared full-message digests, abandoned overlap recovery,
+finite omission codes and truthful capacity gaps on end/lazy work. The unused
+`test:episodes` script is removed; `test:core` continues registering every suite.
 
 ### Cross-plan shared files
 

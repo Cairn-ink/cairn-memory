@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { captureSnapshot, retainedSourceView } from './capture-input.mjs';
-import { episodeText } from './episode-storage.mjs';
+import { episodeText, episodeClient } from './episode-storage.mjs';
 import { denseArray, fail, identifier, object } from './validation.mjs';
 
 export function episodeInstant(value) {
@@ -16,7 +16,8 @@ export function episodeSnapshot(input) {
     object(input, ['namespace','client','eventId','sessionId','messages','episodeContext']);
     object(input.episodeContext, ['clientLabel','generation','origin']);
     const { clientLabel, generation, origin } = input.episodeContext;
-    if (!/^[A-Za-z0-9._-]{1,64}$/.test(input.client) || !['ordinary','precompact'].includes(origin)) fail('invalid_input');
+    episodeClient(input.client);
+    if (!['ordinary','precompact'].includes(origin)) fail('invalid_input');
     const context = { clientLabel: episodeText(clientLabel, 80), generation: identifier(generation), origin };
     const times = [];
     const messages = denseArray(input.messages, 1, 24).map(message => {

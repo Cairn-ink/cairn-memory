@@ -114,7 +114,7 @@ test('E5 concurrent processes admit independent sessions under shared capacity p
       const runtime=createMemoryRuntime({path:${JSON.stringify(f.path)},sessionEpisodes:{mode:'episode-v1',draftEveryBatches:16}}),ns=${JSON.stringify(ns)};
       for(let i=0;i<70;i++){
         const eventId=${JSON.stringify(client)}+i,view={messages:Array.from({length:20},(_,j)=>({id:eventId+'-'+j,role:'user',content:'x'.repeat(780)})),retainedSourceWindow:{maxUnitsPerMessage:800,truncatedMessageIndices:[]}};
-        const input={client:${JSON.stringify(client)},clientLabel:'Synthetic process',sessionId:'private-session',eventId,generation:'initial',payloadDigest:createHash('sha256').update(JSON.stringify(view)).digest('hex'),view};
+        const input={client:${JSON.stringify(client)},clientLabel:'Synthetic process',sessionId:'private-session',eventId,generation:'initial',payloadDigest:createHash('sha256').update(JSON.stringify(view)).digest('hex'),view,messages:view.messages.map(message=>({...message,occurredAt:null}))};
         runtime.reserveEpisodeBatch(ns,input);const claim=runtime.claimAdmission(ns,{...input,leaseMs:125000});
         runtime.finishAdmission(ns,{...input,token:claim.token,items:[]});
       }runtime.close();`;

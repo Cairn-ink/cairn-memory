@@ -389,8 +389,12 @@ run normal extraction/qualification immediately. A failed interpretation also ru
 normal admission, even after an older quick label. The ordinary 125-second admission
 lease starts after episode work; an optional capture deadline starts at that point.
 Successful admission advances the producer cursor even if interpretation failed.
-Completed replay restores acknowledgement without model calls. Producers must wait
-on `processing`, including an overlap whose original admission is still unfinished.
+Registered work can finish across pause. A stale-generation draft claim records
+a content-free gap and continues ordinary admission; project stop still discards
+and fences unfinished work. Completed replay restores acknowledgement without model calls. Producers must wait
+on `processing` while an overlapping original has a live lease. If its admission
+failed or was abandoned and no lease remains, a new event can register that
+evidence again. Completed overlaps still count zero.
 
 Results add `episode` (and `lazyEpisode` when attempted) alongside ordinary admission.
 A wholly covered overlap reports `admission.status:'covered'`; completed event replay
@@ -402,8 +406,12 @@ signal. `keepEpisode({namespace,episodeId,expectedRevision,actionId})` runs norm
 inferred extraction, qualification and placement over currently retained passages,
 never the gist. It bypasses debounce. Its durable action binds the source revision;
 identical completed replay makes no calls. Keep cannot recover omitted/expired text.
-Inspection exposes up to 20 content-free keep action outcomes with source revision
-and an `exhausted` flag. This bounded action summary has no continuation cursor.
+Inspection exposes paged content-free keep actions in creation-ordinal order:
+`keepActions:{items,nextCursor,exhausted}`, with `keepLimit` (default 20, max 50)
+and `keepCursor`. Coverage records exact source IDs, revision and source fence,
+independently of later passage replacement. Explicit keep also updates the source
+batches’ policy ledger. Transient/unknown failures release the admission claim for
+retry; only classified terminal failures replay without another model call.
 
 Automatic procedural tags use the episode extraction/qualification prompt variants.
 Only preferences/instructions qualify, with 1–4 exact candidate anchors compiled to

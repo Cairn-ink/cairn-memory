@@ -2,6 +2,12 @@
 
 ## Unreleased — opt-in episode capture
 
+- Harden episode replay across pause, crash and consumed PreCompact attempts;
+  preserve stop/deletion fences and allow abandoned evidence to be resubmitted.
+- Keep actions now retain paged source coverage and explicit outcomes, isolate
+  internal admission keys, and retry transient failures. Restore legacy diagnostic
+  parity and separate omission positions from finite gap codes.
+
 - Add debounced episode interpretation through an injected port, bounded first,
   periodic, PreCompact, end and lazy attempts, independent admission recovery,
   per-batch quick policy and idempotent explicit keep from retained passages.

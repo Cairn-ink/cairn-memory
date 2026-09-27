@@ -1,5 +1,5 @@
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
-import { episodeOptions } from './episode-storage.mjs';
+import { episodeOptions, episodeClient, KEEP_ADMISSION_CLIENT } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
 import { createCaptureDeadline } from './capture-deadline.mjs';
@@ -10,6 +10,8 @@ import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
 import { captureEpisodeMessages, endEpisode, keepEpisodeCapture } from './episode-capture.mjs';
+
+const keepAdmissionKey = Symbol('keepAdmissionKey');
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
@@ -348,7 +350,7 @@ export function openMemoryCore(input) {
     if (typeof input.payloadDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.payloadDigest)) {
       throw new MemoryStoreError('invalid_input');
     }
-    return { client: contractId(input.client), eventId: contractId(input.eventId),
+    return { client: input[keepAdmissionKey] ? KEEP_ADMISSION_CLIENT : contractId(input.client), eventId: contractId(input.eventId),
       payloadDigest: input.payloadDigest };
   }
 
@@ -431,7 +433,7 @@ export function openMemoryCore(input) {
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
       return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, conflictHints, qualification,
-        ...(episode && Object.hasOwn(item,'procedural') ? { procedural: item.procedural } : {}) };
+        ...(episode && Object.hasOwn(item, 'procedural') ? { procedural: item.procedural } : {}) };
     });
   }
 
@@ -796,6 +798,7 @@ export function openMemoryCore(input) {
       if (!keepInput) object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', ...(sessionEpisodes ? ['episodeContext'] : ['causal'])]);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
+      const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput,
@@ -805,16 +808,16 @@ export function openMemoryCore(input) {
         operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline)),
-          finishAdmission: value => finishAdmissionValidated(value, true, deadline),
-          abandonAdmission, get, map,
-          beginInitialClassification: value => beginInitialClassification(value, deadline),
-          failInitialClassification,
-          applyInitialPlacement: value => applyInitialPlacement(value, deadline),
+          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline),
+          abandonAdmission: value => abandonAdmission(captureKey(value)), get, map,
+          beginInitialClassification: value => beginInitialClassification(captureKey(value), deadline),
+          failInitialClassification: value => failInitialClassification(captureKey(value)),
+          applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),
           claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS, view: value.view,
           }, deadline)),
           assertCaptureEvidence: value => invoke(() => runtime.assertCaptureEvidence(ns, {
-            ...admissionKey(value), token: contractId(value.token),
+            ...admissionKey(captureKey(value)), token: contractId(value.token),
           })),
           reviewRationale: value => reviewRationaleValidated(value, deadline),
           discoverRationale: ({ refs, query }) => invoke(() => {
@@ -847,20 +850,24 @@ export function openMemoryCore(input) {
     try {
       runtime.ready();
       if (!sessionEpisodes) throw new MemoryStoreError('episode_mode_required');
-      object(input, ['namespace','client','sessionId','generation','eventId']);
-      const ns=contractNamespace(input.namespace);
-      for (const key of ['client','sessionId','generation','eventId']) contractId(input[key]);
-      return success(await endEpisode({runtime,ns,model,input}));
-    } catch(error) { return failure(error); }
+      object(input, ['namespace', 'client', 'sessionId', 'generation', 'eventId']);
+      const ns = contractNamespace(input.namespace);
+      episodeClient(input.client);
+      for (const key of ['sessionId', 'generation', 'eventId']) contractId(input[key]);
+      return success(await endEpisode({ runtime, ns, model, input }));
+    } catch (error) { return failure(error); }
   }
+
   async function keepEpisode(input) {
     try {
       runtime.ready();
       if (!sessionEpisodes) throw new MemoryStoreError('episode_mode_required');
-      object(input, ['namespace','episodeId','expectedRevision','actionId']);
-      contractId(input.episodeId); contractId(input.actionId); contractRevision(input.expectedRevision);
-      return await capture({namespace:input.namespace}, {...input});
-    } catch(error) { return failure(error); }
+      object(input, ['namespace', 'episodeId', 'expectedRevision', 'actionId']);
+      contractId(input.episodeId);
+      contractId(input.actionId);
+      contractRevision(input.expectedRevision);
+      return await capture({ namespace: input.namespace }, { ...input });
+    } catch (error) { return failure(error); }
   }
 
   async function classifyPlacementValidated(input, deadline) {
@@ -915,35 +922,41 @@ export function openMemoryCore(input) {
   }
   function getEpisode(input) {
     return invoke(() => {
-      runtime.ready(); object(input, ['namespace','episodeId','sourceLimit','sourceCursor','memoryLimit','memoryCursor','policyLimit','policyCursor']);
-      const ns = contractNamespace(input.namespace), episodeId = contractId(input.episodeId), pages = {}, bindings = {};
-      for (const name of ['source','memory','policy']) {
+      runtime.ready();
+      object(input, ['namespace', 'episodeId', 'sourceLimit', 'sourceCursor', 'memoryLimit', 'memoryCursor',
+        'policyLimit', 'policyCursor', 'keepLimit', 'keepCursor']);
+      const ns = contractNamespace(input.namespace), episodeId = contractId(input.episodeId);
+      const pages = {}, bindings = {};
+      const pageSpecs = [['source', 'sources', 'id'], ['memory', 'memoryLinks', 'id'],
+        ['policy', 'policies', 'position'], ['keep', 'keepActions', 'ordinal']];
+      for (const name of ['source', 'memory', 'policy', 'keep']) {
         const count = input[`${name}Limit`] ?? 20;
         if (!Number.isSafeInteger(count) || count < 1 || count > 50) throw new MemoryStoreError('invalid_input');
         const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'getEpisode', m: episodeId, p: name, l: count };
         const cursor = input[`${name}Cursor`] === undefined ? undefined : decodeCursor(input[`${name}Cursor`], binding);
-        if (cursor && (Object.keys(cursor.a).join() !== 'id' || (name === 'policy'
+        if (cursor && (Object.keys(cursor.a).join() !== 'id' || (['policy', 'keep'].includes(name)
           ? !Number.isSafeInteger(cursor.a.id) || cursor.a.id < 0 : typeof cursor.a.id !== 'string'))) throw new MemoryStoreError('invalid_cursor');
-        bindings[name] = binding; pages[name] = { limit: count, after: cursor?.a.id, epoch: cursor?.e };
+        bindings[name] = binding;
+        pages[name] = { limit: count, after: cursor?.a.id, epoch: cursor?.e };
       }
       const result = runtime.getEpisode(ns, { episodeId }, pages);
-      const output = { episode: result.episode, ...(result.keepActions.length ? { keepActions: {
-        items: result.keepActions.slice(0,20).map(action => ({ ...action, policy: 'explicit-keep', sourceCoverage: 'retained-passages-at-revision' })),
-        exhausted: result.keepActions.length <= 20 } } : {}) };
-      for (const [name, key, idKey] of [['source','sources','id'],['memory','memoryLinks','id'],['policy','policies','position']]) {
-        const values = result[key].slice(0,pages[name].limit), exhausted = result[key].length <= pages[name].limit;
+      const output = { episode: result.episode };
+      for (const [name, key, idKey] of pageSpecs) {
+        const values = result[key].slice(0, pages[name].limit), exhausted = result[key].length <= pages[name].limit;
         output[key] = { items: values, exhausted, nextCursor: exhausted ? null : encodeCursor({ ...bindings[name], e: result.epoch, a: { id: values.at(-1)[idKey] } }) };
       }
       output.status = 'complete';
-      for (const [name,key,idKey] of [['policy','policies','position'],['memory','memoryLinks','id'],['source','sources','id']]) {
-        while (Buffer.byteLength(JSON.stringify(output),'utf8') > 65536 && output[key].items.length) {
-          output[key].items.pop(); output[key].exhausted = false; output.status = 'budget_exhausted';
-          const after = output[key].items.at(-1)?.[idKey] ?? pages[name].after ?? (name === 'policy' ? 0 : '');
+      for (const [name, key, idKey] of [...pageSpecs].reverse()) {
+        while (Buffer.byteLength(JSON.stringify(output), 'utf8') > 65536 && output[key].items.length) {
+          output[key].items.pop();
+          output[key].exhausted = false;
+          output.status = 'budget_exhausted';
+          const after = output[key].items.at(-1)?.[idKey] ?? pages[name].after ?? (['policy', 'keep'].includes(name) ? 0 : '');
           output[key].nextCursor = encodeCursor({ ...bindings[name], e: result.epoch, a: { id: after } });
         }
       }
       if (Buffer.byteLength(JSON.stringify(output), 'utf8') > 65536 ||
-          (output.status === 'budget_exhausted' && !output.sources.items.length && !output.memoryLinks.items.length && !output.policies.items.length)) throw new MemoryStoreError('context_item_too_large');
+          (output.status === 'budget_exhausted' && !output.sources.items.length && !output.memoryLinks.items.length && !output.policies.items.length && !output.keepActions.items.length)) throw new MemoryStoreError('context_item_too_large');
       return output;
     });
   }

@@ -77,7 +77,7 @@ for(const failure of ['throw','timeout','malformed','oversized','budget']) test(
   ok(await f.core.capture(input(10)));assert.equal(counts(f.model),failure==='budget'?1:2);
 });
 
-test('E2 strict Unicode, time, foreign and split-code-point output; E3 K4 message reuse after release/restart',async t=>{
+test('E2 strict Unicode, time, foreign and split-code-point output; E3 durable message reuse after release/restart',async t=>{
   const f=setup(t);const first=ok(await f.core.capture(input()));
   const restarted=openMemoryCore({path:f.path,...options,model:f.model});t.after(()=>restarted.close());
   const overlap={...input(),eventId:'overlap'};
@@ -191,12 +191,12 @@ test('E8 quick anchors exclusively in old context cannot skip current admission;
 });
 
 test('E8 failed explicit keep replay has a durable outcome and makes no further calls',async t=>{
-  const f=setup(t,{interpretEpisode:r=>interpretation(r,'quick-one-off-question'),extract:()=>{throw Error('scripted failure');}});
+  const f=setup(t,{interpretEpisode:r=>interpretation(r,'quick-one-off-question'),extract:()=>({invalid:'scripted terminal failure'})});
   const result=ok(await f.core.capture(input()));const detail=ok(f.core.getEpisode({namespace:ns,episodeId:result.episode.id}));
   const action={namespace:ns,episodeId:result.episode.id,expectedRevision:detail.episode.revision,actionId:'failed-keep'};
-  assertError(await f.core.keepEpisode(action),'extraction_failed');const calls=f.model.calls.length;
-  assertError(await f.core.keepEpisode(action),'extraction_failed');assert.equal(f.model.calls.length,calls);
-  assert.equal(ok(f.core.getEpisode({namespace:ns,episodeId:result.episode.id})).keepActions.items[0].errorCode,'extraction_failed');
+  assertError(await f.core.keepEpisode(action),'invalid_model_output');const calls=f.model.calls.length;
+  assertError(await f.core.keepEpisode(action),'invalid_model_output');assert.equal(f.model.calls.length,calls);
+  assert.equal(ok(f.core.getEpisode({namespace:ns,episodeId:result.episode.id})).keepActions.items[0].errorCode,'invalid_model_output');
 });
 
 test('E4 actual 30-second abort precedes a fresh 125-second admission lease (mock clock, no sleep)',async t=>{
@@ -230,4 +230,146 @@ for(const client of ['claude','codex'])test(`E6 synthetic ${client} producer gen
   assert.ok(!JSON.stringify(f.model.calls).includes('PAUSED_PARTIAL_MARKER'));
   assert.equal(f.db.prepare("SELECT count(*) n FROM episode_messages WHERE message_id='partial-line'").get().n,0);
   assert.equal(f.db.prepare("SELECT count(*) n FROM session_episodes WHERE scope='personal'").get().n,0);
+});
+
+test('E8 transient busy keep releases its own claim and retries the same action', async t => {
+  let lock = false;
+  const f = setup(t, { interpretEpisode: r => interpretation(r, 'quick-one-off-question'),
+    extract: () => {
+      if (lock) f.db.exec('BEGIN IMMEDIATE');
+      return { items: [] };
+    } });
+  const first = ok(await f.core.capture(input()));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const action = { namespace: ns, episodeId: first.episode.id, expectedRevision: detail.episode.revision, actionId: 'busy' };
+  lock = true;
+  assertError(await f.core.keepEpisode(action), 'storage_busy');
+  f.db.exec('ROLLBACK'); lock = false;
+  const retry = ok(await f.core.keepEpisode(action));
+  assert.equal(retry.admission.memories.length, 0);
+  assert.equal(counts(f.model, 'extract'), 2);
+  assert.equal(counts(f.model), 1);
+  assert.equal(ok(await f.core.keepEpisode(action)).duplicate, true);
+  assert.equal(counts(f.model, 'extract'), 2);
+  const stored = f.db.prepare('SELECT token,keep_state,keep_error_code FROM episode_attempts WHERE keep_event_id IS NOT NULL').get();
+  assert.equal(stored.keep_state, 'completed'); assert.equal(stored.keep_error_code, null);
+  assert.ok(!stored.token.startsWith('failed:'));
+});
+
+test('E8 keep coverage survives new drafts and all 27 actions page in creation order', async t => {
+  const f = setup(t);
+  const first = ok(await f.core.capture(input()));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  for (let n = 0; n < 27; n++) ok(await f.core.keepEpisode({ namespace: ns, episodeId: first.episode.id,
+    expectedRevision: detail.episode.revision, actionId: 'keep-' + n }));
+  let page = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  assert.equal(page.keepActions.items.length, 20); assert.equal(page.keepActions.exhausted, false);
+  const coverage = page.keepActions.items[0].sourceCoverage;
+  assert.deepEqual(coverage.sourceIds, detail.sources.items.map(source => source.id));
+  assert.equal(coverage.revision, detail.episode.revision);
+  assert.equal(page.policies.items[0].policy, 'explicit-keep');
+  const second = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id, keepCursor: page.keepActions.nextCursor }));
+  assert.equal(second.keepActions.items.length, 7); assert.equal(second.keepActions.exhausted, true);
+  assert.equal(second.keepActions.nextCursor, null);
+  const ordinals = [...page.keepActions.items, ...second.keepActions.items].map(action => action.ordinal);
+  assert.equal(new Set(ordinals).size, 27); assert.deepEqual(ordinals, [...ordinals].sort((a, b) => a - b));
+  assertError(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id, keepLimit: 51 }), 'invalid_input');
+  const next = input(2); next.episodeContext.origin = 'precompact'; ok(await f.core.capture(next));
+  page = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id, keepLimit: 50 }));
+  assert.equal(page.keepActions.items.length, 27);
+  assert.deepEqual(page.keepActions.items[0].sourceCoverage, coverage);
+  assert.ok(!page.sources.items.some(source => coverage.sourceIds.includes(source.id)));
+});
+
+test('E3 client episode-keep prefix is ordinary capture; abandoned overlaps can be registered anew', async t => {
+  let failing = true;
+  const f = setup(t, { extract: () => { if (failing) throw Error('synthetic failure'); return { items: [] }; } });
+  const original = { ...input(), eventId: 'episode-keep:client-owned' };
+  assertError(await f.core.capture(original), 'extraction_failed');
+  failing = false;
+  const retry = ok(await f.core.capture({ ...original, eventId: 'resent' }));
+  assert.equal(retry.duplicate, false); assert.equal(retry.admission.memories.length, 0);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 2);
+  const identity = f.db.prepare('SELECT first_event_id,coverage_event_id FROM episode_messages').get();
+  assert.equal(identity.first_event_id, original.eventId); assert.equal(identity.coverage_event_id, 'resent');
+  const calls = f.model.calls.length;
+  assert.equal(ok(await f.core.capture({ ...original, eventId: 'covered' })).overlap, true);
+  assert.equal(f.model.calls.length, calls);
+});
+
+test('E3 full-message digest is shared by validation and registration, including time and the tail', t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  const original = batch('full', 'x'.repeat(800));
+  original.messages[0].content += ' canonical tail';
+  original.messages[0].occurredAt = '2026-09-28T00:00:00.000Z';
+  const missing = { ...original }; delete missing.messages;
+  assert.throws(() => runtime.reserveEpisodeBatch(ns, missing), { code: 'invalid_input' });
+  runtime.reserveEpisodeBatch(ns, original);
+  const claim = runtime.claimAdmission(ns, { ...original, leaseMs: 125000 });
+  runtime.finishAdmission(ns, { ...original, token: claim.token, items: [] });
+  const overlap = { ...original, eventId: 'full-overlap' };
+  assert.equal(runtime.validateEpisodeBatch(ns, overlap).overlap, true);
+  assert.equal(runtime.reserveEpisodeBatch(ns, overlap).overlap, true);
+  for (const content of ['x'.repeat(800), original.messages[0].content + '!']) {
+    const changed = { ...overlap, messages: [{ ...original.messages[0], content }] };
+    for (const method of ['validateEpisodeBatch', 'reserveEpisodeBatch'])
+      assert.throws(() => runtime[method](ns, changed), { code: 'event_payload_conflict' });
+  }
+});
+
+for (const client of ['', 'x'.repeat(65), 'bad:client', 'bad client']) test(`E6 end rejects invalid client ${JSON.stringify(client)}`, async t => {
+  const f = setup(t);
+  assertError(await f.core.endEpisodeSession({ namespace: ns, client, sessionId: 's', eventId: 'end', generation: 'initial' }), 'invalid_input');
+  assert.equal(f.model.calls.length, 0);
+});
+
+test('E4 omission codes stay finite while all 24 omitted message positions remain inspectable', async t => {
+  const f = setup(t, {}, { sessionEpisodes: { mode: 'episode-v1', draftEveryBatches: 2 } });
+  const first = ok(await f.core.capture(input()));
+  const older = input(2); older.messages = Array.from({ length: 24 }, (_, n) =>
+    ({ id: 'omitted-' + n, role: 'user', content: 'Older synthetic source ' + n }));
+  ok(await f.core.capture(older));
+  f.model.countTokens = text => {
+    const value = JSON.parse(text);
+    return value.input?.classificationTarget && value.input.sources.length > 1 ? 6001 : 1;
+  };
+  ok(await f.core.capture(input(3)));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const policy = detail.policies.items.find(item => item.eventId === older.eventId);
+  assert.deepEqual(policy.gapReasons, ['omitted']); assert.equal(policy.omittedCount, 24);
+  assert.deepEqual(policy.omittedMessageIndices, Array.from({ length: 24 }, (_, n) => n));
+  assert.ok(detail.policies.items.flatMap(item => item.gapReasons).every(code => code.length <= 64));
+});
+
+test('E4 end and lazy report capacity when the newest batch was never staged', async t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  for (let n = 0; n < 64; n++) runtime.reserveEpisodeBatch(ns, { ...batch('protected-' + n, 'Protected', 'p-' + n), client: 'other' });
+  ok(await f.core.capture(input())); ok(await f.core.capture(input(2)));
+  const ended = ok(await f.core.endEpisodeSession({ namespace: ns, client: 'synthetic', sessionId: 'private-session', generation: 'initial', eventId: 'end' }));
+  assert.equal(ended.episode.error.code, 'capacity');
+  ok(await f.core.capture(input(3)));
+  const later = ok(await f.core.capture(input(1, 'next-session')));
+  assert.equal(later.lazyEpisode.error.code, 'capacity'); assert.equal(counts(f.model), 0);
+  assert.ok(f.db.prepare('SELECT gap_reasons FROM episode_events').all().every(row => !row.gap_reasons.includes('context_budget_exceeded')));
+});
+
+test('E8 unknown keep storage errors stay storage_error and permit action retry', async t => {
+  const { keepEpisodeCapture } = await import('../episode-capture.mjs');
+  const f = setup(t, { interpretEpisode: r => interpretation(r, 'quick-one-off-question') });
+  const first = ok(await f.core.capture(input()));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const action = { namespace: ns, episodeId: first.episode.id, expectedRevision: detail.episode.revision, actionId: 'unknown-error' };
+  const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  await assert.rejects(keepEpisodeCapture({ runtime: { ...runtime,
+    assertEpisodeKeep() { throw Error('synthetic unclassified storage failure'); } }, ns, keepInput: action,
+    input: { namespace: ns }, model: f.model, captureEvidence: 'staged-v1', captureQualification: 'source-bound-v2',
+    operations: { abandonAdmission: value => runtime.abandonAdmission(ns, value) } }), { code: 'storage_error' });
+  const stored = f.db.prepare('SELECT keep_state,keep_error_code FROM episode_attempts WHERE keep_event_id IS NOT NULL').get();
+  assert.equal(stored.keep_state, 'retryable'); assert.equal(stored.keep_error_code, null);
+  assert.equal(f.db.prepare("SELECT state FROM admission_claims WHERE event_id=(SELECT keep_event_id FROM episode_attempts WHERE keep_event_id IS NOT NULL)").get().state, 'reserved');
+  assert.equal(ok(await f.core.keepEpisode(action)).admission.memories.length, 0);
+  assert.equal(counts(f.model, 'extract'), 2);
 });

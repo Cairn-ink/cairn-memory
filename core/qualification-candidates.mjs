@@ -80,8 +80,11 @@ function compileQualification(output, snapshot, onFailure, episode = false) {
     const entries = denseArray(output.qualifications, snapshot.items.length, snapshot.items.length);
     const compiled = new Map();
     for (const entry of entries) {
-      object(entry, ['itemIndex', ...FIELDS, ...(episode ? ['procedural'] : [])]);
-      if (['itemIndex', ...FIELDS].some(key => !Object.hasOwn(entry,key))) reject('qualification_binding');
+      if (!episode) exact(entry, ['itemIndex', ...FIELDS]);
+      else {
+        object(entry, ['itemIndex', ...FIELDS, 'procedural']);
+        if (['itemIndex', ...FIELDS].some(key => !Object.hasOwn(entry, key))) reject('qualification_binding');
+      }
       const index = entry.itemIndex;
       if (!Number.isSafeInteger(index) || index < 0 || index >= snapshot.items.length || compiled.has(index)) {
         reject('qualification_binding');

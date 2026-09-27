@@ -53,7 +53,10 @@ test('E5 expired worker cannot publish, release successor or consume its memory 
   f.db.exec('UPDATE episode_attempts SET expires_at=0; UPDATE session_episodes SET writer_expires_at=0');
   const successor=openMemoryCore({path:f.path,...options,model:{...f.model,interpretEpisode:()=>{throw Error('must not retry');}}});t.after(()=>successor.close());
   const recovered=ok(await successor.capture(input()));assert.equal(recovered.admission.memories.length,0);
-  release.resolve();const stale=await running;assert.ok(stale.ok||stale.error.code==='stale_admission');
+  release.resolve();const stale=ok(await running);
+  assert.equal(stale.duplicate, true);
+  assert.deepEqual(stale.admission, { status: 'completed', memoryIds: [], suppressedCount: 0 });
+  assert.deepEqual(stale.episode.error, { code: 'episode_failed', retryable: false });
   assert.equal(f.db.prepare('SELECT state FROM admission_claims').get().state,'completed');
   assert.equal(f.db.prepare('SELECT interpretedAt FROM (SELECT json_extract(record,\'$.interpretedAt\') interpretedAt FROM session_episodes)').get().interpretedAt,null);
 });
@@ -63,12 +66,12 @@ test('E3/E5 overlap registered after validation cannot acknowledge unfinished ad
     b=createMemoryRuntime({path:f.path,sessionEpisodes:{mode:'episode-v1'}});
   t.after(()=>{a.close();b.close();});
   const original=batch('original'),overlap={...original,eventId:'overlap'};
-  assert.equal(a.validateEpisodeBatch(ns,{...overlap,messages:overlap.view.messages}).overlap,false);
+  assert.equal(a.validateEpisodeBatch(ns,overlap).overlap,false);
   b.reserveEpisodeBatch(ns,original);
+  const claim=b.claimAdmission(ns,{...original,leaseMs:125000});
   const raced=a.reserveEpisodeBatch(ns,overlap);
   assert.equal(raced.overlap,true);assert.equal(raced.processing,true);
   assert.equal(f.db.prepare('SELECT count(*) n FROM episode_events').get().n,1);
-  const claim=b.claimAdmission(ns,{...original,leaseMs:125000});
   b.finishAdmission(ns,{...original,token:claim.token,items:[]});
   const completed=a.reserveEpisodeBatch(ns,overlap);
   assert.equal(completed.overlap,true);assert.equal(completed.processing,false);
@@ -145,4 +148,46 @@ test('E7 correction during keep qualification fences admission; deletion of kept
   const again=ok(f.core.getEpisode({namespace:ns,episodeId:captured.episode.id}));assert.equal(again.memoryLinks.items.length,1);
   ok(f.core.forgetEpisode({namespace:ns,episodeId:captured.episode.id,expectedRevision:again.episode.revision}));
   assertError(await f.core.keepEpisode(action),'episode_not_found');assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n,0);
+});
+
+for (const stop of [false, true]) test(`E5 cross-process ${stop ? 'project stop' : 'pause'} between registration and draft claim`, async t => {
+  const f = setup(t), worker = child(t, f.path, 'registered-hold');
+  await stage(worker, 'registered');
+  const control = stop ? ok(f.core.setProjectCapture({ namespace: ns, expectedGeneration: 'initial', enabled: false }))
+    : ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: 'initial', paused: true }));
+  const finished = stage(worker, 'result'); worker.send('continue'); const result = await finished;
+  if (stop) {
+    assertError(result.result, 'capture_evidence_closed'); assert.deepEqual(result.calls, []);
+    assert.equal(f.db.prepare('SELECT state FROM staged_capture_evidence').get().state, 'discarded');
+  } else {
+    assert.equal(ok(result.result).episode.error.code, 'generation_conflict');
+    assert.deepEqual(result.calls, ['extract']);
+    ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: control.generation, paused: false }));
+    assert.equal(ok(await f.core.capture(input())).duplicate, true); assert.equal(f.model.calls.length, 0);
+  }
+});
+
+test('E5 crash before draft, pause, replay, unpause and replay preserve ordinary admission', async t => {
+  const f = setup(t), worker = child(t, f.path, 'registered-hold'); await stage(worker, 'registered');
+  const exit = once(worker, 'exit'); worker.kill('SIGKILL'); await exit;
+  const paused = ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: 'initial', paused: true }));
+  const resumed = ok(await f.core.capture(input()));
+  assert.equal(resumed.episode.error.code, 'generation_conflict'); assert.equal(counts(f.model), 0);
+  assert.equal(counts(f.model, 'extract'), 1);
+  const gap = f.db.prepare('SELECT gap_reasons FROM episode_events').get();
+  assert.deepEqual(JSON.parse(gap.gap_reasons), ['generation_conflict']);
+  ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: paused.generation, paused: false }));
+  assert.equal(ok(await f.core.capture(input())).duplicate, true); assert.equal(counts(f.model, 'extract'), 1);
+});
+
+test('E5 crash after PreCompact consumes its marker before generation checks on replay', async t => {
+  const f = setup(t), worker = child(t, f.path, 'crash-after-precompact'); await stage(worker, 'drafted');
+  const exit = once(worker, 'exit'); worker.kill('SIGKILL'); await exit;
+  f.db.exec('UPDATE session_episodes SET writer_expires_at=0');
+  ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: 'initial', paused: true }));
+  const value = input(); value.episodeContext.origin = 'precompact';
+  const replay = ok(await f.core.capture(value));
+  assert.equal(replay.episode.reason, 'replay'); assert.equal(counts(f.model), 0);
+  assert.equal(counts(f.model, 'extract'), 1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 1);
 });

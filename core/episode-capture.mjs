@@ -15,7 +15,7 @@ const errorCode = error => error instanceof MemoryStoreError && error.code === '
 /** Pack current evidence first, then newest undrafted evidence, then prior cited context. */
 export function episodeRequest(model, snapshot) {
   const target = snapshot.events.find(event => event.eventId === snapshot.targetEventId);
-  if (!target) fail('context_budget_exceeded');
+  if (!target) fail(snapshot.missingReason ?? 'missing_evidence');
   const sources = [], refs = [], counts = new Map();
   let prior = {};
   const request = () => ({ sources: sources.map((source, sourceIndex) => ({ sourceIndex, ...source })),
@@ -59,10 +59,12 @@ export function episodeRequest(model, snapshot) {
 }
 
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken, trigger, watermark, staging }) {
-  const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken, trigger, watermark });
-  if (claim.consumed) return { id: episodeId, status: 'not-run', reason: 'consumed' };
-  const owned = { episodeId, token: claim.token };
+  let owned;
   try {
+    const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken, trigger, watermark });
+    if (claim.consumed) return { id: episodeId, status: 'not-run', reason: 'consumed' };
+    owned = { episodeId, token: claim.token };
+    if (claim.skipReason) fail(claim.skipReason);
     if (staging === 'not-staged') fail('capacity');
     const snapshot = runtime.episodeDraftSnapshot(ns, owned);
     const planned = episodeRequest(model, snapshot);
@@ -82,10 +84,10 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     return { id: episodeId, status: 'interpreted', revision: committed.revision,
       type: output.type.value, classificationTarget: snapshot.targetEventId };
   } catch (error) {
-    const code = error.code === 'capacity' ? 'capacity' : errorCode(error);
-    try { runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
+    const code = ['capacity', 'expired', 'missing_evidence', 'generation_conflict'].includes(error.code) ? error.code : errorCode(error);
+    try { if (owned) runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
     return { id: episodeId, status: 'failed', error: { code, retryable: false } };
-  } finally { runtime.settleEpisodeAttempt(ns, owned); }
+  } finally { if (owned) runtime.settleEpisodeAttempt(ns, owned); }
 }
 
 async function auxiliary({ runtime, ns, model, episodeId, generation, trigger }) {
@@ -140,7 +142,7 @@ export async function captureEpisodeMessages(options) {
   try {
     let state = runtime.episodeCaptureState(ns, { episodeId, client: batch.client, eventId: batch.eventId });
     let episode = { id: episodeId, status: 'not-run', reason: registered.duplicate ? 'replay' : 'debounced' };
-    const due = state.admission !== 'completed' && (state.attempted === 0 ||
+    const due = !state.draftConsumed && state.admission !== 'completed' && (state.attempted === 0 ||
       registered.position - state.attempted >= state.draftEvery || snapshot.episodeContext.origin === 'precompact');
     if (due) episode = await interpret({ runtime, ns, model, episodeId, generation: batch.generation,
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging });
@@ -163,10 +165,11 @@ export async function keepEpisodeCapture(options) {
   const kept = runtime.prepareEpisodeKeep(ns, keepInput);
   if (kept.failure) fail(kept.failure);
   const claim = runtime.claimAdmission(ns, { ...kept.key, leaseMs: 125000 });
-  if (claim.duplicate || claim.processing) return { ...claim, episode: { id: keepInput.episodeId, policy: 'explicit-keep' },
+  if (claim.duplicate || claim.processing) return { ...claim, episode: { id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage },
     admission: { status: claim.duplicate ? 'completed' : 'processing', memoryIds: claim.memoryIds } };
+  kept.admissionToken = claim.token;
   const deadline = startAdmission?.();
-  const snapshot = { namespace: options.input.namespace, client: kept.key.client, eventId: kept.key.eventId,
+  const snapshot = { namespace: options.input.namespace, client: kept.client, eventId: kept.key.eventId,
     payloadDigest: kept.key.payloadDigest, sessionId: kept.sessionKey, messages: kept.sources.map(source =>
       ({ id: source.message_id, role: source.role, content: source.text })), captureQualification: 'source-bound-v2', sessionEpisodes: 'episode-v1' };
   const operations = { ...options.operations,
@@ -177,11 +180,11 @@ export async function keepEpisodeCapture(options) {
       return options.operations.finishAdmission(value);
     } };
   try {
-    const result = await captureMessages({ ...options, operations, deadline, episodeRun: { snapshot, claim, skip: false } });
-    return { ...result, episode: { id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.sources.map(source => source.id) } };
+    const result = await captureMessages({ ...options, operations, deadline, episodeRun: { snapshot, claim, skip: false, keep: true } });
+    return { ...result, episode: { id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage } };
   } catch (error) {
-    const code=error instanceof MemoryStoreError ? error.code : 'extraction_failed';
-    runtime.failEpisodeKeep(ns,kept,code);
+    const code = error instanceof MemoryStoreError ? error.code : 'storage_error';
+    try { runtime.failEpisodeKeep(ns, kept, code); } catch { /* Preserve the original failure. */ }
     throw error;
   }
 }

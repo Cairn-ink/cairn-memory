@@ -112,7 +112,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned); } catch { /* The bounded lease can expire. */ }
     if (error instanceof MemoryStoreError) throw error;
-    fail('extraction_failed');
+    fail(episodeRun?.keep ? 'storage_error' : 'extraction_failed');
   }
   const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
     indexRevision: finished.indexRevision };

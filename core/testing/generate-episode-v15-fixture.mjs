@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { openDatabase } from '../database.mjs';
+import { captureDiagnosticParity } from './episode-diagnostic-parity.mjs';
 import { captureEpisodeParity } from './episode-parity.mjs';
 
 const [flag, root, ...extra] = process.argv.slice(2);
@@ -42,6 +44,14 @@ try {
     { captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' }].entries()) {
     parity.push({ config, expected: await captureEpisodeParity(root, join(temporary, 'parity-' + index + '.sqlite'), config) });
   }
+  writeFileSync(new URL('./episode-v15-diagnostics.json', import.meta.url),
+    JSON.stringify({ base, cases: await captureDiagnosticParity(root) }, null, 2) + '\n');
+  const current = openDatabase(join(temporary, 'v16.sqlite'));
+  try {
+    const layout = Object.fromEntries(['episode_messages', 'episode_events', 'episode_attempts'].map(name =>
+      [name, current.prepare('PRAGMA table_info(' + name + ')').all()]));
+    writeFileSync(new URL('./episode-v16-layout.json', import.meta.url), JSON.stringify(layout, null, 2) + '\n');
+  } finally { current.close(); }
   // Freeze the old opener for the old-binary exclusion gate. Relative imports only;
   // the version constant is frozen to the value shipped by this pinned binary.
   const opener = readFileSync(join(root, 'core/database.mjs'), 'utf8')

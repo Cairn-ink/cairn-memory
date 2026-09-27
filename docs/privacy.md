@@ -180,7 +180,8 @@ secure-erasure, complete-history or semantic-fidelity guarantee follows.
 ### SE-1 implementation boundary
 
 The episode persistence/inspection, correction/deletion and explicit procedural-tag
-subset above is now implemented locally. Episode capture/interpretation now uses an injected port; trusted producer integrations
+subset above is now implemented locally. Episode capture/interpretation now uses
+an injected port; trusted producer integrations
 remain separate work. Opening the store eagerly upgrades to v16 in either mode;
 staging alone still never enables episodes.
 Hosts must stop/drain older connections before upgrade; already-open old processes
@@ -193,7 +194,7 @@ remain unchanged when neither opt-in is used.
 
 ### Durable message identity metadata
 
-Schema v16 adds `episode_messages`: episode/message identity, first event ID and
+Schema v16 adds `episode_messages`: episode/message identity, first and coverage event IDs, and
 an HMAC-SHA256 digest of `["m1", role, canonicalText, eventTimeOrNull]`, using the
 existing private episode key. No message text or role is stored in this ledger.
 It prevents reused IDs from silently changing evidence after staging release.
@@ -202,6 +203,7 @@ key holders can still test guesses, and identifiers retain correlation risk.
 Registration and capacity disposition are atomic. Episode-off captures leave the
 ledger empty. Upgrades do not backfill earlier messages, so overlap detection starts
 with post-upgrade registration. Provider payloads receive no ledger IDs/digests.
-Explicit keep records only an action key, source revision/fence and admission result
-in existing durable journals; it neither archives additional transcript text nor
+Explicit keep records only an action key, creation ordinal/time, source IDs,
+source revision/fence and a classified admission result in dedicated journal
+columns; it neither archives additional transcript text nor
 turns the interpretation into evidence. E1/E3/E5/E7/E11 cover these boundaries.

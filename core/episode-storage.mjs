@@ -4,6 +4,11 @@ import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
 
+export const KEEP_ADMISSION_CLIENT = '\0episode-keep';
+const GAP_CODES = new Set(['forgotten', 'discarded', 'expired', 'capacity', 'omitted',
+  'episode_failed', 'episode_timeout', 'invalid_model_output', 'context_budget_exceeded',
+  'generation_conflict', 'missing_evidence']);
+
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId];
 const eventWhere = `${where} AND client=? AND event_id=?`;
@@ -22,7 +27,7 @@ export function episodeOptions(value) {
   if (!Number.isInteger(draftEveryBatches) || draftEveryBatches < 2 || draftEveryBatches > 16) fail('invalid_input');
   return Object.freeze({ mode: 'episode-v1', draftEveryBatches });
 }
-function clientId(value) {
+export function episodeClient(value) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(value)) fail('invalid_input');
   return value;
 }
@@ -50,9 +55,39 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   if (options) secret();
   function sessionKey(ns, client, sessionId) {
-    clientId(client); identifier(sessionId);
+    episodeClient(client); identifier(sessionId);
     return `s1:${createHmac('sha256', Buffer.from(secret(), 'hex'))
       .update(JSON.stringify(['episode-v1', ...boundary(ns), client, sessionId])).digest('hex')}`;
+  }
+  function messageLedger(messages) {
+    const key = Buffer.from(secret(), 'hex');
+    return denseArray(messages, 1, 24).map(message => {
+      object(message, ['id', 'role', 'content', 'occurredAt']);
+      if (!['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' ||
+          !message.content.isWellFormed() || !message.content.length || message.content.length > 20000 ||
+          !Object.hasOwn(message, 'occurredAt')) fail('invalid_input');
+      const time = instant(message.occurredAt);
+      return { id: identifier(message.id), digest: createHmac('sha256', key)
+        .update(JSON.stringify(['m1', message.role, message.content, time])).digest('hex') };
+    });
+  }
+  function messageCoverage(ns, row, client, ledger) {
+    let unfinished = false;
+    const fresh = ledger.filter(message => {
+      const previous = row && db.prepare('SELECT digest,coverage_event_id FROM episode_messages WHERE episode_id=? AND message_id=?')
+        .get(row.id, message.id);
+      if (!previous) return true;
+      if (previous.digest !== message.digest) fail('event_payload_conflict');
+      const admission = db.prepare(`SELECT state,lease_expires_at FROM admission_claims WHERE ${eventWhere}`)
+        .get(...boundary(ns), client, previous.coverage_event_id);
+      if (admission?.state === 'completed') return false;
+      const active = admission?.lease_expires_at > Date.now() || row.writer_expires_at > Date.now() ||
+        db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND finished=0 AND expires_at>?')
+          .get(row.id, Date.now());
+      if (active) { unfinished = true; return false; }
+      return true;
+    });
+    return { fresh, unfinished };
   }
   function control(ns) {
     return db.prepare(`SELECT * FROM episode_controls WHERE ${where}`).get(...boundary(ns));
@@ -153,13 +188,14 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     if (!options) fail('episode_mode_required');
     object(input, ['client','clientLabel','sessionId','eventId','payloadDigest','generation','view',
       'eventStart','eventEnd','eventTimeCoverage','writerToken','messages','acquireWriter']);
-    clientId(input.client); identifier(input.eventId); identifier(input.sessionId);
+    episodeClient(input.client); identifier(input.eventId); identifier(input.sessionId);
     const label = episodeText(input.clientLabel, 80);
     if (!HEX_DIGEST.test(input.payloadDigest)) fail('invalid_input');
     const start = instant(input.eventStart ?? null), end = instant(input.eventEnd ?? null);
     const coverage = input.eventTimeCoverage ?? 'unknown';
     if (!['complete','partial','unknown'].includes(coverage) || (start && end && start > end) ||
       (coverage === 'complete' && (!start || !end)) || (coverage === 'unknown' && (start || end))) fail('invalid_input');
+    const ledger = messageLedger(input.messages);
     const serialized = stagedEvidence.serializeView(input.view, true);
     const identity = sessionKey(ns, input.client, input.sessionId);
     return transaction(db, () => {
@@ -176,17 +212,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       assertControl(ns, input.generation);
       if (db.prepare(`SELECT 1 FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, input))) fail('event_payload_conflict');
       if (row?.writer_expires_at > Date.now() && row.writer_token !== input.writerToken) fail('episode_processing');
-      const ledger = (input.messages ?? input.view.messages).map(message => ({ id: identifier(message.id),
-        digest: createHmac('sha256', Buffer.from(secret(), 'hex'))
-          .update(JSON.stringify(['m1', message.role, message.content, message.occurredAt ?? null])).digest('hex') }));
-      let unfinished = false;
-      const fresh = ledger.filter(message => {
-        const prior = row && db.prepare('SELECT digest,first_event_id FROM episode_messages WHERE episode_id=? AND message_id=?').get(row.id, message.id);
-        if (prior && prior.digest !== message.digest) fail('event_payload_conflict');
-        if (prior && db.prepare(`SELECT state FROM admission_claims WHERE ${eventWhere}`)
-          .get(...boundary(ns), input.client, prior.first_event_id)?.state !== 'completed') unfinished = true;
-        return !prior;
-      });
+      const { fresh, unfinished } = messageCoverage(ns, row, input.client, ledger);
       if (!fresh.length) return { episodeId: row.id, sessionKey: identity, position: row.observed, overlap: true, processing: unfinished };
       const now = stagedEvidence.touch(ns, true), received = new Date(now).toISOString();
       db.prepare(`INSERT OR IGNORE INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,'initial',0,1)`).run(...boundary(ns));
@@ -199,8 +225,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           .run(id, ...boundary(ns), input.client, identity, input.generation, options.draftEveryBatches, received, received, received, JSON.stringify(blank(label)));
         row = read(ns, id);
       }
-      for (const message of fresh) db.prepare('INSERT INTO episode_messages VALUES(?,?,?,?)')
-        .run(row.id, message.id, message.digest, input.eventId);
+      for (const message of fresh) db.prepare(`INSERT INTO episode_messages VALUES(?,?,?,?,?)
+        ON CONFLICT(episode_id,message_id) DO UPDATE SET coverage_event_id=excluded.coverage_event_id`)
+        .run(row.id, message.id, message.digest, input.eventId, input.eventId);
       // Parent reservation always precedes both event and staging children.
       db.prepare(`INSERT INTO admission_claims(owner_id,scope,project_id,client,event_id,payload_digest,state) VALUES(?,?,?,?,?,?,'reserved')`)
         .run(...eventKey(ns, input), input.payloadDigest);
@@ -224,6 +251,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   // Preserve all reasons and keep terminal fences stronger than diagnostic failures.
   function mergeGap(ns, input, reason) {
+    if (!GAP_CODES.has(reason)) fail('invalid_input');
     const registered = event(ns, input);
     if (!registered) return false;
     const reasons = [...new Set([...JSON.parse(registered.gap_reasons), ...(registered.gap ? [registered.gap] : [])])];
@@ -312,16 +340,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       assertControl(ns,input.generation);
       if (db.prepare(`SELECT 1 FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns,input))) fail('event_payload_conflict');
       if (row?.writer_expires_at > Date.now()) return { processing: true };
-      let fresh=0, unfinished=false;
-      for (const message of input.messages) {
-        const digest=createHmac('sha256',Buffer.from(secret(),'hex'))
-          .update(JSON.stringify(['m1',message.role,message.content,message.occurredAt??null])).digest('hex');
-        const previous=row && db.prepare('SELECT digest,first_event_id FROM episode_messages WHERE episode_id=? AND message_id=?').get(row.id,message.id);
-        if (previous && previous.digest!==digest) fail('event_payload_conflict');
-        if (!previous) fresh++;
-        else if (db.prepare(`SELECT state FROM admission_claims WHERE ${eventWhere}`).get(...boundary(ns),input.client,previous.first_event_id)?.state!=='completed') unfinished=true;
-      }
-      return { overlap: fresh===0, processing: fresh===0 && unfinished, episodeId: row?.id };
+      const { fresh, unfinished } = messageCoverage(ns, row, input.client, messageLedger(input.messages));
+      return { overlap: fresh.length === 0, processing: fresh.length === 0 && unfinished, episodeId: row?.id };
     });
   }
   function claimWriter(ns, input) {
@@ -340,16 +360,19 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   function claimDraft(ns, input) {
     return transaction(db, () => {
-      assertControl(ns, input.generation);
       const row = live(ns, input.episodeId); writer(row, input.writerToken);
       if (!['batch','end','lazy'].includes(input.trigger) || !Number.isSafeInteger(input.watermark) || input.watermark < 1 || input.watermark > row.observed) fail('invalid_input');
       const marker = input.trigger === 'batch' ? `batch:${input.watermark}` : input.trigger;
       if (db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND marker=?').get(row.id, marker)) return { consumed: true };
+      const current = getControl(ns);
+      if (!current.enabled) fail('capture_evidence_closed');
+      if (input.trigger !== 'batch') assertControl(ns, input.generation);
+      const skipReason = current.generation !== input.generation ? 'generation_conflict' : null;
       const token = randomUUID();
       db.prepare('INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation) VALUES(?,?,?,?,?,?,?,?)')
         .run(row.id, marker, input.watermark, token, Date.now()+ADMISSION_LEASE_MS, row.revision, row.source_fence, input.generation);
       db.prepare('UPDATE session_episodes SET attempted=max(attempted,?) WHERE id=?').run(input.watermark, row.id);
-      return { token, revision: row.revision, sourceFence: row.source_fence, watermark: input.watermark };
+      return { token, revision: row.revision, sourceFence: row.source_fence, watermark: input.watermark, skipReason };
     });
   }
   function attempt(ns, input) {
@@ -361,7 +384,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     return { row, claim };
   }
   function failDraft(ns, input) {
-    if (!['episode_failed','episode_timeout','invalid_model_output','context_budget_exceeded','capacity','expired'].includes(input.code)) fail('invalid_input');
+    if (!['episode_failed','episode_timeout','invalid_model_output','context_budget_exceeded','capacity','expired','generation_conflict','missing_evidence'].includes(input.code)) fail('invalid_input');
     return transaction(db, () => {
       const { row, claim } = attempt(ns, input), record = JSON.parse(row.record);
       record.processing.state = record.gist ? 'incomplete' : 'failed'; record.processing.errorCode = input.code;
@@ -475,7 +498,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       for (const item of disposed) {
         if (item.omitted) {
           mergeGap(ns, { client: row.client, eventId: item.eventId }, 'omitted');
-          if (item.omittedIndices) mergeGap(ns, {client:row.client,eventId:item.eventId}, 'omitted-messages:'+item.omittedIndices.join(','));
+          db.prepare(`UPDATE episode_events SET omitted_count=?,omitted_indices=? WHERE ${eventWhere}`)
+            .run(item.omitted, JSON.stringify(item.omittedIndices ?? []), ...boundary(ns), row.client, item.eventId);
         }
         db.prepare(`UPDATE episode_events SET disposition=1 WHERE ${eventWhere}`).run(...boundary(ns), row.client, item.eventId);
         db.prepare(`UPDATE staged_capture_evidence SET disposition=1 WHERE ${eventWhere}`).run(...boundary(ns), row.client, item.eventId);
@@ -507,9 +531,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         WHERE e.episode_id=? AND e.position<=? AND e.disposition=0 AND s.payload IS NOT NULL
         AND e.generation=? ORDER BY e.position DESC LIMIT 64`).all(row.id, claim.watermark, claim.generation);
       const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id').all(row.id);
-      const target = db.prepare('SELECT event_id FROM episode_events WHERE episode_id=? AND position=?').get(row.id, claim.watermark);
+      const target = db.prepare('SELECT event_id,staging,gap FROM episode_events WHERE episode_id=? AND position=?').get(row.id, claim.watermark);
       return { episodeId: row.id, client: row.client, revision: row.revision, sourceFence: row.source_fence,
-        targetEventId: target.event_id, events: events.map(event => ({ eventId: event.event_id,
+        targetEventId: target.event_id, missingReason: target.staging === 'not-staged' ? 'capacity' : target.gap ?? 'missing_evidence', events: events.map(event => ({ eventId: event.event_id,
           position: event.position, view: JSON.parse(event.payload) })), sources, record: JSON.parse(row.record) };
     });
   }
@@ -525,6 +549,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       return { episodeId: row.id, revision: row.revision, observed: row.observed, attempted: row.attempted,
         covered: row.covered, draftEvery: row.draft_every, record: JSON.parse(row.record),
         policy: registered?.policy, admission: registered?.admission,
+        draftConsumed: registered ? Boolean(db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND marker=?').get(row.id, `batch:${registered.position}`)) : false,
         generation: row.generation, sessionKey: row.session_key, client: row.client };
     });
   }
@@ -546,77 +571,99 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (row) db.prepare('UPDATE episode_attempts SET finished=1 WHERE episode_id=? AND token=?').run(row.id, input.token);
     });
   }
+  // Only this in-process owner may release a claim whose cleanup hit a busy database.
+  const keepCleanup = new Map();
   function keepAttempt(ns, input) {
+    if (input.client !== KEEP_ADMISSION_CLIENT) return null;
     return db.prepare(`SELECT a.*,e.id,e.deleted,e.source_fence AS current_fence,e.revision AS current_revision
       FROM episode_attempts a JOIN session_episodes e ON e.id=a.episode_id
-      WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND e.client=? AND a.marker=?`)
-      .get(...boundary(ns),input.client,input.eventId);
+      WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND a.keep_event_id=?`)
+      .get(...boundary(ns), input.eventId);
   }
   function keepGuard(ns, input) {
-    if (!input.eventId.startsWith('episode-keep:')) return null;
-    const claim=keepAttempt(ns,input);
-    if (!claim) return null;
-    if (claim.deleted) return 'capture_evidence_closed';
-    const admission=db.prepare(`SELECT state FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns,input));
-    if (admission?.state==='completed') return null;
-    if (claim.revision!==claim.current_revision || claim.source_fence!==claim.current_fence) return 'revision_conflict';
+    const action = keepAttempt(ns, input);
+    if (!action) return null;
+    if (action.deleted || control(ns)?.enabled === 0) return 'capture_evidence_closed';
+    if (action.keep_state === 'completed') return null;
+    if (action.revision !== action.current_revision || action.source_fence !== action.current_fence) return 'revision_conflict';
     return null;
   }
-  function prepareKeep(ns,input) {
-    return transaction(db,()=>{
-      const row=live(ns,input.episodeId);
-      const eventId='episode-keep:'+createHmac('sha256',Buffer.from(secret(),'hex'))
-        .update(JSON.stringify([row.id,identifier(input.actionId)])).digest('hex');
-      const payloadDigest=sourceDigest(JSON.stringify(['episode-keep-v1',row.id,revision(input.expectedRevision),eventId]));
-      const key={client:row.client,eventId,payloadDigest};
-      const prior=db.prepare(`SELECT * FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns,key));
-      if (prior && prior.payload_digest!==payloadDigest) fail('event_payload_conflict');
-      const action=keepAttempt(ns,key);
-      if (action?.token.startsWith('failed:')) return { failure: action.token.slice(7) };
-      if (prior?.state==='pending' && prior.lease_expires_at<=Date.now()) {
-        db.prepare("UPDATE episode_attempts SET token='failed:stale_admission' WHERE episode_id=? AND marker=?").run(row.id,eventId);
-        return { failure:'stale_admission' };
+  function cleanupKeep(ns, kept, code) {
+    const claim = db.prepare(`SELECT state,token FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, kept.key));
+    if (claim?.state === 'completed' || claim?.token !== kept.admissionToken) return;
+    const terminal = ['invalid_model_output', 'context_budget_exceeded', 'revision_conflict',
+      'capture_evidence_closed', 'episode_sources_unavailable'].includes(code);
+    db.prepare(`UPDATE admission_claims SET state='reserved',token=NULL,lease_expires_at=NULL WHERE ${eventWhere}`)
+      .run(...eventKey(ns, kept.key));
+    db.prepare('UPDATE episode_attempts SET keep_state=?,keep_error_code=? WHERE episode_id=? AND keep_event_id=?')
+      .run(terminal ? 'failed' : 'retryable', terminal ? code : null, kept.episodeId, kept.key.eventId);
+    advanceEpoch(ns);
+  }
+  function prepareKeep(ns, input) {
+    return transaction(db, () => {
+      const row = live(ns, input.episodeId);
+      const eventId = createHmac('sha256', Buffer.from(secret(), 'hex'))
+        .update(JSON.stringify(['keep-v1', row.id, identifier(input.actionId)])).digest('hex');
+      const payloadDigest = sourceDigest(JSON.stringify(['episode-keep-v1', row.id, revision(input.expectedRevision), eventId]));
+      const key = { client: KEEP_ADMISSION_CLIENT, eventId, payloadDigest };
+      const pendingCleanup = keepCleanup.get(eventId);
+      if (pendingCleanup) {
+        cleanupKeep(ns, pendingCleanup.kept, pendingCleanup.code);
+        keepCleanup.delete(eventId);
       }
-      if (prior?.state==='completed') return {key,sessionKey:row.session_key,sources:[]};
-      const current=getControl(ns);
-      if (!current.enabled) fail('capture_disabled');
-      if (row.revision!==input.expectedRevision) fail('revision_conflict');
-      const denied=keepGuard(ns,key); if (denied) fail(denied);
-      const sources=db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id LIMIT 17').all(row.id);
-      if (!sources.length || sources.length>16) fail('episode_sources_unavailable');
+      const prior = db.prepare(`SELECT * FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, key));
+      if (prior && prior.payload_digest !== payloadDigest) fail('event_payload_conflict');
+      const action = keepAttempt(ns, key);
+      const coverage = action && { sourceIds: JSON.parse(action.keep_source_ids), revision: action.revision, sourceFence: action.source_fence };
+      if (action?.keep_state === 'failed') return { failure: action.keep_error_code };
+      if (prior?.state === 'completed') return { key, client: row.client, sessionKey: row.session_key, sources: [], coverage };
+      if (!getControl(ns).enabled) fail('capture_disabled');
+      if (row.revision !== input.expectedRevision) fail('revision_conflict');
+      const denied = keepGuard(ns, key); if (denied) fail(denied);
+      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id LIMIT 17').all(row.id);
+      if (!sources.length || sources.length > 16) fail('episode_sources_unavailable');
       if (!prior) {
         db.prepare(`INSERT INTO admission_claims(owner_id,scope,project_id,client,event_id,payload_digest,state)
-          VALUES(?,?,?,?,?,?,'reserved')`).run(...eventKey(ns,key),payloadDigest);
-        // Keep actions share the durable action/attempt journal, but never buy a draft allowance.
-        db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished)
-          VALUES(?,?,?,?,0,?,?,?,1)`).run(row.id,eventId,row.observed,randomUUID(),row.revision,row.source_fence,row.generation);
+          VALUES(?,?,?,?,?,?,'reserved')`).run(...eventKey(ns, key), payloadDigest);
+        db.prepare(`UPDATE episode_controls SET ordinal=ordinal+1 WHERE ${where}`).run(...boundary(ns));
+        const ordinal = control(ns).ordinal, createdAt = iso();
+        db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished,
+          keep_event_id,keep_state,keep_source_ids,keep_ordinal,keep_created_at)
+          VALUES(?,?,?,?,0,?,?,?,1,?,'pending',?,?,?)`)
+          .run(row.id, 'keep:' + eventId, row.observed, randomUUID(), row.revision, row.source_fence, row.generation,
+            eventId, JSON.stringify(sources.map(source => source.id)), ordinal, createdAt);
+        for (const source of sources) db.prepare(`UPDATE episode_events SET policy='explicit-keep',policy_revision=?,policy_type=NULL,policy_at=?
+          WHERE episode_id=? AND event_id=?`).run(row.revision, createdAt, row.id, source.event_id);
         advanceEpoch(ns);
-      }
-      return {key,sessionKey:row.session_key,sources,episodeId:row.id,revision:row.revision,sourceFence:row.source_fence,actionToken:keepAttempt(ns,key).token};
+      } else db.prepare("UPDATE episode_attempts SET keep_state='pending',keep_error_code=NULL WHERE episode_id=? AND keep_event_id=?")
+        .run(row.id, eventId);
+      return { key, client: row.client, sessionKey: row.session_key, sources, episodeId: row.id,
+        coverage: coverage ?? { sourceIds: sources.map(source => source.id), revision: row.revision, sourceFence: row.source_fence } };
     });
   }
-  function failKeep(ns,kept,code) {
-    return transaction(db,()=>{
-      // Bind cleanup to this action, never a successor admission lease.
-      const claim=db.prepare(`SELECT state FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns,kept.key));
-      if (claim?.state==='completed') return;
-      db.prepare('UPDATE episode_attempts SET token=? WHERE episode_id=? AND marker=? AND token=?')
-        .run('failed:'+code,kept.episodeId,kept.key.eventId,kept.actionToken);
-      advanceEpoch(ns);
-    });
+  function failKeep(ns, kept, code) {
+    keepCleanup.set(kept.key.eventId, { kept, code });
+    try {
+      transaction(db, () => cleanupKeep(ns, kept, code));
+      keepCleanup.delete(kept.key.eventId);
+    } catch (error) {
+      if (error.code !== 'storage_busy' && error.code !== 'SQLITE_BUSY' && error.errcode !== 5) throw error;
+    }
   }
-  function assertKeep(ns,kept) {
-    const denied=keepGuard(ns,kept.key); if (denied) fail(denied);
+  function assertKeep(ns, kept) {
+    const denied = keepGuard(ns, kept.key); if (denied) fail(denied);
   }
-  function keepAdmitted(ns,input,entries) {
-    const action=keepAttempt(ns,input); if (!action) return;
+  function keepAdmitted(ns, input, entries) {
+    const action = keepAttempt(ns, input); if (!action) return;
+    db.prepare("UPDATE episode_attempts SET keep_state='completed',keep_error_code=NULL WHERE episode_id=? AND keep_event_id=?")
+      .run(action.id, input.eventId);
     for (const entry of entries) {
-      const memory=db.prepare('SELECT revision FROM memories WHERE id=?').get(entry.memoryId);
-      const ids=(entry.item.receipts??[]).flatMap(receipt=>db.prepare(
+      const memory = db.prepare('SELECT revision FROM memories WHERE id=?').get(entry.memoryId);
+      const ids = (entry.item.receipts ?? []).flatMap(receipt => db.prepare(
         'SELECT id FROM receipts WHERE memory_id=? AND client=? AND session_id=? AND event_id=?')
-        .all(entry.memoryId,receipt.client,receipt.sessionId,receipt.eventId).map(row=>row.id));
+        .all(entry.memoryId, receipt.client, receipt.sessionId, receipt.eventId).map(row => row.id));
       db.prepare('INSERT INTO episode_memory_links VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING')
-        .run(randomUUID(),action.id,entry.memoryId,input.eventId,memory.revision,JSON.stringify(ids));
+        .run(randomUUID(), action.id, entry.memoryId, input.eventId, memory.revision, JSON.stringify(ids));
     }
     advanceEpoch(ns);
   }
@@ -703,17 +750,18 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         WHERE e.episode_id=? AND e.position>? ORDER BY e.position LIMIT ?`)
         .all(row.id, pages.policy.after ?? 0, pages.policy.limit+1).map(e => ({ position: e.position, eventId: e.event_id,
           policy: e.policy, basisRevision: e.policy_revision, type: e.policy_type, decidedAt: e.policy_at, receivedAt: e.created_at, admission: e.admission,
-          gapReasons: JSON.parse(e.gap_reasons), staging: e.staging === 'not-staged' ? 'not-staged' : e.state, gap: e.gap, releaseReason: e.release_reason ?? null }));
+          gapReasons: JSON.parse(e.gap_reasons), omittedCount: e.omitted_count, omittedMessageIndices: JSON.parse(e.omitted_indices), staging: e.staging === 'not-staged' ? 'not-staged' : e.state, gap: e.gap, releaseReason: e.release_reason ?? null }));
       return { episode: { id: row.id, revision: row.revision, namespace: { ...ns, projectId: ns.projectId || null },
         sessionKey: row.session_key, client: row.client, firstReceivedAt: row.first_received_at,
         lastReceivedAt: row.last_received_at, updatedAt: row.updated_at, ...record,
         processing: { ...record.processing, observed: row.observed, attempted: row.attempted, covered: row.covered } },
         sources, memoryLinks: memories, policies,
-        keepActions: db.prepare(`SELECT a.marker AS actionKey,a.revision AS sourceRevision,c.state AS admission,
-          CASE WHEN a.token LIKE 'failed:%' THEN substr(a.token,8) ELSE NULL END AS errorCode
-          FROM episode_attempts a JOIN admission_claims c ON c.client=? AND c.event_id=a.marker
-          AND c.owner_id=? AND c.scope=? AND c.project_id=? WHERE a.episode_id=? AND a.marker LIKE 'episode-keep:%'
-          ORDER BY a.marker LIMIT 21`).all(row.client,...boundary(ns),row.id), epoch: currentEpoch };
+        keepActions: db.prepare(`SELECT * FROM episode_attempts WHERE episode_id=? AND keep_ordinal>?
+          ORDER BY keep_ordinal LIMIT ?`).all(row.id, pages.keep.after ?? 0, pages.keep.limit + 1)
+          .map(action => ({ actionKey: action.keep_event_id, ordinal: action.keep_ordinal,
+            createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
+            errorCode: action.keep_error_code, sourceCoverage: { sourceIds: JSON.parse(action.keep_source_ids),
+              revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
     });
   }
   return { prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionProcessing, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,

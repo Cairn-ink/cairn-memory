@@ -44,6 +44,7 @@ For admission-claim changes also run `npm run demo:admission`, which uses a fres
 synthetic SQLite database and handcrafted trusted inferred items, not extraction.
 
 For capture changes also run `npm run demo:capture` on both core runtime versions.
+For session episode changes also run `npm run demo:episodes` on both core runtimes.
 Its injected scripted extractor verifies source binding and lifecycle, not model quality.
 
 For `evaluation/longmemeval` changes, first install the existing locked isolated

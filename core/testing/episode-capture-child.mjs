@@ -1,11 +1,24 @@
 // Synthetic IPC barriers; no sleeps, provider, key or user store.
 import { openMemoryCore } from '../index.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
+import { episodeSnapshot } from '../episode-input.mjs';
 import { captureEpisodeMessages } from '../episode-capture.mjs';
 import { model,input,options,ns,interpretation } from './episode-capture-helpers.mjs';
 const [path,mode]=process.argv.slice(2);
 const send=value=>new Promise(resolve=>process.send(value,resolve));
-if(mode.startsWith('heavy-')) {
+if (mode === 'registered-hold') {
+  const runtime = createMemoryRuntime({ path, sessionEpisodes: { mode: 'episode-v1' } });
+  const snapshot = episodeSnapshot(input());
+  runtime.reserveEpisodeBatch(ns, { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
+    payloadDigest: snapshot.payloadDigest, clientLabel: snapshot.episodeContext.clientLabel, generation: 'initial',
+    messages: snapshot.messages, view: snapshot.view });
+  runtime.close();
+  await send({ stage: 'registered' });
+  await new Promise(resolve => process.once('message', resolve));
+  const port = model(), core = openMemoryCore({ path, ...options, model: port });
+  const result = await core.capture(input()); core.close();
+  await send({ stage: 'result', result, calls: port.calls.map(call => call.method) }); process.disconnect();
+} else if(mode.startsWith('heavy-')) {
   const port=model({interpretEpisode:r=>{if(mode.includes('failure'))throw Error('scripted failure');return interpretation(r);}});
   const core=openMemoryCore({path,...options,sessionEpisodes:{mode:'episode-v1',draftEveryBatches:16},model:port});
   await send({stage:'ready'});await new Promise(resolve=>process.once('message',resolve));
@@ -23,9 +36,10 @@ if(mode.startsWith('heavy-')) {
     admitted++;
   }
   core.close();await send({stage:'result',admitted,calls:port.calls.filter(c=>c.method==='interpretEpisode').length});process.disconnect();
-} else if(mode==='crash-after-draft') {
+} else if(mode==='crash-after-draft' || mode==='crash-after-precompact') {
   const runtime=createMemoryRuntime({path,sessionEpisodes:{mode:'episode-v1'}});
-  await captureEpisodeMessages({runtime,ns,model:model(),input:input(),startAdmission(){
+  await captureEpisodeMessages({runtime,ns,model:model(),input:input(1, 'private-session', { episodeContext: { clientLabel: 'Synthetic client', generation: 'initial',
+    origin: mode === 'crash-after-precompact' ? 'precompact' : 'ordinary' } }),startAdmission(){
     process.send({stage:'drafted'});
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);
   }});

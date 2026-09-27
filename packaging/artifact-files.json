@@ -2,6 +2,11 @@
   "core/admission-storage.mjs",
   "core/episode-schema.mjs",
   "core/episode-storage.mjs",
+  "core/episode-input.mjs",
+  "core/episode-capture.mjs",
+  "core/prompts/interpret-episode.md",
+  "core/prompts/extract-episode-sources.md",
+  "core/prompts/qualify-episode-candidates.md",
   "core/procedural-storage.mjs",
   "core/staged-evidence-schema.mjs",
   "core/staged-evidence-storage.mjs",
@@ -76,10 +81,5 @@
   "adapters/openai/schemas.mjs",
   "plugins/cairn-memory/lib/redact.mjs",
   "evaluation/live/diagnostics.mjs",
-  "LICENSE",
-  "core/episode-input.mjs",
-  "core/episode-capture.mjs",
-  "core/prompts/interpret-episode.md",
-  "core/prompts/extract-episode-sources.md",
-  "core/prompts/qualify-episode-candidates.md"
+  "LICENSE"
 ]
