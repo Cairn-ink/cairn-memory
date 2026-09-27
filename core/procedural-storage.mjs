@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
-import { ensureEpisodes, hasEpisodes } from './episode-schema.mjs';
 import { denseArray, fail, object } from './validation.mjs';
 
 export const sourceDigest = text => createHash('sha256').update(text).digest('hex');
@@ -14,13 +13,12 @@ export function sourceSpan(text, start, end) {
 /** Tags have an independent revision; tag edits never run memory invalidators. */
 export function createProceduralStorage({ db, activeRow, advanceEpoch, epoch }) {
   function inspect(id) {
-    if (!hasEpisodes(db)) return null;
     const row = db.prepare('SELECT * FROM procedural_tags WHERE memory_id=?').get(id);
     return row ? { tagRevision: row.tag_revision, procedural: row.positive === 1,
       origin: row.origin, anchors: row.anchors ? JSON.parse(row.anchors) : [] } : null;
   }
   function clear(id) {
-    if (hasEpisodes(db)) db.prepare(`UPDATE procedural_tags SET tag_revision=tag_revision+1,
+    db.prepare(`UPDATE procedural_tags SET tag_revision=tag_revision+1,
       positive=0,origin=NULL,anchors=NULL WHERE memory_id=? AND positive=1`).run(id);
   }
   function write(memory, value, origin = 'explicit', receipts) {
@@ -48,7 +46,6 @@ export function createProceduralStorage({ db, activeRow, advanceEpoch, epoch }) 
     return inspect(memory.id);
   }
   function set(ns, input) {
-    ensureEpisodes(db);
     return transaction(db, () => {
       const memory = activeRow(ns, input.memoryId);
       if (!memory) fail('memory_not_found');

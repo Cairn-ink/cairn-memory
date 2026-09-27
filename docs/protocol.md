@@ -291,7 +291,7 @@ event bound payload retention, not content-free replay metadata or total file
 size. Expired/discarded/forgotten fences remain; replay does not renew retention.
 SQLite journals, backups, local-file authority, best-effort redaction and opaque
 identifier limitations still apply. Stop older runtime connections before the
-v14 migration; an already-open old process is not retroactively fenced. See
+v15 migration; an already-open old process is not retroactively fenced. See
 [staged evidence](staged-capture-evidence.md) for the threat model and limits.
 
 ### Embedded proposed-rationale boundary
@@ -553,7 +553,7 @@ status commit in one transaction, including no-op placement. Later explicit
 classification never rewrites the initial journal. Journal identifiers and
 revision guards persist with the local SQLite file, are not encryption, and
 do not create a retention/pruning policy. Older open runtimes must stop before
-the v14 upgrade; it cannot retroactively fence an already-open process.
+the v15 upgrade; it cannot retroactively fence an already-open process.
 
 `classify_unfiled_memories`
 accepts only one to five unique memory ID/revision pairs. Its namespace is
@@ -657,7 +657,9 @@ and logical forgetting retain their existing limitations. See
 SE-1 implements the model-free storage and management subset of the
 [session-episode plan](plans/session-episodes.md), including `getEpisode` before
 capture integration. See [storage API shapes](storage-contract.md#episode-management-and-procedural-tags-se-1)
-and [opt-in schema migration](local-store.md#episode-storage-foundation-se-1).
+and [atomic v15 migration](local-store.md#episode-storage-foundation-se-1).
 Capture scheduling/interpretation, range/startup reads, provider schemas and MCP
 exposure remain SE-2–SE-5. No hosted defaults, telemetry or automatic prompt bytes
-change. Explicit procedural tags are independent opt-in local mutations.
+change. Every open eagerly upgrades older committed formats to v15; hosts must
+stop/drain older connections first. Explicit procedural tags are independent
+opt-in local mutations.

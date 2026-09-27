@@ -568,112 +568,29 @@ version edits belong to a separately assigned release packet, not this plan.
 SE-2 uses the v2 candidate path; the v1-only `core/automatic-qualification.mjs`
 is not required and is excluded from its allowed paths.
 
-### SE-1 implementation notes at 93e52b7
-
-SE-1 implements the persistence/management seams only. Public mode-on `capture`
-returns `episode_capture_not_available` until SE-2 wires the pipeline. No capture
-scheduler, interpretation provider, range/startup reader, MCP tool or new prompt
-is reserved or implemented here. Model-free internal runtime operations register
-batches, claim/release session writers, consume draft markers, commit/fail drafts,
-and bind batch policy. Public `getEpisode` is available now without a model.
-
-Adaptations to current main and scope clarification:
-
-- The researched schema v13 is now v14, with `capture_initial_classification`
-  referencing admission claims and cascading on deletion. SE-1 therefore upgrades
-  to v15 and snapshots/drops **both** children before rebuilding/restoring the
-  admission parent and children. Foreign keys remain on inside `transaction()`;
-  `foreign_key_check` precedes commit. Failures restore all tables and the version.
-- Upgrade is opt-in: episode mode or an explicit procedural-tag mutation requests
-  v15; untouched feature-off databases retain v14, including existing stored-field
-  shapes. V15 can reopen feature-off while retaining mutation/deletion fences.
-  This preserves current migration tests without changing frozen test files.
-- Existing ordinary staging still commits the early capacity-error disposition.
-  A registered episode event bypasses that legacy capacity branch: registration
-  already made its release/stage/bypass decision atomically, before the ordinary
-  admission lease. Episode live-payload admission leases can recover independently
-  of expired, consumed draft attempts; source TTL expiry remains a closed fence.
-- Preserve the current initial-classification journal and current filing/rationale
-  invalidation behavior. Procedural tag-only edits do not use content mutation;
-  ordinary admission changes and content correction/forgetting clear tags.
-- The assignment explicitly added the three common allowed files. The artifact
-  manifest change adds only the three shipped modules, with no reordered entries.
-  Already-open old binaries must be stopped before migration, as with current
-  v14: tests establish rejection on an old binary's **new** open, not retroactive
-  fencing of an existing connection.
-
-SE-1 schema: `episode_identity` owns the private HMAC key; `episode_controls`
-owns generations and namespace receipt ordinals; `session_episodes` owns bounded
-visible records, counters and writer leases; `episode_events` owns reservations,
-policy, admission and gap dispositions. `episode_sources` records original passage
-ownership and copies; `episode_memory_links` records per-event admission lineage
-and receipt IDs. `episode_attempts` consumes batch/end/lazy markers with independent
-125-second claims. `procedural_tags` holds independently revised source anchors.
-Rebuilt staging enforces content-free episode-only released rows; rebuilt claims
-enforce non-leased reserved rows and retain pending/completed checks.
+### SE-1 verification
 
 | SE-1 responsibility / touched gate | Tests (all under `core/test/`) |
 | --- | --- |
-| Opt-in schema, fresh/current/v13 migrations, rollback, parent/child FKs and CHECKs; E11 | `episode-migration.test.mjs`: fresh v15/current-v14 preservation; failed rebuild rollback/FK-off rejection; original v13 upgrade; reserved/released constraint checks; prior-binary rejection |
-| Mode isolation and legacy bytes; E10/E11 | `episode-migration.test.mjs`: frozen `93e52b7` comparison for default, v2 and staged-v1 capture, including request/prompt/output/rows/digests (only generated UUIDs/timestamps normalized); unexpected automatic tag rejection. Existing core tests remain unchanged |
+| Eager v15 schema, fresh/current/v13 migrations, rollback, parent/child FKs and CHECKs; E11 | `episode-migration.test.mjs`: fresh v15/current-v14 preservation; failed rebuild rollback/FK-off rejection; original v13 upgrade; reserved/released constraint checks; schema checks and whitespace-independent DDL |
+| Mode isolation and legacy bytes; E10/E11 | `episode-migration.test.mjs`: committed v14 fixtures from `93e52b7`, without git/tar at test time, for default, v2 and staged-v1 capture, including request/prompt/output/rows/digests (only generated UUIDs/timestamps normalized); unexpected automatic tag rejection. Existing current-version expectations updated to v15 |
 | HMAC identity, storage privacy and key failure; E1 | `episode-storage.test.mjs`: restart, namespace/client separation, raw-session absence, corrupt/missing key rejection |
 | Bounded source-bound records, Unicode, corrections and inspection; E2 | `episode-storage.test.mjs`: source-bound inspection and foreign/surrogate rejection; malformed/oversized fields; pinned prose/anchors across later revisions |
-| Independent writer/draft/admission claims, durable markers, crash/replay and stale commits; E3/E5/E11 | `episode-storage.test.mjs`: claim consumption/non-leased admission; `episode-capacity.test.mjs`: two-process serialization, expired-attempt recovery, stale worker and successor protection; `episode-staging-release.test.mjs`: admission-lease recovery and expiry publication fence |
-| Failure retention and explicit gaps; E4 | `episode-staging-release.test.mjs`: failed draft leaves payload, live expiry records gap; `episode-storage.test.mjs`: failed first draft retains null prose and normal admission |
+| Independent writer/draft/admission claims, durable markers, crash/replay and stale commits; E3/E5/E11 | `episode-storage.test.mjs`: claim consumption/non-leased admission; `episode-capacity.test.mjs`: two-process serialization, expired-attempt recovery, stale worker and successor protection; `episode-staging-release.test.mjs`: admission-lease recovery and expiry publication fence; writer expiry cannot fail admission |
+| Failure retention and explicit gaps; E4 | `episode-staging-release.test.mjs`: failed draft leaves payload, live expiry records gap; failing a pre-forget bypass draft preserves all fence/capacity reasons; `episode-storage.test.mjs`: failed first draft retains null prose and normal admission |
 | Capacity, oldest/minimal prefix, protection, bypass and atomic rollback; E4a | `episode-capacity.test.mjs`: N16/140 approximately 16 KiB batches with success/failure, two interleaved sessions; protected quota plus 129 small-batch bypasses; N8/129 successful-disposition release baseline; mixed legacy protection; rollback; byte-pressure draft fence; per-event overflow; two concurrent processes admitting 140 batches |
 | Both release completion orders, empty admission, no-expiry inspection, cold replay; E4a/E8/E11 | `episode-staging-release.test.mjs`: admission-first/draft-first release, source retention, completed replay, quick-policy/empty release; `episode-capacity.test.mjs`: bypass replay after restart |
-| Durable pause/project stop and generation checks; E6 | `episode-storage.test.mjs`: pause/stop/re-enable, stale admission rejection, exact-project control persistence and no fallback |
-| Conversation deletion/suppression, zero-memory copies, historical/multi-source lineage, feature-off correction, pins; E7 | `episode-storage.test.mjs`: named deletion, copy-consumer, historical-lineage, legacy-correction and pinned-revision tests |
+| Durable pause/project stop and generation checks; E6 | `episode-storage.test.mjs`: pre-pause draft/admission completion; stop/re-enable fences, exact-project control persistence and no fallback |
+| Conversation deletion/suppression, zero-memory copies, historical/multi-source lineage, feature-off correction, pins; E7 | `episode-storage.test.mjs`: named deletion, copy-consumer, historical-lineage, legacy-correction and pinned-revision tests; cross-session dedup preserves interpretation and tags |
 | Persisted fresh quick policy and later normal policy; E8 | `episode-staging-release.test.mjs`: guarded skip-quick binding, empty release/replay, non-drafted normal policy and no retroactive policy change |
 | `getEpisode` independent source/lineage/policy pages, scope/epoch binding and 64 KiB envelope; E9 | `episode-storage.test.mjs`: signed/bounded/stale pages and whole-source prefix budget test |
-| Explicit tags in both modes/facades, exact receipt anchors, independent revisions and mutation semantics; E10 | `procedural-storage.test.mjs`: explicit admit and legacy remember; nonempty conflict/qualification/rationale preservation; filing preservation; receipt-add/content-correction/forget clearing; foreign and split-code-point rejection |
+| Explicit tags in both modes/facades, exact receipt anchors, independent revisions and mutation semantics; E10 | `procedural-storage.test.mjs`: explicit admit and legacy remember; nonempty conflict/qualification/rationale preservation; filing preservation; receipt-add preservation; content-correction/forget clearing; foreign and split-code-point rejection |
 
-These are storage-scope observations, not claims to have passed each entire gate.
-SE-2 still owns overlap registration at the capture boundary, debounce call counts,
-provider wait/budget behavior, prompt variants, automatic tags, keep orchestration,
-and producer/cursor integration. SE-3 owns range/startup/step transitions; SE-4/5
-own provider/MCP/installed-host gates. No semantic-fidelity or paid-pilot result is
-claimed. Installed artifact/MCP/provider suites are not SE-1 verification here;
-the additive artifact manifest and new-module import closure are checked locally.
-
-Verification at the SE-1 implementation (synthetic stores/scripted ports only):
-
-The following commands ran with `PATH="$HOME/.nvm/versions/node/v22.16.0/bin:$PATH"`
-and with `PATH="$HOME/.nvm/versions/node/v24.15.0/bin:$PATH"`, respectively.
-
-| Exact command | Node 22.16.0 exit | Node 24.15.0 exit |
-| --- | --- | --- |
-| `npm run test:core` | 0 (792 tests) | 0 (792 tests) |
-| `npm run demo:store` | 0 | 0 |
-| `npm run demo:history` | 0 | 0 |
-| `npm run demo:moc` | 0 | 0 |
-| `npm run demo:recall` | 0 | 0 |
-| `npm run demo:admission` | 0 | 0 |
-| `npm run demo:capture` | 0 | 0 |
-| `npm run demo:conflicts` | 0 | 0 |
-| `npm run demo:rebuild` | 0 | 0 |
-| `npm run demo:continuation` | 0 | 0 |
-
-`PATH="$HOME/.nvm/versions/node/v22.16.0/bin:$PATH" npm test` exited 0 (112 tests).
-`PATH="$HOME/.nvm/versions/node/v22.16.0/bin:$PATH" npm run validate` exited 0.
-`git diff --check` exited 0. After the full runs, the final N8/129 successful-release
-baseline was added to the capacity tests without changing production code; both
-`~/.nvm/versions/node/v22.16.0/bin/node --test core/test/episode-capacity.test.mjs`
-and `~/.nvm/versions/node/v24.15.0/bin/node --test core/test/episode-capacity.test.mjs`
-exited 0 (8 tests each). An earlier development `npm run test:core` on Node 22
-exited 1 on a new tag fixture; that fixture was corrected before the successful
-full runs. No existing core test was edited. All changes are within the authorized
-paths; no paid/model-network calls, real data, push or PR were used.
-
-Changed files (SE-1 only): `core/episode-schema.mjs`, `core/episode-storage.mjs`,
-`core/procedural-storage.mjs`, `core/runtime.mjs`, `core/database.mjs`,
-`core/contract.mjs`, `core/index.mjs`, `core/staged-evidence-storage.mjs`,
-`core/admission-storage.mjs`, `core/test/episode-storage.test.mjs`,
-`core/test/episode-migration.test.mjs`, `core/test/episode-staging-release.test.mjs`,
-`core/test/episode-capacity.test.mjs`, `core/test/procedural-storage.test.mjs`,
-`CONTEXT.md`, `docs/local-store.md`, `docs/storage-contract.md`,
-`docs/staged-capture-evidence.md`, `docs/protocol.md`, `docs/privacy.md`,
-`packaging/artifact-files.json`, `CHANGELOG.md`, `docs/plans/session-episodes.md`.
+Storage-scope coverage only: capture/interpretation, range/startup and provider/MCP
+episode integration remain SE-2–SE-5. K3 uses eager atomic v15 upgrades in both modes.
+Hosts must stop/drain older connections before upgrade; new old-binary opens reject v15.
+Verification results for this correction round will be recorded after the CI runs.
+No semantic-fidelity or paid-pilot claim is made.
 
 ### Cross-plan shared files
 

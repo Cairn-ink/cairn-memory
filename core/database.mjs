@@ -11,10 +11,10 @@ import { migrateVersion11 } from './rationale-schema.mjs';
 import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
 
-import { migrateVersion14 } from './episode-schema.mjs';
+import { migrateVersion14, EPISODE_SCHEMA_VERSION } from './episode-schema.mjs';
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = 14;
+const VERSION = EPISODE_SCHEMA_VERSION;
 
 function createVersion3(db) {
   db.exec(`
@@ -254,7 +254,7 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, episodes = false) {
+export function openDatabase(path) {
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
   if (path !== ":memory:") {
     path = resolve(path);
@@ -275,89 +275,126 @@ export function openDatabase(path, episodes = false) {
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
-      if (appId === APPLICATION_ID && version === 15) return;
-      if (appId === APPLICATION_ID && version === VERSION) {
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 13) {
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 12) {
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 11) {
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 10) {
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 9) {
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 8) {
-        migrateVersion8(db);
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 7) {
-        migrateVersion7(db);
-        migrateVersion8(db);
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 6) {
-        migrateVersion6(db);
-        migrateVersion7(db);
-        migrateVersion8(db);
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 1) {
-        migrateVersion1(db);
+      if (appId === APPLICATION_ID && version === VERSION) return;
+      function upgradeCommittedSchema() {
+        if (appId === APPLICATION_ID && version === 14) return;
+        if (appId === APPLICATION_ID && version === 13) {
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 12) {
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 11) {
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 10) {
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 9) {
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 8) {
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 7) {
+          migrateVersion7(db);
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 6) {
+          migrateVersion6(db);
+          migrateVersion7(db);
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 1) {
+          migrateVersion1(db);
+          migrateVersion3(db);
+          migrateVersion4(db);
+          migrateVersion5(db);
+          migrateVersion6(db);
+          migrateVersion7(db);
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 3) {
+          migrateVersion3(db);
+          migrateVersion4(db);
+          migrateVersion5(db);
+          migrateVersion6(db);
+          migrateVersion7(db);
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 4) {
+          migrateVersion4(db);
+          migrateVersion5(db);
+          migrateVersion6(db);
+          migrateVersion7(db);
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        if (appId === APPLICATION_ID && version === 5) {
+          migrateVersion5(db);
+          migrateVersion6(db);
+          migrateVersion7(db);
+          migrateVersion8(db);
+          migrateVersion9(db);
+          migrateVersion10(db);
+          migrateVersion11(db);
+          migrateVersion12(db);
+          migrateVersion13(db);
+          return;
+        }
+        const tables = db.prepare("SELECT count(*) AS n FROM sqlite_master").get().n;
+        if (appId !== 0 || version !== 0 || tables !== 0) fail("unsupported_database");
+        createVersion3(db);
         migrateVersion3(db);
         migrateVersion4(db);
         migrateVersion5(db);
@@ -369,71 +406,10 @@ export function openDatabase(path, episodes = false) {
         migrateVersion11(db);
         migrateVersion12(db);
         migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
       }
-      if (appId === APPLICATION_ID && version === 3) {
-        migrateVersion3(db);
-        migrateVersion4(db);
-        migrateVersion5(db);
-        migrateVersion6(db);
-        migrateVersion7(db);
-        migrateVersion8(db);
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 4) {
-        migrateVersion4(db);
-        migrateVersion5(db);
-        migrateVersion6(db);
-        migrateVersion7(db);
-        migrateVersion8(db);
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      if (appId === APPLICATION_ID && version === 5) {
-        migrateVersion5(db);
-        migrateVersion6(db);
-        migrateVersion7(db);
-        migrateVersion8(db);
-        migrateVersion9(db);
-        migrateVersion10(db);
-        migrateVersion11(db);
-        migrateVersion12(db);
-        migrateVersion13(db);
-        db.exec(`PRAGMA user_version = ${VERSION}`);
-        if (episodes) migrateVersion14(db);
-        return;
-      }
-      const tables = db.prepare("SELECT count(*) AS n FROM sqlite_master").get().n;
-      if (appId !== 0 || version !== 0 || tables !== 0) fail("unsupported_database");
-      createVersion3(db);
-      migrateVersion3(db);
-      migrateVersion4(db);
-      migrateVersion5(db);
-      migrateVersion6(db);
-      migrateVersion7(db);
-      migrateVersion8(db);
-      migrateVersion9(db);
-      migrateVersion10(db);
-      migrateVersion11(db);
-      migrateVersion12(db);
-      migrateVersion13(db);
+      upgradeCommittedSchema();
+      migrateVersion14(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
-      if (episodes) migrateVersion14(db);
     });
     return db;
   } catch (error) {

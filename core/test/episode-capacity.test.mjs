@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fixture, ns, batch, register, finish, draft, inspect, digest } from './episode-storage.test.mjs';
+import { fixture, ns, batch, register, finish, draft, inspect, digest } from '../testing/episode-helpers.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 
 function large(id, session='private-host-session', units=780) {
@@ -141,4 +141,23 @@ test('E4a N8/129 small-batch baseline releases all successful dispositions witho
   assert.equal(attempts,17);assert.equal(payloadCount(f),0);
   assert.equal(f.db.prepare("SELECT count(*) n FROM staged_capture_evidence WHERE release_reason='interpreted'").get().n,129);
   assert.equal(f.db.prepare("SELECT count(*) n FROM staged_capture_evidence WHERE release_reason='capacity'").get().n,0);
+});
+
+test('E4a/E7 failing a pre-forget bypass draft preserves capacity and the namespace forgotten fence', t => {
+  const f = fixture(t); f.db.exec('PRAGMA journal_mode=WAL');
+  for (let i = 0; i < 64; i++) register(f, batch('protected-' + i));
+  const input = batch('bypass-failure', 'Synthetic bypass evidence', 'bypass-session'), r = register(f, input);
+  assert.equal(r.staging, 'not-staged');
+  const job = draft(f, r, input);
+  const unrelated = f.core.admit({ namespace: ns, memory: { content: 'Unrelated memory', kind: 'fact' },
+    receipts: [{ client: 'independent', sessionId: 'other', eventId: 'other', role: 'user', excerpt: 'Unrelated memory' }] }).value.memory;
+  assert.equal(f.core.forget({ namespace: ns, memoryId: unrelated.id, expectedRevision: unrelated.revision }).ok, true);
+  assert.throws(() => finish(f, input), /capture_evidence_closed/);
+  f.runtime.failEpisodeDraft(ns, { episodeId: r.episodeId, token: job.claim.token, code: 'episode_failed' });
+  const event = f.db.prepare('SELECT gap,gap_reasons FROM episode_events WHERE event_id=?').get(input.eventId);
+  assert.equal(event.gap, 'forgotten');
+  assert.deepEqual(JSON.parse(event.gap_reasons), ['capacity', 'forgotten', 'episode_failed']);
+  assert.throws(() => finish(f, input), /capture_evidence_closed/);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n, 0);
+  assert.equal(f.db.prepare('SELECT state FROM admission_claims WHERE event_id=?').get(input.eventId).state, 'reserved');
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fixture, ns, batch, register, finish, draft, inspect } from './episode-storage.test.mjs';
+import { fixture, ns, batch, register, finish, draft, inspect } from '../testing/episode-helpers.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 
 const evidence=(f,input)=>f.runtime.inspectCaptureEvidence(ns,input).evidence;

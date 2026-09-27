@@ -181,10 +181,10 @@ secure-erasure, complete-history or semantic-fidelity guarantee follows.
 
 The episode persistence/inspection, correction/deletion and explicit procedural-tag
 subset above is now implemented locally. Episode capture/interpretation and trusted
-producer integrations remain proposed. Enabling the option upgrades storage but
+producer integrations remain proposed. Opening the store eagerly upgrades to v15 in either mode;
 mode-on capture is unavailable until SE-2; staging alone still never enables it.
-Feature-off databases retain v14 until episode mode or an explicit tag mutation
-requests v15. Subsequent feature-off access to v15 retains deletion/source fences.
+Hosts must stop/drain older connections before upgrade; already-open old processes
+are not retroactively fenced. Feature-off access retains deletion/source fences.
 New retained passages are source evidence, not receipts for remembered assertions.
 Capacity release and bypass leave content-free gaps and no active expiry, while
 conversation deletion suppresses even multi-source/historical derived memories.

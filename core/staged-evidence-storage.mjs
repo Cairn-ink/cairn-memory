@@ -1,4 +1,4 @@
-import { hasEpisodes } from './episode-schema.mjs';
+import { STAGED_PAYLOAD_MAX_BYTES } from './episode-schema.mjs';
 import { transaction } from './database.mjs';
 import { boundedText, denseArray, fail, identifier, object } from './validation.mjs';
 
@@ -29,7 +29,7 @@ function serializeView(view, episode = false) {
   const payload = JSON.stringify({ messages,
     retainedSourceWindow: { maxUnitsPerMessage, truncatedMessageIndices: [...indices] } });
   const bytes = Buffer.byteLength(payload, 'utf8');
-  if (!episode && bytes > 128 * 1024) fail('capture_evidence_capacity');
+  if (!episode && bytes > STAGED_PAYLOAD_MAX_BYTES) fail('capture_evidence_capacity');
   return { payload, bytes };
 }
 
@@ -47,7 +47,7 @@ export function createStagedEvidenceStorage({ db }) {
     db.prepare(`INSERT INTO staged_capture_clocks(owner_id, scope, project_id, watermark)
       VALUES (?, ?, ?, ?) ON CONFLICT(owner_id, scope, project_id)
       DO UPDATE SET watermark = excluded.watermark`).run(...boundary(ns), now);
-    if (episodes && hasEpisodes(db)) for (const row of db.prepare(`SELECT client,event_id FROM staged_capture_evidence WHERE ${where} AND event_mode='episode-v1' AND payload IS NOT NULL AND expires_at<=?`).all(...boundary(ns), now)) {
+    if (episodes) for (const row of db.prepare(`SELECT client,event_id FROM staged_capture_evidence WHERE ${where} AND event_mode='episode-v1' AND payload IS NOT NULL AND expires_at<=?`).all(...boundary(ns), now)) {
       episodes.gap(ns, { client: row.client, eventId: row.event_id }, 'expired');
     }
     db.prepare(`UPDATE staged_capture_evidence SET state = 'expired', payload = NULL,
@@ -117,9 +117,11 @@ export function createStagedEvidenceStorage({ db }) {
 
   function purgeNamespace(ns) {
     touch(ns);
-    if (hasEpisodes(db)) db.prepare(`UPDATE episode_events SET gap='forgotten' WHERE ${where}`).run(...boundary(ns));
+    for (const row of db.prepare(`SELECT client,event_id FROM episode_events WHERE ${where}`).all(...boundary(ns))) {
+      episodes.mergeGap(ns,{client:row.client,eventId:row.event_id},'forgotten');
+    }
     db.prepare(`UPDATE staged_capture_evidence SET state = 'forgotten', payload = NULL,
-      payload_bytes = 0${hasEpisodes(db) ? ', release_reason = NULL' : ''} WHERE ${where}`).run(...boundary(ns));
+      payload_bytes = 0, release_reason = NULL WHERE ${where}`).run(...boundary(ns));
   }
 
   function inspect(ns, input) {
@@ -151,17 +153,16 @@ export function createStagedEvidenceStorage({ db }) {
   }
 
   function releaseCompleted(ns, input) {
-    if (!hasEpisodes(db)) return;
+    const filter = input ? eventWhere : where;
     db.prepare(`UPDATE staged_capture_evidence SET state='released',payload=NULL,payload_bytes=0,release_reason='interpreted'
-      WHERE ${eventWhere} AND event_mode='episode-v1' AND disposition=1 AND state='admitted'`)
-      .run(...key(ns, input));
+      WHERE ${filter} AND event_mode='episode-v1' AND disposition=1 AND state='admitted'`)
+      .run(...(input ? key(ns,input) : boundary(ns)));
   }
 
   function episodeCapacity(ns, serialized) {
-    if (serialized.bytes > 128 * 1024) return false;
+    if (serialized.bytes > STAGED_PAYLOAD_MAX_BYTES) return false;
     // Expiry was already pruned under the registration lock; complete normal releases first.
-    db.prepare(`UPDATE staged_capture_evidence SET state='released',payload=NULL,payload_bytes=0,release_reason='interpreted'
-      WHERE ${where} AND event_mode='episode-v1' AND disposition=1 AND state='admitted'`).run(...boundary(ns));
+    releaseCompleted(ns);
     if (!capacityGuard(ns, serialized)) return true;
     const eligible = db.prepare(`SELECT s.client,s.event_id FROM staged_capture_evidence s
       JOIN admission_claims a USING(owner_id,scope,project_id,client,event_id)

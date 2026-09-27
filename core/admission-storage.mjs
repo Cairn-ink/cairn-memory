@@ -95,7 +95,6 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       const closed = stagedEvidence.finishGuard(ns, input, row, now);
       if (closed) return { closed };
       if (!live(row, input, now)) fail("stale_admission");
-      const episodeClosed=episodes.finishGuard(ns,input); if (episodeClosed) fail(episodeClosed);
       // The public manual finish cannot bypass ordered capture's private proof.
       if (!hooks?.validate && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
         .get(...key(ns, input))) fail('stale_admission');

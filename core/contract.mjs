@@ -1,3 +1,4 @@
+import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
@@ -393,7 +394,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const leaseMs = contractRevision(input.leaseMs);
-      if (leaseMs > 125000) throw new MemoryStoreError('invalid_input');
+      if (leaseMs > ADMISSION_LEASE_MS) throw new MemoryStoreError('invalid_input');
       return runtime.claimAdmission(ns, { ...key, leaseMs });
     });
   }
@@ -793,7 +794,7 @@ export function openMemoryCore(input) {
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
-          ...admissionKey(value), leaseMs: 125000,
+          ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline)),
           finishAdmission: value => finishAdmissionValidated(value, true, deadline),
           abandonAdmission, get, map,
@@ -801,7 +802,7 @@ export function openMemoryCore(input) {
           failInitialClassification,
           applyInitialPlacement: value => applyInitialPlacement(value, deadline),
           claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
-            ...admissionKey(value), leaseMs: 125000, view: value.view,
+            ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS, view: value.view,
           }, deadline)),
           assertCaptureEvidence: value => invoke(() => runtime.assertCaptureEvidence(ns, {
             ...admissionKey(value), token: contractId(value.token),

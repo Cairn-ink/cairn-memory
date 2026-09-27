@@ -23,7 +23,7 @@ const set=(f,id,tagRevision=0,anchors)=>{
     procedural:{anchors:anchors??[{receiptId:r.id,digest:sourceDigest(r.excerpt),start:0,end:6}]}});
 };
 
-test('E10 explicit procedural admit works in both modes and independently upgrades v14',t=>{
+test('E10 explicit procedural admit works in both modes and uses the eagerly upgraded schema',t=>{
   for(const mode of [false,true]) {
     const f=fixture(t,mode);
     const result=ok(f.core.admit({namespace:ns,memory,receipts:[receipt()],procedural:{anchors:[{receiptIndex:0,start:0,end:6}]}}));
@@ -57,7 +57,7 @@ test('E10 tag-only edits preserve memory bytes, conflict/qualification/rationale
     expectedMemoryRevisions:[{memoryId:id,revision:before.revision}],expectedIndexRevision:ok(f.core.map({namespace:ns,purpose:'classification'})).indexRevision}));
   assert.deepEqual(detail(f,id).procedural,tag);
   ok(f.core.admit({namespace:ns,memory,receipts:[receipt('new-evidence')]}));
-  assert.equal(detail(f,id).procedural.procedural,false);
+  assert.deepEqual(detail(f,id).procedural,tag);
   assert.equal(detail(f,id).conflicts.length,0);
 });
 

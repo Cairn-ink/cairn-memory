@@ -96,12 +96,14 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1, v3, v4, v5, v6, v7, v8, v9 or v10 format performs an atomic upgrade to v11, retaining
+Opening the committed v1 or v3–v14 format performs an atomic upgrade to v15, retaining
 existing memory/source data, revisions and suppression. Back up the file while
 all older-runtime processes and connections (including idle readers) are closed
-before upgrading meaningful data. Mixed-version coexistence is unsupported;
+before upgrading meaningful data. The host must stop/drain those connections
+before opening the store for upgrade, even with episodes disabled. No request
+performs a lazy upgrade. Mixed-version coexistence is unsupported;
 an already-open old process is not retroactively fenced. Older binaries cannot
-open v11; there is no downgrade tool. Existing receipts remain unordered; no past
+open v15; there is no downgrade tool. Existing receipts remain unordered; no past
 chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
@@ -165,7 +167,9 @@ feature-off reopens. Existing namespace-wide staged purges remain in effect.
 Control getters take `{namespace}`; setters take that namespace, an
 `expectedGeneration` and respectively `paused` or `enabled`. Project setters
 require project scope. Generations are opaque strings (`initial` before the first
-mutation); setters produce a new token and fence unfinished work. Producers must
+mutation); setters produce a new token. Pause excludes newly submitted text;
+already accepted requests and claimed drafts may finish. Project stop discards
+and fences unfinished work, including after re-enable. Producers must
 still implement the skip-to-transcript-end barrier; SE-1 cannot authenticate their
 submitted roles or generations.
 
@@ -177,5 +181,27 @@ or `{anchors:[{receiptId,digest,start,end}]}`. It updates only the sidecar tag a
 namespace epoch. `get` includes `procedural` only when a tag revision exists;
 cleared tags expose `procedural:false` with no anchors. Tag-only edits preserve
 memory revision, receipts and conflict/qualification/rationale links. Filing
-preserves tags; content correction, forgetting and admission changes clear them.
+preserves tags; content correction and forgetting clear them. Deduplicated
+admission adding receipts preserves tags and dependent episodes while retaining
+existing conflict/rationale/qualification invalidation semantics.
 Automatic tag proposal remains SE-2; legacy automatic outputs still reject tags.
+
+The operation envelope uses these episode-specific error codes (opening failures
+throw instead). They never expose raw database or provider errors.
+
+| Code | Meaning |
+| --- | --- |
+| `episode_identity_unavailable` | The private session-key secret is missing or corrupt; do not regenerate it for an existing store. |
+| `episode_mode_required` | The requested episode write/control seam requires the episode option. |
+| `episode_not_found` | The episode is absent, deleted or outside the exact namespace. |
+| `generation_conflict` | The supplied control generation is stale. Reread controls. |
+| `capture_disabled` | Capture is paused or disabled for that scope; new work cannot start. |
+| `episode_processing` | Another live session writer owns the episode. Retry after it completes/expires. |
+| `stale_episode` | The draft claim expired, was consumed, or lost its revision/source fence. Discard its result. |
+| `episode_step_conflict` | A draft would replace an existing open next step without a supported disposition transition. |
+| `episode_capture_not_available` | SE-1 supplies storage only; public episode capture awaits SE-2. |
+
+An admission with a live admission lease can finish after its session writer
+expires. Deletion, forgetting, explicit discard and project stop remain closed
+fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
+and cannot reopen them or erase a capacity gap.

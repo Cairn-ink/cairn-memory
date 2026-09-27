@@ -10,6 +10,10 @@
   edits preserve memory content and relationship evidence. Untagged, episode-off
   stores retain their existing behavior. Episode capture and interpretation, range
   reads, startup context, and provider/MCP integrations remain later packages.
+- Upgrade older committed local databases atomically to v15 on open in either
+  mode. Hosts must stop/drain older connections before upgrading. Pause allows
+  already accepted work to finish; project stop fences unfinished work. Receipt
+  additions preserve episode interpretations and explicit procedural tags.
 
 ## Unreleased — decision commitment and claimant guidance
 

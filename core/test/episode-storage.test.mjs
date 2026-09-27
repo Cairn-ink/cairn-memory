@@ -1,52 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { pathToFileURL } from 'node:url';
-const storageTest = import.meta.url === pathToFileURL(process.argv[1]).href ? test : () => {};
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { openMemoryCore, openMemoryStore } from '../index.mjs';
+import { ns, options, digest, ok, fixture, batch, register, finish, draft, inspect } from '../testing/episode-helpers.mjs';
 
-export const ns = { ownerId: 'synthetic', scope: 'project', projectId: 'project' };
-export const options = { sessionEpisodes: { mode: 'episode-v1' }, captureEvidence: 'staged-v1', captureQualification: 'source-bound-v2' };
-export const digest = text => createHash('sha256').update(text).digest('hex');
-export const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
-export function fixture(t, config = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'se1-synthetic-')), path = join(dir, 'store.sqlite');
-  const runtime = createMemoryRuntime({ path, sessionEpisodes: { mode: 'episode-v1', ...config } });
-  const db = new DatabaseSync(path); db.exec('PRAGMA foreign_keys=ON');
-  const core = openMemoryCore({ path });
-  t.after(() => { runtime.close(); core.close(); db.close(); rmSync(dir, { recursive: true, force: true }); });
-  return { runtime, core, db, path };
-}
-export function batch(id = 'one', text = 'Synthetic 中文 English 😀 evidence.', sessionId = 'private-host-session') {
-  return { client: 'synthetic', clientLabel: 'Synthetic client', sessionId, eventId: id, payloadDigest: digest(id+text), generation: 'initial',
-    view: { messages: [{ id: `message-${id}`, role: 'user', content: text }], retainedSourceWindow: { maxUnitsPerMessage: 800, truncatedMessageIndices: [] } } };
-}
-export function register(f, input = batch()) { return f.runtime.reserveEpisodeBatch(ns, input); }
-export function finish(f, input, items = []) {
-  const writer=f.db.prepare('SELECT writer_token FROM session_episodes WHERE id=(SELECT episode_id FROM episode_events WHERE event_id=?)').get(input.eventId)?.writer_token;
-  const claim = f.runtime.claimAdmission(ns, { ...input, episodeWriterToken: writer, leaseMs: 125000 });
-  return claim.duplicate ? claim : f.runtime.finishAdmission(ns, { ...input, token: claim.token, items });
-}
-export function draft(f, registered, input, overrides = {}) {
-  const writer = f.runtime.claimEpisodeWriter(ns, { episodeId: registered.episodeId, generation: 'initial' });
-  const claim = f.runtime.claimEpisodeDraft(ns, { episodeId: registered.episodeId, generation: 'initial', writerToken: writer.token,
-    trigger: 'batch', watermark: registered.position });
-  const field = value => ({ value, anchors: [{ sourceIndex: 0, start: 0, end: input.view.messages[0].content.length }] });
-  const commit = { episodeId: registered.episodeId, token: claim.token,
-    sources: [{ eventId: input.eventId, messageId: input.view.messages[0].id }],
-    result: { type: field('work'), language: 'mixed', gist: field('Synthetic 中文 gist'), outcome: null, nextStep: field('Review evidence'), disposition: null },
-    dispositions: [{ eventId: input.eventId, omitted: 0 }],
-    modelMetadata: { adapter: 'scripted', model: null, profile: null, promptVersion: 'storage-test', digest: digest('prompt'), portVersion: 'episode-v1' }, ...overrides };
-  return { claim, commit, writer };
-}
-export const inspect = (f, id, extra = {}) => ok(f.core.getEpisode({ namespace: ns, episodeId: id, ...extra }));
-
-storageTest('E1 identity stable across restart, separated by namespace/client; private session never persisted', t => {
+test('E1 identity stable across restart, separated by namespace/client; private session never persisted', t => {
   const f = fixture(t), input = batch(), registered = register(f,input);
   assert.match(registered.sessionKey, /^s1:[0-9a-f]{64}$/);
   assert.notEqual(f.runtime.episodeSessionKey({ ...ns, projectId: 'other' }, input.client, input.sessionId), registered.sessionKey);
@@ -54,13 +12,15 @@ storageTest('E1 identity stable across restart, separated by namespace/client; p
   const cold = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } }); t.after(() => cold.close());
   assert.equal(cold.episodeSessionKey(ns, input.client, input.sessionId), registered.sessionKey);
   for (const table of ['session_episodes','episode_events','admission_claims','staged_capture_evidence']) assert.equal(JSON.stringify(f.db.prepare(`SELECT * FROM ${table}`).all()).includes(input.sessionId),false);
+  f.db.exec('PRAGMA ignore_check_constraints=ON');
   f.db.prepare('UPDATE episode_identity SET secret=?').run('corrupt');
+  f.db.exec('PRAGMA ignore_check_constraints=OFF');
   assert.throws(() => createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } }), /episode_identity_unavailable/);
   f.db.exec('DELETE FROM episode_identity');
   assert.throws(() => cold.episodeSessionKey(ns,input.client,input.sessionId), /episode_identity_unavailable/);
 });
 
-storageTest('E2/E7 successful source-bound inspection, pinned correction, unpin and foreign/surrogate rejection', t => {
+test('E2/E7 successful source-bound inspection, pinned correction, unpin and foreign/surrogate rejection', t => {
   const f=fixture(t), input=batch(), registered=register(f,input), job=draft(f,registered,input);
   f.runtime.commitEpisodeDraft(ns,job.commit);
   let detail=inspect(f,registered.episodeId);
@@ -80,7 +40,7 @@ storageTest('E2/E7 successful source-bound inspection, pinned correction, unpin 
   assert.throws(()=>f.runtime.commitEpisodeDraft(ns,{...bad.commit,result:{...bad.commit.result,gist:{value:'bad',anchors:[{sourceIndex:0,start:22,end:23}]}}}),/invalid_input/);
 });
 
-storageTest('E3/E5 claims consume markers, keep admission unleased and fence expired/corrected workers', t=>{
+test('E3/E5 claims consume markers, keep admission unleased and fence expired/corrected workers', t=>{
   const f=fixture(t), input=batch(), registered=register(f,input), job=draft(f,registered,input);
   assert.equal(f.db.prepare('SELECT state FROM admission_claims').get().state,'reserved');
   assert.equal(f.db.prepare('SELECT token FROM admission_claims').get().token,null);
@@ -92,12 +52,13 @@ storageTest('E3/E5 claims consume markers, keep admission unleased and fence exp
   assert.throws(()=>f.runtime.commitEpisodeDraft(ns,job.commit),/stale_episode/);
 });
 
-storageTest('E6 durable pause/stop generations fence admission, never fall back to personal',t=>{
+test('E6 pause preserves accepted work; project stop fences unfinished work without personal fallback',t=>{
   const f=fixture(t),input=batch(),r=register(f,input);
   const control=ok(f.core.getCaptureControl({namespace:ns}));
   const configured=openMemoryCore({path:f.path,...options});t.after(()=>configured.close());
   const paused=ok(configured.setCapturePaused({namespace:ns,expectedGeneration:control.generation,paused:true}));
-  assert.throws(()=>finish(f,input),/capture_evidence_closed/);
+  assert.notEqual(f.runtime.inspectCaptureEvidence(ns,input).evidence.view,null);
+  assert.equal(finish(f,input).duplicate,false);
   assert.throws(()=>register(f,{...batch('paused'),generation:paused.generation}),/capture_disabled/);
   assert.equal(ok(f.core.getCaptureControl({namespace:ns})).generation,paused.generation);
   const resumed=ok(configured.setCapturePaused({namespace:ns,expectedGeneration:paused.generation,paused:false}));
@@ -107,7 +68,7 @@ storageTest('E6 durable pause/stop generations fence admission, never fall back 
   assert.equal(inspect(f,r.episodeId).episode.namespace.scope,'project');
 });
 
-storageTest('E7 conversation deletion forgets deduplicated/historical lineage with suppression, unrelated survives',t=>{
+test('E7 conversation deletion forgets deduplicated/historical lineage with suppression, unrelated survives',t=>{
   const f=fixture(t),input=batch(),r=register(f,input);
   const memory=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic remembered',kind:'fact'},receipts:[{client:'independent',sessionId:'independent',eventId:'independent',role:'user',excerpt:'Synthetic remembered'}]})).memory;
   const receipt={client:input.client,sessionId:r.sessionKey,eventId:input.eventId,role:'user',excerpt:input.view.messages[0].content};
@@ -124,7 +85,7 @@ storageTest('E7 conversation deletion forgets deduplicated/historical lineage wi
   assert.equal(f.core.getEpisode({namespace:ns,episodeId:r.episodeId}).error.code,'episode_not_found');
 });
 
-storageTest('E7 feature-off legacy correction invalidates dependent episodes',t=>{
+test('E7 feature-off legacy correction invalidates dependent episodes',t=>{
   const f=fixture(t),input=batch(),r=register(f,input);
   const receipt={client:input.client,sessionId:r.sessionKey,eventId:input.eventId,role:'user',excerpt:input.view.messages[0].content};
   const admitted=finish(f,input,[{content:'Synthetic memory',kind:'preference',origin:'agent-inferred',confidence:0.8,fingerprint:digest('synthetic memory'),receipts:[receipt],conflictHints:[]}]);
@@ -137,7 +98,7 @@ storageTest('E7 feature-off legacy correction invalidates dependent episodes',t=
   assert.deepEqual(inspect(f,r.episodeId).sources.items,[]);
 });
 
-storageTest('E9 inspection pages are bounded, namespace-bound, signed and stale after visibility mutation',t=>{
+test('E9 inspection pages are bounded, namespace-bound, signed and stale after visibility mutation',t=>{
   const f=fixture(t);let r;
   for(let i=0;i<4;i++) r=register(f,batch(`page-${i}`));
   const first=inspect(f,r.episodeId,{policyLimit:2});assert.equal(first.policies.items.length,2);
@@ -147,7 +108,7 @@ storageTest('E9 inspection pages are bounded, namespace-bound, signed and stale 
   assert.equal(f.core.getEpisode({namespace:ns,episodeId:r.episodeId,policyLimit:2,policyCursor:first.policies.nextCursor}).error.code,'cursor_stale');
 });
 
-storageTest('E7 deleting a zero-memory origin removes copied passages without forgetting unrelated consumer memories',t=>{
+test('E7 deleting a zero-memory origin removes copied passages without forgetting unrelated consumer memories',t=>{
   const f=fixture(t),a=batch('origin','Synthetic origin source','origin-session'),ar=register(f,a),aj=draft(f,ar,a);
   f.runtime.commitEpisodeDraft(ns,aj.commit);finish(f,a);
   const source=inspect(f,ar.episodeId).sources.items[0];
@@ -162,7 +123,7 @@ storageTest('E7 deleting a zero-memory origin removes copied passages without fo
   assert.equal(f.core.get({namespace:ns,memoryId:admitted.memories[0].id}).ok,true);
 });
 
-storageTest('E7 historical derived memory is forgotten through conversation lineage',t=>{
+test('E7 historical derived memory is forgotten through conversation lineage',t=>{
   const f=fixture(t),input=batch(),r=register(f,input);
   const receipt={client:input.client,sessionId:r.sessionKey,eventId:input.eventId,role:'user',excerpt:input.view.messages[0].content};
   const admitted=finish(f,input,[{content:'Old claim',kind:'fact',origin:'agent-inferred',confidence:0.8,fingerprint:digest('old claim'),receipts:[receipt],conflictHints:[]}]);
@@ -174,7 +135,7 @@ storageTest('E7 historical derived memory is forgotten through conversation line
   assert.equal(f.core.get({namespace:ns,memoryId:replacement.memory.id}).ok,true);
 });
 
-storageTest('E2/E7 model revision preserves pinned prose and original anchors, and correction fences old commit',t=>{
+test('E2/E7 model revision preserves pinned prose and original anchors, and correction fences old commit',t=>{
   const f=fixture(t),a=batch(),r=register(f,a),job=draft(f,r,a);f.runtime.commitEpisodeDraft(ns,job.commit);
   let d=inspect(f,r.episodeId);const source=d.sources.items[0];
   ok(f.core.correctEpisode({namespace:ns,episodeId:r.episodeId,expectedRevision:d.episode.revision,
@@ -188,14 +149,14 @@ storageTest('E2/E7 model revision preserves pinned prose and original anchors, a
   assert.throws(()=>f.runtime.commitEpisodeDraft(ns,cj.commit),/stale_episode/);
 });
 
-storageTest('E11 mode validation is snapshotted and mode-on capture is deferred to SE-2', async t=>{
+test('E11 mode validation is snapshotted and mode-on capture is deferred to SE-2', async t=>{
   for(const n of [1,17,2.5,null]) assert.throws(()=>openMemoryCore({path:':memory:',...options,sessionEpisodes:{mode:'episode-v1',draftEveryBatches:n}}),/invalid_input/);
   assert.throws(()=>openMemoryCore({path:':memory:',sessionEpisodes:{mode:'episode-v1'}}),/invalid_input/);
   const f=fixture(t),core=openMemoryCore({path:f.path,...options});t.after(()=>core.close());
   assert.equal((await core.capture({})).error.code,'episode_capture_not_available');
 });
 
-storageTest('E2/E9 field limits reject atomically; inspection returns whole source prefixes under 64KiB',t=>{
+test('E2/E9 field limits reject atomically; inspection returns whole source prefixes under 64KiB',t=>{
   const f=fixture(t),input=batch('large','\x01'.repeat(800));
   input.view.messages=Array.from({length:16},(_,i)=>({id:`message-${i}`,role:'user',content:'\x01'.repeat(800)}));
   const r=register(f,input),job=draft(f,r,input);
@@ -210,4 +171,67 @@ storageTest('E2/E9 field limits reject atomically; inspection returns whole sour
   assert.ok(Buffer.byteLength(JSON.stringify(page))<=65536);
   const next=inspect(f,r.episodeId,{sourceCursor:page.sources.nextCursor});
   assert.equal(page.sources.items.length+next.sources.items.length,16);
+});
+
+test('E7/E10 a second session deduplicates a preference without invalidating the first episode or its explicit tag', t => {
+  const f = fixture(t), a = batch('preference-a', 'I prefer offline tools.', 'session-a'), ar = register(f, a);
+  const item = (input, sessionKey) => ({ content: 'Prefer offline tools', kind: 'preference',
+    origin: 'agent-inferred', confidence: 0.8, fingerprint: digest('prefer offline tools'), conflictHints: [],
+    receipts: [{ client: input.client, sessionId: sessionKey, eventId: input.eventId, role: 'user', excerpt: input.view.messages[0].content }] });
+  const memory = finish(f, a, [item(a, ar.sessionKey)]).memories[0];
+  const detail = ok(f.core.get({ namespace: ns, memoryId: memory.id })), receipt = detail.receipts[0];
+  ok(f.core.setProceduralMemory({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
+    expectedTagRevision: 0, procedural: { anchors: [{ receiptId: receipt.id, digest: digest(receipt.excerpt), start: 0, end: 6 }] } }));
+  const job = draft(f, ar, a); f.runtime.commitEpisodeDraft(ns, job.commit);
+  const before = inspect(f, ar.episodeId), tag = ok(f.core.get({ namespace: ns, memoryId: memory.id })).procedural;
+  const b = batch('preference-b', 'I prefer offline tools.', 'session-b'), br = register(f, b);
+  assert.equal(finish(f, b, [item(b, br.sessionKey)]).memories[0].id, memory.id);
+  const after = inspect(f, ar.episodeId), dedup = ok(f.core.get({ namespace: ns, memoryId: memory.id }));
+  assert.deepEqual(after.episode, before.episode);
+  assert.deepEqual(after.sources, before.sources);
+  assert.equal(after.episode.processing.state, 'ready');
+  assert.deepEqual(dedup.procedural, tag);
+  assert.equal(dedup.receipts.length, 2);
+  assert.equal(dedup.memory.revision, memory.revision + 1);
+});
+
+test('E5 admission finishes after the session writer expires while its own lease is live', t => {
+  const f = fixture(t), input = batch(), r = register(f, input);
+  const writer = f.runtime.claimEpisodeWriter(ns, { episodeId: r.episodeId, generation: 'initial' });
+  const claim = f.runtime.claimAdmission(ns, { ...input, leaseMs: 125000, episodeWriterToken: writer.token });
+  f.db.prepare('UPDATE session_episodes SET writer_expires_at=0 WHERE id=?').run(r.episodeId);
+  assert.ok(f.db.prepare('SELECT lease_expires_at FROM admission_claims').get().lease_expires_at > Date.now());
+  const result = f.runtime.finishAdmission(ns, { ...input, token: claim.token, items: [] });
+  assert.equal(result.duplicate, false);
+  assert.equal(f.db.prepare('SELECT state FROM admission_claims').get().state, 'completed');
+});
+
+test('E6 a pre-pause draft and admission may finish, but project stop closes accepted work across restart', t => {
+  const f = fixture(t), input = batch(), r = register(f, input), job = draft(f, r, input);
+  const paused = f.runtime.setCapturePaused(ns, { expectedGeneration: 'initial', paused: true });
+  f.runtime.commitEpisodeDraft(ns, job.commit);
+  assert.equal(finish(f, input).duplicate, false);
+  assert.throws(() => register(f, { ...batch('paused'), generation: paused.generation }), /capture_disabled/);
+  const resumed = f.runtime.setCapturePaused(ns, { expectedGeneration: paused.generation, paused: false });
+  f.runtime.releaseEpisodeWriter(ns, { episodeId: r.episodeId, token: job.writer.token });
+  const old = { ...batch('accepted'), generation: resumed.generation }; register(f, old);
+  const claim = f.runtime.claimAdmission(ns, { ...old, leaseMs: 125000 });
+  const stopped = f.runtime.setProjectCapture(ns, { expectedGeneration: resumed.generation, enabled: false });
+  f.runtime.setProjectCapture(ns, { expectedGeneration: stopped.generation, enabled: true });
+  assert.throws(() => f.runtime.finishAdmission(ns, { ...old, token: claim.token, items: [] }), /capture_evidence_closed/);
+  const cold = createMemoryRuntime({ path: f.path }); t.after(() => cold.close());
+  assert.throws(() => cold.claimAdmission(ns, { ...old, leaseMs: 125000 }), /capture_evidence_closed/);
+});
+
+test('E6 project stop discards draft-complete payloads awaiting admission and preserves completed episode records', t => {
+  const f = fixture(t), input = batch(), r = register(f, input), job = draft(f, r, input);
+  f.runtime.commitEpisodeDraft(ns, job.commit);
+  const claim = f.runtime.claimAdmission(ns, { ...input, leaseMs: 125000, episodeWriterToken: job.writer.token });
+  const before = inspect(f, r.episodeId).episode;
+  const stopped = f.runtime.setProjectCapture(ns, { expectedGeneration: 'initial', enabled: false });
+  assert.equal(f.runtime.inspectCaptureEvidence(ns, input).evidence.state, 'discarded');
+  assert.equal(f.runtime.inspectCaptureEvidence(ns, input).evidence.view, null);
+  assert.deepEqual(inspect(f, r.episodeId).episode, before);
+  f.runtime.setProjectCapture(ns, { expectedGeneration: stopped.generation, enabled: true });
+  assert.throws(() => f.runtime.finishAdmission(ns, { ...input, token: claim.token, items: [] }), /capture_evidence_closed/);
 });

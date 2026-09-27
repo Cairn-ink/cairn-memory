@@ -1,25 +1,33 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
-import { createMemoryRuntime } from '../runtime.mjs';
+import { captureEpisodeParity } from '../testing/episode-parity.mjs';
 import { migrateVersion14 } from '../episode-schema.mjs';
 import { transaction } from '../database.mjs';
 
 const ns={ownerId:'migration',scope:'personal',projectId:null};
 const options={sessionEpisodes:{mode:'episode-v1'},captureEvidence:'staged-v1',captureQualification:'source-bound-v2'};
 function directory(t) {const dir=mkdtempSync(join(tmpdir(),'se1-migration-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return dir;}
-function legacy(t) {
-  const path=join(directory(t),'store.sqlite'),runtime=createMemoryRuntime({path});
-  const nsInternal={...ns,projectId:''},key={client:'synthetic',eventId:'old',payloadDigest:'a'.repeat(64),leaseMs:125000};
-  const view={messages:[{id:'message',role:'user',content:'Synthetic old evidence'}],retainedSourceWindow:{maxUnitsPerMessage:800,truncatedMessageIndices:[]}};
-  const claim=runtime.claimCaptureEvidence(nsInternal,{...key,view});
-  runtime.finishCapturedAdmission(nsInternal,{...key,token:claim.token,items:[]});runtime.close();
-  const db=new DatabaseSync(path);db.exec('PRAGMA foreign_keys=ON');t.after(()=>db.close());return{path,db};
+const frozen = JSON.parse(readFileSync(new URL('../testing/episode-v14-fixture.json', import.meta.url), 'utf8'));
+const schemaV14 = readFileSync(new URL('../testing/episode-schema-v14.sql', import.meta.url), 'utf8');
+function legacy(t, schema = schemaV14) {
+  const path = join(directory(t), 'store.sqlite');
+  writeFileSync(path, '', { mode: 0o600 });
+  const db = new DatabaseSync(path);
+  db.exec('PRAGMA foreign_keys=ON');
+  transaction(db, () => {
+    db.exec('PRAGMA defer_foreign_keys=ON');
+    db.exec(schema);
+    for (const [name, rows] of Object.entries(frozen.tables)) {
+      for (const row of rows) db.prepare(`INSERT INTO ${name}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(() => '?').join(',')})`).run(...Object.values(row));
+    }
+  });
+  t.after(() => db.close());
+  return { path, db };
 }
 const oldTables=['admission_claims','staged_capture_evidence','capture_initial_classification'];
 
@@ -48,35 +56,36 @@ test('E11 failed rebuild rolls back parent, every child and version; FK-off call
   f.db.exec('PRAGMA foreign_keys=OFF');assert.throws(()=>transaction(f.db,()=>migrateVersion14(f.db)),/storage_error/);
 });
 
-function frozenBase(t) {
-  const dir=directory(t);
-  const archive=execFileSync('git',['archive','93e52b7','core','plugins/cairn-memory/lib/redact.mjs'],{maxBuffer:16*1024*1024});
-  execFileSync('tar',['-x','-C',dir],{input:archive});return dir;
-}
+test('E10 frozen v14 prompt/request/output/stored-field/digest parity with episodes off', async t => {
+  const root = new URL('../../', import.meta.url).pathname, dir = directory(t);
+  for (const [index, { config, expected }] of frozen.parity.entries()) {
+    const path = join(dir, 'parity-' + index + '.sqlite');
+    assert.deepEqual(await captureEpisodeParity(root, path, config), expected);
+    const db = new DatabaseSync(path);
+    try {
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 15);
+      for (const name of ['session_episodes', 'episode_events', 'procedural_tags']) {
+        assert.equal(db.prepare('SELECT count(*) n FROM ' + name).get().n, 0);
+      }
+    } finally { db.close(); }
+  }
+});
 
-test('E11 prior binary rejects v15; E10 mode-off prompt/request/output/stored-field/digest parity against 93e52b7',t=>{
-  const base=frozenBase(t),directoryPath=directory(t);
-  const harness=join(directoryPath,'parity.mjs');
-  writeFileSync(harness,`import {pathToFileURL} from 'node:url';
-import {DatabaseSync} from 'node:sqlite';
-const {openMemoryCore}=await import(pathToFileURL(process.argv[2]+'/core/index.mjs'));
-const {rationaleModel}=await import(pathToFileURL(process.argv[2]+'/core/testing/rationale-model.mjs'));
-const path=process.argv[3],calls=[];
-const model=rationaleModel();
-for(const method of ['extract','qualifyCandidates','classify']){const run=model[method];if(run)model[method]=request=>{calls.push([method,request]);return run(request);};}
-const core=openMemoryCore({path,model,...JSON.parse(process.argv[4])});
-const input={namespace:{ownerId:'parity',scope:'personal',projectId:null},client:'scripted',sessionId:'legacy-session',eventId:'event',messages:[{id:'source',role:'user',content:'I prefer offline tools.'}]};
-const result=await core.capture(input),replay=await core.capture(input);if(!result.ok)throw new Error(JSON.stringify(result));core.close();
-const db=new DatabaseSync(path);
-const rows=Object.fromEntries(['memories','receipts','admission_claims','staged_capture_evidence'].map(name=>[name,db.prepare('SELECT * FROM '+name).all()]));db.close();
-const clean=value=>JSON.stringify(value,(key,item)=>['signal'].includes(key)?undefined:typeof item==='string'?item.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,'UUID').replace(/\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z/g,'TIME'):['created_at','expires_at'].includes(key)&&typeof item==='number'?0:item);
-console.log(clean({calls,result,replay,rows}));`);
-  const run=(root,config,index)=>execFileSync(process.execPath,[harness,root,join(directoryPath,(root===base?'base':'new')+index+'.sqlite'),JSON.stringify(config)],{encoding:'utf8'}).trim();
-  const current=new URL('../../',import.meta.url).pathname;
-  for (const [index,config] of [{},{captureQualification:'source-bound-v2'},{captureQualification:'source-bound-v2',captureEvidence:'staged-v1'}].entries()) assert.equal(run(current,config,index),run(base,config,index));
-  const path=join(directoryPath,'upgraded.sqlite');openMemoryCore({path,...options}).close();
-  const script=`import {openMemoryCore} from ${JSON.stringify(new URL('file://'+base+'/core/index.mjs').href)};try{openMemoryCore({path:${JSON.stringify(path)}});process.exit(2)}catch(error){if(error.code!=='unsupported_database')throw error}`;
-  execFileSync(process.execPath,['--input-type=module','-e',script]);
+test('E11 eager feature-off open upgrades v14 before requests, independent of DDL whitespace', t => {
+  const reformatted = schemaV14.replace("('pending','completed')", "( 'pending', 'completed' )");
+  assert.notEqual(reformatted, schemaV14);
+  const f = legacy(t, reformatted);
+  const core = openMemoryCore({ path: f.path }); t.after(() => core.close());
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 15);
+  assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(), []);
+  const before = f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all();
+  const result = core.admit({ namespace: ns, memory: { content: 'Rejected fact tag', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 's', eventId: 'bad', role: 'user', excerpt: 'Synthetic' }],
+    procedural: { anchors: [{ receiptIndex: 0, start: 0, end: 1 }] } });
+  assert.equal(result.error.code, 'invalid_input');
+  assert.deepEqual(f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), before);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memories').get().n, 0);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM procedural_tags').get().n, 0);
 });
 
 test('E10 unexpected automatic tag output is still rejected with episodes off',async t=>{
@@ -103,4 +112,26 @@ test('E11 reserved parent and released staging CHECK constraints enforce non-lea
   assert.throws(()=>f.db.exec("UPDATE staged_capture_evidence SET state='released'"),/CHECK/);
   f.db.exec("UPDATE staged_capture_evidence SET event_mode='episode-v1',state='released',payload=NULL,payload_bytes=0,release_reason='capacity'");
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
+});
+
+test('E11 v15 rejects invalid namespaces, digests, oversized records and unknown processing states', async t => {
+  const { fixture, register, batch, ns: episodeNs, draft } = await import('../testing/episode-helpers.mjs');
+  const f = fixture(t), input = batch(), r = register(f, input), job = draft(f, r, input);
+  f.runtime.commitEpisodeDraft(episodeNs, job.commit);
+  for (const table of ['episode_controls', 'session_episodes', 'episode_events']) {
+    for (const change of ["scope='wrong'", "scope='personal',project_id='not-empty'", "scope='project',project_id=''"]) {
+      assert.throws(() => f.db.exec('UPDATE ' + table + ' SET ' + change), /CHECK/);
+    }
+  }
+  for (const [table, column] of [['episode_identity', 'secret'], ['episode_events', 'payload_digest'], ['episode_sources', 'digest']]) {
+    for (const value of ['a'.repeat(63), 'g'.repeat(64), 'A'.repeat(64)]) {
+      assert.throws(() => f.db.prepare('UPDATE ' + table + ' SET ' + column + '=?').run(value), /CHECK/);
+    }
+  }
+  const record = JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record);
+  for (const invalid of [{ ...record, processing: { state: 'invented' } }, { ...record, processing: {} },
+    { ...record, gist: 'x'.repeat(32768) }]) {
+    assert.throws(() => f.db.prepare('UPDATE session_episodes SET record=?').run(JSON.stringify(invalid)), /CHECK/);
+  }
+  assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(), []);
 });

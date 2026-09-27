@@ -1,4 +1,3 @@
-import { ensureEpisodes } from './episode-schema.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash, randomUUID } from "node:crypto";
@@ -24,7 +23,7 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 export function createMemoryRuntime(input) {
   object(input, ["path", "sessionEpisodes"]);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
-  const db = openDatabase(input.path, !!sessionEpisodes);
+  const db = openDatabase(input.path);
   let identity;
   try {
     identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
@@ -135,7 +134,6 @@ export function createMemoryRuntime(input) {
 
   function admit(ns, value, projection = {}) {
     ready();
-    if (value.procedural !== undefined) ensureEpisodes(db);
     return transaction(db, () => {
       assertNotSuppressed(ns, value.fingerprint);
       conflictStorage.validateTargets(ns, value.conflictHints);
@@ -169,8 +167,6 @@ export function createMemoryRuntime(input) {
         changed = true;
       }
       if (changed) {
-        proceduralStorage.clear(existing.id);
-        episodes.invalidateMemory(ns, existing.id);
         conflictStorage.invalidateMemory(existing.id);
         mocStorage.invalidateMemory(ns, existing.id, now);
         db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?,
