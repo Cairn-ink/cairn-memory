@@ -96,6 +96,12 @@ Eight calibration examples have all six explicit ratings and reasons and valid
 source/field citation projections. Calibration examples use whole short sources;
 scored output still must be judged against its actual exact cited anchor passages.
 
+An independent pre-score review found and corrected one rubric overstatement:
+the source dates importing the repair account from the user's field journal,
+not importing the entire journal. The case wording was narrowed before any
+provider output existed. This bounded correction did not alter the fixture or
+calibration examples.
+
 Before integrating the guidance candidate, the runner worker passed full OpenAI
 277/277, generic112/112, JSON and marketplace/strict-plugin checks on both
 Node22.16.0 and24.15.0. Six focused fake-HTTP tests include all24 attempts, five

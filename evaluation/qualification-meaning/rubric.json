@@ -163,14 +163,14 @@
       "id": "imported-rain-gauge-event",
       "requiredPropositions": [
         "The user's field journal reports a repair of a brass rain gauge during the Bellglass Point restoration walk on 2023-04-02.",
-        "The journal was imported on 2026-08-19."
+        "The repair account was imported from the user's field journal on 2026-08-19."
       ],
       "prohibitedStrengthenings": [
         "Do not treat the import date as the repair date.",
         "Do not imply that the user currently owns, uses, or maintains the gauge.",
         "Do not turn this historical event into a preference or settled practice."
       ],
-      "attributionTimeScopeCaveats": "This is a historical event recalled by an imported journal. Preserve the event date and later import date as different temporal facts."
+      "attributionTimeScopeCaveats": "The source dates importing this repair account from the user's field journal to 2026-08-19; it does not say that the entire journal was imported. Preserve this import date separately from the 2023-04-02 repair date."
     },
     {
       "id": "mountain-exhibition-caption-preference-zh",
