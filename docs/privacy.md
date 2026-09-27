@@ -100,7 +100,7 @@ they cannot acquire the control lock.
 This is the explicit threat-model update for the proposed
 [session-episode contract](plans/session-episodes.md), not shipped behavior.
 Core opts in with `sessionEpisodes: {mode:'episode-v1'}` and v2 capture/staging;
-`draftEveryBatches` defaults to 8 and accepts integers 2–64. The **one-brain
+`draftEveryBatches` defaults to 8 and accepts integers 2–16. The **one-brain
 configuration** is the product setup in which one person's Claude Code, Codex and
 chat tools share one memory. It enables episodes by default with automatic capture
 and discloses their retention. Staging alone never enables durable episodes.
@@ -116,7 +116,7 @@ not permission to share personal content or authenticate its claimed roles.
 | Client key/display label | Reveals tool use or identifying prose. Bounded host-configured labels, no user/device/path/version data, exact namespace/client filtering; label is not authenticated identity. | E1/E2/E9 |
 | Type/language, gist/outcome/step, correction pins and procedural tags | Sensitive diary/habit descriptions, unsupported claims or instruction injection. Bounded source-anchored interpretations and untrusted framing; no truth or execution authority. Only the freshly classified batch may skip extraction. Automatic tags require episode-v1; explicit remember tags work independently. Legacy automatic prompts/outputs/fields/digests remain unchanged without the option. | E2/E8/E10 |
 | Retained source passages, anchors/digests and memory lineage | More personal text persists than memory extraction selects. Bounded selected passages survive temporary staging; conversation deletion suppresses derived memories and invalidates dependent episodes, including copied sources. Hashes are guessable and redaction is best-effort. | E4/E7 |
-| Model/profile/prompt-version, policy, action IDs, gap and release status | Processing records may leak secrets or hide failure. Bounded nonsecret IDs/finite codes only, no raw errors/prompts/responses. Debounced attempts have durable caps; episode failures retain pending staging/gaps without blocking that batch's memory admission. Atomic release after admission and source disposition frees completed payloads/quota; content-free fences survive. | E1/E3/E4/E4a/E8 |
+| Model/profile/prompt-version, policy, action IDs, gap and release/bypass status | Processing records may leak secrets or hide failure. Bounded nonsecret IDs/finite codes only, no raw errors/prompts/responses. Debounced attempts have durable caps. Capacity first releases oldest admitted episode-only backlog with explicit gaps, then bypasses new staging if needed; ordinary admission continues even under sustained interpretation failure. Content-free fences survive. | E1/E3/E4/E4a/E8 |
 | Time/startup reads and tag revisions | May expose unrelated personal data or erase relationship evidence. Exact scope, hard budgets, group opt-outs, final freshness checks and untrusted-data framing; tag-only sidecar updates preserve conflict/rationale links. Host interpretation remains untrusted. | E9/E10/E11 |
 
 The injected episode-interpretation port receives bounded redacted source text,
@@ -131,14 +131,24 @@ counter, with no generation. No paid call is authorized by this documentation.
 Reuse the existing pause/cursor barrier above for all drafts, including lazy work.
 Project stop fences unfinished work; entry producers must never backfill paused
 text. Local controls cannot retract previously transmitted requests. Selected
-passages have no automatic age TTL. Episode-mode staging's fixed 24-hour deadline
-now applies to unresolved payloads, including admitted-but-undrafted/failed work.
-Once admission and selected-passage retention/disposition both commit, release
-the staged text and quota atomically; keep only content-free completion/replay
-metadata. Duplicate release cannot restore text or expire a completed replay.
-Capacity limits unfinished work, not daily completed capture; ordinary staged-v1
-events retain their existing retention/accounting. See gate E4a for heavy-day,
-failure, crash and restart tests. No extra unbounded holding store is introduced.
+passages have no automatic age TTL. Episode-mode staging's 24-hour deadline is an
+upper bound on live payloads, not guaranteed retention: pressure can release
+admitted-but-undrafted/failed interpretation evidence sooner. Normal release
+still occurs atomically after admission and selected-passage disposition complete.
+At capacity, release eligible episode-mode payloads oldest-first (staging time,
+then client/event ID), record gaps and fence in-flight drafts; never reclaim
+unadmitted or ordinary staged-v1 payloads. If space still fails, register the new
+batch without episode staging and run normal extraction/admission, with a visible
+gap. Releases, gaps and registration commit atomically; replay cannot repeat them
+or restore text. No alternative source store or new model trigger is introduced.
+
+Inspection distinguishes `released` from `not-staged`; both have null source views
+and `expiresAt:null`, with content-free reason/admission/coverage metadata.
+Completed replay survives release; deletion fences still win. Protected pending
+admissions retain their lease/backpressure rules, and legacy staging is unchanged;
+neither justifies rejecting a new episode-mode batch for episode staging pressure.
+E4a requires >64 captures with N=16, two concurrent sessions, about 16 KiB payloads,
+sustained interpreter failure, protected-capacity bypass and crash/restart tests.
 Conversation deletion clears descriptive policy/correction metadata as well as
 prose/sources, and conservatively forgets even multi-source derived memories.
 Existing namespace-wide staged purges and source-consumer invalidation still apply.

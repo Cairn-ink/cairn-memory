@@ -2,12 +2,12 @@
 
 Proposed with the [session-episode contract](../plans/session-episodes.md), not
 implemented behavior. Draft first capture, then debounce by accepted batch count
-(default eight), coalescing PreCompact, available end and next-capture catch-up
+(default 8, allowed range 2–16), coalescing PreCompact, end and next-capture catch-up
 triggers. This limits ordinary per-conversation cost while retaining quick-question
 handling and interruption recovery without relying on end signals. The contract
 bounds repeated triggers and records delayed/omitted coverage. Reads never draft.
 Episode failure falls through to ordinary memory admission, with an inspectable
-gap and retained staging; prior context is trimmed oldest-first within the budget.
+gap and bounded staging; prior context is trimmed oldest-first within the budget.
 Only a freshly classified quick batch skips extraction; non-drafted batches
 always receive normal extraction regardless of the previous episode's label.
 
@@ -20,10 +20,14 @@ it enables episodes by default with automatic capture and discloses retention.
 Bound each record and describe it as a source-anchored rolling interpretation,
 not a transcript archive or an assessed claim.
 
-Episode-mode staging releases text/quota atomically once admission and durable
-selected-passage disposition complete. The 24-hour ceiling then applies only to
-unresolved payloads; completed captures do not consume a daily staging allowance.
-Content-free replay fences remain, and ordinary staged-v1 behavior is unchanged.
+Episode-mode staging normally releases text/quota atomically once admission and
+durable selected-passage disposition complete. Under pressure, release the oldest
+admitted payloads awaiting only episode interpretation, recording coverage gaps.
+If capacity still fails, register/admit new input normally without episode staging
+and record that gap too. Protect unadmitted payloads; episode-only capacity may
+never stop ordinary admission. The 24-hour ceiling bounds live payloads, not a
+guaranteed minimum: pressure can release them earlier. Content-free replay fences
+remain; released inspection has no active expiry. Ordinary staged-v1 is unchanged.
 
 Deleting an episode means deleting that captured conversation and forgetting its
 derived memories through existing suppression, including deduplicated multi-source

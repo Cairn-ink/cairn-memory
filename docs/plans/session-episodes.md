@@ -25,7 +25,7 @@ Read with [capture](../capture.md), [staged evidence](../staged-capture-evidence
    accepted batches (default 8), PreCompact, available session-end, or lazily on
    the next capture for the same client/project. Never draft on reads or a daemon.
 7. **P2:** Episode failure never blocks ordinary extraction/admission. Record a
-   coverage gap and retain staged evidence. Drop oldest prior cited sources first
+   coverage gap and retain staged evidence subject to R1. Drop oldest prior cited sources first
    to fit the interpretation budget; prior context alone cannot cause overflow.
 8. **P3:** Habits and instructions enter startup context. A source-anchored
    `procedural` tag comes from normal extraction/qualification or explicit remember,
@@ -39,13 +39,21 @@ Read with [capture](../capture.md), [staged evidence](../staged-capture-evidence
     episode-source disposition; count only unfinished payloads, not a day's captures.
 12. **Q3:** Automatic procedural tags require episode-v1; explicit remember tags
     do not. Without that mode, preserve legacy prompts, outputs, fields and digests.
-13. **Q4:** The maintainer serializes cross-plan shared files, one open PR per file;
-    proposed order: CX-1 → SE-1…SE-5 → CX-2…CX-6/LAC.
+13. **Q4:** The coordinator serializes cross-plan shared files on the repository
+    maintainer's behalf, one open PR per file; proposed order:
+    CX-1 → SE-1…SE-5 → CX-2…CX-6/LAC.
+14. **R1:** Episode capacity never blocks admission: reclaim oldest admitted
+    episode-only backlog, then bypass new episode staging if space still fails;
+    record content-free gaps in both cases and protect unadmitted payloads.
+15. **R2:** N defaults to 8 and permits 2–16; concurrent heavy capture must keep
+    admitting even under sustained episode-interpretation failure.
+16. **R3–R4:** Storage owns explicit table rebuilds, non-leased admission reservation
+    rows and released-row replay guards; released inspection has no active expiry.
 
 Core option: `sessionEpisodes: {mode:'episode-v1', draftEveryBatches:8}`;
-N is an integer 2–64, snapshotted per session. Require source-bound-v2 capture
-and staged-v1 evidence; retain staging's rejection of causal capture. Absent the
-option, existing behavior/digests remain unchanged. The one-brain default is a
+N is an integer 2–16, snapshotted per session. Require source-bound-v2 capture
+and staged-v1 capability, with R1's per-batch fallback; causal capture still rejects.
+Absent the option, existing behavior/digests remain unchanged. The one-brain default is a
 client configuration contract, including the required v2/staging configuration,
 not a claim about today's released plugin.
 
@@ -97,8 +105,9 @@ user language, not UI locale. Keep quoted terms; use `mixed` when undetermined.
 
 ## Debounced lifecycle, cost and latency
 
-“Accepted batch” means a new valid, durably staged batch in episode mode, even if
-its later memory extraction fails. Duplicate events and wholly covered identical
+“Accepted batch” means a new valid, durably registered batch in episode mode,
+with either a staged payload or R1's content-free staging gap, even if its later
+memory extraction fails. Duplicate events and wholly covered identical
 message overlaps count zero. Session and namespace receipt ordinals are core-owned
 monotone counters, not proof of real-world chronology. Changed text/role/time on a
 reused message ID rejects. Partly overlapping batches count once for new evidence.
@@ -141,9 +150,12 @@ or lazy allowance. Remaining gaps are inspectable, not silently retried forever.
 
 ### Interpretation and admission are separate outcomes
 
-1. Validate/stage using the existing capture bounds and replay digest, versioned
-   for episode metadata. Stage and episode shell/observed coverage commit together.
-2. If due, claim a separate episode lease and call injected
+1. Validate/register using the existing capture bounds and versioned episode
+   digest. Atomically reserve an `admission_claims` parent row, the episode shell/
+   observed coverage, and either the staged payload or a capacity-gap disposition.
+   Apply the capacity algorithm below instead of returning the existing early
+   capacity error; lack of episode staging space cannot abort this admission.
+2. If due and staged, claim a separate episode lease and call injected
    `model.interpretEpisode({system,input,maxOutputTokens,signal})` outside writes.
    Its strict result is `{type,language,gist,outcome,nextStep,disposition}`. Each nonnull
    semantic field is `{value,anchors:[{sourceIndex,start,end}]}`; language is the
@@ -168,6 +180,11 @@ or lazy allowance. Remaining gaps are inspectable, not silently retried forever.
    records memory lineage and the batch policy. A crash between the two outcomes
    resumes unfinished admission without repeating a consumed episode attempt.
 
+A capacity-bypassed batch runs ordinary extraction from the bounded canonical
+submission in memory, without an episode call or quick skip. Persist its normal
+policy and gap; consume any due draft marker without a provider call. It still
+counts as an accepted batch for N, and retries cannot silently stage it later.
+
 The response carries separate `episode` and `admission` outcomes. Only ordinary
 admission completion (including intentional quick skip) advances the capture
 cursor; completed replay recovers a lost acknowledgement. Episode failure cannot
@@ -177,9 +194,9 @@ fail under its existing rules; never call that an episode-induced failure.
 ### Source budget, retention and concurrency
 
 Use [capture's model-call limits](../capture.md): ≤6,000 input/1,024 output tokens,
-30-second deadline, local exact counter, no automatic repair call. Current trigger
-batch sources are mandatory. Add undrafted staged messages newest first while
-whole messages fit, within the existing namespace staging capacity; report omitted
+30-second deadline, local exact counter, no automatic repair call. For a staged
+attempt, current trigger-batch sources are mandatory. Add undrafted messages
+newest first while whole messages fit, within staging capacity; report omitted
 batch/message positions. End/lazy use the newest undrafted batch as mandatory.
 If that mandatory input cannot fit, record `context_budget_exceeded` and continue
 ordinary admission. Missing/expired passages become explicit gaps, never guessed
@@ -198,50 +215,101 @@ untrusted editing context, never substitutes for missing source evidence.
 
 Episode mode changes staging capacity/release as defined below; ordinary staged-v1
 retains its [existing rules](../staged-capture-evidence.md). Neither mode renews
-expiry or evicts pending evidence on replay, or reopens a closed admission. A later
+expiry on replay or reopens a closed admission. Episode-only backlog may be
+released for capacity under R1; unadmitted source payloads are protected. A later
 *new* draft may inspect still-live payloads from admitted/failed batches without
-reopening their admission; episode failure alone does not purge them.
+reopening their admission; missing payloads remain explicit gaps.
 Selected episode passages survive staged expiry until replacement/invalidation/
 deletion. No full transcript, old-prose audit log or automatic age TTL is added.
 Expiry leaves content-free gap/fence metadata. No invisible loss or unbounded retry.
 
-### Episode-mode staging release
+### Episode-mode staging release and capacity
 
-The 64-payload/1 MiB guard counts live payloads still awaiting admission **or**
-episode interpretation/disposition, not every batch admitted in the last day.
-The per-event 128 KiB bound remains. Persist episode-mode ownership on each event
-so reopening without the option cannot change its retention/replay policy; do not
-retroactively convert ordinary staged-v1 events or change their existing quota.
-In a mixed namespace, legacy retained payloads keep their existing accounting;
-completed episode-mode payloads contribute zero to the shared capacity guard.
+Keep the 64-payload/1 MiB namespace guard and 128 KiB per-event bound. Persist each
+event's episode-mode ownership; reopening with the option off cannot change its
+policy. Ordinary staged-v1 rows/accounting remain unchanged, including in a mixed
+namespace. **The guard is never a prerequisite for new episode-mode admission.**
+The existing early `capture_evidence_capacity` return inside `claimAdmission`
+must be replaced by this branch for episode-mode events, not caught after rollback.
+An otherwise valid capture whose optional serialized staging exceeds 128 KiB
+also uses the no-staging fallback; releasing other rows cannot fix a per-event
+limit. Invalid capture input still rejects before registration.
 
-Release requires both (a) admission completion, including empty/quick-skip results,
-and (b) successful draft disposition: all selected passages have committed to
-episode storage, with nonselected/omitted positions explicitly recorded. An empty
-selection is valid; omission is a coverage gap, never a claim of completeness.
-Non-drafted or episode-failed batches remain pending interpretation; admission
-failure remains pending admission. They are not silently marked completed to
-free capacity. Normal extraction for non-drafted batches is never deferred.
+Under one SQLite write transaction, check namespace/generation, payload digest,
+existing replay/lease and deletion fences **before** capacity work. An identical
+registered event reuses its recorded staging decision without reclaiming again.
+For a new event, prune expired payloads and perform normal completed releases,
+then calculate the charge for its canonical source view. If it would overflow:
 
-Whichever transaction satisfies the second condition also atomically sets the
-staged payload to null, its byte charge to zero and its content-free state to
-`released`. A successful later draft releases eligible earlier admitted batches
-in that transaction; admission completion releases an already-drafted batch.
-Thus there is no committed interval with both conditions true but capacity still
-charged. Preserve the event digest, admission result, source disposition and
-replay fence. Release is idempotent: replay/restart never restores the payload,
-double-decrements quota, duplicates passage copies or repeats interpretation.
-`released` inspection returns a null view and its disposition; it is not discard,
-expiry or a forgotten event, and completed admission replay still works. Deletion
-fences take precedence. Two-process/crash tests cover both completion orders.
+1. Release only episode-mode payloads whose admission is completed (including
+   empty/quick results) and which wait solely on episode interpretation, including
+   failed interpretation. Choose oldest original staging time first, then bytewise
+   client and event ID; never evict an unadmitted or legacy staged-v1 payload.
+   Release the minimum ordered prefix that fits, or every eligible row if none
+   suffices. Each becomes `released`, with null payload/zero charge, reason
+   `capacity` and a content-free episode coverage gap bound to the event ID/digest.
+   Keep any independently retained episode passages and admitted memories intact.
+   Advance affected episode revisions/source fences so an already-running draft
+   cannot publish from its now-released snapshot. Provider copies already sent
+   cannot be recalled. No replacement interpretation call is scheduled.
+2. Recompute capacity. If it fits, stage the new payload; otherwise create **no
+   new payload**, reserve/register its admission normally, and record `not-staged`
+   with reason `capacity` in episode event metadata. This content-free row is not
+   a fabricated staged-evidence row and consumes no source quota. Normal extraction
+   and admission proceed from the submitted input. Missing episode staging is not
+   `capture_evidence_closed`: guards must recognize this persisted bypass mode.
 
-The fixed 24-hour deadline, measured from original staging, now limits unresolved
-episode-mode payloads (including admitted-but-undrafted and failed batches); it
-is a ceiling, not a minimum retention promise for completed work. Release does not
-restart it; no payload means no later expiry transition. Pending expiry retains
-the existing closed-event fence and visible coverage gap. Genuine unfinished-work
-backpressure can still reject capacity, but healthy completed traffic does not
-consume a daily allowance. No new model trigger or unbounded holding store is added.
+The chosen releases, gap markers, new parent reservation, optional child staging
+and observed ordinals commit together or all roll back. Replay cannot duplicate
+release/gap counts, restore payloads, replenish TTL, repeat a draft, or change a
+bypass to staged when capacity later frees. After a crash, replay supplies the
+same digest-bound submission for unfinished ordinary admission; a completed claim
+returns its recorded result. Deletion/pause/stop fences remain authoritative even
+without a staged child. Index/cursor epochs must reflect changed gap visibility.
+
+Payloads still waiting on admission are never reclaimed by this algorithm. Their
+existing lease/processing fences remain; legacy staged submissions may still get
+`capture_evidence_capacity`. Protecting them must not turn episode pressure into
+a rejection of a new episode-mode batch: step 2 is the fallback even if protected
+rows fill the entire quota. No unbounded alternate source store is introduced.
+
+For normal release without pressure, require admission completion **and** durable
+successful draft disposition: selected passages saved, nonselected/omitted positions
+recorded honestly. The transaction satisfying the second condition releases the
+payload/charge with reason `interpreted`. Admission-first and draft-first both
+work; an empty selection is valid, not proof of complete summary coverage.
+
+Inspection exposes `state:'released'`, null view, `expiresAt:null`, release reason
+and disposition; never a misleading active deadline. A bypassed event is visibly
+`not-staged`, null view/expiry and a capacity gap, distinct from an unknown event;
+`getEpisode` coverage/policy pages show both kinds of gap and admission status.
+The fixed 24-hour original deadline remains an upper bound only for live payloads,
+including undrafted/failed work, which R1 may release sooner after admission.
+Release is not discard/expiry/forgetting and does not close completed replay.
+Pending expiry keeps its existing closed-event fence; no-payload releases/bypasses
+have no TTL transition. Content-free replay metadata may persist.
+
+### Storage migration and guards (SE-1)
+
+At v13, `staged_capture_evidence.state` excludes `released`, and its foreign key
+requires an `admission_claims` row even before an admission lease starts. SE-1
+must implement a transactional **table-rebuild migration**, not an invalid enum
+ALTER: rebuild the staging table with `released` and event-mode/disposition
+metadata, preserving all legacy rows, keys, fences and foreign-key relationships.
+Also rebuild `admission_claims`' constrained state shape to add `reserved`: a
+non-leased parent with digest/identity but null token, lease and result fields.
+Preserve the existing pending/completed checks. Create the parent before a staged
+child in the same transaction; later CAS from reserved to pending starts the
+ordinary 125-second lease. Do not use a fake expired lease or disable FK integrity.
+
+`claimGuard` treats a released staged row like an admitted row: allow the ordinary
+completed-claim replay path after digest/fence checks. Reserved-parent staging
+must not be mistaken for an expired admission; validate its episode/session lease
+separately. Capacity-bypassed events have no child, so claim/finish/source guards
+consult their recorded bypass and namespace/session fences instead of demanding a
+payload. Neither exception permits admission under a discarded/forgotten fence.
+Migration must preserve referencing tables, validate foreign keys and roll back
+all rebuilt tables on failure. Legacy behavior outside episode mode stays intact.
 
 ### Replay and concurrency
 
@@ -355,7 +423,7 @@ schemas, existing transport caps, read-only hints and untrusted-data framing app
 generation, following `--capture-evidence-access staged-v1`'s naming pattern.
 `--session-episodes episode-v1 --session-episodes-draft-batches 8` configures
 generation once a trusted session producer is wired; the count defaults to 8
-and accepts 2–64. Access alone never enables capture or interpretation.
+and accepts 2–16. Access alone never enables capture or interpretation.
 Management maps to the revision-guarded core methods; deletion describes its cascade.
 `remember_memory` additionally accepts optional `procedural` plus source anchors
 under the explicit admission rules below. No hosted HTTP schema is widened here.
@@ -448,16 +516,16 @@ and 24**; inspect state, source bindings, call counts and forbidden payload fiel
 | --- | --- |
 | E1 Identity/privacy | Stable HMAC across restart, namespace/client separation, missing/corrupt key rejection; no raw session/secret metadata in new rows, provider payloads or telemetry. |
 | E2 Fields/language | Chinese/English/mixed scripts, Unicode/boundary cases, malformed output and foreign anchors; source-anchored labels remain unassessed. |
-| E3 Debounce/cost | B=1/8/9/17, N=2/64, duplicate/overlap, combined first/PreCompact, repeated end, repeated lazy visits, reopened sessions and restart. Assert the formula and ≤2 jobs per capture, no read/daemon calls, correct cursor holds and acknowledgement recovery. |
-| E4 Failure/budget | Throw/timeout/malformed/oversized episode input/output followed by successful normal admission despite an older quick label. Gap and pending staging survive; prior-only overflow drops oldest context and never fails. Expiry/omission remains visible; no retry storm or consumed memory lease. |
-| E4a Staging throughput | Admit 129 synthetic batches in one project within 24 hours at N=8, with successful periodic drafts: capture continues beyond 64, at most eight small payloads await a draft, and current selected passages remain inspectable after release. Test admission-first/draft-first release, empty/quick results, omitted positions, duplicate release, restart/crashes and two-process races. Pending failure still counts/expires; released payloads never reappear or expire a completed replay. Verify ordinary staged-v1 accounting remains unchanged. |
+| E3 Debounce/cost | B=1/8/9/17, N=2/16, duplicate/overlap, combined first/PreCompact, repeated end, repeated lazy visits, reopened sessions and restart. Assert the formula and ≤2 jobs per capture, no read/daemon calls, correct cursor holds and acknowledgement recovery. |
+| E4 Failure/budget | Throw/timeout/malformed/oversized episode input/output followed by successful normal admission despite an older quick label. Gap and pending staging survive until declared release/expiry; prior-only overflow drops oldest context and never fails. Expiry/omission remains visible; no retry storm or consumed memory lease. |
+| E4a Staging throughput | Admit >64 batches/day with N=16, two concurrent sessions in one project and canonical payloads averaging about 16 KiB, both with successful drafts and sustained interpretation-port failure; ordinary admission continues in every arm. Force count and byte pressure, verify oldest eligible reclamation/minimal prefix and inspectable gaps. Fill quota with protected unadmitted payloads: new episode-mode capture bypasses staging and still admits, with no protected payload loss; legacy staging retains its backpressure. Test both release completion orders, empty/quick results, no-expiry inspection, duplicate/restart/crash replay, all-or-nothing registration/reclamation and an in-flight draft fenced by reclamation. Retain the N=8/129-small-batch baseline and existing passage inspection checks. |
 | E5 Concurrency | Two processes, expired worker, crash between draft/admission, lazy versus end, correction/deletion during callbacks; no duplicate calls, stale commits or lost admitted memories. |
 | E6 Entry controls | Pause/project stop/re-enable across restart and partial lines; paused marker absent from provider input, stages, passages, drafts and keep; no personal fallback. Synthetic Claude/Codex producer contracts, not a compatibility claim. |
 | E7 Deletion/correction | Zero-memory/multi-source/historical conversation deletion, dependency invalidation, pinned corrections and legacy feature-off mutation; suppression/fences prevent replay, unrelated memories survive. |
 | E8 Quick/keep | A first draft classified quick followed by seven non-drafted batches skips extraction only on the first: all seven run normal extraction/qualification/admission without an episode call. Failed drafts are non-quick; end/lazy reclassification never changes completed policy. Explicit keep respects source coverage and replay. |
 | E9 Time/read | Event/receipt disagreement, unknown/partial time, DST caller boundaries, ties/range edges, scope/client isolation, bounded large-history paging and `cursor_stale`. |
 | E10 Startup/habits | Automatic tags only in episode-v1; explicit/MCP remember tags in both modes. Freeze mode-off prompt/request/output-shape/stored-field/digest parity against the base, and reject unexpected automatic tags. No unsupported/foreign anchors; tag-only changes preserve conflict/rationale links. Test documented content invalidation, group switches, step closure/ambiguity, budgets and injection framing. |
-| E11 Migration/host | Atomic v13 upgrade/failure rollback, old-process exclusion, feature-off fences; actual MCP stdio/restart and installed artifact contains every new module/prompt. No hosted schema/default change. |
+| E11 Migration/host | Atomic v13 table-rebuild upgrade/failure rollback, preserved foreign keys, reserved-parent-before-child insertion, released-as-admitted `claimGuard`, bypassed claim/finish guards, old-process exclusion and feature-off fences; actual MCP stdio/restart and installed artifact contains every new module/prompt. No hosted schema/default change. |
 
 Run `npm test`, `npm run validate`, `npm run test:core` and relevant existing
 store/capture/admission/MOC/recall/history demos; add `demo:episodes` and
@@ -484,8 +552,8 @@ allowed paths, not permission for this docs-only revision to edit them.
 
 | Package / sole owner | Additional allowed paths (new paths are intentional) |
 | --- | --- |
-| SE-1 / storage worker | `core/episode-schema.mjs`, `core/episode-storage.mjs`, `core/procedural-storage.mjs`, `core/runtime.mjs`, `core/database.mjs`, `core/contract.mjs`, `core/index.mjs`, `core/staged-evidence-schema.mjs`, `core/staged-evidence-storage.mjs`, `core/admission-storage.mjs`, `core/test/episode-storage.test.mjs`, `core/test/episode-migration.test.mjs`, `core/test/episode-staging-release.test.mjs`, `core/test/procedural-storage.test.mjs`, `CONTEXT.md`, `docs/local-store.md`, `docs/storage-contract.md`, `docs/staged-capture-evidence.md`, `docs/protocol.md`, `docs/privacy.md`. Own the episode-mode staging schema, unfinished-payload capacity guard, atomic/idempotent release and replay migration, plus control/claims, deletion/correction, tags and **getEpisode inspection** before the capture demo. |
-| SE-2 / capture worker | `core/episode-input.mjs`, `core/episode-capture.mjs`, `core/episode-storage.mjs`, `core/procedural-storage.mjs`, `core/capture.mjs`, `core/capture-input.mjs`, `core/automatic-qualification.mjs`, `core/qualification-candidates.mjs`, `core/contract.mjs`, `core/runtime.mjs`, `core/database.mjs`, `core/admission-storage.mjs`, `core/staged-evidence-storage.mjs`, `core/model-diagnostics.mjs`, `core/prompts/interpret-episode.md`, `core/prompts/extract-episode-sources.md`, `core/prompts/qualify-episode-candidates.md`, `core/test/episode-capture.test.mjs`, `core/test/episode-concurrency.test.mjs`, `core/test/procedural-capture.test.mjs`, `core/test/episode-mode-parity.test.mjs`, `examples/session-episodes.mjs`, `package.json`, `.github/workflows/ci.yml`, `docs/capture.md`, `docs/staged-capture-evidence.md`, `docs/privacy.md`, `docs/protocol.md`. Own debounce/failure/quick/keep, heavy-day orchestration and mode-gated automatic tags/legacy parity; wire SE-1 release at both completion points. Demo can inspect through SE-1. |
+| SE-1 / storage worker | `core/episode-schema.mjs`, `core/episode-storage.mjs`, `core/procedural-storage.mjs`, `core/runtime.mjs`, `core/database.mjs`, `core/contract.mjs`, `core/index.mjs`, `core/staged-evidence-schema.mjs`, `core/staged-evidence-storage.mjs`, `core/admission-storage.mjs`, `core/test/episode-storage.test.mjs`, `core/test/episode-migration.test.mjs`, `core/test/episode-staging-release.test.mjs`, `core/test/episode-capacity.test.mjs`, `core/test/procedural-storage.test.mjs`, `CONTEXT.md`, `docs/local-store.md`, `docs/storage-contract.md`, `docs/staged-capture-evidence.md`, `docs/protocol.md`, `docs/privacy.md`. Own transactional rebuilds of staging/admission-claim CHECK constraints and foreign keys, reserved parent rows, released-row `claimGuard`, capacity reclaim/bypass, inspection and replay migration, plus control/claims, deletion/correction, tags and **getEpisode inspection** before the capture demo. |
+| SE-2 / capture worker | `core/episode-input.mjs`, `core/episode-capture.mjs`, `core/episode-storage.mjs`, `core/procedural-storage.mjs`, `core/capture.mjs`, `core/capture-input.mjs`, `core/qualification-candidates.mjs`, `core/contract.mjs`, `core/runtime.mjs`, `core/database.mjs`, `core/admission-storage.mjs`, `core/staged-evidence-storage.mjs`, `core/model-diagnostics.mjs`, `core/prompts/interpret-episode.md`, `core/prompts/extract-episode-sources.md`, `core/prompts/qualify-episode-candidates.md`, `core/test/episode-capture.test.mjs`, `core/test/episode-concurrency.test.mjs`, `core/test/procedural-capture.test.mjs`, `core/test/episode-mode-parity.test.mjs`, `examples/session-episodes.mjs`, `package.json`, `.github/workflows/ci.yml`, `docs/capture.md`, `docs/staged-capture-evidence.md`, `docs/privacy.md`, `docs/protocol.md`. Own debounce/failure/quick/keep, heavy-day orchestration and mode-gated automatic tags/legacy parity; wire SE-1 release at both completion points. Demo can inspect through SE-1. |
 | SE-3 / retrieval worker | `core/episode-reads.mjs`, `core/session-context.mjs`, `core/episode-storage.mjs`, `core/procedural-storage.mjs`, `core/contract.mjs`, `core/runtime.mjs`, `core/database.mjs`, `core/index.mjs`, `core/test/episode-reads.test.mjs`, `core/test/session-context.test.mjs`, `examples/session-context.mjs`, `package.json`, `.github/workflows/ci.yml`, `docs/storage-contract.md`, `docs/protocol.md`, `docs/privacy.md`. Own range reads and startup context/step closure. |
 | SE-4 / provider worker | `adapters/openai/index.mjs`, `adapters/openai/schemas.mjs`, `adapters/openai/profiles.mjs`, `adapters/openai/test/episodes.test.mjs`, `adapters/openai/test/procedural.test.mjs`, `adapters/openai/test/episode-mode-parity.test.mjs`, `examples/openai-offline.mjs`, `docs/openai-provider.md`. Implement episode-interpretation port and mode-specific automatic tag schemas with legacy request/output parity; fake HTTP only, no classifier/vendor default or paid grant. |
 | SE-5 / MCP worker | `adapters/mcp/server.mjs`, `adapters/mcp/cli.mjs`, `adapters/mcp/test/episodes.test.mjs`, `adapters/mcp/test/procedural.test.mjs`, `adapters/mcp/test/fixtures/episode-server.mjs`, `packaging/test/session-episodes.test.mjs`, `docs/standalone-mcp.md`, `docs/protocol.md`, `docs/privacy.md`. Own keyless reads/management and explicit remember tags; generation waits for the trusted producer binding below. |
@@ -497,6 +565,8 @@ another worker: hosted `schemas/` is frozen throughout; MCP server is writable
 only in SE-5; core contract/database only in SE-1–SE-3. No simultaneous shared-file
 editing. Out-of-list changes require a revised assignment. Runtime release/package
 version edits belong to a separately assigned release packet, not this plan.
+SE-2 uses the v2 candidate path; the v1-only `core/automatic-qualification.mjs`
+is not required and is excluded from its allowed paths.
 
 ### Cross-plan shared files
 
@@ -504,7 +574,8 @@ version edits belong to a separately assigned release packet, not this plan.
 `plugins/cairn-memory/hooks/**` and `CHANGELOG.md` are also edited by the sibling
 Codex-client contract, `docs/plans/codex-client.md` on its own branch (packages
 CX-1…CX-6 and LAC). **Only one open PR at a time may edit each shared file.** The
-repository maintainer sets the order; proposed default:
+repository maintainer sets the order; the coordinator serialises cross-plan edits
+on the maintainer's behalf. Proposed default:
 **CX-1 → SE-1…SE-5 → CX-2…CX-6/LAC**. This cross-plan rule overrides any apparent
 concurrency permission in a package row. Naming hooks here does not add them to
 an SE package's allowed paths. No merge, push or PR is authorized by this packet.
