@@ -13,6 +13,10 @@ This plan owns installer/distribution behavior; the [client contract](codex-clie
 owns parsing, transport, identity, pause and host hooks. No implementation,
 installation or publication is performed by this packet.
 
+One-command setup installs the [one-brain configuration defined in privacy](../privacy.md#proposed-session-episodes-local-core).
+Its episode default is subject to the installed local-core capability and
+automatic-capture consent below; it does not change hosted behavior.
+
 ## Acceptance S01–S08
 
 1. **S01 — Command and discovery.** The normal proposed release interface is
@@ -61,6 +65,38 @@ installation or publication is performed by this packet.
    its runtime/artifact/store binding and model/provider consent; otherwise show
    capture unavailable. Explicit MCP operations do not substitute for capture.
    Do not silently change an existing target/account when adding a client.
+
+   Enable episodes by default with automatic capture only when the chosen target
+   is the local core and the installed core supports the sibling's `episode-v1`
+   mode, delivered by the SE packages. Use the sibling's [episode configuration](session-episodes.md#product-decisions-supplied-by-the-coordinator-2026-09-27).
+   For hosted targets or a core without that installed capability, neither enable
+   episodes nor describe them as active; status reports episodes as unavailable.
+   The [privacy contract](../privacy.md#proposed-session-episodes-local-core)
+   leaves hosted behavior unchanged.
+
+   When episodes will be enabled, show these disclosures **before** asking for
+   automatic-capture consent and before any capture starts:
+
+   “Each captured session gets a short model-written summary. It is an
+   interpretation, not verified fact.” See [episode privacy](../privacy.md#proposed-session-episodes-local-core)
+   and [session episodes](session-episodes.md#record-vocabulary-and-source-bounds).
+
+   “Selected source passages are kept with no automatic age limit, until the
+   conversation is deleted. Deleting a conversation removes memories derived from
+   it and invalidates its episodes.” See [episode privacy](../privacy.md#proposed-session-episodes-local-core)
+   and [session episodes](session-episodes.md#entry-controls-deletion-correction-and-quick-questions)
+   for retention, deletion and its limits.
+
+   “Episode interpretation sends bounded, redacted session text to the configured
+   model provider. Redaction is best-effort.” See [episode privacy](../privacy.md#proposed-session-episodes-local-core)
+   and [session episodes](session-episodes.md#source-budget-retention-and-concurrency)
+   for source and provider-exposure bounds; this plan adds no numbers.
+
+   Episodes are part of each client's automatic-capture consent, not a separate
+   question. Declining capture for a client also means no episodes from it. This
+   plan adds no episode toggle; finer episode/session-context controls belong to
+   the sibling's [entry controls](session-episodes.md#entry-controls-deletion-correction-and-quick-questions)
+   and [session-start context](session-episodes.md#session-start-context-next-steps-and-procedural-memories).
 
 4. **S04 — One root and key.** Use the client contract's
    [existing-client detection and state locations](codex-client.md#existing-client-detection-and-state-locations)
@@ -179,6 +215,12 @@ Node 20/22 gates. No real host installation, credentials, provider calls or publ
 - Before consent, assert summary includes redacted prompt recall, capture policy,
   Claude telemetry on by default and `telemetry=false` opt-out. Exercise hosted
   token/OAuth-capability and local-LAC-unavailable paths without network calls.
+- With an episode-capable local core, assert all three episode disclosures appear
+  before automatic-capture consent and any capture starts. Episodes follow that
+  consent without another question; a declined client produces no episodes.
+- With a hosted target or core without episode support, assert setup does not
+  enable episodes or claim active episodes in its disclosures, and status reports
+  them as unavailable. Cover the coordinator deferring the SE packages.
 - Assert supported hook paths, stable runtime, other-hook preservation, no trust
   bypass argument, unchanged trust state and pending `/hooks` review.
 - Remove either/last client repeatedly: preserve keys, memories and the other
@@ -212,6 +254,10 @@ per shared file, including CI, version validation and release records. The
 repository maintainer coordinates with the private umbrella plan and the sibling
 [session episodes](session-episodes.md). CX-7 follows CX-5;
 CX-6 receives tests for final verification. No competing shared-file owner.
+Episode enablement and its consent disclosure depend on SE-1…SE-5, which precede
+CX-5 and CX-7 in the proposed order. If the coordinator defers them, setup ships
+with episodes unavailable as in A8's hosted/unsupported-core case, until the
+installed core supports the mode; a merged design contract is not that capability.
 
 ## Verification and remaining evidence
 
