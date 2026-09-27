@@ -339,7 +339,8 @@ test('returns a fixed busy error without retrying or authorizing a reservation',
   assert.throws(() => ledger.reserve({
     attemptId: randomUUID(), channel: 'host-completion', reservedMicroUsd: 100,
   }), error('ledger_busy'));
-  assert.equal(performance.now() - started < 1_000, true);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed >= 900 && elapsed < 10_000, 'fixed lock wait with a generous test watchdog');
   lock.exec('ROLLBACK');
   assert.equal(ledger.getState().requestCount, 0);
 });

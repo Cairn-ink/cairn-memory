@@ -276,6 +276,8 @@ function withTransaction(db, mode, work) {
 
 function configureConnection(db, readOnly = false) {
   db.exec(`PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;${readOnly ? ' PRAGMA query_only = ON;' : ''}`);
+  // Bound local lock waits without retrying a transaction or provider request.
+  if (!readOnly) db.exec('PRAGMA busy_timeout = 1000');
 }
 
 function assertSchema(db, version = SCHEMA_VERSION) {

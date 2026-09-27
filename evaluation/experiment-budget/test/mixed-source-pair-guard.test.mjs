@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { holdReader } from '../testing/reader-lock.mjs';
 
 import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
   inspectExperimentBudgetForEmbeddingUpgrade, reopenEmbeddingExperimentBudget,
@@ -832,6 +833,98 @@ test('X1/X7 old readers deny v2, foreign pending and rowid history block before 
   guard.close();
 });
 
+test('B2/B3 mixed settlement waits for short child reader once and keeps successful record shape', async t => {
+  const f = fixture(t), capability = authorizeMixedSourcePairCapability(f.options);
+  let physical = 0, reader;
+  const guard = create(f, capability, async () => {
+    physical += 1;
+    reader = await holdReader(t, join(f.ledger.directory, 'experiment-budget.sqlite'));
+    await reader.releaseAfter(200);
+    return Response.json({ ...embeddingResponse(1), usage: { prompt_tokens: 470, total_tokens: 470 } });
+  });
+  t.after(() => guard.close());
+  await guard.withCaseScope(capability.schedule[0], async () => {});
+  const result = await guard.withCaseScope(capability.schedule[1], async () => {
+    await guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint, request(embedding(['a '.repeat(470)])));
+  });
+  await reader.release();
+  assert.equal(result.status, 'completed');
+  assert.equal(physical, 1); assert.equal(guard.isHalted(), false);
+  const attempt = guard.attempts()[0];
+  assert.deepEqual(Object.keys(attempt), ['attemptId', 'stage', 'ledgerChannel', 'model', 'endpoint',
+    'reservedMicroUsd', 'outcome', 'actualMicroUsd', 'observedActualMicroUsd', 'inputTokens', 'outputTokens',
+    'ordinal', 'phase', 'arm']);
+  assert.deepEqual([attempt.reservedMicroUsd, attempt.actualMicroUsd, attempt.observedActualMicroUsd,
+    attempt.inputTokens, attempt.outputTokens], [10, 10, 10, 470, 0]);
+  assert.equal(attempt.outcome, 'succeeded');
+  const state = guard.getState();
+  assert.equal(state.requestCount, f.snapshot.requestCount + 1);
+  assert.equal(state.reservedMicroUsd, f.snapshot.reservedMicroUsd + 10);
+  assert.equal(state.attempts.at(-1).outcome, 'succeeded');
+});
+
+test('B2/B3 mixed settlement times out on held child reader, retaining priced pending usage and global halt', async t => {
+  const f = fixture(t), capability = authorizeMixedSourcePairCapability(f.options);
+  let physical = 0, reader;
+  const guard = create(f, capability, async () => {
+    physical += 1;
+    reader = await holdReader(t, join(f.ledger.directory, 'experiment-budget.sqlite'));
+    return Response.json({ ...embeddingResponse(1), usage: { prompt_tokens: 470, total_tokens: 470 } });
+  });
+  t.after(() => guard.close());
+  await guard.withCaseScope(capability.schedule[0], async () => {});
+  await assert.rejects(guard.withCaseScope(capability.schedule[1], async () => {
+    await guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint, request(embedding(['a '.repeat(470)])));
+  }), rejected('callback_failed'));
+  await reader.release();
+  assert.equal(physical, 1); assert.equal(guard.isHalted(), true);
+  const attempt = guard.attempts()[0];
+  assert.deepEqual(attempt.settlementFailure, { operation: 'record_outcome', category: 'ledger_busy' });
+  assert.equal(Object.isFrozen(attempt), true);
+  assert.equal(Object.isFrozen(attempt.settlementFailure), true);
+  assert.deepEqual([attempt.reservedMicroUsd, attempt.observedActualMicroUsd, attempt.inputTokens,
+    attempt.outputTokens, attempt.outcome, attempt.actualMicroUsd], [10, 10, 470, 0, null, null]);
+  const state = inspectEmbeddingExperimentBudgetSnapshot(f.ledger);
+  assert.equal(state.requestCount, f.snapshot.requestCount + 1);
+  assert.equal(state.reservedMicroUsd, f.snapshot.reservedMicroUsd + 10);
+  assert.equal(state.attempts.at(-1).outcome, null);
+  assert.equal(state.attempts.at(-1).actualMicroUsd, null);
+  await assert.rejects(guard.withCaseScope(capability.schedule[2], async () => {}), rejected('paid_work_halted'));
+  await assert.rejects(guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
+    request(embedding(['b']))), rejected('paid_work_halted'));
+  assert.equal(physical, 1);
+});
+
+test('B2/B4 arbitrary settlement exception details are replaced by the closed fallback category', async t => {
+  const f = fixture(t), capability = authorizeMixedSourcePairCapability(f.options);
+  const originalExec = DatabaseSync.prototype.exec;
+  let settling = false, commits = 0, physical = 0;
+  const guard = create(f, capability, () => {
+    physical += 1; settling = true;
+    return Response.json(embeddingResponse(1));
+  });
+  try {
+    DatabaseSync.prototype.exec = function(sql) {
+      if (settling && sql === 'COMMIT') {
+        commits += 1;
+        throw Object.assign(new Error('synthetic-private-key SQL /tmp/private'),
+          { code: 'arbitrary-private-code', privatePayload: 'synthetic-secret' });
+      }
+      return originalExec.call(this, sql);
+    };
+    await guard.withCaseScope(capability.schedule[0], async () => {});
+    await assert.rejects(guard.withCaseScope(capability.schedule[1], async () => {
+      await guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint, request(embedding(['a'])));
+    }), rejected('callback_failed'));
+    const attempt = guard.attempts()[0];
+    assert.deepEqual(attempt.settlementFailure, { operation: 'record_outcome', category: 'ledger_failed' });
+    assert.equal(attempt.outcome, null); assert.equal(attempt.actualMicroUsd, null);
+    assert.equal(guard.isHalted(), true);
+    assert.equal(physical, 1); assert.equal(commits, 1);
+    assert.ok(!/private|secret|SQL/.test(JSON.stringify(guard.attempts())));
+  } finally { DatabaseSync.prototype.exec = originalExec; guard.close(); }
+});
+
 test('X7/X12 in-flight foreign rowid mutation fences bound settlement and globally halts', async t => {
   const f = fixture(t, { executionId: 'foreign-during-settlement' });
   const capability = authorizeMixedSourcePairCapability(f.options);
@@ -855,6 +948,7 @@ test('X7/X12 in-flight foreign rowid mutation fences bound settlement and global
   assert.equal(attempt.observedActualMicroUsd, 3);
   assert.equal(attempt.inputTokens, 1);
   assert.equal(attempt.outputTokens, 1);
+  assert.deepEqual(attempt.settlementFailure, { operation: 'record_outcome', category: 'invalid_ledger' });
   const db = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
   try {
     const persisted = db.prepare('SELECT outcome FROM attempts WHERE attempt_id = ?').get(attempt.attemptId);
