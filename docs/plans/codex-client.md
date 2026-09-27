@@ -2,7 +2,7 @@
 
 Status: proposed, docs-only contract against `codex-cli 0.157.1` and repository
 base `b8af5cda1820fd0bb385aca784c2d2ee8c036b36`, researched 2026-09-27.
-Revision: maintainer's one-command setup decision, 2026-09-27, candidate `9e22c66`.
+Revision: one-command setup review corrections, candidate `b7c3d93`.
 Nothing here claims a shipped client.
 
 A person switching between Claude Code and Codex must use one memory target and
@@ -76,91 +76,15 @@ hosted and the two local-core clients, unless expressly identified as shared pau
 
 ## One-command setup and distribution
 
-**G1–G5, decided by repository maintainer chichi on 2026-09-27:** the normal
-installation path for Claude Code and/or Codex is one command:
-
-```sh
-npx @cairn-ink/memory setup
-```
-
-This is the proposed release interface, not a command shipped by this packet.
-Cairn.ink's naming decision reserves `@cairn-ink`; the exact package name
-`@cairn-ink/memory` is **to verify at release**. Never install or refer users to the
-unrelated `cairn-memory` npm package. The Claude marketplace identifier remains
-`cairn-memory@cairn-memory` and is not an npm package name.
-
-Setup performs the following bounded, reviewable sequence:
-
-1. Resolve `claude` and `codex` on `PATH`, obtain versions with their version
-   commands, and report missing/unsupported clients. Use bounded metadata probes,
-   never sessions, conversations or existing host credentials. Perform F1's
-   known-path/origin checks below before any state creation.
-2. Offer hosted or local preview. Hosted uses masked Cairn token entry, or OAuth
-   only where supported (**to verify:** Cairn OAuth availability); never reuse
-   Claude/Codex login credentials. Store credentials only through the mechanisms
-   below, never in arguments, printed plans or logs. Local preview binds the
-   approved local artifact/runtime/store; automatic capture requires LAC and its
-   model/provider consent. Without LAC, report automatic capture unavailable;
-   explicit local MCP operations are not a substitute. Do not silently switch an
-   existing target/account when adding a client.
-3. Show the selected clients/versions, target, exact paths/commands to change,
-   and collection policy: allowlisted user/assistant text only, locally redacted
-   before payload creation; no tool calls/output, reasoning or arbitrary files.
-   Link [privacy](../privacy.md) for limitations, including pasted sensitive text.
-   Ask explicit installation/automatic-capture consent for **each** client;
-   presence on `PATH` is not consent. Declined clients stay unchanged. Collect and
-   persist credentials only after this consent; dry-run never collects them.
-4. Under the shared setup lock, create or adopt **one** state root/key. A fresh
-   joint install defaults to `~/.cairn-memory`; both consenting clients are bound
-   in this transaction, without a separate pairing prompt/command. An existing
-   Claude key produces one sharing confirmation, for example “Share memory with
-   the existing Cairn setup in Claude Code?”; setup performs adoption itself.
-   Adding Claude to Codex uses the corresponding confirmation. Per-client capture
-   consent still applies. Key conflicts require E4's explicit choice; declining
-   sharing leaves the established client working and the newcomer disconnected.
-5. For Claude, drive the supported marketplace/plugin commands, including
-   `claude plugin marketplace add Cairn-ink/cairn-memory` and
-   `claude plugin install cairn-memory@cairn-memory`, preserving existing installs.
-   See [Claude's command reference](https://code.claude.com/docs/en/plugins/cli-reference).
-   **To verify:** setting endpoint, token and `pairing_record` userConfig
-   non-interactively on supported versions. Where unavailable, print the exact
-   remaining host configuration step and non-secret values; request token entry
-   in the host's sensitive field. Never patch Claude credential/config files.
-   Report configuration pending until verified; do not claim both clients ready.
-   The exact fallback command/UI path is a CX-7 pinned-host gate, not guessed syntax.
-6. For Codex, install the allowlisted runtime at
-   `join(homedir(), ".cairn-memory-clients", "runtime", version)` and write Cairn
-   definitions to user `~/.codex/hooks.json` (or an explicitly selected supported
-   hooks location). Use stable absolute runtime paths, never the transient npx
-   cache. Preserve other hooks and avoid duplicate Cairn registrations. Tell the
-   person to complete the initial `/hooks` trust review; changes may require
-   review again. Never use `--dangerously-bypass-hook-trust` or edit trust state.
-   Keep new hooks inactive until consent, configuration and shared binding are
-   complete; then host trust remains an independent gate.
-
-`setup --dry-run` prints every planned change and pending confirmation, but writes
-nothing: no keys, locks, configuration, runtime, credentials or install metadata;
-no mutating host command or OAuth flow. It does not prompt for secrets. A8 runs
-the packed command directly; npm's own package download/cache precedes setup and
-is outside the installer's dry-run guarantee.
-
-Re-running setup reports status and repairs approved incomplete setup idempotently,
-without new keys, duplicate hooks, reset cursors or revoked pause state. A newly
-installed client gets its consent and sharing confirmation. Record content-free
-setup progress in `install.json`; retries retain the one chosen key and leave new
-clients inactive until bound. Never repair paired key loss by regeneration.
-`setup --remove claude` or `setup --remove codex` disconnects only that client,
-using the controls below. It retains keys, Cairn-owned credentials and memory data, including
-when removing the last client. Deleting data requires a separate explicit
-confirmation and is never an implicit part of disconnection.
-
-The npm package bundles the shared library, Codex adapter and installer, with an
-explicit file allowlist and **no install/postinstall scripts** (nor other install
-lifecycle hooks). Claude remains a marketplace plugin that setup drives; root and
-local-preview manifests remain private. CX-7 owns the new public package manifest
-and reproducible bundle, not another engine. Publishing occurs only in a separately
-approved release step using the maintainer's credentials and npm provenance;
-neither this contract nor its implementation packages publish anything.
+Normal proposed installation is `npx @cairn-ink/memory setup`; the exact scoped
+package name is **to verify at release**. Never use the unrelated `cairn-memory`
+npm package. The [one-command setup plan](one-command-setup.md) owns CX-7's design:
+per-client consent, target choice, joint key initialization, confirmed adoption,
+Claude configuration, Codex trust, reruns, removal and approved npm distribution.
+Fresh joint setup needs no separate pairing prompt. Standalone pairing remains
+for separate routes, legacy Claude and conflicts. Dry-run never executes a host
+binary; setup refuses if an absolute home cannot be determined. A8 below points
+to the installer gates. Nothing here claims a published package.
 
 ## Explicit pairing and project identity
 
@@ -194,8 +118,9 @@ plugin's explicitly supplied `CLAUDE_PLUGIN_DATA/project-key`), Cairn registrati
 and `join(homedir() || tmpdir(), ".cairn-memory", "project-key")`. This is a known-file check, never a
 host directory search. If the installed origin cannot be confirmed as the standard
 `cairn-memory@cairn-memory` marketplace entry, setup must ask **whether the person
-uses Cairn in Claude Code before creating anything**. Ask also when the home or
-plugin location is undetermined. Non-standard cases include
+uses Cairn in Claude Code before creating anything**. Ask also when the plugin
+location is undetermined; an undetermined home instead refuses setup under H5.
+Non-standard cases include
 `CLAUDE_CODE_PLUGIN_CACHE_DIR` relocating the plugins root, `--plugin-dir` / `@inline`
 installs (the data directory is then `cairn-memory-inline`), and other marketplaces
 or origins such as `@synced`; see the loading reference above. A missing standard
@@ -243,8 +168,9 @@ CX-2 creates these proposed coordination files, separate from the selected key r
 These paths stay unchanged when `CLAUDE_PLUGIN_DATA` is set; only Claude's key root
 uses that variable. The coordination directory is 0700, its files 0600, with owner/
 symlink validation. With falsy `homedir()`, all three locations use `tmpdir()`;
-legacy single-client operation remains supported, but pairing is unavailable until
-both hosts resolve the same durable home instead of this temporary fallback.
+legacy standalone single-client operation remains supported. The setup command
+refuses an undetermined/non-absolute home before any writes or host execution;
+its paths never use this fallback. Pairing requires the same durable home.
 Both hosts resolve the same coordination location; no per-host alternate registry.
 After read-only detection, take the setup lock and recheck before registering or
 creating a key. One fresh joint setup elects one initializer for both consenting
@@ -256,11 +182,11 @@ it to be stopped during pairing, and never claim concurrent legacy setup is safe
 Automatically register a fresh single client; a pairing record is still unnecessary.
 Metadata loss never authorizes ignoring an existing key or bypassing detection.
 
-Proposed Claude delivery is a `userConfig` option `pairing_record`, exposed as
-`CLAUDE_PLUGIN_OPTION_PAIRING_RECORD`. **To verify:** primary documentation and
-the pinned Claude host must establish whether an installer can set this option;
-do not claim that automation exists. Until verified, the person supplies the path
-through the supported plugin configuration flow; its hook delivery is a CX-2 gate.
+Claude delivery uses CX-2's declared `userConfig` option `pairing_record`, exposed
+as `CLAUDE_PLUGIN_OPTION_PAIRING_RECORD`. Setup requires Claude Code >=2.1.147 and
+uses the documented `plugin install --config` for endpoint/record values; token
+entry stays in the sensitive host dialog. See [S05 configuration and fallback](one-command-setup.md#acceptance-s01s08).
+Pinned-host reconfiguration and hook delivery remain CX-2/CX-7 verification gates.
 Codex's installed command passes a fixed, quoted `--pairing-record /absolute/path`
 to its launcher. Controls use the same bindings. The paired launcher validates
 the record and supplies its root to workers as
@@ -522,7 +448,7 @@ started may finish. See [pause limitations](../privacy.md#disable-automatic-beha
 | Control | Required behavior |
 | --- | --- |
 | Install/trust | Normal path: `npx @cairn-ink/memory setup`, per-client capture consent and target choice. Joint fresh setup shares one key without a pairing prompt; later additions use setup's sharing confirmation. Preserve other registrations. The person reviews Codex commands/events/budgets through `/hooks`; never write trust state or bypass it. |
-| Disable/uninstall | `setup --remove <client>` pauses shared memory, stops affected workers and removes only that client's Cairn registrations/runtime references; explicitly resume the remaining client if wanted. Keep runtime files still used by another client, shared key/state, Cairn-owned credentials and stored memories. Use Claude's documented [--keep-data](https://code.claude.com/docs/en/plugins/manifest-reference) uninstall option or disconnect with supported disable if unavailable; never delete its shared data directory. Data deletion requires a separate explicit confirmation. |
+| Disable/uninstall | `setup --remove <client>` pauses shared memory, stops affected workers and removes only that client's Cairn registrations/runtime references; explicitly resume the remaining client if wanted. Keep runtime files still used by another client, shared key/state and stored memories. Last-client removal separately offers deletion of the stored Cairn token; retain it if declined. Use Claude's documented [--keep-data](https://code.claude.com/docs/en/plugins/manifest-reference) uninstall option or disconnect with supported disable if unavailable; never delete its shared data directory. Data deletion requires a separate explicit confirmation. |
 | Stop capture for a project | While paused with workers stopped, add its opaque ID to a shared capture opt-out set; resume with the existing global EOF barrier. Both capture paths/end signals check it. Recall may remain enabled; state that clearly. No project-switching subsystem. |
 | Status | Re-running setup shows installed/configuration-pending/trust-review-needed/ready or pairing-needed, versions, target capability, pause/project capture state, token present/missing and bounded gap/error/progress counters. No conversation reads, keys/tokens/raw paths/session IDs in routine status; the explicit setup/dry-run change plan shows destination paths. Hook trust is unknown unless an installed-version interface verifies it. |
 
@@ -581,7 +507,7 @@ Record exact runtimes/platforms; mock success is not a host or semantic-quality 
 | A5 — Fail-open | Stalled/oversized stdin, null path, outage/auth failure, bad reply, spawn/lock/state failure and unsupported schema. Bounded successful hook exits, valid Stop JSON, no blocking output; explicit controls fail visibly. Check worker lifetime and LAC's >30 s scripted success, lease cooldown and termination. |
 | A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits/retries unchanged. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
 | A7 — Context authority/lifecycle | Framing/filter/size fixtures reject hostile authority/execution requests in recall and session context, without receipt stripping or stale injection. A positive fixture proves “Prefer diagrams.” survives unchanged as quoted preference data with its receipt, without becoming an authoritative directive. Keep defaults disabled until authorized pinned-host adversarial evaluation passes. Sibling conformance separately verifies context/end capability, deduplication and incomplete-capture semantics. |
-| A8 — Installer/distribution | Offline packed CLI, fake `claude`/`codex` binaries on `PATH`, temporary homes and synthetic credentials; all A8 cases below. No real host installation, network/provider calls or publication. |
+| A8 — Installer/distribution | [Installer gates](one-command-setup.md#a8-installer-gates): fake CLIs on `PATH`, temporary homes, packed CLI; assert dry-run starts zero host processes and writes nothing. Cover joint setup/adoption, Claude >=2.1.147 configuration/manual fallback, consent disclosures, trust, missing home, separate token removal and tarball scripts/version checks. No real host installation, network/provider calls or publication. |
 
 **A3 identity fixtures** exercise the guards before setup completes adoption;
 A8 additionally proves setup's normal path and confirmation handling:
@@ -591,8 +517,9 @@ A8 additionally proves setup's normal path and confirmation handling:
   one initializer; the second reports `pairing_needed`, with no key or memory requests.
 - Released Claude key at the exact known plugin data path, with no registration:
   Codex reports `pairing_needed`, creates no key, and Claude keeps working.
-- Undetermined Claude path: no setup writes before the question; a yes answer
-  requires pairing, never key creation. Cover falsy home and nonstandard origin.
+- Undetermined Claude path with a valid home: no setup writes before the question;
+  a yes answer requires adoption, never key creation. Cover nonstandard origins;
+  the missing-home refusal is tested separately below.
 - Un-upgraded Claude key in `~/.cairn-memory`: Codex enters pairing without implicit
   control sharing. Old Claude continues until explicit upgrade/stopped-worker adoption.
 - Codex registered first, then upgraded Claude: if Claude already used a different
@@ -608,37 +535,12 @@ A8 additionally proves setup's normal path and confirmation handling:
   Paired deletion fails with `paired_key_missing`; original-key restore preserves
   IDs, while explicit reset requires fresh pairing and discloses changed scope.
 - Exact coordination paths stay independent of `CLAUDE_PLUGIN_DATA`; falsy home
-  uses the specified temporary paths for unpaired operation and rejects pairing.
+  uses the specified temporary paths only for standalone unpaired operation; setup
+  refuses before writes or host execution and never builds relative paths.
 
-**A8 installer fixtures:**
-
-- Both CLIs present, no existing Cairn state: detect versions, obtain separate
-  client consent, and initialize both in one run with one key and no pairing prompt.
-  Declining either client leaves it untouched; no capture precedes consent/binding.
-- Only Claude present: configure it; after adding fake Codex, re-run setup and
-  require the sharing confirmation, adopting the same key. Plain reruns preserve
-  keys, pause state/cursors and existing hooks; partial failure repairs do not
-  create a second key or claim an unconfigured client is ready.
-- Existing Claude plugin key, including F1 known/nonstandard paths: confirm and
-  adopt, never replace. Decline preserves the existing client; E4 conflicts keep
-  each established client's access until explicit choice. Cover the userConfig
-  automation and exact-manual-step fallback using version-specific fake hosts.
-- `--dry-run`, including removal plans: snapshot temporary homes and assert no
-  writes, locks, secrets or mutating subprocess calls; every intended change is
-  printed with secret placeholders. No OAuth/browser/network side effects.
-- Hook definitions use supported locations/stable runtime paths and preserve
-  other hooks. Recorded subprocess arguments never contain
-  `--dangerously-bypass-hook-trust`; trust files are unchanged, and `/hooks` review
-  remains pending. Hosted token/OAuth-capability and local-LAC-unavailable paths
-  report accurate status without real credentials or provider calls.
-- Remove either/last client repeatedly: retain data, key and Cairn-owned credentials; preserve
-  the other client's usable runtime/registrations and require separate consent for
-  data deletion. Verify Claude `--keep-data` or safe disable fallback.
-- Pack locally with scripts disabled and inspect the actual tarball: only explicit
-  allowlisted files, shared/Codex/setup dependency closure, correct scoped name,
-  no `preinstall`/`install`/`postinstall` or other install lifecycle hooks, no
-  secrets/development files, and no imports back into the checkout. Root and local
-  preview remain private; no publish command is run. Provenance is a release gate.
+Detailed [A8 installer fixtures](one-command-setup.md#a8-installer-gates) live in
+CX-7's plan, including zero host starts in dry-run, consent disclosures, version
+fallback, token-removal confirmation, missing-home refusal and packed-file checks.
 
 Parser fixtures additionally cover all excluded item families, bootstrap and
 compaction messages, duplicate representations, unknown fields/channels, Unicode,
@@ -657,8 +559,8 @@ injection part until A7; do not substitute a direct API check for human acceptan
 
 ## Ordered packages and exclusive file ownership
 
-Future allowed files only; this worker edits this document alone. Each row has
-**one package owner for every listed path**, including shared paths. Hand off
+Future allowed files only; this docs packet edits this contract and the setup plan.
+Each row has **one package owner for every listed path**, including shared paths. Hand off
 serially in this order; the next owner cannot edit until the prior package lands.
 No column delegates an overlapping subtree to another worker.
 
@@ -670,8 +572,8 @@ No column delegates an overlapping subtree to another worker.
 | CX-4 / protocol owner | `schemas/capture-request.schema.json`; `plugins/cairn-memory/test/protocol.test.mjs`; `integrations/client/transport-hosted.mjs`, `integrations/client/test/transport-hosted.test.mjs`; `docs/protocol.md`, `docs/architecture.md`, `docs/privacy.md`; release files below, including root `package.json` | CX-3; 0.2.0 breaking-version note, matching version bumps and changelog in this same PR, truthful discriminator and Codex reader threat boundary. Hosted support is an external gate; no service code. |
 | LAC / local-capture owner | `adapters/local-capture/**` including `test/**` and `README.md`; `integrations/client/transport-local.mjs`, `integrations/client/test/transport-local.test.mjs`; `packaging/**` including `packaging/artifact-files.json`; `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-3/4; actual core integration for both clients, deadlines and A6. Own the “local store not connected” correction, local capture privacy/threat-model change, its own changelog entry and required version bump in this PR. No engine changes. |
 | CX-5 / lifecycle-install owner | `integrations/codex/**`; `integrations/client/session-context.mjs`, `integrations/client/session-end.mjs`, `integrations/client/context-format.mjs`, `integrations/client/test/session-context.test.mjs`, `integrations/client/test/session-end.test.mjs`, `integrations/client/test/context-format.test.mjs`; `plugins/cairn-memory/hooks/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/lifecycle.test.mjs`, `plugins/cairn-memory/README.md`; `packaging/**`; root `README.md`; release files below | LAC, or completed hosted path with LAC explicitly deferred; sibling-agreed port DTOs and A7. Own root README's Codex automatic-hook status, its own changelog entry and required version bump. This owner alone implements sibling adapters in shared files; sibling authors supply the contract, not competing edits. Preserve Claude hosted behavior; its new episode hooks remain separate work. |
-| CX-7 / one-command setup and npm distribution owner | `integrations/setup/**` including `cli.mjs`, `test/**`, `README.md`; `packaging/npm/**` including `package.json`, `files.json`, `build.mjs`, `test/**`; `packaging/artifact-files.json`; `README.md`, `plugins/cairn-memory/README.md`, `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | After CX-5; normal setup/dry-run/removal, reuse CX-2 identity/lock/controls and CX-5 host registrations, A8. Own npm allowlist/manifest/build and installation/privacy/distribution docs, including installed runtime/progress state. Own its changelog and required synchronized version bump in this PR. Produce a reviewable tarball; publication requires separate release approval. |
-| CX-6 / verification owner | `integrations/codex/test/**`, `integrations/client/test/**`, `adapters/local-capture/test/**`, `integrations/setup/test/**`, `packaging/npm/test/**`; `docs/plans/codex-client.md`, `docs/limitations.md`, `ROADMAP.md` | Previous packages including CX-7; full runtime matrices and later separately authorized human evidence. No registry/release claim from mocks. |
+| CX-7 / one-command setup and npm distribution owner | `integrations/setup/**`; `packaging/npm/**`; `packaging/artifact-files.json`, `packaging/README.md`; `scripts/validate-json.mjs`; `README.md`, `plugins/cairn-memory/README.md`, `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`; release files below | After CX-5; [setup plan](one-command-setup.md), A8, CX-2 identity/controls and CX-5 registrations. Own installer/bundle, installation/privacy/distribution docs, runtime/progress state, packaging README's no-npx boundary, and public-manifest version validation. Own changelog/synchronized bump; reviewable tarball only, separate publication approval. |
+| CX-6 / verification owner | `integrations/codex/test/**`, `integrations/client/test/**`, `adapters/local-capture/test/**`, `integrations/setup/test/**`, `packaging/npm/test/**`; `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`, `docs/limitations.md`, `ROADMAP.md` | Previous packages including CX-7; full runtime matrices and later separately authorized human evidence. No registry/release claim from mocks. |
 
 Every user-visible package owns its release records **in its own PR**, including
 CX-2, CX-4, LAC, CX-5 and CX-7. These concrete release files supplement its row's allowed paths:
@@ -682,15 +584,17 @@ and any required version bump; CX-4 owns the full 0.2.0 bump, including root ver
 in the same PR. `scripts/validate-json.mjs` requires all five version locations
 (including the marketplace plugin entry) to match. Later packages update all
 of them together when a bump is required; they cannot defer records to CX-6.
-CX-7 also owns `packaging/npm/package.json` and aligns its release version with
-the bundled runtime; the root contributor package stays private.
+CX-7 owns `packaging/npm/package.json` and `scripts/validate-json.mjs`: validate
+the public manifest version alongside all existing version locations. The root
+contributor and local-preview packages stay private.
 
 The integrator owns `.github/workflows/**` and schedules root script changes;
 the active package owner alone edits root `package.json`, including scripts/version,
 in that package's PR. No competing integrator version or file-list edit is allowed.
 Each row naming `packaging/**` owns its entire subtree exclusively while active;
-after CX-5 lands, CX-7 alone owns `packaging/npm/**` and `packaging/artifact-files.json`,
-then hands only npm tests to CX-6. No competing artifact file-list edits.
+after CX-5 lands, CX-7 alone owns `packaging/npm/**`, `packaging/artifact-files.json`
+and `packaging/README.md`, then hands only npm tests to CX-6. No competing artifact
+file-list edits. CX-7 alone edits `scripts/validate-json.mjs` in its PR.
 `docs/privacy.md` passes CX-2 → CX-4 → LAC → CX-7; `docs/architecture.md` passes
 CX-4 → LAC → CX-7. CX-6 cannot edit them. If LAC is deferred, CX-7 documents only
 shipped setup/distribution; LAC receives a later explicit handoff for local-flow
@@ -706,12 +610,15 @@ Snapshot **as of sibling `cc0f31e`, to verify at execution** for
 `packaging/artifact-files.json`, `.github/workflows/ci.yml`, root `package.json`,
 `CHANGELOG.md` and `packaging/test/**`. The sibling does not edit Claude `hooks/**` in this snapshot.
 CX-7 now participates in the snapshot's `docs/privacy.md`, artifact file list,
-root `package.json` and `CHANGELOG.md` handoffs. Its root `README.md` and
-`docs/architecture.md` handoffs also require the coordinator's umbrella-plan check;
-this does not assert additional sibling edits. The integrator retains CI ownership.
-Across both plans, **only one open PR at a time may edit each shared file**,
-including CI and release files. The repository maintainer (coordinator) sets the
-order and hands ownership to the next package after the preceding PR closes/lands;
+root `package.json` and `CHANGELOG.md` handoffs. The linked [setup plan](one-command-setup.md#cx-7-ownership-and-following-stages)
+shares this ledger, not another owner. Its `packaging/README.md`,
+`scripts/validate-json.mjs`, root `README.md` and `docs/architecture.md` handoffs
+also require the coordinator's umbrella-plan check; this does not assert additional
+sibling edits. The integrator retains CI ownership.
+Across this contract, the setup plan and the sibling, **only one open PR at a time
+may edit each shared file**, including CI, version validation and release files.
+The repository maintainer (coordinator) sets the order and hands ownership to the
+next package after the preceding PR closes/lands;
 this also serializes the integrator's CI edits. Rebase before each handoff.
 
 Proposed default order: **CX-1 → SE-1…SE-5 → CX-2 → CX-3 → CX-4 → LAC → CX-5 → CX-7 → CX-6**.
@@ -729,8 +636,9 @@ newcomers remain memory-disabled until then; established clients keep their own
 existing keys and memory access, with visible `pairing_needed` conflict status.
 Paired key loss disables both memory clients until explicit repair. The repository
 maintainer sets conflict policy and resolves repository boundaries only. Path aliases/cross-machine pairing
-are excluded. Claude installer automation for endpoint/token/`pairing_record`,
-exact npm package name/availability and hosted OAuth remain **to verify at release**.
+are excluded. Claude pinned-host reconfiguration/hook delivery, exact npm name
+and hosted OAuth remain **to verify at release**. The setup plan records H1
+PATH-helper uncertainty; dry-run never relies on a host probe being read-only.
 Current architecture/README correctly describe no public npm shortcut today;
 CX-7 must reconcile that distribution boundary with the approved release before
 advertising availability. The private umbrella-plan pointer remains an execution gate.
@@ -741,8 +649,8 @@ tool/file/reasoning/image ingestion; target switching; episode implementation;
 paid experiments or production deployment. Existing semantic-quality failures
 remain failures; this contract does not certify source truth or adoption.
 
-One-command revision verification on Node `v22.16.0`: `npm test` exited 0 (106 passed),
-`npm run validate` exited 0, and all 20 relative Markdown links resolved (exit 0).
+Setup-split revision verification on Node `v22.16.0`: `npm test` exited 0 (106 passed),
+`npm run validate` exited 0, and all 38 relative links in both plans resolved (exit 0).
 Working/staged `git diff --check` exited 0 before the new local commit.
 No Node 20/24 execution, new-client implementation or human two-client acceptance
 is implied by these existing repository checks.
