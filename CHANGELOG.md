@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — opt-in episode storage
+
+- Add the local episode storage and inspection foundation: source-bound retained
+  passages, revision-guarded corrections, conversation deletion with derived-memory
+  suppression, and durable capture controls. Episode payload capacity reclaims only
+  admitted episode backlog, then bypasses staging while preserving admission.
+- Add explicitly sourced procedural tags with independent revisions; tag-only
+  edits preserve memory content and relationship evidence. Untagged, episode-off
+  stores retain their existing behavior. Episode capture and interpretation, range
+  reads, startup context, and provider/MCP integrations remain later packages.
+
 ## Unreleased — decision commitment and claimant guidance
 
 - Clarify v2 source interpretation: settled scoped preferences and choices may

@@ -11,6 +11,8 @@ import { migrateVersion11 } from './rationale-schema.mjs';
 import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
 
+import { migrateVersion14 } from './episode-schema.mjs';
+
 const APPLICATION_ID = 0x43414952;
 const VERSION = 14;
 
@@ -252,7 +254,7 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path) {
+export function openDatabase(path, episodes = false) {
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
   if (path !== ":memory:") {
     path = resolve(path);
@@ -273,16 +275,22 @@ export function openDatabase(path) {
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
-      if (appId === APPLICATION_ID && version === VERSION) return;
+      if (appId === APPLICATION_ID && version === 15) return;
+      if (appId === APPLICATION_ID && version === VERSION) {
+        if (episodes) migrateVersion14(db);
+        return;
+      }
       if (appId === APPLICATION_ID && version === 13) {
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 12) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 11) {
@@ -290,6 +298,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 10) {
@@ -298,6 +307,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 9) {
@@ -307,6 +317,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 8) {
@@ -317,6 +328,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 7) {
@@ -328,6 +340,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 6) {
@@ -340,6 +353,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 1) {
@@ -356,6 +370,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 3) {
@@ -371,6 +386,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 4) {
@@ -385,6 +401,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       if (appId === APPLICATION_ID && version === 5) {
@@ -398,6 +415,7 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
         db.exec(`PRAGMA user_version = ${VERSION}`);
+        if (episodes) migrateVersion14(db);
         return;
       }
       const tables = db.prepare("SELECT count(*) AS n FROM sqlite_master").get().n;
@@ -415,6 +433,7 @@ export function openDatabase(path) {
       migrateVersion12(db);
       migrateVersion13(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
+      if (episodes) migrateVersion14(db);
     });
     return db;
   } catch (error) {

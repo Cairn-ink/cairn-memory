@@ -1,3 +1,4 @@
+import { episodeOptions } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
 import { createCaptureDeadline } from './capture-deadline.mjs';
@@ -141,7 +142,7 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes']);
   const sourceCandidateDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceCandidatePolicy');
   const sourceCandidatePolicy = sourceCandidateDescriptor?.value;
   if (sourceCandidateDescriptor && (!Object.hasOwn(sourceCandidateDescriptor, 'value') ||
@@ -171,9 +172,11 @@ export function openMemoryCore(input) {
       captureEvidence !== undefined || captureRationale !== undefined)) {
     throw new MemoryStoreError('invalid_input');
   }
+  const sessionEpisodes = Object.hasOwn(input, 'sessionEpisodes') ? episodeOptions(input.sessionEpisodes) : undefined;
+  if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
-  const runtime = createMemoryRuntime({ path: input.path });
+  const runtime = createMemoryRuntime({ path: input.path, ...(sessionEpisodes ? { sessionEpisodes } : {}) });
   const { storeId, cursorSecret } = runtime.identity;
 
   function namespaceBinding(ns) {
@@ -230,7 +233,7 @@ export function openMemoryCore(input) {
   function admit(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memory", "receipts", "conflictHints", "qualification"]);
+      object(input, ["namespace", "memory", "receipts", "conflictHints", "qualification", "procedural"]);
       const ns = contractNamespace(input.namespace);
       const memory = contractMemory(input.memory);
       if (!Array.isArray(input.receipts) || input.receipts.length < 1 || input.receipts.length > 4) {
@@ -240,7 +243,7 @@ export function openMemoryCore(input) {
       const conflictHints = contractConflictHints(input.conflictHints);
       if (Object.hasOwn(input, 'qualification')) qualificationSources(input.memory.content, input.receipts);
       const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
-      const result = runtime.admit(ns, { ...memory, receipts, conflictHints, qualification });
+      const result = runtime.admit(ns, { ...memory, receipts, conflictHints, qualification, ...(Object.hasOwn(input, "procedural") ? { procedural: input.procedural } : {}) });
       return { memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated, indexRevision: result.indexRevision };
     });
@@ -287,7 +290,7 @@ export function openMemoryCore(input) {
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
-      return { memory: page.memory, receipts, placements: page.placements, conflicts: page.conflicts,
+      return { memory: page.memory, receipts, ...(page.procedural ? { procedural: page.procedural } : {}), placements: page.placements, conflicts: page.conflicts,
         ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
@@ -781,6 +784,7 @@ export function openMemoryCore(input) {
     try {
       const deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
       runtime.ready();
+      if (sessionEpisodes) throw new MemoryStoreError('episode_capture_not_available');
       object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
@@ -856,7 +860,65 @@ export function openMemoryCore(input) {
 
   async function classifyPlacement(input) { return classifyPlacementValidated(input); }
 
+  function episodeMutation(method, allowed, input) {
+    return invoke(() => {
+      runtime.ready(); object(input, ['namespace', ...allowed]);
+      const ns = contractNamespace(input.namespace);
+      if (input.episodeId !== undefined) contractId(input.episodeId);
+      if (input.expectedRevision !== undefined) contractRevision(input.expectedRevision);
+      return runtime[method](ns, input);
+    });
+  }
+  const forgetEpisode = input => episodeMutation('forgetEpisode', ['episodeId','expectedRevision'], input);
+  const correctEpisode = input => episodeMutation('correctEpisode', ['episodeId','expectedRevision','patch'], input);
+  const releaseEpisodeCorrection = input => episodeMutation('releaseEpisodeCorrection', ['episodeId','expectedRevision','fields'], input);
+  const getCaptureControl = input => episodeMutation('getCaptureControl', [], input);
+  const setCapturePaused = input => episodeMutation('setCapturePaused', ['expectedGeneration','paused'], input);
+  const setProjectCapture = input => episodeMutation('setProjectCapture', ['expectedGeneration','enabled'], input);
+  function setProceduralMemory(input) {
+    return invoke(() => {
+      runtime.ready(); object(input, ['namespace','memoryId','expectedRevision','expectedTagRevision','procedural']);
+      if (!Object.hasOwn(input, 'procedural') || !Number.isSafeInteger(input.expectedTagRevision) || input.expectedTagRevision < 0) throw new MemoryStoreError('invalid_input');
+      return runtime.setProceduralMemory(contractNamespace(input.namespace), { ...input,
+        memoryId: contractId(input.memoryId), expectedRevision: contractRevision(input.expectedRevision) });
+    });
+  }
+  function getEpisode(input) {
+    return invoke(() => {
+      runtime.ready(); object(input, ['namespace','episodeId','sourceLimit','sourceCursor','memoryLimit','memoryCursor','policyLimit','policyCursor']);
+      const ns = contractNamespace(input.namespace), episodeId = contractId(input.episodeId), pages = {}, bindings = {};
+      for (const name of ['source','memory','policy']) {
+        const count = input[`${name}Limit`] ?? 20;
+        if (!Number.isSafeInteger(count) || count < 1 || count > 50) throw new MemoryStoreError('invalid_input');
+        const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'getEpisode', m: episodeId, p: name, l: count };
+        const cursor = input[`${name}Cursor`] === undefined ? undefined : decodeCursor(input[`${name}Cursor`], binding);
+        if (cursor && (Object.keys(cursor.a).join() !== 'id' || (name === 'policy'
+          ? !Number.isSafeInteger(cursor.a.id) || cursor.a.id < 0 : typeof cursor.a.id !== 'string'))) throw new MemoryStoreError('invalid_cursor');
+        bindings[name] = binding; pages[name] = { limit: count, after: cursor?.a.id, epoch: cursor?.e };
+      }
+      const result = runtime.getEpisode(ns, { episodeId }, pages);
+      const output = { episode: result.episode };
+      for (const [name, key, idKey] of [['source','sources','id'],['memory','memoryLinks','id'],['policy','policies','position']]) {
+        const values = result[key].slice(0,pages[name].limit), exhausted = result[key].length <= pages[name].limit;
+        output[key] = { items: values, exhausted, nextCursor: exhausted ? null : encodeCursor({ ...bindings[name], e: result.epoch, a: { id: values.at(-1)[idKey] } }) };
+      }
+      output.status = 'complete';
+      for (const [name,key,idKey] of [['policy','policies','position'],['memory','memoryLinks','id'],['source','sources','id']]) {
+        while (Buffer.byteLength(JSON.stringify(output),'utf8') > 65536 && output[key].items.length) {
+          output[key].items.pop(); output[key].exhausted = false; output.status = 'budget_exhausted';
+          const after = output[key].items.at(-1)?.[idKey] ?? pages[name].after ?? (name === 'policy' ? 0 : '');
+          output[key].nextCursor = encodeCursor({ ...bindings[name], e: result.epoch, a: { id: after } });
+        }
+      }
+      if (Buffer.byteLength(JSON.stringify(output), 'utf8') > 65536 ||
+          (output.status === 'budget_exhausted' && !output.sources.items.length && !output.memoryLinks.items.length && !output.policies.items.length)) throw new MemoryStoreError('context_item_too_large');
+      return output;
+    });
+  }
+
   return Object.freeze({
+    getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
+    getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,

@@ -206,3 +206,31 @@ Local MCP, real-model evaluation and export/restore remain separate work.
 Hosted migration remains a separate, behavior-tested change.
 The existing released plugin's default-on telemetry is unchanged; this store
 has no telemetry at all. See [acceptance and dependency provenance](plans/local-memory-store.md).
+
+## Episode storage foundation (SE-1)
+
+`sessionEpisodes: {mode:'episode-v1', draftEveryBatches:8}` opts into schema v15;
+`openMemoryCore` also requires `captureQualification:'source-bound-v2'` and
+`captureEvidence:'staged-v1'`. N is snapshotted per session, integer 2–16.
+This package supplies persistence and management, not the SE-2 capture pipeline.
+A mode-on `capture` returns `episode_capture_not_available` until that package
+lands. Mode-off capture remains unchanged. No provider calls are added.
+
+Untouched feature-off stores remain v14. An explicit procedural-tag mutation also
+opts into v15. A v15 store can reopen with episodes off; inspection and existing
+memory correction/forgetting still enforce episode dependencies. Close **all** old
+processes before upgrading. Older binaries reject v15 on subsequent opens, but
+cannot be retroactively fenced while already connected. There is no downgrade.
+
+The upgrade runs within the existing immediate transaction with foreign keys on.
+It snapshots and drops the two admission children (staging and the v14 initial
+classification journal) before rebuilding the admission parent, then restores
+both children. Reserved parents have no token, lease, or result. Released staging
+retains event ownership, reason and source disposition, with no payload charge.
+Foreign-key checking precedes commit; any failure restores the prior schema/data.
+
+Episode identity uses a dedicated 256-bit store HMAC key and a versioned tuple of
+exact namespace, client and host session. New episode rows retain only the derived
+`s1:` identity. Missing or corrupt keys fail closed. Retained passages have no age
+TTL; conversation deletion and source invalidation remove them logically. Old
+receipts are unchanged; backups and SQLite free pages remain outside erasure claims.

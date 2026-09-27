@@ -132,3 +132,50 @@ bounded fetch/recall. MCP integration and real-model evaluation remain separate.
 This does not certify the draft
 engine's unrelated-query recall behavior. Hosted migration and Moss remain out
 of scope; the end goal is one public core consumed by all host adapters.
+
+## Episode management and procedural tags (SE-1)
+
+The local envelope facade adds `getEpisode`, `correctEpisode`,
+`releaseEpisodeCorrection`, `forgetEpisode`, `getCaptureControl`,
+`setCapturePaused`, `setProjectCapture`, and `setProceduralMemory`. No HTTP/MCP
+schema or provider interface is widened. `getEpisode` needs no model or mode
+option on a v15 store. It takes the plan's exact namespace/episode ID and
+independent source/memory/policy limits/cursors (20 default, 50 maximum).
+`{episode,sources,memoryLinks,policies,status}` returns each page as
+`{items,nextCursor,exhausted}`. Signed cursors bind store, namespace, episode,
+page kind, limit and epoch; mutation returns `cursor_stale`. Pages retain whole
+items under 64 KiB and report `budget_exhausted` when truncated. Source roles and
+prose remain untrusted and `semanticSupport:'unassessed'`.
+
+`correctEpisode({namespace,episodeId,expectedRevision,patch})` accepts gist,
+outcome and nextStep entries as `{text,anchors:[{sourceId,digest,start,end}]}`.
+Outcome/nextStep can be null; clearing a step closes it. Corrections pin fields;
+`releaseEpisodeCorrection({namespace,episodeId,expectedRevision,fields})` removes
+pins. UTF-16 offsets cannot split a code point, and prose bounds apply before and
+after normalization/redaction. These operations never invoke a model.
+
+`forgetEpisode({namespace,episodeId,expectedRevision})` removes conversation prose,
+labels, metadata and retained passages, tombstones the derived session, and forgets
+all derived memories including deduplicated and historical ones with normal exact
+suppression. Source consumers are invalidated even without memory lineage. Other
+memories of an invalidated consumer are not recursively forgotten. Both existing
+memory facades invalidate dependent episodes when correcting/forgetting, including
+feature-off reopens. Existing namespace-wide staged purges remain in effect.
+
+Control getters take `{namespace}`; setters take that namespace, an
+`expectedGeneration` and respectively `paused` or `enabled`. Project setters
+require project scope. Generations are opaque strings (`initial` before the first
+mutation); setters produce a new token and fence unfinished work. Producers must
+still implement the skip-to-transcript-end barrier; SE-1 cannot authenticate their
+submitted roles or generations.
+
+Explicit `admit` accepts `procedural:{anchors:[{receiptIndex,start,end}]}` for
+instruction/preference memories, independently of episode mode. Anchors address
+canonical admitted receipts. `setProceduralMemory` takes namespace, memoryId,
+expectedRevision, expectedTagRevision (0 when absent), and `procedural` as null
+or `{anchors:[{receiptId,digest,start,end}]}`. It updates only the sidecar tag and
+namespace epoch. `get` includes `procedural` only when a tag revision exists;
+cleared tags expose `procedural:false` with no anchors. Tag-only edits preserve
+memory revision, receipts and conflict/qualification/rationale links. Filing
+preserves tags; content correction, forgetting and admission changes clear them.
+Automatic tag proposal remains SE-2; legacy automatic outputs still reject tags.

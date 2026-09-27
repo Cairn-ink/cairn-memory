@@ -651,3 +651,13 @@ expansion, dropped conditions or inferred authority is allowed. Inspection can
 still expose the original model interpretation. File-access, journals, backups
 and logical forgetting retain their existing limitations. See
 [source evidence context](source-evidence-context.md).
+
+### Local episode persistence package
+
+SE-1 implements the model-free storage and management subset of the
+[session-episode plan](plans/session-episodes.md), including `getEpisode` before
+capture integration. See [storage API shapes](storage-contract.md#episode-management-and-procedural-tags-se-1)
+and [opt-in schema migration](local-store.md#episode-storage-foundation-se-1).
+Capture scheduling/interpretation, range/startup reads, provider schemas and MCP
+exposure remain SE-2–SE-5. No hosted defaults, telemetry or automatic prompt bytes
+change. Explicit procedural tags are independent opt-in local mutations.

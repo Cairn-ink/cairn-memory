@@ -1,5 +1,8 @@
 [
   "core/admission-storage.mjs",
+  "core/episode-schema.mjs",
+  "core/episode-storage.mjs",
+  "core/procedural-storage.mjs",
   "core/staged-evidence-schema.mjs",
   "core/staged-evidence-storage.mjs",
   "core/automatic-qualification.mjs",

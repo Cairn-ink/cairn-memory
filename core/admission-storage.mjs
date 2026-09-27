@@ -7,7 +7,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal }) {
+  conflictStorage, stagedEvidence, classificationJournal, episodes }) {
   const read = (ns, input) => db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
     .get(...key(ns, input));
   const live = (row, input, now) => row?.state === "pending" &&
@@ -23,7 +23,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         .get(...key(ns, input));
       let result;
       if (!row) result = { status: 'absent', classification: { status: 'unknown' } };
-      else if (row.state === 'pending') result = { status: 'pending', classification: { status: 'unknown' } };
+      else if (row.state === 'pending' || row.state === 'reserved') result = { status: 'pending', classification: { status: 'unknown' } };
       else {
         let ids;
         try { ids = JSON.parse(row.memory_ids); } catch { fail('storage_error'); }
@@ -64,13 +64,15 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
           suppressedCount: row.suppressed_count, ...hooks?.replay() };
       }
+      if (episodes.admissionProcessing(ns,input)) return { processing: true };
       const prepared = hooks?.prepare(row);
       if (row && row.lease_expires_at > now) return { processing: true };
-      const capacity = serialized && stagedEvidence.capacityGuard(ns, serialized);
+      const registered = episodes.event(ns, input);
+      const capacity = !registered && serialized && stagedEvidence.capacityGuard(ns, serialized);
       if (capacity) return { closed: capacity };
       const token = randomUUID();
       if (row) {
-        db.prepare(`UPDATE admission_claims SET token = ?, lease_expires_at = ? WHERE ${where}`)
+        db.prepare(`UPDATE admission_claims SET state = 'pending', token = ?, lease_expires_at = ? WHERE ${where}`)
           .run(token, now + input.leaseMs, ...key(ns, input));
       } else {
         db.prepare(`INSERT INTO admission_claims
@@ -78,7 +80,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
           .run(...key(ns, input), input.payloadDigest, token, now + input.leaseMs);
       }
-      if (serialized) stagedEvidence.insert(ns, input, serialized, now);
+      if (registered) episodes.admissionStarted(ns,input);
+      if (serialized && !registered) stagedEvidence.insert(ns, input, serialized, now);
       return { token, ...prepared };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
@@ -92,6 +95,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       const closed = stagedEvidence.finishGuard(ns, input, row, now);
       if (closed) return { closed };
       if (!live(row, input, now)) fail("stale_admission");
+      const episodeClosed=episodes.finishGuard(ns,input); if (episodeClosed) fail(episodeClosed);
       // The public manual finish cannot bypass ordered capture's private proof.
       if (!hooks?.validate && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
         .get(...key(ns, input))) fail('stale_admission');
@@ -125,6 +129,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${where}`)
         .run(JSON.stringify(memoryIds), suppressedCount, ...key(ns, input));
       hooks?.complete?.();
+      episodes.admitted(ns, input, entries);
       stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
