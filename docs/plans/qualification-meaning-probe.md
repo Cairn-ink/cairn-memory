@@ -118,3 +118,30 @@ reviewed one-shot launcher to this single-arm runner and24-attempt denominator.
 The private launcher remains inert until its new manifest is frozen. It retains
 the same key scope, ledger, start marker and no-retry behavior. The operator and
 fresh checkpoint remain separate pre-dispatch review requirements.
+
+## Integrated offline verification
+
+Primary integrated the guidance candidate at `20c86ee4240a0a7d8098e36d0a9e36aa99483ba1`
+and personally ran full OpenAI277/277, generic112/112, JSON/version and pinned
+marketplace/strict-plugin checks on both Node22.16.0 and24.15.0. OpenAI logs:
+`/tmp/meaning-probe-integrated-openai-{22.16.0,24.15.0}.log`.
+
+The prerequisite's remote CI exposed three stale downstream CURRENT token-count
+assertions. Its independent correction `c1998886f0f207460bf2e58f5654cb4f0c8c3605`
+changes only that boundary test and its verification notes, not product behavior,
+wire, fixture or historical results. Integrating it produced
+`e7aa25d48fcf0712caacab9275adb93d98d4717b`. Primary reran the new runner's six tests
+and seven affected boundary tests together:13/13 on both runtimes, zero skips.
+Logs: `/tmp/meaning-probe-post-ci-focused-{22.16.0,24.15.0}.log`.
+The separately reviewed prerequisite also has full offline evidence340 passed,
+zero failed,30 explicit opt-in skips on both runtimes; those skips are not an
+installed-pass claim. Final remote CI and main ancestry integration remain gates.
+
+Two independent GPT-6 Sol/high pre-score calibration checks inspected the sources,
+rubric and all eight calibration examples before any model output existed. One
+identified the import-account overstatement corrected above; the narrowed rubric
+must be included in final review and the operator manifest. Source/fixture and
+calibration files did not change. The rubric file SHA256 is now
+`81028a9774780a624669ad715409b64fc7c1cd6dff34ebb388427e987feab948`.
+There is still no semantic score. Exact committed final code and the private
+operator/audit require independent review before the one-shot paid launch.
