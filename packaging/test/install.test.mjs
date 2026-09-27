@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test, { before } from 'node:test';
 import { buildArtifact, command, packageName, runtimeFiles } from '../build.mjs';
+import { GENERATED_BANNER } from '../../integrations/client/bundle.mjs';
 import { createExperimentBudget } from '../../evaluation/experiment-budget/index.mjs';
 import { createExperimentRequestGuard, authorizeQualificationExtension } from '../../evaluation/experiment-budget/request-guard.mjs';
 import { experimentPolicy } from '../../evaluation/live/session.mjs';
@@ -844,4 +845,18 @@ test('an ancestor npm project is never modified by a fresh explicitly scoped chi
   assert.equal(readJSON(join(child, 'package.json')).name, 'synthetic-local-install');
   assert.ok(existsSync(installed.executable));
   assert.equal(hash(join(installed.packagePath, 'core/contract.mjs')), artifact.sourceHashes['core/contract.mjs']);
+});
+
+test('installed redactor preserves the original self-contained dependency closure', () => {
+  const bundled = 'plugins/cairn-memory/lib/redact.mjs';
+  assert.ok(artifact.files.includes(bundled));
+  const source = readFileSync(new URL('../../integrations/client/redact.mjs', import.meta.url), 'utf8');
+  assert.equal(readFileSync(join(installation.packagePath, bundled), 'utf8'),
+    GENERATED_BANNER + source);
+  const probe = `import assert from 'node:assert/strict';
+    import {redactSecrets} from './node_modules/${packageName}/plugins/cairn-memory/lib/redact.mjs';
+    assert.equal(redactSecrets('api_token=synthetic-secret'), 'api_token=[REDACTED]');
+    console.log('installed_shared_redactor_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_shared_redactor_passed');
 });
