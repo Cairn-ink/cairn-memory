@@ -42,6 +42,7 @@ files and required dependency gate commands are frozen at dispatch.
   qualificationInputMode adaptive-text-catalog-v1; existing pinned model IDs.
   Recall query exactly P.mem0Input.query; limit6, contextMode source-evidence,
   selectionMode bounded-source-scan. Bind BOTH distinct keyset/selection choices.
+
 - Native Y topK6, threshold0, unchanged inferTrue and no-NLP verified profile;
   HTTP timeout equals the supplied X capability. Child deadline must be a
   documented positive fixed value <=Y cap, frozen before source preparation.
@@ -719,3 +720,12 @@ the private verification archive. Core, adapter, X ledger, provider policy,
 and native runtime files were not changed in this correction; their earlier
 full-suite evidence is unchanged. No paid calls, corpus, holdout, operational
 ledger or provider credentials were used.
+
+## Later bounded-qualification partition amendment
+
+The original mixed runner above remains a frozen historical protocol. The
+dependent [bounded qualification partition](bounded-qualification-partitions.md)
+keeps its external adaptive catalog wire/profile but binds the new
+whole-then-singleton dispatch policy into `mixed-context-v2`. It requires
+fresh v3 resource and guard-cap projection before any new launch; it does not
+alter prior runs or turn a stopped case into a retry.

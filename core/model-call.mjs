@@ -42,11 +42,19 @@ export async function callModel(model, method, system, input,
   controller = new AbortController();
   let timer;
   let output;
+  const freshnessFailure = {};
+  let freshnessError;
   try {
     output = await Promise.race([
       Promise.resolve().then(() => {
         check();
         const detached = structuredClone(request);
+        check();
+        // A token counter may have queued a discard before this invocation
+        // microtask. Keep trusted freshness failures distinct from model errors
+        // so the provider catch below cannot launder either one's authority.
+        try { validateFresh(); }
+        catch (error) { freshnessError = error; return freshnessFailure; }
         check();
         return model[method]({ ...detached, signal: controller.signal });
       }),
@@ -73,6 +81,7 @@ export async function callModel(model, method, system, input,
     reject(failureCode, 'provider_failure');
   } finally { clearTimeout(timer); }
   check();
+  if (output === freshnessFailure) throw freshnessError;
   validateFresh();
   check();
   let text;

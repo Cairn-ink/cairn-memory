@@ -154,11 +154,16 @@ the accepted native chat response's complete byte cap to bound fact embedding
 tokens across each pass. It still reserves both attempted batches and all
 possible singleton fallbacks, including previously successful chunks; the
 historical v1 independent token-maxima projection is retained, not rewritten.
-Neither version is an expected invoice: a ceiling above available funds does
+The later v3 [bounded qualifier partition](plans/bounded-qualification-partitions.md)
+reserves up to five qualifier count/generation pairs per source batch; it does
+not make an oversized individual source fit or establish that cited evidence
+entails a field. Old stopped pilots and reservations remain unchanged.
+No version is an expected invoice: a ceiling above available funds does
 not prove the run cannot fit, and a ceiling below them does not guarantee
-completion. The unchanged fixed-30 request ceiling still exceeds the existing
-request cap, so a separate same-dollar schema-2 cap extension, verified native
-configuration, the full common protocol, actual artifact and source-only checks
+completion. The v3 high-batch fixed-30 arithmetic exceeds the earlier request
+cap even before accounting for previously consumed requests. Fresh request-cap
+and money checks, verified native configuration, the full common protocol,
+actual artifact and source-only checks
 remain necessary before a paid pilot.
 
 The [same-dollar request-cap transition](plans/mixed-request-cap-v2.md) adds

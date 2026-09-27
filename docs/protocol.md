@@ -449,6 +449,19 @@ The separate `source-bound-v2` mode sends bounded deterministic source
 candidates with request-local indices and speaker roles to `qualifyCandidates`.
 The model selects evidence per field; core computes exact source offsets/text and
 coverage, then validates the unchanged S1 DTO. Receipt identities remain local.
+For an explicitly fit-capable qualifier, a whole-batch request that fits stays
+whole. Only when both whole inline and whole catalog forms fail local fit does
+core preflight up to five original-order singleton requests before any provider
+call. Each request retains exact candidate/receipt text and the same per-request
+bounds; results are compiled against immutable local source snapshots and only
+returned together. A later failure cannot admit earlier group results. This
+does not add a captured field, new authority, retry, source redaction or
+semantic validation of the model's interpretation. For staged source evidence,
+a trusted capture-scoped freshness check runs immediately before each group:
+discard/forget during an in-flight group blocks later provider calls and
+admission, though the already-started call cannot be recalled. The same check
+runs after token counting and before model dispatch, so a counter callback
+cannot bypass it, including when the callback queues a discard microtask.
 The local MCP constructor can select this mode without changing tool inputs.
 This does not authorize the new experiment paid method or expose a new HTTP payload.
 Source precision is not semantic truth or trusted slot membership. See

@@ -93,7 +93,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
     // A provider request already in flight cannot be recalled by local deletion.
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
-      ? await qualifyCandidateItems(model, items, deadline) : await qualifyExtractedItems(model, items, deadline);
+      ? await qualifyCandidateItems(model, items, deadline,
+        captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined)
+      : await qualifyExtractedItems(model, items, deadline);
     deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));

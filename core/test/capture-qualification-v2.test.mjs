@@ -207,6 +207,49 @@ test('CV2 neither-fitting qualifier refuses the whole capture before admission',
     qualifyCandidates() { modelCalls++; return { qualifications: [] }; } });
   const before = material(f.db);
   error(await f.core.capture(input({ eventId: 'no-fit' })), 'context_budget_exceeded');
-  assert.equal(fitCalls, 2); assert.equal(modelCalls, 0);
+  assert.equal(fitCalls, 4); assert.equal(modelCalls, 0);
   assert.deepEqual(material(f.db), before);
+});
+
+test('B3 partitioned capture compiles five sources atomically and cold-inspects exact anchors', async (t) => {
+  const f = fixture(t, { fitsQualificationRequest: ({ input: candidateInput }) => candidateInput.items.length === 1 });
+  const messages = Array.from({ length: 5 }, (_, index) => ({ id: `partition-${index}`, role: 'user',
+    content: `Independent synthetic source ${index}.` }));
+  const first = ok(await f.core.capture(input({ eventId: 'partition-success', messages })));
+  assert.equal(first.admission.memories.length, 5);
+  assert.deepEqual(f.calls.map((call) => call.method),
+    ['extract', ...Array(5).fill('qualifyCandidates')]);
+  assert.deepEqual(f.calls.slice(1).map((call) => call.input.items[0].candidates[0].candidateIndex),
+    [0, 1, 2, 3, 4]);
+  const warm = first.admission.memories.map((entry) => detail(f.core, entry.id));
+  assert.deepEqual(warm.map((entry) => entry.qualification.anchors[0].text),
+    messages.map((message) => message.content));
+  f.close();
+  const cold = openMemoryCore({ path: f.path, captureQualification: 'source-bound-v2' });
+  t.after(() => cold.close());
+  assert.deepEqual(first.admission.memories.map((entry) => detail(cold, entry.id)), warm);
+});
+
+test('B3 second partition failure leaves prior memory but admits none of the new batch', async (t) => {
+  let groupCalls = 0;
+  const f = fixture(t, { fitsQualificationRequest: ({ input: candidateInput }) => candidateInput.items.length === 1,
+    qualifyCandidates(request) {
+      const output = qualifyCandidates(request);
+      groupCalls++;
+      if (groupCalls === 2) output.qualifications[0].subject.evidenceIndices = [999];
+      return output;
+    } });
+  ok(await f.core.capture(input({ eventId: 'baseline' })));
+  const before = material(f.db); groupCalls = 0; f.calls.length = 0;
+  const messages = Array.from({ length: 5 }, (_, index) => ({ id: `failed-${index}`, role: 'user',
+    content: `Unadmitted synthetic source ${index}.` }));
+  error(await f.core.capture(input({ eventId: 'partition-failure', messages })), 'invalid_model_output');
+  assert.equal(groupCalls, 2);
+  assert.deepEqual(f.calls.map((call) => call.method), ['extract', 'qualifyCandidates',
+    'qualifyCandidates']);
+  assert.deepEqual(material(f.db), before);
+  f.close();
+  const cold = new DatabaseSync(f.path, { readOnly: true }); t.after(() => cold.close());
+  assert.deepEqual(material(cold), before);
+  assert.equal(cold.prepare("SELECT count(*) n FROM admission_claims WHERE state = 'completed'").get().n, 1);
 });

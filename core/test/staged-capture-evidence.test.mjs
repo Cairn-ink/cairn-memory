@@ -407,6 +407,114 @@ test('same-owner project namespaces isolate inspect, discard and namespace-wide 
   assert.equal(inspect(f.core, second).state, 'admitted'); assert.notEqual(inspect(f.core, second).view, null);
 });
 
+test('B3 staged discard during first singleton prevents every later qualifier dispatch', async t => {
+  const base = rationaleModel();
+  let releaseFirst; let startedFirst;
+  const firstStarted = new Promise(resolve => { startedFirst = resolve; });
+  const calls = [];
+  const f = fixture(t, { fitsQualificationRequest: request => request.input.items.length === 1,
+    qualifyCandidates(request) {
+      calls.push(request.input.items[0].content);
+      if (calls.length === 1) return new Promise(resolve => {
+        releaseFirst = () => resolve(base.qualifyCandidates(request)); startedFirst();
+      });
+      return base.qualifyCandidates(request);
+    } });
+  const v = input({ eventId: 'partition-discard', messages: [
+    { id: 'first', role: 'user', content: 'First synthetic source.' },
+    { id: 'second', role: 'user', content: 'Second synthetic source.' },
+  ] });
+  const pending = f.core.capture(v);
+  await firstStarted;
+  const other = reopen(t, f.path, { captureEvidence: 'staged-v1' });
+  assert.deepEqual(ok(other.discardCaptureEvidence(key(v))), { discarded: true });
+  releaseFirst();
+  error(await pending, 'capture_evidence_closed');
+  assert.deepEqual(calls, ['First synthetic source.']);
+  f.core.close(); other.close();
+  const cold = new DatabaseSync(f.path, { readOnly: true }); t.after(() => cold.close());
+  assert.equal(cold.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 0);
+  assert.equal(cold.prepare('SELECT count(*) n FROM memories').get().n, 0);
+  assert.equal(cold.prepare('SELECT count(*) n FROM receipts').get().n, 0);
+});
+
+test('B3 staged discard during singleton planning prevents the first dispatch', async t => {
+  const v = input({ eventId: 'planning-discard', messages: [
+    { id: 'first', role: 'user', content: 'First planned source.' },
+    { id: 'second', role: 'user', content: 'Second planned source.' },
+  ] });
+  let other; let modelCalls = 0; let discarded = false;
+  const f = fixture(t, { fitsQualificationRequest(request) {
+    if (request.input.items.length === 1 && !discarded) {
+      discarded = true;
+      assert.deepEqual(ok(other.discardCaptureEvidence(key(v))), { discarded: true });
+    }
+    return request.input.items.length === 1;
+  }, qualifyCandidates() { modelCalls++; assert.fail('stale source must not dispatch'); } });
+  other = reopen(t, f.path, { captureEvidence: 'staged-v1' });
+  error(await f.core.capture(v), 'capture_evidence_closed');
+  assert.equal(discarded, true); assert.equal(modelCalls, 0);
+  f.core.close(); other.close();
+  const cold = new DatabaseSync(f.path, { readOnly: true }); t.after(() => cold.close());
+  assert.equal(cold.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 0);
+  assert.equal(cold.prepare('SELECT count(*) n FROM memories').get().n, 0);
+});
+
+test('B3 staged discard in final pre-dispatch token count prevents first model call', async t => {
+  const v = input({ eventId: 'count-discard', messages: [
+    { id: 'first', role: 'user', content: 'First counted source.' },
+    { id: 'second', role: 'user', content: 'Second counted source.' },
+  ] });
+  const base = rationaleModel();
+  let other; let planned = false; let discarded = false; let modelCalls = 0;
+  const f = fixture(t, { countTokens() {
+    if (planned && !discarded) {
+      discarded = true;
+      assert.deepEqual(ok(other.discardCaptureEvidence(key(v))), { discarded: true });
+    }
+    return 1;
+  }, fitsQualificationRequest(request) {
+    if (request.input.items.length === 1 && request.input.items[0].content === 'Second counted source.') {
+      planned = true;
+    }
+    return request.input.items.length === 1;
+  }, qualifyCandidates(request) { modelCalls++; return base.qualifyCandidates(request); } });
+  other = reopen(t, f.path, { captureEvidence: 'staged-v1' });
+  error(await f.core.capture(v), 'capture_evidence_closed');
+  assert.equal(discarded, true); assert.equal(modelCalls, 0);
+  f.core.close(); other.close();
+  const cold = new DatabaseSync(f.path, { readOnly: true }); t.after(() => cold.close());
+  assert.equal(cold.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 0);
+  assert.equal(cold.prepare('SELECT count(*) n FROM memories').get().n, 0);
+});
+
+test('B3 staged discard queued by final counter precedes model microtask dispatch', async t => {
+  const v = input({ eventId: 'microtask-discard', messages: [
+    { id: 'first', role: 'user', content: 'First queued source.' },
+    { id: 'second', role: 'user', content: 'Second queued source.' },
+  ] });
+  const base = rationaleModel();
+  let other; let planned = false; let scheduled = false; let discarded = false; let modelCalls = 0;
+  const f = fixture(t, { countTokens() {
+    if (planned && !scheduled) {
+      scheduled = true;
+      queueMicrotask(() => {
+        discarded = true;
+        assert.deepEqual(ok(other.discardCaptureEvidence(key(v))), { discarded: true });
+      });
+    }
+    return 1;
+  }, fitsQualificationRequest(request) {
+    if (request.input.items.length === 1 && request.input.items[0].content === 'Second queued source.') {
+      planned = true;
+    }
+    return request.input.items.length === 1;
+  }, qualifyCandidates(request) { modelCalls++; return base.qualifyCandidates(request); } });
+  other = reopen(t, f.path, { captureEvidence: 'staged-v1' });
+  error(await f.core.capture(v), 'capture_evidence_closed');
+  assert.equal(discarded, true); assert.equal(modelCalls, 0);
+});
+
 function version12Fixture(t) {
   // Reconstruct the frozen synthetic v10 fixture, then apply the unchanged v11
   // and v12 migrations. No v13 implementation constructs this old schema.

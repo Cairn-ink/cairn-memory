@@ -90,6 +90,68 @@ test('catalog-fit uses two local fit checks and still one model invocation', asy
   assert.equal(calls[0].inputMode, 'text-catalog-v1');
 });
 
+test('B2: five distinct fitting singleton groups are planned before dispatch', async () => {
+  const source = Array.from({ length: 5 }, (_, index) => item([
+    receipt(`${shaText().slice(0, 790)}-${index}`, `distinct-${index}`),
+  ]));
+  const planned = []; const calls = [];
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    fitsQualificationRequest(request) {
+      planned.push(request.input);
+      const fits = request.input.items.length === 1;
+      request.input.items[0].candidates[0].text = 'forged by fit callback';
+      return fits;
+    },
+    qualifyCandidates(request) { calls.push(request.input); return result(request.input); } };
+  const output = await qualifyCandidateItems(model, source);
+  assert.equal(output.length, 5);
+  assert.equal(planned.length, 7);
+  assert.equal(calls.length, 5);
+  assert.deepEqual(output.map(entry => entry.receipts[0].eventId),
+    source.map(entry => entry.receipts[0].eventId));
+  assert.deepEqual(calls.map(group => group.items[0].candidates[0].text),
+    source.map(entry => entry.receipts[0].excerpt.slice(0, 200)));
+});
+
+test('B2 deadline expiry during final singleton planning denies every model call', async () => {
+  let expired = false; const calls = [];
+  const deadline = { check() { if (expired) throw Error('synthetic deadline'); }, expired: () => expired,
+    remainingMs: () => 10_000 };
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    fitsQualificationRequest(request) {
+      if (request.input.items.length === 1 && request.input.items[0].content === 'claim 4') expired = true;
+      return request.input.items.length === 1;
+    }, qualifyCandidates(request) { calls.push(request.input); return result(request.input); } };
+  const source = Array.from({ length: 5 }, (_, index) => ({ ...small()[0], content: `claim ${index}` }));
+  await assert.rejects(qualifyCandidateItems(model, source, deadline), /synthetic deadline/);
+  assert.equal(calls.length, 0);
+});
+
+test('B3 deadline expiry during first partition cannot dispatch another group', async () => {
+  let expired = false; const calls = [];
+  const deadline = { check() { if (expired) throw Error('synthetic deadline'); }, expired: () => expired,
+    remainingMs: () => 10_000 };
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    fitsQualificationRequest: request => request.input.items.length === 1,
+    qualifyCandidates(request) { calls.push(request.input); expired = true; return result(request.input); } };
+  const source = Array.from({ length: 5 }, (_, index) => ({ ...small()[0], content: `claim ${index}` }));
+  await assert.rejects(qualifyCandidateItems(model, source, deadline), { code: 'model_timeout' });
+  assert.equal(calls.length, 1);
+});
+
+test('B4 changed token counter after local fit still denies dispatch', async () => {
+  let denyCount = false; const calls = [];
+  const model = { contextWindow: 8192,
+    countTokens: () => denyCount ? 6001 : 1,
+    fitsQualificationRequest(request) {
+      if (request.input.items.length === 1 && request.input.items[0].content === 'claim 4') denyCount = true;
+      return request.input.items.length === 1;
+    }, qualifyCandidates(request) { calls.push(request.input); return result(request.input); } };
+  const source = Array.from({ length: 5 }, (_, index) => ({ ...small()[0], content: `claim ${index}` }));
+  await assert.rejects(qualifyCandidateItems(model, source), { code: 'context_budget_exceeded' });
+  assert.equal(calls.length, 0);
+});
+
 test('fit callback sees a detached request and cannot rewrite authoritative source text', async () => {
   const calls = [];
   const model = { contextWindow: 8192, countTokens: () => 1,
@@ -114,7 +176,7 @@ test('neither-fit and invalid fit results refuse before model invocation, includ
       fitsQualificationRequest() { checks++; return badFit(); },
       qualifyCandidates() { calls.push(1); } };
     await assert.rejects(qualifyCandidateItems(model, source), error =>
-      error.code === (checks === 2 ? 'context_budget_exceeded' : 'token_count_unavailable'));
+      error.code === (checks === 4 ? 'context_budget_exceeded' : 'token_count_unavailable'));
   }
   const accessor = { contextWindow: 8192, countTokens: () => 1,
     qualifyCandidates() { calls.push(1); } };

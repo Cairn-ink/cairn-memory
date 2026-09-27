@@ -2,7 +2,7 @@ import { experimentPolicy } from '../live/session.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
 
-export const MIXED_RESOURCE_VERSION = 'mixed-resource-projection-v2';
+export const MIXED_RESOURCE_VERSION = 'mixed-resource-projection-v3';
 export const NATIVE_PROFILE = 'mem0-2.2.0-infer-add-no-nlp-v1';
 
 export class MixedResourceError extends Error {
@@ -139,8 +139,10 @@ export function projectMixedResources(options) {
   const cairnStages = {
     extractionCount: stage(batches, countReserve),
     extractionGeneration: stage(batches, generationReserve),
-    qualificationCount: stage(batches, countReserve),
-    qualificationGeneration: stage(batches, generationReserve),
+    // A source-bound batch has at most five extracted items. The whole-batch
+    // path uses one pair; only a wholly nonfitting batch uses up to five pairs.
+    qualificationCount: stage(batches * 5n, countReserve),
+    qualificationGeneration: stage(batches * 5n, generationReserve),
     classificationCount: stage(batches, countReserve),
     classificationGeneration: stage(batches, generationReserve),
     selectionRound1Count: stage(cases, countReserve),

@@ -186,6 +186,23 @@ evidence. Unknown values may cite context, and even all-unknown output must
 explicitly select at least one candidate overall. Four distinct candidates per
 qualification is the maximum; additional evidence rejects rather than being lost.
 
+An explicitly fit-capable qualifier first keeps the whole inline request if it
+fits, then the whole strict catalog if that fits. Only when neither fits does
+core preflight one request per original item (at most five), choosing inline
+then catalog for each before any model call. The local item index is rebased to
+zero in each request while original candidate IDs and receipt/source anchors
+stay bound to an immutable snapshot. All results must compile before admission;
+failure of any group rejects the batch without partial memories or a retry.
+Models without this fit capability retain one whole inline request. Each
+request retains the same token/output limits and original capture deadline.
+For staged evidence, the capture layer rechecks its scoped ownership immediately
+before each group, including the first after planning. Explicit discard or
+forget during an already-started request cannot recall that request, but blocks
+later groups and admission. The core model-call boundary checks again after
+token counting and in the invocation microtask, so a counter callback cannot
+send a discarded source to another model call.
+This is capacity handling, not evidence entailment or semantic verification.
+
 The v2 interpretation prompt evaluates descriptors independently: unknown
 commitment does not require dropping a supported subject, attribute or condition.
 Its scoped coffee example is illustrative, never reusable evidence. It

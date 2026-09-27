@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { createOpenAIModel, countOpenAITokens } from '../index.mjs';
 import { schemasFor, schemasForQualificationInput } from '../schemas.mjs';
+import { openMemoryCore } from '../../../core/contract.mjs';
 import { createQualificationCandidateSnapshot, qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
 import { createQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
 
@@ -122,7 +127,7 @@ test('fitting inline remains inline; default model denies named mode before HTTP
   assert.equal(denied.length, 0);
 });
 
-test('all-unique oversized sources refuse locally before HTTP; zero field citations reject after generation', async () => {
+test('B2 all-unique oversized batch uses five preplanned real-wire singleton pairs', async () => {
   const unique = Array.from({ length: 5 }, (_, i) => ({ ...item(i),
     receipts: Array.from({ length: 4 }, (_, r) => ({ client: 'synthetic', sessionId: 'session',
       eventId: `unique-${i}-${r}`, role: r % 2 ? 'assistant' : 'user',
@@ -131,11 +136,159 @@ test('all-unique oversized sources refuse locally before HTTP; zero field citati
   const candidateTexts = uniqueSnapshot.input.items.flatMap((entry) => entry.candidates.map((candidate) => candidate.text));
   assert.equal(candidateTexts.length, 80);
   assert.equal(new Set(candidateTexts).size, 80);
+  const calls = []; const planned = [];
+  const actual = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
+    fetchImpl: async (url, options) => {
+      const body = JSON.parse(options.body); calls.push({ url, body });
+      if (calls.length === 1) assert.deepEqual(planned.filter(input => input.items.length === 1)
+        .map(input => input.items[0].content), unique.map(entry => entry.content));
+      const group = JSON.parse(body.input[0].content[0].text);
+      assert.equal(group.items.length, 1);
+      assert.ok(countOpenAITokens(JSON.stringify(body)) <= 6000);
+      return Response.json(url.endsWith('/input_tokens')
+        ? { object: 'response.input_tokens', input_tokens: 120 }
+        : envelope(body.model, wire(group)));
+    } });
+  const model = Object.freeze({ ...actual, fitsQualificationRequest(value) {
+    planned.push(structuredClone(value.input)); return actual.fitsQualificationRequest(value);
+  } });
+  const qualified = await qualifyCandidateItems(model, unique);
+  assert.equal(qualified.length, 5);
+  assert.equal(calls.length, 10);
+  assert.deepEqual(calls.map((call) => call.url.endsWith('/input_tokens')),
+    [true, false, true, false, true, false, true, false, true, false]);
+  for (let index = 0; index < 5; index++) {
+    const countBody = calls[index * 2].body;
+    const group = JSON.parse(countBody.input[0].content[0].text);
+    assert.equal(group.items[0].itemIndex, 0);
+    assert.equal(group.items[0].candidates[0].candidateIndex,
+      uniqueSnapshot.input.items[index].candidates[0].candidateIndex);
+    assert.equal(qualified[index].qualification.anchors[0].text,
+      uniqueSnapshot.candidates[index][0].text);
+    assert.deepEqual(calls[index * 2 + 1].body.input, countBody.input);
+  }
+});
+
+test('B6 real core captures five distinct sources through ten qualifier fake-HTTP calls', async t => {
+  const source = Array.from({ length: 5 }, (_, index) => ({ ...item(index),
+    receipts: Array.from({ length: 4 }, (_, offset) => ({ client: 'synthetic', sessionId: 'session',
+      eventId: `five-${index}-${offset}`, role: offset % 2 ? 'assistant' : 'user',
+      excerpt: Array.from({ length: 13 }, (_, hashIndex) => createHash('sha256')
+        .update(`five-${index}-${offset}-${hashIndex}`).digest('hex')).join('').slice(0, 800) })) }));
+  const messages = source.flatMap(entry => entry.receipts.map(receipt => ({
+    id: receipt.eventId, role: receipt.role, content: receipt.excerpt })));
   const calls = [];
-  const model = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
-    fetchImpl: fakeHTTP(wire(uniqueSnapshot.input), calls) });
-  await assert.rejects(qualifyCandidateItems(model, unique), error => error.code === 'context_budget_exceeded');
+  const adapter = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
+    fetchImpl: async (url, options) => {
+      const body = JSON.parse(options.body); calls.push({ url, body });
+      const group = JSON.parse(body.input[0].content[0].text);
+      assert.equal(group.items.length, 1);
+      return Response.json(url.endsWith('/input_tokens')
+        ? { object: 'response.input_tokens', input_tokens: 120 }
+        : envelope(body.model, wire(group)));
+    } });
+  const model = { ...adapter,
+    // Isolate the 20-message extraction fixture while preserving the actual
+    // qualifier tokenizer, serializer, count and generation for every group.
+    countTokens(text) { return text.includes('"input":{"messages":') ? 1 : adapter.countTokens(text); },
+    extract: () => ({ items: source.map((entry, index) => ({ content: entry.content, kind: entry.kind,
+      confidence: entry.confidence, sourceIndices: Array.from({ length: 4 }, (_, offset) => index * 4 + offset) })) }),
+    classify: ({ input }) => ({ items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) }) };
+  const path = join(mkdtempSync(join(tmpdir(), 'cairn-partition-success-')), 'memory.sqlite');
+  const core = openMemoryCore({ path, model, captureQualification: 'source-bound-v2' });
+  t.after(() => core.close());
+  const namespace = { ownerId: 'partition-success', scope: 'personal', projectId: null };
+  const captured = await core.capture({ namespace, client: 'synthetic', sessionId: 'session',
+    eventId: 'batch', messages });
+  assert.equal(captured.ok, true, JSON.stringify(captured));
+  assert.equal(captured.value.admission.memories.length, 5);
+  assert.deepEqual(calls.map(call => call.url.endsWith('/input_tokens')),
+    [true, false, true, false, true, false, true, false, true, false]);
+  for (let index = 0; index < 5; index++) {
+    const memory = captured.value.admission.memories[index];
+    const detail = core.get({ namespace, memoryId: memory.id, includeQualification: true });
+    assert.equal(detail.ok, true);
+    assert.equal(detail.value.qualification.anchors[0].text, source[index].receipts[0].excerpt.slice(0, 200));
+  }
+});
+
+test('B3 later group count overflow or foreign citation stops with no retry or later group', async () => {
+  const source = items();
+  for (const variant of ['count-overflow', 'foreign-citation']) {
+    const calls = [];
+    const actual = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body); calls.push({ url, body });
+        const group = JSON.parse(body.input[0].content[0].text);
+        const second = group.items[0].content === 'Synthetic claim 1';
+        if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens',
+          input_tokens: second && variant === 'count-overflow' ? 7025 : 120 });
+        const output = wire(group);
+        if (second && variant === 'foreign-citation') output.qualifications.item_0.pool = [0];
+        return Response.json(envelope(body.model, output));
+      } });
+    const model = Object.freeze({ ...actual, fitsQualificationRequest(value) {
+      return value.input.items.length === 1 && actual.fitsQualificationRequest(value);
+    } });
+    await assert.rejects(qualifyCandidateItems(model, source), error =>
+      error.code === (variant === 'count-overflow' ? 'context_budget_exceeded' : 'invalid_model_output'));
+    assert.deepEqual(calls.map(call => call.url.endsWith('/input_tokens')),
+      variant === 'count-overflow' ? [true, false, true] : [true, false, true, false]);
+  }
+});
+
+test('B3 real capture with actual adapter fake HTTP rejects second group before admission', async t => {
+  const source = Array.from({ length: 2 }, (_, index) => ({ ...item(index),
+    receipts: Array.from({ length: 4 }, (_, offset) => ({ client: 'synthetic', sessionId: 'session',
+      eventId: `capture-${index}-${offset}`, role: offset % 2 ? 'assistant' : 'user',
+      excerpt: Array.from({ length: 13 }, (_, hashIndex) => createHash('sha256')
+        .update(`capture-${index}-${offset}-${hashIndex}`).digest('hex')).join('').slice(0, 800) })) }));
+  const messages = source.flatMap(entry => entry.receipts.map(receipt => ({
+    id: receipt.eventId, role: receipt.role, content: receipt.excerpt })));
+  const calls = [];
+  const adapter = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
+    fetchImpl: async (url, options) => {
+      const body = JSON.parse(options.body); calls.push({ url, body });
+      const group = JSON.parse(body.input[0].content[0].text);
+      assert.equal(group.items.length, 1);
+      if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+      const result = wire(group);
+      if (group.items[0].content === 'Synthetic claim 1') result.qualifications.item_0.pool = [0];
+      return Response.json(envelope(body.model, result));
+    } });
+  const model = { ...adapter,
+    extract: () => ({ items: source.map((entry, index) => ({ content: entry.content, kind: entry.kind,
+      confidence: entry.confidence, sourceIndices: Array.from({ length: 4 }, (_, offset) => index * 4 + offset) })) }),
+    classify: () => assert.fail('failed qualification must not classify') };
+  const path = join(mkdtempSync(join(tmpdir(), 'cairn-partition-failure-')), 'memory.sqlite');
+  const core = openMemoryCore({ path, model, captureQualification: 'source-bound-v2' });
+  let closed = false; t.after(() => { if (!closed) core.close(); });
+  const result = await core.capture({ namespace: { ownerId: 'partition-failure', scope: 'personal', projectId: null },
+    client: 'synthetic', sessionId: 'session', eventId: 'batch', messages });
+  assert.deepEqual(result, { ok: false, error: { code: 'invalid_model_output', retryable: false } });
+  assert.deepEqual(calls.map(call => call.url.endsWith('/input_tokens')), [true, false, true, false]);
+  core.close(); closed = true;
+  const db = new DatabaseSync(path, { readOnly: true }); t.after(() => db.close());
+  for (const table of ['memories', 'receipts']) {
+    assert.equal(db.prepare(`SELECT count(*) n FROM ${table}`).get().n, 0);
+  }
+  assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 0);
+});
+
+test('B2 any unfit final singleton denies every HTTP call before planning ends', async () => {
+  const source = items(); const calls = [];
+  const actual = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
+    fetchImpl: () => { calls.push(1); assert.fail('no HTTP'); } });
+  const model = Object.freeze({ ...actual, fitsQualificationRequest(value) {
+    if (value.input.items.length === 5) return false;
+    if (value.input.items[0].content === 'Synthetic claim 4') return false;
+    return actual.fitsQualificationRequest(value);
+  } });
+  await assert.rejects(qualifyCandidateItems(model, source), { code: 'context_budget_exceeded' });
   assert.equal(calls.length, 0);
+});
+
+test('zero field citations reject after generation', async () => {
   const small = [item(0, 'short source')]; const smallInput = createQualificationCandidateSnapshot(small).input;
   const invalidCalls = [];
   const invalidModel = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',

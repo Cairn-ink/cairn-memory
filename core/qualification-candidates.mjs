@@ -180,36 +180,73 @@ function qualificationFit(model, deadline) {
   };
 }
 
-export async function qualifyCandidateItems(model, items, deadline) {
+function singletonSnapshot(snapshot, index) {
+  const source = snapshot.input.items[index];
+  return freeze({ items: [snapshot.items[index]], candidates: [snapshot.candidates[index]],
+    input: { items: [{ itemIndex: 0, content: source.content, kind: source.kind,
+      candidates: source.candidates }] } });
+}
+
+export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence) {
   deadline?.check();
   const snapshot = createQualificationCandidateSnapshot(items);
   deadline?.check();
   let input = snapshot.input;
   const fits = qualificationFit(model, deadline);
+  let partition = null;
   if (fits && !fits({ system, input, maxOutputTokens: 1024 })) {
     deadline?.check();
     let catalog;
     try { catalog = createQualificationTextCatalog(snapshot.input); }
     catch { deadline?.check(); fail('invalid_model_output'); }
     deadline?.check();
-    if (!fits({ system, input: catalog.catalog, maxOutputTokens: 1024 })) {
-      emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'context_budget_exceeded');
-      fail('context_budget_exceeded');
+    if (fits({ system, input: catalog.catalog, maxOutputTokens: 1024 })) input = catalog.catalog;
+    else {
+      // Plan every bounded singleton from the same detached source snapshot.
+      // A later unfit item must fail before the first model/HTTP request.
+      partition = snapshot.items.map((_, index) => {
+        deadline?.check();
+        const local = singletonSnapshot(snapshot, index);
+        let selected = local.input;
+        if (!fits({ system, input: selected, maxOutputTokens: 1024 })) {
+          let localCatalog;
+          try { localCatalog = createQualificationTextCatalog(selected); }
+          catch { deadline?.check(); fail('invalid_model_output'); }
+          deadline?.check();
+          if (!fits({ system, input: localCatalog.catalog, maxOutputTokens: 1024 })) {
+            emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'context_budget_exceeded');
+            fail('context_budget_exceeded');
+          }
+          selected = localCatalog.catalog;
+        }
+        return { snapshot: local, input: selected };
+      });
     }
-    input = catalog.catalog;
   }
-  deadline?.check();
-  const output = await callModel(model, 'qualifyCandidates', system, input,
-    { failureCode: 'qualification_failed', deadline });
-  let reason = 'invalid_qualification';
-  try {
-    const result = compileQualification(output, snapshot, (category) => { reason = category; });
+  const results = [];
+  for (const planned of partition ?? [{ snapshot, input }]) {
     deadline?.check();
-    return result;
-  }
-  catch {
+    // The capture layer supplies only its scoped, trusted staged-source check.
+    // Never dispatch another group after explicit discard/forget during a
+    // previously started provider call. Keep this outside compiler handling.
+    assertCaptureEvidence?.();
     deadline?.check();
-    emitDiagnostic(model, 'qualifyCandidates', 'core_validation', reason);
-    fail('invalid_model_output');
+    const output = await callModel(model, 'qualifyCandidates', system, planned.input,
+      { failureCode: 'qualification_failed', deadline,
+        // Count callbacks run after the outer group check. Recheck the scoped
+        // staged source after counting and before dispatch, and after response.
+        validateFresh: assertCaptureEvidence });
+    let reason = 'invalid_qualification';
+    try {
+      results.push(...compileQualification(output, planned.snapshot,
+        (category) => { reason = category; }));
+      deadline?.check();
+    }
+    catch {
+      deadline?.check();
+      emitDiagnostic(model, 'qualifyCandidates', 'core_validation', reason);
+      fail('invalid_model_output');
+    }
   }
+  return results;
 }

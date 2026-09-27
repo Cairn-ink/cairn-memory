@@ -173,6 +173,11 @@ is used, the full common protocol, actual artifact/configuration and source-only
 checks still need independent verification. Earmarks or phase caps alone do not
 establish feasibility.
 
+The v3 projection accounts for up to five qualifier count/generation pairs
+per source batch after bounded singleton preflight; v1/v2 historical ceilings
+and grants are not upgraded. Fresh launches must recheck phase, case, money
+and request caps against the versioned plan.
+
 The [controlled mixed runner](plans/mixed-comparison-runner.md) has three
 separate APIs: `prepareMixedComparison` accepts only source histories/questions,
 `runMixedGeneration` consumes a supplied X guard and the pinned native identity,

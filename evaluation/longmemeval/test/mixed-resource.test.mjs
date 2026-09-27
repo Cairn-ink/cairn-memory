@@ -78,12 +78,12 @@ test('zero-batch case retains answer, judge, recall and native search work', () 
   assert.equal(result.empiricalEstimate, null);
 });
 
-test('one batch counts full native fallback and six Cairn ingest calls', () => {
+test('one batch counts full native fallback and up to fourteen Cairn ingest calls', () => {
   const result = project([1]);
-  assert.equal(MIXED_RESOURCE_VERSION, 'mixed-resource-projection-v2');
+  assert.equal(MIXED_RESOURCE_VERSION, 'mixed-resource-projection-v3');
   assert.equal(result.version, MIXED_RESOURCE_VERSION);
   const { cairn, mem0 } = result.conditionalCeilings.arms;
-  assert.deepEqual(cairn.stages.qualificationCount, { requests: 1, reservedMicroUsd: 5000 });
+  assert.deepEqual(cairn.stages.qualificationCount, { requests: 5, reservedMicroUsd: 25_000 });
   assert.deepEqual(cairn.stages.classificationGeneration, { requests: 1, reservedMicroUsd: 5000 });
   assert.deepEqual(mem0.stages.addQueryEmbedding, { requests: 1, reservedMicroUsd: 164 });
   assert.deepEqual(mem0.stages.addChat, { requests: 1, reservedMicroUsd: 16_308 });
@@ -91,11 +91,11 @@ test('one batch counts full native fallback and six Cairn ingest calls', () => {
   assert.deepEqual(mem0.stages.fallbackSingletonEmbedding,
     { requests: 256, reservedMicroUsd: 5_498 });
   assert.deepEqual(result.conditionalCeilings.generation,
-    { requests: 276, reservedMicroUsd: 189_019 });
+    { requests: 284, reservedMicroUsd: 229_019 });
   assert.deepEqual(result.conditionalCeilings.scoring,
     { requests: 2, reservedMicroUsd: 20_800 });
   assert.deepEqual(result.conditionalCeilings.joint,
-    { requests: 278, reservedMicroUsd: 209_819 });
+    { requests: 286, reservedMicroUsd: 249_819 });
 });
 
 test('mixed counts preserve every case and sum all arm stages', () => {
@@ -114,17 +114,17 @@ test('mixed counts preserve every case and sum all arm stages', () => {
     assert.equal(scoring[field], arms.cairn.stages.judge[field] + arms.mem0.stages.judge[field]);
     assert.equal(joint[field], generation[field] + scoring[field]);
   }
-  assert.equal(joint.reservedMicroUsd, 629_457);
+  assert.equal(joint.reservedMicroUsd, 749_457);
 });
 
 test('fixed N30 and high-batch arithmetic preserves all requests and both fallback stages', () => {
   const thirty = project(Array(30).fill(1));
   assert.deepEqual(thirty.conditionalCeilings.joint,
-    { requests: 8_340, reservedMicroUsd: 6_294_570 });
+    { requests: 8_580, reservedMicroUsd: 7_494_570 });
   const counts = [1_477, ...Array(29).fill(0)];
   const high = project(counts);
   assert.deepEqual(high.conditionalCeilings.joint,
-    { requests: 394_689, reservedMicroUsd: 89_084_675 });
+    { requests: 406_505, reservedMicroUsd: 148_164_675 });
   assert.deepEqual(high.conditionalCeilings.arms.mem0.stages.factBatchEmbedding,
     { requests: 4_431, reservedMicroUsd: 1_477 * 5_245 });
   assert.deepEqual(high.conditionalCeilings.arms.mem0.stages.fallbackSingletonEmbedding,

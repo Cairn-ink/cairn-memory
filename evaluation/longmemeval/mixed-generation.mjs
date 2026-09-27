@@ -118,11 +118,13 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     'configurationSha256', 'invalid_native_descriptor');
   const configuration = Object.getOwnPropertyDescriptor(nativeConfiguration, 'configuration')?.value;
   if (!configuration || typeof configuration !== 'object') fail('invalid_native_descriptor');
-  const context = { version: 'mixed-context-v1', sourcePolicyDigest: mixedSourcePolicy().digest,
+  const context = { version: 'mixed-context-v2', sourcePolicyDigest: mixedSourcePolicy().digest,
     nativeProfile: 'mem0-2.2.0-infer-add-no-nlp-v1',
     nativeConfigurationSha256: configurationSha256,
     nativeTopK: 6, nativeThreshold: 0, nativeChildTimeoutMs: 3_600_000,
-    cairnQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1',
+    cairnQualification: 'source-bound-v2',
+    qualificationDispatchPolicy: 'whole-then-singleton-preflight-v1',
+    captureSourcePolicy: 'indexed-windows-v1',
     sourceCandidatePolicy: 'bounded-keyset-v1', recallLimit: 6,
     recallContextMode: 'source-evidence', recallSelectionMode: 'bounded-source-scan',
     experimentPolicy: experimentPolicy(), stages: benchmarkStagePolicy(),

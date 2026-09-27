@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — bounded qualification partitions
+
+- When both whole-batch qualification forms fail local fit, preflight up to
+  five exact-source singleton groups before dispatch and compile all successful
+  results atomically under the original capture deadline. Fitting whole batches
+  and models without fit support retain their paths; provider failures never
+  trigger another representation or retry. The mixed context digest and pure
+  resource ceiling now version this conditional extra work. Offline fake-HTTP
+  tests establish transport and persistence bounds, not semantic quality,
+  slot-mapping repair or permission for a paid run.
+
 ## Unreleased — coherent qualification wire guidance
 
 - Give the standard OpenAI qualifier one pool-format example and instructions
@@ -44,8 +55,10 @@
   shares exact repeated candidate text through a strict first-occurrence catalog
   when needed. Original candidate IDs, roles, evidence-pool response decoding,
   compiler and receipt anchors remain unchanged. Synthetic repeated-source
-  capture/fake-HTTP tests fit with one count and one generation; all-unique
-  oversized sources still refuse locally. Old guards deny named catalog mode.
+  capture/fake-HTTP tests fit with one count and one generation; at this stage,
+  all-unique oversized sources still refused locally. Old guards deny named
+  catalog mode. The later bounded-partition entry above supersedes only that
+  capacity limit.
   No model, budget, paid cohort, default route or quality claim changes.
 
 ## Unreleased — bounded evidence-pool qualification wire

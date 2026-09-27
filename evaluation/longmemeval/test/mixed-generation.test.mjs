@@ -148,7 +148,7 @@ test('M3 fixed protocol and scope golden is accepted by actual X authority', t =
   try {
     const row = fixture.prepared.roster[0];
     assert.equal(row.protocolDigest,
-      'c17b0f19ad124db5fc85231a49e4ef1e36706af7078b07f1ef79c90d27c24efc');
+      '08d4f3804aeed541e17de13e37e3f4660d02a4bfb3eaa499714c378400bd6203');
     assert.deepEqual(row.arms.map(item => item.scopeId), [
       'lme-case-60944a186cb2b615f6b643cecc585fb79be01d6739b468228b46b0d88e1f9f73',
       'lme-case-15015798b217141bb54a70b1682ec77d61e7f16acf3ff4d7cdd99f7ec1698629',

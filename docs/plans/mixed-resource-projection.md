@@ -303,3 +303,22 @@ repair does not supply the separate same-dollar schema-2 cap extension or
 authorize paid execution. The frozen implementation and verification evidence
 is recorded in the dependent
 [byte-bound plan](mixed-resource-byte-bound.md).
+
+## Bounded qualification partition amendment — v3
+
+The dependent [bounded qualification partition contract](bounded-qualification-partitions.md)
+supersedes only v2's one qualifier pair per capture batch. A batch still tries
+one whole inline request and then one whole catalog request locally. If neither
+fits, it preflights every original-order singleton before any provider call and
+may dispatch up to five qualifier count/generation pairs under one capture
+deadline. The pure conditional ceiling is therefore 14B Cairn ingestion
+requests (7B count, 7B generation) rather than 6B. No other Cairn stage,
+Mem0 stage, answer or judge is changed. This is `mixed-resource-projection-v3`;
+v1/v2 arithmetic and historical reservations above are not rewritten.
+
+At the accepted 5,000-micro-USD qualifier count and generation reserves, v3
+adds at most eight physical requests and 40,000 micro-USD per planned batch.
+The synthetic N1/B1 ceiling is 286 requests / 249,819 micro-USD; N30/B30 is
+8,580 / 7,494,570; N30/B1477 is 406,505 / 148,164,675. These are
+conditional ceilings, not invoices or completion predictions. Fresh phase,
+case, total-money and request-cap checks must use v3; no old grant is reusable.

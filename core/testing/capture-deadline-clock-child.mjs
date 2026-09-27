@@ -19,11 +19,11 @@ if (mutation === 'reset-stage-deadline') registerHooks({ load(url, context, next
   if (!['automatic-qualification.mjs', 'qualification-candidates.mjs']
     .some(name => url.endsWith(`/core/${name}`))) return loaded;
   const source = String(loaded.source);
-  const target = "{ failureCode: 'qualification_failed', deadline }";
+  const target = "{ failureCode: 'qualification_failed', deadline";
   assert.equal(source.split(target).length, 2, `single qualification call in ${url}`);
   mutatedModules++;
   return { ...loaded, source: "import { createCaptureDeadline } from './capture-deadline.mjs';\n"
-    + source.replace(target, "{ failureCode: 'qualification_failed', deadline: createCaptureDeadline(1_000) }") };
+    + source.replace(target, "{ failureCode: 'qualification_failed', deadline: createCaptureDeadline(1_000)") };
 } });
 
 const realNow = process.hrtime.bigint;
