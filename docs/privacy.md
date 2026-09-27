@@ -99,10 +99,12 @@ they cannot acquire the control lock.
 
 This is the explicit threat-model update for the proposed
 [session-episode contract](plans/session-episodes.md), not shipped behavior.
-Core requires `sessionEpisodes: {mode:'episode-v1', draftEveryBatches:8}` with v2
-capture/staging; the one-brain client configuration enables this by default for
-people enabling automatic capture and discloses its retention. Staging alone
-never enables durable episodes. Hosted behavior/schemas and telemetry are unchanged.
+Core opts in with `sessionEpisodes: {mode:'episode-v1'}` and v2 capture/staging;
+`draftEveryBatches` defaults to 8 and accepts integers 2–64. The **one-brain
+configuration** is the product setup in which one person's Claude Code, Codex and
+chat tools share one memory. It enables episodes by default with automatic capture
+and discloses their retention. Staging alone never enables durable episodes.
+Hosted behavior/schemas and telemetry are unchanged.
 Intentional diary entry is consent to organize an ordinary submitted source,
 not permission to share personal content or authenticate its claimed roles.
 
@@ -112,9 +114,9 @@ not permission to share personal content or authenticate its claimed roles.
 | Namespace/project, generation and origin/end signals | Cross-scope leakage or forged triggers can bypass entry controls or inflate call cost. Claude/Codex client contracts bind trusted metadata, stop/pause generations and real lifecycle signals. No thread IDs, personal fallback or shared scope; controls cannot stop other devices. | E1/E3/E6/E11 |
 | Event/receipt/revision times, ordinals and draft markers | Reveal routines and may imply false chronology. Validate UTC, preserve unknown/partial time, keep scheduling counters and consumed-trigger markers local; submitted clocks are unauthenticated. | E3/E9 |
 | Client key/display label | Reveals tool use or identifying prose. Bounded host-configured labels, no user/device/path/version data, exact namespace/client filtering; label is not authenticated identity. | E1/E2/E9 |
-| Type/language, gist/outcome/step, correction pins and procedural tags | Sensitive diary/habit descriptions, unsupported claims or instruction injection. Bounded source-anchored model interpretations, explicit origin, untrusted framing; no truth or execution authority. Tags come from anchored extraction/qualification or explicit remember, not a new memory kind. | E2/E8/E10 |
+| Type/language, gist/outcome/step, correction pins and procedural tags | Sensitive diary/habit descriptions, unsupported claims or instruction injection. Bounded source-anchored interpretations and untrusted framing; no truth or execution authority. Only the freshly classified batch may skip extraction. Automatic tags require episode-v1; explicit remember tags work independently. Legacy automatic prompts/outputs/fields/digests remain unchanged without the option. | E2/E8/E10 |
 | Retained source passages, anchors/digests and memory lineage | More personal text persists than memory extraction selects. Bounded selected passages survive temporary staging; conversation deletion suppresses derived memories and invalidates dependent episodes, including copied sources. Hashes are guessable and redaction is best-effort. | E4/E7 |
-| Model/profile/prompt-version, policy, action IDs and gap status | Processing records may leak secrets or hide failure. Bounded nonsecret IDs/finite codes only, no raw errors/prompts/responses. Debounced attempts have durable caps; episode failures leave gaps/staging and cannot block memory admission. Content-free fences survive deletion. | E1/E3/E4/E8 |
+| Model/profile/prompt-version, policy, action IDs, gap and release status | Processing records may leak secrets or hide failure. Bounded nonsecret IDs/finite codes only, no raw errors/prompts/responses. Debounced attempts have durable caps; episode failures retain pending staging/gaps without blocking that batch's memory admission. Atomic release after admission and source disposition frees completed payloads/quota; content-free fences survive. | E1/E3/E4/E4a/E8 |
 | Time/startup reads and tag revisions | May expose unrelated personal data or erase relationship evidence. Exact scope, hard budgets, group opt-outs, final freshness checks and untrusted-data framing; tag-only sidecar updates preserve conflict/rationale links. Host interpretation remains untrusted. | E9/E10/E11 |
 
 The injected episode-interpretation port receives bounded redacted source text,
@@ -129,7 +131,14 @@ counter, with no generation. No paid call is authorized by this documentation.
 Reuse the existing pause/cursor barrier above for all drafts, including lazy work.
 Project stop fences unfinished work; entry producers must never backfill paused
 text. Local controls cannot retract previously transmitted requests. Selected
-passages have no automatic age TTL; staged payloads retain their existing expiry.
+passages have no automatic age TTL. Episode-mode staging's fixed 24-hour deadline
+now applies to unresolved payloads, including admitted-but-undrafted/failed work.
+Once admission and selected-passage retention/disposition both commit, release
+the staged text and quota atomically; keep only content-free completion/replay
+metadata. Duplicate release cannot restore text or expire a completed replay.
+Capacity limits unfinished work, not daily completed capture; ordinary staged-v1
+events retain their existing retention/accounting. See gate E4a for heavy-day,
+failure, crash and restart tests. No extra unbounded holding store is introduced.
 Conversation deletion clears descriptive policy/correction metadata as well as
 prose/sources, and conservatively forgets even multi-source derived memories.
 Existing namespace-wide staged purges and source-consumer invalidation still apply.
