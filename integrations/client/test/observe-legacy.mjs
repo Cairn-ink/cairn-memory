@@ -31,7 +31,7 @@ export async function observeMechanisms(moduleRoot, { shared = false } = {}) {
   const lock = await load('file-lock');
   const query = await load('recall-query');
   const transport = await load(shared ? 'transport-hosted' : 'http');
-  const dir = await mkdtemp(join(tmpdir(), 'cx1-mechanisms-'));
+  const dir = await mkdtemp(join(tmpdir(), 'cairn-mechanisms-test-'));
   try {
     await writeFile(join(dir, 'project-key'), ` ${key}\n`, { mode: 0o600 });
     await writeFile(join(dir, 'install-id'), `${key}\n`, { mode: 0o600 });
@@ -100,7 +100,7 @@ export async function observeMechanisms(moduleRoot, { shared = false } = {}) {
 }
 
 export async function observeHosted(pluginRoot) {
-  const dir = await mkdtemp(join(tmpdir(), 'cx1-hosted-'));
+  const dir = await mkdtemp(join(tmpdir(), 'cairn-hosted-test-'));
   const dataDir = join(dir, 'data');
   const transcript = join(dir, 'synthetic.jsonl');
   const requests = [];
