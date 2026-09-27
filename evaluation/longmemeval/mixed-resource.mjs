@@ -99,8 +99,10 @@ const sum = stages => ({ requests: checked(stages.reduce((acc, item) => acc + Bi
 /** Pure conditional ceiling. The caller, not this module, verifies the native execution profile. */
 export function projectMixedResources(options) {
   const input = snapshot(options, 'invalid_resource_options');
-  if (!input || Array.isArray(input) || Object.keys(input).length !== OPTION_KEYS.length
+  const explicitProfile = Object.hasOwn(input ?? {}, 'comparisonProfile');
+  if (!input || Array.isArray(input) || Object.keys(input).length !== OPTION_KEYS.length + Number(explicitProfile)
     || OPTION_KEYS.some(key => !Object.hasOwn(input, key))) fail('invalid_resource_options');
+  if (explicitProfile && input.comparisonProfile !== 'indexed-evidence-v1') fail('unsupported_resource_profile');
   const { batchCounts, policy, stages, wireProfile, remainingMicroUsd,
     protectedMicroUsd, nativeProfile } = input;
   if (!Array.isArray(batchCounts) || batchCounts.length < 1 || batchCounts.length > 250
@@ -164,6 +166,10 @@ export function projectMixedResources(options) {
     answer: stage(cases, answerReserve),
     judge: stage(cases, judgeReserve),
   };
+  if (explicitProfile) {
+    delete cairnStages.qualificationCount;
+    delete cairnStages.qualificationGeneration;
+  }
   const cairnTotal = sum(Object.values(cairnStages));
   const mem0Total = sum(Object.values(mem0Stages));
   const generation = sum([...Object.entries(cairnStages), ...Object.entries(mem0Stages)]
@@ -173,7 +179,8 @@ export function projectMixedResources(options) {
   const available = BigInt(remainingMicroUsd) - BigInt(protectedMicroUsd);
   const total = BigInt(joint.reservedMicroUsd);
   return {
-    version: MIXED_RESOURCE_VERSION,
+    version: explicitProfile ? 'mixed-indexed-evidence-resource-projection-v1' : MIXED_RESOURCE_VERSION,
+    ...(explicitProfile ? { comparisonProfile: input.comparisonProfile } : {}),
     nativeProfile,
     plannedCaseCount: checked(cases),
     plannedBatchCount: checked(batches),

@@ -108,6 +108,17 @@ The optional [indexed-window provenance path](indexed-window-provenance.md) is
 separately versioned and requires explicit core opt-in. The default plan and
 ingestion path continue to use their original digest and response contract.
 
+`planIndexedEvidenceLongMemEvalCase` and `ingestIndexedEvidenceLongMemEvalCase`
+reuse that exact indexed partition/source map for a trusted core opened with
+`captureSourcePolicy: 'indexed-evidence-v1'` and omitted enrichment options.
+The separate `cairn-longmemeval-indexed-evidence-ingestion-plan-v1` binds the
+actual evidence-lane replay digest. Every success (including processing,
+duplicate and partial classification) requires the exact source catalog plus
+`qualificationStatus: 'not-requested'`; ordinary qualified responses and extra
+fields become malformed unknown outcomes. An injected envelope cannot prove
+the caller used the trusted core. Failures carry no success metadata. All
+existing stop rules remain, including no answer from persisted partial evidence.
+
 ## Qualified-prefix control (offline only)
 
 `planQualifiedPrefixLongMemEvalCase({history, namespace})` and

@@ -2402,15 +2402,20 @@ function mixedManifest(value) {
     'answerProtocolSha256', 'scorerProtocolSha256']) {
     if (typeof value[key] !== 'string' || !SHA256_HEX.test(value[key])) fail('invalid_capability');
   }
+  const evidenceOnly = own(value.cairn ?? {}, 'comparisonProfile');
   exactKeys(value.cairn, ['runtimeArtifactSha256', 'adapterConfigurationSha256',
-    'qualificationInputProfile', 'captureSourcePolicy'], 'invalid_capability');
+    'qualificationInputProfile', 'captureSourcePolicy',
+    ...(evidenceOnly ? ['comparisonProfile'] : [])], 'invalid_capability');
   for (const key of ['runtimeArtifactSha256', 'adapterConfigurationSha256']) {
     if (typeof value.cairn[key] !== 'string' || !SHA256_HEX.test(value.cairn[key])) {
       fail('invalid_capability');
     }
   }
-  if (value.cairn.qualificationInputProfile !== ADAPTIVE_QUALIFICATION_INPUT_PROFILE
-    || value.cairn.captureSourcePolicy !== 'indexed-windows-v1') fail('invalid_capability');
+  if (evidenceOnly ? value.cairn.comparisonProfile !== 'indexed-evidence-v1'
+    || value.cairn.qualificationInputProfile !== 'not-requested'
+    || value.cairn.captureSourcePolicy !== 'indexed-evidence-v1'
+    : value.cairn.qualificationInputProfile !== ADAPTIVE_QUALIFICATION_INPUT_PROFILE
+      || value.cairn.captureSourcePolicy !== 'indexed-windows-v1') fail('invalid_capability');
   exactKeys(value.mem0, ['version', 'sourceTreeSha256', 'dependencyLockSha256',
     'configurationSha256', 'wireProfile'], 'invalid_capability');
   if (value.mem0.version !== '2.2.0') fail('invalid_capability');
@@ -2521,7 +2526,8 @@ function mixedCapabilityRecord(config) {
     experimentDigest: pairHash('cairn.lme.mixed-source-pair.experiment.v1', {
       checkpoint: config.checkpoint, manifest: config.manifest, roster: config.roster,
       limits: config.limits }), schedule: mixedSchedule(config.roster),
-    methodProfile: MIXED_SOURCE_PAIR_METHOD_PROFILE };
+    methodProfile: config.manifest.cairn.comparisonProfile === 'indexed-evidence-v1'
+      ? 'cairn-mem0-indexed-evidence-source-pair-v1' : MIXED_SOURCE_PAIR_METHOD_PROFILE };
 }
 
 function verifyMixedCapability(capability, ledger, policy, benchmarkExtension) {
@@ -3833,7 +3839,8 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     const channel = policy[kind];
     const snapshot = requestSnapshot(url, options, channel);
     validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
-      CANDIDATE_QUALIFICATION_KIND.method, false, 'cairn', true, true);
+      capability.manifest.cairn.comparisonProfile === 'indexed-evidence-v1'
+        ? null : CANDIDATE_QUALIFICATION_KIND.method, false, 'cairn', true, true);
     return { stage: kind === 'cairnCount' ? 'cairn-count' : 'cairn-generation', kind,
       channel, snapshot, requestedOutputTokens: kind === 'cairnGeneration'
         ? snapshot.body.max_output_tokens : 0 };
