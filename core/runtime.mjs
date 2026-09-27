@@ -1,3 +1,5 @@
+import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
+import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash, randomUUID } from "node:crypto";
 import { openDatabase, transaction } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
@@ -19,7 +21,8 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input) {
-  object(input, ["path"]);
+  object(input, ["path", "sessionEpisodes"]);
+  const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const db = openDatabase(input.path);
   let identity;
   try {
@@ -135,6 +138,7 @@ export function createMemoryRuntime(input) {
       assertNotSuppressed(ns, value.fingerprint);
       conflictStorage.validateTargets(ns, value.conflictHints);
       const result = admitMutation(ns, value, projection);
+      if (value.procedural !== undefined) proceduralStorage.write(result.memory, value.procedural, 'explicit', value.receipts);
       const changed = conflictStorage.insertBatch(ns,
         [{ memoryId: result.memory.id, hints: value.conflictHints }], "explicit-hint");
       return { ...result, changed: result.changed || changed, indexRevision: epoch(ns) };
@@ -206,6 +210,8 @@ export function createMemoryRuntime(input) {
       conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
       qualificationStorage.clear(id);
+      proceduralStorage.clear(id);
+      episodes.invalidateMemory(ns, id);
       db.prepare(`UPDATE memories SET content = ?, fingerprint = ?, kind = ?,
         origin = 'explicit', confidence = 1, revision = revision + 1, updated_at = ?
         WHERE id = ?`).run(value.content, value.fingerprint, value.kind, now, id);
@@ -219,24 +225,27 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function forget(ns, id, expectedRevision) {
-    ready();
-    return transaction(db, () => {
+  function forgetMutation(ns, id, expectedRevision) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
-      if (current.revision !== expectedRevision) fail("revision_conflict");
+      if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
       suppress(ns, current.fingerprint);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       conflictStorage.invalidateMemory(id);
       mocStorage.invalidateMemory(ns, id, now);
       qualificationStorage.clear(id);
+      proceduralStorage.clear(id);
+      episodes.invalidateMemory(ns, id);
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
-        revision = revision + 1, updated_at = ? WHERE id = ?`)
-        .run(now, id);
+        revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
       return { forgotten: true, indexRevision: advanceEpoch(ns) };
-    });
+  }
+
+  function forget(ns, id, expectedRevision) {
+    ready();
+    return transaction(db, () => forgetMutation(ns, id, expectedRevision));
   }
 
   function supersede(ns, id, value, expectedRevision) {
@@ -359,6 +368,7 @@ export function createMemoryRuntime(input) {
       params.push(count + 1);
       return { memory: { ...metadataDto(memory), content: memory.content },
         receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
+        ...(proceduralStorage.inspect(id) ? { procedural: proceduralStorage.inspect(id) } : {}),
         placements: mocStorage.placementRefs(ns, id),
         conflicts: conflictStorage.inspect(ns, id),
         ...(includeQualification ? { qualification: qualificationStorage.inspect(memory) } : {}),
@@ -480,14 +490,35 @@ export function createMemoryRuntime(input) {
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch });
   const stagedEvidence = createStagedEvidenceStorage({ db });
+  const proceduralStorage = createProceduralStorage({ db, activeRow, advanceEpoch, epoch });
+  let episodes;
+  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation }); }
+  catch (error) { db.close(); throw error; }
+  stagedEvidence.setEpisodes(episodes);
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal,
+    classificationJournal, episodes,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
   return Object.freeze({
+    episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
+    reserveEpisodeBatch(ns, input) { ready(); return episodes.reserveBatch(ns, input); },
+    setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },
+    claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
+    releaseEpisodeWriter(ns, input) { ready(); return episodes.releaseWriter(ns, input); },
+    claimEpisodeDraft(ns, input) { ready(); return episodes.claimDraft(ns, input); },
+    failEpisodeDraft(ns, input) { ready(); return episodes.failDraft(ns, input); },
+    commitEpisodeDraft(ns, input) { ready(); return episodes.commitDraft(ns, input); },
+    getEpisode(ns, input, pages) { ready(); return episodes.inspect(ns, input, pages); },
+    forgetEpisode(ns, input) { ready(); return episodes.forget(ns, input); },
+    correctEpisode(ns, input) { ready(); return episodes.correct(ns, input); },
+    releaseEpisodeCorrection(ns, input) { ready(); return episodes.releaseCorrection(ns, input); },
+    getCaptureControl(ns) { ready(); return episodes.getControl(ns); },
+    setCapturePaused(ns, input) { ready(); return episodes.setControl(ns, input); },
+    setProjectCapture(ns, input) { ready(); return episodes.setControl(ns, input, true); },
+    setProceduralMemory(ns, input) { ready(); return proceduralStorage.set(ns, input); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot, sourceSnapshot,

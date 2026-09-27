@@ -567,6 +567,34 @@ version edits belong to a separately assigned release packet, not this plan.
 SE-2 uses the v2 candidate path; the v1-only `core/automatic-qualification.mjs`
 is not required and is excluded from its allowed paths.
 
+### SE-1 verification
+
+| SE-1 responsibility / touched gate | Tests (all under `core/test/`) |
+| --- | --- |
+| Eager v15 schema, fresh/current/v13 migrations, rollback, parent/child FKs and CHECKs; E11 | `episode-migration.test.mjs`: fresh v15/current-v14 preservation; failed rebuild rollback/FK-off rejection; original v13 upgrade; reserved/released constraint checks; schema checks and whitespace-independent DDL |
+| Mode isolation and legacy bytes; E10/E11 | `episode-migration.test.mjs`: committed v14 fixtures from `93e52b7`, without git/tar at test time, for default, v2 and staged-v1 capture, including request/prompt/output/rows/digests (only generated UUIDs/timestamps normalized); unexpected automatic tag rejection. Existing current-version expectations updated to v15 |
+| HMAC identity, storage privacy and key failure; E1 | `episode-storage.test.mjs`: restart, namespace/client separation, raw-session absence, corrupt/missing key rejection |
+| Bounded source-bound records, Unicode, corrections and inspection; E2 | `episode-storage.test.mjs`: source-bound inspection and foreign/surrogate rejection; malformed/oversized fields; pinned prose/anchors across later revisions |
+| Independent writer/draft/admission claims, durable markers, crash/replay and stale commits; E3/E5/E11 | `episode-storage.test.mjs`: claim consumption/non-leased admission and writer expiry cannot fail admission; `episode-capacity.test.mjs`: two-process serialization, expired-attempt recovery, stale worker and successor protection; `episode-staging-release.test.mjs`: admission-lease recovery and expiry publication fence |
+| Failure retention and explicit gaps; E4 | `episode-staging-release.test.mjs`: failed draft leaves payload, live expiry records gap; `episode-capacity.test.mjs`: failing a pre-forget bypass draft preserves all fence/capacity reasons; `episode-storage.test.mjs`: failed first draft retains null prose and normal admission |
+| Capacity, oldest/minimal prefix, protection, bypass and atomic rollback; E4a | `episode-capacity.test.mjs`: N16/140 approximately 16 KiB batches with success/failure, two interleaved sessions; protected quota plus 129 small-batch bypasses; N8/129 successful-disposition release baseline; mixed legacy protection; rollback; byte-pressure draft fence; per-event overflow; two concurrent processes admitting 140 batches |
+| Both release completion orders, empty admission, no-expiry inspection, cold replay; E4a/E8/E11 | `episode-staging-release.test.mjs`: admission-first/draft-first release, source retention, completed replay, quick-policy/empty release; `episode-capacity.test.mjs`: bypass replay after restart |
+| Durable pause/project stop and generation checks; E6 | `episode-storage.test.mjs`: pre-pause draft/admission completion; stop/re-enable fences, exact-project control persistence and no fallback |
+| Conversation deletion/suppression, zero-memory copies, historical/multi-source lineage, feature-off correction, pins; E7 | `episode-storage.test.mjs`: named deletion, copy-consumer, historical-lineage, legacy-correction and pinned-revision tests; cross-session dedup preserves interpretation and tags |
+| Persisted fresh quick policy and later normal policy; E8 | `episode-staging-release.test.mjs`: guarded skip-quick binding, empty release/replay, non-drafted normal policy and no retroactive policy change |
+| `getEpisode` independent source/lineage/policy pages, scope/epoch binding and 64 KiB envelope; E9 | `episode-storage.test.mjs`: signed/bounded/stale pages and whole-source prefix budget test |
+| Explicit tags in both modes/facades, exact receipt anchors, independent revisions and mutation semantics; E10 | `procedural-storage.test.mjs`: explicit admit and legacy remember; nonempty conflict/qualification/rationale preservation; filing preservation; receipt-add preservation; content-correction/forget clearing; foreign and split-code-point rejection |
+
+Storage-scope coverage only; capture/interpretation, range/startup and episode
+provider/MCP integration remain SE-2–SE-5. K3 uses eager atomic v15 upgrades.
+All CI run steps passed on Node 22.16; core, MCP, experiment-budget,
+experiment-request-guard and live-evidence-offline also passed on Node 24.15.
+Core passed 800/800 on both runtimes and in a fresh depth-1 Node 22 clone before
+main integration, and 815/815 after it.
+The base binary rejects v15 on both runtimes; hosts must stop/drain older connections.
+Artifact and installed synthetic-rationale gates passed on both runtimes.
+Whitespace checks passed. No semantic-fidelity or paid-pilot claim is made.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,

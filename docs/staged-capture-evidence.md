@@ -104,3 +104,32 @@ Verification uses synthetic stores and scripted models. It demonstrates
 retention and lifecycle boundaries, not semantic quality. Native Hermes
 exposure, precise source-lineage deletion, automatic retries, promotion,
 background maintenance and general reliability claims are outside this slice.
+
+## Opt-in episode ownership (SE-1)
+
+The storage runtime reserves a non-leased admission parent, an episode shell and
+observed event, and optional payload in one transaction. SE-2 will call these
+model-free seams around capture. Ordinary staging and its capacity error are
+unchanged. Episode ownership survives reopening without the option.
+
+Before capacity work, registration checks control generation, session deletion,
+event identity/digest and replay. It expires live payloads and releases successful
+dispositions already admitted. Under count (64) or byte (1 MiB) pressure it releases
+the minimum oldest prefix of admitted episode payloads, ordered by staging time,
+then binary client/event ID. It never reclaims unadmitted or legacy payloads.
+Each pressure release records a gap, advances revision/source fences and retains
+independent passages and memories. All reclamation and registration roll back
+together on failure.
+
+If space still fails, or an optional serialized payload exceeds 128 KiB, the event
+is persistently `not-staged` with a capacity gap and no fabricated staging child.
+It still has an admission reservation. Inspection returns null view and expiry.
+Replay reuses this decision even after capacity frees. Admission claims and finish
+checks consult episode metadata and control/deletion fences for bypassed events.
+
+Successful source disposition plus admission releases payload/quota in either
+completion order, including empty results. Released inspection returns
+`state:'released'`, `view:null`, `expiresAt:null`, release reason and disposition.
+Release does not close completed admission replay. A failed draft leaves payloads
+available; only live payloads have the original 24-hour upper bound. Explicit
+expiry/discard and pressure reclamation fence in-flight draft publication.
