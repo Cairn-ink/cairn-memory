@@ -99,6 +99,13 @@ reliability work below without declaring older failure gates resolved.
    It does not supply an operational credential broker, prove source selection
    or model answers, or authorize a paid cohort. Its synthetic pre-grant demo
    and explicit pinned-native local test must not be conflated with a score.
+   A fresh [six-batch synthetic canary](docs/evidence/qualification-canary.md)
+   has since completed one paired question; this is technical feasibility,
+   not a benchmark result or repair of the earlier failed cases. The next
+   proposed gate is a separately sealed, authorized six-case pilot with one
+   case per official LongMemEval question type, followed only if scoreable by
+   a new fixed-30 comparison. Installed-host, source-fidelity and lightweight
+   resource gates remain separate.
 2. Review/merge the verified native-provider candidate and its dependent
    native deadline/recovery candidate. The separately frozen
    [six-case development smoke](docs/fresh-reliability-smoke.md) now has a

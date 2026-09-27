@@ -212,12 +212,25 @@ but this synthetic-tested prompt change does not identify N1's malformed
 field, prove it caused N1's failure, or establish real-provider reliability or
 memory-quality improvement.
 
-The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
-an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.
+The fresh [N2 six-batch synthetic canary](evidence/qualification-canary.md)
+completed all six Cairn captures and produced one correct, resolved synthetic
+answer in each Cairn/Mem0 arm. Its single new case is operational evidence,
+not an official LongMemEval score, a statistical comparison, proof of semantic
+fidelity, or a causal repair of N1's qualification failure. The fixed-30 S3
+ingestion failures and N1 failure remain unchanged. N2's 63 requests added
+420,352 micro-USD of conservative reservation, not an invoice; the unchanged
+shared cap and zero-pending aggregate were checked independently. A separately
+sealed and authorized multi-type pilot remains necessary before any new
+fixed-30 comparison or broader quality claim.
+
+The [controlled mixed comparison runner](plans/mixed-comparison-runner.md)'s
+offline fake-HTTP tests are engineering evidence, not a measured Cairn/Mem0
+score.
 Its `apiKey` parameter serves Cairn and shared answer/judge requests; the
-native child uses a local-only dummy key and requires a separately trusted
-parent-side credential broker at a later launch gate. No credential is passed
-into that child here. The runner can await core work, owned guarded promises,
+native child uses a local-only dummy key and operational launches require a
+separately trusted parent-side credential broker. No provider credential is
+passed into the native child. The runner can await core work, owned guarded
+promises,
 X accounting and native cleanup; it cannot attest an abort-ignoring physical
 fetch's settlement. The guard fences late responses, and local tests must
 release such test doubles and check for no late dispatch or database progress.

@@ -35,3 +35,45 @@ Include all runtime Markdown and the tiny composer in the explicit installed-art
 Across the first combined tree and its test/docs-only final diagnostics amendment, full OpenAI adapter tests passed 234/234 on each Node; full installed-artifact tests on the final base passed 84/84 on each; installed offline rationale tests passed 4/4 on each; LongMemEval tests passed 185/185 on each; generic tests passed 112/112 on each; validation passed on each; all seven offline demos exited zero on each. Full core tests passed 729/729 on each Node with serial file scheduling; the Node 24 run was independently owned by the primary reviewer. Logs for the final-base Node 24 OpenAI and core, both artifact and rationale suites, Node 24 demos, and focused suites are in `/tmp/cairn-qualification-wire-gates.aAu59n/`; the earlier same-runtime-byte gate transcripts were retained in the implementation session. No paid provider run, real corpus, evaluator or operational ledger was used.
 
 The first PR CI live-evidence-offline Node 24 gate found three stale exact full-body token expectations in `qualified-source-budget-boundary.test.mjs` (3,905→3,952 and 3,913→3,960 twice). The unchanged candidate reproduced RED locally: 4 passed, 3 failed. Updating those exposed the local serialized count assertion (2,452→2,499), likewise measured by its own provider-like fake HTTP count of the actual serialized body; the intermediate RED was 6 passed, 1 failed. All four changes are +47 tokens from the coherent prompt. The schema/evidence contribution assertions, full bounds object, over-bound refusal, no-halt condition and three-method count/generation sequence remain exact and unchanged. Focused final file passed 7/7 on both Nodes. Full live-evidence-offline reruns on Node 22.16 and 24.15 each passed 340, failed 0, skipped 30 (the existing opt-in skips), as retained in `/tmp/cairn-qualification-wire-gates.aAu59n/live-evidence-final-{22,24}.log`. Earlier runtime gates remain applicable because no runtime file changed.
+
+## E1–E5 — Post-P canary evidence and next checkpoint
+
+This section is acceptance for a **documentation-only** result record, not a
+retroactive amendment to P1–P6 or authority for another launch.
+
+- E1: Record the fresh N2 synthetic canary's fixed one-question, six-session,
+  24-turn scope; all six Cairn capture batches, 24 retained memories, one
+  recalled source receipt, and each arm's one answer and resolved judgment.
+  Separate operational completion from the synthetic reference's correctness.
+  Preserve the failed S3 fixed-30 and N1 outcomes without replay or causal
+  attribution to the P prompt change.
+- E2: Report the N2 request and **conservative reservation** totals separately
+  from an invoice or known usage. Avoid private paths, case IDs, source text,
+  evaluator content and operational hashes in public docs. Identify the scope
+  of the independently checked aggregate accounting without implying that
+  the known usage estimate is an invoice.
+- E3: Specify the next proposed checkpoint as a **new**, sealed six-case
+  official LongMemEval-type pilot: one case per each of the six official type
+  labels, selected deterministically by hash from ID and type only after
+  excluding every previously frozen ID, including unexecuted holdouts. Freeze
+  source/evaluator separately, use the same paired arms, models, scorer and
+  resource protocol, and retain all scheduled outcomes without replacement.
+  Neither this record nor N2 authorizes selection, spending or launch.
+- E4: Distinguish six-of-six mechanical completion and scoreability in both
+  arms from accuracy. Report correct, incorrect and unresolved counts by arm
+  and common resolved denominator. A mechanical failure returns to an offline
+  reproducer and reviewed repair before expanding scope; it is not a reason
+  to retry a consumed case. Only after a feasible pilot propose a **fresh**
+  fixed-30 comparison under the existing at-least-29-per-arm and common
+  scoreability rule, with separate statistical, semantic, resource and
+  invariant gates. Do not invent an accuracy target or parity claim.
+- E5: Keep installed Hermes, MOC candidate visibility, source-supported
+  update/answer fidelity, and lightweight request/latency/cost evidence as
+  separate later product gates. Verify this documentation change with the
+  repository's generic tests and validation on Node 22.16 and 24.15; no
+  provider, operational ledger or original corpus is needed.
+
+The [technical result](../evidence/qualification-canary.md) is limited to the
+N2 observation and the proposed next gate. For this docs-only edit, generic
+tests passed 112/112 and JSON/version validation passed on each of Node
+22.16 and 24.15; no runtime, scorer, model or provider test behavior changed.
