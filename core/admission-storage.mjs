@@ -102,7 +102,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       if (closed) return { closed };
       if (!live(row, input, now)) fail("stale_admission");
       // The public manual finish cannot bypass ordered capture's private proof.
-      if (!hooks?.validate && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
+      if (!input.keepActionId && !hooks?.validate && db.prepare(`SELECT 1 FROM capture_events WHERE ${where}`)
         .get(...key(ns, input))) fail('stale_admission');
       hooks?.validate?.();
       const ids = new Set();

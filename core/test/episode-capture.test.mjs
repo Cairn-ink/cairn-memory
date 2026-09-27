@@ -414,6 +414,15 @@ test('E8 keep identity and ordinal are separate from capture events and draft at
   const captured = ok(await f.core.capture({ ...input(2), eventId: action.admission_key }));
   assert.equal(captured.admission.status, 'completed');
   assert.equal(f.db.prepare('SELECT count(*) n FROM admission_claims').get().n, 2);
+  const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  const legacy = openMemoryCore({ path: f.path, model: f.model });
+  t.after(() => { runtime.close(); legacy.close(); });
+  const current = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const next = { namespace: ns, episodeId: first.episode.id, expectedRevision: current.episode.revision, actionId: 'ordered-collision' };
+  const prepared = runtime.prepareEpisodeKeep(ns, next);
+  ok(await legacy.capture({ namespace: ns, client: 'synthetic', sessionId: 'legacy', eventId: prepared.key.eventId,
+    causal: { streamId: 'legacy-stream', sequence: 1 }, messages: [{ id: 'legacy-message', role: 'user', content: 'Synthetic ordered evidence' }] }));
+  assert.equal(ok(await f.core.keepEpisode(next)).admission.status, 'completed');
 });
 
 test('E6 end signal ID may collide with a forgotten capture event', async t => {
