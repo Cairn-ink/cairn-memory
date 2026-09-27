@@ -248,6 +248,107 @@ test('M8 empty Cairn recall still permits an empty-evidence answer; native remai
   } finally { fixture.guard.close(); }
 });
 
+test('O1 mixed runner retains the known stopping capture error', async t => {
+  assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
+  const artifact = inspectMem0NativeArtifact({
+    venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const fake = fakeMixedHttp((url, body) => body.text?.format?.name === 'cairn_extract'
+    && url.endsWith('/responses')
+    ? Response.json({ object: 'response', model: body.model, status: 'completed',
+      error: null, incomplete_details: null,
+      output: [{ type: 'message', role: 'assistant', status: 'completed',
+        content: [{ type: 'output_text', text: 'not-json' }] }],
+      usage: { input_tokens: 100, output_tokens: 5, total_tokens: 105 } })
+    : undefined);
+  const fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl });
+  try {
+    const report = await runMixedGeneration({ prepared: fixture.prepared,
+      guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+    const cairn = report.cases[0].arms.find(arm => arm.name === 'cairn');
+    const mem0 = report.cases[0].arms.find(arm => arm.name === 'mem0');
+    assert.equal(cairn.status, 'failed');
+    assert.equal(cairn.reason, 'ingestion_incomplete');
+    assert.equal(cairn.answer, null);
+    assert.equal(mem0.status, 'completed');
+    assert.equal(report.halted, false);
+    assert.deepEqual({ ...cairn.diagnostics.ingestion?.firstStop }, {
+      batchIndex: 0, status: 'failed', errorStage: 'capture',
+      errorCode: 'invalid_model_output', retryable: false });
+    assert.equal(cairn.diagnostics.ingestion.kind, 'capture_outcome');
+    assert.equal(cairn.diagnostics.ingestion.counts.failed, 1);
+    assert.equal(cairn.diagnostics.ingestion.counts.completed, 0);
+    assert.ok(cairn.diagnostics.modelDiagnostics.events.some(event =>
+      event.stage === 'extract' && event.layer === 'adapter' && event.reason === 'output_json'));
+    const scoring = await scoreMixedGeneration({ generationReport: report,
+      evaluatorRows: [evaluatorRow()], referenceRenderings: new Map(),
+      guard: fixture.guard, apiKey: 'synthetic-only' });
+    assert.equal(scoring.halted, false);
+    assert.equal(scoring.summary.fixedN, 1);
+    assert.equal(scoring.summary.perArm.cairn.unresolved, 1);
+  } finally { fixture.guard.close(); }
+});
+
+test('O5 real core and fake HTTP distinguish extract, qualification and classification stops', async t => {
+  assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
+  const artifact = inspectMem0NativeArtifact({
+    venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const scenarios = [
+    { method: 'cairn_extract', stage: 'extract', layer: 'core_validation',
+      reason: 'invalid_extraction_source_range',
+      status: 'failed', errorStage: 'capture', mutate: output => { output.items[0].sourceIndices = [99]; } },
+    { method: 'cairn_qualifyCandidates', stage: 'qualifyCandidates', layer: 'core_validation',
+      reason: 'qualification_citation_integrity', status: 'failed', errorStage: 'capture',
+      mutate: output => { output.qualifications.item_0.value.evidenceSlots = []; } },
+    { method: 'cairn_classify', stage: 'classify', layer: 'adapter', reason: 'output_shape',
+      status: 'partial', errorStage: 'classification',
+      mutate: output => { output.items[0].parentIds = ['synthetic-nonvisible-parent']; } },
+  ];
+  for (const scenario of scenarios) {
+    const base = fakeMixedHttp(undefined, { cairnMemory: true });
+    let changed = false;
+    const fetchImpl = async (url, options) => {
+      const response = await base.fetchImpl(url, options);
+      const body = JSON.parse(options.body);
+      if (changed || !url.endsWith('/responses') || body.text?.format?.name !== scenario.method) {
+        return response;
+      }
+      const envelope = await response.json();
+      const output = JSON.parse(envelope.output[0].content[0].text);
+      scenario.mutate(output);
+      envelope.output[0].content[0].text = JSON.stringify(output);
+      changed = true;
+      return Response.json(envelope);
+    };
+    const fixture = syntheticMixedFixture(t, { artifact, configuration,
+      sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']], fetchImpl });
+    try {
+      const report = await runMixedGeneration({ prepared: fixture.prepared,
+        guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      const cairn = report.cases[0].arms.find(arm => arm.name === 'cairn');
+      const mem0 = report.cases[0].arms.find(arm => arm.name === 'mem0');
+      assert.equal(changed, true, scenario.method);
+      assert.equal(cairn.reason, 'ingestion_incomplete', scenario.method);
+      assert.equal(cairn.answer, null, scenario.method);
+      assert.equal(mem0.status, 'completed', scenario.method);
+      assert.equal(cairn.diagnostics.ingestion.firstStop.status, scenario.status, scenario.method);
+      assert.equal(cairn.diagnostics.ingestion.firstStop.errorStage,
+        scenario.errorStage, scenario.method);
+      assert.ok(cairn.diagnostics.modelDiagnostics.events.some(event =>
+        event.stage === scenario.stage && event.layer === scenario.layer
+          && event.reason === scenario.reason),
+      `${scenario.method}: ${JSON.stringify(cairn.diagnostics.modelDiagnostics.events)}`);
+      assert.equal(report.halted, false, scenario.method);
+    } finally { fixture.guard.close(); }
+  }
+});
+
 test('M8/M11 nonempty actual Cairn admission and recall use authoritative source, not model summary', async t => {
   assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
   const artifact = inspectMem0NativeArtifact({

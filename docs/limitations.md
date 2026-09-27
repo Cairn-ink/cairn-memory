@@ -185,6 +185,16 @@ not a completed paid run or a semantic score. Unexpected process death before
 the generator returns still does not supply per-case generation checkpoints or
 authorize resuming the consumed cohort.
 
+The completed fixed-30 S3 attempt remains unresolved for every Cairn arm at
+ingestion. Its retained report records `ingestion_incomplete` but not each
+capture's underlying error code, stage or model diagnostic; those facts cannot
+be reconstructed or relabeled from later code. The bounded
+[ingestion-stop diagnostics](plans/mixed-ingestion-observability.md) add
+source-free status counts, first stop and finite model observations only to
+future runs. Synthetic tests distinguish several boundaries but do not prove
+which one occurred in the old 30 cases, fix capture, improve answer quality or
+authorize a new run.
+
 The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
 an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.
 Its `apiKey` parameter serves Cairn and shared answer/judge requests; the

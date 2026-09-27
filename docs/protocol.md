@@ -23,6 +23,19 @@ an immutable host. The normalized native result has only ordered bounded
 ADD records; it does not infer source provenance, timestamps, missing facts,
 or a quality score. Synthetic fake-provider tests do not authorize paid work.
 
+The private mixed generation report may retain a failed Cairn arm's first
+noncompleted, arm-disqualifying ingestion batch index and fixed outcome counts.
+A duplicate can precede another ingested batch; this field does not claim the
+capture loop stopped there. A plan mismatch is reported separately from a
+capture outcome. Capture errors pass through the
+existing finite ingestion-code projector, and up to 64 core/model adapter
+diagnostic events retain only finite `{version,stage,layer,reason}` values plus
+an omitted count. No source text, event/question ID, receipt, model output,
+provider body or arbitrary exception is copied into these new fields. Events
+are observations, not causal proof; absence is not success. The fields do not
+grant authority, alter default behavior, relax validation, add retries, or
+change public core/plugin/MCP/HTTP or hosted telemetry schemas.
+
 
 ### Optional embedded indexed source-window boundary
 

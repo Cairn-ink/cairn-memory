@@ -1,5 +1,4 @@
 import { createRequire } from 'node:module';
-import { isDeepStrictEqual } from 'node:util';
 import { lstatSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 
@@ -12,6 +11,8 @@ import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { experimentPolicy } from '../live/session.mjs';
 import { ingestIndexedWindowLongMemEvalCase } from './ingestion.mjs';
+import { createMixedModelDiagnosticObserver,
+  summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
 import { verifiedEvidence } from './mixed-evidence.mjs';
 import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
@@ -254,8 +255,10 @@ function revokeSemanticOnly(handle, guard, allowedLocalOrdinals) {
 async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, holdCore,
   allowedLocalOrdinals }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
+  const modelDiagnostics = createMixedModelDiagnosticObserver();
   const model = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
-    qualificationInputMode: 'adaptive-text-catalog-v1' });
+    qualificationInputMode: 'adaptive-text-catalog-v1',
+    onDiagnostic: modelDiagnostics.onDiagnostic });
   const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
     captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1',
     sourceCandidatePolicy: 'bounded-keyset-v1' });
@@ -265,10 +268,12 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
       expectedPlan: plan.cairnPlan });
     const ingested = await ingestIndexedWindowLongMemEvalCase({ history: plan.renderedHistory,
       namespace: row.namespace, capture: input => core.capture(input) });
-    if (!isDeepStrictEqual(ingested.plan, plan.cairnPlan)
-      || ingested.outcomes.length !== plan.cairnPlan.batches.length
+    const ingestion = summarizeMixedIngestionStop(ingested, plan.cairnPlan);
+    if (ingestion.kind !== 'capture_outcome'
       || ingested.outcomes.some(item => item.status !== 'completed')) {
-      revokeSemanticOnly(handle, guard, allowedLocalOrdinals); fail('ingestion_incomplete');
+      revokeSemanticOnly(handle, guard, allowedLocalOrdinals);
+      return { failed: 'ingestion_incomplete', diagnostics: { stage: 'ingestion',
+        ingestion, modelDiagnostics: modelDiagnostics.snapshot() } };
     }
     const recalled = await core.recall({ readSet: [row.namespace], query: plan.mem0Input.query,
       limit: 6, contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });
