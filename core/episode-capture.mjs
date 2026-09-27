@@ -106,7 +106,7 @@ export async function endEpisode({ runtime, ns, model, input }) {
   const control = runtime.getCaptureControl(ns);
   if (control.generation !== input.generation) fail('generation_conflict');
   if (control.paused || !control.enabled) fail('capture_disabled');
-  const state = runtime.episodeCaptureState(ns, input);
+  const state = runtime.episodeCaptureState(ns, { client: input.client, sessionId: input.sessionId });
   if (!state) return { episode: { status: 'not-run', reason: 'no-undrafted-evidence' } };
   return { episode: await auxiliary({ runtime, ns, model, episodeId: state.episodeId,
     generation: input.generation, trigger: 'end' }) };
@@ -138,6 +138,7 @@ export async function captureEpisodeMessages(options) {
   const episodeId = registered.episodeId;
   if (registered.processing) return { processing: true, episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
   if (registered.overlap) return { duplicate: true, overlap: true, episode: { id: episodeId, status: 'not-run', reason: 'overlap' }, admission: { status: 'covered' } };
+  if (registered.messageIds?.length) snapshot.messages = snapshot.messages.filter(message => registered.messageIds.includes(message.id));
   const writerToken = registered.token;
   try {
     let state = runtime.episodeCaptureState(ns, { episodeId, client: batch.client, eventId: batch.eventId });

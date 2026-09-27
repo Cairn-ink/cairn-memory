@@ -239,12 +239,12 @@ exact namespace, client and host session. New episode rows retain only the deriv
 TTL; conversation deletion and source invalidation remove them logically. Old
 receipts are unchanged; backups and SQLite free pages remain outside erasure claims.
 
-The v15-to-v16 step adds one empty STRICT `episode_messages` table and explicit
-keep outcome/coverage and omission columns to existing journals, atomically
+The v15-to-v16 step adds empty STRICT message-ledger and keep-action tables, plus
+bounded message membership and omission columns on the batch journal, atomically
 with the version update and foreign-key check. The v14 upgrade runs both migrations
 in the same transaction. Existing episodes are not backfilled: overlap detection
 covers only messages registered after the upgrade. The ledger retains message ID,
-first and coverage event IDs and a keyed digest of canonical role/text/event time, never plaintext
-text or role. It survives staging release and conversation deletion as content-free
+first and coverage event IDs and a keyed digest of canonical role/text/event time,
+never plaintext text or role. It survives staging release and conversation deletion as content-free
 replay metadata. Episode-off capture never writes it. Older binaries refuse v16 with
 `unsupported_database`; stop and drain older connections before upgrading.

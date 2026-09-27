@@ -6,6 +6,7 @@ import { createMemoryRuntime } from '../runtime.mjs';
 function large(id, session='private-host-session', units=780) {
   const input=batch(id,'x'.repeat(units),session);
   input.view.messages=Array.from({length:20},(_,i)=>({id:`${id}-${i}`,role:'user',content:'x'.repeat(units)}));
+  input.messages=input.view.messages.map(message=>({...message,occurredAt:null}));
   input.payloadDigest=digest(JSON.stringify(input.view));return input;
 }
 const payloadCount=f=>f.db.prepare('SELECT count(*) n FROM staged_capture_evidence WHERE payload IS NOT NULL').get().n;

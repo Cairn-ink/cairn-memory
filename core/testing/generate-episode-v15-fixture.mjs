@@ -48,7 +48,7 @@ try {
     JSON.stringify({ base, cases: await captureDiagnosticParity(root) }, null, 2) + '\n');
   const current = openDatabase(join(temporary, 'v16.sqlite'));
   try {
-    const layout = Object.fromEntries(['episode_messages', 'episode_events', 'episode_attempts'].map(name =>
+    const layout = Object.fromEntries(['episode_messages', 'episode_events', 'episode_attempts', 'episode_keep_actions'].map(name =>
       [name, current.prepare('PRAGMA table_info(' + name + ')').all()]));
     writeFileSync(new URL('./episode-v16-layout.json', import.meta.url), JSON.stringify(layout, null, 2) + '\n');
   } finally { current.close(); }

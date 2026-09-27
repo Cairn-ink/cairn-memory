@@ -159,6 +159,7 @@ test('E11 mode validation is snapshotted and mode-on capture is deferred to SE-2
 test('E2/E9 field limits reject atomically; inspection returns whole source prefixes under 64KiB',t=>{
   const f=fixture(t),input=batch('large','\x01'.repeat(800));
   input.view.messages=Array.from({length:16},(_,i)=>({id:`message-${i}`,role:'user',content:'\x01'.repeat(800)}));
+  input.messages=input.view.messages.map(message=>({...message,occurredAt:null}));
   const r=register(f,input),job=draft(f,r,input);
   for(const patch of [{language:'中文'},{gist:{value:'x'.repeat(401),anchors:[{sourceIndex:0,start:0,end:1}]}},
     {gist:{value:'foreign',anchors:[{sourceIndex:99,start:0,end:1}]}}]) assert.throws(()=>f.runtime.commitEpisodeDraft(ns,{...job.commit,result:{...job.commit.result,...patch}}),/invalid_input/);

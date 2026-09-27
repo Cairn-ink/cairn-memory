@@ -1,5 +1,5 @@
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
-import { episodeOptions, episodeClient, KEEP_ADMISSION_CLIENT } from './episode-storage.mjs';
+import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createMemoryRuntime } from "./runtime.mjs";
 import { createCaptureDeadline } from './capture-deadline.mjs';
@@ -10,8 +10,6 @@ import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
 import { captureEpisodeMessages, endEpisode, keepEpisodeCapture } from './episode-capture.mjs';
-
-const keepAdmissionKey = Symbol('keepAdmissionKey');
 import { captureMessages } from './capture.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
@@ -24,6 +22,8 @@ import { reviewSourceBasis } from './source-basis.mjs';
 import {
   boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
 } from "./validation.mjs";
+
+const keepAdmissionKey = Symbol('keepAdmissionKey');
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
 const statusOrder = ["filed", "unfiled"];
@@ -350,7 +350,7 @@ export function openMemoryCore(input) {
     if (typeof input.payloadDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.payloadDigest)) {
       throw new MemoryStoreError('invalid_input');
     }
-    return { client: input[keepAdmissionKey] ? KEEP_ADMISSION_CLIENT : contractId(input.client), eventId: contractId(input.eventId),
+    return { client: contractId(input.client), ...(input[keepAdmissionKey] ? { keepActionId: contractId(input.eventId) } : {}), eventId: contractId(input.eventId),
       payloadDigest: input.payloadDigest };
   }
 

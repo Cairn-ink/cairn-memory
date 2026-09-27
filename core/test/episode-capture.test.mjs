@@ -251,9 +251,9 @@ test('E8 transient busy keep releases its own claim and retries the same action'
   assert.equal(counts(f.model), 1);
   assert.equal(ok(await f.core.keepEpisode(action)).duplicate, true);
   assert.equal(counts(f.model, 'extract'), 2);
-  const stored = f.db.prepare('SELECT token,keep_state,keep_error_code FROM episode_attempts WHERE keep_event_id IS NOT NULL').get();
+  const stored = f.db.prepare('SELECT token,keep_state,keep_error_code FROM episode_keep_actions').get();
   assert.equal(stored.keep_state, 'completed'); assert.equal(stored.keep_error_code, null);
-  assert.ok(!stored.token.startsWith('failed:'));
+  assert.equal(stored.token, null);
 });
 
 test('E8 keep coverage survives new drafts and all 27 actions page in creation order', async t => {
@@ -267,7 +267,7 @@ test('E8 keep coverage survives new drafts and all 27 actions page in creation o
   const coverage = page.keepActions.items[0].sourceCoverage;
   assert.deepEqual(coverage.sourceIds, detail.sources.items.map(source => source.id));
   assert.equal(coverage.revision, detail.episode.revision);
-  assert.equal(page.policies.items[0].policy, 'explicit-keep');
+  assert.equal(page.policies.items[0].policy, 'normal');
   const second = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id, keepCursor: page.keepActions.nextCursor }));
   assert.equal(second.keepActions.items.length, 7); assert.equal(second.keepActions.exhausted, true);
   assert.equal(second.keepActions.nextCursor, null);
@@ -367,9 +367,85 @@ test('E8 unknown keep storage errors stay storage_error and permit action retry'
     assertEpisodeKeep() { throw Error('synthetic unclassified storage failure'); } }, ns, keepInput: action,
     input: { namespace: ns }, model: f.model, captureEvidence: 'staged-v1', captureQualification: 'source-bound-v2',
     operations: { abandonAdmission: value => runtime.abandonAdmission(ns, value) } }), { code: 'storage_error' });
-  const stored = f.db.prepare('SELECT keep_state,keep_error_code FROM episode_attempts WHERE keep_event_id IS NOT NULL').get();
+  const stored = f.db.prepare('SELECT keep_state,keep_error_code FROM episode_keep_actions').get();
   assert.equal(stored.keep_state, 'retryable'); assert.equal(stored.keep_error_code, null);
-  assert.equal(f.db.prepare("SELECT state FROM admission_claims WHERE event_id=(SELECT keep_event_id FROM episode_attempts WHERE keep_event_id IS NOT NULL)").get().state, 'reserved');
+  assert.equal(f.db.prepare("SELECT state FROM episode_keep_actions").get().state, 'reserved');
   assert.equal(ok(await f.core.keepEpisode(action)).admission.memories.length, 0);
   assert.equal(counts(f.model, 'extract'), 2);
+});
+
+test('E8 failed keep preserves completed quick policy, basis and admission exactly', async t => {
+  const f = setup(t, { interpretEpisode: r => interpretation(r, 'quick-one-off-question'),
+    extract: () => ({ invalid: true }) });
+  const first = ok(await f.core.capture(input()));
+  const before = f.db.prepare('SELECT * FROM episode_events').get();
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  assertError(await f.core.keepEpisode({ namespace: ns, episodeId: first.episode.id,
+    expectedRevision: detail.episode.revision, actionId: 'failed-keep' }), 'invalid_model_output');
+  assert.deepEqual(f.db.prepare('SELECT * FROM episode_events').get(), before);
+  assert.equal(before.policy, 'skip-quick'); assert.equal(before.policy_type, 'quick-one-off-question');
+  assert.equal(before.admission, 'completed');
+  assert.equal(ok(await f.core.capture(input())).admission.status, 'completed');
+  assert.equal(counts(f.model, 'extract'), 1);
+});
+
+test('E4 interpretation provider failure emits the documented diagnostic exactly', async t => {
+  const diagnostics = [];
+  const f = setup(t, { interpretEpisode: () => { throw Error('synthetic provider failure'); },
+    onDiagnostic: event => diagnostics.push(event) });
+  const result = ok(await f.core.capture(input()));
+  assert.equal(result.episode.error.code, 'episode_failed');
+  assert.deepEqual(diagnostics, [{ version: 1, stage: 'interpretEpisode', layer: 'core_call', reason: 'provider_failure' }]);
+});
+
+test('E8 keep identity and ordinal are separate from capture events and draft attempts', async t => {
+  const f = setup(t);
+  const first = ok(await f.core.capture(input()));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const before = f.db.prepare('SELECT ordinal FROM episode_controls').get().ordinal;
+  const drafts = f.db.prepare('SELECT * FROM episode_attempts').all();
+  ok(await f.core.keepEpisode({ namespace: ns, episodeId: first.episode.id,
+    expectedRevision: detail.episode.revision, actionId: 'identity' }));
+  const action = f.db.prepare('SELECT * FROM episode_keep_actions').get();
+  assert.equal(action.client, 'synthetic'); assert.equal(action.keep_ordinal, 1);
+  assert.equal(f.db.prepare('SELECT ordinal FROM episode_controls').get().ordinal, before);
+  assert.deepEqual(f.db.prepare('SELECT * FROM episode_attempts').all(), drafts);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM admission_claims').get().n, 1);
+  const captured = ok(await f.core.capture({ ...input(2), eventId: action.admission_key }));
+  assert.equal(captured.admission.status, 'completed');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM admission_claims').get().n, 2);
+});
+
+test('E6 end signal ID may collide with a forgotten capture event', async t => {
+  const f = setup(t);
+  const first = ok(await f.core.capture(input(1, 'forgotten')));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  ok(f.core.forgetEpisode({ namespace: ns, episodeId: first.episode.id, expectedRevision: detail.episode.revision }));
+  ok(await f.core.capture(input(1, 'live'))); ok(await f.core.capture(input(2, 'live')));
+  const result = ok(await f.core.endEpisodeSession({ namespace: ns, client: 'synthetic', sessionId: 'live',
+    generation: 'initial', eventId: input(1, 'forgotten').eventId }));
+  assert.equal(result.episode.status, 'interpreted');
+});
+
+test('E3 partial completed overlap extracts only previously unadmitted messages', async t => {
+  const f = setup(t);
+  ok(await f.core.capture(input()));
+  const second = input(2); second.messages.unshift(input().messages[0]);
+  const result = ok(await f.core.capture(second));
+  assert.equal(result.admission.status, 'completed');
+  assert.deepEqual(f.model.calls.filter(call => call.method === 'extract').at(-1).request.input.messages.map(m => m.content),
+    [input(2).messages[0].content]);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 2);
+});
+
+test('E8 keep cleanup recognizes SQLite primary and extended busy/locked codes only', async () => {
+  const { createEpisodeStorage } = await import('../episode-storage.mjs');
+  const kept = { key: { eventId: 'synthetic-action' } };
+  for (const errcode of [5, 6, 261, 262]) {
+    const store = createEpisodeStorage({ db: { exec() { throw Object.assign(Error('synthetic lock'), { errcode }); } } });
+    assert.doesNotThrow(() => store.failKeep(ns, kept, 'storage_busy'));
+  }
+  const error = Object.assign(Error('unclassified failure'), { code: 'SQLITE_BUSY' });
+  const store = createEpisodeStorage({ db: { exec() { throw error; } } });
+  assert.throws(() => store.failKeep(ns, kept, 'storage_error'), value => value === error);
 });

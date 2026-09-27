@@ -204,6 +204,14 @@
     },
     {
       "cid": 20,
+      "name": "message_ids",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": "'[]'",
+      "pk": 0
+    },
+    {
+      "cid": 21,
       "name": "omitted_count",
       "type": "INTEGER",
       "notnull": 1,
@@ -211,7 +219,7 @@
       "pk": 0
     },
     {
-      "cid": 21,
+      "cid": 22,
       "name": "omitted_indices",
       "type": "TEXT",
       "notnull": 1,
@@ -291,18 +299,92 @@
       "notnull": 1,
       "dflt_value": "0",
       "pk": 0
+    }
+  ],
+  "episode_keep_actions": [
+    {
+      "cid": 0,
+      "name": "admission_key",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 1
+    },
+    {
+      "cid": 1,
+      "name": "action_id",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 2,
+      "name": "episode_id",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 3,
+      "name": "owner_id",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 4,
+      "name": "scope",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 5,
+      "name": "project_id",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 6,
+      "name": "client",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 7,
+      "name": "event_id",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 8,
+      "name": "payload_digest",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
     },
     {
       "cid": 9,
-      "name": "keep_event_id",
+      "name": "state",
       "type": "TEXT",
-      "notnull": 0,
+      "notnull": 1,
       "dflt_value": null,
       "pk": 0
     },
     {
       "cid": 10,
-      "name": "keep_state",
+      "name": "token",
       "type": "TEXT",
       "notnull": 0,
       "dflt_value": null,
@@ -310,15 +392,15 @@
     },
     {
       "cid": 11,
-      "name": "keep_error_code",
-      "type": "TEXT",
+      "name": "lease_expires_at",
+      "type": "INTEGER",
       "notnull": 0,
       "dflt_value": null,
       "pk": 0
     },
     {
       "cid": 12,
-      "name": "keep_source_ids",
+      "name": "memory_ids",
       "type": "TEXT",
       "notnull": 0,
       "dflt_value": null,
@@ -326,7 +408,7 @@
     },
     {
       "cid": 13,
-      "name": "keep_ordinal",
+      "name": "suppressed_count",
       "type": "INTEGER",
       "notnull": 0,
       "dflt_value": null,
@@ -334,9 +416,57 @@
     },
     {
       "cid": 14,
-      "name": "keep_created_at",
+      "name": "keep_state",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 15,
+      "name": "keep_error_code",
       "type": "TEXT",
       "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 16,
+      "name": "keep_source_ids",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 17,
+      "name": "revision",
+      "type": "INTEGER",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 18,
+      "name": "source_fence",
+      "type": "INTEGER",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 19,
+      "name": "keep_ordinal",
+      "type": "INTEGER",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 20,
+      "name": "keep_created_at",
+      "type": "TEXT",
+      "notnull": 1,
       "dflt_value": null,
       "pk": 0
     }

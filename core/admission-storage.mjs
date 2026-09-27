@@ -8,8 +8,14 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
   conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage }) {
-  const read = (ns, input) => db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
-    .get(...key(ns, input));
+  const table = input => input.keepActionId ? 'episode_keep_actions' : 'admission_claims';
+  const predicate = input => input.keepActionId ? 'owner_id=? AND scope=? AND project_id=? AND admission_key=?' : where;
+  const values = (ns, input) => input.keepActionId ? [ns.ownerId, ns.scope, ns.projectId, input.keepActionId] : key(ns, input);
+  const read = (ns, input) => db.prepare(`SELECT * FROM ${table(input)} WHERE ${predicate(input)}`)
+    .get(...values(ns, input));
+  const time = (ns, input, create) => input.keepActionId ? Date.now() : stagedEvidence.admissionTime(ns, input, create);
+  const guard = (method, ns, input, ...args) => input.keepActionId ? episodes.guard(ns, input)
+    : stagedEvidence[method](ns, input, ...args);
   const live = (row, input, now) => row?.state === "pending" &&
     row.payload_digest === input.payloadDigest && row.token === input.token &&
     row.lease_expires_at > now;
@@ -55,10 +61,10 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
   function claimAdmission(ns, input, hooks, stagedView, deadline) {
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
     const result = transaction(db, () => {
-      const now = stagedEvidence.admissionTime(ns, input, serialized !== null);
+      const now = time(ns, input, serialized !== null);
       const row = read(ns, input);
       if (row && row.payload_digest !== input.payloadDigest) return { closed: 'event_payload_conflict' };
-      const closed = stagedEvidence.claimGuard(ns, input, row, now, serialized !== null);
+      const closed = guard('claimGuard', ns, input, row, now, serialized !== null);
       if (closed) return { closed };
       if (row?.state === "completed") {
         return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
@@ -72,8 +78,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       if (capacity) return { closed: capacity };
       const token = randomUUID();
       if (row) {
-        db.prepare(`UPDATE admission_claims SET state = 'pending', token = ?, lease_expires_at = ? WHERE ${where}`)
-          .run(token, now + input.leaseMs, ...key(ns, input));
+        db.prepare(`UPDATE ${table(input)} SET state = 'pending', token = ?, lease_expires_at = ? WHERE ${predicate(input)}`)
+          .run(token, now + input.leaseMs, ...values(ns, input));
       } else {
         db.prepare(`INSERT INTO admission_claims
           (owner_id, scope, project_id, client, event_id, payload_digest, state, token, lease_expires_at)
@@ -90,9 +96,9 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
 
   function finishAdmission(ns, input, hooks, deadline) {
     const result = transaction(db, () => {
-      const now = stagedEvidence.admissionTime(ns, input);
+      const now = time(ns, input);
       const row = read(ns, input);
-      const closed = stagedEvidence.finishGuard(ns, input, row, now);
+      const closed = guard('finishGuard', ns, input, row, now);
       if (closed) return { closed };
       if (!live(row, input, now)) fail("stale_admission");
       // The public manual finish cannot bypass ordered capture's private proof.
@@ -125,13 +131,13 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       // Resolve revisions after the entire batch: later exact matches can attach
       // receipts to an earlier result while preserving its first occurrence order.
       const memories = memoryIds.map((id) => ({ id, revision: activeRow(ns, id).revision }));
-      db.prepare(`UPDATE admission_claims SET state = 'completed', token = NULL,
-        lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${where}`)
-        .run(JSON.stringify(memoryIds), suppressedCount, ...key(ns, input));
+      db.prepare(`UPDATE ${table(input)} SET state = 'completed', token = NULL,
+        lease_expires_at = NULL, memory_ids = ?, suppressed_count = ? WHERE ${predicate(input)}`)
+        .run(JSON.stringify(memoryIds), suppressedCount, ...values(ns, input));
       hooks?.complete?.();
       episodes.admitted(ns, input, entries);
-      stagedEvidence.mark(ns, input, 'admitted');
-      if (hooks?.initialClassification) classificationJournal.insert(ns, input, memories);
+      if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
+      if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
@@ -140,24 +146,24 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
 
   function abandonAdmission(ns, input) {
     return transaction(db, () => {
-      const now = stagedEvidence.admissionTime(ns, input);
+      const now = time(ns, input);
       const row = read(ns, input);
       // The expired owner may record its failure, but cannot release a successor.
       if (row?.state !== 'pending' || row.payload_digest !== input.payloadDigest ||
         row.token !== input.token) return { abandoned: false };
-      stagedEvidence.mark(ns, input, 'failed');
+      if (!input.keepActionId) stagedEvidence.mark(ns, input, 'failed');
       if (!live(row, input, now)) return { abandoned: false };
-      db.prepare(`UPDATE admission_claims SET lease_expires_at = 0 WHERE ${where}`)
-        .run(...key(ns, input));
+      db.prepare(`UPDATE ${table(input)} SET lease_expires_at = 0 WHERE ${predicate(input)}`)
+        .run(...values(ns, input));
       return { abandoned: true };
     });
   }
 
   function assertCaptureEvidence(ns, input) {
     const result = transaction(db, () => {
-      const now = stagedEvidence.admissionTime(ns, input);
+      const now = time(ns, input);
       const row = read(ns, input);
-      return stagedEvidence.finishGuard(ns, input, row, now) ||
+      return guard('finishGuard', ns, input, row, now) ||
         (!live(row, input, now) ? 'capture_evidence_closed' : null);
     });
     if (result) fail(result);

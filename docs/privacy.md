@@ -203,7 +203,7 @@ key holders can still test guesses, and identifiers retain correlation risk.
 Registration and capacity disposition are atomic. Episode-off captures leave the
 ledger empty. Upgrades do not backfill earlier messages, so overlap detection starts
 with post-upgrade registration. Provider payloads receive no ledger IDs/digests.
-Explicit keep records only an action key, creation ordinal/time, source IDs,
-source revision/fence and a classified admission result in dedicated journal
-columns; it neither archives additional transcript text nor
-turns the interpretation into evidence. E1/E3/E5/E7/E11 cover these boundaries.
+Batch rows also retain bounded message-ID membership to fence superseded owners.
+Explicit keep records action identity, creation ordinal/time, source IDs, source
+revision/fence and a classified admission result in a separate keep-action table.
+It neither archives additional transcript text nor turns interpretation into evidence. E1/E3/E5/E7/E11 cover these boundaries.

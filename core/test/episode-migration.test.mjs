@@ -176,25 +176,25 @@ test('E11 v15 committed fixture eagerly upgrades to v16 with empty content-free 
   const layout=JSON.parse(readFileSync(new URL('../testing/episode-v16-layout.json',import.meta.url),'utf8'));
   for(const [name,expected] of Object.entries(layout))
     assert.deepEqual(JSON.parse(JSON.stringify(db.prepare('PRAGMA table_info('+name+')').all())),expected);
-  assert.ok(db.prepare('PRAGMA table_info(episode_attempts)').all().some(column=>column.name==='keep_state'));
+  assert.ok(db.prepare('PRAGMA table_info(episode_keep_actions)').all().some(column=>column.name==='keep_state'));
   assert.ok(db.prepare('PRAGMA table_info(episode_events)').all().some(column=>column.name==='omitted_indices'));
 });
 
 test('E11 failed v14/v15 -> v16 migration rolls back schema, rows and version',t=>{
-  for(const version of [14,15]) {
+  for(const version of [14,15]) for(const collision of ['episode_messages', 'episode_keep_actions']) {
     const data=JSON.parse(readFileSync(new URL(`../testing/episode-v${version}-fixture.json`,import.meta.url),'utf8'));
-    const path=join(directory(t),`rollback-${version}.sqlite`);writeFileSync(path,'',{mode:0o600});
+    const path=join(directory(t),`rollback-${version}-${collision}.sqlite`);writeFileSync(path,'',{mode:0o600});
     const db=new DatabaseSync(path);t.after(()=>db.close());db.exec('PRAGMA foreign_keys=ON');
     transaction(db,()=>{db.exec('PRAGMA defer_foreign_keys=ON');db.exec(readFileSync(new URL(`../testing/episode-schema-v${version}.sql`,import.meta.url),'utf8'));
       for(const [name,rows]of Object.entries(data.tables))for(const row of rows)
         db.prepare(`INSERT INTO ${name}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values(row));
-      db.exec("CREATE TABLE episode_messages(precious TEXT); INSERT INTO episode_messages VALUES('keep')");
+      db.exec(`CREATE TABLE ${collision}(precious TEXT); INSERT INTO ${collision} VALUES('keep')`);
     });
     const before=db.prepare('SELECT * FROM sqlite_master ORDER BY name').all();
     assert.throws(()=>openMemoryCore({path}), { code: 'ERR_SQLITE_ERROR' });
     assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(),before);
     assert.equal(db.prepare('PRAGMA user_version').get().user_version,version);
-    assert.equal(db.prepare('SELECT precious FROM episode_messages').get().precious,'keep');
+    assert.equal(db.prepare(`SELECT precious FROM ${collision}`).get().precious,'keep');
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
   }
 });

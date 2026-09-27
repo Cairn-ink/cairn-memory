@@ -6,7 +6,16 @@ import { captureEpisodeMessages } from '../episode-capture.mjs';
 import { model,input,options,ns,interpretation } from './episode-capture-helpers.mjs';
 const [path,mode]=process.argv.slice(2);
 const send=value=>new Promise(resolve=>process.send(value,resolve));
-if (mode === 'registered-hold') {
+if (mode === 'keep-retry') {
+  const port = model(), core = openMemoryCore({ path, ...options, model: port });
+  await send({ stage: 'ready' });
+  for (let i = 0; i < 2; i++) {
+    const action = await new Promise(resolve => process.once('message', resolve));
+    const result = await core.keepEpisode(action);
+    await send({ stage: 'result', result, calls: port.calls.map(call => call.method) });
+  }
+  core.close(); process.disconnect();
+} else if (mode === 'registered-hold') {
   const runtime = createMemoryRuntime({ path, sessionEpisodes: { mode: 'episode-v1' } });
   const snapshot = episodeSnapshot(input());
   runtime.reserveEpisodeBatch(ns, { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
@@ -36,9 +45,9 @@ if (mode === 'registered-hold') {
     admitted++;
   }
   core.close();await send({stage:'result',admitted,calls:port.calls.filter(c=>c.method==='interpretEpisode').length});process.disconnect();
-} else if(mode==='crash-after-draft' || mode==='crash-after-precompact') {
+} else if(mode==='crash-after-draft' || mode==='crash-after-precompact' || mode==='crash-after-quick') {
   const runtime=createMemoryRuntime({path,sessionEpisodes:{mode:'episode-v1'}});
-  await captureEpisodeMessages({runtime,ns,model:model(),input:input(1, 'private-session', { episodeContext: { clientLabel: 'Synthetic client', generation: 'initial',
+  await captureEpisodeMessages({runtime,ns,model:model(mode === 'crash-after-quick' ? { interpretEpisode: r => interpretation(r, 'quick-one-off-question') } : {}),input:input(1, 'private-session', { episodeContext: { clientLabel: 'Synthetic client', generation: 'initial',
     origin: mode === 'crash-after-precompact' ? 'precompact' : 'ordinary' } }),startAdmission(){
     process.send({stage:'drafted'});
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);

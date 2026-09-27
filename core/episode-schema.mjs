@@ -114,23 +114,33 @@ export function migrateVersion15(db) {
     PRIMARY KEY(episode_id,message_id)
   ) STRICT;`);
   db.exec(`
+    ALTER TABLE episode_events ADD COLUMN message_ids TEXT NOT NULL DEFAULT '[]'
+      CHECK(json_valid(message_ids) AND json_type(message_ids)='array' AND json_array_length(message_ids)<=24 AND length(message_ids)<=32768);
     ALTER TABLE episode_events ADD COLUMN omitted_count INTEGER NOT NULL DEFAULT 0 CHECK(omitted_count BETWEEN 0 AND 24);
     ALTER TABLE episode_events ADD COLUMN omitted_indices TEXT NOT NULL DEFAULT '[]'
       CHECK(json_valid(omitted_indices) AND json_type(omitted_indices)='array' AND length(omitted_indices)<=100);
-    ALTER TABLE episode_attempts ADD COLUMN keep_event_id TEXT CHECK(keep_event_id IS NULL OR (${digestCheck('keep_event_id')}));
-    ALTER TABLE episode_attempts ADD COLUMN keep_state TEXT CHECK(keep_state IN ('pending','completed','failed','retryable'));
-    ALTER TABLE episode_attempts ADD COLUMN keep_error_code TEXT CHECK(keep_error_code IS NULL OR length(keep_error_code) BETWEEN 1 AND 64);
-    ALTER TABLE episode_attempts ADD COLUMN keep_source_ids TEXT CHECK(keep_source_ids IS NULL OR
-      (json_valid(keep_source_ids) AND json_type(keep_source_ids)='array' AND json_array_length(keep_source_ids) BETWEEN 1 AND 16));
-    ALTER TABLE episode_attempts ADD COLUMN keep_ordinal INTEGER CHECK(keep_ordinal>0);
-    ALTER TABLE episode_attempts ADD COLUMN keep_created_at TEXT CHECK(
-      (keep_event_id IS NULL AND keep_state IS NULL AND keep_error_code IS NULL AND keep_source_ids IS NULL
-        AND keep_ordinal IS NULL AND keep_created_at IS NULL) OR
-      (keep_event_id IS NOT NULL AND keep_state IS NOT NULL AND keep_source_ids IS NOT NULL
-        AND keep_ordinal IS NOT NULL AND keep_created_at IS NOT NULL AND length(keep_created_at)=24
-        AND ((keep_state='failed' AND keep_error_code IS NOT NULL) OR (keep_state!='failed' AND keep_error_code IS NULL))));
-    CREATE UNIQUE INDEX episode_keep_event ON episode_attempts(keep_event_id) WHERE keep_event_id IS NOT NULL;
-    CREATE INDEX episode_keep_page ON episode_attempts(episode_id,keep_ordinal) WHERE keep_ordinal IS NOT NULL;
+    CREATE TABLE episode_keep_actions (
+      admission_key TEXT PRIMARY KEY CHECK(${digestCheck('admission_key')}),
+      action_id TEXT NOT NULL CHECK(length(action_id) BETWEEN 1 AND 200),
+      episode_id TEXT NOT NULL REFERENCES session_episodes(id),
+      owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+      client TEXT NOT NULL, event_id TEXT NOT NULL,
+      payload_digest TEXT NOT NULL CHECK(${digestCheck('payload_digest')}),
+      state TEXT NOT NULL CHECK(state IN ('reserved','pending','completed')),
+      token TEXT, lease_expires_at INTEGER, memory_ids TEXT, suppressed_count INTEGER,
+      keep_state TEXT NOT NULL CHECK(keep_state IN ('pending','completed','failed','retryable')),
+      keep_error_code TEXT CHECK(keep_error_code IS NULL OR length(keep_error_code) BETWEEN 1 AND 64),
+      keep_source_ids TEXT NOT NULL CHECK(json_valid(keep_source_ids) AND json_type(keep_source_ids)='array'
+        AND json_array_length(keep_source_ids) BETWEEN 1 AND 16),
+      revision INTEGER NOT NULL CHECK(revision>0), source_fence INTEGER NOT NULL CHECK(source_fence>0),
+      keep_ordinal INTEGER NOT NULL CHECK(keep_ordinal>0), keep_created_at TEXT NOT NULL CHECK(length(keep_created_at)=24),
+      UNIQUE(episode_id,action_id), UNIQUE(episode_id,keep_ordinal), ${namespaceCheck},
+      CHECK((state='reserved' AND token IS NULL AND lease_expires_at IS NULL AND memory_ids IS NULL AND suppressed_count IS NULL) OR
+        (state='pending' AND token IS NOT NULL AND lease_expires_at IS NOT NULL AND memory_ids IS NULL AND suppressed_count IS NULL) OR
+        (state='completed' AND token IS NULL AND lease_expires_at IS NULL AND memory_ids IS NOT NULL
+          AND length(memory_ids)<=2016 AND suppressed_count IS NOT NULL AND suppressed_count BETWEEN 0 AND 5)),
+      CHECK((keep_state='failed' AND keep_error_code IS NOT NULL) OR (keep_state!='failed' AND keep_error_code IS NULL))
+    ) STRICT;
   `);
   if (db.prepare('PRAGMA foreign_key_check').all().length) fail('storage_error');
 }

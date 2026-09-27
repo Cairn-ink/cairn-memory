@@ -391,8 +391,9 @@ lease starts after episode work; an optional capture deadline starts at that poi
 Successful admission advances the producer cursor even if interpretation failed.
 Registered work can finish across pause. A stale-generation draft claim records
 a content-free gap and continues ordinary admission; project stop still discards
-and fences unfinished work. Completed replay restores acknowledgement without model calls. Producers must wait
-on `processing` while an overlapping original has a live lease. If its admission
+and fences unfinished work. Completed replay restores acknowledgement without model calls.
+Producers must wait on `processing` while an overlapping original has a live lease
+or a pending payload within its replay window. If its admission
 failed or was abandoned and no lease remains, a new event can register that
 evidence again. Completed overlaps still count zero.
 
@@ -409,9 +410,9 @@ identical completed replay makes no calls. Keep cannot recover omitted/expired t
 Inspection exposes paged content-free keep actions in creation-ordinal order:
 `keepActions:{items,nextCursor,exhausted}`, with `keepLimit` (default 20, max 50)
 and `keepCursor`. Coverage records exact source IDs, revision and source fence,
-independently of later passage replacement. Explicit keep also updates the source
-batches’ policy ledger. Transient/unknown failures release the admission claim for
-retry; only classified terminal failures replay without another model call.
+independently of later passage replacement. Explicit keep has its own
+action ledger; existing batch policies remain unchanged.
+Transient/unknown failures release the admission claim for retry; only classified terminal failures replay without another model call.
 
 Automatic procedural tags use the episode extraction/qualification prompt variants.
 Only preferences/instructions qualify, with 1–4 exact candidate anchors compiled to

@@ -191,3 +191,83 @@ test('E5 crash after PreCompact consumes its marker before generation checks on 
   assert.equal(counts(f.model, 'extract'), 1);
   assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 1);
 });
+
+test('E5/E8 crash after quick policy, then keep, then replay preserves skip without extra extract', { timeout: 30000 }, async t => {
+  const f = setup(t), worker = child(t, f.path, 'crash-after-quick');
+  assert.equal((await once(worker, 'message'))[0].stage, 'drafted');
+  const exited = once(worker, 'exit'); worker.kill('SIGKILL'); await exited;
+  f.db.exec('UPDATE session_episodes SET writer_expires_at=0');
+  const before = f.db.prepare('SELECT * FROM episode_events').get();
+  assert.equal(before.policy, 'skip-quick'); assert.equal(before.admission, 'reserved');
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: before.episode_id }));
+  ok(await f.core.keepEpisode({ namespace: ns, episodeId: before.episode_id, expectedRevision: detail.episode.revision, actionId: 'after-crash' }));
+  assert.deepEqual(f.db.prepare('SELECT * FROM episode_events').get(), before);
+  assert.equal(ok(await f.core.capture(input())).admission.status, 'completed');
+  assert.equal(counts(f.model, 'extract'), 1); assert.equal(counts(f.model), 0);
+});
+
+test('E5/E8 busy keep cleanup lost at restart recovers in a new process after lease expiry', { timeout: 45000 }, async t => {
+  let lock = false;
+  const f = setup(t, { interpretEpisode: r => interpretation(r, 'quick-one-off-question'), extract: () => {
+    if (lock) f.db.exec('BEGIN IMMEDIATE');
+    return { items: [] };
+  } });
+  const first = ok(await f.core.capture(input()));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const action = { namespace: ns, episodeId: first.episode.id, expectedRevision: detail.episode.revision, actionId: 'restart-busy' };
+  lock = true; assertError(await f.core.keepEpisode(action), 'storage_busy');
+  f.core.close(); f.db.exec('ROLLBACK');
+  assert.equal(f.db.prepare('SELECT state FROM episode_keep_actions').get().state, 'pending');
+  const worker = child(t, f.path, 'keep-retry'); await stage(worker, 'ready');
+  let response = stage(worker, 'result'); worker.send(action);
+  const pending = await response; assert.equal(ok(pending.result).admission.status, 'processing'); assert.deepEqual(pending.calls, []);
+  f.db.exec('UPDATE episode_keep_actions SET lease_expires_at=0');
+  response = stage(worker, 'result'); worker.send(action);
+  const retried = await response; assert.equal(ok(retried.result).admission.status, 'completed'); assert.deepEqual(retried.calls, ['extract']);
+});
+
+test('E3/E5 reserved overlap waits for replay, then completed overlap counts zero', async t => {
+  const f = setup(t), worker = child(t, f.path, 'registered-hold');
+  await stage(worker, 'registered');
+  const resent = { ...input(), eventId: 'new-event' };
+  assert.equal(ok(await f.core.capture(resent)).admission.status, 'processing');
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 1);
+  const completed = stage(worker, 'result'); worker.send('continue');
+  const result = await completed; assert.equal(ok(result.result).admission.status, 'completed');
+  assert.equal(result.calls.filter(call => call === 'extract').length, 1);
+  assert.equal(ok(await f.core.capture(resent)).admission.status, 'covered');
+  assert.equal(ok(await f.core.capture(input())).admission.status, 'completed');
+  assert.equal(counts(f.model, 'extract'), 0);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 1);
+});
+
+for (const disposition of ['abandoned', 'expired', 'released']) test(`E3/E5 ${disposition} original can rebind but cannot later double-admit`, async t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  const { episodeSnapshot } = await import('../episode-input.mjs');
+  const snapshot = episodeSnapshot(input());
+  const original = { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
+    payloadDigest: snapshot.payloadDigest, clientLabel: 'Synthetic client', generation: 'initial', messages: snapshot.messages, view: snapshot.view };
+  runtime.reserveEpisodeBatch(ns, original);
+  if (disposition === 'abandoned') {
+    const claim = runtime.claimAdmission(ns, { ...original, leaseMs: 125000 });
+    runtime.abandonAdmission(ns, { ...original, token: claim.token });
+  } else if (disposition === 'expired') f.db.exec('UPDATE staged_capture_evidence SET expires_at=0');
+  else f.db.exec("UPDATE staged_capture_evidence SET state='released',payload=NULL,payload_bytes=0,release_reason='capacity'");
+  assert.equal(ok(await f.core.capture({ ...input(), eventId: 'successor' })).admission.status, 'completed');
+  assertError(await f.core.capture(input()), 'capture_evidence_closed');
+  assert.equal(counts(f.model, 'extract'), 1);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 2);
+});
+
+test('E3/E5 repeated abandoned ownership transfers fence every previous event', async t => {
+  let failures = 2;
+  const f = setup(t, { extract: () => { if (failures-- > 0) throw Error('scripted abandonment'); return { items: [] }; } });
+  const first = input(), second = { ...first, eventId: 'second-owner' }, third = { ...first, eventId: 'third-owner' };
+  assertError(await f.core.capture(first), 'extraction_failed');
+  assertError(await f.core.capture(second), 'extraction_failed');
+  assert.equal(ok(await f.core.capture(third)).admission.status, 'completed');
+  for (const previous of [first, second]) assertError(await f.core.capture(previous), 'capture_evidence_closed');
+  assert.equal(counts(f.model, 'extract'), 3);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 3);
+});

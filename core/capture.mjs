@@ -15,7 +15,7 @@ const episodeSystem = readFileSync(new URL('./prompts/extract-episode-sources.md
 const windowSystem = readFileSync(new URL('./prompts/extract-source-windows.md', import.meta.url), 'utf8');
 const unwrap = (result) => { if (!result.ok) fail(result.error.code); return result.value; };
 
-async function classifyAdmission(model, namespace, admission, operations, key, deadline) {
+async function classifyAdmission(model, namespace, admission, operations, key, deadline, keep = false) {
   if (!admission.memories.length) return { status: 'skipped', reason: 'empty' };
   let attemptToken;
   try {
@@ -26,7 +26,8 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
       if (memory.revision !== admitted.revision) fail('revision_conflict');
       if (memory.filing.status === 'unfiled') guards.push({ memoryId: admitted.id, revision: admitted.revision });
     }
-    const started = unwrap(operations.beginInitialClassification({ ...key,
+    // Keep has its own durable admission identity; placement uses the same revision guards.
+    const started = keep ? { skipped: !guards.length } : unwrap(operations.beginInitialClassification({ ...key,
       admitted: admission.memories.map(({ id, revision }) => ({ memoryId: id, revision })),
       selected: guards }));
     if (started.skipped) return { status: 'skipped', reason: 'already_filed' };
@@ -42,7 +43,8 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
       memoryIds: guards.map((guard) => guard.memoryId), expectedMemoryRevisions: guards,
       mapRevision: mapped.indexRevision }));
     deadline?.check();
-    const placed = unwrap(operations.applyInitialPlacement({ ...key, token: attemptToken,
+    const apply = keep ? operations.applyPlacement : operations.applyInitialPlacement;
+    const placed = unwrap(apply({ ...(keep ? { namespace } : { ...key, token: attemptToken }),
       proposal: classified.proposal,
       expectedMemoryRevisions: classified.basedOn.memoryRevisions,
       expectedIndexRevision: classified.basedOn.indexRevision }));
@@ -114,9 +116,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
     if (error instanceof MemoryStoreError) throw error;
     fail(episodeRun?.keep ? 'storage_error' : 'extraction_failed');
   }
-  const admission = { memories: finished.memories, suppressedCount: finished.suppressedCount,
-    indexRevision: finished.indexRevision };
-  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline);
+  const admission = { ...(episodeRun ? { status: 'completed' } : {}),
+    memories: finished.memories, suppressedCount: finished.suppressedCount, indexRevision: finished.indexRevision };
+  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline, episodeRun?.keep);
   const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
     classification, sourceMessages, operations, deadline }) : undefined;
   return { duplicate: false, admission, classification,
