@@ -74,3 +74,41 @@ fixtures, rubric and grader calibration examples, independently of the model
 guidance implementer. A GPT-6 Sol/high worker owns the baseline-only runner and
 offline tests. Independent final reviewers must be neither implementer. All
 fixture/rubric changes stop before live execution; future findings are retained.
+
+## Pre-integration checkpoint
+
+Fixture author: GPT-6 Luna/max; runner author: GPT-6 Sol/high. They had disjoint
+file ownership and neither implemented the guidance intervention. Primary
+reviewed all source/rubric/calibration and runner/test files. No live output was
+available during authoring. The source fixture content SHA256 is
+`f63f5a4c68390f16c9217b8826f4240e8d15d40295089269081fcb96ad495435`.
+Twelve scenarios have fifteen messages, at most189 UTF-16 units each. All remain
+fully visible after existing canonical normalization; five Chinese messages
+normalize punctuation under NFKC. Primary's initial raw-byte equality check
+failed on that known normalization, then the correct retained-versus-canonical
+snapshot check passed. No content was truncated or changed to hide that check.
+
+Primary resolved rubric ambiguities before scoring: a represented third party's
+own adopted choice is valid without reporter adoption; incorrect extra decision
+commitment need not erase otherwise useful coverage; genuine empty output on the
+named assistant-only suggestion is distinct from a nonempty unknown-only card.
+Eight calibration examples have all six explicit ratings and reasons and valid
+source/field citation projections. Calibration examples use whole short sources;
+scored output still must be judged against its actual exact cited anchor passages.
+
+Before integrating the guidance candidate, the runner worker passed full OpenAI
+277/277, generic112/112, JSON and marketplace/strict-plugin checks on both
+Node22.16.0 and24.15.0. Six focused fake-HTTP tests include all24 attempts, five
+singleton partitions, malformed/count/refusal/qualification failures, fatal
+authority/accounting/persistence and source-only request inspection. These are
+provisional plumbing gates, not semantic scores. The guidance dependency is
+`66a86f9393bad505143599802df734016405b763`; its separate PR#261 has passed both
+independent reviews and primary final checks, with remote CI still pending.
+After integration, primary reruns affected checks, freezes the exact combined
+candidate and obtains both independent axes before any provider call.
+
+Primary prepares only bounded operator integration by adapting the previously
+reviewed one-shot launcher to this single-arm runner and24-attempt denominator.
+The private launcher remains inert until its new manifest is frozen. It retains
+the same key scope, ledger, start marker and no-retry behavior. The operator and
+fresh checkpoint remain separate pre-dispatch review requirements.
