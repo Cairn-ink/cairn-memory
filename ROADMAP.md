@@ -16,6 +16,17 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [fresh qualification meaning diagnostic](docs/evidence/qualification-meaning-probe.md)
+  completed 24/24 attempts and 31 cards, but adjudicated full-six semantic success
+  was 13/24. False observation/fact commitment, claimant/time omissions and an
+  exact-anchor failure remain; clarified guidance is not a semantic validator.
+  Next is fresh long-history six-type paired feasibility using the merged fixes,
+  while retaining source fidelity as an unresolved product gate. No consumed
+  cohort tuning/replay or reliability/promotion claim. Source-only operator review
+  and v3 budget projection precede dispatch; six common resolved cases are required
+  before a separately assessed fresh fixed-30. Ordinary installed Hermes/MCP is
+  still a separate gate.
+
 - The [paired ingestion semantic probe](docs/evidence/ingestion-semantic-probe.md)
   concludes **do not adopt combined**: mechanical completion was 23/24 baseline
   and 24/24 combined, but useful coverage was 19/24 and 18/24, failing the frozen

@@ -1,6 +1,11 @@
 # Fresh qualification meaning diagnostic
 
-This prospective, single-arm diagnostic implements [Q1–Q8](../../docs/plans/qualification-meaning-probe.md).
+This single-arm diagnostic implements [Q1–Q8](../../docs/plans/qualification-meaning-probe.md).
+Its completed, frozen [results](results.json) and [evidence report](../../docs/evidence/qualification-meaning-probe.md)
+retain all 24 attempts, original provider output text, source/card projections,
+raw ratings, adjudication and resource observations. Mechanical completion was
+24/24; adjudicated full-six success was 13/24. Source fidelity remains an unresolved
+product gate; next work is fresh long-history six-type paired feasibility.
 It has no CLI, provider-key lookup, ledger creation, model invocation on import,
 or production/default change. Offline plumbing results are not semantic scores
 or authorization for paid calls. The twelve new sources, separate rubric and
@@ -76,6 +81,7 @@ With locked isolated dependencies installed, run:
 
 ```sh
 node --test adapters/openai/test/qualification-meaning-probe.test.mjs
+node --test adapters/openai/test/qualification-meaning-results.test.mjs
 npm test --prefix adapters/openai
 npm test
 npm run validate

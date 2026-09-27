@@ -885,9 +885,40 @@ No new refusal or partition occurs in these fixtures, but this is not a general
 fit guarantee. The existing multi-source refusal and legal-long output exceeding
 1,024 tokens remain; no budget or default changes accompany the guidance.
 
+## Fresh meaning guidance does not establish source fidelity
+
+The [fresh qualification meaning diagnostic](evidence/qualification-meaning-probe.md)
+mechanically completed 24/24 attempts and 31 cards after the guidance clarification,
+but only 13/24 passed all six adjudicated semantic dimensions. Supported meaning
+and uncertainty each passed 16/24, attribution 21/24, scope/time 22/24, useful
+coverage 20/24 and exact cited entailment 15/24. Eight attempts retain false
+`adopted` on observations, moods or factual/historical claims; both planetarium
+outputs omit the group claimant, one supplier correction has incorrect direct
+attribution, both repair cards omit import time/provenance, and one foldout
+scope lacks its antecedent in the exact cited anchor. Useful coverage is scored
+separately from false commitment; unknown useful observations are not failures
+solely because commitment is unknown. Guidance was present in the actual
+requests but is not a reliable semantic validator. Unchanged structural guards
+do not certify entailment. No currentness/retirement write occurred, and this
+probe establishes no automatic-retirement or new authority bypass.
+
+Both same-family agent raters had 12/24 raw full successes. Two rows disagree on
+seven dimensions; separately frozen adjudication resolves genuine interpretation
+close calls rather than objectively verified rater mistakes. Exact original
+outputs and raw notes remain inspectable, with no repaired outputs, post-hoc
+threshold, human-judge or causal comparison claim. Twelve short repeated scenarios
+do not resolve long-history capacity, endpoint/cold-session performance, factual
+updates or earlier failures. New reservation was 427,008 microUSD, known generation
+uncached ceiling 34,440 microUSD and 48 count costs remain unknown; reservations are
+not invoices. The next decision is fresh long-history six-type paired feasibility,
+with semantics still an unresolved product gate, then a separately assessed fresh
+fixed-30 only after six common resolved cases, source-only operator review and v3
+budget projection. Ordinary installed Hermes/MCP remains separate.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
+- [Fresh qualification meaning diagnostic](evidence/qualification-meaning-probe.md)
 - [Semantic evaluation](semantic-evaluation.md)
 - [Paired ingestion semantic probe](evidence/ingestion-semantic-probe.md)
 - [Paired update-reliability experiment](evidence/qualified-comparison.md)

@@ -1,6 +1,7 @@
 # Fresh source-meaning check after guidance clarification
 
-Status: prospective; no provider execution authorized by this file alone.
+Status: completed one-shot diagnostic; [frozen public evidence](../evidence/qualification-meaning-probe.md).
+This file alone authorizes no provider execution or additional dispatch.
 Planning base: 10b0c9bd85c789c188aff3e32e14fccc6914abaa.
 Depends on the separately reviewed qualification-meaning guidance candidate.
 
@@ -145,3 +146,56 @@ calibration files did not change. The rubric file SHA256 is now
 `81028a9774780a624669ad715409b64fc7c1cd6dff34ebb388427e987feab948`.
 There is still no semantic score. Exact committed final code and the private
 operator/audit require independent review before the one-shot paid launch.
+
+## Frozen execution and result delivery
+
+The preceding no-score and pre-dispatch statements are historical checkpoints.
+The independently reviewed execution candidate was
+`daf48d2fba4ddd7c3bb84300f06e69eefd053f77`. The immutable one-shot run mechanically
+completed 24/24 attempts, with 31 cards, 96 HTTP requests and no retry/replacement.
+Two GPT-6 Sol/high agents calibrated before scored outputs, independently rated
+the 24 anonymized rows and retained all raw judgments. Primary adjudication was
+frozen before aggregate/mapping at SHA256
+`f2b79f79ff3fe306f84a9153801e625fa987319beb8d97cfdf8bfd4a8469bc7a`.
+Raw A/B each have 12/24 full successes; adjudication has 13/24. Two rows disagree
+on seven dimensions; both are genuine close calls, not corrected objective
+rater errors. Adjudicated dimensions are 16/16/21/22/20/15 out of 24 in the frozen
+meaning/uncertainty/attribution/scope-time/coverage/entailment order.
+
+R1–R6 delivery is bounded to new public results, evidence and integrity tests,
+plus this plan, README, limitations and roadmap. GPT-6 Sol/high implementation worker
+owns that packet, independently of raters; primary owns interpretation and
+raw-to-public equivalence. There are no changed flow entrypoints, runtime,
+prompts, fixtures, rubric, calibration or historical artifacts. Existing provider
+execution and rater/operator records remain immutable. The source/card/anchor
+joins and all 24 outputs are replayed offline through the actual adapter/core.
+Primary already independently confirmed equivalence for all 24 attempts, 31 cards,
+96 records, raw judgments and decoded provider text within the privacy allowlist.
+
+The first worker focused test run passed 4/5: the test mistakenly treated the
+blind projection's rubric-version string as the whole rubric document. The
+version assertion was corrected without changing source data or outputs; all 5
+focused tests then passed on Node 22.16.0, including all 24 real compiler replays.
+The earlier raw-byte/canonical normalization and prerequisite downstream CI
+failures above remain recorded, not hidden by a later green run.
+
+Next decision: continue fresh long-history six-type paired feasibility with the
+already merged fixes while keeping observed semantic weaknesses an unresolved
+product gate. No repeated tuning/replay of this consumed cohort, benchmark
+score, causal improvement, release eligibility or automatic-retirement claim.
+Source-only operator review and v3 budget projection precede paid dispatch;
+only six common resolved cases permit a separately assessed fresh fixed-30.
+Ordinary installed Hermes/MCP remains a separate gate. Reservations remain
+retained; the campaign ends at 18,768 requests, 121,064,614 microUSD reserved,
+78,935,386 headroom and zero pending under US$200.
+
+Worker verification on Node 22.16.0 and 24.15.0: `npm run test:openai` passed
+282/282 with zero failures/skips, `npm test` passed 112/112, `npm run validate`
+passed JSON/version checks, and `npm run validate --prefix tools/plugin-validation`
+passed marketplace and strict-plugin checks. Full OpenAI logs are
+`/tmp/meaning-results-openai-{22.16.0,24.15.0}.log`; generic logs are
+`/tmp/meaning-results-generic-{22.16.0,24.15.0}.log`. After tightening the new
+decoded-output privacy allowlists, the five focused integrity/replay tests were
+rerun on both runtimes and passed with zero skips. Primary personally reruns
+the final focused content and raw equivalence; separate Standards/Spec review
+on the final committed candidate and latest-head remote CI remain delivery gates.
