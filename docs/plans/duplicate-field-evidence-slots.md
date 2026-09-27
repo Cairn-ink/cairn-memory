@@ -69,3 +69,95 @@ publishing, deployment or production data changes.
 Clarifying the semantic meaning of commitment for facts/moods, preserving
 claimants and distinct dates, and scalable input/output capacity are separate
 follow-up gates. This small mechanical fix does not resolve those questions.
+
+## Implementation evidence
+
+Bounded worker: GPT-6 Sol/high, requested and actual; fixed base above, worktree
+branch `fix/duplicate-field-evidence-slots`, pre-commit HEAD `a42d0da`.
+Primary owns acceptance/integration and independent reviews. No worker commits
+or pushes. Implementation changed only the pool decoder runtime: original
+`dataArray(..., 0, 4)` descriptor/shape/length validation and every slot's
+safe-integer/range validation run before first-seen `Set` canonicalization.
+The distinct same-item pool check is unchanged.
+
+Red-before evidence (Node22.16.0, after isolated adapter `npm ci`):
+`node --test --test-name-pattern='valid repeated field slots'
+adapters/openai/test/qualification-candidates.test.mjs` exited 1:
+
+```text
+not ok 1 - valid repeated field slots retain first-seen original IDs and compile identical anchors without retry
+error: 'invalid_model_output'
+code: 'invalid_model_output'
+normalizeQualificationSlots (adapters/openai/index.mjs:70:11)
+async callModel (core/model-call.mjs:48:14)
+# pass 0
+# fail 1
+```
+
+The single-reference counterpart completed adapter decoding and core compilation
+before that repeated-reference failure. An earlier launch failed only because
+the isolated `tiktoken` dependency was absent; it is not the behavioral red.
+The first green focused run passed 19 tests. Subsequent coverage adds explicit
+unchanged core rejection of known uncited fields and entirely empty evidence.
+
+Affected path/check ownership (worker unless marked primary):
+
+- D1/D2: decoder unit tests cover all seven fields, five non-contiguous item
+  IDs and non-contiguous original candidate IDs, first-seen ordering and no
+  mutation. Raw five-repeat arrays, sparse/accessor/nonenumerable/extra string
+  or symbol properties, fractional/string/negative/out-of-range/unsafe/NaN/
+  infinite/null slots adjacent to valid repeats still reject. Getter calls
+  stay zero. Duplicate/foreign pools and wrong item mappings keep their finite
+  categories. Old duplicate-slot rejection fixtures now use raw five-repeat
+  overlength arrays; other rejection cases remain intact.
+- D3: `qualification-candidates.test.mjs` exercises fake HTTP, actual
+  `callModel`, snapshot and compiler with two items and pools `[3, 1]` and
+  `[7, 5]`. Every field's `[1, 0, 1, 0]` equals `[1, 0]` in source-bound anchors
+  with exactly one count/generation pair. The existing real-wire singleton
+  partition test now compares single and repeated valid slots across all five
+  groups; both keep the same ten calls and isolated original sources.
+- D4: callers traced through `adapters/openai/index.mjs`'s inline schema check,
+  `core/model-call.mjs`, and `core/qualification-candidates.mjs` compiler and
+  partition mapping. Shared example/direct-wire decoders and guidance tests are
+  covered by the full OpenAI suite; no schema, prompt, core or guard edits.
+- D5: changelog and both focused wire docs explain local canonicalization,
+  unchanged invalid-array/pool constraints, and the limits of source linkage.
+  Original paid failure/scores remain unchanged. Separate semantic evidence is
+  primary-owned and is not rescored by this change.
+
+Primary independent replay: the original retained completed response was served
+through extraction, actual adapter, `callModel` and `qualifyCandidateItems` by
+fake HTTP. The replay asserts outgoing bodies match all four retained responses.
+The base exits 1 with `invalid_model_output` after four responses; this decoder
+passes on Node22.16.0 and24.15.0 with two qualified cards, one anchor for repeated
+scope, the same four responses, and zero external model calls. Primary also
+ran the minimal `[1, 1]`/`[1]` differential repro green on both runtimes. These
+are replay evidence only, not revised live semantic scores.
+
+D6 worker gates, both Node22.16.0 and24.15.0 (absolute runtime `bin` prepended
+to PATH for each command), final uncommitted implementation/tests above:
+
+| Command | Node22.16.0 | Node24.15.0 |
+| --- | --- | --- |
+| `npm run test:openai` | 258 pass, 0 fail/skip | 258 pass, 0 fail/skip |
+| `npm run demo:openai-offline` | pass | pass |
+| `npm test` | 112 pass, 0 fail/skip | 112 pass, 0 fail/skip |
+| `npm run validate` | pass | pass |
+| `npm run validate --prefix tools/plugin-validation` | marketplace and strict plugin pass | marketplace and strict plugin pass |
+| `CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node --test evaluation/live/test/rationale-pilot.test.mjs` | 4 pass, 0 fail/skip | 4 pass, 0 fail/skip |
+
+Dependency setup used isolated locked `npm ci --prefix adapters/openai`,
+`npm ci --prefix adapters/mcp` and `npm ci --prefix tools/plugin-validation`,
+then `node packaging/prepare-cache.mjs`. The latter prepared public package
+metadata for offline nested installation, not model traffic. Installed rationale
+gates exercise fake HTTP with new synthetic test ledgers and databases only;
+no environment key, operational ledger, user database or paid call was used.
+Raw gate summaries are retained locally as `/tmp/duplicate-slot-*-final.log`,
+`/tmp/duplicate-slot-{demo,generic,rationale}{22,24}.log`.
+`git diff --check` is clean. Worker correction rounds: zero; elapsed time and
+token/cost measurements unavailable. Primary exact committed-candidate reruns
+and independent Standards/Spec reviews remain pending integration acceptance.
+
+Primary acceptance additionally reran the final full OpenAI suite on both
+Node22.16.0 and24.15.0: 258 passed, zero failed/skipped. The same reviewed
+working-tree implementation produced the retained-response replay result above.

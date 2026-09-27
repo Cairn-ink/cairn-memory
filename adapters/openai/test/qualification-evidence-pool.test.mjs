@@ -86,7 +86,8 @@ test('invalid pools, slots, coverage and accessor fields are rejected without re
     (v) => { v.qualifications.item_3.pool = [13]; },
     (v) => { v.qualifications.item_3.pool[0] = -1; },
     (v) => { v.qualifications.item_3.subject.evidenceSlots = [2]; },
-    (v) => { v.qualifications.item_3.subject.evidenceSlots = [0, 0]; },
+    // Valid repeats are accepted; raw overlength repeats still reject before canonicalization.
+    (v) => { v.qualifications.item_3.subject.evidenceSlots = [0, 0, 0, 0, 0]; },
     (v) => { v.qualifications.item_3.subject.evidenceSlots = [0, 1, 2, 3, 4]; },
     (v) => { v.qualifications.item_3.subject.evidenceSlots = [0.5]; },
     (v) => { v.qualifications.item_3.subject.extra = true; },
@@ -98,6 +99,57 @@ test('invalid pools, slots, coverage and accessor fields are rejected without re
     get() { getterCalls++; return [2]; } });
   assert.throws(() => decodeQualificationEvidencePool(data, accessor), /invalid_pool_output/u);
   assert.equal(getterCalls, 0);
+});
+
+test('canonicalization validates every raw slot and array descriptor before removing valid repeats', () => {
+  const data = input(2), valid = encode(inline(data));
+  for (const slots of [[0, 0, -1], [0, 0, 2], [0, 0, 0.5], [0, 0, '0'],
+    [0, 0, Number.MAX_SAFE_INTEGER + 1], [0, 0, NaN], [0, 0, Infinity], [0, 0, null]]) {
+    const malformed = structuredClone(valid), reasons = [];
+    malformed.qualifications.item_3.subject.evidenceSlots = slots;
+    assert.throws(() => decodeQualificationEvidencePool(data, malformed, reason => reasons.push(reason)), /invalid_pool_output/u);
+    assert.deepEqual(reasons, ['qualification_slot_mapping']);
+  }
+  let getterCalls = 0;
+  for (const change of [
+    slots => { delete slots[1]; },
+    slots => { Object.defineProperty(slots, '1', { enumerable: true, get() { getterCalls++; return 0; } }); },
+    slots => { slots.extra = true; },
+    slots => { slots[Symbol('extra')] = true; },
+    slots => { Object.defineProperty(slots, '1', { value: 0, enumerable: false }); },
+  ]) {
+    const malformed = structuredClone(valid), slots = [0, 0]; change(slots);
+    malformed.qualifications.item_3.subject.evidenceSlots = slots;
+    assert.throws(() => decodeQualificationEvidencePool(data, malformed), /invalid_pool_output/u);
+  }
+  assert.equal(getterCalls, 0);
+  for (const change of [
+    entry => { entry.pool = [2, 2]; },
+    entry => { entry.pool = [2, 5]; }, // Candidate belongs to the other item.
+    entry => { entry.itemIndex = 7; },
+  ]) {
+    const malformed = structuredClone(valid), reasons = [];
+    malformed.qualifications.item_3.subject.evidenceSlots = [0, 0];
+    change(malformed.qualifications.item_3);
+    assert.throws(() => decodeQualificationEvidencePool(data, malformed, reason => reasons.push(reason)), /invalid_pool_output/u);
+    assert.deepEqual(reasons, ['qualification_pool_mapping']);
+  }
+});
+
+test('valid repeats preserve first-seen order for every field across non-contiguous items and IDs without mutation', () => {
+  const data = input(5), valid = encode(inline(data));
+  for (const [position, entry] of Object.values(valid.qualifications).entries()) {
+    entry.pool = GROUPS[position];
+    for (const field of FIELDS) entry[field].evidenceSlots = entry.pool.length === 1 ? [0, 0, 0, 0]
+      : [entry.pool.length - 1, 0, entry.pool.length - 1, 0];
+  }
+  const before = structuredClone(valid), inputBefore = structuredClone(data);
+  const decoded = decodeQualificationEvidencePool(data, valid);
+  for (const [position, entry] of decoded.qualifications.entries()) for (const field of FIELDS) {
+    assert.deepEqual(entry[field].evidenceIndices, GROUPS[position].length === 1 ? GROUPS[position]
+      : [GROUPS[position].at(-1), GROUPS[position][0]]);
+  }
+  assert.deepEqual(valid, before); assert.deepEqual(data, inputBefore);
 });
 
 test('Q2 decoder preserves no-observer error shape and reports only a fixed category', async () => {

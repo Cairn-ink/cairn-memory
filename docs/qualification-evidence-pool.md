@@ -26,8 +26,13 @@ That example assumes the request actually supplied candidate index 7 for item
 fields and every requested item are required. A nonempty pool does not itself
 cite anything: at least one field must reference a slot, including when every
 value is null or unknown. Known values need their own field citation. Unused
-pool members create no anchor. Duplicate, foreign or out-of-range IDs/slots,
-accessors, unknown keys and incomplete coverage fail rather than being repaired.
+pool members create no anchor. The adapter validates each original field array's
+dense data shape, raw length (zero to four), and every slot's integer/range
+constraints before removing repeated valid slots in first-seen order. For example,
+pool `[7, 19]` and slots `[1, 0, 1]` decode to original candidate IDs `[19, 7]`.
+Five equal slots still exceed the raw limit. Duplicate or foreign pool IDs,
+invalid slots, sparse/accessor/extra-property arrays, unknown keys and incomplete
+coverage remain invalid; the pool itself is never repaired or reordered.
 
 The strict provider schema shares common field definitions through `$defs`,
 but the adapter also validates the decoded result against the unchanged inline
@@ -36,6 +41,13 @@ canonical labels and source anchors. No evidence is selected for the model,
 truncated, or inferred by this conversion. The old one-count/one-generation
 qualification schedule, model, 6,000-token local bounds and provider/guard
 limits remain unchanged.
+
+This local canonicalization accepts redundant references to the same valid
+source; source linkage does not establish semantic truth. A retained completed
+paid response with `scope.evidenceSlots: [1, 1]` and pool `[1, 2]` failed under
+the previous decoder. Its original failure and scores remain recorded, with no
+historical rescoring. This mechanical change alone does not establish successful
+long-history ingestion or recall.
 
 Synthetic fake-HTTP tests show a fixed five-item, one-323-unit-receipt-each
 fixture now fits the complete request and compiles. The maximum-size
