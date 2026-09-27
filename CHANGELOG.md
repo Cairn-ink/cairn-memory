@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — opt-in indexed evidence capture
+
+- Add the explicit embedded `indexed-evidence-v1` capture source policy: shared
+  indexed extraction, atomic admission and existing classification without claim
+  qualification, staged evidence, rationale or causal reconciliation. Report
+  `qualificationStatus: 'not-requested'` on successful capture/replay, preserving
+  prior qualification/dedup rules and exact source-only reads. No default, host
+  flag, complete archive, semantic-quality claim or paid benchmark change.
+
 ## Unreleased — decision commitment and claimant guidance
 
 - Clarify v2 source interpretation: settled scoped preferences and choices may
