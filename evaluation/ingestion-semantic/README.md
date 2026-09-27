@@ -1,10 +1,22 @@
 # Paired ingestion semantic probe
 
+Status, 2026-09-28: the separately reviewed paid short-source probe is complete;
+[the report](../../docs/evidence/ingestion-semantic-probe.md) and
+[sanitized results](results.json) retain both repetitions, original blind agent
+ratings and adjudication. Decision: do not adopt combined. Useful coverage 18/24
+was below baseline 19/24 despite lower request work. Same-model-family judgments
+are not human labels, and repeated scenarios are not independent questions.
+No engine or default changes; overall reliability and prior capacity limits
+remain unresolved. The public artifact excludes raw HTTP bodies and provider,
+transport and campaign identifiers; its random local blind aliases are safe
+synthetic evaluation references.
+
 This experimental library runs twelve supplied frozen synthetic scenarios twice
 through each ingestion arm. It has no CLI, credential/environment lookup, corpus
 loader, ledger creation, persistence/admission, retrieval, or model invocation
 on import. The [acceptance contract](../../docs/plans/ingestion-semantic-probe.md)
-governs the prospective experiment. Offline tests establish containment and
+records the original prospective protocol and completed result. Offline tests
+establish containment and
 plumbing only; they are not semantic results or permission for paid calls.
 
 Baseline uses the actual source-bound-v2 snapshot, `callModel`, current OpenAI

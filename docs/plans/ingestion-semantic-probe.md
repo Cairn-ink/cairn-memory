@@ -1,6 +1,8 @@
 # Small paired ingestion semantic probe
 
-Status: prospective; no provider calls yet. Base: c347657acdc67f093771fb33fa9d449389c2cc25.
+Status: completed; do not adopt combined. The original prospective contract and
+pre-launch audit are preserved below; completed results follow them.
+Base: c347657acdc67f093771fb33fa9d449389c2cc25.
 
 Goal: decide whether combining extraction and source qualification merits further
 development for a lightweight, reliable memory layer. This is not a retrieval,
@@ -86,3 +88,56 @@ Primary read-only audit found the existing v2 campaign open at 18,528 requests,
 This is a pre-launch checkpoint, not a promise of the balance at dispatch.
 The operator must revalidate the exact historical witness and reject changes.
 No paid call occurred during this planning/audit step.
+
+## Completed result update, 2026-09-28
+
+The prospective contract/checkpoint above is the preserved pre-launch record;
+the separately reviewed one-shot paid probe has now completed. Frozen P1–P9,
+fixtures and rubric remain unchanged. See the
+[full evidence report](../evidence/ingestion-semantic-probe.md) and
+[sanitized per-attempt artifact](../../evaluation/ingestion-semantic/results.json)
+for original independent A/B ratings, source/card projection, mapping and
+adjudication. Adjudication was frozen before the mapping join at SHA256
+`1e215c4948e05ab07c58c53ee5be146d645e20376e3bb5c762f64ec76aae05b9`;
+primary's earlier baseline projection/failure inspection limits blinding.
+
+Baseline mechanically completed 23/24 and combined 24/24; strict all-six success
+was 11/24 and 12/24. Useful coverage was 19/24 and 18/24, so the frozen adoption
+hypothesis fails: **do not adopt combined**. Same-model-family agent judgments,
+not human labels, cover twelve scenarios repeated twice, not independent
+questions. Raw rater A full success was baseline 9/24 versus combined 12/24;
+rater B was baseline 11/24 versus combined 15/24. Six rows had eleven dimension
+disagreements. Two preference consensus failures were corrected using preexisting
+adopted-position
+guidance. The eleven nondecision commitment-only failures support a post-hoc
+17/24-each sensitivity, not a changed rubric, score or adoption decision.
+
+The sole mechanical failure, baseline conditional-cap-exception repetition 1,
+retains a repeated valid field reference rejected by the actual slot decoder.
+Local deduplication diagnosed only this response; no replay, score repair,
+production correction or historical official-slot root cause is claimed.
+Baseline consumed 96 HTTP attempts and combined 48. Known generation usage
+uncached ceilings were 32,713 and 25,864 microUSD; retained reservations were
+427,008 and 213,504 microUSD. Count cost remains unknown. New reservation
+640,512 microUSD leaves cumulative campaign reserved 120,637,606 microUSD,
+remaining 79,362,394 microUSD, 18,672 requests and zero pending attempts.
+These are accounting/usage evidence, not invoices or production latency claims.
+
+P7/P8 delivery publishes the audit projection and offline integrity gate; final
+result-delivery independent review is still required. This PR changes no engine
+and does not finish the reliability goal. Next: a separate minimal safe duplicate
+field-reference fix, semantic/time/claimant clarification, then bounded ingestion
+and output capacity; offline checks/review precede NEW held-out paid cases.
+Further dispatch requires a new frozen, reviewed operator manifest and budget
+audit within the user's already authorized cumulative US$200 cap. The completed
+one-shot manifest supplies no additional dispatch or consumed-case replay.
+Only after completion gating return to official-style fixed-N Cairn/Mem0 scoring
+and then ordinary installed Hermes/MCP. Do not replay consumed official cases.
+
+Result-delivery verification: the primary reran the final full OpenAI suite on
+Node22.16.0 and24.15.0, both 267 passed with zero failures/skips. Worker focused
+tests passed 13/13 and generic tests 112/112 on both runtimes, plus JSON/version
+validation. Primary verified the public blinded rows, raw ratings, mapping and
+adjudication exactly match original private evidence, all 48 metric projections
+match original HTTP records, and all six historical input file hashes match the
+pre-live candidate. Final independent review and CI records belong to the PR.

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { createExperimentBudget, inspectExperimentBudgetForEmbeddingUpgrade, upgradeExperimentBudgetForEmbeddings,
   inspectEmbeddingExperimentBudgetSnapshot, reopenEmbeddingExperimentBudget } from '../../../evaluation/experiment-budget/index.mjs';
 import { createIngestionSemanticTransport, combinedBodies, probeLimits } from '../../../evaluation/ingestion-semantic/transport.mjs';
@@ -13,6 +13,7 @@ import { fixtures as designFixtures } from '../../../evaluation/ingestion-design
 import { scriptedExtraction, scriptedCombined } from '../../../evaluation/ingestion-design/oracle.mjs';
 import { wireFor } from '../../../evaluation/ingestion-design/report.mjs';
 import { snapshotQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
+import { fixtures as semanticFixtures, fixtureSha256 } from '../../../evaluation/ingestion-semantic/fixtures.mjs';
 
 const key = 'synthetic-provider-key-never-persist';
 const source = designFixtures.find(f => f.id === 'short-fact');
@@ -263,4 +264,171 @@ test('constants retain approved ceilings and modules have no launch side effects
   assert.equal(probeLimits.reservationMicroUsd, 4448); assert.equal(probeLimits.httpRequests, 576);
   assert.equal(probeLimits.callMs, 30_000); assert.equal(probeLimits.armMs, 180_000);
   assert.ok(probeLimits.httpRequests * probeLimits.reservationMicroUsd < probeLimits.reservedMicroUsd);
+});
+
+test('published paid artifact preserves frozen inputs, blind joins, fixed scores and resource accounting offline', () => {
+  const read = filename => readFileSync(new URL('../../../' + filename, import.meta.url), 'utf8');
+  const sha = text => createHash('sha256').update(text).digest('hex');
+  const result = JSON.parse(read('evaluation/ingestion-semantic/results.json'));
+  const dimensions = ['supportedMeaning', 'uncertaintyPreserved', 'attributionPreserved',
+    'scopeTimePreserved', 'usefulCoverage', 'evidenceEntails'];
+  const canonicalHash = document => sha(JSON.stringify(document, null, 2) + '\n');
+  assert.equal(result.provenance.fixtureSha256, fixtureSha256);
+  assert.equal(fixtureSha256, 'a1dd2918160f5575a8c77e1a495add5a322dd83ab72c9b4a8ceac805b36e9478');
+  assert.equal(sha(read('evaluation/ingestion-semantic/fixtures.mjs')),
+    '1200b0054ed90784a971f3d8068558cda76a21f0ef38885898c536c50657dcc4');
+  assert.equal(sha(read('evaluation/ingestion-semantic/rubric.json')),
+    'eae9ac9e5f8fd76bca476f59d741447023cb005bb7bb74ee354e070cf6737512');
+  for (const filename of ['evaluation/ingestion-semantic/fixtures.mjs', 'evaluation/ingestion-semantic/rubric.json']) {
+    assert.equal(sha(read(filename)), result.provenance.frozenFiles[filename], filename);
+  }
+  const originalDocuments = { blind: result.blind, 'blind-mapping': result.mapping,
+    'rater-a': result.raterA, 'rater-b': result.raterB, adjudication: result.adjudication };
+  for (const [name, document] of Object.entries(originalDocuments)) {
+    assert.equal(canonicalHash(document), result.provenance.originalInputSha256[name], name);
+  }
+  assert.equal(canonicalHash(result.adjudication),
+    '1e215c4948e05ab07c58c53ee5be146d645e20376e3bb5c762f64ec76aae05b9');
+  assert.equal(result.adjudication.inputs.blindSha256, canonicalHash(result.blind));
+  assert.equal(result.adjudication.inputs.raterASha256, canonicalHash(result.raterA));
+  assert.equal(result.adjudication.inputs.raterBSha256, canonicalHash(result.raterB));
+  assert.equal(result.fixtureCount, 12); assert.equal(result.repetitions, 2);
+  assert.equal(result.attemptDenominatorPerArm, 24); assert.equal(result.attempts.length, 48);
+  const tuple = row => JSON.stringify([row.id, row.arm, row.repetition]);
+  assert.equal(new Set(result.attempts.map(tuple)).size, 48);
+  assert.equal(result.mapping.mapping.length, 48);
+  const mapping = new Map(result.mapping.mapping.map(row => [row.id, row]));
+  assert.equal(mapping.size, 48);
+  const blind = new Map(result.blind.rows.map(row => [row.id, row]));
+  assert.equal(blind.size, 48);
+  const ratings = [result.raterA.ratings, result.raterB.ratings, result.adjudication.ratings];
+  for (const rows of ratings) {
+    assert.equal(rows.length, 48); assert.equal(new Set(rows.map(r => r.id)).size, 48);
+    assert.deepEqual(rows.map(r => r.id).sort(), [...mapping.keys()].sort());
+  }
+  for (const row of result.attempts) {
+    assert.deepEqual(Object.keys(row).sort(), ['id', 'repetition', 'arm', 'blindId', 'status', 'reason',
+      'failureStage', 'compiledCards', 'instrumentedArmLatencyMs', 'httpMetrics'].sort());
+    const identity = mapping.get(row.blindId), projection = blind.get(row.blindId);
+    assert.deepEqual([identity.scenarioId, identity.arm, identity.repetition], [row.id, row.arm, row.repetition]);
+    assert.equal(projection.scenarioId, row.id);
+    assert.equal(projection.mechanicalCompletion, row.status === 'completed');
+    const fixture = semanticFixtures.find(f => f.id === row.id);
+    assert.deepEqual(projection.sources, fixture.input.messages.map((m, sourceIndex) => ({ sourceIndex, role: m.role, text: m.content })));
+    assert.deepEqual(row.compiledCards.map(({ confidence, ...card }) => card), projection.cards);
+    for (const card of row.compiledCards) {
+      assert.ok(Number.isFinite(card.confidence) && card.confidence >= 0 && card.confidence <= 1);
+      for (const receipt of card.receipts) {
+        assert.deepEqual(Object.keys(receipt).sort(), ['sourceIndex', 'role', 'excerpt'].sort());
+        const source = projection.sources[receipt.sourceIndex];
+        assert.equal(receipt.role, source.role); assert.equal(receipt.excerpt, source.text);
+      }
+      for (const anchor of card.qualification.anchors) {
+        assert.equal(card.receipts[anchor.receiptIndex].excerpt.slice(anchor.start, anchor.end), anchor.text);
+      }
+    }
+    for (const set of ratings) {
+      const rating = set.find(r => r.id === row.blindId);
+      for (const d of dimensions) assert.ok(row.status === 'completed' ? typeof rating[d] === 'boolean' : rating[d] === null);
+      assert.equal(rating.fullSuccess, row.status === 'completed' && dimensions.every(d => rating[d] === true));
+    }
+    if (row.status !== 'completed') assert.deepEqual(row.compiledCards, []);
+    assert.ok(Number.isFinite(row.instrumentedArmLatencyMs) && row.instrumentedArmLatencyMs > 0);
+    for (const metric of row.httpMetrics) {
+      assert.deepEqual(Object.keys(metric).sort(), ['method', 'endpoint', 'httpStatus', 'outcome', 'failure',
+        'usage', 'reservedMicroUsd', 'actualMicroUsd', 'latencyMs'].sort());
+      assert.equal(metric.reservedMicroUsd, 4448);
+      assert.equal(metric.httpStatus, 200); assert.equal(metric.outcome, 'succeeded');
+      assert.equal(metric.failure, null); assert.ok(Number.isFinite(metric.latencyMs) && metric.latencyMs >= 0);
+      assert.ok((row.arm === 'combined' ? ['evaluation_combined_v1'] : ['extract', 'qualifyCandidates']).includes(metric.method));
+      if (metric.endpoint === 'responses/input_tokens') {
+        assert.equal(metric.usage, null); assert.equal(metric.actualMicroUsd, null);
+      } else {
+        assert.equal(metric.endpoint, 'responses');
+        const u = metric.usage;
+        assert.ok(Number.isSafeInteger(u.input_tokens) && u.input_tokens >= 0 && u.input_tokens <= 7024);
+        assert.ok(Number.isSafeInteger(u.output_tokens) && u.output_tokens >= 0 && u.output_tokens <= 1024);
+        assert.equal(u.total_tokens, u.input_tokens + u.output_tokens);
+        assert.equal(metric.actualMicroUsd, Math.ceil((u.input_tokens * 4 + u.output_tokens * 16) / 10));
+      }
+    }
+  }
+  const scores = (selected, set) => {
+    const joined = selected.map(row => set.find(r => r.id === row.blindId));
+    return { denominator: selected.length, mechanicalCompletion: selected.filter(r => r.status === 'completed').length,
+      fullSuccess: joined.filter(r => r.fullSuccess).length,
+      dimensions: Object.fromEntries(dimensions.map(d => [d, joined.filter(r => r[d] === true).length])),
+      unsupportedAssertionAttempts: joined.filter(r => r.unsupportedAssertions.length).length,
+      omissionAttempts: joined.filter(r => r.omissions.length).length };
+  };
+  for (const [arm, expectedDimensions, expectedFull, expectedMechanical, rawA, rawB, omissions] of [
+    ['baseline', [13, 13, 21, 23, 19, 13], 11, 23, 9, 11, 4],
+    ['combined', [14, 17, 20, 22, 18, 14], 12, 24, 12, 15, 6],
+  ]) {
+    const selected = result.attempts.filter(row => row.arm === arm), aggregate = result.aggregates[arm];
+    assert.equal(selected.length, 24);
+    for (const fixture of semanticFixtures) {
+      const caseRows = selected.filter(r => r.id === fixture.id);
+      assert.equal(caseRows.length, 2); assert.deepEqual(caseRows.map(r => r.repetition).sort(), [0, 1]);
+      const { unsupportedAssertionAttempts, omissionAttempts, ...caseScore } = scores(caseRows, result.adjudication.ratings);
+      assert.deepEqual(result.perCase.find(r => r.id === fixture.id)[arm], caseScore);
+    }
+    assert.deepEqual(aggregate.strict, scores(selected, result.adjudication.ratings));
+    assert.deepEqual(aggregate.rawRaterA, scores(selected, result.raterA.ratings));
+    assert.deepEqual(aggregate.rawRaterB, scores(selected, result.raterB.ratings));
+    assert.equal(aggregate.strict.fullSuccess, expectedFull); assert.equal(aggregate.strict.mechanicalCompletion, expectedMechanical);
+    assert.deepEqual(dimensions.map(d => aggregate.strict.dimensions[d]), expectedDimensions);
+    assert.equal(aggregate.rawRaterA.fullSuccess, rawA); assert.equal(aggregate.rawRaterB.fullSuccess, rawB);
+    assert.equal(aggregate.strict.unsupportedAssertionAttempts, 10); assert.equal(aggregate.strict.omissionAttempts, omissions);
+    const metrics = selected.flatMap(r => r.httpMetrics), times = selected.map(r => r.instrumentedArmLatencyMs).sort((a, b) => a - b);
+    const resources = { httpRequests: metrics.length, generations: metrics.filter(r => r.endpoint === 'responses').length,
+      inputTokens: metrics.reduce((sum, r) => sum + (r.usage?.input_tokens ?? 0), 0),
+      outputTokens: metrics.reduce((sum, r) => sum + (r.usage?.output_tokens ?? 0), 0),
+      knownUsageUncachedCeilingMicroUsd: metrics.reduce((sum, r) => sum + (r.actualMicroUsd ?? 0), 0),
+      reservedMicroUsd: metrics.reduce((sum, r) => sum + r.reservedMicroUsd, 0),
+      unknownCostCountRequests: metrics.filter(r => r.endpoint === 'responses/input_tokens' && r.actualMicroUsd === null).length,
+      medianInstrumentedArmLatencyMs: (times[11] + times[12]) / 2,
+      totalGuardedHttpLatencyMs: metrics.reduce((sum, r) => sum + r.latencyMs, 0) };
+    assert.deepEqual(aggregate.resources, resources);
+    assert.deepEqual([resources.httpRequests, resources.generations, resources.inputTokens, resources.outputTokens,
+      resources.knownUsageUncachedCeilingMicroUsd, resources.reservedMicroUsd, resources.unknownCostCountRequests],
+      arm === 'baseline' ? [96, 48, 57952, 5945, 32713, 427008, 48] : [48, 24, 44754, 4970, 25864, 213504, 24]);
+    assert.ok(Math.abs(resources.medianInstrumentedArmLatencyMs - (arm === 'baseline' ? 5794.5835 : 3566.1748)) < 0.0001);
+    assert.ok(Math.abs(resources.totalGuardedHttpLatencyMs - (arm === 'baseline' ? 101521.8172 : 64000.3657)) < 0.0001);
+    const sensitive = selected.filter(r => result.adjudication.exploratorySensitivity.commitmentOnlyIds.includes(r.blindId));
+    assert.ok(sensitive.every(r => !result.adjudication.ratings.find(x => x.id === r.blindId).fullSuccess));
+    assert.equal(aggregate.postHocCommitmentSensitivityFullSuccess, expectedFull + sensitive.length);
+    assert.equal(aggregate.postHocCommitmentSensitivityFullSuccess, 17);
+  }
+  assert.equal(result.perCase.length, 12); assert.equal(result.adjudication.exploratorySensitivity.commitmentOnlyIds.length, 11);
+  const disagreements = result.raterA.ratings.flatMap(a => {
+    const b = result.raterB.ratings.find(r => r.id === a.id), differences = dimensions.filter(d => a[d] !== b[d]);
+    return differences.length ? [{ id: a.id, dimensions: differences }] : [];
+  });
+  assert.deepEqual(disagreements.map(r => ({ ...r, dimensions: [...r.dimensions].sort() })).sort((a, b) => a.id.localeCompare(b.id)),
+    result.adjudication.disagreements.map(r => ({ ...r, dimensions: [...r.dimensions].sort() })).sort((a, b) => a.id.localeCompare(b.id)));
+  assert.equal(disagreements.length, 6); assert.equal(disagreements.reduce((sum, r) => sum + r.dimensions.length, 0), 11);
+  const failed = result.attempts.filter(r => r.status !== 'completed');
+  assert.equal(failed.length, 1);
+  assert.deepEqual([failed[0].id, failed[0].arm, failed[0].repetition, failed[0].failureStage, failed[0].reason],
+    ['conditional-cap-exception', 'baseline', 1, 'qualification', 'invalid_model_output']);
+  assert.deepEqual(result.failureDiagnosis.evidenceSlots, [1, 1]); assert.deepEqual(result.failureDiagnosis.pool, [1, 2]);
+  const campaign = result.campaignAggregates, allMetrics = result.attempts.flatMap(r => r.httpMetrics);
+  assert.equal(campaign.newReservedMicroUsd, allMetrics.reduce((sum, r) => sum + r.reservedMicroUsd, 0));
+  assert.equal(campaign.newReservedMicroUsd, 640512);
+  assert.equal(campaign.finalReservedMicroUsd, campaign.initialReservedMicroUsd + campaign.newReservedMicroUsd);
+  assert.equal(campaign.remainingMicroUsd, campaign.limitMicroUsd - campaign.finalReservedMicroUsd);
+  assert.equal(campaign.finalRequestCount, campaign.initialRequestCount + allMetrics.length);
+  assert.equal(campaign.pendingAttempts, 0); assert.equal(campaign.limitMicroUsd, 200000000);
+  assert.ok(result.aggregates.combined.strict.dimensions.usefulCoverage < result.aggregates.baseline.strict.dimensions.usefulCoverage);
+  assert.equal(result.decision, 'do-not-adopt-combined');
+  const forbidden = new Set(['requestBody', 'responseBody', 'attemptId', 'runId', 'eventId', 'sessionId',
+    'Authorization', 'apiKey', 'headers']);
+  const visit = value => {
+    if (typeof value === 'string') assert.ok(!/\b(?:resp_|msg_)[a-z0-9]+|\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/.test(value));
+    if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) {
+      assert.ok(!forbidden.has(key), key); visit(child);
+    }
+  };
+  visit(result);
 });
