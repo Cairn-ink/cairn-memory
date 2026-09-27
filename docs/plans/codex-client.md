@@ -6,7 +6,7 @@ main at `e7c4ecc47d4e632e4b78209bb3c176da7437f078` (#256 merged, docs only).
 No code changed between these bases.
 
 Status: proposed, docs-only contract against `codex-cli 0.157.1`, researched 2026-09-27.
-Revision: post-integration terminology, links and setup-evidence corrections.
+Revision: owner billing decision, runtime usage guards and client-boundary reliability.
 Nothing here claims a shipped client.
 
 A person switching between Claude Code and Codex must use one memory target and
@@ -14,6 +14,8 @@ one opaque identity for the same project path. **Submitted evidence** is client-
 supplied source text and claimed speaker roles. A **source receipt** ties an
 assertion to captured source text: provenance, not truth, continuing applicability,
 authenticated intent or execution permission. See [vocabulary](../../CONTEXT.md).
+Two coding clients sharing local memory does not connect the website or chat tools;
+a successful npm installation never establishes that wider product capability.
 
 Follow [architecture](../architecture.md), [protocol](../protocol.md),
 [privacy](../privacy.md), [capture](../capture.md), [roadmap](../../ROADMAP.md),
@@ -42,7 +44,8 @@ Offline help/version previously verified `codex-cli 0.157.1`, trust-bypass flags
 to paginated history. JSONL stdout is not evidence of the session-file schema.
 **To verify (0.157.1):** session format/discriminators, flush/replacement/lifetime,
 headless lifecycle and detached-process behavior. No real transcripts or credential
-configs were inspected. CX-3 must pin primary format/schema evidence and synthetic
+configs were inspected. The early F0 feasibility gate below must resolve host risks;
+CX-3 must pin primary format/schema evidence and synthetic
 host fixtures before capture ships; unsupported formats disable capture. Do not
 advertise a blanket “>=0.150” compatibility claim.
 
@@ -63,7 +66,11 @@ npm channel below. Plugin-loaded code remains compatible with Node
 **>=20**, including hosted hooks on Node 20; local core runs separately on >=22.16.
 
 **D1: preserve the released Claude hosted path.** Extraction/pairing must retain
-its hosted payloads, retry/event identity, cursor behavior and transport behavior.
+its hosted payloads, event identity, normal retries, cursor profile and transport behavior.
+The owner's billing revision adds only quota-refusal scheduling/status and the shared
+background-worker cap to upgraded Claude hosted hooks; this is an explicit D1
+exception, not a change to payload bounds or wire session IDs. Released 0.1.0
+does not gain these controls retroactively; report that limitation until upgraded.
 Shared state controls are the explicitly agreed integration change. Profile choice
 is fixed by host and installed target, never by conversation text:
 
@@ -74,9 +81,10 @@ is fixed by host and installed target, never by conversation text:
 | Either client → local core | Same new normalized profile and hashed wire/port session identity. |
 
 Never reinterpret an existing hosted Claude pending range under the new profile.
-Any later change to that hosted behavior requires its own separately versioned
-proposal, outside CX/LAC. New worker budgets/cursors below apply only to Codex
-hosted and the two local-core clients, unless expressly identified as shared pause.
+Any further change to that hosted behavior beyond the explicit quota/concurrency
+exception requires its own separately versioned proposal, outside CX/LAC. New
+worker budgets/cursors below apply only to Codex hosted and the two local-core clients, except the expressly shared pause and
+quota/concurrency controls; the latter require both clients to be upgraded.
 
 ## One-command setup and distribution
 
@@ -294,6 +302,8 @@ text, token or expanded input enters it. Use a closed stdin pipe, ignored worker
 stdout/stderr and no shell. No text queue or conversation-derived handoff through
 arguments/environment. Configured state may still arrive through
 `CAIRN_MEMORY_STATE_DIR` or the pairing record; those are not conversation input.
+Host-CLI inference runs separately under HMA's restricted model-port boundary;
+its host owns authentication, and Cairn never reads its credential store.
 Only read the supplied regular nonsymlink transcript, plus configured Cairn state/
 runtime/target credentials. Never follow conversation paths, attachments or URLs,
 enumerate sessions, read project files, or inspect either host's credential config.
@@ -328,6 +338,10 @@ then enforces 4,000 units/message and 20,000 total. In the shared profile:
 1. Normalize complete allowlisted strings with that sequence, redact each block
    and the joined value, then truncate to <=4,000 UTF-16 units without splitting
    code points. Recanonicalize/revalidate the result before building any DTO.
+   Persist content-free `truncated` coverage with source byte range and normalized/
+   submitted unit counts, never omitted text. A terminal acknowledgement means
+   only the submitted fragment was processed; status remains incomplete even
+   after its cursor advances. Expansion that triggers the cutoff also counts as truncation.
    Reject empty, NUL, malformed Unicode or redaction-only results locally, recording
    only exclusion counts/byte boundaries. Never send a permanently invalid message.
 2. Form deterministic ordered batches of <=24 messages. **The first exceeded
@@ -341,8 +355,11 @@ then enforces 4,000 units/message and 20,000 total. In the shared profile:
    A target rejection is not a terminal acknowledgement; unexpected rejection
    stops that profile with visible status until repaired, rather than endless retry.
 
-Claude's hosted 20,000-unit profile, raw session identity and existing behavior
-remain untouched. Profile/version and deterministic normalization are part of
+Later bounded segmentation with source positions and cross-segment qualifiers
+requires core support and a separate contract; do not design or imply it here.
+
+Claude's hosted 20,000-unit profile and raw session identity remain untouched;
+only the explicit D1 quota/concurrency exception changes its scheduling. Profile/version and deterministic normalization are part of
 new cursor/replay identity; pending ranges cannot change profile on retry.
 
 ## Cursor and worker contract
@@ -379,7 +396,8 @@ avoids routinely cancelling before core's 30 s model call and 125 s admission
 lease. The initial LAC path enables no optional qualification/rationale/causal
 stages; adding them requires a separate bounded deadline review.
 The sibling's episode configuration is one such addition, so it needs that review
-before any client enables episodes through LAC.
+before any client enables episodes through LAC; with HMA it also covers cold
+host-CLI startup, every model call and cancellation/termination within that budget.
 
 A kill/outage can still interrupt paid work before admission, permitting another
 model charge on retry. For an uncertain LAC attempt, persist a content-free
@@ -388,6 +406,26 @@ Retry at the next eligible hook with the same event ID, honor `processing`, and
 stop automatic retries on definite nonretryable configuration/input failure.
 Core idempotency protects stored admission, not provider billing. LAC must test
 lease recovery, child termination and eventual progress using scripted providers.
+
+### Remainder after the last hook
+
+First-version choice: **best-effort incompleteness**, not a durable source queue
+or an automatic drain beyond the one-batch worker/deadline. Before launch, persist
+content-free pending/coverage state under the cursor lock; if this fails, do not
+launch. Keep a gap for known remaining ranges and an unconfirmed tail until the
+authorized worker accounts for its supplied end. Hook failure/teardown is never
+proof of completion. Status separates acknowledged submitted ranges, truncation,
+pending backlog and unknown final coverage; SessionEnd cannot certify completeness.
+
+Only a later hook for that same host session that supplies the authorized source
+may retry, under existing pause/epoch checks. A new session reads only its own
+source and cannot drain the old one. After restart the old gap stays visible;
+if no further authorized hook arrives, it may remain permanently incomplete.
+If an authorized read finds the file gone, record `source_unavailable`; without
+such a read retain the unresolved gap, never infer complete. No crawling, stored
+source locator, unauthorized reads, or paused backfill. A quota-resume action
+reenables eligible dispatch, not access to another session's source. Episode lazy
+catch-up covers only evidence core already received; it cannot recover these bytes.
 
 ## Hosted protocol and local transport
 
@@ -421,7 +459,9 @@ as documented in [privacy](../privacy.md#local-state).
 
 The shared port is `recall(query, binding, limits, signal)` and
 `capture(batch, binding, eventId, signal)`, plus the sibling's optional ports.
-Validate replies; distinguish acknowledgement, processing, unavailable and error.
+Validate replies; distinguish acknowledgement, processing, quota refusal, unavailable
+and error. Hosted quota response fields/reset semantics are **to verify** against
+the deployed wire contract; do not invent wire fields or treat HTTP 429 as success.
 Bindings/target capabilities come from installation, never model arguments. Target
 migration/dual writing/fallback are outside this packet.
 
@@ -436,10 +476,114 @@ Node 20 launches a separately configured >=22.16 local runtime, without importin
 core. Missing compatible runtime reports local capture unavailable.
 
 LAC requires explicit automatic-capture consent and model-capable configuration.
+Host-CLI mode depends on HMA, its supported ports, shared runtime guards and the
+reviewed host latency/deadlines; API-key mode uses the existing provider adapter.
+Neither path enables episodes before the separate LAC review and SE capabilities.
 Local storage does not imply offline inference; provider exposure/cost must be
 shown at setup. LAC owns the architecture statement changing “local store not
 connected” and the privacy/threat-model update for this new flow. The sibling
 session package does not deliver local automatic capture.
+
+## Model access, billing and runtime guards
+
+**Owner decision (chichi, 2026-09-27):** paid Cairn plans use cloud processing;
+people choosing cloud without a paid plan receive a bounded free quota. The
+hosted service enforces entitlements/quotas outside this repository. On a verified
+quota refusal, keep the pending batch/cursor, persist target-wide `quota_reached`,
+and suppress hook-driven retries across both clients/restarts. Show the service's
+validated reset time if supplied, otherwise “reset unknown”; never guess. The
+person may resume using the shared control, at or after a known reset; an unknown
+reset requires explicit resume. Resume permits one eligible attempt, not polling;
+a repeated refusal closes the gate again. Do not switch target/authentication or
+silently purchase more quota. Exact service refusal/reset mapping is **to verify**.
+
+The open-source local npm path's proposed default is the person's logged-in
+`claude -p` host, with no API key needed for that mode, processing evidence from
+**both** coding clients. It consumes their Claude plan quota. API-key processing
+through `adapters/openai/` remains an explicit alternative, with future adapters
+possible; no silent fallback between plan quota and per-call billing.
+
+Policy remains unresolved: the [Anthropic Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview)
+requires prior approval for third-party products offering Claude login or rate
+limits and directs developers to API-key authentication. Using the CLI instead
+of the SDK does not establish an exception. The coordinator will seek approval;
+record the outcome before shipping subscription-backed setup, and do not claim
+approval here. [OpenAI authentication guidance](https://learn.chatgpt.com/docs/auth)
+recommends API keys for programmatic Codex workflows. Both policies were checked
+2026-09-27; neither verifies pinned-host functionality. On Codex-only machines,
+`codex exec` with that policy caveat versus requiring the API-key path remains an
+open decision for the maintainer; setup reports it unresolved, never chooses silently.
+
+**HMA — host model access** belongs in `adapters/host-model/`. It translates core's
+injected model ports to bounded headless calls, preserving core prompts, schemas,
+source validation and semantics. Declare exactly which ports it implements;
+unsupported ports are unavailable, never simulated success. Pin the Claude host
+version (setup minimum 2.1.147 is not a tested pin), model and auth mode in the
+installed capability record. All stream schema/quota/latency/isolation behavior
+is **to verify on that pin**; Codex feasibility starts at 0.157.1.
+
+Send already bounded/redacted model input through stdin, never argv, logs or a
+text queue; validate output as untrusted model data. Run outside the user's
+project, with tools, project instructions, plugins/hooks, MCP and session saving
+excluded through verified host controls. Prevent recursive Cairn capture of model
+workers. Only the host may use its own authentication; Cairn does not scrape or
+copy host credentials or let inherited API-key settings silently change billing
+mode. **To verify:** exact auth/isolation flags, host-created state,
+structured output and cancellation/child termination. If isolation cannot be
+verified, the adapter stays unavailable. Scripted fake processes, no real hosts
+or subscriptions in CI, test every supported port and failure boundary.
+
+A cold headless process cannot satisfy the 2 s prompt-recall request budget.
+Host-CLI automatic recall and SessionStart context therefore stay unavailable
+unless the actual installed path passes the existing hook budgets (and A7 for
+context); status states this, hooks fail open, and timeouts never extend budgets.
+Explicit recall via supported MCP tools remains available with disclosed latency;
+HMA owns model selection in `adapters/mcp/cli.mjs` for its supported recall ports
+and retains the explicit API-key alternative, never silently switching providers.
+Background capture/extraction/episode interpretation may use HMA only within
+worker deadlines; the separate LAC review must include host-CLI latency.
+
+**Runtime guard, not the evaluation campaign ledger.** One target-wide guard
+covers both clients and all sessions. CX-3 owns `integrations/client/runtime-usage.mjs`
+and `integrations/client/test/runtime-usage.test.mjs`; LAC wraps every local model
+port, including API-key calls, and HMA takes the supplied guard before spawning.
+Use owner-only `usage/<opaque-target-id>.json` and its `.lock` under the bound state
+root: finite counters, UTC day, window/reset values, reservations and refusal
+codes only, no text/credentials. LAC owns this new local-state/privacy disclosure;
+CX-4 owns the hosted guard disclosure. Do not store raw service/host errors.
+
+- One shared cap defaults to **2 concurrent background model workers per target**,
+  not per client/session. Hosted clients share a cap on background requests; this
+  cannot assert the cloud's internal worker count. Acquire atomically before
+  dispatch and release after confirmed termination; include every local child/model
+  call using the same reservation through LAC/HMA, not nested permits. At capacity,
+  record `concurrency_limited`, exit without advancing cursors,
+  and retry only at a later eligible hook. No waiting loop in a hook or worker.
+- In plan mode stop background work early to protect interactive use. Proposed
+  defaults to calibrate: five-hour 0.95, seven-day 0.93, seven-day Opus 0.93,
+  seven-day Sonnet 0.92, overage 0.95; also stop at >=0.85 with <=15 minutes to
+  reset. At a threshold, cancel active background calls and prevent new dispatch;
+  retain uncertain usage, and apply the quota-resume gate. These are design
+  defaults, not measured Cairn safety guarantees.
+  The maintainer's Claude-Mem comparison (`thedotmack/claude-mem` at `7d03554`,
+  checked 2026-09-26) reports SDK `rate_limit_event` window/utilization/`resetsAt`,
+  subscription default, Haiku model and concurrency 2; it is supplied research,
+  not proof for Cairn. **To verify:** whether `claude -p --output-format stream-json`
+  exposes equivalent usable events. Missing/stale/unsupported quota signals use
+  a conservative daily automatic-call cap and `quota_signal_unavailable` status.
+- API-key mode is exempt from plan-window guards, but has a daily automatic-call
+  cap and the same concurrency limit. Each model call, not batch, reserves count
+  before dispatch; retries and uncertain billing count, including episode calls.
+  The maintainer must calibrate finite daily defaults before release; absent a
+  configured cap, automatic model work stays unavailable, never unlimited. Status
+  shows configured cap, used/reserved counts, mode and next eligible UTC day/reset.
+- Guard state/reservations survive restart. Do not release a possibly live worker
+  on age alone; require the verified PID-namespace/termination rules. Unknown
+  liveness or corrupt state denies new dispatch visibly. Unknown billing is not
+  refunded, and the LAC not-before cooldown still applies. Budget/quota refusal
+  never advances a capture cursor, including mid-batch refusal; preserve event IDs
+  and receiver idempotency. Explicit resume cannot bypass known reset/cap limits,
+  pause generations, or grant source access. No timers, daemon retries or storms.
 
 ## Controls
 
@@ -457,7 +601,8 @@ started may finish. See [pause limitations](../privacy.md#disable-automatic-beha
 | Install/trust | Normal path: `npx @cairn-ink/memory setup`, per-client capture consent and target choice. Joint fresh setup shares one key without a pairing prompt; later additions use setup's sharing confirmation. Preserve other registrations. The person reviews Codex commands/events/budgets through `/hooks`; never write trust state or bypass it. |
 | Disable/uninstall | `setup --remove <client>` pauses shared memory, stops affected workers and removes only that client's Cairn registrations/runtime references; explicitly resume the remaining client if wanted. Keep runtime files still used by another client, shared key/state and stored memories. Last-client removal separately offers deletion of the stored Cairn token; retain it if declined. Use Claude's documented [--keep-data](https://code.claude.com/docs/en/plugins/manifest-reference) uninstall option or disconnect with supported disable if unavailable; never delete its shared data directory. Data deletion requires a separate explicit confirmation. |
 | Stop capture for a project | While paused with workers stopped, add its opaque ID to a shared capture opt-out set; resume with the existing global EOF barrier. Both capture paths/end signals check it. Recall may remain enabled; state that clearly. No project-switching subsystem. |
-| Status | Re-running setup shows installed/configuration-pending/trust-review-needed/ready or pairing-needed, versions, target capability, pause/project capture state, token present/missing and bounded gap/error/progress counters. No conversation reads, keys/tokens/raw paths/session IDs in routine status; the explicit setup/dry-run change plan shows destination paths. Hook trust is unknown unless an installed-version interface verifies it. |
+| Resume after quota/budget refusal | Reenable eligible work through the target-wide guard above; preserve pending event identity. Show known reset/day limits, and retain old-session coverage gaps if no authorized source hook returns. Never clear the global pause or backfill paused bytes. |
+| Status | Re-running setup shows installed/configuration-pending/trust-review-needed/ready or pairing-needed, versions, target capability, pause/project capture state, token present/missing and bounded gap/error/progress counters, truncation/incomplete coverage, pending final backlog, quota/reset or call-cap fallback, shared concurrency usage, auth mode and recall/context availability. No conversation reads, keys/tokens/raw paths/session IDs in routine status; the explicit setup/dry-run change plan shows destination paths. Hook trust is unknown unless an installed-version interface verifies it. |
 
 ## Threat-model deltas and context gate
 
@@ -500,21 +645,40 @@ All fixtures are synthetic: no real transcripts, user credentials or paid calls
 in offline gates. **Every gate A1–A5 runs on both Node 22.16 and Node 24**, including
 hosted, pairing, fail-open and LAC cases. Plugin-loaded/shared hosted code also
 runs its applicable tests on **Node 20 and 22**; never import core on Node 20.
-Core-dependent LAC/installed-core tests, including A6, run on **Node 22.16 and 24**.
+Core-dependent HMA/LAC/installed-core tests, including A6 and the runtime-guard
+cases below, run on **Node 22.16 and 24**.
 A8 installer/distribution gates run on **Node 22.16 and 24**; installer/shared code
 loaded on Node 20 must also pass applicable Node 20/22 gates.
 Record exact runtimes/platforms; mock success is not a host or semantic-quality claim.
 
+**F0 — early pinned-host feasibility gate, immediately after CX-1 and before CX-2.**
+The CX-1 owner uses `integrations/client/test/feasibility/**` for a disposable
+synthetic harness and records sanitized outcomes/to-verify updates in this plan.
+Verify transcript exclusions (including injected user-role material), hook delivery
+including SessionEnd, worker survival and authorized source readability after
+teardown, and both coding hosts writing to/reading from the same temporary local
+core through the extracted client seam and scripted model. This is a feasibility
+harness, not a claim that unbuilt CX-2/LAC/HMA are complete. Check whether pinned
+`claude -p` exposes usable quota events and safe model-only isolation. Pin exact
+Claude/Codex versions; no real private conversations or paid API calls. Synthetic
+sessions using the maintainer's subscriptions require their explicit authorization
+at execution; this packet grants none. Without authorization, keep those results
+**to verify**, with affected capabilities disabled and CX-7 blocked from claiming
+support. This gate runs separately from offline CI, never through `npm test`. F0 must resolve or explicitly scope out feasibility risks before CX-2;
+its results update installer evidence before CX-7 is built. Final A6/human tests
+still validate the shipped integration; F0 cannot substitute for them.
+
 | Gate | Required observable evidence |
 | --- | --- |
-| A1 — Delivered-body privacy | Actual hook/worker → loopback HTTP; assert received capture/recall bodies, state and output contain no fake-secret/tool/reasoning/image/sandbox canaries. Check normalization before truncation, U+FDFA expansion, redaction-only/NUL rejection, UTF-16 boundaries and JSON escaping that reaches 64 KiB before 20,000 units. |
+| A1 — Delivered-body privacy | Actual hook/worker → loopback HTTP; assert received capture/recall bodies, state and output contain no fake-secret/tool/reasoning/image/sandbox canaries. Check normalization before truncation, U+FDFA expansion, redaction-only/NUL rejection, UTF-16 boundaries and JSON escaping that reaches 64 KiB before 20,000 units. Tail decision (“cancel A, use B”), qualifier crossing the cutoff and normalization expansion past the cutoff must report incomplete coverage after fragment acknowledgement. |
 | A2 — Pause | Pause from either host while the other waits; resume/restart; unseen sessions, split lines and delayed recall responses. No stale dispatch/injection, no paused backfill; first resumed capture records EOF only. |
 | A3 — Identity | All A3 fixtures below; after explicit adoption, >=16 mixed processes return the same project ID across restart. Include root/option delivery, conflicting env/record, creator crashes, permissions and PID namespace rejection. |
-| A4 — Cursor | >24 messages, partial/malformed/oversized lines, appends and replacement; first/middle/last-batch timeouts, `processing`, lost reply and crash before cursor write. Stable IDs, no premature advance, idempotent receiver and eventual later-batch progress. Locally excluded records never masquerade as acknowledgement. |
+| A4 — Cursor | >24 messages, partial/malformed/oversized lines, appends and replacement; first/middle/last-batch timeouts, `processing`, lost reply and crash before cursor write. Stable IDs, no premature advance and idempotent receiver; progress only while authorized hooks remain. Last hook with several pending batches → close → restart/new session must retain a visible gap, never read old sources from new hooks or backfill paused bytes; absent sources never show complete. Episode lazy catch-up does not drain client backlog. Locally excluded records never masquerade as acknowledgement. |
 | A5 — Fail-open | Stalled/oversized stdin, null path, outage/auth failure, bad reply, spawn/lock/state failure and unsupported schema. Bounded successful hook exits, valid Stop JSON, no blocking output; explicit controls fail visibly. Check worker lifetime and LAC's >30 s scripted success, lease cooldown and termination. |
-| A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits/retries unchanged. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
+| A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits and normal retries unchanged; verify the explicit D1 quota/concurrency exception separately. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
 | A7 — Context authority/lifecycle | Framing/filter/size fixtures reject hostile authority/execution requests in recall and session context, without receipt stripping or stale injection. A positive fixture proves “Prefer diagrams.” survives unchanged as quoted preference data with its receipt, without becoming an authoritative directive. Keep defaults disabled until authorized pinned-host adversarial evaluation passes. Sibling conformance separately verifies context/end capability, deduplication and incomplete-capture semantics. |
 | A8 — Installer/distribution | [Installer gates](one-command-setup.md#a8-installer-gates): fake CLIs on `PATH`, temporary homes, packed CLI; assert dry-run starts zero host processes and writes nothing. Cover joint setup/adoption, Claude >=2.1.147 configuration/manual fallback, consent disclosures, trust, missing home, separate token removal and tarball scripts/version checks. Episode-capable local core with LAC running the reviewed episode configuration requires summary/retention/provider disclosures before capture consent; hosted, unsupported core or LAC without that reviewed configuration reports episodes unavailable without enabling or claiming them active. No real host installation, network/provider calls or publication. |
+| A9 — Runtime usage/latency | Both clients dispatch simultaneously against one target: shared cap 2, restart/unknown liveness, uncertain billing charged against daily counts, plan-window thresholds/early stop, missing signal fallback and API-key exemption from window guards. Hosted quota with/without reset, mid-batch budget refusal and repeated resume never advance cursor or storm; stable IDs prevent duplicate admission. Fake slow headless recall/context stays unavailable within hook budgets; explicit MCP recall remains usable. Scripted HMA ports/termination/isolation and LAC host-latency/episode review; no real host calls in CI. |
 
 **A3 identity fixtures** exercise the guards before setup completes adoption;
 A8 additionally proves setup's normal path and confirmation handling:
@@ -546,8 +710,8 @@ A8 additionally proves setup's normal path and confirmation handling:
   refuses before writes or host execution and never builds relative paths.
 
 Detailed [A8 installer fixtures](one-command-setup.md#a8-installer-gates) live in
-CX-7's plan, including zero host starts in dry-run, consent disclosures, version
-fallback, token-removal confirmation, missing-home refusal and packed-file checks.
+CX-7's plan, including billing/quota/provider consent, F0 evidence, zero host starts
+in dry-run, version fallback, token-removal confirmation, missing-home refusal and packed-file checks.
 
 Parser fixtures additionally cover all excluded item families, bootstrap and
 compaction messages, duplicate representations, unknown fields/channels, Unicode,
@@ -574,16 +738,18 @@ No column delegates an overlapping subtree to another worker.
 | Package / sole owner | Allowed paths | Dependency / boundary |
 | --- | --- | --- |
 | CX-1 / shared-client owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/test/**`; `packaging/**` including `packaging/artifact-files.json` | Behavior-preserving extraction, compatibility exports, bundle parity and Node 20/22 hosted gates. |
-| CX-2 / pairing owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/**`, `plugins/cairn-memory/.claude-plugin/plugin.json`, `plugins/cairn-memory/README.md`; `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-1; explicit record/option delivery, joint-initialization API and pending-binding guard for CX-7, shared identity/pause, A2/A3. Own privacy's local-state list for install/pairing metadata and setup lock; own release records for the new user-visible Claude option. No real-user migration. |
-| CX-3 / Codex owner | `integrations/codex/**` including `test/fixtures/**` and `README.md`; `integrations/client/**` including `test/**`; `docs/plans/codex-client.md` | CX-2; primary parser evidence, common profile, new cursor/worker, A1/A4/A5 with stubs; no hosted enablement. |
-| CX-4 / protocol owner | `schemas/capture-request.schema.json`; `plugins/cairn-memory/test/protocol.test.mjs`; `integrations/client/transport-hosted.mjs`, `integrations/client/test/transport-hosted.test.mjs`; `docs/protocol.md`, `docs/architecture.md`, `docs/privacy.md`; release files below, including root `package.json` | CX-3; 0.2.0 breaking-version note, matching version bumps and changelog in this same PR, truthful discriminator and Codex reader threat boundary. Hosted support is an external gate; no service code. |
-| LAC / local-capture owner | `adapters/local-capture/**` including `test/**` and `README.md`; `integrations/client/transport-local.mjs`, `integrations/client/test/transport-local.test.mjs`; `packaging/**` including `packaging/artifact-files.json`; `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-3/4; actual core integration for both clients, deadlines and A6. Own the “local store not connected” correction, local capture privacy/threat-model change, its own changelog entry and required version bump in this PR. No engine changes. |
+| F0 / CX-1 feasibility owner (gate) | `integrations/client/test/feasibility/**`; `docs/plans/codex-client.md` | Immediately after CX-1, before CX-2; pinned-host feasibility above. No production adapter or installer claim; no subscription execution without explicit authorization. |
+| CX-2 / pairing owner | `integrations/client/**`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/**`, `plugins/cairn-memory/.claude-plugin/plugin.json`, `plugins/cairn-memory/README.md`; `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-1 and F0; explicit record/option delivery, joint-initialization API and pending-binding guard for CX-7, shared identity/pause, A2/A3. Own privacy's local-state list for install/pairing metadata and setup lock; own release records for the new user-visible Claude option. No real-user migration. |
+| CX-3 / Codex owner | `integrations/codex/**` including `test/fixtures/**` and `README.md`; `integrations/client/**` including `test/**`; `docs/plans/codex-client.md` | CX-2; primary parser evidence, common profile, new cursor/worker and shared runtime-usage guard, A1/A4/A5/A9 with stubs; no hosted enablement. |
+| CX-4 / protocol/quota owner | `schemas/capture-request.schema.json`; `plugins/cairn-memory/lib/**`, `plugins/cairn-memory/scripts/**`, `plugins/cairn-memory/test/**`; `packaging/**`; `integrations/client/transport-hosted.mjs`, `integrations/client/test/transport-hosted.test.mjs`; `docs/protocol.md`, `docs/architecture.md`, `docs/privacy.md`; release files below, including root `package.json` | CX-3; 0.2.0 breaking-version note and explicit upgraded-Claude quota/concurrency exception, matching version bumps and changelog in this same PR, truthful discriminator and Codex reader threat boundary. Hosted support is an external gate; no service code. |
+| HMA / host-model owner | `adapters/host-model/**` including `test/**` and `README.md`; `adapters/mcp/cli.mjs`, `adapters/mcp/test/host-model.test.mjs`; `docs/plans/codex-client.md`, `docs/privacy.md`; release files below | After CX-4 and F0; core injected-port adapter, scripted fakes, verified isolation/quota capabilities and API-key alternative. Uses CX-3 guard; no engine or hook logic. Own explicit MCP model selection, host-process/provider privacy notes and release records. No real host calls in CI; policy approval remains a release gate. |
+| LAC / local-capture owner | `adapters/local-capture/**` including `test/**` and `README.md`; `integrations/client/transport-local.mjs`, `integrations/client/test/transport-local.test.mjs`; `packaging/**` including `packaging/artifact-files.json`; `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`; release files below | CX-3/4, HMA for host-CLI mode, or configured API-key adapter; actual core integration for both clients, guarded model ports, deadlines and A6/A9. Before episodes, require SE capabilities and separate deadline review including host-CLI latency when used. Own the “local store not connected” correction, local capture privacy/threat-model change, its own changelog entry and required version bump in this PR. No engine changes. |
 | CX-5 / lifecycle-install owner | `integrations/codex/**`; `integrations/client/session-context.mjs`, `integrations/client/session-end.mjs`, `integrations/client/context-format.mjs`, `integrations/client/test/session-context.test.mjs`, `integrations/client/test/session-end.test.mjs`, `integrations/client/test/context-format.test.mjs`; `plugins/cairn-memory/hooks/**`, `plugins/cairn-memory/skills/**`, `plugins/cairn-memory/test/lifecycle.test.mjs`, `plugins/cairn-memory/README.md`; `packaging/**`; root `README.md`; release files below | LAC, or completed hosted path with LAC explicitly deferred; sibling-agreed port DTOs and A7. Own root README's Codex automatic-hook status, its own changelog entry and required version bump. This owner alone implements sibling adapters in shared files; sibling authors supply the contract, not competing edits. Preserve Claude hosted behavior; its new episode hooks remain separate work. |
-| CX-7 / one-command setup and npm distribution owner | `integrations/setup/**`; `packaging/npm/**`; `packaging/artifact-files.json`, `packaging/README.md`; `scripts/validate-json.mjs`; `README.md`, `plugins/cairn-memory/README.md`, `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`; release files below | After CX-5; [setup plan](one-command-setup.md), A8, CX-2 identity/controls and CX-5 registrations. One-brain episode disclosure/enablement depends on a local target, installed SE episode-v1 capability and LAC running the episode configuration that passed the separate bounded deadline review; the coordinator assigns its review owner. Missing any precondition means episodes unavailable. Own installer/bundle, installation/privacy/distribution docs, runtime/progress state, packaging README's no-npx boundary, and public-manifest version validation. Own changelog/synchronized bump; reviewable tarball only, separate publication approval. |
-| CX-6 / verification owner | `integrations/codex/test/**`, `integrations/client/test/**`, `adapters/local-capture/test/**`, `integrations/setup/test/**`, `packaging/npm/test/**`; `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`, `docs/limitations.md`, `ROADMAP.md` | Previous packages including CX-7; full runtime matrices and later separately authorized human evidence. No registry/release claim from mocks. |
+| CX-7 / one-command setup and npm distribution owner | `integrations/setup/**`; `packaging/npm/**`; `packaging/artifact-files.json`, `packaging/README.md`; `scripts/validate-json.mjs`; `README.md`, `plugins/cairn-memory/README.md`, `docs/architecture.md`, `docs/privacy.md`, `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`; release files below | After CX-5 and F0 outcomes; HMA for the proposed local default (policy approval/pinned-host capabilities required), or explicit API-key alternative; [setup plan](one-command-setup.md), A8, CX-2 identity/controls and CX-5 registrations. One-brain episode disclosure/enablement depends on a local target, installed SE episode-v1 capability and LAC running the episode configuration that passed the separate bounded deadline review including host-CLI latency when used; the coordinator assigns its review owner. Missing any precondition means episodes unavailable. Own installer/bundle, installation/privacy/distribution docs, runtime/progress state, packaging README's no-npx boundary, and public-manifest version validation. Own changelog/synchronized bump; reviewable tarball only, separate publication approval. |
+| CX-6 / verification owner | `integrations/codex/test/**`, `integrations/client/test/**`, `adapters/local-capture/test/**`, `adapters/host-model/test/**`, `adapters/mcp/test/host-model.test.mjs`, `integrations/setup/test/**`, `packaging/npm/test/**`; `docs/plans/codex-client.md`, `docs/plans/one-command-setup.md`, `docs/limitations.md`, `ROADMAP.md` | Previous packages including CX-7; full runtime matrices and later separately authorized human evidence. No registry/release claim from mocks. |
 
 Every user-visible package owns its release records **in its own PR**, including
-CX-2, CX-4, LAC, CX-5 and CX-7. These concrete release files supplement its row's allowed paths:
+CX-2, CX-4, HMA, LAC, CX-5 and CX-7. These concrete release files supplement its row's allowed paths:
 `CHANGELOG.md`, root `package.json`, `.claude-plugin/marketplace.json`,
 `plugins/cairn-memory/.claude-plugin/plugin.json` and
 `plugins/cairn-memory/lib/version.mjs`. Each package adds its own changelog entry
@@ -602,7 +768,7 @@ Each row naming `packaging/**` owns its entire subtree exclusively while active;
 after CX-5 lands, CX-7 alone owns `packaging/npm/**`, `packaging/artifact-files.json`
 and `packaging/README.md`, then hands only npm tests to CX-6. No competing artifact
 file-list edits. CX-7 alone edits `scripts/validate-json.mjs` in its PR.
-`docs/privacy.md` passes CX-2 → CX-4 → LAC → CX-7; `docs/architecture.md` passes
+`docs/privacy.md` passes CX-2 → CX-4 → HMA → LAC → CX-7; `docs/architecture.md` passes
 CX-4 → LAC → CX-7. CX-6 cannot edit them. If LAC is deferred, CX-7 documents only
 shipped setup/distribution; LAC receives a later explicit handoff for local-flow
 claims. CX-7 must not claim local automatic capture before LAC lands.
@@ -621,22 +787,29 @@ root `package.json` and `CHANGELOG.md` handoffs. The linked [setup plan](one-com
 shares this ledger, not another owner. Its `packaging/README.md`,
 `scripts/validate-json.mjs`, root `README.md` and `docs/architecture.md` handoffs
 also require the coordinator's umbrella-plan check; this does not assert additional
-sibling edits. The integrator retains CI ownership.
+sibling edits. HMA also joins the `docs/privacy.md` and release-record handoffs;
+its `adapters/mcp/cli.mjs` handoff must be checked against the umbrella plan and
+SE ownership before execution. F0 adds no sibling file ownership. The integrator retains CI ownership.
 Across this contract, the setup plan and the sibling, **only one open PR at a time
 may edit each shared file**, including CI, version validation and release files.
 The repository maintainer (coordinator) sets the order and hands ownership to the
 next package after the preceding PR closes/lands;
 this also serializes the integrator's CI edits. Rebase before each handoff.
 
-Proposed default order: **CX-1 → SE-1…SE-5 → CX-2 → CX-3 → CX-4 → LAC → CX-5 → CX-7 → CX-6**.
-This refines CX-2…CX-6/LAC by placing local transport before its installation gate.
+Proposed default order: **CX-1 → F0 → SE-1…SE-5 → CX-2 → CX-3 → CX-4 → HMA → LAC → CX-5 → CX-7 → CX-6**.
+F0 runs immediately after extraction; HMA precedes host-CLI LAC and any episode
+enablement. A separately configured API-key delivery may defer HMA but must not
+claim the proposed host-CLI default; the episode deadline review still applies.
 The coordinator may defer LAC for a hosted-only delivery, but must preserve package
 dependencies and exclusive file ownership. No sibling edits are authorized here.
 
 ## Open questions, non-goals and verification
 
-Remaining **to verify** gates: 0.150 minimum and exact 0.157.1 format/lifecycle/
-privileges; same PID namespace and platform publication/permission semantics;
+Remaining **to verify** gates: policy approval for subscription-backed processing;
+pinned HMA model ports/isolation/quota events and latency; finite daily-cap defaults;
+hosted quota/reset response mapping; Codex-only local model choice; F0 outcomes;
+0.150 minimum and exact 0.157.1 format/lifecycle/privileges; same PID namespace
+and platform publication/permission semantics;
 hosted 0.2.0 deployment; A7 authority evaluation; sibling context/end semantics.
 The person pairing resolves conflicting keys through an explicit flow choice;
 newcomers remain memory-disabled until then; established clients keep their own
@@ -657,9 +830,9 @@ tool/file/reasoning/image ingestion; target switching; episode implementation;
 paid experiments or production deployment. Existing semantic-quality failures
 remain failures; this contract does not certify source truth or adoption.
 
-Episode-deadline revision verification on Node `v22.16.0`: `npm test` exited 0
-(106 passed), `npm run validate` exited 0, and all 57 relative links and 35 anchors
+Billing/reliability revision verification on Node `v22.16.0`: `npm test` exited 0
+(112 passed), `npm run validate` exited 0, and all 58 relative links and 36 anchors
 in both plans resolved (exit 0).
 Working/staged `git diff --check` exited 0 before the new local commit.
-No Node 20/24 execution, new-client implementation or human two-client acceptance
-is implied by these existing repository checks.
+No Node 20/24 execution, F0/HMA host calls, new-client implementation or human
+two-client acceptance is implied by these existing repository checks.

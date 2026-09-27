@@ -6,7 +6,7 @@ main at `e7c4ecc47d4e632e4b78209bb3c176da7437f078` (#256 merged, docs only).
 No code changed between these bases.
 
 Status: proposed docs-only plan, researched 2026-09-27.
-Revision: post-integration terminology, links and required-token evidence corrections.
+Revision: owner billing decision, local host-model dependencies and reliability disclosures.
 Implements maintainer chichi's one-command decision through CX-7, after CX-5 and
 before CX-6 in the [Codex client package order](codex-client.md#ordered-packages-and-exclusive-file-ownership).
 This plan owns installer/distribution behavior; the [client contract](codex-client.md)
@@ -16,7 +16,9 @@ installation or publication is performed by this packet.
 One-command setup installs the Claude Code and Codex part of the
 [one-brain configuration defined in privacy](../privacy.md#proposed-session-episodes-local-core).
 Its episode default is subject to the installed local-core capability, reviewed
-LAC configuration and automatic-capture consent below; it does not change hosted behavior.
+LAC configuration and automatic-capture consent below; hosted episodes remain unchanged.
+This connects two coding clients, not the website or chat tools; npm installation
+does not establish shared memory with those products.
 
 ## Acceptance S01–S08
 
@@ -62,10 +64,44 @@ LAC configuration and automatic-capture consent below; it does not change hosted
    conversation. Presence on `PATH` is not consent; declined clients stay unchanged.
    Collect secrets only after consent, never in dry-run. Hosted authentication
    uses token entry or OAuth where supported (**to verify:** Cairn OAuth support),
-   never the host's login credentials. Local automatic capture requires LAC,
-   its runtime/artifact/store binding and model/provider consent; otherwise show
+   never the host's login credentials for hosted authentication. Local automatic
+   capture requires LAC, its runtime/artifact/store binding and model/provider consent; otherwise show
    capture unavailable. Explicit MCP operations do not substitute for capture.
    Do not silently change an existing target/account when adding a client.
+
+   Apply the owner's [billing decision and runtime guards](codex-client.md#model-access-billing-and-runtime-guards):
+   hosted processing uses the paid Cairn plan or bounded free quota, enforced by
+   the service. Disclose quota-reached status, supplied reset time and explicit
+   resume; no automatic target switch, cursor advance or retry storm on refusal.
+   The proposed open-source local default uses `claude -p` with the person's
+   logged-in Claude plan, for either coding client's memory. Before consent say:
+   “Local memory processing consumes your Claude plan quota and may reduce what
+   is available for interactive use. You can choose API-key processing instead,
+   billed by that provider.” Local storage is not offline inference. Offer the
+   existing OpenAI adapter path; never silently substitute it or require an API
+   key for the approved host-plan mode. The host uses its own authentication;
+   setup does not read/import host credentials, nor put provider keys on argv.
+   API-key configuration uses the existing adapter's injected key mechanism
+   (`OPENAI_API_KEY` for its current CLI), never the Cairn hosted token.
+
+   The [Anthropic policy](https://code.claude.com/docs/en/agent-sdk/overview) requires
+   prior approval to offer Claude login/plan limits through a third-party product;
+   the coordinator will seek it. The proposed default is not an approval claim:
+   subscription-backed setup cannot ship as supported before that outcome and
+   pinned-host feasibility are recorded. The [OpenAI authentication guidance](https://learn.chatgpt.com/docs/auth)
+   recommends API keys for programmatic Codex use. For machines without Claude,
+   `codex exec` under that caveat versus requiring API-key processing is an open
+   maintainer decision; show the options/unresolved status, do not silently choose.
+
+   Show the selected model/auth mode, shared background concurrency cap (default
+   2 per target), plan-window guard or conservative daily call-cap fallback,
+   configured daily cap/reset, and incomplete-coverage/backlog limitations before
+   consent. Missing quota signals must say so; API-key mode uses a daily automatic-
+   call cap instead of plan-window guards. Daily defaults require calibration;
+   absent a finite cap, report automatic processing unavailable. Cold host-CLI
+   recall/context cannot assume the hook budgets: show unavailable unless the
+   pinned installed path meets them; explicit MCP recall remains available with
+   disclosed latency. No installer benchmark silently spends subscription quota.
 
    Enable episodes by default with automatic capture only when all three hold:
    the chosen target is the local core; the installed core supports the sibling's
@@ -73,7 +109,8 @@ LAC configuration and automatic-capture consent below; it does not change hosted
    the separate [bounded deadline review](codex-client.md#cursor-and-worker-contract)
    and runs with that reviewed configuration. The coordinator assigns the review's
    owner. It covers source-bound-v2 capture, staged-v1 staging and episode-interpretation
-   calls within LAC's worker budget, as required by the sibling's [episode configuration](session-episodes.md#product-decisions-supplied-by-the-coordinator-2026-09-27).
+   calls and, in host-CLI mode, cold startup/model latency and termination within
+   LAC's worker budget, as required by the sibling's [episode configuration](session-episodes.md#product-decisions-supplied-by-the-coordinator-2026-09-27).
    If any precondition is absent, neither enable episodes nor describe them as
    active; status reports episodes as unavailable.
    The [privacy contract](../privacy.md#proposed-session-episodes-local-core)
@@ -97,7 +134,7 @@ LAC configuration and automatic-capture consent below; it does not change hosted
    “Episode interpretation sends bounded, redacted session text to the configured
    model provider. Redaction is best-effort.” See [episode privacy](../privacy.md#proposed-session-episodes-local-core)
    and [session episodes](session-episodes.md#source-budget-retention-and-concurrency)
-   for source and provider-exposure bounds; this plan adds no numbers.
+   for source and provider-exposure bounds; this plan adds no episode budget numbers.
 
    Episodes are part of each client's automatic-capture consent, not a separate
    question. Declining capture for a client also means no episodes from it. This
@@ -142,8 +179,11 @@ LAC configuration and automatic-capture consent below; it does not change hosted
    The plugin manifest declares `api_token` with `required: true`. **To verify:**
    whether installation with only the non-secret `--config` values prompts for
    that missing token, fails, or installs unconfigured. Do not assume one outcome.
-   Never put `api_token` in command arguments, plans or logs. The person enters
-   the token into Claude's sensitive `api_token` field through its configuration
+   These Cairn-token requirements concern the hosted target; local mode must not
+   request a dummy hosted token. **To verify:** the upgraded plugin's local-mode
+   configuration/required-field handling before setup claims it ready.
+   Never put `api_token` in command arguments, plans or logs. For hosted, the person
+   enters the token into Claude's sensitive `api_token` field through its configuration
    dialog; setup must not patch or read the host credential store. Print the exact
    remaining step: open an interactive Claude session, run
    `/plugin configure cairn-memory@cairn-memory`, and enter `api_token` in the
@@ -163,12 +203,14 @@ LAC configuration and automatic-capture consent below; it does not change hosted
    initial `/hooks` review; changed definitions can need review again. Never use
    `--dangerously-bypass-hook-trust` or edit trust state. Existing verified host
    facts/version limits remain in the [client evidence](codex-client.md#evidence-and-version-boundary).
-   Codex token entry is masked; write only the owner-only 0600
+   Hosted Codex token entry is masked; write only the owner-only 0600
    `credentials/cairn-token` in the bound state root. Never print its value or use
    it in command arguments; do not import Claude's saved token.
 
 7. **S07 — Rerun and removal.** Reruns report status and repair approved incomplete
-   setup idempotently, preserving keys, pause state, cursors and existing hooks.
+   setup idempotently, preserving keys, pause state, cursors, runtime quota/call
+   reservations and existing hooks. Rerun never resets usage to zero or clears
+   incomplete/truncated coverage; expose quota-resume and pending-gap status.
    A newly installed client gets its consent and sharing confirmation. Use the
    [shared controls](codex-client.md#controls) for `setup --remove claude` or
    `setup --remove codex`: stop affected workers, remove only owned registrations,
@@ -222,6 +264,20 @@ Node 20/22 gates. No real host installation, credentials, provider calls or publ
 - Before consent, assert summary includes redacted prompt recall, capture policy,
   Claude telemetry on by default and `telemetry=false` opt-out. Exercise hosted
   token/OAuth-capability and local-LAC-unavailable paths without network calls.
+- Before consent, assert Claude-plan quota disclosure and explicit API-key
+  alternative, hosted paid/free quota explanation, model/auth mode and policy-
+  pending status. Missing Claude leaves the Codex-only choice unresolved. Keys
+  never enter argv/logs; local mode never requests a dummy hosted token.
+- Fake missing/stale quota events select the conservative daily-cap fallback;
+  unset caps disable automatic processing. API-key mode skips plan-window guards,
+  not daily/concurrency limits. Preserve reservations and quota blocks on rerun.
+  Cross-client contention/restart/uncertain billing and refusal cases are A9.
+- Fake slow host-model startup leaves automatic recall/context unavailable within
+  hook deadlines, while explicit MCP recall remains available. Report truncated
+  coverage and final backlog gaps honestly; a new session cannot read the old
+  transcript. These are A1/A4 cases, not installer recovery by crawling.
+- Require recorded F0 outcomes and supported HMA ports before claiming host mode
+  ready; pending authorization/policy/capabilities never trigger host experiments.
 - With an episode-capable local core and LAC running the reviewed episode
   configuration, assert all three episode disclosures appear
   before automatic-capture consent and any capture starts. Episodes follow that
@@ -257,6 +313,9 @@ and [install artifact](install-artifact.md) packaging and no-publication boundar
 until the approved release step changes that availability. CX-2 supplies
 identity/lock/pending-binding APIs; CX-5 supplies
 host registration; LAC alone supplies local automatic capture for both clients.
+HMA supplies the proposed local host-CLI model adapter; the existing API-key
+adapter remains an explicit alternative. CX-7 consumes F0 feasibility outcomes
+and HMA/policy readiness before advertising the default, not just CLI presence.
 
 Follow the [cross-plan handoff](codex-client.md#cross-plan-shared-files): one open PR
 per shared file, including CI, version validation and release records. The
@@ -265,14 +324,18 @@ repository maintainer coordinates with the private umbrella plan and the sibling
 CX-6 receives tests for final verification. No competing shared-file owner.
 Episode enablement and its consent disclosure depend on SE-1…SE-5, which precede
 CX-5 and CX-7 in the proposed order, and the separate bounded deadline review
-assigned by the coordinator. If the SE packages or that review are deferred,
+assigned by the coordinator, including HMA host-CLI latency when that mode is used.
+HMA precedes LAC host-mode episode use. If the SE packages or that review are deferred,
 setup ships with episodes unavailable as in A8's unavailable-episode case.
 Enablement requires a local target, installed core support and LAC running the
 reviewed episode configuration; a merged design contract is not that capability.
 
 ## Verification and remaining evidence
 
-Remaining **to verify**: exact npm name/availability, hosted OAuth, pinned-host
+Remaining **to verify**: subscription-policy approval; F0 pinned-host quota signals,
+model-port isolation and latency; finite daily-cap defaults; hosted quota/reset
+response mapping; Codex-only model path; local Claude token-field handling;
+exact npm name/availability, hosted OAuth, pinned-host
 Claude reconfiguration/hook delivery, install behavior when required `api_token`
 is omitted from `--config`, and Codex 0.157.1 PATH-helper side effects. The token
 must never be supplied on argv, regardless of that behavior.
