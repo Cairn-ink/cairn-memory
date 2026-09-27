@@ -332,9 +332,8 @@ stop persists a disabled flag/new generation, rejects new project capture and
 fences/discards unfinished work; re-enable skips to transcript end. It neither
 deletes completed records nor reroutes text to personal scope.
 
-Producers are the Claude plugin client contract and the Codex client contract
-at `docs/plans/codex-client.md` on its own branch (not present at this fixed base,
-so deliberately not linked). They supply trusted origins, session/end identity,
+Producers are the Claude plugin client contract and the
+[Codex client contract](codex-client.md). They supply trusted origins, session/end identity,
 event times and project-stop controls to shared core methods `getCaptureControl`,
 `setCapturePaused` and `setProjectCapture`; setters require expected generation.
 Host-only `endEpisodeSession({namespace,client,sessionId,generation,eventId})`
@@ -572,8 +571,8 @@ is not required and is excluded from its allowed paths.
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,
 `plugins/cairn-memory/hooks/**` and `CHANGELOG.md` are also edited by the sibling
-Codex-client contract, `docs/plans/codex-client.md` on its own branch (packages
-CX-1…CX-6 and LAC). **Only one open PR at a time may edit each shared file.** The
+[Codex client contract](codex-client.md) (packages CX-1…CX-7, F0, HMA and LAC;
+see that contract's [refined order](codex-client.md#cross-plan-shared-files)). **Only one open PR at a time may edit each shared file.** The
 repository maintainer sets the order; the coordinator serialises cross-plan edits
 on the maintainer's behalf. Proposed default:
 **CX-1 → SE-1…SE-5 → CX-2…CX-6/LAC**. This cross-plan rule overrides any apparent

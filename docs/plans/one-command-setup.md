@@ -53,8 +53,17 @@ does not establish shared memory with those products.
    must not depend on disproving it. npm's package download/cache precedes setup
    and is outside the installer's dry-run guarantee; A8 invokes the packed CLI.
 
-3. **S03 — Target and informed consent.** Choose hosted or the local preview,
-   then show clients/versions, target, exact changes and collection policy before
+3. **S03 — Target and informed consent.** Offer exactly two targets per the
+   maintainer's 2026-09-28 decisions: the Cairn cloud target (processing billed to
+   the Cairn plan or bounded free quota), or the local open-source target (host
+   CLI or API key, subject to the capability gates below). Hosted never asks the
+   person for a model API key; bring-your-own-key is not offered on hosted for now.
+   No hybrid mode processes locally through a host CLI and uploads processed
+   results to the hosted store. It needs two processing pipelines, client/service
+   versions drift apart, the service would have to trust each client's processed
+   results, source text still uploads anyway, and it carries the highest policy
+   risk. The local API-key alternative is unchanged.
+   Show clients/versions, target, exact changes and collection policy before
    asking explicit installation/automatic-capture consent for **each** client.
    The summary must say: capture allowlists user/assistant text and redacts locally
    before payload creation; tool calls/output, reasoning and arbitrary file reads
@@ -80,8 +89,9 @@ does not establish shared memory with those products.
    resume; no automatic target switch, cursor advance or retry storm on refusal.
    Depend on CX-4's published 0.2.0 protocol, response schemas and conformance
    tests first; hosted implementation of that contract remains **to verify**.
-   The proposed open-source local default uses `claude -p` with the person's
-   logged-in Claude plan, for either coding client's memory. Before consent say:
+   Where Claude is available, the proposed open-source local default uses
+   `claude -p` with the person's logged-in Claude plan, for either coding client's
+   memory. Before consent say:
    “Local memory processing consumes your Claude plan quota and may reduce what
    is available for interactive use. You can choose API-key processing instead,
    billed by that provider.” Local storage is not offline inference. Offer the
@@ -96,19 +106,35 @@ does not establish shared memory with those products.
    the coordinator will seek it. The proposed default is not an approval claim:
    subscription-backed setup cannot ship as supported before that outcome and
    pinned-host feasibility are recorded. The [OpenAI authentication guidance](https://learn.chatgpt.com/docs/auth)
-   recommends API keys for programmatic Codex use. For machines without Claude,
-   `codex exec` under that caveat versus requiring API-key processing is an open
-   maintainer decision; show the options/unresolved status, do not silently choose.
+   recommends API keys for programmatic Codex use. The maintainer decided on
+   2026-09-28 that Codex-only machines use headless `codex exec` for host-CLI
+   processing, with `gpt-6-luna` as the candidate default subject to a Chinese-
+   quality check before it becomes the default. The OpenAI policy caveat still
+   applies; disclose the selected host's plan-quota use and pending policy,
+   quality and pinned-host checks, without claiming approval or readiness.
 
    Show the selected model/auth mode, shared background concurrency cap (default
    2 per target), plan-window guard or conservative daily call-cap fallback,
    configured daily cap/reset, and incomplete-coverage/backlog limitations before
    consent. Missing quota signals must say so; API-key mode uses a daily automatic-
    call cap instead of plan-window guards. Daily defaults require calibration;
-   absent a finite cap, report automatic processing unavailable. Cold host-CLI
-   recall/context cannot assume the hook budgets: show unavailable unless the
-   pinned installed path meets them; explicit MCP recall remains available with
-   disclosed latency. No installer benchmark silently spends subscription quota.
+   absent a finite cap, report automatic model processing unavailable. Core recall
+   selects and ranks through model ports; cold host-CLI startup is not expected
+   to fit the 2 s `UserPromptSubmit` request budget. The maintainer-approved
+   direction is model-free per-prompt search within that budget, as in the
+   [Claude-Mem comparison and core proposal boundary](codex-client.md#model-access-billing-and-runtime-guards).
+   At `7d03554`, `CLAUDE_MEM_SEMANTIC_INJECT` defaults to `'false'`; enabling it
+   calls the search manager, not a model, and SessionStart context reads its
+   database without a model call. The coordinator assigns the separate core
+   proposal's owner; this installer plan does not design the search algorithm.
+   Until that core path lands, show host-CLI automatic recall as unavailable;
+   explicit MCP recall stays model-ranked with disclosed latency.
+   SessionStart context reads stored next steps and procedural memories within
+   its budget, makes no model call and does not use HMA. It is available in
+   host-CLI mode within the existing hook budgets when the context capability is
+   installed. Codex SessionStart context remains disabled by default until A7
+   passes for the separate authority reason; automatic Codex recall injection
+   also requires A7. No installer benchmark silently spends subscription quota.
 
    Enable episodes by default with automatic capture only when all three hold:
    the chosen target is the local core; the installed core supports the sibling's
@@ -276,16 +302,23 @@ Node 20/22 gates. No real host installation, credentials, provider calls or publ
 - Before consent, assert summary includes redacted prompt recall, capture policy,
   Claude telemetry on by default and `telemetry=false` opt-out. Exercise hosted
   token/OAuth-capability and local-LAC-unavailable paths without network calls.
-- Before consent, assert Claude-plan quota disclosure and explicit API-key
-  alternative, hosted paid/free quota explanation, model/auth mode and policy-
-  pending status. Missing Claude leaves the Codex-only choice unresolved. Keys
-  never enter argv/logs; local mode never requests a dummy hosted token.
+- Before consent, assert the two-target choice, host-plan quota disclosure and
+  local API-key alternative, hosted paid/free quota explanation, model/auth mode
+  and policy-pending status. Hosted never requests a model API key or offers BYOK;
+  no hybrid processed-result upload mode is offered. Codex-only setup selects
+  headless `codex exec` and reports `gpt-6-luna` as a candidate pending the Chinese-
+  quality check, not an approved default. Keys never enter argv/logs; local mode
+  never requests a dummy hosted token.
 - Fake missing/stale quota events select the conservative daily-cap fallback;
-  unset caps disable automatic processing. API-key mode skips plan-window guards,
+  unset caps disable automatic model processing. API-key mode skips plan-window guards,
   not daily/concurrency limits. Preserve reservations and quota blocks on rerun.
   Cross-client contention/restart/uncertain billing and refusal cases are A9.
-- Fake slow host-model startup leaves automatic recall/context unavailable within
-  hook deadlines, while explicit MCP recall remains available. Report truncated
+- Until the separate core model-free path lands, report host-CLI automatic recall
+  unavailable; fake slow host-model startup never extends hook deadlines. Explicit
+  MCP recall remains model-ranked. Assert SessionStart reads stored next steps and
+  procedural memories without any HMA/model call within existing hook budgets;
+  slow model startup does not disable that store read. Independently assert Codex
+  context stays disabled by default until A7 passes. Report truncated
   coverage and final backlog gaps honestly; a new session cannot read the old
   transcript. These are A1/A4 cases, not installer recovery by crawling.
 - Require recorded F0 outcomes and supported HMA ports before claiming host mode
@@ -347,12 +380,13 @@ reviewed episode configuration; a merged design contract is not that capability.
 Remaining **to verify**: subscription-policy approval; F0 pinned-host quota signals,
 model-port isolation and latency; finite daily-cap defaults; hosted quota/reset
 implementation of CX-4's published contract; LAC's 180 s/120 s/150 s deadline
-reconciliation; Codex-only model path; local Claude token-field handling;
+reconciliation; Chinese-quality check before making `gpt-6-luna` the Codex-only
+default; separate core model-free recall proposal and delivery; local Claude token-field handling;
 exact npm name/availability, hosted OAuth, pinned-host
 Claude reconfiguration/hook delivery, install behavior when required `api_token`
 is omitted from `--config`, and Codex 0.157.1 PATH-helper side effects. The token
 must never be supplied on argv, regardless of that behavior.
 Primary CLI documentation establishes `--config`/configure availability, not a
 completed integration test. A8 above specifies future tests; this docs packet
-does not claim those installer tests ran. Repository checks and both plans' link
+does not claim those installer tests ran. Repository checks and all three plans' link
 checks are recorded in the [client contract verification](codex-client.md#open-questions-non-goals-and-verification).
