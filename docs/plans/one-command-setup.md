@@ -108,8 +108,11 @@ does not establish shared memory with those products.
    pinned-host feasibility are recorded. The [OpenAI authentication guidance](https://learn.chatgpt.com/docs/auth)
    recommends API keys for programmatic Codex use. The maintainer decided on
    2026-09-28 that Codex-only machines use headless `codex exec` for host-CLI
-   processing, with `gpt-6-luna` as the candidate default subject to a Chinese-
-   quality check before it becomes the default. The OpenAI policy caveat still
+   processing, with the Codex CLI model `gpt-6-luna` from its 0.157.1 catalog as
+   the candidate default subject to a Chinese-quality check before it becomes
+   the default. The API adapter's `gpt-5.6-luna` profile in
+   [`adapters/openai/profiles.mjs`](../../adapters/openai/profiles.mjs) belongs to
+   the separate API-key path. The OpenAI policy caveat still
    applies; disclose the selected host's plan-quota use and pending policy,
    quality and pinned-host checks, without claiming approval or readiness.
 
@@ -121,12 +124,18 @@ does not establish shared memory with those products.
    absent a finite cap, report automatic model processing unavailable. Core recall
    selects and ranks through model ports; cold host-CLI startup is not expected
    to fit the 2 s `UserPromptSubmit` request budget. The maintainer-approved
-   direction is model-free per-prompt search within that budget, as in the
+   direction is generation-free per-prompt search within that budget, as in the
    [Claude-Mem comparison and core proposal boundary](codex-client.md#model-access-billing-and-runtime-guards).
    At `7d03554`, `CLAUDE_MEM_SEMANTIC_INJECT` defaults to `'false'`; enabling it
-   calls the search manager, not a model, and SessionStart context reads its
-   database without a model call. The coordinator assigns the separate core
-   proposal's owner; this installer plan does not design the search algorithm.
+   calls `searchManager.search`, which runs a Chroma vector query using the
+   bundled `all-MiniLM-L6-v2` embedding model for the prompt. It falls back to
+   SQLite full-text search only when Chroma is unavailable. This avoids a
+   generative LLM or host-CLI call, not every model; SessionStart context reads
+   its database without a model call.
+   Cairn's generation-free automatic-recall path excludes generative-model and
+   host-CLI calls inside the hook. Whether it uses a bundled local embedding
+   model or full-text search is left to the separate core proposal, whose owner
+   the coordinator assigns; this installer plan does not design the algorithm.
    Until that core path lands, show host-CLI automatic recall as unavailable;
    explicit MCP recall stays model-ranked with disclosed latency.
    SessionStart context reads stored next steps and procedural memories within
@@ -306,14 +315,14 @@ Node 20/22 gates. No real host installation, credentials, provider calls or publ
   local API-key alternative, hosted paid/free quota explanation, model/auth mode
   and policy-pending status. Hosted never requests a model API key or offers BYOK;
   no hybrid processed-result upload mode is offered. Codex-only setup selects
-  headless `codex exec` and reports `gpt-6-luna` as a candidate pending the Chinese-
-  quality check, not an approved default. Keys never enter argv/logs; local mode
+  headless `codex exec` and reports the Codex CLI model `gpt-6-luna` as a candidate
+  pending the Chinese-quality check, not an approved default. Keys never enter argv/logs; local mode
   never requests a dummy hosted token.
 - Fake missing/stale quota events select the conservative daily-cap fallback;
   unset caps disable automatic model processing. API-key mode skips plan-window guards,
   not daily/concurrency limits. Preserve reservations and quota blocks on rerun.
   Cross-client contention/restart/uncertain billing and refusal cases are A9.
-- Until the separate core model-free path lands, report host-CLI automatic recall
+- Until the separate core generation-free path lands, report host-CLI automatic recall
   unavailable; fake slow host-model startup never extends hook deadlines. Explicit
   MCP recall remains model-ranked. Assert SessionStart reads stored next steps and
   procedural memories without any HMA/model call within existing hook budgets;
@@ -380,8 +389,9 @@ reviewed episode configuration; a merged design contract is not that capability.
 Remaining **to verify**: subscription-policy approval; F0 pinned-host quota signals,
 model-port isolation and latency; finite daily-cap defaults; hosted quota/reset
 implementation of CX-4's published contract; LAC's 180 s/120 s/150 s deadline
-reconciliation; Chinese-quality check before making `gpt-6-luna` the Codex-only
-default; separate core model-free recall proposal and delivery; local Claude token-field handling;
+reconciliation; Chinese-quality check before making the Codex CLI model
+`gpt-6-luna` the Codex-only default; separate core generation-free recall proposal
+and delivery; local Claude token-field handling;
 exact npm name/availability, hosted OAuth, pinned-host
 Claude reconfiguration/hook delivery, install behavior when required `api_token`
 is omitted from `--config`, and Codex 0.157.1 PATH-helper side effects. The token

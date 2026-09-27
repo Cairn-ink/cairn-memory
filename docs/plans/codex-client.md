@@ -563,8 +563,11 @@ recommends API keys for programmatic Codex workflows. Both policies were checked
 2026-09-27; neither verifies pinned-host functionality.
 
 **Maintainer decision (2026-09-28):** Codex-only machines use headless `codex exec`
-for host-CLI processing. The candidate default model is `gpt-6-luna`, subject to
-a Chinese-quality check before it becomes the default. The OpenAI policy caveat
+for host-CLI processing. The candidate default is the Codex CLI model `gpt-6-luna`
+from its 0.157.1 catalog, subject to a Chinese-quality check before it becomes the
+default. This is distinct from the API adapter's `gpt-5.6-luna` profile in
+[`adapters/openai/profiles.mjs`](../../adapters/openai/profiles.mjs), which serves
+the separate API-key path. The OpenAI policy caveat
 above still applies; this decision does not establish policy approval or verified
 host capabilities. Setup reports that path and its pending checks explicitly.
 
@@ -591,15 +594,22 @@ or subscriptions in CI, test every supported port and failure boundary.
 A cold headless host process is not expected to meet the 2 s `UserPromptSubmit`
 request budget; F0 measures the pinned installed path without extending budgets.
 **Maintainer-approved direction (2026-09-28):** automatic per-prompt recall in
-host-CLI mode should use a model-free search path within that hook budget, as
+host-CLI mode should use a generation-free search path within that hook budget, as
 Claude-Mem does. In the maintainer's comparison at `7d03554`, Claude-Mem's
 `CLAUDE_MEM_SEMANTIC_INJECT` defaults to `'false'`; when enabled, per-prompt
-injection calls its search manager, not a model. Its SessionStart context is built
-from its database without a model call. This is supplied comparison evidence,
-not proof of an implemented Cairn path.
+injection calls `searchManager.search` (`SearchRoutes.ts:384-409`). It runs a
+Chroma vector query that embeds the prompt with the bundled `all-MiniLM-L6-v2`
+embedding model (`ChromaSync.ts:1087`, `ChromaMcpManager.ts:49`), falling back to
+SQLite full-text search only when Chroma is unavailable. It avoids a generative
+LLM or host-CLI call, not every model. Its SessionStart context is built from its
+database without a model call. This is supplied comparison evidence, not proof
+of an implemented Cairn path.
 
-Model-free recall is engine behavior and belongs in `core/` under a separate
-proposal whose owner the coordinator assigns, outside HMA and the client packages.
+Here, generation-free means no generative-model or host-CLI call inside the
+automatic-recall hook. Whether to use a bundled local embedding model or full-text
+search is left to the separate core proposal. Generation-free recall is engine
+behavior and belongs in `core/` under a separate proposal whose owner the
+coordinator assigns, outside HMA and the client packages.
 This contract does not design its search algorithm. Until that path lands,
 host-CLI automatic per-prompt recall stays unavailable with honest status and
 fail-open hooks; meeting a model-call timing probe alone does not enable it.
@@ -754,8 +764,8 @@ still validate the shipped integration; F0 cannot substitute for them.
 | A5 — Fail-open | Stalled/oversized stdin, null path, outage/auth failure, bad reply, spawn/lock/state failure and unsupported schema. Bounded successful hook exits, valid Stop JSON, no blocking output; explicit controls fail visibly. Check worker lifetime and LAC's >30 s scripted success, lease cooldown and termination. |
 | A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits and normal retries unchanged; verify the explicit D1 quota/concurrency exception separately. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
 | A7 — Context authority/lifecycle | Framing/filter/size fixtures reject hostile authority/execution requests in recall and session context, without receipt stripping or stale injection. A positive fixture proves “Prefer diagrams.” survives unchanged as quoted preference data with its receipt, without becoming an authoritative directive. Keep defaults disabled until authorized pinned-host adversarial evaluation passes. Sibling conformance separately verifies context/end capability, deduplication and incomplete-capture semantics. |
-| A8 — Installer/distribution | [Installer gates](one-command-setup.md#a8-installer-gates): fake CLIs on `PATH`, temporary homes, packed CLI; assert dry-run starts zero host processes and writes nothing. Cover joint setup/adoption, Claude >=2.1.147 configuration/manual fallback, consent disclosures, trust, missing home, separate token removal and tarball scripts/version checks. Assert the two-target choice, no hosted model API key/BYOK or hybrid mode, and Codex-only headless `codex exec` with `gpt-6-luna` pending the Chinese-quality check. Disclose unavailable host-CLI automatic recall until the separate core model-free path lands; SessionStart is a budgeted store read without HMA, independently gated by A7 for Codex. Episode-capable local core with LAC running the reviewed episode configuration requires summary/retention/provider disclosures before capture consent; hosted, unsupported core or LAC without that reviewed configuration reports episodes unavailable without enabling or claiming them active. No real host installation, network/provider calls or publication. |
-| A9 — Runtime usage/latency | Both clients dispatch simultaneously against one target: shared cap 2, restart/unknown liveness, uncertain billing charged against daily counts, plan-window thresholds/early stop, missing signal fallback and API-key exemption from window guards. Hosted quota with/without reset, mid-batch budget refusal and repeated resume never advance cursor or storm; stable IDs prevent duplicate admission. Until the separate core model-free recall path lands, host-CLI automatic recall stays unavailable; fake slow headless model startup never extends hook budgets. SessionStart reads stored next steps/procedural memories within existing budgets with zero HMA/model calls, independently of model startup; Codex context remains disabled by default until A7 passes. Explicit MCP recall remains model-ranked and usable. Scripted HMA ports/termination/isolation and LAC host-latency/episode review; no real host calls in CI. |
+| A8 — Installer/distribution | [Installer gates](one-command-setup.md#a8-installer-gates): fake CLIs on `PATH`, temporary homes, packed CLI; assert dry-run starts zero host processes and writes nothing. Cover joint setup/adoption, Claude >=2.1.147 configuration/manual fallback, consent disclosures, trust, missing home, separate token removal and tarball scripts/version checks. Assert the two-target choice, no hosted model API key/BYOK or hybrid mode, and Codex-only headless `codex exec` with the Codex CLI model `gpt-6-luna` pending the Chinese-quality check. Disclose unavailable host-CLI automatic recall until the separate core generation-free path lands; SessionStart is a budgeted store read without HMA, independently gated by A7 for Codex. Episode-capable local core with LAC running the reviewed episode configuration requires summary/retention/provider disclosures before capture consent; hosted, unsupported core or LAC without that reviewed configuration reports episodes unavailable without enabling or claiming them active. No real host installation, network/provider calls or publication. |
+| A9 — Runtime usage/latency | Both clients dispatch simultaneously against one target: shared cap 2, restart/unknown liveness, uncertain billing charged against daily counts, plan-window thresholds/early stop, missing signal fallback and API-key exemption from window guards. Hosted quota with/without reset, mid-batch budget refusal and repeated resume never advance cursor or storm; stable IDs prevent duplicate admission. Until the separate core generation-free recall path lands, host-CLI automatic recall stays unavailable; fake slow headless model startup never extends hook budgets. SessionStart reads stored next steps/procedural memories within existing budgets with zero HMA/model calls, independently of model startup; Codex context remains disabled by default until A7 passes. Explicit MCP recall remains model-ranked and usable. Scripted HMA ports/termination/isolation and LAC host-latency/episode review; no real host calls in CI. |
 
 **A3 identity fixtures** exercise the guards before setup completes adoption;
 A8 additionally proves setup's normal path and confirmation handling:
@@ -887,8 +897,8 @@ Remaining **to verify** gates: policy approval for subscription-backed processin
 pinned HMA model ports/isolation/quota events and latency; finite daily-cap defaults;
 hosted implementation of CX-4's published quota/reset contract; unresolved LAC
 180 s/120 s/150 s deadline reconciliation; Chinese-quality check before making
-`gpt-6-luna` the Codex-only default; separate core model-free recall proposal and
-delivery; F0 outcomes;
+the Codex CLI model `gpt-6-luna` the Codex-only default; separate core
+generation-free recall proposal and delivery; F0 outcomes;
 0.150 minimum and exact 0.157.1 format/lifecycle/privileges; same PID namespace
 and platform publication/permission semantics;
 hosted 0.2.0 deployment; A7 authority evaluation; sibling context/end semantics.
@@ -911,10 +921,11 @@ tool/file/reasoning/image ingestion; target switching; episode implementation;
 paid experiments or production deployment. Existing semantic-quality failures
 remain failures; this contract does not certify source truth or adoption.
 
-Host-CLI context/maintainer-decision correction verified on 2026-09-28 against
-code at `93e52b7`, on Node `v22.16.0`: `npm test` exited 0 (112 passed),
-`npm run validate` exited 0, and all 83 relative links and 44 anchors across
+Second correction round (Claude-Mem embedding distinction and CLI/API model IDs)
+verified on 2026-09-28 over candidate `cf1117b`, with code unchanged from `93e52b7`,
+on Node `v22.16.0`: `npm test` exited 0 (112 passed),
+`npm run validate` exited 0, and all 85 relative links and 44 anchors across
 this contract, the setup plan and the session-episodes plan resolved (exit 0).
-Working/staged `git diff --check` exited 0 before the local correction commit.
+Working/staged `git diff --check` exited 0 before the new local correction commit.
 No Node 20/24 execution, F0/HMA host calls, new-client implementation or human
 two-client acceptance is implied by these existing repository checks.
