@@ -113,6 +113,11 @@ reliability work below without declaring older failure gates resolved.
    falsifiers and a reviewed product correction. Review the v3 resource/cap
    projection and obtain a fresh grant before considering a newly frozen
    feasibility probe; do not replay consumed cases.
+   The [direct candidate-ID wire experiment](docs/plans/direct-candidate-wire-experiment.md)
+   is offline-only and recommends revision, not production adoption: its
+   synthetic five-item intermediate case increases qualifier pairs from one
+   to five despite a smaller compact output. Source semantics and the earlier
+   slot failures remain unresolved.
    Installed Hermes, MOC candidate visibility, source fidelity and lightweight
    latency/request/cost gates remain separate.
 2. Review/merge the verified native-provider candidate and its dependent

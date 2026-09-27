@@ -787,6 +787,19 @@ all JavaScript process memory or side effects of Proxy traps during own-key
 inspection. No semantic score, parity or installed behavior follows from
 renderer tests.
 
+## Direct candidate-ID wire remains an offline experiment
+
+The [direct candidate-ID experiment](plans/direct-candidate-wire-experiment.md)
+keeps the production pool/slot wire unchanged. Its detached decoder and actual
+core compiler agree with the current wire on synthetic source bindings, but
+fake HTTP cannot prove provider schema acceptance, semantic entailment, or
+repair of unretained official-run malformed responses. The modeled alternate
+one-item bodies are slightly smaller; in a distinct five-item intermediate
+fixture, the current adapter fits one whole request while the alternate needs
+five singleton qualifier pairs. Valid maximal-label outputs also exceed the
+unchanged output-token ceiling. The decision is to revise the design rather
+than adopt it; no paid cases, user data or operational ledger were used.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
