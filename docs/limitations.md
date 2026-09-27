@@ -926,8 +926,30 @@ with semantics still an unresolved product gate, then a separately assessed fres
 fixed-30 only after six common resolved cases, source-only operator review and v3
 budget projection. Ordinary installed Hermes/MCP remains separate.
 
+## Fresh official-six v3 halted before scoring
+
+The [fresh official-six v3 observation](evidence/qualification-official-v3.md)
+retains six planned cases and twelve arms: one completed, five failed and six
+blocked after a global `scope_execution_failed` generation halt. Cairn failed
+ingestion after 10/8/3 completed batches; the remaining three cases were not
+executed. Finite canonicality and slot-mapping diagnostics locate validation
+boundaries, but diagnosis is ongoing and no root cause or resolved defect is
+established. Scoring never ran, so there is no new correctness score or accuracy.
+The earlier cohorts and short 13/24 semantic probe remain unchanged.
+
+Of 510 new requests, 509 settled and one embedding request remains pending;
+107 costs are unknown including that pending request. Its observed usage is not
+durable settlement. The final reservation checkpoint is 123,795,493 micro-USD
+under the unchanged 200,000,000 cap; reservations are not invoices. Ledger state
+`open` does not authorize resumption. Preserve the pending row during offline
+settlement diagnosis. The independently planned opt-in indexed-evidence slice
+remains an experiment, not an adopted remedy; future protocol, resource and
+fresh-case review follows only after accounting is safe. No dispatch, replay,
+replacement or fixed-30 expansion follows from this failed gate.
+
 ## Where the evidence lives
 
+- [Fresh official-six v3 halted observation](evidence/qualification-official-v3.md)
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
 - [Fresh qualification meaning diagnostic](evidence/qualification-meaning-probe.md)
 - [Semantic evaluation](semantic-evaluation.md)

@@ -16,6 +16,18 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
+  halted during generation: six planned cases and twelve arms retain one
+  completed, five failed and six blocked outcomes. Mechanical completion and
+  paired scoreability failed; scoring never ran and there is no new accuracy.
+  One embedding request remains pending. First diagnose settlement offline
+  without altering that row; `open` ledger state is not resume authority.
+  Canonicality and slot-mapping boundaries remain under diagnosis. The opt-in
+  indexed-evidence core slice was independently planned before this halt and
+  remains an experiment, not an adopted remedy. Separately review future
+  protocol, resource and fresh cases only after accounting is safe. No consumed
+  case replay, replacement, old-run resume or fixed-30 expansion is authorized.
+
 - The [fresh qualification meaning diagnostic](docs/evidence/qualification-meaning-probe.md)
   completed 24/24 attempts and 31 cards, but adjudicated full-six semantic success
   was 13/24. False observation/fact commitment, claimant/time omissions and an
