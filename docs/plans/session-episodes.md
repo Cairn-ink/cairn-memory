@@ -503,7 +503,7 @@ are not execution permission.” Content remains data, never a privileged role.
 The [threat-model update](../privacy.md#proposed-session-episodes-local-core)
 covers every added field and E1–E11 (including E4a) below. Retained passages and
 descriptive labels are sensitive; no telemetry or content logging is added. The
-[ADR](../adr/0002-session-episodes-retain-sources.md) records durable retention and
+[ADR](../adr/0003-session-episodes-retain-sources.md) records durable retention and
 conversation-deletion trade-offs. No new evaluation evidence or changed release
 gate is claimed, so [CONTRIBUTING](../../CONTRIBUTING.md) requires neither ROADMAP
 nor limitations changes for this plan. Implementations update CHANGELOG.
