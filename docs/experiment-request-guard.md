@@ -645,6 +645,17 @@ process-local attempt snapshot once a Mem0 response has been priced. If B4
 settlement fails, those observations remain visible for diagnosis while
 `outcome` and `actualMicroUsd` stay null because no durable settlement was
 confirmed; the full reservation remains pending and paid work halts.
+Only failed settlement records additionally retain
+`settlementFailure: {operation: 'record_outcome', category}`. The category is
+exactly `ledger_busy`, `invalid_ledger`, `ledger_closed`,
+`configuration_mismatch` or the fallback `ledger_failed`. Successful records
+keep their previous shape. This process-local diagnostic is not a core, MCP,
+HTTP or hosted telemetry field and does not alter thrown/public errors.
+The privacy boundary excludes exception messages, stacks, SQL, IDs, provider
+content and arbitrary properties; tests exercise injected private exception
+details and require the closed fallback. The category identifies a mapped
+storage failure, not a transaction phase or proven historical cause. Snapshot
+projections remain frozen. It grants no retry, recovery or spending authority.
 This observation is never substituted into the ledger or used to advance the
 historical binding. The guard does not run or contain a native child, hold keys,
 verify the declared artifact
