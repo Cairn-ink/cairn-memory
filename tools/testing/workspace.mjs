@@ -10,6 +10,7 @@ export function createTestWorkspace(t, { prefix = 'cairn-test-', parent = tmpdir
   }
   if (t != null && typeof t.after !== 'function') throw new TypeError('invalid_test_context');
   const ownerParent = realpathSync(parent);
+  const parentIdentity = lstatSync(ownerParent);
   const path = mkdtempSync(join(ownerParent, prefix));
   const identity = lstatSync(path);
   const deferred = [];
@@ -23,8 +24,10 @@ export function createTestWorkspace(t, { prefix = 'cairn-test-', parent = tmpdir
       }
       try {
         const current = lstatSync(path);
+        const currentParent = lstatSync(ownerParent);
         if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev ||
-            current.ino !== identity.ino || realpathSync(ownerParent) !== ownerParent) {
+            current.ino !== identity.ino || currentParent.dev !== parentIdentity.dev ||
+            currentParent.ino !== parentIdentity.ino || realpathSync(ownerParent) !== ownerParent) {
           throw new Error('test_workspace_identity_changed');
         }
         await rm(path, { recursive: true, force: false });

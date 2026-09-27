@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
-import { existsSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createTestWorkspace } from './workspace.mjs';
 
-test('cleanup is immediate, LIFO, awaited and idempotent', async () => {
+test('cleanup is immediate, LIFO, awaited and idempotent', async t => {
   let hook;
   const workspace = createTestWorkspace({ after(fn) { hook = fn; } });
+  t.after(workspace.cleanup);
   const order = [];
   workspace.defer(() => { order.push('first'); });
   workspace.defer(async () => { await Promise.resolve(); order.push('second'); });
@@ -19,8 +20,9 @@ test('cleanup is immediate, LIFO, awaited and idempotent', async () => {
   assert.equal(existsSync(workspace.path), false);
 });
 
-test('failed close still attempts every close and removes scratch; rejection persists', async () => {
+test('failed close still attempts every close and removes scratch; rejection persists', async t => {
   const workspace = createTestWorkspace(null);
+  t.after(() => assert.rejects(workspace.cleanup(), { name: 'AggregateError' }));
   const order = [];
   workspace.defer(() => { order.push(1); });
   workspace.defer(() => { order.push(2); throw new Error('close failed'); });
@@ -28,6 +30,25 @@ test('failed close still attempts every close and removes scratch; rejection per
   await assert.rejects(workspace.cleanup(), { name: 'AggregateError' });
   assert.deepEqual(order, [2, 1]);
   assert.equal(existsSync(workspace.path), false);
+});
+
+test('replacement directory is retained and nested symlink never follows sibling', async () => {
+  const parent = createTestWorkspace(null);
+  try {
+    const sibling = join(parent.path, 'sibling');
+    mkdirSync(sibling);
+    writeFileSync(join(sibling, 'keep'), 'synthetic');
+    const workspace = createTestWorkspace(null, { parent: parent.path });
+    symlinkSync(sibling, join(workspace.path, 'link'), 'dir');
+    await workspace.cleanup();
+    assert.equal(existsSync(join(sibling, 'keep')), true);
+    const replaced = createTestWorkspace(null, { parent: parent.path });
+    renameSync(replaced.path, `${replaced.path}-moved`);
+    mkdirSync(replaced.path);
+    writeFileSync(join(replaced.path, 'keep'), 'synthetic');
+    await assert.rejects(replaced.cleanup(), { name: 'AggregateError' });
+    assert.equal(existsSync(join(replaced.path, 'keep')), true);
+  } finally { await parent.cleanup(); }
 });
 
 test('replaced root and external symlink target and sibling are preserved', async () => {
