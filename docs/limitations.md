@@ -206,6 +206,11 @@ what would happen for a different case. The dependent
 [qualification output diagnostics](plans/qualification-output-diagnostics.md)
 split future local shape observations without reclassifying N1, changing
 capture acceptance, improving measured quality or authorizing a replay.
+The later [qualification wire guidance](plans/qualification-wire-guidance.md)
+removes conflicting output-format examples from the standard provider request,
+but this synthetic-tested prompt change does not identify N1's malformed
+field, prove it caused N1's failure, or establish real-provider reliability or
+memory-quality improvement.
 
 The [controlled mixed comparison runner](plans/mixed-comparison-runner.md) is
 an offline, fake-HTTP engineering candidate, not a measured Cairn/Mem0 result.

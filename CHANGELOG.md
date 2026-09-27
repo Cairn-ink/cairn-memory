@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — coherent qualification wire guidance
+
+- Give the standard OpenAI qualifier one pool-format example and instructions
+  composed with shared source-interpretation guidance; core/custom models keep
+  the inline response contract. The same bounded serializer still handles fit,
+  count and generation, with no schema, admission, retry or model change.
+  Synthetic and installed fake-HTTP checks cover framing and source anchors;
+  they do not identify the historical N1 failure or measure quality gains.
+
 ## Unreleased — bounded mixed-evaluation resources
 
 - Tighten the conditional fact-embedding cost ceiling using the accepted

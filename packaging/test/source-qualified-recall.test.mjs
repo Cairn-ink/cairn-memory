@@ -25,13 +25,15 @@ test('installed v2 recall preserves source descriptions in real adapter ranking 
   const qualifierPrompt = readFileSync(join(packageRoot, 'core/prompts/qualify-candidates.md'), 'utf8');
   assert.equal(createHash('sha256').update(qualifierPrompt).digest('hex'), artifact.sourceHashes['core/prompts/qualify-candidates.md']);
   assert.equal(qualifierPrompt, readFileSync(new URL('../../core/prompts/qualify-candidates.md', import.meta.url), 'utf8'));
-  const expectedQualificationInstructions = `${qualifierPrompt}\n\nProvider wire-format override evidence-pool-v1: return wireVersion "evidence-pool-v1" `
-    + 'and qualifications as an object with exactly these fields: item_0=>itemIndex 0. '
-    + 'For each item, choose one to four distinct original candidateIndex values in pool. '
-    + 'Each field returns value and evidenceSlots, zero-based positions from 0 through pool.length-1, not original candidate IDs. '
-    + 'At least one field must reference a pool slot per item, even when all values are null or unknown; '
-    + 'unused pool members are not citations. Cite only actual supporting evidence. '
-    + 'The pool and item fields are transport references, not new source identities.';
+  const sharedPath = 'core/prompts/qualify-candidates-shared.md';
+  const poolPath = 'adapters/openai/prompts/qualify-candidates-pool.md';
+  for (const name of [sharedPath, poolPath]) {
+    assert.equal(createHash('sha256').update(readFileSync(join(packageRoot, name))).digest('hex'),
+      artifact.sourceHashes[name]);
+  }
+  const expectedQualificationInstructions = `${readFileSync(join(packageRoot, sharedPath), 'utf8').trimEnd()}\n\n`
+    + `${readFileSync(join(packageRoot, poolPath), 'utf8').trimEnd()}\n\n`
+    + 'Requested qualification entries: item_0=>itemIndex 0.';
   const source = 'I suggest a small welcome illustration 🚋; it is only a proposal.';
   let active, sends = 0, ranks = 0, forbid = false, expectedQualification;
   const proxy = await startExperimentProxy({ session: { request: async (route, body) => {

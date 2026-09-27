@@ -5,6 +5,14 @@
 still receives its original per-field `evidenceIndices` and applies the same
 source-bound qualification compiler and admission rules.
 
+The standard OpenAI path composes one shared source-interpretation guide with
+the pool-specific output framing and a valid pool example. Core and other
+models receive that same guide with the inline `evidenceIndices` framing.
+Arbitrary caller-supplied adapter instructions are preserved and retain the
+existing appended wire override. This removes contradictory standard-path
+format examples; it does not establish why any historical output failed or
+that a model will now produce more reliable qualifications.
+
 For each required `item_N` entry, `pool` lists one to four distinct original
 candidate indices supplied for that item. A field's `evidenceSlots` refers to
 zero-based positions in that item's pool, not to original candidate indices:

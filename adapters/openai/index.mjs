@@ -7,6 +7,7 @@ import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
 import { classificationWire } from './classification-wire.mjs';
 import { decodeQualificationEvidencePool } from './qualification-evidence-pool.mjs';
 import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
+import { qualificationCandidatesPrompt, standardInlineQualificationPrompt } from '../../core/qualification-candidates-prompt.mjs';
 
 const encoder = get_encoding('o200k_base');
 const fail = (code) => { throw new MemoryStoreError(code); };
@@ -14,6 +15,8 @@ const providerFailure = () => { throw new Error('openai_request_failed'); };
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const count = (value) => Number.isSafeInteger(value) && value >= 0;
 const qualificationSlot = itemIndex => `item_${itemIndex}`;
+const standardPoolQualificationPrompt = qualificationCandidatesPrompt(
+  new URL('./prompts/qualify-candidates-pool.md', import.meta.url));
 
 // The provider's strict-schema subset is small and request-scoped here. Core
 // still performs the authoritative source/semantic compilation after mapping.
@@ -39,6 +42,9 @@ function schemaAccepts(schema, value) {
 function qualificationInstructions(method, system, input) {
   if (method !== 'qualifyCandidates') return system;
   const mapping = input.items.map(item => `${qualificationSlot(item.itemIndex)}=>itemIndex ${item.itemIndex}`).join(', ');
+  if (system === standardInlineQualificationPrompt) {
+    return `${standardPoolQualificationPrompt}\n\nRequested qualification entries: ${mapping}.`;
+  }
   return `${system}\n\nProvider wire-format override evidence-pool-v1: return wireVersion "evidence-pool-v1" `
     + `and qualifications as an object with exactly these fields: ${mapping}. `
     + 'For each item, choose one to four distinct original candidateIndex values in pool. '

@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
+import { standardInlineQualificationPrompt } from './qualification-candidates-prompt.mjs';
 import { boundedText, denseArray, fail, object } from './validation.mjs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
@@ -9,7 +9,7 @@ import { isPromise } from 'node:util/types';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
-const system = readFileSync(new URL('./prompts/qualify-candidates.md', import.meta.url), 'utf8');
+const system = standardInlineQualificationPrompt;
 const exact = (value, keys) => {
   object(value, keys);
   if (keys.some(key => !Object.hasOwn(value, key))) fail('invalid_model_output');

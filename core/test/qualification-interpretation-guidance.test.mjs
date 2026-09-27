@@ -1,11 +1,31 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { createQualificationCandidateSnapshot, compileQualificationCandidates } from '../qualification-candidates.mjs';
+import { standardInlineQualificationPrompt } from '../qualification-candidates-prompt.mjs';
 
-const prompt = readFileSync(new URL('../prompts/qualify-candidates.md', import.meta.url), 'utf8');
+const prompt = standardInlineQualificationPrompt;
 const examples = [...prompt.matchAll(/```json\s*([\s\S]*?)```/g)].map(match => JSON.parse(match[1]));
 const fields = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
+
+test('P2 core prompt composer imports with only its core files and no optional adapter', t => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cairn-core-qualification-prompt-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, 'prompts'));
+  copyFileSync(new URL('../qualification-candidates-prompt.mjs', import.meta.url),
+    path.join(root, 'qualification-candidates-prompt.mjs'));
+  for (const name of ['qualify-candidates-shared.md', 'qualify-candidates.md']) {
+    copyFileSync(new URL(`../prompts/${name}`, import.meta.url), path.join(root, 'prompts', name));
+  }
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e',
+    'import { standardInlineQualificationPrompt } from "./qualification-candidates-prompt.mjs"; '
+      + 'if (!standardInlineQualificationPrompt.includes("evidenceIndices")) process.exit(1);'],
+  { cwd: root, encoding: 'utf8', timeout: 5_000 });
+  assert.equal(child.status, 0, child.stderr);
+});
 function snapshotFor(input) {
   return createQualificationCandidateSnapshot(input.items.map(item => ({ content: item.content, kind: item.kind, confidence: 0.8,
     receipts: item.candidates.map((candidate, index) => ({ client: 'synthetic', sessionId: 'prompt-example', eventId: `source-${index}`,
