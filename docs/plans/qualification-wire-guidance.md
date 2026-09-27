@@ -42,8 +42,8 @@ This section is acceptance for a **documentation-only** result record, not a
 retroactive amendment to P1–P6 or authority for another launch.
 
 - E1: Record the fresh N2 synthetic canary's fixed one-question, six-session,
-  24-turn scope; all six Cairn capture batches, 24 retained memories, one
-  recalled source receipt, and each arm's one answer and resolved judgment.
+  24-turn scope; all six Cairn capture batches, 24 admitted memory references,
+  one recalled source receipt, and each arm's one answer and resolved judgment.
   Separate operational completion from the synthetic reference's correctness.
   Preserve the failed S3 fixed-30 and N1 outcomes without replay or causal
   attribution to the P prompt change.

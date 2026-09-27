@@ -11,7 +11,8 @@ replay of S3 or N1.
 ## Observed path
 
 The fictional source contained one question over six dated sessions and 24
-turns. Cairn completed all six planned capture batches and retained 24 memories.
+turns. Cairn completed all six planned capture batches and reported 24 admitted
+memory references.
 Its answer used one recalled source receipt. The matched Mem0 arm completed.
 Both arms produced a nonempty answer, and each was judged correct against the
 separately frozen **synthetic** reference: Cairn 1/1 correct, 0 incorrect,
