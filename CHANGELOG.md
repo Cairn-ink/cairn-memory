@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — repeated qualification field references
+
+- Accept repeated valid per-field evidence-pool slots after validating the
+  original array shape, raw zero-to-four length and every slot. Decode unique
+  original candidate IDs in first-seen order; invalid pools, slots and missing
+  evidence remain rejected. Fake HTTP through the actual adapter and core
+  compiler preserves source anchors and request counts, including singleton
+  partitions. Schema, prompts, budgets, retries and stored qualifications are
+  unchanged. The retained paid failure and scores remain unchanged; source
+  linkage is not semantic truth or proof of long-history ingestion/recall.
+
 ## Unreleased — bounded qualification partitions
 
 - When both whole-batch qualification forms fail local fit, preflight up to

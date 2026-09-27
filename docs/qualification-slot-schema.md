@@ -23,6 +23,12 @@ the bounded wire, checks the unchanged inline schema, then returns the existing
 deduplicate an invalid array, invent evidence, retry, or admit an unqualified
 fallback.
 
+The evidence-pool decoder now canonicalizes repeated valid references within a
+field only after validating the original array shape, raw length and every slot.
+It preserves first-seen order and original candidate IDs. This does not relax
+named item coverage or permit duplicate pool members; see the
+[field reference rules](qualification-evidence-pool.md).
+
 The shared core prompt and programmatic model contract remain unchanged. A
 provider-specific instruction clarifies that its wire object supersedes the
 prompt's illustrative array; the added instruction is included in token checks.
