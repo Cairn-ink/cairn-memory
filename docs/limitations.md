@@ -11,6 +11,17 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The opt-in embedded [indexed evidence capture](indexed-evidence-capture.md)
+lane separates indexed extraction/admission from optional claim qualification;
+it is not a repair or fallback for the qualified lane. Synthetic core and actual
+installed-adapter fake-HTTP checks establish exact selected receipts, cold reads,
+atomic failures and absent qualifier calls, not model fidelity, a complete source
+archive, host usability or improved answer correctness. Extraction/classification
+and bounded source retrieval can still fail or omit needed passages. Conflicting
+dated choices remain evidence, not automatically adjudicated decisions. No MCP/
+Hermes exposure, existing benchmark/grant change, replay of consumed cases or
+paid result is authorized. The prior 13/24 semantic-probe result is unchanged.
+
 The optional [indexed source-window experiment](retained-source-windows.md)
 can retain a scripted passage beyond the ordinary first-800-unit receipt
 prefix in synthetic actual-core and installed fake-HTTP tests. It does not

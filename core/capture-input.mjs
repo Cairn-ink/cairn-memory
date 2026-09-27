@@ -21,7 +21,8 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       const id = identifier(message.id);
       const role = message.role;
       if (!['user', 'assistant'].includes(role)) fail('invalid_input');
-      if (captureQualification && (typeof message.content !== 'string' || !message.content.isWellFormed())) {
+      if ((captureQualification || captureSourcePolicy === 'indexed-evidence-v1') &&
+          (typeof message.content !== 'string' || !message.content.isWellFormed())) {
         fail('invalid_input');
       }
       return { id, role, content: boundedText(message.content, 4000) };
@@ -31,7 +32,8 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       fail('invalid_input');
     }
     const payloadDigest = createHash('sha256').update(JSON.stringify([
-      captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
+      captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
+        captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
         captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
       [namespace.ownerId, namespace.scope, namespace.projectId],
       client, eventId, sessionId, messages.map(({ id, role, content }) => [id, role, content]),
@@ -70,7 +72,8 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
       reason = 'invalid_extraction_item_shape';
       object(item, ['content', 'kind', 'confidence', 'sourceIndices']);
       reason = 'invalid_extraction_text';
-      if (snapshot.captureQualification && (typeof item.content !== 'string' || !item.content.isWellFormed())) {
+      if ((snapshot.captureQualification || snapshot.captureSourcePolicy === 'indexed-evidence-v1') &&
+          (typeof item.content !== 'string' || !item.content.isWellFormed())) {
         fail('invalid_model_output');
       }
       const content = boundedText(item.content, 600);

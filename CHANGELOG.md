@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — opt-in indexed evidence capture
+
+- Add the explicit embedded `indexed-evidence-v1` capture source policy: shared
+  indexed extraction, atomic admission and existing classification without claim
+  qualification, staged evidence, rationale or causal reconciliation. Report
+  `qualificationStatus: 'not-requested'` on successful capture/replay, preserving
+  prior qualification/dedup rules and exact source-only reads. No default, host
+  flag, complete archive, semantic-quality claim or paid benchmark change.
+
 ## Unreleased — bounded experiment ledger lock waits
 
 - Wait up to 1,000 ms for writable experiment-ledger SQLite locks and retain a
