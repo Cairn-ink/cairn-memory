@@ -31,6 +31,14 @@ runner also removes legacy scratch created under standard `TMPDIR`/`TMP`/`TEMP`.
 It does not intercept arbitrary explicit paths or promise that every legacy
 fixture disposes its files immediately. Public build/install output, demos,
 formal evaluation databases and ledgers keep their existing retention contracts.
+The runner owns only its newly created test directory. The parent `npm` process
+starts first and may write its own Node compile cache (for example
+`node-compile-cache`) into the caller's `TMPDIR`; that cache is outside the
+test workspace and is not removed by this runner. For a strict parent-TMPDIR
+residue probe, set `NODE_DISABLE_COMPILE_CACHE=1` on the parent npm invocation,
+for example `NODE_DISABLE_COMPILE_CACHE=1 npm run test:workspace-lifecycle`.
+Other tool-managed caches remain governed by their own lifecycles; do not sweep
+the caller's temporary directory to make a test probe pass.
 
 Run `npm run test:workspace-lifecycle` on Node 22.16 and 24.15 with the isolated
 OpenAI dependencies installed. It verifies real subprocess success/failure,
