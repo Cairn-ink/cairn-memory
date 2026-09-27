@@ -47,12 +47,18 @@ fixtures and the sanitized packaging child environment. Packaging children
 forward only validated standard temp paths in addition to their existing
 allowlist; application environment and credentials remain excluded.
 
-On Linux, the runner owns a child process group and waits for its live members
-to stop before cleanup; catchable SIGINT/SIGTERM/SIGHUP terminate the group and
-escalate after two seconds. Deliberately detached sessions, SIGKILL and host
-crashes cannot guarantee cleanup. Other platforms wait for the direct child
-only. An unverifiable live group or replaced workspace root fails and retains
-scratch. No historical-directory sweep is performed. Direct `node --test`
+On supported POSIX hosts, the runner owns a child process group and waits for
+its members to stop before cleanup; catchable SIGINT/SIGTERM/SIGHUP terminate
+the group and escalate after two seconds. Linux excludes zombies awaiting the
+host reaper using `/proc`; other POSIX hosts conservatively wait until the
+kernel reports the whole group absent. An unverifiable group, including a
+permission error or a group that remains visible after termination, fails and
+retains scratch. Windows is unsupported: the runner fails before creating a
+workspace or launching a child. The lifecycle gate is verified on Linux/WSL;
+the other POSIX path is exercised by a simulated-platform process-group test,
+not a native macOS run. Deliberately detached sessions, SIGKILL and host
+crashes cannot guarantee cleanup. A replaced workspace root also fails and
+is retained. No historical-directory sweep is performed. Direct `node --test`
 commands bypass the invocation safety net.
 
 CI utility scripts can use explicit `--script` mode, for example

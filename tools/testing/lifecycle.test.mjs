@@ -12,7 +12,7 @@ const helper = new URL('./workspace.mjs', import.meta.url).href;
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
 function launch(owner, args, options = {}) {
-  const child = spawn(process.execPath, [runner, ...args], {
+  const child = spawn(process.execPath, [...(options.execArgv ?? []), runner, ...args], {
     cwd: root, env: { ...process.env, TMPDIR: owner.path, TMP: owner.path, TEMP: owner.path, ...options.env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -29,6 +29,62 @@ function launch(owner, args, options = {}) {
   });
   return { child, done };
 }
+
+test('Windows is rejected before child launch or workspace creation', async () => {
+  const owner = createTestWorkspace(null);
+  try {
+    const bootstrap = join(owner.path, 'windows-bootstrap.mjs');
+    const child = join(owner.path, 'child.mjs');
+    const marker = join(owner.path, 'child-launched');
+    writeFileSync(bootstrap, "Object.defineProperty(process, 'platform', { value: 'win32' });");
+    writeFileSync(child, `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'launched');`);
+    const result = await launch(owner, ['--script', child], { execArgv: ['--import', bootstrap] }).done;
+    assert.equal(result.code, 1, result.output);
+    assert.match(result.output, /test_runner_unsupported_platform/);
+    assert.equal(existsSync(marker), false);
+    assert.deepEqual(readdirSync(owner.path).sort(), ['child.mjs', 'windows-bootstrap.mjs']);
+  } finally { await owner.cleanup(); }
+});
+
+test('simulated POSIX host launches a real isolated process group and removes normal-exit scratch',
+  { skip: process.platform !== 'linux' }, async () => {
+    const owner = createTestWorkspace(null);
+    try {
+      const bootstrap = join(owner.path, 'posix-bootstrap.mjs');
+      const child = join(owner.path, 'child.mjs');
+      writeFileSync(bootstrap, "Object.defineProperty(process, 'platform', { value: 'darwin' });");
+      writeFileSync(child, `import assert from 'node:assert/strict';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const stat = readFileSync('/proc/self/stat', 'utf8');
+assert.equal(Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2]), process.pid);
+mkdtempSync(join(tmpdir(), 'posix-child-'));`);
+      const result = await launch(owner, ['--script', child], { execArgv: ['--import', bootstrap] }).done;
+      assert.equal(result.code, 0, result.output);
+      assert.deepEqual(readdirSync(owner.path).sort(), ['child.mjs', 'posix-bootstrap.mjs']);
+    } finally { await owner.cleanup(); }
+  });
+
+test('ambiguous POSIX group liveness retains scratch and fails after direct child exit',
+  { skip: process.platform !== 'linux' }, async () => {
+    const owner = createTestWorkspace(null);
+    try {
+      const bootstrap = join(owner.path, 'posix-ambiguous-bootstrap.mjs');
+      const child = join(owner.path, 'child.mjs');
+      writeFileSync(bootstrap, `Object.defineProperty(process, 'platform', { value: 'darwin' });
+const originalKill = process.kill;
+process.kill = (pid, signal) => { if (pid < 0 && signal === 0) {
+  const error = new Error('synthetic_group_ambiguity'); error.code = 'EPERM'; throw error;
+} return originalKill(pid, signal); };`);
+      writeFileSync(child, 'process.exitCode = 0;');
+      const result = await launch(owner, ['--script', child], { execArgv: ['--import', bootstrap] }).done;
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /synthetic_group_ambiguity/);
+      assert.equal(readdirSync(owner.path).filter(name => name.startsWith('cairn-test-run-')).length, 1,
+        'unverified group must retain exact scratch');
+    } finally { await owner.cleanup(); }
+  });
 
 async function waitFor(predicate) {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(25); }

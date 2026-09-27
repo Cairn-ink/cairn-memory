@@ -3,10 +3,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from './workspace.mjs';
 
-// On Linux the child owns a process group. Check live members, excluding zombies
-// already terminated but awaiting their host's reaper. Escaped/detached sessions
-// and uncatchable SIGKILL/host shutdown are outside this test runner's contract.
-function groupAlive(group) {
+// Every supported POSIX host gives the child its own process group. Linux can
+// exclude zombies awaiting the host's reaper; other hosts must conservatively
+// wait until the kernel reports that the entire group no longer exists.
+function groupAlive(group, platform) {
+  if (platform !== 'linux') {
+    try { process.kill(-group, 0); return true; }
+    catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+  }
   for (const name of readdirSync('/proc')) {
     if (!/^\d+$/.test(name)) continue;
     let stat;
@@ -18,26 +22,28 @@ function groupAlive(group) {
   return false;
 }
 
-function signalGroup(child, signal, grouped) {
-  try { if (grouped) process.kill(-child.pid, signal); else child.kill(signal); }
+function signalGroup(child, signal) {
+  try { process.kill(-child.pid, signal); }
   catch (error) { if (error.code !== 'ESRCH') throw error; }
 }
 
-async function finishGroup(child) {
-  if (!groupAlive(child.pid)) return;
-  signalGroup(child, 'SIGTERM', true);
+async function finishGroup(child, platform) {
+  if (!groupAlive(child.pid, platform)) return;
+  signalGroup(child, 'SIGTERM');
   for (let attempt = 0; attempt < 100; attempt++) {
-    if (!groupAlive(child.pid)) return;
-    if (attempt === 40) signalGroup(child, 'SIGKILL', true);
+    if (!groupAlive(child.pid, platform)) return;
+    if (attempt === 40) signalGroup(child, 'SIGKILL');
     await delay(50);
   }
   throw new Error('test_children_still_running_workspace_retained');
 }
 
+const platform = process.platform;
+const posixPlatforms = new Set(['linux', 'darwin', 'freebsd', 'openbsd', 'netbsd', 'aix', 'sunos', 'android']);
+if (!posixPlatforms.has(platform)) throw new Error(`test_runner_unsupported_platform:${platform}`);
 const workspace = createTestWorkspace(null, { prefix: 'cairn-test-run-' });
 const args = process.argv.slice(2);
 const scriptMode = args[0] === '--script';
-const grouped = process.platform === 'linux';
 let child;
 let termination;
 let escalation;
@@ -47,8 +53,8 @@ const signalExitCode = signal => ({ SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[si
 const handlers = new Map(['SIGINT', 'SIGTERM', 'SIGHUP'].map(signal => [signal, () => {
   termination ??= signal;
   if (cleaning) { process.exitCode = signalExitCode(termination); return; }
-  if (child?.pid) signalGroup(child, signal, grouped);
-  escalation ??= setTimeout(() => { if (child?.pid) signalGroup(child, 'SIGKILL', grouped); }, 2000);
+  if (child?.pid) signalGroup(child, signal);
+  escalation ??= setTimeout(() => { if (child?.pid) signalGroup(child, 'SIGKILL'); }, 2000);
 }]));
 for (const [signal, handler] of handlers) process.on(signal, handler);
 try {
@@ -58,7 +64,7 @@ try {
   // worker. This internal marker would otherwise silently skip its test files.
   delete env.NODE_TEST_CONTEXT;
   child = spawn(process.execPath, scriptMode ? args.slice(1) : ['--test', ...args], {
-    cwd: process.cwd(), stdio: 'inherit', detached: grouped,
+    cwd: process.cwd(), stdio: 'inherit', detached: true,
     env,
   });
   childrenStopped = false;
@@ -66,7 +72,7 @@ try {
     child.once('error', reject);
     child.once('close', (code, signal) => resolve({ code, signal }));
   });
-  if (grouped && child.pid) await finishGroup(child);
+  if (child.pid) await finishGroup(child, platform);
   childrenStopped = true;
   process.exitCode = termination ? signalExitCode(termination)
     : result.code ?? (result.signal ? 1 : 0);

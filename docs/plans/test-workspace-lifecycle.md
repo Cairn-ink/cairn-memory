@@ -208,3 +208,28 @@ boundaries. No repeated unsuccessful correction loop. Elapsed model time and
 token cost are not measured. All listed gates are complete. Independent
 Standards/Spec review uses this plan and the same committed candidate before
 push; fixed-SHA reviewer findings and final CI delivery are recorded in the PR.
+
+## Review correction: POSIX process-group ownership
+
+Spec review found that the original runner verified descendant exit only on
+Linux. On another POSIX host it waited for the direct child alone, so it could
+remove scratch while a descendant still used it. The new runner starts an
+isolated process group on every supported POSIX platform. Linux retains the
+existing `/proc` non-zombie check; other POSIX platforms require the kernel's
+negative-group liveness probe to report `ESRCH` before removal. Ambiguous
+results fail and retain the exact owned workspace. Windows and unknown
+platforms fail before workspace creation or child launch; no native Windows
+job-object ownership is claimed. Deliberately detached sessions, uncatchable
+termination and host crashes remain outside T2's guarantee.
+
+The test seam preloads a platform override only into an isolated runner child.
+Before the correction, the Windows preflight and ambiguous POSIX regressions
+failed 2/2. Afterward, those cases and a real Linux process group exercised
+through the simulated POSIX branch passed 3/3 on Node 22.16 and 24.15. The
+canonical `npm run test:workspace-lifecycle` gate then passed 25/25 with no
+skips or residual parent roots on both runtimes. Raw outputs are
+`/tmp/cairn-test-lifecycle-evidence.MjDOl0/posix-review-node22.log` and
+`/tmp/cairn-test-lifecycle-evidence.MjDOl0/posix-review-node24.log`. Each run
+used a newly owned short parent and disabled only the parent npm compile cache
+for residue inspection. Native macOS/other POSIX host testing is not claimed.
+No production runtime or fixture contract changed.

@@ -3,7 +3,8 @@
 ## Unreleased — test-owned temporary workspaces
 
 - Give ordinary offline test invocations isolated scratch with cleanup after
-  success, failure and catchable Linux termination. Close migrated fixture
+  success, failure and catchable POSIX termination; reject unsupported Windows
+  before test launch. Close migrated fixture
   resources before exact owned-directory removal, and verify residual scratch
   through real subprocess and fixture gates. Packaging children preserve only
   validated standard temporary paths in their sanitized environment. Public
