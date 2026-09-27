@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "official-six-v3-aggregate-v1",
+  "runtimeCommit": "26a7221ec82134306ef2dfeffe11ce46fab3e6be",
+  "generation": {
+    "halted": true,
+    "haltReason": "scope_execution_failed",
+    "operatorStatus": "halted",
+    "operatorReason": "generation_halted",
+    "mechanicalSuccess": false,
+    "scoreableSix": false
+  },
+  "scoring": { "executed": false, "artifactPresent": false },
+  "denominators": { "plannedCases": 6, "plannedArms": 12, "completedArms": 1, "failedArms": 5, "blockedArms": 6 },
+  "cases": [
+    { "index": 1, "plannedBatches": 47, "cairn": { "status": "failed", "reason": "ingestion_incomplete", "completedBatches": 10, "diagnostics": ["qualification_label_canonicality"] }, "mem0": { "status": "completed", "reason": null, "answerPresent": true } },
+    { "index": 2, "plannedBatches": 43, "cairn": { "status": "failed", "reason": "ingestion_incomplete", "completedBatches": 8, "diagnostics": ["qualification_label_canonicality"] }, "mem0": { "status": "failed", "reason": "invalid_payload", "answerPresent": false } },
+    { "index": 3, "plannedBatches": 51, "cairn": { "status": "failed", "reason": "ingestion_incomplete", "completedBatches": 3, "diagnostics": ["qualification_slot_mapping", "adapter_output_invalid"] }, "mem0": { "status": "failed", "reason": "scope_execution_failed", "answerPresent": false } },
+    { "index": 4, "plannedBatches": 52, "cairn": { "status": "blocked", "reason": "scope_execution_failed", "completedBatches": null, "diagnostics": [] }, "mem0": { "status": "blocked", "reason": "scope_execution_failed", "answerPresent": false } },
+    { "index": 5, "plannedBatches": 48, "cairn": { "status": "blocked", "reason": "scope_execution_failed", "completedBatches": null, "diagnostics": [] }, "mem0": { "status": "blocked", "reason": "scope_execution_failed", "answerPresent": false } },
+    { "index": 6, "plannedBatches": 54, "cairn": { "status": "blocked", "reason": "scope_execution_failed", "completedBatches": null, "diagnostics": [] }, "mem0": { "status": "blocked", "reason": "scope_execution_failed", "answerPresent": false } }
+  ],
+  "accounting": {
+    "prefixRequestCount": 18768,
+    "prefixReservedMicroUsd": 121064614,
+    "newRequests": 510,
+    "newReservedMicroUsd": 2730879,
+    "finalRequestCount": 19278,
+    "finalReservedMicroUsd": 123795493,
+    "limitMicroUsd": 200000000,
+    "remainingReservationMicroUsd": 76204507,
+    "ledgerState": "open",
+    "settledRequests": 509,
+    "settledSucceeded": 508,
+    "settledFailed": 1,
+    "knownCostRequests": 403,
+    "knownCostMicroUsd": 710086,
+    "settledUnknownCostRequests": 106,
+    "unknownCostRequestsIncludingPending": 107,
+    "pendingRequests": 1,
+    "pendingEmbedding": { "reservedMicroUsd": 10, "observedCostMicroUsd": 10, "inputTokens": 470, "outputTokens": 0, "durableOutcome": null, "durableCostMicroUsd": null }
+  }
+}
