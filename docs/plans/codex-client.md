@@ -1,8 +1,12 @@
 # Codex hooks client design contract
 
-Status: proposed, docs-only contract against `codex-cli 0.157.1` and repository
-base `b8af5cda1820fd0bb385aca784c2d2ee8c036b36`, researched 2026-09-27.
-Revision: one-command setup review corrections, candidate `b7c3d93`.
+Base: `b8af5cda1820fd0bb385aca784c2d2ee8c036b36` (#175 merged).
+Code and evidence were examined at this base. The branch was then integrated with
+main at `e7c4ecc47d4e632e4b78209bb3c176da7437f078` (#256 merged, docs only).
+No code changed between these bases.
+
+Status: proposed, docs-only contract against `codex-cli 0.157.1`, researched 2026-09-27.
+Revision: post-integration terminology, links and setup-evidence corrections.
 Nothing here claims a shipped client.
 
 A person switching between Claude Code and Codex must use one memory target and
@@ -14,8 +18,8 @@ authenticated intent or execution permission. See [vocabulary](../../CONTEXT.md)
 Follow [architecture](../architecture.md), [protocol](../protocol.md),
 [privacy](../privacy.md), [capture](../capture.md), [roadmap](../../ROADMAP.md),
 [delivery roadmap](delivery-roadmap.md) and [contributing](../../CONTRIBUTING.md).
-The sibling `docs/plans/session-episodes.md` on `docs/session-episodes-contract`
-owns session context and episodes. Reference it by name only; reserve callable
+The merged sibling [session episodes](session-episodes.md)
+owns session context and episodes. Reserve callable
 ports here without assuming its payloads or implementing its product decisions.
 
 ## Evidence and version boundary
@@ -88,7 +92,7 @@ to the installer gates. Nothing here claims a published package.
 
 ## Explicit pairing and project identity
 
-**D3 as scoped by E1/F1/G2:** setup is the normal path. Fresh joint setup binds both
+**D3: shared setup and explicit adoption.** Setup is the normal path. Fresh joint setup binds both
 clients to one key without a separate pairing step. Later addition adopts the
 existing key through setup's sharing confirmation. Standalone pairing remains
 only for separate installation routes, legacy 0.1.0 Claude and key conflicts.
@@ -119,7 +123,8 @@ and `join(homedir() || tmpdir(), ".cairn-memory", "project-key")`. This is a kno
 host directory search. If the installed origin cannot be confirmed as the standard
 `cairn-memory@cairn-memory` marketplace entry, setup must ask **whether the person
 uses Cairn in Claude Code before creating anything**. Ask also when the plugin
-location is undetermined; an undetermined home instead refuses setup under H5.
+location is undetermined; an undetermined home instead refuses setup under
+[S01's home-directory requirement](one-command-setup.md#acceptance-s01s08).
 Non-standard cases include
 `CLAUDE_CODE_PLUGIN_CACHE_DIR` relocating the plugins root, `--plugin-dir` / `@inline`
 installs (the data directory is then `cairn-memory-inline`), and other marketplaces
@@ -141,7 +146,7 @@ pairing; Codex continues working. If Claude already used its own key before the
 upgrade, both clients are established: each keeps using its own existing key,
 neither creates a new key, and both show a visible `pairing_needed` conflict status.
 With different keys, project identities differ and there is no cross-tool sharing
-until the person explicitly chooses the root/key in the pairing flow (E4).
+until the person explicitly chooses the root/key in the pairing flow.
 Un-upgraded Claude with `CLAUDE_PLUGIN_DATA` unset already uses `~/.cairn-memory`,
 also Codex's default: its key still triggers pairing, never implicit sharing.
 Upgrade Claude and stop old workers before activating shared controls; 0.1.0 does
@@ -605,7 +610,7 @@ claims. CX-7 must not claim local automatic capture before LAC lands.
 The authoritative file list lives in the **coordinator's umbrella plan (private
 repository)**; the coordinator maintains it. Its private URL/path was not supplied
 to this packet: obtain that pointer at execution, rather than invent a public link.
-Snapshot **as of sibling `cc0f31e`, to verify at execution** for
+Snapshot **as of merged sibling `f1b577d` (#256), to verify at execution** for
 `docs/plans/session-episodes.md` (SE-1…SE-5): `docs/protocol.md`, `docs/privacy.md`,
 `packaging/artifact-files.json`, `.github/workflows/ci.yml`, root `package.json`,
 `CHANGELOG.md` and `packaging/test/**`. The sibling does not edit Claude `hooks/**` in this snapshot.
@@ -637,8 +642,9 @@ existing keys and memory access, with visible `pairing_needed` conflict status.
 Paired key loss disables both memory clients until explicit repair. The repository
 maintainer sets conflict policy and resolves repository boundaries only. Path aliases/cross-machine pairing
 are excluded. Claude pinned-host reconfiguration/hook delivery, exact npm name
-and hosted OAuth remain **to verify at release**. The setup plan records H1
-PATH-helper uncertainty; dry-run never relies on a host probe being read-only.
+and hosted OAuth remain **to verify at release**. The setup plan's
+[S02 dry-run rule](one-command-setup.md#acceptance-s01s08) records PATH-helper
+uncertainty; dry-run never relies on a host probe being read-only.
 Current architecture/README correctly describe no public npm shortcut today;
 CX-7 must reconcile that distribution boundary with the approved release before
 advertising availability. The private umbrella-plan pointer remains an execution gate.
@@ -649,8 +655,9 @@ tool/file/reasoning/image ingestion; target switching; episode implementation;
 paid experiments or production deployment. Existing semantic-quality failures
 remain failures; this contract does not certify source truth or adoption.
 
-Setup-split revision verification on Node `v22.16.0`: `npm test` exited 0 (106 passed),
-`npm run validate` exited 0, and all 38 relative links in both plans resolved (exit 0).
+Post-integration correction verification on Node `v22.16.0`: `npm test` exited 0
+(106 passed), `npm run validate` exited 0, and all 45 relative links and 23 anchors
+in both plans resolved (exit 0).
 Working/staged `git diff --check` exited 0 before the new local commit.
 No Node 20/24 execution, new-client implementation or human two-client acceptance
 is implied by these existing repository checks.

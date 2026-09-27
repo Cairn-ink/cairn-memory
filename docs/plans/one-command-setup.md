@@ -1,6 +1,12 @@
 # One-command setup and npm distribution
 
-Status: proposed docs-only plan, revised from candidate `b7c3d93` on 2026-09-27.
+Base: `b8af5cda1820fd0bb385aca784c2d2ee8c036b36` (#175 merged).
+Code and evidence were examined at this base. The branch was then integrated with
+main at `e7c4ecc47d4e632e4b78209bb3c176da7437f078` (#256 merged, docs only).
+No code changed between these bases.
+
+Status: proposed docs-only plan, researched 2026-09-27.
+Revision: post-integration terminology, links and required-token evidence corrections.
 Implements maintainer chichi's one-command decision through CX-7, after CX-5 and
 before CX-6 in the [Codex client package order](codex-client.md#ordered-packages-and-exclusive-file-ownership).
 This plan owns installer/distribution behavior; the [client contract](codex-client.md)
@@ -44,7 +50,8 @@ installation or publication is performed by this packet.
    target. It must also disclose that Claude's content-free telemetry defaults on
    under the current [privacy contract](../privacy.md#data-flow), independently
    disabled by setting the plugin's `telemetry` option to `false` in plugin
-   configuration. Provide that choice before consent; do not silently change D1.
+   configuration. Provide that choice before consent; preserve the
+   [released Claude hosted behavior](codex-client.md#architecture-and-compatibility-profiles).
    Codex telemetry stays off by default. See [privacy controls](../privacy.md#disable-automatic-behavior)
    for redaction/pause limitations; pasted sensitive text can remain in ordinary
    conversation. Presence on `PATH` is not consent; declined clients stay unchanged.
@@ -56,7 +63,7 @@ installation or publication is performed by this packet.
    Do not silently change an existing target/account when adding a client.
 
 4. **S04 — One root and key.** Use the client contract's
-   [F1 detection and state locations](codex-client.md#existing-client-detection-and-state-locations)
+   [existing-client detection and state locations](codex-client.md#existing-client-detection-and-state-locations)
    before creating state. Under its setup lock, a fresh run with both consenting
    clients initializes one key/root, default `~/.cairn-memory`, and their shared
    binding together, with no pairing prompt or separate command. An existing
@@ -64,8 +71,8 @@ installation or publication is performed by this packet.
    setup in Claude Code?” Setup performs adoption itself; use the corresponding
    confirmation when adding Claude to Codex. This does not replace per-client
    capture consent. Declining leaves the existing client working and the newcomer
-   disconnected. Preserve E4's explicit key choice and existing-client access in
-   conflicts. Standalone pairing is only for separate routes, legacy 0.1.0 Claude
+   disconnected. Preserve the person's [explicit key choice and existing-client access](codex-client.md#existing-client-detection-and-state-locations)
+   in conflicts. Standalone pairing is only for separate routes, legacy 0.1.0 Claude
    or conflicts. Record content-free progress in `install.json`; partial retries
    reuse the chosen key and keep new clients inactive until binding is complete.
    Never regenerate a paired key as repair or create a second root during fallback.
@@ -89,6 +96,9 @@ installation or publication is performed by this packet.
    CX-2 must declare `pairing_record` before this path ships. Preserve existing
    installs; **to verify on pinned hosts:** reconfiguration of an already-installed
    plugin and delivery to hooks, not the documented existence of `--config`.
+   The plugin manifest declares `api_token` with `required: true`. **To verify:**
+   whether installation with only the non-secret `--config` values prompts for
+   that missing token, fails, or installs unconfigured. Do not assume one outcome.
    Never put `api_token` in command arguments, plans or logs. The person enters
    the token into Claude's sensitive `api_token` field through its configuration
    dialog; setup must not patch or read the host credential store. Print the exact
@@ -152,8 +162,9 @@ Node 20/22 gates. No real host installation, credentials, provider calls or publ
   before consent/configuration/binding; pending host trust is reported honestly.
 - Only Claude initially: later add Codex and require the sharing confirmation;
   adopt the same key. Reruns and interrupted setup preserve identity/control state
-  and avoid duplicate hooks. Existing Claude keys at F1 known/nonstandard paths
-  are confirmed and adopted; E4 conflicts preserve access until explicit choice.
+  and avoid duplicate hooks. Existing Claude keys at the documented
+  [known/nonstandard paths](codex-client.md#existing-client-detection-and-state-locations)
+  are confirmed and adopted; key conflicts preserve access until explicit choice.
 - Dry-run: instrument the subprocess boundary and assert **zero host process
   starts**, including version/help/plugin probes and wrappers. Fake hosts that
   record invocation or would create PATH helpers must remain unexecuted. Also
@@ -190,21 +201,24 @@ CX-7 owns its changelog and synchronized version bump in its PR, including the
 public npm manifest. Its validator change checks that manifest's version alongside
 existing root/plugin/marketplace/runtime versions. Keep existing manifests private.
 Update root and packaging READMEs' current no-npx statements only with truthful
-release availability. This plan follows [preview installer](preview-installer.md)
-and [install artifact](install-artifact.md) boundaries, not their historical claims
-of a public release. CX-2 supplies identity/lock/pending-binding APIs; CX-5 supplies
+release availability. CX-7 keeps the [preview installer](preview-installer.md)
+and [install artifact](install-artifact.md) packaging and no-publication boundaries
+until the approved release step changes that availability. CX-2 supplies
+identity/lock/pending-binding APIs; CX-5 supplies
 host registration; LAC alone supplies local automatic capture for both clients.
 
 Follow the [cross-plan handoff](codex-client.md#cross-plan-shared-files): one open PR
 per shared file, including CI, version validation and release records. The
 repository maintainer coordinates with the private umbrella plan and the sibling
-`docs/plans/session-episodes.md` (referenced by name only). CX-7 follows CX-5;
+[session episodes](session-episodes.md). CX-7 follows CX-5;
 CX-6 receives tests for final verification. No competing shared-file owner.
 
 ## Verification and remaining evidence
 
 Remaining **to verify**: exact npm name/availability, hosted OAuth, pinned-host
-Claude reconfiguration/hook delivery, and Codex 0.157.1 PATH-helper side effects.
+Claude reconfiguration/hook delivery, install behavior when required `api_token`
+is omitted from `--config`, and Codex 0.157.1 PATH-helper side effects. The token
+must never be supplied on argv, regardless of that behavior.
 Primary CLI documentation establishes `--config`/configure availability, not a
 completed integration test. A8 above specifies future tests; this docs packet
 does not claim those installer tests ran. Repository checks and both plans' link
