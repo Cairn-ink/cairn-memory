@@ -142,6 +142,15 @@ function failure(error) {
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
     'captureDeadlineMs', 'sourceCandidatePolicy']);
+  const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
+  const captureSourcePolicy = policyDescriptor?.value;
+  const evidenceOnly = captureSourcePolicy === 'indexed-evidence-v1';
+  if (policyDescriptor && (!Object.hasOwn(policyDescriptor, 'value') ||
+      !['indexed-windows-v1', 'indexed-evidence-v1'].includes(captureSourcePolicy) ||
+      evidenceOnly && ['captureQualification', 'captureEvidence', 'captureRationale']
+        .some(key => Object.hasOwn(input, key)))) {
+    throw new MemoryStoreError('invalid_input');
+  }
   const sourceCandidateDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceCandidatePolicy');
   const sourceCandidatePolicy = sourceCandidateDescriptor?.value;
   if (sourceCandidateDescriptor && (!Object.hasOwn(sourceCandidateDescriptor, 'value') ||
@@ -156,18 +165,15 @@ export function openMemoryCore(input) {
   if (Object.hasOwn(input, 'captureQualification') && !['source-bound-v1', 'source-bound-v2'].includes(captureQualification)) {
     throw new MemoryStoreError('invalid_input');
   }
-  const captureRationale = input.captureRationale;
+  const captureRationale = evidenceOnly ? undefined : input.captureRationale;
   if (Object.hasOwn(input, 'captureRationale') && (captureRationale !== 'source-bound-v1' || captureQualification !== 'source-bound-v2')) {
     throw new MemoryStoreError('invalid_input');
   }
-  const captureEvidence = input.captureEvidence;
+  const captureEvidence = evidenceOnly ? undefined : input.captureEvidence;
   if (Object.hasOwn(input, 'captureEvidence') && (captureEvidence !== 'staged-v1' || captureQualification !== 'source-bound-v2')) {
     throw new MemoryStoreError('invalid_input');
   }
-  const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
-  const captureSourcePolicy = policyDescriptor?.value;
-  if (policyDescriptor && (!Object.hasOwn(policyDescriptor, 'value') ||
-      captureSourcePolicy !== 'indexed-windows-v1' || captureQualification !== 'source-bound-v2' ||
+  if (policyDescriptor && !evidenceOnly && (captureQualification !== 'source-bound-v2' ||
       captureEvidence !== undefined || captureRationale !== undefined)) {
     throw new MemoryStoreError('invalid_input');
   }
@@ -784,7 +790,7 @@ export function openMemoryCore(input) {
       object(input, ['namespace', 'client', 'eventId', 'sessionId', 'messages', 'causal']);
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
-      if (captureEvidence && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
+      if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await captureMessages({ model, captureQualification, captureSourcePolicy,
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },

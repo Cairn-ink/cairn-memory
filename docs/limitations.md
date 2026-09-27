@@ -11,6 +11,17 @@ here unchanged apart from link paths and the bold lead-in becoming this section'
 
 ## Preview, not a quality guarantee
 
+The opt-in embedded [indexed evidence capture](indexed-evidence-capture.md)
+lane separates indexed extraction/admission from optional claim qualification;
+it is not a repair or fallback for the qualified lane. Synthetic core and actual
+installed-adapter fake-HTTP checks establish exact selected receipts, cold reads,
+atomic failures and absent qualifier calls, not model fidelity, a complete source
+archive, host usability or improved answer correctness. Extraction/classification
+and bounded source retrieval can still fail or omit needed passages. Conflicting
+dated choices remain evidence, not automatically adjudicated decisions. No MCP/
+Hermes exposure, existing benchmark/grant change, replay of consumed cases or
+paid result is authorized. The prior 13/24 semantic-probe result is unchanged.
+
 The optional [indexed source-window experiment](retained-source-windows.md)
 can retain a scripted passage beyond the ordinary first-800-unit receipt
 prefix in synthetic actual-core and installed fake-HTTP tests. It does not
@@ -915,8 +926,30 @@ with semantics still an unresolved product gate, then a separately assessed fres
 fixed-30 only after six common resolved cases, source-only operator review and v3
 budget projection. Ordinary installed Hermes/MCP remains separate.
 
+## Fresh official-six v3 halted before scoring
+
+The [fresh official-six v3 observation](evidence/qualification-official-v3.md)
+retains six planned cases and twelve arms: one completed, five failed and six
+blocked after a global `scope_execution_failed` generation halt. Cairn failed
+ingestion after 10/8/3 completed batches; the remaining three cases were not
+executed. Finite canonicality and slot-mapping diagnostics locate validation
+boundaries, but diagnosis is ongoing and no root cause or resolved defect is
+established. Scoring never ran, so there is no new correctness score or accuracy.
+The earlier cohorts and short 13/24 semantic probe remain unchanged.
+
+Of 510 new requests, 509 settled and one embedding request remains pending;
+107 costs are unknown including that pending request. Its observed usage is not
+durable settlement. The final reservation checkpoint is 123,795,493 micro-USD
+under the unchanged 200,000,000 cap; reservations are not invoices. Ledger state
+`open` does not authorize resumption. Preserve the pending row during offline
+settlement diagnosis. The independently planned opt-in indexed-evidence slice
+remains an experiment, not an adopted remedy; future protocol, resource and
+fresh-case review follows only after accounting is safe. No dispatch, replay,
+replacement or fixed-30 expansion follows from this failed gate.
+
 ## Where the evidence lives
 
+- [Fresh official-six v3 halted observation](evidence/qualification-official-v3.md)
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
 - [Fresh qualification meaning diagnostic](evidence/qualification-meaning-probe.md)
 - [Semantic evaluation](semantic-evaluation.md)
