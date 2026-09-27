@@ -69,7 +69,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const sourceMessages = retained?.messages ?? snapshot.messages;
   // Retention coverage of this submitted snapshot, not an attestation of which
   // extraction policy executed an earlier duplicate batch.
-  const coverage = catalog?.coverage ?? (retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {});
+  const coverage = { ...(catalog?.coverage ?? (retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {})),
+    ...(captureSourcePolicy === 'indexed-evidence-v1' ? { qualificationStatus: 'not-requested' } : {}) };
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = snapshot.causal ? unwrap(operations.ordered.claim(snapshot))

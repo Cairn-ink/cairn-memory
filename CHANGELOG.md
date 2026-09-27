@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — opt-in indexed evidence capture
+
+- Add the explicit embedded `indexed-evidence-v1` capture source policy: shared
+  indexed extraction, atomic admission and existing classification without claim
+  qualification, staged evidence, rationale or causal reconciliation. Report
+  `qualificationStatus: 'not-requested'` on successful capture/replay, preserving
+  prior qualification/dedup rules and exact source-only reads. No default, host
+  flag, complete archive, semantic-quality claim or paid benchmark change.
+
+## Unreleased — bounded experiment ledger lock waits
+
+- Wait up to 1,000 ms for writable experiment-ledger SQLite locks and retain a
+  closed failure category when mixed-guard settlement fails. Read-only inspection,
+  journal mode, schemas, reservations and public errors remain unchanged. Failed
+  settlement still halts paid work with a pending reservation; this correction
+  does not recover historical accounting or authorize retries or another run.
+
 ## Unreleased — opt-in episode storage
 
 - Add the local episode storage and inspection foundation: source-bound retained

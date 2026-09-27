@@ -8,6 +8,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { holdReader } from '../testing/reader-lock.mjs';
 
 import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
   inspectExperimentBudgetForEmbeddingUpgrade, openBoundEmbeddingExperimentBudget,
@@ -17,6 +18,56 @@ import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
 const denied = code => error => error?.code === code;
 const filename = config => path.join(config.directory, 'experiment-budget.sqlite');
 const child = fileURLToPath(new URL('../testing/bound-embedding-ledger-child.mjs', import.meta.url));
+
+test('B1 writable connections have the fixed wait while read-only inspection stays unchanged', t => {
+  const f = fixture(t), originalExec = DatabaseSync.prototype.exec, statements = [];
+  try {
+    DatabaseSync.prototype.exec = function(sql) { statements.push(sql); return originalExec.call(this, sql); };
+    const handle = bound(f.config);
+    handle.close();
+    assert.equal(statements.filter(sql => sql === 'PRAGMA busy_timeout = 1000').length, 1);
+    statements.length = 0;
+    inspectEmbeddingExperimentBudgetSnapshot(f.config);
+    assert.ok(statements.some(sql => sql.includes('PRAGMA query_only = ON')));
+    assert.ok(!statements.some(sql => sql.includes('busy_timeout')));
+    const db = new DatabaseSync(filename(f.config), { readOnly: true });
+    try {
+      assert.equal(db.prepare('PRAGMA journal_mode').get().journal_mode, 'delete');
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2);
+    } finally { db.close(); }
+  } finally { DatabaseSync.prototype.exec = originalExec; }
+});
+
+test('B1/B3 short child reader permits exactly one bound settlement with no extra reservation', async t => {
+  const f = fixture(t), handle = bound(f.config), attemptId = randomUUID();
+  t.after(() => handle.close());
+  handle.reserve({ attemptId, channel: 'host-embedding', reservedMicroUsd: 10 });
+  const reader = await holdReader(t, filename(f.config));
+  await reader.releaseAfter(200);
+  assert.deepEqual(handle.recordOutcome({ attemptId, outcome: 'succeeded', actualMicroUsd: 10 }),
+    { attemptId, channel: 'host-embedding', reservedMicroUsd: 10, outcome: 'succeeded', actualMicroUsd: 10 });
+  await reader.release();
+  const snapshot = handle.getState();
+  assert.equal(snapshot.requestCount, 3);
+  assert.equal(snapshot.reservedMicroUsd, 40);
+  assert.equal(snapshot.attempts.at(-1).outcome, 'succeeded');
+});
+
+test('B1/B3 long child reader leaves bound settlement pending and closes failed handle', async t => {
+  const f = fixture(t), handle = bound(f.config), attemptId = randomUUID();
+  handle.reserve({ attemptId, channel: 'host-embedding', reservedMicroUsd: 10 });
+  const reader = await holdReader(t, filename(f.config));
+  const started = performance.now();
+  assert.throws(() => handle.recordOutcome({ attemptId, outcome: 'succeeded', actualMicroUsd: 10 }), denied('ledger_busy'));
+  assert.ok(performance.now() - started >= 900);
+  assert.throws(() => handle.getState(), denied('ledger_closed'));
+  await reader.release();
+  const snapshot = inspectEmbeddingExperimentBudgetSnapshot(f.config);
+  assert.equal(snapshot.requestCount, 3);
+  assert.equal(snapshot.reservedMicroUsd, 40);
+  assert.equal(snapshot.attempts.at(-1).outcome, null);
+  assert.equal(snapshot.attempts.at(-1).actualMicroUsd, null);
+});
 
 function runChild(mode, config, attemptId = randomUUID()) {
   const result = spawnSync(process.execPath, [child, mode, JSON.stringify(config), attemptId],

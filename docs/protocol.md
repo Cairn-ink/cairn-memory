@@ -52,6 +52,17 @@ schema changes.
 
 ### Optional embedded indexed source-window boundary
 
+The separate explicit `captureSourcePolicy: 'indexed-evidence-v1'` uses this
+same window/extraction boundary without claim qualification. Own qualification,
+staging and rationale settings must be omitted; any own capture `causal` field
+is rejected. Extraction admits atomically before existing classification, with
+no relation/reconciliation/retirement authority or silent qualified fallback.
+Success adds `qualificationStatus: 'not-requested'`, including replay/processing;
+it does not erase a deduplicated memory's separate prior qualification. Exact
+selected receipts remain untrusted evidence, not a complete archive or verified
+decision. No new captured storage field, schema, host flag or paid authorization
+is added. See [indexed evidence capture](indexed-evidence-capture.md).
+
 Trusted embedded construction may select `captureSourcePolicy: 'indexed-windows-v1'`
 only with `source-bound-v2` qualification and without active rationale or
 staged evidence. Core sends the configured extractor bounded canonical

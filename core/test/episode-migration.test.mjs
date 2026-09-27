@@ -135,3 +135,23 @@ test('E11 v15 rejects invalid namespaces, digests, oversized records and unknown
   }
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(), []);
 });
+
+test('E10/E11 indexed evidence rejects episode options before getters or eager migration, then opens v14 atomically', t => {
+  const f = legacy(t), before = f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all();
+  for (const sessionEpisodes of [undefined, { mode: 'episode-v1' }]) {
+    assert.throws(() => openMemoryCore({ path: f.path, captureSourcePolicy: 'indexed-evidence-v1', sessionEpisodes }),
+      { code: 'invalid_input' });
+  }
+  let reads = 0;
+  const config = { path: f.path, captureSourcePolicy: 'indexed-evidence-v1' };
+  Object.defineProperty(config, 'sessionEpisodes', { enumerable: true, get() { reads++; throw new Error('unexpected getter'); } });
+  assert.throws(() => openMemoryCore(config), { code: 'invalid_input' });
+  assert.equal(reads, 0);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 14);
+  assert.deepEqual(f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), before);
+  const core = openMemoryCore({ path: f.path, captureSourcePolicy: 'indexed-evidence-v1' }); t.after(() => core.close());
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 15);
+  assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(), []);
+  assert.equal(core.inspectAdmission({ namespace: ns, client: 'synthetic', eventId: 'old',
+    includeInitialClassification: true }).value.initialClassification.status, 'skipped_empty');
+});

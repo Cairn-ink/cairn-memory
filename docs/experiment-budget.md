@@ -53,6 +53,18 @@ API keys, transcripts or raw provider errors. Keep its new directory private
 real nonsymlink ancestors. Do not replace paths while processes are using it.
 Filesystem validation is not a sandbox against a hostile same-user process.
 
+Writable ledger connections use a fixed 1,000 ms SQLite busy timeout so a short
+concurrent reader can release its lock before a reservation or settlement
+transaction fails. Read-only inspectors keep their existing behavior. This is
+a bounded local lock wait, not a provider retry, transaction replay, automatic
+reconnect or second settlement attempt. Journal mode, schema and permissions
+are unchanged. A lock that outlasts the wait still fails closed as `ledger_busy`;
+an unsuccessful settlement retains the full pending reservation.
+
+Synthetic child-reader tests demonstrate this contention mechanism. They do
+not establish why an earlier terminal experiment failed, settle its pending
+record, refund reservations or authorize another run.
+
 Creation and reopening are separate operations. Reopening must not initialize
 a missing ledger, reset prior reservations or accept different configuration.
 Do not delete an experiment ledger to recover budget. Keep failed/partial files

@@ -235,3 +235,51 @@ test('E6 project stop discards draft-complete payloads awaiting admission and pr
   f.runtime.setProjectCapture(ns, { expectedGeneration: stopped.generation, enabled: true });
   assert.throws(() => f.runtime.finishAdmission(ns, { ...input, token: claim.token, items: [] }), /capture_evidence_closed/);
 });
+
+test('E4a/E7/E10 indexed evidence coexists with full episode staging, preserves dedup tags/sources and obeys conversation suppression', async t => {
+  const f = fixture(t); f.db.exec('PRAGMA journal_mode=WAL');
+  const a = batch('episode-preference', 'I prefer offline tools.', 'episode-session'), ar = register(f, a);
+  const content = 'Prefer offline tools';
+  const memory = finish(f, a, [{ content, kind: 'preference', origin: 'agent-inferred', confidence: 0.8,
+    fingerprint: digest(content.toLowerCase()), conflictHints: [], receipts: [{ client: a.client,
+      sessionId: ar.sessionKey, eventId: a.eventId, role: 'user', excerpt: a.view.messages[0].content }] }]).memories[0];
+  const receipt = ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts[0];
+  ok(f.core.setProceduralMemory({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
+    expectedTagRevision: 0, procedural: { anchors: [{ receiptId: receipt.id, digest: digest(receipt.excerpt), start: 0, end: 6 }] } }));
+  const job = draft(f, ar, a); f.runtime.commitEpisodeDraft(ns, job.commit);
+  for (let i = 0; i < 64; i++) register(f, batch('protected-' + i, 'Synthetic protected source', 'protected-session'));
+  const before = inspect(f, ar.episodeId), tag = ok(f.core.get({ namespace: ns, memoryId: memory.id })).procedural;
+  const staged = f.db.prepare('SELECT * FROM staged_capture_evidence ORDER BY event_id').all();
+  const calls = [], model = { contextWindow: 8192, countTokens: () => 1,
+    extract({ input }) { calls.push('extract'); return { items: [{ content, kind: 'preference', confidence: 0.8,
+      sourceIndices: [input.messages.length - 1] }] }; },
+    classify({ input }) { calls.push('classify'); return { items: input.memories.map(row => ({ memoryId: row.id, parentIds: [] })) }; } };
+  for (const method of ['qualify', 'qualifyCandidates', 'reconcile', 'relate', 'reviewBasis']) {
+    Object.defineProperty(model, method, { get() { assert.fail('unexpected interpreter: ' + method); } });
+  }
+  const indexed = openMemoryCore({ path: f.path, model, captureSourcePolicy: 'indexed-evidence-v1' }); t.after(() => indexed.close());
+  const request = { namespace: ns, client: 'synthetic', sessionId: 'indexed-session', eventId: 'indexed-preference',
+    messages: [{ id: 'indexed-source', role: 'user', content: 'x'.repeat(800) + 'I prefer offline tools.' }] };
+  assert.equal((await indexed.capture({ ...request, eventId: 'protected-0' })).error.code, 'event_payload_conflict');
+  assert.deepEqual(calls, []);
+  const captured = ok(await indexed.capture(request));
+  assert.equal(captured.qualificationStatus, 'not-requested');
+  assert.equal(captured.admission.memories[0].id, memory.id);
+  const saved = ok(indexed.get({ namespace: ns, memoryId: memory.id }));
+  assert.deepEqual(saved.procedural, tag);
+  assert.equal(saved.receipts.length, 2);
+  assert.equal(saved.receipts.find(row => row.eventId === 'indexed-source').excerpt, 'I prefer offline tools.');
+  assert.deepEqual(inspect(f, ar.episodeId).episode, before.episode);
+  assert.deepEqual(inspect(f, ar.episodeId).sources, before.sources);
+  assert.deepEqual(f.db.prepare('SELECT * FROM staged_capture_evidence ORDER BY event_id').all(), staged);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM episode_events').get().n, 65);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 2);
+  const count = calls.length;
+  assert.equal(ok(await indexed.capture(request)).duplicate, true);
+  assert.equal(calls.length, count);
+  ok(f.core.forgetEpisode({ namespace: ns, episodeId: ar.episodeId, expectedRevision: before.episode.revision }));
+  assert.equal(ok(await indexed.capture(request)).duplicate, true);
+  assert.equal(calls.length, count);
+  assert.equal(indexed.get({ namespace: ns, memoryId: memory.id }).error.code, 'memory_not_found');
+  assert.equal(ok(await indexed.capture({ ...request, eventId: 'suppressed-indexed' })).admission.suppressedCount, 1);
+});
