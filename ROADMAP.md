@@ -16,6 +16,12 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [offline ingestion design comparison](docs/plans/ingestion-design-comparison.md)
+  remains **revise before live test**: selected combined requests save local
+  input work, but current bounded partition completes a synthetic multi-source
+  case combined refuses. Scripted output plumbing establishes no semantic
+  winner or default change; fresh paired interpretation scoring is still needed.
+
 - Public SQLite core: capture orchestration, MOC organization, bounded recall,
   inspection, correction, deletion suppression and namespace isolation.
 - Optional OpenAI adapter and thin local MCP host; an inspected local npm archive

@@ -813,6 +813,21 @@ five singleton qualifier pairs. Valid maximal-label outputs also exceed the
 unchanged output-token ceiling. The decision is to revise the design rather
 than adopt it; no paid cases, user data or operational ledger were used.
 
+## Combined ingestion remains an offline design experiment
+
+The [12-case ingestion comparison](plans/ingestion-design-comparison.md) uses
+source-only synthetic fixtures, real adapter/core fake HTTP for current paths,
+and reconstructed evaluator-only combined requests. Current bounded partition
+completes 11 scripted cases; combined and whole-batch each complete 10. Combined
+has lower local input work in some fitting cases, but refuses a multi-source
+case that current partitioning completes. Selected legal-long outputs exceed
+the unchanged 1,024-token output ceiling in both designs. All total work retains
+failed-stage extraction. These are output-conditioned counts, not measured
+cost, provider schema acceptance or interpretation quality. Valid citations can
+still carry a wrong interpretation or unhelpful all-unknown fields. The decision
+is revise before a separate fresh semantic test; no default, persistence,
+installed MCP/Hermes behavior, paid call or live guard change follows.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
