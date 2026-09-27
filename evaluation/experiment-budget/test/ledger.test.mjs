@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -21,7 +22,9 @@ import {
   ExperimentBudgetError,
   OUTCOMES,
   createExperimentBudget,
+  inspectExperimentBudgetSnapshot,
   reopenExperimentBudget,
+  transitionExperimentBudgetCaps,
 } from '../index.mjs';
 
 const moduleUrl = new URL('../index.mjs', import.meta.url).href;
@@ -441,4 +444,97 @@ test('closed handles and unknown attempts fail with fixed errors', (t) => {
   }), error('attempt_not_found'));
   ledger.close();
   assert.throws(() => ledger.getState(), error('ledger_closed'));
+});
+
+test('cap transition is existing-only, exact and replayable without adapter imports', (t) => {
+  const { directory } = workspace(t);
+  const oldConfiguration = configuration(directory, { limitMicroUsd: 100_000_000,
+    requestCap: 10 });
+  const newConfiguration = { ...oldConfiguration, limitMicroUsd: 200_000_000,
+    requestCap: 20 };
+  createExperimentBudget(oldConfiguration).close();
+  const handle = reopenExperimentBudget(oldConfiguration);
+  const attemptId = randomUUID();
+  handle.reserve({ attemptId, channel: 'host-completion', reservedMicroUsd: 7 });
+  handle.recordOutcome({ attemptId, outcome: 'unknown' });
+  const before = handle.getState();
+  handle.close();
+  assert.deepEqual(inspectExperimentBudgetSnapshot(oldConfiguration), before);
+  const expectedCheckpoint = { requestCount: 1, reservedMicroUsd: 7 };
+  const modes = [];
+  const authorize = ({ mode, state, checkpointAttempts }) => {
+    modes.push(mode);
+    assert.deepEqual(state.attempts, before.attempts);
+    assert.deepEqual(checkpointAttempts, before.attempts);
+    assert.equal(Object.isFrozen(state.attempts), true);
+  };
+  const options = { oldConfiguration, newConfiguration, expectedCheckpoint, authorize };
+  const result = transitionExperimentBudgetCaps(options);
+  assert.deepEqual(result.attempts, before.attempts);
+  assert.equal(result.limitMicroUsd, 200_000_000);
+  assert.deepEqual(transitionExperimentBudgetCaps(options), result);
+  assert.deepEqual(modes, ['transition', 'replay']);
+  assert.deepEqual(inspectExperimentBudgetSnapshot(newConfiguration), result);
+  assert.throws(() => reopenExperimentBudget(oldConfiguration), error('configuration_mismatch'));
+});
+
+test('cap transition refuses pending, callback errors and missing database without creation', (t) => {
+  const { directory } = workspace(t);
+  const oldConfiguration = configuration(directory, { limitMicroUsd: 100_000_000,
+    requestCap: 10 });
+  const newConfiguration = { ...oldConfiguration, limitMicroUsd: 200_000_000,
+    requestCap: 20 };
+  createExperimentBudget(oldConfiguration).close();
+  const options = { oldConfiguration, newConfiguration,
+    expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 }, authorize: () => Promise.resolve() };
+  assert.throws(() => transitionExperimentBudgetCaps(options), error('ledger_failed'));
+  assert.equal(inspectExperimentBudgetSnapshot(oldConfiguration).limitMicroUsd, 100_000_000);
+  const handle = reopenExperimentBudget(oldConfiguration);
+  handle.reserve({ attemptId: randomUUID(), channel: 'host-completion', reservedMicroUsd: 1 });
+  handle.close();
+  assert.throws(() => transitionExperimentBudgetCaps({ ...options, authorize: () => {} }),
+    error('budget_blocked'));
+  const filename = path.join(directory, 'experiment-budget.sqlite');
+  const moved = path.join(directory, 'original.sqlite');
+  const original = readFileSync(filename);
+  renameSync(filename, moved);
+  assert.throws(() => transitionExperimentBudgetCaps(options), error('ledger_missing'));
+  assert.throws(() => lstatSync(filename), { code: 'ENOENT' });
+  assert.deepEqual(readFileSync(moved), original);
+});
+
+test('cap transition reads caller fields once and callback mutation cannot change caps', (t) => {
+  const { directory } = workspace(t);
+  const oldConfiguration = configuration(directory, { limitMicroUsd: 100_000_000,
+    requestCap: 10 });
+  const newConfiguration = { ...oldConfiguration, limitMicroUsd: 200_000_000,
+    requestCap: 20 };
+  createExperimentBudget(oldConfiguration).close();
+  const checkpoint = { requestCount: 0, reservedMicroUsd: 0 };
+  const reads = new Map();
+  const singleRead = (value, label) => {
+    const detached = {};
+    for (const [key, expected] of Object.entries(value)) {
+      const id = `${label}.${key}`;
+      Object.defineProperty(detached, key, { enumerable: true,
+        get() { reads.set(id, (reads.get(id) ?? 0) + 1); return expected; } });
+    }
+    return detached;
+  };
+  const values = { oldConfiguration: singleRead(oldConfiguration, 'old'),
+    newConfiguration: singleRead(newConfiguration, 'new'),
+    expectedCheckpoint: singleRead(checkpoint, 'checkpoint'),
+    authorize: ({ mode, state }) => {
+      assert.equal(mode, 'transition');
+      assert.equal(state.requestCount, 0);
+      oldConfiguration.limitMicroUsd = 1;
+      newConfiguration.limitMicroUsd = 300_000_000;
+      checkpoint.requestCount = 9;
+    } };
+  const options = singleRead(values, 'options');
+  const after = transitionExperimentBudgetCaps(options);
+  assert.equal(after.limitMicroUsd, 200_000_000);
+  assert.equal(after.requestCap, 20);
+  assert.ok([...reads.values()].every((count) => count === 1));
+  assert.equal(reads.size, 4 + 4 + 4 + 2);
 });

@@ -6,10 +6,10 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 
 const system = readFileSync(new URL('./prompts/classify-placement.md', import.meta.url), 'utf8');
 
-export async function classify({ model, snapshot, map, validateFresh }) {
+export async function classify({ model, snapshot, map, validateFresh, deadline }) {
   const input = { memories: snapshot.memories, map: map.items, mapExhausted: map.exhausted };
   const output = await callModel(model, 'classify', system, input,
-    { validateFresh, failureCode: 'classification_failed' });
+    { validateFresh, failureCode: 'classification_failed', deadline });
   let proposal;
   try {
     proposal = placementProposal(output, snapshot.memories.map((memory) => memory.id));
@@ -22,11 +22,13 @@ export async function classify({ model, snapshot, map, validateFresh }) {
       }
     }
   } catch (error) {
+    deadline?.check();
     if (error?.code === 'token_count_unavailable') throw error;
     emitDiagnostic(model, 'classify', 'core_validation', 'invalid_classification');
     fail('invalid_model_output');
   }
   validateFresh();
+  deadline?.check();
   return { proposal, basedOn: { memoryRevisions: snapshot.memories.map((m) =>
     ({ memoryId: m.id, revision: m.revision })), indexRevision: snapshot.indexRevision,
   mapExhausted: map.exhausted } };

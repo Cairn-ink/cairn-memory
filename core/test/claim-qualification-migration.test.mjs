@@ -32,7 +32,7 @@ function preserved(db) {
 
 test('S7 frozen v9 migration preserves all old identities, records, ordered sources, replay, cursors and index state without backfill', async (t) => {
   const { path, db } = fixture(t); const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
   for (const name of ['memory_qualifications', 'qualification_anchors']) {
     assert.equal(db.prepare(`SELECT count(*) n FROM ${name}`).get().n, 0);
     assert.equal(db.prepare('PRAGMA table_list').all().find((r) => r.name === name).strict, 1);
@@ -47,7 +47,7 @@ test('S7 frozen v9 migration preserves all old identities, records, ordered sour
   assert.deepEqual(replay.memoryIds, saved.captureResult.admission.memories.map((m) => m.id));
   preserved(db);
   core.close(); const reopened = openMemoryCore({ path }); t.after(() => reopened.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
   let cursor = saved.rebuild.cursor;
   do { cursor = ok(reopened.rebuildIndex({ ...saved.rebuild, cursor })).nextCursor; } while (cursor);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
@@ -62,7 +62,7 @@ for (const table of ['memory_qualifications', 'qualification_anchors']) test(`S7
   assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema); preserved(db);
   assert.equal(db.prepare(`SELECT preserve_me FROM ${table}`).get().preserve_me, 'synthetic survivor');
   db.exec(`DROP TABLE ${table}`); const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
 });
 
 test('S7 writer lock blocks migration with no partial v10 state, then clean retry succeeds', (t) => {
@@ -74,5 +74,5 @@ test('S7 writer lock blocks migration with no partial v10 state, then clean retr
     assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema); preserved(db);
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); preserved(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14); preserved(db);
 });

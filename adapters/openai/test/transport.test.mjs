@@ -97,8 +97,13 @@ test('A02: each method uses fixed endpoint, exact count/generation projection, s
     rank: { query: 'Synthetic', candidates: [], limit: 6 },
   };
   for (const [method, input] of Object.entries(inputs)) {
-    const output = ['extract', 'classify'].includes(method) ? { items: [] } : { refs: [] };
-    const { model, calls } = harness([() => json(countEnvelope()), () => json(envelope(output))]);
+    const output = method === 'extract' ? { items: [] } : method === 'classify'
+      ? { items: [{ memoryId: 'memory', parentIds: [] }] } : { refs: [] };
+    const { model, calls } = harness([() => json(countEnvelope()), (call) => {
+      if (method !== 'classify') return json(envelope(output));
+      const wire = userInput(call.body);
+      return json(envelope({ items: [{ memoryId: wire.memories[0].id, parentIds: [] }] }));
+    }]);
     const req = request(input);
     assert.deepEqual(await model[method](req), output);
     assert.deepEqual(calls.map((call) => call.url), ['https://api.openai.com/v1/responses/input_tokens', 'https://api.openai.com/v1/responses']);
@@ -109,7 +114,11 @@ test('A02: each method uses fixed endpoint, exact count/generation projection, s
       assert.equal(headers.get('content-type'), 'application/json');
       assert.equal(call.body.model, 'gpt-4.1-mini-2025-04-14');
       assert.equal(call.body.instructions, req.system); assert.equal(call.body.truncation, 'disabled');
-      assert.deepEqual(userInput(call.body), input);
+      const sent = userInput(call.body);
+      if (method === 'classify') {
+        assert.deepEqual(sent.memories.map(({ id, ...memory }) => memory), input.memories.map(({ id, ...memory }) => memory));
+        assert.match(sent.memories[0].id, /^m[0-9a-z]+$/);
+      } else assert.deepEqual(sent, input);
       assert.ok(!JSON.stringify(call.body).includes(secret));
       assert.equal(call.body.text.format.type, 'json_schema'); assert.equal(call.body.text.format.strict, true);
       assert.equal(call.body.text.format.name, `cairn_${method}`); strictObjects(call.body.text.format.schema);

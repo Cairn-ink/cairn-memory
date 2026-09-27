@@ -2,30 +2,72 @@ import { countTokens } from './model-budget.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 
+// Internal cross-layer provenance only. There is deliberately no setter and
+// this predicate is not re-exported from the public core entry point.
+const coreDeadlineSignals = new WeakSet();
+export const isCoreModelDeadlineSignal = (signal) => coreDeadlineSignals.has(signal);
+
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, failureCode = 'recall_failed' } = {}) {
+  { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
+  let controller;
+  let deadlineReported = false;
+  const check = () => {
+    if (!deadline?.expired()) return;
+    if (controller) {
+      coreDeadlineSignals.add(controller.signal);
+      controller.abort();
+    }
+    if (!deadlineReported) {
+      deadlineReported = true;
+      reject('model_timeout');
+    }
+    fail('model_timeout');
+  };
   const tokens = (text) => {
+    check();
     try { return countTokens(model, text); }
     catch (error) { emitDiagnostic(model, method, 'core_call', 'token_count_unavailable'); throw error; }
+    finally { check(); }
   };
+  check();
   if (typeof model?.[method] !== 'function') reject('model_not_configured');
   if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
   const request = { system, input, maxOutputTokens: 1024 };
   if (tokens(JSON.stringify(request)) > 6000) reject('context_budget_exceeded');
+  check();
   validateFresh();
-  const controller = new AbortController();
+  check();
+  controller = new AbortController();
   let timer;
   let output;
+  const freshnessFailure = {};
+  let freshnessError;
   try {
     output = await Promise.race([
-      Promise.resolve().then(() => model[method]({ ...structuredClone(request), signal: controller.signal })),
+      Promise.resolve().then(() => {
+        check();
+        const detached = structuredClone(request);
+        check();
+        // A token counter may have queued a discard before this invocation
+        // microtask. Keep trusted freshness failures distinct from model errors
+        // so the provider catch below cannot launder either one's authority.
+        try { validateFresh(); }
+        catch (error) { freshnessError = error; return freshnessFailure; }
+        check();
+        return model[method]({ ...detached, signal: controller.signal });
+      }),
       new Promise((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(new MemoryStoreError('model_timeout')); }, 30_000);
+        timer = setTimeout(() => {
+          coreDeadlineSignals.add(controller.signal);
+          controller.abort();
+          reject(new MemoryStoreError('model_timeout'));
+        }, deadline ? deadline.remainingMs() : 30_000);
       }),
     ]);
   } catch (error) {
+    check();
     if (controller.signal.aborted || error?.code === 'model_timeout') reject('model_timeout');
     if (error?.name === 'AbortError') reject('model_cancelled');
     // Trusted adapters can reject exact provider framing or malformed output.
@@ -38,11 +80,18 @@ export async function callModel(model, method, system, input,
     }
     reject(failureCode, 'provider_failure');
   } finally { clearTimeout(timer); }
+  check();
+  if (output === freshnessFailure) throw freshnessError;
   validateFresh();
+  check();
   let text;
-  try { text = JSON.stringify(output); } catch { reject('invalid_model_output', 'output_serialization'); }
+  try { text = JSON.stringify(output); }
+  catch { check(); reject('invalid_model_output', 'output_serialization'); }
+  check();
   if (typeof text !== 'string' || text.length > 40_000) reject('invalid_model_output', 'output_bounds');
   if (tokens(text) > 1024) reject('invalid_model_output', 'output_bounds');
+  check();
   validateFresh();
+  check();
   return output;
 }
