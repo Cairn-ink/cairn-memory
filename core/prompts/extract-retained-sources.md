@@ -16,6 +16,14 @@ establish. Entailed paraphrases are allowed. Do not invent entity types, roles,
 or exclusivity to make a memory standalone. High confidence does not justify
 unsupported additions.
 
+Keep the claimant (whose assertion, preference or decision is represented) visible
+in content, including an assistant who suggested an option; receipt roles alone
+are insufficient. The claimant may differ from the source author or claim subject.
+Preserve material explicit event, decision and import times separately from an
+application period. Do not invent dates or turn approval into completed execution.
+For decision/premise mixtures, keep their meanings distinct; split useful claims
+only within the existing limits, without erasing supported context or adding facts.
+
 Select every source necessary to support the standalone memory, not only the
 last response. When expanding references such as "that", "it", "上述" or "它",
 cite both the antecedent source and the response when both are needed. Preserve
