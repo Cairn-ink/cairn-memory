@@ -81,6 +81,40 @@ for (const code of [0, 7]) {
   });
 }
 
+for (const cleanupFails of [false, true]) {
+test(`signal during awaited removal preserves ${cleanupFails ? 'cleanup failure' : 'termination'} status`, { timeout: 15000 }, async () => {
+  const owner = createTestWorkspace(null);
+  try {
+    const file = join(owner.path, 'cleanup-signal.mjs');
+    const child = join(owner.path, 'child.mjs');
+    const marker = join(owner.path, 'cleanup-complete');
+    writeFileSync(child, 'process.exitCode = 0;');
+    writeFileSync(file, `import assert from 'node:assert/strict'; import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module';
+const originalRm = fs.promises.rm;
+fs.promises.rm = async (path, options) => {
+  assert.equal(fs.existsSync(path), true);
+  const keepAlive = setInterval(() => {}, 1000);
+  const delivered = new Promise(resolve => process.once('SIGTERM', resolve));
+  process.kill(process.pid, 'SIGTERM');
+  await delivered;
+  clearInterval(keepAlive);
+  assert.equal(fs.existsSync(path), true, 'signal must not interrupt awaited removal');
+  await originalRm(path, options);
+  assert.equal(fs.existsSync(path), false);
+  fs.writeFileSync(${JSON.stringify(marker)}, 'removed');
+  ${cleanupFails ? "throw new Error('synthetic_cleanup_failure');" : ''}
+};
+syncBuiltinESMExports();
+process.argv = [process.execPath, ${JSON.stringify(runner)}, '--script', ${JSON.stringify(child)}];
+await import(${JSON.stringify(new URL('./run.mjs', import.meta.url).href)});`);
+    const result = await launch(owner, ['--script', file]).done;
+    assert.equal(result.code, cleanupFails ? 1 : 143, result.output);
+    assert.equal(readFileSync(marker, 'utf8'), 'removed');
+    assert.deepEqual(readdirSync(owner.path).sort(), ['child.mjs', 'cleanup-complete', 'cleanup-signal.mjs']);
+  } finally { await owner.cleanup(); }
+});
+}
+
 test('overlapping invocations isolate roots and repeated runs leave no scratch', async () => {
   const owner = createTestWorkspace(null);
   try {

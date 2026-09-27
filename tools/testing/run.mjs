@@ -42,8 +42,11 @@ let child;
 let termination;
 let escalation;
 let childrenStopped = true;
+let cleaning = false;
+const signalExitCode = signal => ({ SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[signal];
 const handlers = new Map(['SIGINT', 'SIGTERM', 'SIGHUP'].map(signal => [signal, () => {
   termination ??= signal;
+  if (cleaning) { process.exitCode = signalExitCode(termination); return; }
   if (child?.pid) signalGroup(child, signal, grouped);
   escalation ??= setTimeout(() => { if (child?.pid) signalGroup(child, 'SIGKILL', grouped); }, 2000);
 }]));
@@ -65,7 +68,7 @@ try {
   });
   if (grouped && child.pid) await finishGroup(child);
   childrenStopped = true;
-  process.exitCode = termination ? ({ SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[termination]
+  process.exitCode = termination ? signalExitCode(termination)
     : result.code ?? (result.signal ? 1 : 0);
 } catch (error) {
   // A failed spawn creates no child. A failed process-group check deliberately
@@ -74,10 +77,12 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
+  cleaning = true;
   clearTimeout(escalation);
-  for (const [signal, handler] of handlers) process.off(signal, handler);
-  if (childrenStopped) {
-    try { await workspace.cleanup(); }
-    catch (error) { console.error(error); process.exitCode = 1; }
-  }
+  try {
+    if (childrenStopped) {
+      try { await workspace.cleanup(); }
+      catch (error) { console.error(error); process.exitCode = 1; }
+    }
+  } finally { for (const [signal, handler] of handlers) process.off(signal, handler); }
 }
