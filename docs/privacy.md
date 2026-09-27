@@ -1,8 +1,11 @@
 # Privacy and threat model
 
-This page describes the hosted plugin path. The separate, source-runnable local
-storage preview has no outbound processing or telemetry; its database contents,
-trust boundaries, and deletion limits are documented in [Local store](local-store.md).
+This page describes the hosted plugin path and explicitly marked proposed local
+changes below. Current local storage and deletion boundaries are documented in
+[Local store](local-store.md); local model/MCP data exposure is documented in
+[Protocol](protocol.md). Core has no network client or telemetry, but a configured
+injected model adapter can send source text to its provider. Local storage alone
+is not a promise of offline interpretation.
 
 The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 
@@ -95,45 +98,44 @@ they cannot acquire the control lock.
 ## Proposed session episodes (local core)
 
 This is the explicit threat-model update for the proposed
-[session-episode contract](plans/session-episodes.md), not a description of new
-shipped capture. Existing hosted behavior, telemetry and schemas are unchanged.
-New local episode generation requires an explicit mode in addition to v2 capture
-and staged evidence; enabling staging alone does not enable durable episodes.
-An intentional diary entry is an ordinary submitted source, organized under the
-entry controls, never automatically shared or treated as authenticated consent.
+[session-episode contract](plans/session-episodes.md), not shipped behavior.
+Core requires `sessionEpisodes: {mode:'episode-v1', draftEveryBatches:8}` with v2
+capture/staging; the one-brain client configuration enables this by default for
+people enabling automatic capture and discloses its retention. Staging alone
+never enables durable episodes. Hosted behavior/schemas and telemetry are unchanged.
+Intentional diary entry is consent to organize an ordinary submitted source,
+not permission to share personal content or authenticate its claimed roles.
 
-| New or expanded field/retention | Threat and required control | Residual limit / implementation gate |
+| Added or expanded field | Threat, control and residual limit | Gates |
 | --- | --- | --- |
-| Session identity and HMAC key | A stable ID reveals conversation linkage; public hashes permit guessing. Derive a domain-separated HMAC from exact namespace/client/host session using a dedicated private store key; persist no raw session or reverse map in new episode-mode rows. | Pseudonymous, not anonymous or encrypted. Database/key readers can test guesses; old receipts may still contain raw caller identifiers. E1 tests restart, separation and payload exclusion. |
-| Thread identity, project/scope and control generation | Cross-tool correlation and scope leakage. Trusted callers bind exact private namespace and optional opaque thread; no model-derived identity, personal fallback or shared scope. Persist content-free stop/pause fences. | Local controls do not stop other independently configured devices. E1/E6/E11 test isolation, generation races and authority binding. |
-| Message event times, event bounds, receipt/revision times and ordinals | Reveal work schedules and can falsely imply chronology. Validate bounded UTC values, distinguish source time from core receipt time, retain unknown/partial coverage; do not infer timezone or send timestamps to the new model port. | Submitted clocks/roles are unauthenticated; ordered receipt is not ordered real-world activity. E9 tests skew, missing time, DST caller boundaries and equal-time paging. |
-| Client key/display label | Fingerprints tools or devices and can smuggle identifying prose. Use bounded host-configured labels/keys, no user/device/path/version details, exact filters and namespace authorization. | A truthful tool label still reveals tool use and is not authenticated. E1/E2/E9/E11 test validation, provider exclusion and scoped reads. |
-| Type/language labels, gist/outcome/next step, correction origin and procedural tag | May expose diary/sensitive interests, invent outcomes or promote advice into obligations. Bounded model interpretation, per-field source anchors, language preservation, explicit procedural tags and untrusted framing; never new sharing or execution authority. | Exact anchors do not prove entailment. E2/E8/E10 test structural limits; separately authorized fidelity review must assess Chinese/English semantics. |
-| Episode source receipts, digests/anchors and memory lineage | Retains personal text even when extraction was skipped; can preserve forgotten paraphrases. Store only selected bounded redacted sources, separate from 24-hour staging; conversation deletion cascades through actual admission lineage and invalidates dependent projections. | Successful sources persist until replacement/deletion; hashes allow guessing; redaction is best-effort. No full archive or secure-erasure promise. E4/E7 verify expiry, multi-source deletion and legacy mutation paths. |
-| Model/profile/prompt-version metadata, extraction policy, action IDs and failure status | Reveals processing history; errors/configuration could leak credentials. Store bounded nonsecret profile identifiers and finite error codes only; persist skip/keep and action replay decisions without raw prompts/responses. | Replay/control metadata survives deletion; no total database-size bound. E1/E4/E8 test exclusion, suppression and idempotency. |
-| Time reads and session-start context | Exposes potentially unrelated private sources and instructions to the host, with prompt-injection risk. Explicit local read access, exact namespace, hard token/character/byte caps, per-group opt-out and final revision/source checks. | Host may mishandle untrusted recollection; no source grants permission. E9/E10/E11 verify isolation, framed injection strings and stale-read rejection. |
+| Session identity/key | Dedicated private-store HMAC over namespace/client/session, no new raw session or reverse map. Not reversible encoding, encryption or anonymity: stable linkage remains and key holders can test guesses; old receipts are unchanged. | E1 |
+| Namespace/project, generation and origin/end signals | Cross-scope leakage or forged triggers can bypass entry controls or inflate call cost. Claude/Codex client contracts bind trusted metadata, stop/pause generations and real lifecycle signals. No thread IDs, personal fallback or shared scope; controls cannot stop other devices. | E1/E3/E6/E11 |
+| Event/receipt/revision times, ordinals and draft markers | Reveal routines and may imply false chronology. Validate UTC, preserve unknown/partial time, keep scheduling counters and consumed-trigger markers local; submitted clocks are unauthenticated. | E3/E9 |
+| Client key/display label | Reveals tool use or identifying prose. Bounded host-configured labels, no user/device/path/version data, exact namespace/client filtering; label is not authenticated identity. | E1/E2/E9 |
+| Type/language, gist/outcome/step, correction pins and procedural tags | Sensitive diary/habit descriptions, unsupported claims or instruction injection. Bounded source-anchored model interpretations, explicit origin, untrusted framing; no truth or execution authority. Tags come from anchored extraction/qualification or explicit remember, not a new memory kind. | E2/E8/E10 |
+| Retained source passages, anchors/digests and memory lineage | More personal text persists than memory extraction selects. Bounded selected passages survive temporary staging; conversation deletion suppresses derived memories and invalidates dependent episodes, including copied sources. Hashes are guessable and redaction is best-effort. | E4/E7 |
+| Model/profile/prompt-version, policy, action IDs and gap status | Processing records may leak secrets or hide failure. Bounded nonsecret IDs/finite codes only, no raw errors/prompts/responses. Debounced attempts have durable caps; episode failures leave gaps/staging and cannot block memory admission. Content-free fences survive deletion. | E1/E3/E4/E8 |
+| Time/startup reads and tag revisions | May expose unrelated personal data or erase relationship evidence. Exact scope, hard budgets, group opt-outs, final freshness checks and untrusted-data framing; tag-only sidecar updates preserve conflict/rationale links. Host interpretation remains untrusted. | E9/E10/E11 |
 
-Only canonical bounded source text/roles, request-local indices and explicitly
-untrusted prior editing context go to the injected episode/classification port.
-The additional call expands configured-provider exposure; no provider is enabled
-by this plan, and no paid call is authorized. Keep identities, client labels,
-timestamps, control state and persistent source IDs local. Local inspection and
-session-start reads require no provider call. No new field may enter telemetry,
-content logs or exception text. Tests must inspect fake provider payloads and
-persisted rows, not merely assert the absence of a new telemetry function.
+The injected episode-interpretation port receives bounded redacted source text,
+claimed roles, request-local references and untrusted prior editing context.
+Metadata identities/timestamps/control tokens remain local; source text can still
+contain personal information or undetected secrets. Drop oldest prior cited
+sources first to fit the prompt, record exclusions, and never treat omitted
+passages or prior prose as evidence. Additional configured-provider exposure is
+bounded by the plan's per-session attempt formula. Reads use only a local exact
+counter, with no generation. No paid call is authorized by this documentation.
 
-Pause/stop must fence queued and in-flight episode commits; resume cannot backfill
-paused source text. Existing requests already transmitted cannot be recalled.
-Deleting a conversation clears descriptive episode fields and retained sources,
-and conservatively forgets even a memory also derived from another session.
-Unrelated admitted memories remain; normal memory mutations retain the existing
-namespace-wide staged purge and additionally invalidate dependent episodes.
-Opaque replay fences remain to prevent resurrection. Correction replaces visible
-prose without retaining an old-text audit log; it cannot certify meaning.
+Reuse the existing pause/cursor barrier above for all drafts, including lazy work.
+Project stop fences unfinished work; entry producers must never backfill paused
+text. Local controls cannot retract previously transmitted requests. Selected
+passages have no automatic age TTL; staged payloads retain their existing expiry.
+Conversation deletion clears descriptive policy/correction metadata as well as
+prose/sources, and conservatively forgets even multi-source derived memories.
+Existing namespace-wide staged purges and source-consumer invalidation still apply.
 
-Private filesystem permissions, trusted database paths and stopping older runtime
-connections before migration remain required. SQLite free pages, journals, OS
-snapshots, backups, prior caller responses and provider copies may retain bytes.
-This design makes no encryption, remote erasure or complete-history claim. The
-implementation must pass contract gates E1–E11 on Node 22.16 and 24 before these
-proposed boundaries can be advertised as behavior.
+No new field enters telemetry, payload logs or raw exception text. E1–E11 require
+fake-provider payload and persisted-row inspection on Node 22.16 and 24. Private
+filesystem and old-process migration precautions remain; SQLite free pages,
+journals, snapshots, backups and provider/caller copies may retain bytes. No
+secure-erasure, complete-history or semantic-fidelity guarantee follows.
