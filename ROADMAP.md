@@ -12,6 +12,10 @@ service must use the same public core, not separate engines.
   has passed installed subprocess persistence and actual-model sourced recall.
 - Frozen synthetic evaluation and failures are retained. **Source support still
   fails**, so broad-promotion readiness is not declared.
+- The later [fixed-30 paired pilot](docs/plans/s3-paired-result.md) retained all
+  cases but failed scoreability: Cairn had 30 unresolved generations from
+  `ingestion_incomplete`; Mem0 had 20 correct, 9 incorrect and one unresolved.
+  There is no paired noninferiority or parity conclusion.
 - The [verified preview consolidation](docs/plans/pr-consolidation.md) selects
   four narrow engineering changes: filing-only rationale preservation, an
   explicit local MCP source-evidence startup default, owned provider response
@@ -36,15 +40,20 @@ claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
 1. Resolve source-support and unjustified-update failures; evaluate under the
-   reliability contract's frozen-case and independent holdout rules. Any paid
-   rerun needs scoped authorization; earlier one-shot approvals do not roll over.
-   A public LongMemEval benchmark remains a separate next gate: freeze the
-   dataset, model/configuration, scorer and comparison arms, publish per-case
-   failures and independently review the result. Offline scripted demos are not
-   a measured score, and this baseline authorizes no paid run.
+   reliability contract's frozen-case and independent holdout rules. For the
+   fixed-30 pilot failure, first localize the break observed inside capture,
+   before `finishAdmission`, offline with synthetic evidence. Add bounded
+   diagnostics, fix a confirmed defect and independently review its
+   regression. Preserve the 30 terminal outcomes; neither replay nor
+   reclassify them. Before any new paid benchmark, freeze a fresh real-model
+   canary and verify its scope and ledger headroom against the existing
+   authorization. This docs packet authorizes no launch. The present result
+   is not a scoreable paired comparison or a full-500 score.
 2. Review/merge the verified native-provider candidate; separately evaluate
    interactive Hermes chat and additional host/platform coverage.
-3. Complete independent onboarding and propose publication with honest limits.
+3. Complete independent installed-host/growth and cold-onboarding checks before
+   proposing publication with honest limits. A later synthetic installed pass
+   did not explain an earlier 17-minute timeout or close those gates.
 4. Run the [14-day adoption experiment](docs/plans/local-memory-plg.md) only after
    approval: activation and useful sourced recall first; stars are secondary.
 5. Verify private consumption of a pinned public core and synthetic migration/

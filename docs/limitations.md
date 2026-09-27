@@ -60,6 +60,25 @@ independent review before any quality claim. Offline ingestion/comparison demos
 exercise mechanics with scripted models; they are not that measurement. No
 paid evaluation or broad promotion is authorized by this consolidation.
 
+## Fixed-30 paired pilot failed its scoreability gate
+
+The later [fixed-30 LongMemEval-S paired pilot](plans/s3-paired-result.md) used
+the reserved five cases per official question type and retained all failures.
+Cairn had **0 judged correct, 0 judged incorrect and 30 unresolved**: every
+generation ended `ingestion_incomplete`, before a judged answer. Native Mem0
+had **20 correct, 9 incorrect and 1 unresolved** (`invalid_payload`), giving
+20/30 (66.67%) correct yield and 20/29 (68.97%) accuracy among resolved cases.
+No case was retried or removed. There were zero cases resolved in both arms;
+the predeclared 29/30 scoreability gate failed. This is neither 30 wrong Cairn
+answers nor a basis for noninferiority, parity, model-capacity or full-500
+leaderboard claims.
+
+The tested runtime is in dependent PRs #245/#246 rather than this report's
+`main` base. The result directs an offline investigation of the incomplete
+ingestion path and does not authorize another paid run. A later installed S4
+check passed on synthetic data, but an earlier 17-minute timeout remains
+unexplained; installed-host/growth and cold-onboarding gates stay separate.
+
 ## Where the evidence lives
 
 - [Semantic evaluation](semantic-evaluation.md)
@@ -68,4 +87,5 @@ paid evaluation or broad promotion is authorized by this consolidation.
 - [Source-only context](source-evidence-context.md)
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
+- [Fixed-30 paired pilot result](plans/s3-paired-result.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
