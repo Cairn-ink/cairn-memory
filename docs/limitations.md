@@ -828,10 +828,47 @@ still carry a wrong interpretation or unhelpful all-unknown fields. The decision
 is revise before a separate fresh semantic test; no default, persistence,
 installed MCP/Hermes behavior, paid call or live guard change follows.
 
+## Short-source semantic probe does not support combined adoption
+
+The [paired ingestion semantic probe](evidence/ingestion-semantic-probe.md)
+attempted twelve new short synthetic scenarios twice per arm with the actual
+pinned model. Baseline mechanically completed 23/24, combined 24/24; strict
+all-six semantic success was 11/24 and 12/24. Combined useful coverage was
+18/24 against baseline's 19/24, failing the frozen adoption hypothesis despite
+fewer requests. No engine, default, installed host or broad reliability claim
+changes. The earlier multi-source input-fit and 1,024-output-token limits remain.
+
+These are independent same-model-family agent ratings, not human labels or an
+independent benchmark. Two repetitions of each scenario are not independent
+questions. Original A/B ratings, six rows of eleven dimension disagreements,
+source/card projections and frozen adjudication are inspectable. Primary had
+seen a baseline projection example and mechanical failure before adjudication;
+the arm mapping was joined only after adjudication was frozen. Two consensus
+preference failures were corrected against the existing settled-position
+guidance, with raw ratings retained. Eleven nondecision `adopted` failures are
+interpretation-sensitive, not proof of fabricated actions or stable traits;
+a post-hoc 17/24-per-arm sensitivity does not replace the frozen strict score.
+Four assistant rows lack an explicit claimant in content/fields despite receipt
+role recoverability. Date, historical provenance, condition and cap omissions
+remain named failures rather than citation-certified meaning.
+
+The second baseline conditional-cap attempt failed on repeated valid
+`scope.evidenceSlots: [1, 1]` within `pool: [1, 2]`. Local in-memory deduplication
+compiled without a model replay, but changed neither retained output nor score.
+This specific diagnosis does not explain older official-run slot failures.
+Known generation-usage uncached ceilings total US$0.058577, while the retained
+new reservation is US$0.640512; count cost remains unknown. Neither is an invoice.
+Instrumented latency includes guard/persistence work and baseline's extra local
+serialization, so it is not production speed evidence. Next work is a separate
+narrow reference fix, semantic clarification and capacity gate, followed by
+reviewed NEW held-out evidence, a completion-gated fixed-N comparison, and
+ordinary installed Hermes/MCP validation. Overall reliability remains unfinished.
+
 ## Where the evidence lives
 
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
 - [Semantic evaluation](semantic-evaluation.md)
+- [Paired ingestion semantic probe](evidence/ingestion-semantic-probe.md)
 - [Paired update-reliability experiment](evidence/qualified-comparison.md)
 - [Source-support pilot results](../evaluations/results/source-support-v1.json)
 - [Source-only context](source-evidence-context.md)

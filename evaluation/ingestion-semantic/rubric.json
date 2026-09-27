@@ -1,0 +1,195 @@
+{
+  "version": "ingestion-semantic-rubric-v1",
+  "purpose": "Blind human-readable semantic scoring for the separate synthetic source-only fixture set. This file is an evaluation oracle and must never be sent to either model arm.",
+  "design": {
+    "fixtureCount": 12,
+    "predeclaredRepetitionsPerFixture": 2,
+    "attemptsPerArm": 24,
+    "armCount": 2,
+    "denominatorRule": "Keep all 24 attempts in each arm denominator, including refusals, timeouts, malformed or incomplete output, and other failures. Do not retry or replace an attempt.",
+    "blinding": "Two independent agent raters score every attempt. Show each rater the retained source messages, anonymized output cards with their cited source passages, and this rubric. Hide arm, provider cost and usage, and repetition labels. Record each rater's result before adjudication. Disclose disagreements; the primary agent adjudicates them against cited source passages.",
+    "mechanicalCompletion": {
+      "type": "boolean",
+      "definition": "True only when the arm completes its defined extraction and source-qualification work and returns a usable result under its contract. This is a mechanical outcome, not a semantic judgment."
+    },
+    "semanticDimensions": {
+      "supportedMeaning": "Assess both each card's content and all seven structured qualification fields (subject, property, scope, applies, value, attribution, commitment). Every material assertion or non-unknown field value must be supported by the supplied retained messages and must not contradict them. Do not award this for a merely plausible or structurally valid card.",
+      "uncertaintyPreserved": "Across content and qualification fields, preserve the source's certainty, negation, modality, conditionality, and commitment status. Do not turn a suspicion into a confirmed cause, a proposal into an adopted choice, or a definite statement into an unsupported hedge.",
+      "attributionPreserved": "Across content and qualification fields, keep the speaker or claimant attached to the claim. Do not convert an assistant suggestion, a quoted third-party statement, or a journal-reported event into the user's own belief or choice.",
+      "scopeTimePreserved": "Across content and qualification fields, keep project, environment, item, date, and temporal status within the source's bounds. Distinguish when something was imported or decided from when it applied or happened; do not imply present or general validity from a historical or narrow statement.",
+      "usefulCoverage": "Represent every required proposition for the fixture in the card content or meaningful qualification fields; paraphrases and different field placement are acceptable. This is not an exact-wording or exact-field-value check. Unknown on an individual field is acceptable when that field is not established by the source, and does not invalidate coverage expressed elsewhere; unknown never supplies a required proposition. An unknown commitment is acceptable for an observed fact; an explicitly adopted choice must be represented as adopted in the content or qualification. Empty output or output whose content and fields are collectively only unknown/non-informative cannot pass coverage except the assistant-suggestion-only empty-result case specified below.",
+      "evidenceEntails": "Check content citations and each field's own evidenceIndices. The cited source passages must entail the content claims and every non-null/non-unknown qualification value attached to them, including relevant attribution, uncertainty, time, and scope. A valid source index, a citation to a merely adjacent passage, or support available only in an uncited message is not sufficient. Null and unknown values may have no citations when the schema permits it."
+    },
+    "semanticRatingType": "Each of the six semantic dimensions is a boolean for a mechanically completed attempt. A dimension is null only for an attempt where mechanicalCompletion is false, as specified by failedAttemptRule.",
+    "emptyAndUnknownRule": "An empty result, or a result whose card content and seven fields are collectively only unknown or non-informative, fails usefulCoverage for every fixture except assistant-suggestion-only. On that exception, a genuinely empty result may pass usefulCoverage and all five safety dimensions (supportedMeaning, uncertaintyPreserved, attributionPreserved, scopeTimePreserved, evidenceEntails) when it makes no contrary or inferred claim. An attributed, source-faithful card that records only the assistant's suggestion is also an acceptable covered result. Unknown-only output is not the same as a genuinely empty result and does not receive the exception.",
+    "failedAttemptRule": "If mechanicalCompletion is false, set all six semantic dimensions to unscored/null, set fullSuccess to false, and retain the attempt in the 24-attempt denominator. Do not infer semantic success from the absence of a usable card.",
+    "fullSuccessRule": "For a mechanically completed attempt, fullSuccess is true only if all six semantic dimensions are true. Otherwise it is false. Failed attempts are full-success failures even though their semantic dimensions are unscored.",
+    "recording": "Record mechanicalCompletion separately; record each semantic dimension as true, false, or null only under failedAttemptRule; record unsupported assertions and material omissions in brief source-cited notes; record fullSuccess by fullSuccessRule.",
+    "adoptionHypothesis": "Consider combined-arm adoption only as a hypothesis on this sample. Combined must not produce more unsupported assertions than baseline, and its mechanical completion and useful coverage counts must not be lower than baseline. Report resource benefit separately. If any condition fails, revise the design or make no adoption decision. Make no statistical or broad superiority claim from these 24 attempts per arm."
+  },
+  "cases": [
+    {
+      "id": "explicit-preference",
+      "requiredPropositions": [
+        "The user prefers plain-text files for the weekly field-notes project over a shared dashboard."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not generalize this preference to every project or all writing.",
+        "Do not say the user has implemented or mandated the preference."
+      ],
+      "attributionTimeScopeCaveats": "Direct user preference, scoped to the weekly field-notes project; no date or broader policy is given."
+    },
+    {
+      "id": "tentative-incident-cause",
+      "requiredPropositions": [
+        "The rehearsal export failed on 2026-08-14.",
+        "The user suspects the font cache may have caused the failure, and the cause remains unconfirmed."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not state that the font cache caused the failure as a confirmed fact.",
+        "Do not imply the cause was investigated to completion or that the export issue is ongoing."
+      ],
+      "attributionTimeScopeCaveats": "The incident date is 2026-08-14. The proposed cause is the user's tentative suspicion, not a verified diagnosis."
+    },
+    {
+      "id": "proposal-not-adopted",
+      "requiredPropositions": [
+        "Using etched marks instead of labels was proposed for the Cedar greenhouse inventory.",
+        "The user has not approved that change."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not represent etched marks as selected, approved, in use, or implemented.",
+        "Do not erase the explicit non-approval."
+      ],
+      "attributionTimeScopeCaveats": "Direct user report, scoped to the Cedar greenhouse inventory; the proposal status is considered and explicitly not approved."
+    },
+    {
+      "id": "dated-scoped-adoption",
+      "requiredPropositions": [
+        "Paper logs were explicitly approved for the April kiln audit.",
+        "The approval occurred on 2026-05-12 and applies only to the April audit.",
+        "The June kiln audit remains electronic."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not treat the earlier possibility as adoption before the explicit approval.",
+        "Do not extend paper logs to the June audit or all kiln audits.",
+        "Do not confuse the approval date with the month of the audit."
+      ],
+      "attributionTimeScopeCaveats": "The second user message adopts the proposal. Decision date is 2026-05-12; application is limited to the April audit, while June remains electronic."
+    },
+    {
+      "id": "invalidated-reason-choice-unchanged",
+      "requiredPropositions": [
+        "The north entrance remains the choice for the July exhibit.",
+        "The original lower-staffing rationale was invalidated: the north entrance needs more staffing than the west entrance.",
+        "Despite the changed staffing information, the choice was explicitly left unchanged."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not say the team switched to the west entrance.",
+        "Do not keep the lower-staffing rationale as a valid reason.",
+        "Do not infer a new reason for retaining the north entrance."
+      ],
+      "attributionTimeScopeCaveats": "Both statements concern the July exhibit. The decision is explicitly unchanged after the reason was challenged; do not infer permanence beyond that exhibit."
+    },
+    {
+      "id": "adopted-reversal-with-reason",
+      "requiredPropositions": [
+        "Glass jars were the earlier choice for the tea display, made on 2026-02-04.",
+        "A 2026-02-09 transit test showed that the glass jars leak.",
+        "Because of that test result, the user reversed the earlier choice and adopted sealed tins for the tea display on 2026-02-09."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not present glass jars as the current choice after the reversal.",
+        "Do not omit or invent the reason for the reversal.",
+        "Do not claim the tins have been manufactured, shipped, or installed."
+      ],
+      "attributionTimeScopeCaveats": "The two dates distinguish the previous choice from the later reversal. The current adopted choice in this scope is sealed tins for the tea display."
+    },
+    {
+      "id": "late-import-historical-event",
+      "requiredPropositions": [
+        "A journal imported on 2026-09-26 reports that the user used a copper lantern during the 2021-06 Bracken Marsh survey."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not state or imply that the user currently uses a copper lantern.",
+        "Do not treat the 2026-09-26 import date as the event date.",
+        "Do not add current ownership, preference, or continued use."
+      ],
+      "attributionTimeScopeCaveats": "This is a journal-reported historical use in June 2021, imported later on 2026-09-26. Import recency does not make the event current."
+    },
+    {
+      "id": "distinct-environment-scopes",
+      "requiredPropositions": [
+        "The production dashboard ends idle sessions after 90 seconds.",
+        "The staging dashboard keeps idle sessions for 15 minutes."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not merge the values into one dashboard setting.",
+        "Do not claim that the settings conflict or that either environment inherits the other's value."
+      ],
+      "attributionTimeScopeCaveats": "Both are direct user statements about different environments. Preserve each environment's own timeout and units."
+    },
+    {
+      "id": "quoted-third-party-claim",
+      "requiredPropositions": [
+        "Morgan wrote in a draft that the archive is complete.",
+        "The user has not verified Morgan's claim."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not state that the archive is complete as established fact.",
+        "Do not attribute Morgan's claim to the user or imply the user endorses it.",
+        "Do not remove the user's stated lack of verification."
+      ],
+      "attributionTimeScopeCaveats": "The completion statement is quoted and attributed to Morgan in a draft. The user explicitly says it is unverified."
+    },
+    {
+      "id": "dated-one-day-reflection",
+      "requiredPropositions": [
+        "The user asks to retain a journal entry that says they felt impatient in a ferry queue on 2026-09-26.",
+        "The user described this as that day's mood, not a usual trait."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not characterize the user as generally impatient or as having a stable personality trait.",
+        "Do not omit the date or the explicit one-day limitation when retaining the reflection."
+      ],
+      "attributionTimeScopeCaveats": "The user explicitly asks to retain this dated journal entry. Preserve the 2026-09-26 date and one-day mood limitation; do not turn it into an enduring preference or trait."
+    },
+    {
+      "id": "assistant-suggestion-only",
+      "requiredPropositions": [
+        "The assistant suggested adding a checksum column to the Apricot lab sample register."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not attribute the suggestion to the user.",
+        "Do not infer user preference, approval, adoption, implementation, or an existing checksum column."
+      ],
+      "attributionTimeScopeCaveats": "The sole source is an assistant suggestion with no user response. Either preserve it explicitly as an assistant suggestion or return a genuinely empty result; empty is a correct absence, not a missing user fact.",
+      "emptyResultException": {
+        "allowed": true,
+        "whenCorrect": "The result contains zero cards and therefore makes no claim that the user holds, accepted, or acted on the suggestion.",
+        "ratingsWhenCorrect": {
+          "supportedMeaning": true,
+          "uncertaintyPreserved": true,
+          "attributionPreserved": true,
+          "scopeTimePreserved": true,
+          "usefulCoverage": true,
+          "evidenceEntails": true
+        }
+      }
+    },
+    {
+      "id": "conditional-cap-exception",
+      "requiredPropositions": [
+        "The first two winter-crate shipments have a delivery cap below $40 unless temperature-controlled shipping is required for that crate.",
+        "Temperature-controlled shipping is required for shipment two, so the user lifted the $40 cap for shipment two only.",
+        "Shipment one remains under the $40 cap."
+      ],
+      "prohibitedStrengthenings": [
+        "Do not treat the exception as a general waiver for shipment one, later shipments, or all deliveries.",
+        "Do not omit the temperature-control condition that activates the exception.",
+        "Do not state that the cap was lifted for both winter-crate shipments."
+      ],
+      "attributionTimeScopeCaveats": "The original limit and exception are scoped to the first two winter-crate shipments. The active exception applies only to shipment two; shipment one remains capped."
+    }
+  ]
+}
