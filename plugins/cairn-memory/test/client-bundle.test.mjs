@@ -1,0 +1,30 @@
+// Keep shared parity in the existing npm test gate without changing root scripts.
+import '../../../integrations/client/test/parity.test.mjs';
+import assert from 'node:assert/strict';
+import { appendFile, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { bundleClient } from '../../../integrations/client/bundle.mjs';
+
+test('checked-in client bundle is reproducible and current', async () => {
+  await bundleClient({ check: true });
+});
+
+test('bundle check rejects tampered, missing and extra files, then regeneration repairs them', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'cx1-bundle-check-'));
+  try {
+    await bundleClient({ target });
+    await bundleClient({ target, check: true });
+    await appendFile(join(target, 'redact.mjs'), '\n// synthetic tamper\n');
+    await assert.rejects(bundleClient({ target, check: true }), /client_bundle_stale: redact.mjs/);
+    await bundleClient({ target });
+    await unlink(join(target, 'identity.mjs'));
+    await assert.rejects(bundleClient({ target, check: true }), /client_bundle_stale: identity.mjs/);
+    await bundleClient({ target });
+    await writeFile(join(target, 'obsolete.mjs'), '// synthetic obsolete file\n');
+    await assert.rejects(bundleClient({ target, check: true }), /client_bundle_extra/);
+    await bundleClient({ target });
+    await bundleClient({ target, check: true });
+  } finally { await rm(target, { recursive: true, force: true }); }
+});
