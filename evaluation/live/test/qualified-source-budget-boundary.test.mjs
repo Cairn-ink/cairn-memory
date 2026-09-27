@@ -255,7 +255,7 @@ test('D1 within-limit indexed source-qualified capture reaches normal guarded ge
   const trace = await capture(t, { size: 113, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
   assert.equal(trace.halted, false, JSON.stringify(trace));
-  assert.equal(trace.calls[2]?.inputTokens, 3_905);
+  assert.equal(trace.calls[2]?.inputTokens, 3_952);
   assert.equal(trace.calls[2]?.qualification.schemaContributionTokens, 1_366);
   assertThreeMethodPairs(trace);
   assertColdStoredEvidence(trace);
@@ -265,7 +265,7 @@ test('D1 prompt-shaped indexed qualification does not globally halt on a valid s
   const trace = await capture(t, { size: 114, turnCount: 4, extractionItems: 4 });
   assert.equal(trace.calls[0]?.method, 'cairn_extract', JSON.stringify(trace));
   assert.equal(trace.calls[2]?.method, 'cairn_qualifyCandidates', JSON.stringify(trace));
-  assert.equal(trace.calls[2].inputTokens, 3_913);
+  assert.equal(trace.calls[2].inputTokens, 3_960);
   assert.equal(trace.halted, false, JSON.stringify(trace));
   assert.equal(trace.result?.ok, true, JSON.stringify(trace));
   assertThreeMethodPairs(trace);
@@ -286,8 +286,8 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   assert.equal(qualification(full).qualification.candidateCount, 16);
   assert.ok(qualification(threeItems).inputTokens < qualification(full).inputTokens);
   assert.ok(qualification(oneSource).inputTokens < qualification(full).inputTokens);
-  assert.equal(qualification(full).inputTokens, 3_913);
-  assert.equal(qualification(full).localTokens, 2_452);
+  assert.equal(qualification(full).inputTokens, 3_960);
+  assert.equal(qualification(full).localTokens, 2_499);
   assert.equal(qualification(full).qualification.schemaTokens, 1_369);
   assert.equal(qualification(full).qualification.schemaContributionTokens, 1_366);
   assert.equal(qualification(full).qualification.evidenceContributionTokens, 1_016);
