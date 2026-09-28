@@ -1,9 +1,10 @@
 import { get_encoding } from 'tiktoken';
-import { MemoryStoreError } from '../../core/validation.mjs';
+import { readFileSync } from 'node:fs';
+import { MemoryStoreError, boundedText } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
 import { qualificationCandidatesInlineSchema, schemasFor, schemasForQualificationInput,
-  snapshotIndexedExtractInput } from './schemas.mjs';
-import { DEFAULT_MODEL, modelProfile } from './profiles.mjs';
+  snapshotIndexedExtractInput, episodeSchemasFor } from './schemas.mjs';
+import { DEFAULT_MODEL, modelProfile, episodeProfile } from './profiles.mjs';
 import { classificationWire } from './classification-wire.mjs';
 import { decodeQualificationEvidencePool } from './qualification-evidence-pool.mjs';
 import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
@@ -17,6 +18,12 @@ const count = (value) => Number.isSafeInteger(value) && value >= 0;
 const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const standardPoolQualificationPrompt = qualificationCandidatesPrompt(
   new URL('./prompts/qualify-candidates-pool.md', import.meta.url));
+const episodeExtractPrompt = readFileSync(new URL('../../core/prompts/extract-episode-sources.md', import.meta.url), 'utf8');
+const episodeQualificationPrompt = qualificationCandidatesPrompt(
+  new URL('../../core/prompts/qualify-episode-candidates.md', import.meta.url));
+const episodeMode = (method, system) => method === 'interpretEpisode' ||
+  (method === 'extract' && system === episodeExtractPrompt) ||
+  (method === 'qualifyCandidates' && system === episodeQualificationPrompt);
 
 // The provider's strict-schema subset is small and request-scoped here. Core
 // still performs the authoritative source/semantic compilation after mapping.
@@ -33,10 +40,63 @@ function schemaAccepts(schema, value) {
   if (schema.type === 'integer') return Number.isSafeInteger(value)
     && (schema.minimum === undefined || value >= schema.minimum)
     && (schema.maximum === undefined || value <= schema.maximum);
+  if (schema.type === 'boolean') return typeof value === 'boolean';
+  if (schema.type === 'number') return typeof value === 'number' && Number.isFinite(value)
+    && (schema.minimum === undefined || value >= schema.minimum)
+    && (schema.maximum === undefined || value <= schema.maximum);
   if (schema.type === 'string') return typeof value === 'string'
     && (schema.minLength === undefined || value.length >= schema.minLength)
-    && (schema.maxLength === undefined || value.length <= schema.maxLength);
+    && (schema.maxLength === undefined || value.length <= schema.maxLength)
+    && (schema.pattern === undefined || new RegExp(schema.pattern).test(value));
   return false;
+}
+
+function normalizeEpisodeOutput(method, input, output, schema, diagnose) {
+  try {
+    if (!schemaAccepts(schema, output)) fail('invalid_model_output');
+    const wellFormed = value => typeof value === 'string' ? value.isWellFormed() :
+      value && typeof value === 'object' ? Object.values(value).every(wellFormed) : true;
+    if (!wellFormed(output)) fail('invalid_model_output');
+    if (method === 'interpretEpisode') {
+      const cited = new Set();
+      for (const name of ['type', 'gist', 'outcome', 'nextStep', 'disposition']) {
+        const field = output[name];
+        if (field === null) continue;
+        if (['gist', 'outcome', 'nextStep'].includes(name)) boundedText(field.value, name === 'gist' ? 400 : 240);
+        for (const anchor of field.anchors) {
+          const text = input.sources[anchor.sourceIndex].text;
+          if (anchor.start >= anchor.end || anchor.end > text.length ||
+              !text.slice(anchor.start, anchor.end).isWellFormed()) fail('invalid_model_output');
+          cited.add(anchor.sourceIndex);
+        }
+      }
+      if (cited.size > 16 || (output.disposition !== null &&
+          ((output.disposition.action === 'replaced') !== (output.nextStep !== null)))) fail('invalid_model_output');
+      return output;
+    }
+    if (method === 'extract') {
+      for (const item of output.items) {
+        boundedText(item.content, 600);
+        if (new Set(item.sourceIndices).size !== item.sourceIndices.length) fail('invalid_model_output');
+      }
+      return output;
+    }
+    const qualifications = input.items.map(item => output.qualifications[qualificationSlot(item.itemIndex)]);
+    for (const entry of qualifications) {
+      const selected = new Set();
+      for (const [name, field] of Object.entries(entry)) {
+        if (name === 'itemIndex') continue;
+        if (new Set(field.evidenceIndices).size !== field.evidenceIndices.length) fail('invalid_model_output');
+        if (['subject', 'property', 'scope', 'applies', 'value'].includes(name) && field.value !== null) {
+          const normalized = field.value.normalize('NFKC');
+          if (boundedText(normalized, ['scope', 'applies'].includes(name) ? 120 : 160) !== normalized) fail('invalid_model_output');
+        }
+        if (name !== 'procedural') field.evidenceIndices.forEach(index => selected.add(index));
+      }
+      if (!selected.size || selected.size > 4) fail('invalid_model_output');
+    }
+    return { qualifications };
+  } catch { diagnose('output_shape'); fail('invalid_model_output'); }
 }
 
 function qualificationInstructions(method, system, input) {
@@ -163,8 +223,10 @@ function parseOutput(response, contextWindow, model, diagnose) {
 
 export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
   extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL, basisModel = DEFAULT_MODEL,
-  qualificationInputMode = 'inline', onDiagnostic, ...unknown } = {}) {
-  const profile = modelProfile(extractionModel, rationaleModel, basisModel);
+  qualificationInputMode = 'inline', episodeModel, onDiagnostic, ...unknown } = {}) {
+  const episode = episodeProfile(episodeModel);
+  const profile = { ...modelProfile(extractionModel, rationaleModel, basisModel),
+    ...(episode ? { interpretEpisode: episode } : {}) };
   const contextWindow = Math.min(...Object.values(profile).map((entry) => entry.contextWindow));
   if (typeof apiKey !== 'string' || !apiKey.trim() || /[\r\n]/.test(apiKey) ||
       typeof fetchImpl !== 'function' || Object.keys(unknown).length ||
@@ -182,9 +244,14 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     const detached = named ? snapshotQualificationTextCatalog(input) : null;
     const snapshot = JSON.parse(JSON.stringify(detached?.catalog ?? input));
     const expanded = detached?.expanded ?? snapshot;
-    const schema = named ? schemasForQualificationInput(snapshot) : schemasFor('qualifyCandidates', snapshot);
+    const episodic = episodeMode('qualifyCandidates', system);
+    const schema = episodic ? episodeSchemasFor('qualifyCandidates', expanded)
+      : named ? schemasForQualificationInput(snapshot) : schemasFor('qualifyCandidates', snapshot);
     const validationSchema = qualificationCandidatesInlineSchema(expanded);
-    const baseInstructions = qualificationInstructions('qualifyCandidates', system, snapshot);
+    const baseInstructions = episodic ? `${system}\n\nProvider wire-format override: return qualifications as an object with exactly these fields: `
+      + snapshot.items.map(item => `${qualificationSlot(item.itemIndex)}=>itemIndex ${item.itemIndex}`).join(', ')
+      + '. Keep original candidate indices in evidenceIndices, including procedural evidence. Omit unsupported procedural fields.'
+      : qualificationInstructions('qualifyCandidates', system, snapshot);
     const instructions = named ? catalogInstructions(baseInstructions) : baseInstructions;
     const localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
     const serializedInput = JSON.stringify(snapshot);
@@ -195,7 +262,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
         schema } }, truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
     const countBody = JSON.stringify(payload);
     const generateBody = JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
-    return { expanded, validationSchema, localTokens, countBody, generateBody,
+    return { expanded, validationSchema, schema, localTokens, countBody, generateBody,
       countBodyTokens: countTokens(countBody) };
   }
 
@@ -235,6 +302,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let wire;
     let instructions;
     let qualifier;
+    const episodic = episodeMode(method, system);
     try {
       if (method === 'qualifyCandidates') {
         qualifier = prepareQualificationRequest({ system, input, maxOutputTokens });
@@ -248,7 +316,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
           ? snapshotIndexedExtractInput(input) : input;
         const originalSerializedInput = JSON.stringify(prevalidated);
         snapshot = JSON.parse(originalSerializedInput);
-        schema = schemasFor(method, snapshot);
+        schema = episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
         if (method === 'classify') {
@@ -293,11 +361,14 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     const response = await post('/responses', generateBody, 262144, signal, diagnose);
     checkAbort(signal, diagnose);
     const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
+    if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)
       ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+    ...(episode ? { interpretEpisode: request => invoke('interpretEpisode', request),
+      episodeMetadata: Object.freeze({ adapter: 'openai', model: episode.model, profile: episode.model }) } : {}),
     ...(qualificationInputMode === 'adaptive-text-catalog-v1'
       ? { fitsQualificationRequest: (request) => {
         const prepared = prepareQualificationRequest(request);

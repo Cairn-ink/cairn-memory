@@ -27,6 +27,13 @@ function rationaleProfile(model) {
   return model === DEFAULT_MODEL ? baseline : model === LUNA_EXTRACTION_MODEL ? luna : sol;
 }
 
+// No episode model is selected implicitly, including from extraction settings.
+export function episodeProfile(model) {
+  if (model === undefined) return undefined;
+  if (model === EXPERIMENTAL_EXTRACTION_MODEL) return experimental;
+  return rationaleProfile(model);
+}
+
 export function modelProfile(extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL,
   basisModel = DEFAULT_MODEL) {
   if (extractionModel !== DEFAULT_MODEL && extractionModel !== EXPERIMENTAL_EXTRACTION_MODEL &&

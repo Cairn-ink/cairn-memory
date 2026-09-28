@@ -29,7 +29,7 @@ the 272K-token long-context surcharge threshold. Rates checked 2026-09-11.
 See [Luna acceptance](plans/luna-extraction.md) for frozen comparison gates and
 the original cumulative-budget boundary. No automatic fallback is introduced.
 
-The default remains `gpt-4.1-mini-2025-04-14` for every method. An explicit
+The default remains `gpt-4.1-mini-2025-04-14` for the existing methods; episode interpretation has no default. An explicit
 `extractionModel: 'gpt-5.4-mini-2026-03-17'` option on `createOpenAIModel` selects
 that snapshot for extraction only, with `reasoning: { effort: 'none' }` on both
 count and generation. Classification, selection and ranking keep the existing
@@ -104,7 +104,50 @@ server counts are not evidence of actual provider framing.
 
 ## Host and data boundary
 
-`adapters/openai/index.mjs` exports `createOpenAIModel({apiKey,fetchImpl?,extractionModel?})`.
+### Explicit episode interpretation and automatic tags
+
+An embedded host may supply `episodeModel` to `createOpenAIModel` to expose
+`interpretEpisode` and its `episodeMetadata`. Omitting it exposes neither;
+extraction/rationale model selection does not choose an episode model. Supported
+explicit selections are the existing `gpt-4.1-mini-2025-04-14`,
+`gpt-5.4-mini-2026-03-17`, `gpt-5.6-luna` and `gpt-5.6-sol` profiles. This adds
+no classifier default, core provider selection or paid experiment permission.
+Core generation separately requires `sessionEpisodes:{mode:'episode-v1'}`,
+source-bound-v2 qualification and staged-v1 evidence.
+
+Interpretation uses the existing count/generation transport, one shared abort
+signal, 6,000 local input/7,024 provider input/1,024 output ceilings and no retries.
+Its strict output has exactly `type`, `language`, `gist`, `outcome`, `nextStep`
+and `disposition`. Anchors address request-local sources and UTF-16 spans; a
+disposition can cite only the supplied prior-step reference. The adapter checks
+shape, Unicode, prose bounds, source spans and action/step consistency; core
+owns source identity, closure chronology, revision guards and persistence.
+Malformed output raises `invalid_model_output`, with finite `interpretEpisode`
+diagnostics under the [diagnostic contract](model-failure-diagnostics.md).
+Interpretation failure leaves ordinary admission independent.
+
+The core signals episode extraction/qualification through the exact trusted
+episode system prompts selected by its snapshotted mode; these ports have no
+separate mode argument. Only those prompt identities select the automatic-tag
+schemas. Source text, provider capability and `episodeModel` do not enable tags.
+Optional tag fields use closed-object schema alternatives: extraction permits
+`procedural:true` only for preferences/instructions; qualification optionally
+returns `procedural:{evidenceIndices:[...]}` with one to four distinct original
+candidate indices belonging to that item. Omission makes no new tag decision.
+
+Episode qualification uses request-local `item_N` object slots and original
+candidate indices, decoded to the core's qualifications array. It supports the
+existing explicit adaptive text catalog and local fit checks. The legacy
+evidence-pool wire, schemas, prompts, parsing and diagnostic sequences remain
+unchanged. Committed base fixtures compare exact request/output bytes and finite
+diagnostics; fake-HTTP core integration verifies retained passages, receipt-bound
+tags, failure gaps, startup reads and replay. These checks establish transport
+and provenance plumbing, not model fidelity or semantic support. No real-provider
+episode acceptance or hosted/MCP generation is claimed.
+
+### Transport authority
+
+`adapters/openai/index.mjs` exports `createOpenAIModel({apiKey,fetchImpl?,extractionModel?,episodeModel?})`.
 A trusted host supplies an explicit key and injects the result into
 `openMemoryCore({path,model})`. Construction/local counting makes no HTTP calls.
 Calling a model method without fake transport sends selected input to OpenAI

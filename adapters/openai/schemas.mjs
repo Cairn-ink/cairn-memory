@@ -43,6 +43,59 @@ const qualificationSlot = itemIndex => `item_${itemIndex}`;
 const qualificationSlots = (items, variants) => object(Object.fromEntries(
   items.map((item, position) => [qualificationSlot(item.itemIndex), variants[position]])));
 
+// Episode schemas are separate from the exported legacy/live-guard allowlist.
+// Optional fields use closed-object alternatives, so every object's properties
+// remain required under the provider's strict structured-output contract.
+export function episodeSchemasFor(method, input) {
+  if (method === 'extract') {
+    const schema = schemasFor(method, input);
+    const plain = schema.properties.items.items;
+    plain.properties.content.minLength = 1;
+    schema.properties.items.items = { anyOf: [plain, object({ ...plain.properties,
+      kind: { type: 'string', enum: ['preference', 'instruction'] },
+      procedural: { type: 'boolean', enum: [true] } })] };
+    return schema;
+  }
+  if (method === 'qualifyCandidates') {
+    const schema = qualificationCandidatesInlineSchema(input);
+    for (const item of input.items) {
+      if (!['preference', 'instruction'].includes(item.kind)) continue;
+      const name = qualificationSlot(item.itemIndex), plain = schema.properties.qualifications.properties[name];
+      schema.properties.qualifications.properties[name] = { anyOf: [plain, object({ ...plain.properties,
+        procedural: object({ evidenceIndices: { ...array(constrained(integer,
+          item.candidates.map(candidate => candidate.candidateIndex)), 4), minItems: 1 } }) })] };
+    }
+    return schema;
+  }
+  if (method !== 'interpretEpisode') invalid();
+  exactData(input, ['sources', 'classificationTarget', 'prior']);
+  denseArray(input.sources, 1, 1552);
+  input.sources.forEach((source, position) => {
+    exactData(source, ['sourceIndex', 'role', 'text']);
+    if (source.sourceIndex !== position || !['user', 'assistant'].includes(source.role) ||
+        typeof source.text !== 'string' || !source.text.length || source.text.length > 800 || !source.text.isWellFormed()) invalid();
+  });
+  denseArray(input.classificationTarget, 1, 24);
+  if (new Set(input.classificationTarget).size !== input.classificationTarget.length ||
+      input.classificationTarget.some(value => index(value) >= input.sources.length)) invalid();
+  if (!input.prior || typeof input.prior !== 'object' || Array.isArray(input.prior) ||
+      Object.keys(input.prior).some(key => !['type', 'gist', 'outcome', 'nextStep'].includes(key))) invalid();
+  const anchors = { ...array(object({ sourceIndex: { ...integer, maximum: input.sources.length - 1 },
+    start: { ...integer, maximum: 799 }, end: { type: 'integer', minimum: 1, maximum: 800 } }), 4), minItems: 1 };
+  const field = maximum => object({ value: { type: 'string', minLength: 1, maxLength: maximum }, anchors });
+  const nullable = value => ({ anyOf: [value, { type: 'null' }] });
+  const stepRef = input.prior.nextStep?.stepRef;
+  if (stepRef !== undefined && stepRef !== 'prior-next-step') invalid();
+  return object({ type: object({ value: { type: 'string', enum: [
+    'work', 'research', 'meeting', 'diary', 'quick-one-off-question'] }, anchors }),
+    language: { type: 'string', minLength: 2, maxLength: 35,
+      pattern: '^(mixed|[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*)$' },
+    gist: field(400), outcome: nullable(field(240)), nextStep: nullable(field(240)),
+    disposition: stepRef === undefined ? { type: 'null' } : nullable(object({
+      stepRef: { type: 'string', enum: [stepRef] },
+      action: { type: 'string', enum: ['completed', 'cancelled', 'replaced'] }, anchors })) });
+}
+
 // Preserve the fully expanded candidate-ID schema for local validation after
 // the named provider pool wire has been decoded back into this exact shape.
 export function qualificationCandidatesInlineSchema(input) {
