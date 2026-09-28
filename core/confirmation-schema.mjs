@@ -1,8 +1,6 @@
 import { installIndexReaders } from './index-schema.mjs';
 
 export const CONFIRMATION_SCHEMA_VERSION = 18;
-export const RELATION_LIMIT = 5;
-export const exceedsRelationLimit = (existing, added = 1) => existing + added > RELATION_LIMIT;
 
 // Called inside the opener's schema transaction, including feature-off opens.
 export function migrateVersion17(db) {

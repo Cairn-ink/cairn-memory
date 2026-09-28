@@ -1127,14 +1127,6 @@ CF-1.
   makes an invalidated shell readable again, not the rejected prose. The
   conservative rule remains because episode prose cannot reliably be split
   into confirmed and awaiting assertions.
-- **Awaiting predecessors are not reconciliation candidates.** If an awaiting
-  decision A is superseded by a later awaiting decision B, capture creates no
-  held supersession between them. Confirming both, in either order, leaves two
-  current decisions, even when they contradict each other. With review off,
-  reconciliation can retire A when admitting B. The review queue currently
-  cannot discover that missing transition; a separate reconciliation is needed
-  after review. Synthetic tests freeze this limitation rather than implying
-  that confirmation resolves every contradiction.
 - **Scope of evidence.** This is a 100% loss of episode context in one scripted
   fixture, not a measured frequency across real sessions or a model-quality
   result. Every session with at least one live awaiting decision has this cost.
@@ -1143,8 +1135,22 @@ CF-1.
 The measurement is asserted in `core/test/confirmation-state.test.mjs` (“typical
 synthetic session”); see the [contract](plans/confirmation-state.md).
 
+## Awaiting predecessors are not reconciliation candidates
+
+If an awaiting decision A is superseded by a later awaiting decision B, capture
+creates no
+held supersession between them. Confirming both, in either order, leaves two
+current decisions, even when they contradict each other. With review off,
+reconciliation can retire A when admitting B. The review queue currently
+cannot discover that missing transition; a separate reconciliation is needed
+after review. Synthetic tests freeze this limitation rather than implying
+that confirmation resolves every contradiction.
+
+Evidence: `core/test/confirmation-state.test.mjs` tests both confirmation orders.
+
 ## Where the evidence lives
 
+- [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
 - [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)

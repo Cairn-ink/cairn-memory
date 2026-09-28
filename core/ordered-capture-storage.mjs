@@ -141,7 +141,11 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         const immediate = resolved.filter(row => !held.includes(row));
         for (const row of held) db.prepare(`INSERT INTO confirmation_supersessions
           (previous_id,previous_revision,replacement_id,replacement_revision,receipt_ids,previous_fingerprint,previous_receipt_ids)
-          VALUES(?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).run(row.previous.id, row.previous.revision,
+          VALUES(?,?,?,?,?,?,?) ON CONFLICT(previous_id,replacement_id) DO UPDATE SET
+            previous_revision=excluded.previous_revision,replacement_revision=excluded.replacement_revision,
+            receipt_ids=excluded.receipt_ids,previous_fingerprint=excluded.previous_fingerprint,
+            previous_receipt_ids=excluded.previous_receipt_ids,status='pending',result=NULL
+          WHERE confirmation_supersessions.status <> 'pending'`).run(row.previous.id, row.previous.revision,
           row.replacement.id, row.replacement.revision, JSON.stringify(row.receiptIds), row.previous.fingerprint,
           JSON.stringify(receipts(row.previous.id).map(receipt => receipt.id)));
         const qualified = immediate.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement));

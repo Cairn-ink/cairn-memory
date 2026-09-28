@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
-import { exceedsRelationLimit } from './confirmation-schema.mjs';
+import { exceedsRelationLimit } from './relation-limits.mjs';
 import { fail } from './validation.mjs';
 
 export function decisionReviewOption(input) {
@@ -26,8 +26,8 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       if (row.review_state !== 'awaiting') fail('memory_not_awaiting');
       let result;
-      if (action === 'reject') result = { ...forgetMutation(ns, row.id, input.expectedRevision),
-        reviewEffects: heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] } };
+      if (action === 'reject') result = { reviewEffects: { transitions: [], conflicts: [] },
+        ...forgetMutation(ns, row.id, input.expectedRevision, 'rejected') };
       else {
         if (row.currentness !== 'current') fail('memory_historical');
         const now = new Date().toISOString();
@@ -56,17 +56,23 @@ export function recordTransition(db, row, result) {
     .run(result.status, JSON.stringify(result), row.previous_id, row.replacement_id);
 }
 export function dropHeldWork(db, memoryId, reason = 'stale_evidence') {
+  const effects = { transitions: [], conflicts: [] };
   for (const row of db.prepare(`SELECT * FROM confirmation_supersessions
     WHERE (previous_id=? OR replacement_id=?) AND status IN ('pending','unresolved')`).all(memoryId, memoryId)) {
-    recordTransition(db, row, transitionResult(row, 'dropped', reason));
+    const result = transitionResult(row, 'dropped', reason);
+    recordTransition(db, row, result);
+    effects.transitions.push(result);
   }
   for (const row of db.prepare(`SELECT * FROM confirmation_conflicts
     WHERE (memory_id=? OR target_id=?) AND status='pending'`).all(memoryId, memoryId)) {
+    const result = { memoryId: row.target_id, status: 'dropped', reason };
     db.prepare("UPDATE confirmation_conflicts SET status='dropped',drop_reason=?,result=? WHERE memory_id=? AND target_id=?")
-      .run(reason, JSON.stringify({ memoryId: row.target_id, status: 'dropped', reason }), row.memory_id, row.target_id);
+      .run(reason, JSON.stringify(result), row.memory_id, row.target_id);
+    effects.conflicts.push(result);
   }
+  return effects.transitions.length || effects.conflicts.length ? effects : undefined;
 }
-export function heldReviewEffects(db, memoryId) {
+function heldReviewEffects(db, memoryId) {
   const transitions = db.prepare('SELECT result FROM confirmation_supersessions WHERE replacement_id=? AND result IS NOT NULL ORDER BY previous_id')
     .all(memoryId).map(row => JSON.parse(row.result));
   const conflicts = db.prepare('SELECT result FROM confirmation_conflicts WHERE memory_id=? AND result IS NOT NULL ORDER BY target_id')
@@ -77,6 +83,7 @@ export function heldReviewEffects(db, memoryId) {
 /** Shared by confirmation and explicit promotion, inside the caller's transaction. */
 export function createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage }) {
   return function resolveHeld(ns, row) {
+    const before = heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] };
     const held = db.prepare("SELECT * FROM confirmation_supersessions WHERE replacement_id=? AND status='pending' ORDER BY previous_id").all(row.id);
     for (const transition of held) {
       const predecessor = activeRow(ns, transition.previous_id);
@@ -89,7 +96,7 @@ export function createHeldReviewResolver({ db, activeRow, supersessionStorage, c
       if (!predecessor || predecessor.currentness !== 'current' || predecessor.fingerprint !== transition.previous_fingerprint ||
           !evidenceExists(transition.previous_receipt_ids, transition.previous_id) || !evidenceExists(transition.receipt_ids, row.id)) {
         status = 'dropped'; reason = 'stale_evidence';
-      } else if (exceedsRelationLimit(db.prepare('SELECT count(*) n FROM memory_supersessions WHERE replacement_memory_id=?').get(row.id).n)) {
+      } else if (exceedsRelationLimit(db.prepare('SELECT count(*) n FROM memory_supersessions WHERE replacement_memory_id=?').get(row.id).n + 1)) {
         status = 'dropped'; reason = 'supersession_limit';
       } else if (supersessionStorage.requiresQualification(predecessor, replacement)) {
         status = 'unresolved'; reason = 'qualified_transition_required';
@@ -99,6 +106,23 @@ export function createHeldReviewResolver({ db, activeRow, supersessionStorage, c
       if (status === 'applied') supersessionStorage.retire(ns, predecessor, replacement, JSON.parse(transition.receipt_ids));
     }
     conflictStorage.restore(ns, row);
-    return heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] };
+    const after = heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] };
+    return Object.fromEntries(Object.entries(after).map(([kind, results]) => [kind,
+      results.filter(result => !before[kind].some(old => JSON.stringify(old) === JSON.stringify(result)))]));
   };
+}
+
+/** Called by the lineage writer after insertion, before endpoint invalidation. */
+export function recordHeldRetirement(db, previous, replacement, incoming) {
+  const held = db.prepare("SELECT * FROM confirmation_supersessions WHERE previous_id=? AND replacement_id=? AND status IN ('pending','unresolved')")
+    .get(previous.id, replacement.id);
+  if (held) recordTransition(db, held, transitionResult(held, 'applied', null, previous.revision, replacement.revision));
+  // Closing the last slot also closes earlier qualification hand-offs.
+  if (exceedsRelationLimit(incoming + 1)) {
+    for (const pending of db.prepare(`SELECT * FROM confirmation_supersessions
+      WHERE replacement_id=? AND status IN ('pending','unresolved')`).all(replacement.id)) {
+      recordTransition(db, pending, { ...(pending.result ? JSON.parse(pending.result) : transitionResult(pending, 'dropped', 'supersession_limit')),
+        status: 'dropped', reason: 'supersession_limit' });
+    }
+  }
 }

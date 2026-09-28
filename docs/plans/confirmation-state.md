@@ -53,7 +53,7 @@ Awaiting rows retain admission lineage, source receipts and episode links for
 lifecycle cleanup, but cannot be placed, classified, corrected, superseded,
 qualified-transitioned or used as rationale targets until resolved. Awaiting
 predecessors are excluded from reconciliation, so confirming two successive
-awaiting decisions leaves both current; see the [limitation](../limitations.md#decision-confirmation-hides-whole-episode-context). Forget is
+awaiting decisions leaves both current; see the [limitation](../limitations.md#awaiting-predecessors-are-not-reconciliation-candidates). Forget is
 still allowed, including forgetEpisode, which follows physical links and forgets
 awaiting descendants with suppression. Source snapshots exclude awaiting items.
 
@@ -79,15 +79,23 @@ alongside the replacement receipt IDs. Review checks that identity, the bound
 receipts and currentness, not an exact predecessor revision. Content edits,
 missing receipts, forgetting and retirement invalidate work with a recorded
 `dropped/stale_evidence` outcome. No lifecycle path silently deletes a held row.
+Rejection instead records `dropped/rejected` for the work it drops.
 The private tables retain content-free terminal outcomes as well as pending work.
+A fresh hold for the same pair replaces any non-pending row with new revisions
+and evidence, resets it to pending, and clears its result and conflict drop reason.
+An already-pending row keeps its original proof. These tables record the latest
+outcome per pair, not an append-only audit trail: re-arming replaces the earlier
+outcome. Confirm/reject action-ledger results remain immutable.
 
-Review-enabled results expose `reviewEffects: {transitions, conflicts}`. Confirm
-and reject always return it; `admit` returns stored outcomes on promotion and
-subsequent admissions of that memory. An unchanged admit replay therefore
-recovers the same effects even after a lost response. These are durable row
-outcomes: a later qualified resolution or invalidation updates them. Confirm's
-action ledger separately preserves the exact original action result. Forgetting
-a replacement also returns its recorded effects when review is enabled.
+Review-enabled results expose `reviewEffects: {transitions, conflicts}` for work
+performed by that call. Confirm and reject always return it; promotion through
+`admit` returns its new effects. Later admits of an already-active item do not
+return old outcomes, and forget returns only the drops it performs, omitting
+`reviewEffects` if it drops nothing. Confirm/reject action replay returns the
+original call's recorded result. Other lost responses are recovered through the
+review listing, not by repeating admit. Durable pair outcomes remain available
+there until a new hold replaces them; later qualified resolution or invalidation
+updates the outcome.
 **Option-off openers never return `reviewEffects`**, including promotion through
 `openMemoryCore` without the option and every legacy `openMemoryStore.remember`.
 They still apply valid held work atomically and retain outcomes for an enabled
@@ -95,12 +103,15 @@ opener to recover; all legacy record shapes remain unchanged.
 
 Each transition has `predecessor` and `replacement` refs (`memoryId`, `revision`),
 a `status` (`applied`, `unresolved`, or `dropped`) and `reason` (null,
-`qualified_transition_required`, `stale_evidence`, or `supersession_limit`).
+`qualified_transition_required`, `stale_evidence`, `rejected`, or `supersession_limit`).
 Qualified transitions remain durably `unresolved` on confirmation or promotion,
 including legacy remember; the qualified retirement path marks them applied,
 and invalidation records a drop. A review-enabled opener can recover them with
-`listReviewTransitions({namespace, limit?, cursor?})`, returning `transitions`,
-`nextCursor`, and `exhausted`. Its signed cursor binds namespace and page size;
+`listReviewTransitions({namespace, limit?, cursor?, status?})`, returning
+`transitions`, `nextCursor`, and `exhausted`. `status` defaults to `unresolved`;
+`applied`, `dropped`, and `all` also expose recorded terminal outcomes, including
+after forgetting an endpoint. Pending work has no outcome yet and is excluded.
+Its signed cursor binds namespace, page size and status;
 a namespace epoch change gives `cursor_stale`. The listing returns current
 endpoint revisions for the host's qualified-path revision checks. Hosts reserve
 this method for the person's review UI, not model tools. No adapter exposes it.
@@ -112,7 +123,7 @@ Filling the last slot, including through the qualified path, also records a
 limit drop for any earlier unresolved hand-offs targeting that replacement.
 Conflicts use the same shared constant and capacity comparison. Their outcomes
 identify the target `memoryId`, `status` (`restored` or `dropped`) and `reason`
-(null, `stale_evidence`, or `conflict_limit`). A full endpoint drops the hint
+(null, `stale_evidence`, `rejected`, or `conflict_limit`). A full endpoint drops the hint
 instead of blocking review. `confirmation_conflicts` retains both its result
 and drop reason; ordinary conflict insertion still enforces the hard limit.
 Neither conflict nor supersession capacity can fail confirm or promotion.
@@ -199,8 +210,8 @@ checks and the full core suite run on Node 22.16; confirmation tests and all
 | --- | --- |
 | `npm test` | Exit 0; 131 passed |
 | `npm run validate` | Exit 0 |
-| `npm run test:core` | Exit 0; 1,066 passed |
-| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0 on both runtimes; 65 passed each |
+| `npm run test:core` | Exit 0; 1,075 passed |
+| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0 on both runtimes; 74 passed each |
 | `git diff --check` | Exit 0 |
 | `npm run demo:store` | Exit 0 on both runtimes |
 | `npm run demo:history` | Exit 0 on both runtimes |
@@ -213,3 +224,4 @@ checks and the full core suite run on Node 22.16; confirmation tests and all
 | `npm run demo:continuation` | Exit 0 on both runtimes |
 | `npm run demo:episodes` | Exit 0 on both runtimes |
 | `npm run demo:session-context` | Exit 0 on both runtimes |
+| `npm run test:artifact` | Exit 1; npm packaging subprocess cannot write the read-only `/home/chichieh/.npm` cache (`EROFS`) |

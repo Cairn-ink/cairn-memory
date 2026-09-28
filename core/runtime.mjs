@@ -1,4 +1,4 @@
-import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver, heldReviewEffects } from './confirmation-storage.mjs';
+import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver, dropHeldWork, recordHeldRetirement } from './confirmation-storage.mjs';
 import { createSessionContextStorage } from './session-context.mjs';
 import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
@@ -186,7 +186,7 @@ export function createMemoryRuntime(input) {
       }
       const memory = activeRow(ns, existing.id);
       const reviewEffects = existing.review_state === 'awaiting' && reviewState !== 'awaiting'
-        ? resolveHeld(ns, memory) : heldReviewEffects(db, memory.id);
+        ? resolveHeld(ns, memory) : undefined;
       return {
         ...(decisionReview && reviewEffects ? { reviewEffects } : {}),
         memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: true,
@@ -240,14 +240,14 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function forgetMutation(ns, id, expectedRevision) {
+  function forgetMutation(ns, id, expectedRevision, reason = 'stale_evidence') {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
       suppress(ns, current.fingerprint);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
-      conflictStorage.invalidateMemory(id);
+      const effects = conflictStorage.invalidateMemory(id, { reason });
       mocStorage.invalidateMemory(ns, id, now);
       qualificationStorage.clear(id);
       proceduralStorage.clear(id);
@@ -255,7 +255,7 @@ export function createMemoryRuntime(input) {
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
-      const reviewEffects = decisionReview ? heldReviewEffects(db, id) : undefined;
+      const reviewEffects = decisionReview ? effects : undefined;
       return { forgotten: true, indexRevision: advanceEpoch(ns), ...(reviewEffects ? { reviewEffects } : {}) };
   }
 
@@ -494,7 +494,8 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch });
+  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
+    dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
   const qualificationStorage = createQualificationStorage({ db, receiptKey });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
@@ -506,7 +507,8 @@ export function createMemoryRuntime(input) {
   const supersessionStorage = createSupersessionStorage({ db, activeRow: visibleRow, suppress, advanceEpoch,
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
-    evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch });
+    evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
+    recordHeldRetirement: (previous, replacement, incoming) => recordHeldRetirement(db, previous, replacement, incoming) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview });
   const proceduralStorage = createProceduralStorage({ db, activeRow: visibleRow, advanceEpoch, epoch });
@@ -526,7 +528,7 @@ export function createMemoryRuntime(input) {
   const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld });
 
   return Object.freeze({
-    listReviewTransitions(ns, count, after, expectedEpoch) {
+    listReviewTransitions(ns, count, status, after, expectedEpoch) {
       ready();
       if (!decisionReview) fail('decision_review_required');
       return transaction(db, () => {
@@ -534,9 +536,9 @@ export function createMemoryRuntime(input) {
         if (expectedEpoch !== undefined && current !== expectedEpoch) fail('cursor_stale');
         const rows = db.prepare(`SELECT t.*,p.revision AS predecessor_current_revision,m.revision AS replacement_current_revision
           FROM confirmation_supersessions t JOIN memories m ON m.id=t.replacement_id JOIN memories p ON p.id=t.previous_id
-          WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND t.status='unresolved'
+          WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND t.result IS NOT NULL AND (?='all' OR t.status=?)
           AND (t.replacement_id,t.previous_id) > (?,?) ORDER BY t.replacement_id,t.previous_id LIMIT ?`)
-          .all(...boundary(ns), after?.replacementId ?? '', after?.predecessorId ?? '', count + 1);
+          .all(...boundary(ns), status, status, after?.replacementId ?? '', after?.predecessorId ?? '', count + 1);
         return { rows, epoch: current };
       });
     },

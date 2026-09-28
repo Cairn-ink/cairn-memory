@@ -24,7 +24,10 @@
   predecessor preserves held evidence too. Supersession overflow is recorded
   without blocking review, and qualification hand-offs survive lost promotion
   responses through durable outcomes and `listReviewTransitions`. Option-off
-  openers, including legacy remember, never return `reviewEffects`.
+  openers, including legacy remember, never return `reviewEffects`. Fresh held
+  evidence re-arms terminal pair records. Mutation effects describe only that
+  call; terminal lineage outcomes remain available through the review listing's
+  status filter. Rejection records the distinct drop reason `rejected`.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

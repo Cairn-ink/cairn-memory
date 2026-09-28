@@ -333,11 +333,13 @@ export function openMemoryCore(input) {
 
   function listReviewTransitions(input) {
     return invoke(() => {
-      runtime.ready(); object(input, ['namespace', 'limit', 'cursor']);
+      runtime.ready(); object(input, ['namespace', 'limit', 'cursor', 'status']);
       const ns = contractNamespace(input.namespace), count = contractLimit(input.limit);
-      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'listReviewTransitions', l: count };
+      const status = input.status ?? 'unresolved';
+      if (input.status === null || !['unresolved', 'applied', 'dropped', 'all'].includes(status)) throw new MemoryStoreError('invalid_input');
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'listReviewTransitions', l: count, q: status };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      const page = runtime.listReviewTransitions(ns, count, cursor?.a, cursor?.e);
+      const page = runtime.listReviewTransitions(ns, count, status, cursor?.a, cursor?.e);
       const rows = page.rows.slice(0, count), last = rows.at(-1), exhausted = page.rows.length <= count;
       return { transitions: rows.map(row => ({ ...JSON.parse(row.result),
           predecessor: { memoryId: row.previous_id, revision: row.predecessor_current_revision },

@@ -464,7 +464,12 @@ contract with opt-in review, person-only awaiting reads, revision-checked
 Review is independent of currentness and filing. Older openers refuse v18;
 option-off openers retain their DTO shapes and exclude awaiting rows. They never
 return `reviewEffects`, even when an explicit admit promotes an awaiting row.
-Review-enabled `admit` returns durable held-work outcomes on promotion and replay.
-`listReviewTransitions({namespace,limit?,cursor?})` recovers unresolved qualified
-hand-offs with current endpoint revisions; it requires the review option and
-uses namespace/limit-bound signed cursors fenced by the namespace epoch.
+Review-enabled mutations return only the `reviewEffects` performed by that call;
+later admit or forget never repeats old applied outcomes. Confirm/reject action
+replay preserves the original result. Reject drops use the reason `rejected`.
+`listReviewTransitions({namespace,limit?,cursor?,status?})` recovers durable
+outcomes with current endpoint revisions. Status defaults to `unresolved`;
+`applied`, `dropped`, or `all` includes terminal outcomes. It requires the review
+option and uses namespace/limit/status-bound signed cursors fenced by the epoch.
+Fresh held evidence replaces a non-pending pair's prior outcome; pending proof
+is retained. The pair tables are not an append-only audit trail.
