@@ -152,7 +152,7 @@ demo durations were not recorded. The worker's corrected dedicated
 `npm run test:long-history` passed 1/1 on Node 22.16.0 in 48.335 s before the
 final preview-visibility refinement; it is not final-SHA evidence. Primary
 full-core Node 22.16.0 and workspace-lifecycle Node 22.16.0/24.15 checks
-subsequently passed; full-core Node 24.15 remains in progress.
+subsequently passed. Full-core Node 24.15 also passed 934/934 in 360.352 s.
 
 Final worker precommit check on Node 22.16.0: `npm run test:long-history`
 passed 1/1 in 25.780 s. The CLI
@@ -171,8 +171,8 @@ calls, 5133 tokenizer calls, 319597 scripted model-input tokens, 56117
 model-output tokens and 15886942 total local tokenizer tokens across all core
 checks. Write/read/control times were 30219/615/1154 ms; final SQLite bytes
 were 6512640. These are local measurements, not provider billable tokens,
-provider latency or a performance SLA. Primary exact-head reruns and
-independent review remain pending.
+provider latency or a performance SLA. Later exact-head acceptance and
+independent-review outcomes are recorded in the PR against their final SHA.
 
 Primary acceptance on candidate `630661a8fd80ee490b5ec4a8312008cbf6cf1d6a`
 found a gate-reporting defect despite its green positive path: an unexpected
@@ -205,7 +205,8 @@ Its retained initial Node 24 evidence records `recall_failed` and an outer
 original cause was not established by the retained evidence. Installed-host
 readiness stays open; the local scripted gate does not reclassify that failure.
 
-Primary final verification, independent review and exact-head CI are pending.
+Final exact-head verification, independent review and CI outcomes are recorded
+in the PR against the candidate SHA rather than treated as completed here.
 Real-model completion/selection, installed MCP/Hermes acceptance
 (including #241), and semantic/current-state reliability remain open. No
 provider calls were made; provider charges are US$0 for this packet, and
