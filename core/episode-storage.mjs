@@ -577,6 +577,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
 
       if (transition) {
         record.stepClosure = transition;
+        record.nextStepClosedOrdinal = control(ns).ordinal;
         record.anchors.stepClosure = transition.anchors;
         if (transition.action !== 'replaced') {
           record.nextStep = { ...old.nextStep, status: 'closed' };
@@ -589,15 +590,20 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         }
         rememberStep(row, old.nextStep.id, transition.action === 'replaced' ? 'replaced' : 'closed');
       } else {
-        // Repeated text can describe a new proposal, but retained old passages
-        // alone cannot reopen it. Keep the draft and omit an unsupported step.
-        if (old.nextStep?.status === 'closed' && !old.editor.nextStep?.pinned &&
-            record.nextStep?.text === old.nextStep.text) {
+        // Preserve the closure boundary even when a draft omits the step. Older
+        // records retain the equivalent episode receipt position in the journal.
+        if (old.nextStep?.status === 'closed' && record.nextStepClosedOrdinal === undefined) {
+          record.nextStepClosedOrdinal = db.prepare(`SELECT MAX(e.ordinal) AS ordinal
+            FROM episode_attempts a JOIN episode_events e ON e.episode_id=a.episode_id AND e.position<=a.watermark
+            WHERE a.episode_id=? AND a.marker=?`).get(row.id, 'step-identity:'+old.nextStep.id).ordinal ?? control(ns).ordinal;
+        }
+        if (record.nextStepClosedOrdinal !== undefined && old.nextStep?.status !== 'open' &&
+            !old.editor.nextStep?.pinned && record.nextStep) {
           const fresh = record.nextStep.anchors.every(anchor => {
             const index = sources.findIndex(source => source.id === anchor.sourceId);
             const source = sources[index];
             return input.sources[index]?.eventId !== undefined &&
-              source.origin_episode_id === row.id && source.ordinal > old.nextStep.receiptOrdinal;
+              source.origin_episode_id === row.id && source.ordinal > record.nextStepClosedOrdinal;
           });
           if (!fresh) {
             record.nextStep = null;
@@ -854,7 +860,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (record.nextStep?.id !== input.stepId || record.nextStep.status !== 'open') fail('episode_step_conflict');
       correctionAnchors(row,record.nextStep.anchors);
       record.nextStep = { ...record.nextStep,status:'closed' };
-      record.editor.nextStep = { origin: 'explicit-correction', pinned: false };
+      record.nextStepClosedOrdinal = control(ns).ordinal;
       rememberStep(row,input.stepId,'closed');
       db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished,started)
         VALUES(?,?,?,?,0,?,?,?,1,1)`).run(row.id,marker,row.observed,token,row.revision,row.source_fence,row.generation);
@@ -872,6 +878,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         if (value === null) {
           if (field === 'gist') fail('invalid_input');
           if (field === 'nextStep' && record.nextStep) {
+            if (record.nextStep.status === 'open') record.nextStepClosedOrdinal = control(ns).ordinal;
             rememberStep(row, record.nextStep.id, 'closed');
             record.nextStep = { ...record.nextStep, status: 'closed' };
           }

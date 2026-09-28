@@ -344,8 +344,7 @@ is inspected separately. Historical metadata stays labeled; this is not an as-of
 The receipt-time index has no namespace prefix. Receipt reads scan time keys across
 other namespaces in the same database file and check namespace ownership per row.
 Results remain exact and capped at limit+1 eligible rows, but scan cost can grow
-with other namespaces' receipts in that file. Hosted deployments should use one
-database file per owner to limit this cost; this is not a cross-file scan.
+with other namespaces' receipts in that file. This is not a cross-file scan.
 
 Ranges require canonical UTC instants, `since < until`, half-open `[since,until)`,
 and at most 366 days. The caller computes local calendar/DST boundaries. Client
@@ -368,8 +367,9 @@ its independent source, memory, policy and keep pages with the same envelope cap
 accepts `completed` or `dismissed`. Exact action replay returns its original result
 without updating the episode or namespace epoch. Reusing an action ID with different
 guards/action rejects with `event_payload_conflict`. Closure changes the step marker
-and leaves it unpinned, so a later draft can propose a new step without releasing
-a correction. It does not assert that the recorded work actually happened.
+without adding or removing a correction pin. An existing pin remains until
+`releaseEpisodeCorrection`; an unpinned step permits a later supported proposal.
+It does not assert that the recorded work actually happened.
 Source loss invalidates content.
 
 Content-free step identities and action replay markers use the existing finished
@@ -437,10 +437,15 @@ ordinary draft freshness checks. The episode prompt requires explicit new eviden
 and instructs the interpreter to preserve steps on silence, ambiguous chronology,
 historical quotation, assistant advice or dropped context. Episode-off prompts and requests are unchanged.
 
-Only open steps are supplied as `prior.nextStep`; closed steps are omitted. If an
-unpinned closed step's text is proposed again, every anchor must cite a newly
-supplied event passage from that episode, with a receipt ordinal newer than the
-closed step's creation receipt. Such a proposal becomes a new open step with a
-new ID; retained old passages alone yield `nextStep:null`. Either result permits
-the draft to succeed. A later proposal with different text uses the ordinary
-new-step rules. These are provenance rules, not semantic judgments about recurrence.
+Only open steps are supplied as `prior.nextStep`; closed steps are omitted. After
+closure, every proposed step, regardless of wording, must cite only newly supplied
+event passages from that episode received after closure. The namespace receipt
+ordinal at closure is stored as content-free `nextStepClosedOrdinal` in the existing
+episode JSON record, including interpreter closure and explicit closure/correction.
+This boundary survives drafts with a null step. No table or schema version changes.
+A supported proposal becomes a new open step with a new ID; older evidence yields
+`nextStep:null` without failing the draft. A legacy closed record without this field
+recovers the equivalent receipt boundary
+from its finished step-identity journal marker. If that marker is unavailable,
+it conservatively establishes a boundary at its next draft. These are provenance
+rules, not semantic judgments about recurrence.

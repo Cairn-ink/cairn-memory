@@ -438,3 +438,117 @@ test('E10 explicit dismissal leaves a later different proposal unpinned and visi
   assert.deepEqual(ok(f.core.closeEpisodeNextStep(action)), closed);
   assert.deepEqual(ok(f.core.sessionStartContext({ namespace: ns })), context);
 });
+
+for (const closure of ['interpreter', 'explicit']) {
+  for (const text of ['Review the synthetic proposal.', 'Review the synthetic proposal again', 'Revisit the proposed synthetic changes']) {
+    test(`E2/E10 closure boundary rejects old evidence for ${closure}: ${text}`, async t => {
+      let phase = 'initial';
+      const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: request => {
+        if (phase === 'close') return transitionInterpretation(request);
+        const result = stepInterpretation(request);
+        if (phase === 'old') {
+          const sourceIndex = request.input.sources.findIndex(source => source.text.includes('Synthetic 中文 English'));
+          assert.ok(sourceIndex >= 0);
+          const anchors = [{ sourceIndex, start: 0, end: request.input.sources[sourceIndex].text.length }];
+          result.gist.anchors = anchors; // Retain the old passage across the second rejected proposal.
+          result.nextStep = { value: text, anchors };
+        }
+        return result;
+      } });
+      const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+      const original = capturedDetail(f, first.id).episode;
+      if (closure === 'interpreter') {
+        phase = 'close';
+        assert.equal(ok(await f.core.capture(nextCapture())).episode.status, 'interpreted');
+      } else {
+        ok(f.core.closeEpisodeNextStep({ namespace: ns, episodeId: first.id, expectedRevision: original.revision,
+          stepId: original.nextStep.id, actionId: 'close-old-evidence', action: 'dismissed' }));
+      }
+      phase = 'old';
+      for (const n of [3, 4]) {
+        const input = captureInput(n, 'current');
+        input.episodeContext.origin = 'precompact';
+        input.messages[0].content = 'An unrelated later activity.';
+        assert.equal(ok(await f.core.capture(input)).episode.status, 'interpreted');
+        const detail = capturedDetail(f, first.id).episode;
+        assert.equal(detail.processing.state, 'ready');
+        assert.equal(detail.nextStep, null);
+        assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.returned, 0);
+      }
+      phase = 'fresh';
+      const input = captureInput(5, 'current');
+      input.episodeContext.origin = 'precompact';
+      input.messages[0].content = 'Please review the synthetic proposal as a new task.';
+      assert.equal(ok(await f.core.capture(input)).episode.status, 'interpreted');
+      const step = capturedDetail(f, first.id).episode.nextStep;
+      assert.equal(step.status, 'open');
+      assert.notEqual(step.id, original.nextStep.id);
+      assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.items[0].nextStep.id, step.id);
+    });
+  }
+}
+
+test('E2/E10 closure boundary excludes a captured but undrafted passage received before dismissal', async t => {
+  let phase = 'initial';
+  const pending = 'We still need to review the synthetic proposal.';
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: request => {
+    const result = stepInterpretation(request);
+    if (phase === 'pending') {
+      const sourceIndex = request.input.sources.findIndex(source => source.text === pending);
+      assert.ok(sourceIndex >= 0);
+      result.nextStep.anchors = [{ sourceIndex, start: 0, end: pending.length }];
+    }
+    return result;
+  } });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  const input = captureInput(2, 'current');
+  input.messages[0].content = pending;
+  ok(await f.core.capture(input));
+  assert.equal(counts(f.model), 1);
+  const before = capturedDetail(f, first.id).episode;
+  ok(f.core.closeEpisodeNextStep({ namespace: ns, episodeId: first.id, expectedRevision: before.revision,
+    stepId: before.nextStep.id, actionId: 'dismiss-after-pending', action: 'dismissed' }));
+  phase = 'pending';
+  const later = captureInput(3, 'current');
+  later.episodeContext.origin = 'precompact';
+  assert.equal(ok(await f.core.capture(later)).episode.status, 'interpreted');
+  assert.equal(capturedDetail(f, first.id).episode.nextStep, null);
+  assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.returned, 0);
+  phase = 'fresh';
+  const fresh = captureInput(4, 'current');
+  fresh.episodeContext.origin = 'precompact';
+  assert.equal(ok(await f.core.capture(fresh)).episode.status, 'interpreted');
+  assert.equal(capturedDetail(f, first.id).episode.nextStep.status, 'open');
+});
+
+test('E10 explicit closure preserves an existing correction pin and replay is inert', async t => {
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: stepInterpretation });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  correctCapturedStep(f, first.id);
+  const before = capturedDetail(f, first.id).episode;
+  assert.equal(before.editor.nextStep.pinned, true);
+  const action = { namespace: ns, episodeId: first.id, expectedRevision: before.revision,
+    stepId: before.nextStep.id, actionId: 'close-pinned-step', action: 'dismissed' };
+  const closed = ok(f.core.closeEpisodeNextStep(action));
+  assert.deepEqual(capturedDetail(f, first.id).episode.editor.nextStep, before.editor.nextStep);
+  assert.equal(ok(await f.core.capture(nextCapture())).episode.status, 'interpreted');
+  const after = capturedDetail(f, first.id).episode;
+  assert.equal(after.nextStep.status, 'closed');
+  assert.deepEqual(after.editor.nextStep, before.editor.nextStep);
+  assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.returned, 0);
+  assert.deepEqual(ok(f.core.closeEpisodeNextStep(action)), closed);
+  assert.deepEqual(capturedDetail(f, first.id).episode, after);
+});
+
+test('E2/E10 legacy closed records recover the journal boundary for fresh evidence', async t => {
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: stepInterpretation });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  const before = capturedDetail(f, first.id).episode;
+  ok(f.core.closeEpisodeNextStep({ namespace: ns, episodeId: first.id, expectedRevision: before.revision,
+    stepId: before.nextStep.id, actionId: 'legacy-close', action: 'dismissed' }));
+  f.db.prepare("UPDATE session_episodes SET record=json_remove(record,'$.nextStepClosedOrdinal') WHERE id=?").run(first.id);
+  assert.equal(ok(await f.core.capture(nextCapture('current', 'Review the synthetic proposal as a new task.'))).episode.status, 'interpreted');
+  const step = capturedDetail(f, first.id).episode.nextStep;
+  assert.equal(step.status, 'open');
+  assert.notEqual(step.id, before.nextStep.id);
+});

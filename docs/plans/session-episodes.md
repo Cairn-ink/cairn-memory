@@ -826,13 +826,20 @@ ambiguous chronology, historical quotations or assistant advice by core or a mod
 The committed SE-2 episode-off parity tests remain unchanged; no prompt-digest or
 fixture expectation requires adjustment.
 
-Closed steps are never offered as `prior.nextStep`. Repeated text can describe a
-new proposal only when all anchors cite newly supplied passages from the same
-episode with receipt ordinals newer than the closed step's creation receipt;
-then it receives a new open-step ID. With only retained old anchors, the draft
-succeeds with a null step. Explicit closure does not pin the step. The capture
-regressions cover two later interpreted drafts after both closure routes, omission
-with old anchors, and a different new step appearing at startup after dismissal.
+Closed steps are never offered as `prior.nextStep`. Every later proposal, whatever
+its wording, requires newly supplied passages from the same episode with receipt
+ordinals strictly newer than closure. The existing JSON record stores the closure
+ordinal, preserving it through null-step drafts; no schema change is needed. Legacy
+closed records recover the equivalent boundary from the existing step-identity
+journal, conservatively using the next draft's receipt position if unavailable.
+Explicit closure neither adds nor removes correction pins.
+
+Round-two E2/E10 regressions in `session-context.test.mjs` cover punctuation,
+“again” and paraphrases anchored only to old evidence after both closure routes,
+two consecutive rejected proposals followed by fresh evidence, a captured but
+undrafted pre-dismissal passage, and preservation of a correction pin with inert
+closure replay. All eight regressions failed on the pre-fix implementation. A ninth
+compatibility check covers recovery of the boundary from a legacy journal marker.
 
 Known limits: receipt-time reads use a global time index without a namespace
 prefix. They scan other namespaces' receipts in the same database file and filter
@@ -841,10 +848,8 @@ cost grows with other namespaces in that file. Hosted deployments should use one
 database file per owner to limit this cost. Separately, `processing.attempted` can
 change during pagination without advancing the namespace epoch; this predates SE-3.
 
-The core test command caps concurrent test files at two. This preserves all tests
-and deadline budgets while avoiding full-suite contention that exhausted two
-600 ms injection-test budgets before their intended SQL boundary on this host.
-Isolated parent/current probes and complete suites with this cap pass those checks.
+The round-one test concurrency cap was reverted. Verification uses the unchanged,
+uncapped core test runner; any host-load deadline failures are reported separately.
 
 ### Cross-plan shared files
 
