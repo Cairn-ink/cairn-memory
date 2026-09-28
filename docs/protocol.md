@@ -671,7 +671,7 @@ capture integration. See
 [storage API shapes](storage-contract.md#episode-management-and-procedural-tags-se-1)
 and [atomic v17 migration](local-store.md#episode-storage-foundation-se-1).
 Debounced capture/interpretation and keep are implemented through an injected port;
-range/startup reads, provider schemas and MCP exposure remain separate work.
+provider schemas and MCP exposure remain separate work.
 No hosted defaults or telemetry change; automatic prompt changes require episode
 mode. Every open eagerly upgrades older committed formats to v17; hosts must
 stop/drain older connections first. Explicit procedural tags are independent

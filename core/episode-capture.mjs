@@ -53,6 +53,7 @@ export function episodeRequest(model, snapshot) {
   for (const field of ['type','gist','outcome','nextStep']) {
     const value = snapshot.record[field];
     const anchors = snapshot.record.anchors[field];
+    if (field === 'nextStep' && value?.status !== 'open') continue;
     if (!value || !anchors?.length || anchors.some(anchor => !included.has(anchor.sourceId))) continue;
     prior[field] = { value: field === 'nextStep' ? value.text : value,
       ...(field === 'nextStep' && value.status === 'open' && !snapshot.record.editor?.nextStep?.pinned

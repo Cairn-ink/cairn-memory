@@ -494,7 +494,7 @@ export function createMemoryRuntime(input) {
   const stagedEvidence = createStagedEvidenceStorage({ db });
   const episodeReads = createEpisodeReads({ db, epoch });
   const proceduralStorage = createProceduralStorage({ db, activeRow, advanceEpoch, epoch });
-  const sessionContextStorage = createSessionContextStorage({db,epoch,indexStorage,readSourceEvidence,proceduralStorage});
+  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage });
   let episodes;
   try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation }); }
   catch (error) { db.close(); throw error; }
@@ -534,7 +534,7 @@ export function createMemoryRuntime(input) {
     setProjectCapture(ns, input) { ready(); return episodes.setControl(ns, input, true); },
     setProceduralMemory(ns, input) { ready(); return proceduralStorage.set(ns, input); },
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
-    sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns,groups,expected); },
+    sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,

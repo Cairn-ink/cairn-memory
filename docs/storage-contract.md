@@ -197,7 +197,7 @@ throw instead). They never expose raw database or provider errors.
 | `generation_conflict` | The supplied control generation is stale. Reread controls. |
 | `capture_disabled` | Capture is paused or disabled for that scope; new work cannot start. |
 | `stale_episode` | The draft claim expired, was consumed, or lost its revision/source fence. Discard its result. |
-| `episode_step_conflict` | A draft would replace an existing open next step without a supported disposition transition. |
+| `episode_step_conflict` | A draft would replace an existing open next step without a supported disposition transition, or `closeEpisodeNextStep` names a mismatched or not-open step. |
 | `episode_sources_unavailable` | Explicit keep has no currently retained source passages. |
 | `missing_evidence` | The interpretation target has no available staged evidence. |
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
@@ -341,6 +341,12 @@ then ID ascending; client matches any retained receipt. Deleted rows are absent.
 Receipt pages can repeat a memory with different receipt references. Source text
 is inspected separately. Historical metadata stays labeled; this is not an as-of log.
 
+The receipt-time index has no namespace prefix. Receipt reads scan time keys across
+other namespaces in the same database file and check namespace ownership per row.
+Results remain exact and capped at limit+1 eligible rows, but scan cost can grow
+with other namespaces' receipts in that file. Hosted deployments should use one
+database file per owner to limit this cost; this is not a cross-file scan.
+
 Ranges require canonical UTC instants, `since < until`, half-open `[since,until)`,
 and at most 366 days. The caller computes local calendar/DST boundaries. Client
 filters use exact equality in one exact owner/personal-or-project namespace.
@@ -361,8 +367,10 @@ its independent source, memory, policy and keep pages with the same envelope cap
 `closeEpisodeNextStep({namespace,episodeId,expectedRevision,stepId,actionId,action})`
 accepts `completed` or `dismissed`. Exact action replay returns its original result
 without updating the episode or namespace epoch. Reusing an action ID with different
-guards/action rejects. Closure changes the step marker and pins it; it does not
-assert that the recorded work actually happened. Source loss invalidates content.
+guards/action rejects with `event_payload_conflict`. Closure changes the step marker
+and leaves it unpinned, so a later draft can propose a new step without releasing
+a correction. It does not assert that the recorded work actually happened.
+Source loss invalidates content.
 
 Content-free step identities and action replay markers use the existing finished
 `episode_attempts` journal under separate marker prefixes. Action IDs are HMAC-bound;
@@ -426,5 +434,13 @@ The interpreter returns `{stepRef,action,anchors}`; core checks the exact refere
 and supplies the stored step ID/revision locally. Missing, forged or unavailable
 references reject as `invalid_model_output`; concurrent changes still fail the
 ordinary draft freshness checks. The episode prompt requires explicit new evidence
-and preserves steps on silence, ambiguous chronology, historical quotation,
-assistant advice or dropped context. Episode-off prompts and requests are unchanged.
+and instructs the interpreter to preserve steps on silence, ambiguous chronology,
+historical quotation, assistant advice or dropped context. Episode-off prompts and requests are unchanged.
+
+Only open steps are supplied as `prior.nextStep`; closed steps are omitted. If an
+unpinned closed step's text is proposed again, every anchor must cite a newly
+supplied event passage from that episode, with a receipt ordinal newer than the
+closed step's creation receipt. Such a proposal becomes a new open step with a
+new ID; retained old passages alone yield `nextStep:null`. Either result permits
+the draft to succeed. A later proposal with different text uses the ordinary
+new-step rules. These are provenance rules, not semantic judgments about recurrence.

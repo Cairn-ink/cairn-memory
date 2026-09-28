@@ -30,7 +30,7 @@ export function episodeClient(value) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(value)) fail('invalid_input');
   return value;
 }
-function instant(value) {
+export function instant(value) {
   if (value === null) return value;
   if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) ||
       !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) fail('invalid_input');
@@ -43,11 +43,9 @@ const blank = label => ({ clientLabel: label, eventStart: null, eventEnd: null, 
 
 export function episodeMetadata(ns, row) {
   const record = JSON.parse(row.record);
-  // Internal replay identities and closure journals are not descriptive read data.
-  const { stepActions, replacedSteps, ...visible } = record;
   return { id: row.id, revision: row.revision, namespace: { ...ns, projectId: ns.projectId || null },
     sessionKey: row.session_key, client: row.client, firstReceivedAt: row.first_received_at,
-    lastReceivedAt: row.last_received_at, updatedAt: row.updated_at, ...visible,
+    lastReceivedAt: row.last_received_at, updatedAt: row.updated_at, ...record,
     processing: { ...record.processing, observed: row.observed, attempted: row.attempted, covered: row.covered } };
 }
 
@@ -591,9 +589,21 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         }
         rememberStep(row, old.nextStep.id, transition.action === 'replaced' ? 'replaced' : 'closed');
       } else {
-        // A closed identity cannot be silently recreated by an unguarded draft.
-        if (old.nextStep?.status === 'closed' && result.nextStep !== null && result.nextStep.value === old.nextStep.text)
-          fail('episode_step_conflict');
+        // Repeated text can describe a new proposal, but retained old passages
+        // alone cannot reopen it. Keep the draft and omit an unsupported step.
+        if (old.nextStep?.status === 'closed' && !old.editor.nextStep?.pinned &&
+            record.nextStep?.text === old.nextStep.text) {
+          const fresh = record.nextStep.anchors.every(anchor => {
+            const index = sources.findIndex(source => source.id === anchor.sourceId);
+            const source = sources[index];
+            return input.sources[index]?.eventId !== undefined &&
+              source.origin_episode_id === row.id && source.ordinal > old.nextStep.receiptOrdinal;
+          });
+          if (!fresh) {
+            record.nextStep = null;
+            delete record.anchors.nextStep;
+          }
+        }
         delete record.stepClosure;
       }
       const cited = new Set(Object.values(record.anchors).flat().map(anchor => anchor.sourceId));
@@ -844,7 +854,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (record.nextStep?.id !== input.stepId || record.nextStep.status !== 'open') fail('episode_step_conflict');
       correctionAnchors(row,record.nextStep.anchors);
       record.nextStep = { ...record.nextStep,status:'closed' };
-      record.editor.nextStep = { origin:'explicit-correction',pinned:true };
+      record.editor.nextStep = { origin: 'explicit-correction', pinned: false };
       rememberStep(row,input.stepId,'closed');
       db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished,started)
         VALUES(?,?,?,?,0,?,?,?,1,1)`).run(row.id,marker,row.observed,token,row.revision,row.source_fence,row.generation);

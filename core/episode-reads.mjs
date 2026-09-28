@@ -1,19 +1,15 @@
 import { transaction } from './database.mjs';
-import { episodeClient, episodeMetadata } from './episode-storage.mjs';
+import { episodeClient, episodeMetadata, instant } from './episode-storage.mjs';
 import { fail, object, denseArray, identifier } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId];
 const where = alias => `${alias}.owner_id=? AND ${alias}.scope=? AND ${alias}.project_id=?`;
 export const envelopeText = value => JSON.stringify({ ok: true, value });
-export function readInstant(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) ||
-      !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) fail('invalid_input');
-  return value;
-}
 export function rangeInput(input, operation) {
   const memory = operation === 'listMemoriesByTime';
   object(input, ['namespace','since','until','timeBasis','client','limit','cursor', ...(memory ? ['states'] : [])]);
-  const since = readInstant(input.since), until = readInstant(input.until);
+  if (input.since === null || input.until === null) fail('invalid_input');
+  const since = instant(input.since), until = instant(input.until);
   if (since >= until || Date.parse(until)-Date.parse(since) > 366*86400000) fail('invalid_input');
   const limit = input.limit === undefined ? 20 : input.limit;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) fail('invalid_input');
@@ -36,7 +32,8 @@ export function validateRangeAnchor(anchor, receipt) {
   try {
     object(anchor, receipt ? ['time','id','memoryId'] : ['time','id']);
     if (Object.keys(anchor).length !== (receipt ? 3 : 2)) fail('invalid_cursor');
-    readInstant(anchor.time); identifier(anchor.id);
+    if (anchor.time === null) fail('invalid_cursor');
+    instant(anchor.time); identifier(anchor.id);
     if (receipt) identifier(anchor.memoryId);
   } catch { fail('invalid_cursor'); }
 }

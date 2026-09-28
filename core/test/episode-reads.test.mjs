@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { openMemoryCore } from '../index.mjs';
+import { instant } from '../episode-storage.mjs';
 import { fixture, batch, register, draft, inspect, ns, ok } from '../testing/episode-helpers.mjs';
-import { rangeQuery, rangeInput, rangePage } from '../episode-reads.mjs';
+import { rangeQuery, rangeInput, rangePage, validateRangeAnchor } from '../episode-reads.mjs';
 const since='2026-03-08T08:00:00.000Z', until='2026-03-09T07:00:00.000Z'; // Caller-converted US DST day.
 const input={namespace:ns,since,until};
 function episode(f, id, overrides={}) {
@@ -212,4 +213,17 @@ test('E1/E9 inspection revalidates lineage target namespace as well as deletion'
     f.db.prepare('INSERT INTO episode_memory_links VALUES(?,?,?,?,?,?)').run('synthetic-foreign-'+i,e,m.id,'event-'+i,m.revision,JSON.stringify([receipt]));
   }
   assert.deepEqual(inspect(f,e).memoryLinks.items,[]);
+});
+
+test('E9 shared UTC validation permits unknown storage instants but rejects null read bounds and cursor times', () => {
+  assert.equal(instant(null), null);
+  assert.equal(instant(since), since);
+  for (const time of [null, undefined, '2026-02-30T00:00:00.000Z', '2026-03-08T08:00:00Z',
+    '2026-03-08T08:00:00.000+00:00', 'not-a-time']) {
+    if (time !== null) assert.throws(() => instant(time), { code: 'invalid_input' });
+    assert.throws(() => rangeInput({ ...input, since: time }, 'listEpisodes'), { code: 'invalid_input' });
+    assert.throws(() => rangeInput({ ...input, until: time }, 'listMemoriesByTime'), { code: 'invalid_input' });
+    assert.throws(() => validateRangeAnchor({ time, id: 'synthetic' }, false), { code: 'invalid_cursor' });
+  }
+  assert.doesNotThrow(() => validateRangeAnchor({ time: since, id: 'synthetic' }, false));
 });

@@ -8,6 +8,8 @@
   the newest open step, exact counting, group budgets and final freshness checks.
 - Add guarded explicit step closure/replay and source-anchored interpreter
   completion, cancellation and replacement using request-local step references.
+  Closed steps are omitted from prior context; repeated text with new evidence
+  creates a new identity, and explicit closure permits later unpinned proposals.
 - Eagerly migrate stores to schema v17 with four read indexes and no table or
   column changes. Older openers refuse the new version.
 

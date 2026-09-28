@@ -743,37 +743,6 @@ still-pending outcome at commit and both post-call snapshot boundaries. The stal
 harness. Verification repeats the heavy-day failure arm ten times and the full
 capacity suite twenty times under concurrent load, each with isolated temp data.
 
-### Cross-plan shared files
-
-`docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,
-`plugins/cairn-memory/hooks/**` and `CHANGELOG.md` are also edited by the sibling
-[Codex client contract](codex-client.md) (packages CX-1…CX-7, F0, HMA and LAC;
-see that contract's [refined order](codex-client.md#cross-plan-shared-files)). **Only one open PR at a time may edit each shared file.** The
-repository maintainer sets the order; the coordinator serialises cross-plan edits
-on the maintainer's behalf. Proposed default:
-**CX-1 → SE-1…SE-5 → CX-2…CX-6/LAC**. This cross-plan rule overrides any apparent
-concurrency permission in a package row. Naming hooks here does not add them to
-an SE package's allowed paths. No merge, push or PR is authorized by this packet.
-
-## Remaining integration questions and non-goals
-
-- **Trusted producers:** today's MCP fixes the submitted-capture session identity.
-  The Claude plugin and separately branched Codex client contracts must bind real
-  sessions, origin/end signals, event times and project-stop generations before
-  SE-5 generation wiring. Their configuration enables episode-v1 by default with
-  automatic capture, while core remains opt-in. Read/tag APIs can land independently.
-- **Hosted compatibility:** the released Claude hook calls the hosted service;
-  new metadata requires protocol compatibility/versioning and pinned-core cutover
-  decisions owned by the coordinator. This plan does not change that service.
-- **Entry disclosure:** the one-brain client must disclose durable selected-passage
-  retention when enabling capture; how private UI communicates that remains with
-  its owner. Existing staging opt-in must not silently acquire permanent retention.
-
-Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
-additional unsupported clients, complete archives/backfill, cross-store identity
-synchronization, semantic certification or secure backup/provider erasure. Use an
-injected episode-interpretation port; any specific classifier is out of scope.
-
 ### SE-3 verification
 
 maintainer-approved: schema v17 adds read indexes
@@ -810,8 +779,9 @@ in the existing finished-attempt journal under distinct prefixes. They cannot
 acquire leases, schedule interpretation or consume draft allowances. Action IDs
 are HMAC-bound. Later draft storage transitions require the exact open-step ID
 and revision, newer source anchors and explicit completion/cancellation/replacement;
-silence and dropped prior context preserve an open step. Source invalidation
-clears descriptive closure evidence and never resurrects the old proposal.
+a null disposition preserves an open step, including with dropped prior context.
+Source invalidation clears descriptive closure evidence and never resurrects the
+old proposal.
 
 | SE-3 responsibility / touched gate | Tests (under `core/test/`) |
 | --- | --- |
@@ -821,7 +791,7 @@ clears descriptive closure evidence and never resurrects the old proposal.
 | Whole-envelope 64-KiB prefix budgets, strict inputs and bounds; E2/E9 | `episode-reads.test.mjs`: public multilingual whole-record pages, cursor/envelope overhead, oversized-first-item failure, UTC/range/state/field/limit rejection |
 | Startup groups, newest step, procedural order, limits and source completeness; E10 | `session-context.test.mjs`: exact indexed thirteen-row probes, twelve-candidate consideration, group switches, alternation, complete receipts, oversized group stopping, default/hard budgets, exact framing and namespace isolation |
 | No read generation, local counting and final freshness; E3/E5/E10 | `episode-reads.test.mjs` and `session-context.test.mjs`: throwing generation ports, absent/throwing/async/invalid counters, epoch/identity/tag/source mutation during counting, no callback after authoritative reread |
-| Open-step semantics, guarded transitions, closure replay and source loss; E2/E7/E10 | `session-context.test.mjs`: silent later episode, older-step resurfacing, inert explicit replay, foreign/stale guards, newer-source-only completion/cancellation/replacement, pinned steps, missing replacement and source correction invalidation |
+| Open-step semantics, guarded transitions, closure replay and source loss; E2/E7/E10 | `session-context.test.mjs`: silent later episode, older-step resurfacing, inert explicit replay, foreign/stale guards, newer-source-only completion/cancellation/replacement, pinned steps, missing replacement, source correction invalidation, two successful repeated-text drafts after interpreter/explicit closure, old-anchor omission and new proposals after dismissal |
 | Mode isolation and procedural eligibility in both modes; E10 | `session-context.test.mjs`: public facade in both modes; inherited `episode-mode-parity.test.mjs` and migration parity compare committed prompt/request/output/row/digest and diagnostic fixtures |
 | Eager atomic v17 upgrade and older-opener exclusion; E11 | `episode-migration.test.mjs`: committed v14/v15/v16 fixtures in both modes, preserved rows/FKs, frozen index layout, repeated open, failed-index rollback and frozen v16 refusal; existing schema-version assertions advance from 16 to 17 |
 | Shipped modules and synthetic demo; E11 | Artifact manifest includes `episode-reads.mjs` and `session-context.mjs`; existing artifact suite checks installed contents. `demo:session-context` is registered alongside every existing core demo on both CI runtimes |
@@ -839,16 +809,65 @@ The episode interpreter receives a request-local `stepRef` only when the prior
 open step and its supporting passages fit and the step is unpinned. Core retains
 the exact durable step ID and revision locally, checks the returned reference and
 maps it to those guards before the atomic draft commit. Durable IDs are not added
-to the model request. Silence, ambiguous chronology, historical quotation,
-assistant advice and dropped prior context preserve the open step; the prompt
-requires explicit new evidence for completion, cancellation or replacement.
+to the model request. The prompt instructs the interpreter to preserve the step
+on silence, ambiguous chronology, historical quotation, assistant advice or
+dropped prior context, and requires explicit new evidence for a transition.
+Core validates references and anchors; it cannot judge those source semantics.
 
 `session-context.test.mjs` adds end-to-end scripted capture coverage for E2/E5/E10:
 all three transitions with new anchors, closure replay without model calls or
 revision/epoch/journal changes, and older-step resurfacing in startup context.
 It rejects forged/foreign/missing references, injected durable guards, pinned
 steps, omitted prior-step references and a correction during interpretation.
-E3/E10 scripts also exercise the five preservation cases above and assert the
-prompt's instructions. These scripts verify wiring and provenance guards, not
-semantic fidelity of a model. The committed SE-2 episode-off parity tests remain
-unchanged; no prompt-digest or fixture expectation requires adjustment.
+E3/E10 scripts label inputs with those five cases, return a null disposition and
+assert that the step is preserved, along with the prompt's instructions. They
+prove null-disposition preservation and request wiring, not recognition of
+ambiguous chronology, historical quotations or assistant advice by core or a model.
+The committed SE-2 episode-off parity tests remain unchanged; no prompt-digest or
+fixture expectation requires adjustment.
+
+Closed steps are never offered as `prior.nextStep`. Repeated text can describe a
+new proposal only when all anchors cite newly supplied passages from the same
+episode with receipt ordinals newer than the closed step's creation receipt;
+then it receives a new open-step ID. With only retained old anchors, the draft
+succeeds with a null step. Explicit closure does not pin the step. The capture
+regressions cover two later interpreted drafts after both closure routes, omission
+with old anchors, and a different new step appearing at startup after dismissal.
+
+Known limits: receipt-time reads use a global time index without a namespace
+prefix. They scan other namespaces' receipts in the same database file and filter
+ownership per row. The limit+1 eligible-result cap does not bound scanned rows;
+cost grows with other namespaces in that file. Hosted deployments should use one
+database file per owner to limit this cost. Separately, `processing.attempted` can
+change during pagination without advancing the namespace epoch; this predates SE-3.
+
+### Cross-plan shared files
+
+`docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,
+`plugins/cairn-memory/hooks/**` and `CHANGELOG.md` are also edited by the sibling
+[Codex client contract](codex-client.md) (packages CX-1…CX-7, F0, HMA and LAC;
+see that contract's [refined order](codex-client.md#cross-plan-shared-files)). **Only one open PR at a time may edit each shared file.** The
+repository maintainer sets the order; the coordinator serialises cross-plan edits
+on the maintainer's behalf. Proposed default:
+**CX-1 → SE-1…SE-5 → CX-2…CX-6/LAC**. This cross-plan rule overrides any apparent
+concurrency permission in a package row. Naming hooks here does not add them to
+an SE package's allowed paths. No merge, push or PR is authorized by this packet.
+
+## Remaining integration questions and non-goals
+
+- **Trusted producers:** today's MCP fixes the submitted-capture session identity.
+  The Claude plugin and separately branched Codex client contracts must bind real
+  sessions, origin/end signals, event times and project-stop generations before
+  SE-5 generation wiring. Their configuration enables episode-v1 by default with
+  automatic capture, while core remains opt-in. Read/tag APIs can land independently.
+- **Hosted compatibility:** the released Claude hook calls the hosted service;
+  new metadata requires protocol compatibility/versioning and pinned-core cutover
+  decisions owned by the coordinator. This plan does not change that service.
+- **Entry disclosure:** the one-brain client must disclose durable selected-passage
+  retention when enabling capture; how private UI communicates that remains with
+  its owner. Existing staging opt-in must not silently acquire permanent retention.
+
+Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
+additional unsupported clients, complete archives/backfill, cross-store identity
+synchronization, semantic certification or secure backup/provider erasure. Use an
+injected episode-interpretation port; any specific classifier is out of scope.

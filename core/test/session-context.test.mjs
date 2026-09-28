@@ -349,3 +349,92 @@ for(const variant of ['forged','foreign','missing-reference','durable-guard-inje
     }else assert.deepEqual(after,before);
     assert.deepEqual(capturedDetail(f,foreign.id,{...ns,ownerId:'other',projectId:'other'}),foreignBefore);
   });
+
+for (const closure of ['interpreter', 'explicit']) test(`E2/E10 ${closure} closure permits two later interpreted drafts repeating the step text`, async t => {
+  let phase = 'initial';
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: request => {
+    if (phase === 'close') return transitionInterpretation(request);
+    if (phase === 'first-repeat') assert.equal(request.input.prior.nextStep, undefined);
+    if (phase === 'second-repeat') assert.equal(request.input.prior.nextStep.stepRef, 'prior-next-step');
+    return stepInterpretation(request);
+  } });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  const original = capturedDetail(f, first.id).episode;
+  if (closure === 'interpreter') {
+    phase = 'close';
+    assert.equal(ok(await f.core.capture(nextCapture())).episode.status, 'interpreted');
+  } else {
+    ok(f.core.closeEpisodeNextStep({ namespace: ns, episodeId: first.id, expectedRevision: original.revision,
+      stepId: original.nextStep.id, actionId: 'close-before-repeat', action: 'completed' }));
+  }
+  const closed = capturedDetail(f, first.id).episode;
+  assert.equal(closed.nextStep.status, 'closed');
+  assert.equal(closed.editor.nextStep.pinned, false);
+  let replacementId;
+  for (const [index, name] of ['first-repeat', 'second-repeat'].entries()) {
+    phase = name;
+    const input = captureInput(index + 3, 'current');
+    input.episodeContext.origin = 'precompact';
+    input.messages[0].content = 'Review the synthetic proposal again, as a new task.';
+    const result = ok(await f.core.capture(input));
+    assert.equal(result.episode.status, 'interpreted');
+    const detail = capturedDetail(f, first.id).episode;
+    assert.equal(detail.processing.state, 'ready');
+    assert.equal(detail.nextStep.status, 'open');
+    assert.equal(detail.nextStep.text, original.nextStep.text);
+    assert.notEqual(detail.nextStep.id, original.nextStep.id);
+    if (index === 0) replacementId = detail.nextStep.id;
+    else assert.equal(detail.nextStep.id, replacementId);
+    assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.items[0].nextStep.id, replacementId);
+  }
+});
+
+test('E2/E10 repeating a closed step from retained old anchors omits the proposal without failing the draft', async t => {
+  let repeat = false;
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: request => {
+    const result = stepInterpretation(request);
+    if (repeat) {
+      assert.equal(request.input.prior.nextStep, undefined);
+      const sourceIndex = request.input.sources.findIndex(source => source.text.includes('Synthetic 中文 English'));
+      assert.ok(sourceIndex > 0);
+      result.nextStep.anchors = [{ sourceIndex, start: 0, end: request.input.sources[sourceIndex].text.length }];
+    }
+    return result;
+  } });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  const original = capturedDetail(f, first.id).episode;
+  ok(f.core.closeEpisodeNextStep({ namespace: ns, episodeId: first.id, expectedRevision: original.revision,
+    stepId: original.nextStep.id, actionId: 'dismiss-old-proposal', action: 'dismissed' }));
+  repeat = true;
+  assert.equal(ok(await f.core.capture(nextCapture('current', 'An unrelated new activity.'))).episode.status, 'interpreted');
+  const result = capturedDetail(f, first.id).episode;
+  assert.equal(result.processing.state, 'ready');
+  assert.equal(result.nextStep, null);
+  assert.equal(result.anchors.nextStep, undefined);
+  assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.returned, 0);
+});
+
+test('E10 explicit dismissal leaves a later different proposal unpinned and visible at startup', async t => {
+  let later = false;
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: request => {
+    const result = stepInterpretation(request);
+    if (later) {
+      assert.equal(request.input.prior.nextStep, undefined);
+      result.nextStep.value = 'Review a different synthetic proposal';
+    }
+    return result;
+  } });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  const original = capturedDetail(f, first.id).episode;
+  const action = { namespace: ns, episodeId: first.id, expectedRevision: original.revision,
+    stepId: original.nextStep.id, actionId: 'dismiss-before-new-proposal', action: 'dismissed' };
+  const closed = ok(f.core.closeEpisodeNextStep(action));
+  assert.equal(capturedDetail(f, first.id).episode.editor.nextStep.pinned, false);
+  later = true;
+  assert.equal(ok(await f.core.capture(nextCapture('current', 'Review a different synthetic proposal.'))).episode.status, 'interpreted');
+  const context = ok(f.core.sessionStartContext({ namespace: ns }));
+  assert.equal(context.groups.nextSteps.items[0].nextStep.text, 'Review a different synthetic proposal');
+  assert.notEqual(context.groups.nextSteps.items[0].nextStep.id, original.nextStep.id);
+  assert.deepEqual(ok(f.core.closeEpisodeNextStep(action)), closed);
+  assert.deepEqual(ok(f.core.sessionStartContext({ namespace: ns })), context);
+});
