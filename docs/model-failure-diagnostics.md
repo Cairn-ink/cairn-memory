@@ -36,13 +36,24 @@ Each event is a frozen object with exactly four fields:
 | Layer | Reasons |
 | --- | --- |
 | `adapter` | `response_envelope`, `response_usage`, `response_message`, `response_content`, `output_json`, `output_shape`, `output_bounds`, `request_invalid`, `request_bounds`, `token_count_response`, `transport_failure`, `response_body_bounds`, `response_json`, `model_cancelled` |
-| `core_call` | `model_not_configured`, `context_budget_exceeded`, `token_count_unavailable`, `model_timeout`, `model_cancelled`, `provider_failure`, `adapter_output_invalid`, `output_serialization`, `output_bounds` |
+| `core_call` | `model_not_configured`, `context_budget_exceeded`, `token_count_unavailable`, `model_timeout`, `capture_deadline`, `model_cancelled`, `provider_failure`, `adapter_output_invalid`, `output_serialization`, `output_bounds` |
 | `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, `invalid_extraction_text`, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `invalid_qualification`, `invalid_reconciliation`, `invalid_rationale`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
 
 An adapter failure can also produce a core-call event. These are failing
 boundaries, not unique-operation counters. Success is silent. Invalid input
 before a model boundary need not emit an event. Event values describe checks,
 not semantic truth or the provider's underlying root cause.
+
+`core_call:capture_deadline` means the trusted invocation-local capture budget
+was expired at a core model-call check or when its timer fired. The public
+operation still returns `model_timeout`. `core_call:model_timeout` remains the
+per-call timeout or an adapter-supplied timeout code; it alone does not prove
+which actor caused a stall. The adapter can separately observe
+`adapter:model_cancelled` after either core abort. These finite labels contain
+no timing, request, response, source or provider detail, and an expired budget
+does not prove a provider-side cause.
+Capture expiry during non-model work can return `model_timeout` without a model
+diagnostic event; this observer is not a complete timeout timeline.
 
 Extraction categories describe only the first core validation boundary that
 rejected the returned object. They contain no returned values, indices or text.

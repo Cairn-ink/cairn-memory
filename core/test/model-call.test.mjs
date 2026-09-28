@@ -45,6 +45,55 @@ test('adapter cancellation retains the existing explicit cancellation envelope',
     (error) => error.code === 'model_cancelled');
 });
 
+test('finite timeout diagnostics require trusted invocation expiry, including before model dispatch', async () => {
+  const events = [];
+  let counts = 0; let calls = 0;
+  const model = { contextWindow: 8192,
+    countTokens: () => { counts++; return 1; },
+    select: () => { calls++; return { refs: [] }; },
+    onDiagnostic: event => events.push(event) };
+  await assert.rejects(callModel(model, 'select', 'Synthetic', {},
+    { deadline: { expired: () => true } }), { code: 'model_timeout' });
+  assert.equal(counts, 0);
+  assert.equal(calls, 0);
+  assert.deepEqual(events.map(event => event.reason), ['capture_deadline']);
+
+  events.length = 0;
+  let expired = false;
+  model.countTokens = () => { counts++; expired = true; return 1; };
+  await assert.rejects(callModel(model, 'select', 'Synthetic', {},
+    { deadline: { expired: () => expired } }), { code: 'model_timeout' });
+  assert.equal(calls, 0);
+  assert.deepEqual(events.map(event => event.reason), ['capture_deadline']);
+
+  events.length = 0;
+  model.countTokens = () => 1;
+  model.select = () => { calls++; throw new MemoryStoreError('model_timeout'); };
+  await assert.rejects(callModel(model, 'select', 'Synthetic', {},
+    { deadline: { expired: () => false, remainingMs: () => 100 } }), { code: 'model_timeout' });
+  assert.equal(calls, 1);
+  assert.deepEqual(events.map(event => event.reason), ['model_timeout']);
+});
+
+test('per-call timer keeps its origin if the invocation expires during abort delivery', async () => {
+  const events = [];
+  let expired = false;
+  let signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    select: request => {
+      signal = request.signal;
+      return new Promise((_, reject) => signal.addEventListener('abort', () => {
+        expired = true;
+        reject(new DOMException('Synthetic', 'AbortError'));
+      }, { once: true }));
+    }, onDiagnostic: event => events.push(event) };
+  await assert.rejects(callModel(model, 'select', 'Synthetic', {},
+    { deadline: { expired: () => expired, remainingMs: () => 20 } }), { code: 'model_timeout' });
+  assert.equal(expired, true);
+  assert.equal(isCoreModelDeadlineSignal(signal), true);
+  assert.deepEqual(events.map(event => event.reason), ['model_timeout']);
+});
+
 test('one core deadline aborts a pending two-phase adapter without extending phase two', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let signal;

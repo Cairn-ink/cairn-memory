@@ -116,6 +116,11 @@ parameter, benchmark capability, or diagnostic payload. The monotonic budget
 belongs to one capture invocation; its core-created abort signal retains private
 provenance so a provider error string or external abort cannot authorize case-deadline
 isolation. MCP omission retains the previous default and tool schemas. The
+optional trusted model observer may report finite `core_call:capture_deadline`
+when that budget expires at a model boundary; the public error remains
+`model_timeout`. The event keeps the existing exact four-field schema and
+contains no source text, identifiers, request body, timing or arbitrary error.
+It is an observation of local budget expiry, not a provider-cause finding. The
 native Hermes provider also forwards a validated profile-local
 `capture_deadline_ms` string from 1 through 110000 only with v2 capture. It
 adds no model-controlled field or default. Its cooperative checks are not a

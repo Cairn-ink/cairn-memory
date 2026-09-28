@@ -752,6 +752,14 @@ identify a provider, network, HTTP or model-quality cause, and no fix is
 claimed. No automatic retry or new session is implied, and a longer timeout is
 not a proven remedy.
 
+New offline synthetic capture tests distinguish a genuine invocation budget
+expiry with finite `core_call/capture_deadline` from the existing per-call
+`core_call/model_timeout` label. The old retained labels are unchanged and
+cannot be reclassified retroactively: they do not say whether that historical
+capture exhausted a trusted invocation budget, the per-call ceiling or another
+upstream wait. The final generation attempt remains settlement-unknown; these
+local tests are no new score or provider-cause finding.
+
 Optional `bounded-v1` transport milestones can localize a future synthetic
 case-deadline attempt to fetch wait versus response-body wait at the guard.
 They cannot distinguish provider processing from network buffering or prove

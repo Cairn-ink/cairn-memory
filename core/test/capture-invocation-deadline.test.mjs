@@ -92,7 +92,7 @@ test('D2 monotonic budget checks before scheduled adapter invocation and after t
   pause(110); // The adapter microtask has not run yet.
   await assert.rejects(pending, error => error.code === 'model_timeout');
   assert.equal(calls, 0);
-  assert.equal(diagnostics.filter(row => row.reason === 'model_timeout').length, 1);
+  assert.equal(diagnostics.filter(row => row.reason === 'capture_deadline').length, 1);
 
   for (const slowCount of [1, 2]) {
     let counted = 0;

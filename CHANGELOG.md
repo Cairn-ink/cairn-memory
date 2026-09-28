@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — capture timeout diagnostics
+
+- Distinguish an expired trusted capture invocation budget from the per-call
+  model timeout in the optional finite model observer. The public failure code,
+  timeout limits, request count, retry behavior and stored admission semantics
+  remain unchanged. Offline synthetic tests cover genuine and forged aborts,
+  pre-admission rollback, post-admission classification and duplicate capture.
+
 ## Unreleased — offline long-history stage gate
 
 - Add a maintainer-only, source-free synthetic gate that traces public capture,
