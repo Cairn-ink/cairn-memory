@@ -9,16 +9,28 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
 import { redactSecrets } from "../lib/redact.mjs";
-import { captureEventId, transcriptMessages } from "../lib/transcript.mjs";
+import {
+  captureEventId,
+  legacyTranscriptMessages,
+  MACHINE_TEXT_PREFIXES,
+  machineUserRecord,
+  transcriptMessages,
+  TYPED_PROMPT_SOURCES,
+} from "../lib/transcript.mjs";
 
 test("transcript parser allowlists only user and assistant text", () => {
   const jsonl = [
     JSON.stringify({
       type: "user",
       uuid: "user-1",
+      message: { content: [{ type: "text", text: "I prefer concise answers." }] },
+    }),
+    JSON.stringify({
+      type: "user",
+      uuid: "tool-with-text",
       message: {
         content: [
-          { type: "text", text: "I prefer concise answers." },
+          { type: "text", text: "FILE SECRET" },
           { type: "tool_result", content: "FILE SECRET" },
         ],
       },
@@ -88,11 +100,14 @@ test("capture hook redacts locally before constructing the HTTP body", async (t)
         type: "user",
         uuid: "u-http",
         message: {
-          content: [
-            { type: "text", text: "api_token=topsecretvalue123 remember concise replies" },
-            { type: "tool_result", content: "DO NOT SEND TOOL OUTPUT" },
-          ],
+          content: [{ type: "text", text: "api_token=topsecretvalue123 remember concise replies" }],
         },
+      }),
+      JSON.stringify({
+        type: "user",
+        uuid: "u-http-tool",
+        toolUseResult: {},
+        message: { content: [{ type: "tool_result", content: "DO NOT SEND TOOL OUTPUT" }] },
       }),
       JSON.stringify({
         type: "assistant",
@@ -241,4 +256,76 @@ test("a recall outage fails open with a successful, silent hook exit", async () 
   assert.equal(exitCode, 0);
   assert.equal(stdout, "");
   assert.equal(stderr, "");
+});
+
+const userRecord = (index, fields) =>
+  JSON.stringify({ type: "user", uuid: `record-${index}`, ...fields });
+
+test("0.1.1 drops every machine-generated user record kind", () => {
+  const cases = [
+    ["meta", { isMeta: true, message: { content: "<local-command-caveat>Caveat: MACHINE-1</local-command-caveat>" } }],
+    ["meta", { isMeta: true, message: { content: "[Image: source: /synthetic/MACHINE-2.png]" } }],
+    ["compact-summary", {
+      isCompactSummary: true,
+      isVisibleInTranscriptOnly: true,
+      message: { content: "This session is being continued from a previous conversation. MACHINE-3" },
+    }],
+    ["tool-result", { toolUseResult: {}, message: { content: [{ type: "tool_result", content: "MACHINE-4" }] } }],
+    ["tool-result", { message: { content: [{ type: "text", text: "MACHINE-5" }, { type: "tool_result", content: "x" }] } }],
+    ...MACHINE_TEXT_PREFIXES.map((prefix, index) => [
+      "machine-wrapper",
+      { message: { content: `${prefix}MACHINE-prefix-${index}` } },
+    ]),
+    ["machine-wrapper", { message: { content: "  \n<command-name>/model</command-name> MACHINE-6" } }],
+    ["machine-wrapper", { message: { content: [{ type: "text", text: "<local-command-stdout>MACHINE-7</local-command-stdout>" }] } }],
+    // An unknown promptSource value does not mark a typed prompt.
+    ["machine-wrapper", { promptSource: "replay", message: { content: "<bash-input>MACHINE-8</bash-input>" } }],
+    // Structural flags win even when promptSource claims a typed prompt.
+    ["meta", { isMeta: true, promptSource: "typed", message: { content: "MACHINE-9" } }],
+    ["tool-result", { promptSource: "sdk", toolUseResult: {}, message: { content: [{ type: "text", text: "MACHINE-10" }] } }],
+  ];
+  for (const [index, [reason, fields]] of cases.entries()) {
+    const line = userRecord(index, fields);
+    assert.equal(machineUserRecord(JSON.parse(line)), reason, line);
+    assert.deepEqual(transcriptMessages(line, "session"), [], line);
+  }
+  const all = cases.map(([, fields], index) => userRecord(index, fields)).join("\n");
+  assert.equal(JSON.stringify(transcriptMessages(all, "session")).includes("MACHINE-"), false);
+  // 0.1.0 sent the text of these records; the difference is the D1 exception.
+  assert.ok(legacyTranscriptMessages(all, "session").length > 15);
+});
+
+test("typed prompts are kept exactly as 0.1.0 parsed them, with or without promptSource", () => {
+  const typed = [
+    { message: { content: "Plain typed prompt without promptSource." } },
+    { promptSource: "sdk", turnOrigin: "sdk", message: { content: "Print-mode typed prompt." } },
+    { promptSource: "typed", turnOrigin: "human", message: { content: "Interactive typed prompt." } },
+    { promptSource: "typed", message: { content: "<command-name> typed literally by the person" } },
+    { promptSource: "sdk", message: { content: "<local-command-stdout> pasted on purpose" } },
+    { message: { content: "<note> starts with a bracket that is not a wrapper" } },
+    { message: { content: "請用繁體中文回答，並保持簡潔。" } },
+    { message: { content: "Please explain what command-name means in a Claude transcript." } },
+    { promptSource: "typed", message: { content: [{ type: "text", text: "Array-form typed prompt." }] } },
+  ];
+  const jsonl = typed.map((fields, index) => userRecord(index, fields)).join("\n");
+  for (const fields of typed) assert.equal(machineUserRecord({ type: "user", ...fields }), null);
+  const kept = transcriptMessages(jsonl, "session");
+  assert.equal(kept.length, typed.length);
+  assert.deepEqual(kept, legacyTranscriptMessages(jsonl, "session"));
+  assert.deepEqual(TYPED_PROMPT_SOURCES, ["sdk", "typed"]);
+});
+
+test("kept records keep 0.1.0 redaction, the 20,000-character cap and id derivation", () => {
+  const jsonl = [
+    JSON.stringify({ type: "user", message: { content: `api_token=topsecretvalue123 ${"x".repeat(25_000)}` } }),
+    JSON.stringify({ type: "user", isMeta: true, message: { content: "MACHINE caveat between typed records" } }),
+    JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Reply." }, { type: "thinking", thinking: "hidden" }] } }),
+  ].join("\n");
+  const kept = transcriptMessages(jsonl, "session-cap");
+  const legacy = legacyTranscriptMessages(jsonl, "session-cap");
+  assert.deepEqual(kept, [legacy[0], legacy[2]]);
+  assert.equal(kept[0].content.length, 20_000);
+  assert.ok(kept[0].content.startsWith("api_token=[REDACTED] "));
+  assert.match(kept[0].id, /^[a-f0-9]{64}$/);
+  assert.equal(captureEventId("session-cap", kept), captureEventId("session-cap", [legacy[0], legacy[2]]));
 });

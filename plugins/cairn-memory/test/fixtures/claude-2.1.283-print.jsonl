@@ -1,0 +1,16 @@
+{"type":"queue-operation","operation":"enqueue","content":"Synthetic print prompt FXTYPEDPRINT1. Remember concise notes."}
+{"type":"attachment","uuid":"00000000-0000-4000-8000-000000000001","attachment":{"type":"hook_additional_context","content":["Synthetic hook context FXMACHINEHOOKCTX."]}}
+{"type":"attachment","uuid":"00000000-0000-4000-8000-000000000002","attachment":{"type":"instructions","content":"Synthetic project note FXMACHINEINSTR."}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000003","isSidechain":false,"promptSource":"sdk","turnOrigin":"sdk","permissionMode":"dontAsk","message":{"role":"user","content":"Synthetic print prompt FXTYPEDPRINT1. Remember concise notes."}}
+{"type":"assistant","uuid":"00000000-0000-4000-8000-000000000004","isSidechain":false,"message":{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":"synthetic-signature"}]}}
+{"type":"assistant","uuid":"00000000-0000-4000-8000-000000000005","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_synthetic1","name":"Read","input":{"file_path":"canary-tool.txt"}}]}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000006","isSidechain":false,"toolUseResult":{"type":"text"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_synthetic1","content":"Synthetic tool output FXMACHINETOOL."}]}}
+{"type":"assistant","uuid":"00000000-0000-4000-8000-000000000007","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"DONE"}]}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000008","isSidechain":false,"promptSource":"sdk","turnOrigin":"sdk","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoFXMACHINEIMAGEDATA"}},{"type":"text","text":"Synthetic image prompt FXTYPEDPRINT2 of random pixels."}]}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000009","isSidechain":false,"isMeta":true,"message":{"role":"user","content":"[Image: source: /synthetic/FXMACHINEIMGSRC.png]"}}
+{"type":"assistant","uuid":"00000000-0000-4000-8000-000000000010","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"DONE"}]}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000011","isSidechain":false,"isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation. Summary FXMACHINESUMMARYP quoting FXTYPEDPRINT1."}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000012","isSidechain":false,"isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Caveat: FXMACHINECAVEATP. DO NOT respond to these messages.</local-command-caveat>"}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000013","isSidechain":false,"message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args>FXMACHINEARGS</command-args>"}}
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000014","isSidechain":false,"message":{"role":"user","content":"<local-command-stdout>Compacted PreCompact [hook] FXMACHINEHOOKOUT</local-command-stdout>"}}
+{"type":"system","subtype":"stop_hook_summary","content":"FXMACHINESYSTEM"}

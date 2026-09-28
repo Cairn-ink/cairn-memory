@@ -1,7 +1,7 @@
 {
   "name": "cairn-memory",
   "displayName": "Cairn.ink Memory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight cross-session memory with a source receipt for every inference.",
   "author": {
     "name": "Cairn.ink",

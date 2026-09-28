@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
+
+- The Claude Code plugin no longer sends user-role records that Claude Code
+  writes itself: local-command caveats and output, compaction summaries, tool
+  results (the whole record), `[Image: source: …]` notes, and slash-command and
+  bash-mode wrappers. A `promptSource` that marks a submitted prompt keeps it,
+  whatever its text starts with. Typed prompts, assistant text, redaction,
+  bounds, message ids and wire session ids are unchanged.
+- A capture window frozen by 0.1.0 is retried once with the 0.1.0 parse, so its
+  batches and event ids stay identical across the upgrade; later windows are
+  filtered. A content-free marker next to the cursor tells them apart.
+- This is the second explicit D1 exception in `docs/plans/codex-client.md`
+  (decided 2026-09-29). Synthetic fixtures and one interactive synthetic
+  session on Claude Code 2.1.283 verified it.
+
 ## Unreleased — offline long-history stage gate
 
 - Add a maintainer-only, source-free synthetic gate that traces public capture,

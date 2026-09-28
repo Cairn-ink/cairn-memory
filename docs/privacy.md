@@ -11,7 +11,7 @@ The main risk in automatic memory is not bad retrieval. It is silently collectin
 
 ## Data flow
 
-After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
+After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service. From plugin 0.1.1 it skips user-role records that Claude Code writes itself: local-command output and caveats, compaction summaries, tool results, image-source notes and bash-mode wrappers.
 
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
@@ -33,6 +33,7 @@ By default the plugin stores control state under `~/.cairn-memory/`:
 - `paused`: compatibility marker also honored as a pause;
 - `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
   keyed by a hash of the Claude session id;
+- `sessions/*.json.filtered` (0.1.1+): a content-free marker written before a session's capture window is frozen, so a window frozen by 0.1.0 is retried with its original batches;
 - process-owned lock files coordinating control changes and session capture.
 
 Stop and PreCompact pipe only session id, transcript path, working directory,

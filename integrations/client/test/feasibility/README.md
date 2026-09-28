@@ -71,6 +71,7 @@ target, not local automatic capture.
 | `core-server.mjs` | Loopback server with hosted-shaped endpoints over one temporary `core/` store and the scripted model in `lib/scripted-model.mjs`; records every received body. |
 | `fake-responses.mjs` | Scripted Responses provider for zero-quota Codex steps. Records header names only, never values. |
 | `analyze.mjs` | Writes `results.json`: canary hits, record kinds, parser replays, hook matrix, trace summary, quota-event schema and timings. Exits 1 on a missing canary value, an unplanted required canary, or any leak: delivered bodies, recall, state or checked host output. |
+| `interactive-claude.mjs` | One gated, ledgered interactive Claude session in a private tmux server (its own `-L` socket, targeted by the session id it reports), used to verify the 0.1.1 transcript filter; `cleanup` removes its host files through the ledger. |
 | `cleanup.mjs` | Dry run by default; `--apply` removes only ledger-owned session files. |
 | `lib/` | `ledger`, `source-access`, `cleanup-plan`, `preflight`, `toml-hooks`, `supervise` and `canaries` hold the rules above; `core-http` records bodies and answers a handler failure with `harness_error` only, keeping its message in the local record; `parsers`, `common` and `scripted-model` support the probes. |
 | `selftest/` | Offline tests of those rules with in-memory or test-owned filesystems and fake hosts. |
