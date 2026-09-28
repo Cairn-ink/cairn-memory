@@ -528,3 +528,74 @@ test('one-source trace bounds calls, public reads, answer observation and report
     assert.equal(serialized.includes(secret), false, `report disclosed ${secret}`);
   }
 });
+
+test('a select request is projected at call entry before later mutation',
+  { skip: !supportsSqlite && 'node:sqlite requires Node >=22.16' }, async t => {
+  const { createRetainedRecallTrace } = await import('./recall-observation.mjs');
+  const fixture = await coldCase(t, 12);
+  const visible = await fixture.runFor(fixture.firstReceipt, { selectionMode: null });
+  const receipt = fixture.firstReceipt;
+  const read = () => fixture.core.get({ namespace, memoryId: fixture.target.id,
+    receiptLimit: 100 });
+  const trace = createRetainedRecallTrace({ sourceProbe: { namespace,
+    memoryId: fixture.target.id, client: 'synthetic', sessionId: 'cold-case',
+    eventId: receipt.eventId, role: receipt.role, excerpt: receipt.excerpt,
+    routingCue: visible.marker }, before: read(), readSet: [namespace] });
+  const select = visible.frames.gate.find(frame => frame.method === 'select');
+  const rank = visible.frames.gate.find(frame => frame.method === 'rank');
+  assert.ok(select && rank);
+  const request = { input: structuredClone(select.input) };
+  assert.ok(request.input.maps.flatMap(map => map.items)
+    .some(item => item.label?.includes(visible.marker)));
+  const settleSelect = trace.beginSelect(request);
+  // The adapter can mutate its request while an asynchronous response is pending.
+  // The report must describe the request at method entry, not at settlement.
+  for (const item of request.input.maps.flatMap(map => map.items)) {
+    if (item.label?.includes(visible.marker)) item.label = 'unrelated';
+  }
+  settleSelect(select.output);
+  const rankRequest = { input: structuredClone(rank.input) };
+  assert.ok(rankRequest.input.candidates.some(candidate => candidate.receipts
+    .some(row => row.excerpt.includes(visible.marker))));
+  const settleRank = trace.beginRank(rankRequest);
+  for (const candidate of rankRequest.input.candidates) {
+    for (const row of candidate.receipts) row.excerpt = 'unrelated';
+  }
+  settleRank(rank.output);
+  const report = trace.finish({ recall: visible.response, packed: visible.packed,
+    after: read() });
+  assert.equal(report.selection.routingTextVisible, 'yes');
+  assert.equal(report.rank.inputText, 'yes');
+  const duplicate = createRetainedRecallTrace({ sourceProbe: { namespace,
+    memoryId: fixture.target.id, client: 'synthetic', sessionId: 'cold-case',
+    eventId: receipt.eventId, role: receipt.role, excerpt: receipt.excerpt,
+    routingCue: visible.marker }, before: read(), readSet: [namespace] });
+  const settleTwice = duplicate.beginRank({ input: rank.input });
+  settleTwice(rank.output);
+  settleTwice(rank.output);
+  const duplicateReport = duplicate.finish({ recall: visible.response,
+    packed: visible.packed, after: read() });
+  assert.equal(duplicateReport.status, 'unavailable');
+  assert.equal(duplicateReport.reason, 'observation_failed');
+  const sourceProbe = { namespace, memoryId: fixture.target.id, client: 'synthetic',
+    sessionId: 'cold-case', eventId: receipt.eventId, role: receipt.role,
+    excerpt: receipt.excerpt, routingCue: visible.marker };
+  const pending = createRetainedRecallTrace({ sourceProbe, before: read(),
+    readSet: [namespace] });
+  pending.beginSelect({ input: select.input });
+  const pendingReport = pending.finish({ recall: visible.response,
+    packed: visible.packed, after: read() });
+  assert.equal(pendingReport.selection.accepted, 'unavailable');
+  assert.equal(pendingReport.firstObservedGap, 'unavailable');
+  const late = createRetainedRecallTrace({ sourceProbe, before: read(),
+    readSet: [namespace] });
+  const settleAfterClose = late.beginRank({ input: rank.input });
+  const closed = late.finish({ recall: visible.response,
+    packed: visible.packed, after: read() });
+  settleAfterClose(rank.output);
+  assert.equal(closed.rank.accepted, 'yes',
+    'the actual final ref proves ranking, but the late proposal is not observed');
+  assert.equal(closed.rank.proposal, 'unavailable');
+  assert.equal(late.finish({ recall: visible.response,
+    packed: visible.packed, after: read() }).reason, 'already_finished');
+});

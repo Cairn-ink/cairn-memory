@@ -33,6 +33,161 @@ function indexedResponse(body, output) {
     usage: { input_tokens: 100, output_tokens: 5, total_tokens: 105 } });
 }
 
+test('N3 actual mixed runner keeps fake-HTTP/accounting/scorer behavior with one source probe', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const runs = [];
+  for (const enabled of [false, true]) {
+    const fake = fakeMixedHttp(undefined, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact, configuration,
+      sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']],
+      comparisonProfile: 'indexed-evidence-v1', fetchImpl: fake.fetchImpl,
+      ...(enabled ? { sourceProbes: [{ batchIndex: 0, windowIndex: 0,
+        routingCue: 'Synthetic memory fact.' }] } : {}) });
+    try {
+      const generation = await runMixedGeneration({ prepared: fixture.prepared,
+        guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      const scored = await scoreMixedGeneration({ generationReport: generation,
+        evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+        guard: fixture.guard, apiKey: 'synthetic-only' });
+      const cairn = generation.cases[0].arms[0];
+      assert.equal(generation.halted, false);
+      assert.equal(cairn.status, 'completed', JSON.stringify(cairn));
+      assert.equal(generation.cases[0].arms[1].status, 'completed');
+      if (enabled) {
+        assert.equal(cairn.diagnostics.recallTrace.status, 'observed');
+        assert.equal(cairn.diagnostics.recallTrace.firstObservedGap, null);
+        assert.ok(Buffer.byteLength(JSON.stringify(cairn.diagnostics.recallTrace)) <= 32 * 1024);
+        assert.equal(JSON.stringify(cairn.diagnostics.recallTrace)
+          .includes('Synthetic memory fact.'), false);
+      } else assert.equal(Object.hasOwn(cairn.diagnostics, 'recallTrace'), false);
+      runs.push({ generation, scored, calls: fake.calls.map(call =>
+        [call.route, call.body.text?.format?.name ?? call.body.model]),
+      attempts: generation.cases[0].arms.map(item => item.diagnostics.attempts) });
+    } finally { fixture.guard.close(); }
+  }
+  assert.deepEqual(runs[1].calls, runs[0].calls);
+  assert.deepEqual(runs[1].attempts, runs[0].attempts);
+  assert.deepEqual(runs[1].generation.cases[0].arms.map(item =>
+    [item.status, item.reason, item.answer]), runs[0].generation.cases[0].arms.map(item =>
+    [item.status, item.reason, item.answer]));
+  assert.deepEqual(runs[1].scored.summary, runs[0].scored.summary);
+  // Independent captures have random memory IDs, so their provider bodies are
+  // deliberately not asserted byte-identical here.
+
+  const empty = fakeMixedHttp((url, body) => url.endsWith('/responses')
+    && body.text?.format?.name === 'cairn_extract'
+    ? indexedResponse(body, { items: [] }) : undefined, { cairnMemory: true });
+  const fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']],
+    comparisonProfile: 'indexed-evidence-v1', fetchImpl: empty.fetchImpl,
+    sourceProbes: [{ batchIndex: 0, windowIndex: 0,
+      routingCue: 'Synthetic memory fact.' }] });
+  try {
+    const report = await runMixedGeneration({ prepared: fixture.prepared,
+      guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+    const cairn = report.cases[0].arms[0];
+    assert.equal(cairn.status, 'completed');
+    assert.equal(cairn.diagnostics.admittedMemories, 0);
+    assert.equal(cairn.diagnostics.recallTrace.status, 'unavailable');
+    assert.equal(cairn.diagnostics.recallTrace.reason, 'not_observed_in_batch');
+  } finally { fixture.guard.close(); }
+
+  const failed = fakeMixedHttp((url, body) => url.endsWith('/responses')
+    && body.text?.format?.name === 'cairn_extract'
+    ? indexedResponse(body, { items: [{ content: 'invalid source index', kind: 'context',
+      confidence: 0.8, sourceIndices: [999] }] }) : undefined, { cairnMemory: true });
+  const failedFixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']],
+    comparisonProfile: 'indexed-evidence-v1', fetchImpl: failed.fetchImpl,
+    sourceProbes: [{ batchIndex: 0, windowIndex: 0,
+      routingCue: 'Synthetic memory fact.' }] });
+  try {
+    const report = await runMixedGeneration({ prepared: failedFixture.prepared,
+      guard: failedFixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: failedFixture.root });
+    const cairn = report.cases[0].arms[0];
+    assert.equal(cairn.status, 'failed');
+    assert.equal(cairn.reason, 'ingestion_incomplete');
+    assert.equal(cairn.diagnostics.recallTrace.status, 'unavailable');
+    assert.equal(cairn.diagnostics.recallTrace.reason, 'ingestion_incomplete');
+    assert.equal(cairn.diagnostics.recallTrace.firstObservedGap, 'unavailable');
+  } finally { failedFixture.guard.close(); }
+});
+
+test('N3 actual runner distinguishes visible omission, rank omission and model failure', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  for (const stage of ['select-empty', 'rank-empty', 'rank-invalid']) {
+    const row = sourceRow(`synthetic-${stage}`);
+    if (stage === 'select-empty') {
+      for (let index = 0; index < 3; index++) {
+        row.history.sessions.push({ session_index: index + 1,
+          session_id: `lme-session-${String(index + 1).repeat(64)}`,
+          date: `2024/01/01 (Mon) 09:0${index + 1}`,
+          turns: [{ turn_id: `lme-turn-${String(index + 4).repeat(64)}`,
+            role: 'user', content: `Synthetic distractor ${index}.` }] });
+      }
+    }
+    const fake = fakeMixedHttp((url, body) => {
+      if (!url.endsWith('/responses')) return undefined;
+      const method = body.text?.format?.name;
+      if (stage === 'select-empty' && method === 'cairn_extract') {
+        const input = JSON.parse(body.input[0].content[0].text);
+        const window = (input.windows ?? input.messages)[0];
+        const first = window.content.includes('Synthetic memory fact.');
+        return indexedResponse(body, { items: Array.from({ length: first ? 1 : 5 },
+          (_, index) => ({ content: first ? 'Generic interpretation'
+            : `Unique distractor ${window.content.slice(-24)} ${index}`,
+          kind: 'context', confidence: 0.8, sourceIndices: [0] })) });
+      }
+      if (stage === 'select-empty' && method === 'cairn_select') {
+        return indexedResponse(body, { refs: [] });
+      }
+      if (stage === 'rank-empty' && method === 'cairn_rank') {
+        return indexedResponse(body, { refs: [] });
+      }
+      if (stage === 'rank-invalid' && method === 'cairn_rank') {
+        return indexedResponse(body, { refs: [
+          { namespaceIndex: 0, memoryId: 'forged', revision: 1 },
+        ] });
+      }
+      return undefined;
+    }, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact, configuration,
+      sourceCases: [row], armOrders: [['cairn', 'mem0']],
+      comparisonProfile: 'indexed-evidence-v1', fetchImpl: fake.fetchImpl,
+      sourceProbes: [{ batchIndex: 0, windowIndex: 0,
+        routingCue: 'Synthetic memory fact.' }] });
+    try {
+      const report = await runMixedGeneration({ prepared: fixture.prepared,
+        guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      const cairn = report.cases[0].arms[0];
+      assert.equal(report.halted, false, JSON.stringify(cairn));
+      assert.equal(cairn.diagnostics.recallTrace.status, 'observed');
+      if (stage === 'select-empty') {
+        assert.equal(cairn.status, 'completed');
+        assert.equal(cairn.diagnostics.recallTrace.selection.referenceVisible, 'yes');
+        assert.equal(cairn.diagnostics.recallTrace.selection.accepted, 'no');
+        assert.equal(cairn.diagnostics.recallTrace.firstObservedGap, 'selected');
+      } else if (stage === 'rank-empty') {
+        assert.equal(cairn.status, 'completed');
+        assert.equal(cairn.diagnostics.recallTrace.rank.inputSourceBinding, 'yes');
+        assert.equal(cairn.diagnostics.recallTrace.rank.accepted, 'no');
+        assert.equal(cairn.diagnostics.recallTrace.firstObservedGap, 'ranked');
+      } else {
+        assert.equal(cairn.status, 'failed');
+        assert.equal(cairn.reason, 'recall_failed');
+        assert.equal(cairn.diagnostics.recallTrace.final.status, 'failed');
+        assert.equal(cairn.diagnostics.recallTrace.firstObservedGap, 'unavailable');
+      }
+    } finally { fixture.guard.close(); }
+  }
+});
+
 test('C1-C7 actual qualified failure and explicit indexed-evidence success share source/native/common scoring', async t => {
   const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
     pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
