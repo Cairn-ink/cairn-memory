@@ -307,6 +307,14 @@
       "notnull": 1,
       "dflt_value": "1",
       "pk": 0
+    },
+    {
+      "cid": 10,
+      "name": "outcome_code",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
     }
   ],
   "episode_keep_actions": [

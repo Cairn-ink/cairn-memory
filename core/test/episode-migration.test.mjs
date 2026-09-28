@@ -176,6 +176,11 @@ test('E11 v15 committed fixture eagerly upgrades to v16 with empty content-free 
   const layout=JSON.parse(readFileSync(new URL('../testing/episode-v16-layout.json',import.meta.url),'utf8'));
   for(const [name,expected] of Object.entries(layout))
     assert.deepEqual(JSON.parse(JSON.stringify(db.prepare('PRAGMA table_info('+name+')').all())),expected);
+  const outcome = db.prepare('PRAGMA table_info(episode_attempts)').all()
+    .find(column => column.name === 'outcome_code');
+  assert.equal(outcome.type, 'TEXT');
+  assert.equal(outcome.notnull, 0);
+  assert.equal(outcome.dflt_value, null);
   assert.ok(db.prepare('PRAGMA table_info(episode_keep_actions)').all().some(column=>column.name==='keep_state'));
   assert.ok(db.prepare('PRAGMA table_info(episode_events)').all().some(column=>column.name==='omitted_indices'));
 });

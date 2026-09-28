@@ -69,16 +69,14 @@ export function episodeRequest(model, snapshot) {
 }
 
 function recordDraftFailure(runtime, ns, failure) {
+  const deadline = performance.now() + Math.min(250, failure.busyTimeoutMs ?? 250);
   const written = runtime.failEpisodeDraft(ns, failure);
   if (written?.revision !== undefined) return failure.code;
-  // Another owner may already have finalized the attempt during admission.
-  // Report its persisted outcome, rather than the code this owner tried to write.
-  try {
-    return runtime.episodeCaptureState(ns, { episodeId: failure.episodeId })
-      ?.record.processing.errorCode;
-  } catch (error) {
-    if (error.code !== 'episode_not_found') throw error;
-  }
+  // Recovery may have finalized this token before a later attempt changed the
+  // episode-wide state. Read only this attempt, within the remaining budget.
+  const remaining = Math.max(0, Math.floor(deadline - performance.now()));
+  return runtime.episodeDraftOutcome(ns, { episodeId: failure.episodeId,
+    token: failure.token, busyTimeoutMs: remaining });
 }
 
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken,

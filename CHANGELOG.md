@@ -7,8 +7,9 @@
   per-batch quick policy and idempotent explicit keep from retained passages.
   Local draft locks preserve unspent attempts for retry, including after restart.
   Started attempts retain unfinished state until an outcome or timeout is recorded.
-  `episode_outcome_pending` reports an unrecorded outcome from capture, end or lazy
-  interpretation; it is non-retryable and awaits lease-expiry recovery.
+  `episode_outcome_pending` reports an unavailable outcome from capture, end or
+  lazy interpretation. It is non-retryable; stranded attempts await lease-expiry
+  recovery. Failure reporting uses the original attempt's recorded code.
 - Keep actions retain paged source coverage and explicit outcomes in dedicated
   storage, use a separate admission identity, and support retry after interruption.
 - Add source-anchored automatic procedural proposals only in episode-v1. Legacy

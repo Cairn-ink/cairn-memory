@@ -705,18 +705,21 @@ owner immediately finishes the attempt with a finite failure and coverage gap.
 Failure finalization preserves corrected content and stronger deletion fences.
 
 After a started attempt encounters a lock, the owner retries failure recording
-up to 20 times after the initial write, within five seconds. Each SQLite wait is
-bounded by 250 ms and the remaining budget. Only a store locked for that whole
-budget strands an attempt for lease-expiry recovery. Admission proceeds when
-writable in this call or its immediate retry. After successful admission the
-owner tries one additional failure write, bounded to 250 milliseconds. A recorded
-outcome returns its finite code. A no-op write rereads the stored processing code
-so concurrent recovery cannot be misreported. With no stored outcome, or another
-lock, capture, end and lazy paths return non-retryable `episode_outcome_pending`.
-Same-event replay does not finalize the consumed attempt; lease-expiry recovery
-records `episode_timeout` without another paid call. Retryable admission busy
-preserves staged evidence and releases its own claim when writable. A locked cleanup is retried in-process; after restart its
-ordinary admission lease bounds recovery.
+up to 20 times after the initial write, within five seconds. Each SQLite wait
+is bounded by 250 ms and the remaining budget. Only a store locked for that
+whole budget strands an attempt for lease-expiry recovery. Admission proceeds
+when writable in this call or its immediate retry. After successful admission
+the owner tries one additional failure write, bounded to 250 milliseconds. A
+recorded outcome returns its finite code. A no-op write uses a plain read of
+that token's content-free `outcome_code`, within the remaining 250 ms budget.
+Later attempts cannot change the reported code; unidentified older outcomes
+stay pending. With no stored outcome, or another lock, capture, end and lazy
+paths return non-retryable `episode_outcome_pending`. Same-event replay does
+not finalize the consumed attempt; lease-expiry recovery records
+`episode_timeout` without another paid call. Retryable admission busy
+preserves staged evidence and releases its own claim when writable. A locked
+cleanup is retried in-process; after restart its ordinary admission lease
+bounds recovery.
 
 The heavy-day harness uses IPC barriers without clock advancement. Its failure
 arm is repeated at least 20 times at the verified HEAD. Explicit stranded-attempt

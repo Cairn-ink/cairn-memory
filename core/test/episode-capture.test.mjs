@@ -566,7 +566,7 @@ test('E8 a raw keep assertion lock returns retryable storage_busy and the same a
 
 for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
   const outcomes = boundary === 'commitEpisodeDraft'
-    ? ['recorded', 'busy', 'recovered', 'no-outcome'] : ['recorded', 'busy'];
+    ? ['recorded', 'busy', 'recovered', 'read-locked', 'no-outcome'] : ['recorded', 'busy'];
   for (const finalWrite of outcomes) {
     test(`E4/E5 lock beyond budget at ${boundary}; post-admission write ${finalWrite}; ` +
       'fake clock covers stranded lease recovery only',
@@ -575,11 +575,13 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
       const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
       t.after(() => runtime.close());
       let snapshots = 0, locked = false, failureWrites = 0, failureStart, writesBeforeAdmission;
-      let admitted = false;
+      let admitted = false, readLocked = false, finalWriteStarted, originalToken;
       const wrapped = { ...runtime,
         failEpisodeDraft(...args) {
           failureStart ??= performance.now(); failureWrites++;
-          if (admitted && finalWrite === 'recovered') {
+          originalToken ??= args[1].token;
+          if (admitted) finalWriteStarted = performance.now();
+          if (admitted && ['recovered', 'read-locked'].includes(finalWrite)) {
             // A separate connection recovers the genuinely stranded attempt just
             // before its original owner makes the extra post-admission write.
             f.db.exec('UPDATE episode_attempts SET expires_at=0; ' +
@@ -589,10 +591,21 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
             try {
               const episodeId = args[1].episodeId;
               const writer = successor.claimEpisodeWriter(ns, { episodeId, generation: 'initial' });
+              const later = successor.reserveEpisodeBatch(ns,
+                batch('later', 'Synthetic later evidence.', 'private-session'));
+              const attempt = successor.claimEpisodeDraft(ns, { episodeId,
+                generation: 'initial', writerToken: writer.token,
+                trigger: 'batch', watermark: later.position });
+              successor.failEpisodeDraft(ns, { episodeId, token: attempt.token,
+                code: 'invalid_model_output' });
               successor.releaseEpisodeWriter(ns, { episodeId, token: writer.token });
             } finally { successor.close(); }
             const result = runtime.failEpisodeDraft(...args);
             assert.equal(result, undefined);
+            // Reserved writers must not block the read; an exclusive lock must
+            // spend only the remaining budget, never the default five seconds.
+            f.db.exec(finalWrite === 'read-locked' ? 'BEGIN EXCLUSIVE' : 'BEGIN IMMEDIATE');
+            readLocked = true;
             return result;
           }
           if (admitted && finalWrite === 'no-outcome') return undefined;
@@ -602,6 +615,17 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
             finally { f.db.exec('ROLLBACK'); }
           }
           return runtime.failEpisodeDraft(...args);
+        },
+        episodeDraftOutcome(...args) {
+          assert.ok(args[1].busyTimeoutMs >= 0 && args[1].busyTimeoutMs <= 250);
+          try { return runtime.episodeDraftOutcome(...args); }
+          finally {
+            if (readLocked) {
+              f.db.exec('ROLLBACK'); readLocked = false;
+              // Allow scheduling overhead while rejecting the former 5 s wait.
+              assert.ok(performance.now() - finalWriteStarted < 1000);
+            }
+          }
         },
         claimAdmission(...args) {
           // The owner exhausted finalization while a real SQLite lock was held.
@@ -625,11 +649,30 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
         } } });
       assert.equal(locked, true); assert.equal(captured.admission.status, 'completed');
       assert.equal(failureWrites, writesBeforeAdmission + 1);
-      const pending = ['busy', 'no-outcome'].includes(finalWrite);
+      const pending = ['busy', 'no-outcome', 'read-locked'].includes(finalWrite);
       const storedCode = finalWrite === 'recovered' ? 'episode_timeout' : 'episode_failed';
       assert.deepEqual(captured.episode.error, {
         code: pending ? 'episode_outcome_pending' : storedCode, retryable: false });
-      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, pending ? 0 : 1);
+      const recovered = ['recovered', 'read-locked'].includes(finalWrite);
+      const own = f.db.prepare('SELECT finished,outcome_code FROM episode_attempts WHERE token=?')
+        .get(originalToken);
+      assert.equal(own.finished, pending && !recovered ? 0 : 1);
+      if (recovered) {
+        assert.equal(own.outcome_code, 'episode_timeout');
+        const later = f.db.prepare("SELECT outcome_code FROM episode_attempts WHERE marker='batch:2'").get();
+        assert.equal(later.outcome_code, 'invalid_model_output');
+        assert.equal(JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record)
+          .processing.errorCode, later.outcome_code);
+        const reopened = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+        try {
+          const key = { episodeId: captured.episode.id, token: originalToken, busyTimeoutMs: 250 };
+          assert.equal(reopened.episodeDraftOutcome(ns, key), own.outcome_code);
+          assert.equal(reopened.episodeDraftOutcome({ ...ns, ownerId: 'other' }, key), undefined);
+          assert.equal(reopened.episodeDraftOutcome(ns, { ...key, token: 'unknown' }), undefined);
+        } finally { reopened.close(); }
+        assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
+        return;
+      }
       if (!pending) {
         assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
         const event = f.db.prepare('SELECT gap_reasons FROM episode_events').get();

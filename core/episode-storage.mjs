@@ -363,7 +363,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         .all(row.id, claim.watermark)) {
         mergeGap(ns, { client: event.client, eventId: event.event_id }, 'episode_timeout');
       }
-      db.prepare('UPDATE episode_attempts SET finished=1 WHERE episode_id=? AND token=?').run(row.id, claim.token);
+      db.prepare("UPDATE episode_attempts SET finished=1,outcome_code='episode_timeout' WHERE episode_id=? AND token=?")
+        .run(row.id, claim.token);
     }
     if (failed) save(ns, row, record);
     const token = randomUUID();
@@ -447,7 +448,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const claim = row && db.prepare('SELECT * FROM episode_attempts WHERE episode_id=? AND token=?').get(row.id, input.token);
       if (!claim || claim.finished) return;
       const record = JSON.parse(row.record);
-      db.prepare('UPDATE episode_attempts SET started=1,finished=1 WHERE episode_id=? AND token=?').run(row.id, claim.token);
+      db.prepare('UPDATE episode_attempts SET started=1,finished=1,outcome_code=? WHERE episode_id=? AND token=?')
+        .run(input.code, row.id, claim.token);
       db.prepare('UPDATE session_episodes SET attempted=max(attempted,?) WHERE id=?').run(claim.watermark, row.id);
       for (const registered of db.prepare('SELECT client,event_id FROM episode_events WHERE episode_id=? AND position<=? AND disposition=0').all(row.id, claim.watermark)) {
         mergeGap(ns, { client: registered.client, eventId: registered.event_id }, input.code);
@@ -461,6 +463,22 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     }); } finally {
       if (input.busyTimeoutMs !== undefined) db.exec(`PRAGMA busy_timeout=${timeout}`);
     }
+  }
+  function draftOutcome(ns, input) {
+    const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
+    const budget = Math.max(0, Math.min(timeout, 250, Math.floor(input.busyTimeoutMs ?? 0)));
+    db.exec(`PRAGMA busy_timeout=${budget}`);
+    try {
+      // A plain read can coexist with a reserved writer. Never take a write lock
+      // to inspect an outcome, and never borrow another attempt's episode state.
+      return db.prepare(`SELECT a.outcome_code AS code FROM episode_attempts a
+        JOIN session_episodes e ON e.id=a.episode_id
+        WHERE e.owner_id=? AND e.scope=? AND e.project_id=?
+          AND a.episode_id=? AND a.token=? AND a.finished=1`)
+        .get(...boundary(ns), input.episodeId, input.token)?.code;
+    } catch (error) {
+      if (!isStorageBusy(error)) throw error;
+    } finally { db.exec(`PRAGMA busy_timeout=${timeout}`); }
   }
   function commitDraft(ns, input) {
     return transaction(db, () => {
@@ -845,6 +863,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
               revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
     });
   }
-  return { prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
+  return { draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
     claimWriter, releaseWriter, claimDraft, failDraft, commitDraft, correct, releaseCorrection, forget, inspect };
 }

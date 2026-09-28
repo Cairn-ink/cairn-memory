@@ -1,5 +1,6 @@
 // Maintainer-only, offline synthetic fixture generator. Never run by the test suite.
 // Usage: node core/testing/generate-episode-v15-fixture.mjs --write /absolute/clean/13e50399-checkout
+// Layout only: node core/testing/generate-episode-v15-fixture.mjs --write-layout
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
@@ -11,7 +12,25 @@ import { openDatabase } from '../database.mjs';
 import { captureDiagnosticParity } from './episode-diagnostic-parity.mjs';
 import { captureEpisodeParity } from './episode-parity.mjs';
 
+function writeLayout(path) {
+  const current = openDatabase(path);
+  try {
+    const names = ['episode_messages', 'episode_events', 'episode_attempts', 'episode_keep_actions'];
+    const layout = Object.fromEntries(names.map(name =>
+      [name, current.prepare('PRAGMA table_info(' + name + ')').all()]));
+    writeFileSync(new URL('./episode-v16-layout.json', import.meta.url),
+      JSON.stringify(layout, null, 2) + '\n');
+  } finally { current.close(); }
+}
+
 const [flag, root, ...extra] = process.argv.slice(2);
+// Regenerate only the unmerged v16 expectation, preserving frozen v15 data.
+if (flag === '--write-layout' && root === undefined && extra.length === 0) {
+  const temporary = mkdtempSync(join(tmpdir(), 'episode-layout-'));
+  try { writeLayout(join(temporary, 'v16.sqlite')); }
+  finally { rmSync(temporary, { recursive: true, force: true }); }
+  process.exit(0);
+}
 if (flag !== '--write' || !root || !isAbsolute(root) || extra.length) {
   throw new Error('Usage: node core/testing/generate-episode-v15-fixture.mjs --write /absolute/clean/13e50399-checkout');
 }
@@ -46,12 +65,7 @@ try {
   }
   writeFileSync(new URL('./episode-v15-diagnostics.json', import.meta.url),
     JSON.stringify({ base, cases: await captureDiagnosticParity(root) }, null, 2) + '\n');
-  const current = openDatabase(join(temporary, 'v16.sqlite'));
-  try {
-    const layout = Object.fromEntries(['episode_messages', 'episode_events', 'episode_attempts', 'episode_keep_actions'].map(name =>
-      [name, current.prepare('PRAGMA table_info(' + name + ')').all()]));
-    writeFileSync(new URL('./episode-v16-layout.json', import.meta.url), JSON.stringify(layout, null, 2) + '\n');
-  } finally { current.close(); }
+  writeLayout(join(temporary, 'v16.sqlite'));
   // Freeze the old opener for the old-binary exclusion gate. Relative imports only;
   // the version constant is frozen to the value shipped by this pinned binary.
   const opener = readFileSync(join(root, 'core/database.mjs'), 'utf8')

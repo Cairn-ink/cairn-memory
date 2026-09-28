@@ -106,6 +106,10 @@ export function migrateVersion14(db) {
 export function migrateVersion15(db) {
   if (db.prepare('PRAGMA foreign_keys').get().foreign_keys !== 1) fail('storage_error');
   db.exec(`ALTER TABLE episode_attempts ADD COLUMN started INTEGER NOT NULL DEFAULT 1 CHECK(started IN (0,1));
+    ALTER TABLE episode_attempts ADD COLUMN outcome_code TEXT
+      CHECK(outcome_code IN ('episode_failed','episode_timeout','invalid_model_output',
+        'context_budget_exceeded','capacity','expired','generation_conflict','missing_evidence'))
+      CHECK(outcome_code IS NULL OR finished=1);
     CREATE TABLE episode_messages (
     episode_id TEXT NOT NULL REFERENCES session_episodes(id),
     message_id TEXT NOT NULL CHECK(length(message_id) BETWEEN 1 AND 200),

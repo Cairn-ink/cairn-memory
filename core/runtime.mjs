@@ -518,6 +518,7 @@ export function createMemoryRuntime(input) {
     claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
     releaseEpisodeWriter(ns, input) { ready(); return episodes.releaseWriter(ns, input); },
     claimEpisodeDraft(ns, input) { ready(); return episodes.claimDraft(ns, input); },
+    episodeDraftOutcome(ns, input) { ready(); return episodes.draftOutcome(ns, input); },
     failEpisodeDraft(ns, input) { ready(); return episodes.failDraft(ns, input); },
     commitEpisodeDraft(ns, input) { ready(); return episodes.commitDraft(ns, input); },
     getEpisode(ns, input, pages) { ready(); return episodes.inspect(ns, input, pages); },

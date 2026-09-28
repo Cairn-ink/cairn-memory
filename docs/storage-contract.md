@@ -201,7 +201,7 @@ throw instead). They never expose raw database or provider errors.
 | `episode_sources_unavailable` | Explicit keep has no currently retained source passages. |
 | `missing_evidence` | The interpretation target has no available staged evidence. |
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
-| `episode_outcome_pending` | Capture, end or lazy interpretation has no recorded failure outcome yet; non-retryable, awaiting lease-expiry recovery. |
+| `episode_outcome_pending` | This capture, end or lazy attempt has no identifiable outcome available within the budget; non-retryable. Stranded attempts await lease-expiry recovery. |
 | `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
 Interpretation never holds up ordinary admission. A reserved, started or stranded
@@ -229,8 +229,11 @@ the consumed attempt stays unfinished. Admission still proceeds when writable,
 in this call or its immediate retry. After successful admission, the owner makes
 one additional failure write, bounded to 250 milliseconds. Success returns the
 recorded finite code. If another process already finished the attempt, the owner
-rereads and reports the stored processing code. With no stored code, or a write
-still locked, it reports `episode_outcome_pending` with `retryable: false`.
+uses a plain read of that token's `episode_attempts.outcome_code`, bounded by the
+remaining write budget. Later attempts cannot replace that outcome. The nullable
+column is content-free v16 metadata; older attempt outcomes are not reconstructed.
+With no identifiable code, or a read or write still locked, it reports
+`episode_outcome_pending` with `retryable: false`.
 End and lazy interpretation also return this code when failure recording remains
 locked. Retrying the same event before expiry does not finalize the consumed
 attempt or repeat interpretation. A later capture or end signal recovers it after
