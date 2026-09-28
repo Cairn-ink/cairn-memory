@@ -1127,8 +1127,22 @@ message is 1,798 UTF-16 units. Repetitive authored background and a single probe
 make this a bounded diagnostic, not representative long-history coverage or a
 replacement for the official benchmark. Source-only preparation and its frozen
 digests do not establish retention, semantic accuracy, automatic dependency
-maintenance, default MOC retrieval or installed-host behavior. No new paid
-result is claimed at this preparation checkpoint.
+maintenance, default MOC retrieval or installed-host behavior.
+
+The [one-shot paid diagnostic](evidence/source-localization-live-four.md) then
+completed all eight generation arms and eight judgments: Cairn 3/4 correct,
+Mem0 4/4, common resolved N=4. Two traces were observed and showed no source
+delivery gap; two were unavailable because an exact source window was retained
+on multiple cards. This is a diagnostic limitation, not proof of missing data.
+The failed recorder answer correctly rejected an invented replacement but did
+not explain the changed premise. Its original reason was retained separately,
+while final provenance references the later challenge and proposal. That does
+not reconstruct the rank callback or establish a causal retrieval failure.
+The question's broad "status" wording admits a more lenient reading; the frozen
+incorrect judgment is retained without rescoring. The report separates
+1,121,036 microUSD reservations from 96,327 microUSD known partial usage and
+37 unknown-cost token-count requests. Neither four authored cases nor a clean
+mechanical run resolves the official benchmark or installed-host gates.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 

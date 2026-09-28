@@ -244,3 +244,102 @@ within the unchanged packet cap and protected remainder. This is not actual
 usage or launch acceptance. Private helper testing/review, exact runtime freeze
 and fresh authenticated launch preflight remain pending. Agent token/cost
 telemetry is unavailable; no inference is made from model names.
+
+## Accepted private operator and completed one-shot
+
+Public preparation runtime was frozen at
+`a39687bd3fc84b911a946a5bbaf297cea3df3bb0`. Separate nonauthor GPT-6 Sol/high
+Standards and Spec reviews passed that exact seven-file candidate. Standards
+noted only possible duplicated short freeze helpers; primary retained the local
+helpers for this bounded packet, without expanding a shared module boundary.
+CI `36487340926` completed successfully for the exact pull-request head with
+17/17 reported checks and mergeability verified. No CodeQL check was reported.
+
+The private operator worker (GPT-6 Sol/high) initially passed 13/13 synthetic
+tests on both runtimes. Primary nevertheless found an integration blocker:
+the immutable earlier parent capability checkpoint had been incorrectly
+required to equal this run's current settled checkpoint. Primary also required
+an explicit recall-observation module inventory pin. One correction round added
+two RED regressions against the prior helpers, removed the erroneous equality
+without changing parent metadata, and pinned the missing module. Final worker
+tests passed 14/14 on both runtimes; primary independently reran 14/14 on
+Node 22.16 (5496.991 ms) and 24.15 (5167.831 ms), no skips. Both independent
+review axes re-reviewed the final exact private hashes and passed; the initial
+private review is superseded, not counted as evidence for corrected code.
+
+Final private helper hashes (files remain private, no credentials published):
+
+| Helper | SHA-256 |
+| --- | --- |
+| operator | `d40f6b9513dd5d29d48179bd7d9082e9d336328fe9f78e9e95a9f97c3a756154` |
+| bootstrap | `2ec201d5aa3ab9ecb7418614750b0c05cba43baca7645494dbbde2249fa634da` |
+| assembly | `92d7521cec8c93c6e5e878b42844d10d03d402cd4c212ad0ab037f50dfbfc9be` |
+| synthetic test | `a0a022940b7b832f3b3d5f8c2f676eb97897fcba33dfa1798919b5e5b4381023` |
+
+Actual source-only preflight checked the clean runtime, native pins, 1291
+source-only inventory files, fresh authenticated ledger, and actual conditional
+upper reservation before the sole run. Runtime inventory digest:
+`6db825af322c8b35bdb21d70b69d476c8aae84daae0c0ba5de805d9b4fc61d9c`;
+preflight digest:
+`fe5cde9a029c50c84a25ef7996504bfc792c6a9188516945d8a24c29d950a0ec`.
+The reviewed parent transport alone received the previously approved local key.
+Generation was durably saved before evaluator loading; no retry or rescore.
+
+The [completed report](../evidence/source-localization-live-four.md) records
+8/8 completed generations, 8/8 resolved judgments and 16/16 completed scopes.
+Cairn is 3 correct / 1 incorrect / 0 unresolved; Mem0 is 4 / 0 / 0; common
+resolved N is four. The recorder answer omits the changed premise; the frozen
+incorrect judgment remains despite the question-wording ambiguity. Traces
+for cases 2 and 4 observe source progression with no first gap; cases 1 and 3
+remain unavailable (`ambiguous_source`). Read-only inspection of the recorder's
+fresh synthetic store found two cards bearing the exact probe window, and the
+original 72-hour decision retained separately. Final provenance is not a live
+rank callback or proof of causal answer use.
+
+A fresh, nonauthor GPT-6 Sol/high auditor independently verified artifact hashes,
+domain-separated generation/manifest/roster digests, fixed denominators,
+judgments, current-run attempt uniqueness/accounting, and the limited source
+claims. Primary independently reconciled all 142 successful attempts and then
+authenticated the existing ledger again: 21,497 requests, 136,659,334 microUSD
+reservations, open with zero pending, and 63,340,666 microUSD remaining.
+This run's reservation delta is 1,121,036 microUSD, below the 1,365,856 upper
+projection and US$3 packet cap. Known partial usage is 96,327 microUSD; 37
+successful token-count requests have unknown actual cost, not zero. No parent
+reset, refund, cleanup of old evidence, release, deployment or merge occurred.
+
+## F8 decision and remaining milestones
+
+The next bounded packet is OFFLINE: support a source window shared by multiple
+valid cards in the diagnostic, without selecting a convenient winning card or
+relabeling historical unavailable results. Build a real-capture regression,
+preserve exact source/revision/scope binding and finite reads, and verify
+provider-byte/accounting parity. This improves observation, not semantic quality.
+In parallel with that acceptance, distinguish missing original-premise context
+from failure to explain an already delivered update. Do not treat the present
+trace as proof of the first semantic loss, alter the consumed question/reference,
+or repair the answer retrospectively.
+
+Only then select and test a bounded product change, if supported, on fresh
+prospectively frozen cases. Official matched scoring and installed MCP/Hermes
+cold-session, growth, correction/forgetting and latency/cost remain separate
+milestones. The failed official-six feasibility gate is unchanged. This packet
+has produced a reliable measurement of a bounded failure, not a declaration
+that the memory layer's reliability goal is complete. Final report diff review
+and latest-head CI remain delivery gates after the runtime freeze above.
+
+## Report integration acceptance
+
+The bounded report worker used GPT-6 Sol/high and edited only the new evidence
+report. Primary corrected one factual interpretation before acceptance: the
+recorder answer denies a replacement decision and Cedar R2 adoption, but does
+not explicitly deny cancellation. The report now distinguishes that omission
+from inventing a cancellation; the frozen judgment is unchanged. Primary owns
+the roadmap, limitations and plan integration. No runtime or fixture bytes
+changed after the paid runtime freeze.
+
+On the combined report candidate, primary personally reran
+`test:long-history-live:offline` (6/6), `npm test` (143/143), `npm run validate`
+and pinned strict plugin/marketplace validation on both Node 22.16 and 24.15;
+all passed with no skipped tests. These docs-only checks complement, rather
+than replace, the full runtime/native evidence above. Final independent review
+and latest-head CI are recorded in the PR against the report commit.
