@@ -841,6 +841,11 @@ cost grows with other namespaces in that file. Hosted deployments should use one
 database file per owner to limit this cost. Separately, `processing.attempted` can
 change during pagination without advancing the namespace epoch; this predates SE-3.
 
+The core test command caps concurrent test files at two. This preserves all tests
+and deadline budgets while avoiding full-suite contention that exhausted two
+600 ms injection-test budgets before their intended SQL boundary on this host.
+Isolated parent/current probes and complete suites with this cap pass those checks.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,
