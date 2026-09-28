@@ -94,8 +94,99 @@ Keep fixture/expectation freeze in a separate local commit before measurement.
 Record exact commands, failed observations, explanations, corrected candidates
 and measured/unknown cost facts below. No GitHub issue is requested.
 
-## Evidence and remaining gates
+## Implementation and evidence
 
-Pending implementation. Real-model completion/selection, installed MCP/Hermes
-acceptance (including #241), and semantic/current-state reliability remain open
-until their own evidence exists; this gate cannot mark them complete.
+Fixture and expectation freeze: `ad4a96c0e61bff12d6d6638c6b913a762a8d3917`,
+then `4da14fac6ca65b694623fa9721e7e74e98b87ec4` before the first
+result-producing run. The second commit fixed the exact 800-unit boundary
+separator and required a normal classifier-proposed L1 for the front passage.
+The scripted model reads only each public model request. The evaluator derives
+full required passages from the frozen source text and checks exact cold
+receipts, rank input, final recall and packed evidence. Its marker query is a
+literal diagnostic of routing, not a semantic or blind benchmark. The output
+contains per-batch statuses, bounded stage aggregates and no source text or IDs.
+The long passages do not fit the 120-character candidate preview. For the
+shorter capacity and dated passages, the summary body's equal query score
+wins the existing tie against the source receipt, so those full passages are
+also absent from previews. Memory references and marker routing cues are
+visible in successful cases; subsequent fetch/rank/final/packing can still
+deliver exact receipts. `firstMissing` identifies the first preview-level gap,
+`firstDeliveryFailure` identifies the first broken source-delivery stage, and
+`deliverySucceeded` records the observed downstream delivery.
+
+Caller path: `openMemoryCore.capture` → indexed source-window catalog → model
+extract → public admission → model classify → closed/reopened store → public
+get/recall → query candidate map → model select → fetch → model rank → final
+snapshot → existing `packMixedAnswer`. The capacity family writes 205 public
+capture batches of five, then freezes the maximum admitted ID as the target
+before either recall policy is invoked. The default and opt-in policy read the
+same cold database. The front long-window item is filed by normal model
+classification and observed as an L1 child reference; other capacity items
+exercise unfiled candidate routing.
+
+Initial CLI runs failed `gate_negative_controls` because the evaluator matched
+the marker in the packed question even when evidence was empty. The empty
+selection/rank controls exposed that diagnostic bug; checking the packed
+`evidence` array corrected it. An early successful worker run, before the
+final preview and count corrections, was
+`node tools/testing/run.mjs --script evaluation/long-history/run.mjs` on
+Node 22.16.0: exit 0 in 40.558 s, 208/208 positive capture batches and
+1,030 admitted memories; default capacity retained the target but did not
+show its reference, while the opt-in route packed it and reported
+`budget_exhausted` because 1,025 eligible rows exceed the 1,024 top set.
+All eight expected negative controls were observed. That candidate miscounted
+downstream `not-run` stages as true in aggregate. A later test stopped after
+206/208 positive batches at `gate_capacity_optin_delivery`: its first revision
+mistook absence of the full source from the candidate preview for a delivery
+failure. The existing summary/source tie keeps the marker visible while the
+source itself arrives through fetch. The final diagnostic separates preview
+visibility, routing cue and actual delivery; these were evaluator corrections,
+not product behavior changes.
+
+Primary precommit checks of unchanged runtime and dependents: `npm test`
+passed 121/121, `npm run validate` passed, strict marketplace/plugin validation
+passed, `npm run test:longmemeval` passed 193/193 on Node 22.16.0 and 24.15,
+and local-store, MOC, recall, capture and LongMemEval ingestion/comparison/
+public/mixed demos passed on both runtimes through the owned runner. Individual
+demo durations were not recorded. The worker's corrected dedicated
+`npm run test:long-history` passed 1/1 on Node 22.16.0 in 48.335 s before the
+final preview-visibility refinement; it is not final-SHA evidence. Primary
+full-core Node 22.16.0 and workspace-lifecycle Node 22.16.0/24.15 checks
+subsequently passed; full-core Node 24.15 remains in progress.
+
+Final worker precommit check on Node 22.16.0: `npm run test:long-history`
+passed 1/1 in 25.780 s. The CLI
+`node tools/testing/run.mjs --script evaluation/long-history/run.mjs`
+exited 0 in 32.091 s. It recorded 208 completed positive capture batches,
+1,030 admitted memories, seven cold retained required passages, six visible
+memory references and six passages reaching selected/rank/final/packed stages.
+All seven full passages are absent from candidate previews (the long passages
+exceed 120 characters; short source/body scores tie), yet six route from
+visible marker cues to exact packed evidence. The default 1,025-memory target
+has no visible reference; opt-in `bounded-keyset-v1` packs its exact source
+and honestly reports `budget_exhausted`. The eight negative controls passed,
+including explicit post-admission classification failure and cold lifecycle
+checks. Local counts were 214 extract, 212 classify, 16 select and eight rank
+calls, 5133 tokenizer calls, 319597 scripted model-input tokens, 56117
+model-output tokens and 15886942 total local tokenizer tokens across all core
+checks. Write/read/control times were 30219/615/1154 ms; final SQLite bytes
+were 6512640. These are local measurements, not provider billable tokens,
+provider latency or a performance SLA. Primary exact-head reruns and
+independent review remain pending.
+
+An independent base control used the pre-existing public-`admit` K7 test on
+Node 22.16.0: `node tools/testing/run.mjs --test-name-pattern='K7 public-admit source beyond' core/test/bounded-keyset-candidates.test.mjs`
+passed in 86.08 s. It establishes the prior 1,024-ID differential only; it
+does not fulfill this gate's public-`capture` requirement.
+
+The read-only #241 installed-host audit found the remote PR open and draft.
+Its retained initial Node 24 evidence records `recall_failed` and an outer
+`ETIMEDOUT` near 1,022 s. Later four diagnostic gates were green, but the
+original cause was not established by the retained evidence. Installed-host
+readiness stays open; the local scripted gate does not reclassify that failure.
+
+Primary final verification, independent review and exact-head CI are pending.
+Real-model completion/selection, installed MCP/Hermes acceptance
+(including #241), and semantic/current-state reliability remain open. No
+provider calls were made; provider charges are US$0 for this packet, and
+model-token/cost usage for agent work is not exposed by this runtime.

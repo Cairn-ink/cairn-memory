@@ -1,5 +1,15 @@
 # Known limitations
 
+The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
+scripted visible-input-only models and exact synthetic source receipts. A
+default 1,024-ID candidate prefix can miss a retained target among 1,025
+captured memories; explicit bounded keyset routing can carry that target into
+the packed answer request, while coverage remains `budget_exhausted`. These
+mechanical observations do not establish real-model extraction, semantic
+selection, answer accuracy, complete retention, current-choice judgment,
+installed-host readiness or cost superiority. Dated A/B sources remain
+separate evidence; the script emits no adopted latest choice.
+
 The opt-in [indexed-evidence mixed comparison profile](longmemeval-comparison.md#explicit-indexed-evidence-mixed-profile)
 has bounded synthetic coverage through the actual public core and pinned native
 Mem0 with fake HTTP. It omits qualification explicitly, retains the strict

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — offline long-history stage gate
+
+- Add a maintainer-only, source-free synthetic gate that traces public capture,
+  cold source receipts, default/opt-in candidate visibility, recall, and answer
+  packing. It records the known 1,024-ID default-prefix miss, explicit negative
+  controls and per-batch outcomes without changing product policy or models.
+
 ## Unreleased — test-owned temporary workspaces
 
 - Give ordinary offline test invocations isolated scratch with cleanup after

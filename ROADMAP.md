@@ -16,6 +16,14 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
+  locates loss across public capture, cold receipts, candidate map, selection,
+  ranking, final recall and answer packing on finite synthetic families. It
+  preserves the default-prefix miss as an expected negative control and
+  exercises explicit bounded keyset source routing. Real-model and installed
+  host acceptance, semantic/current-state quality, and a fresh paired paid
+  comparison remain separate gates.
+
 - The [test workspace lifecycle gate](docs/plans/test-workspace-lifecycle.md)
   checks fresh invocation-owned scratch through real offline fixtures and
   subprocess success, failure and Linux termination on Node 22.16 and 24.15.
