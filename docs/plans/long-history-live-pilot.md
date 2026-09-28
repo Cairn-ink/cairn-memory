@@ -1,6 +1,9 @@
 # Real-model long-history feasibility pilot
 
-Status: preparation, no provider dispatch yet.
+Status: one-shot real-model diagnostic completed; public
+[result report](../evidence/long-history-live-pilot.md) drafted, final report
+review and delivery pending. Frozen runtime/fixture commit:
+`fd1e09b5c5bf96d0ec26b88eaa9a3418691f1de1`.
 Fixed base: `6a7fbf3dcc52ab6ee06ed7da7016f0f4f8aeea43` (reviewed #273;
 currently stacked on unmerged #273, main `882fff3`).
 Branch/worktree: `test/long-history-live-pilot` / `long-history-live-pilot`.
@@ -161,3 +164,64 @@ The fixture tests use `createTestWorkspace`, check genuine planner batches and
 source/evaluator separation, and intercept `fetch` to assert no network call
 during source-only preparation. All test workspaces were owned by the test
 runner and disposed.
+
+## Post-outcome result and delivery checkpoint
+
+The authorized one-shot run completed without a global halt. All four new
+authored histories retained their four planned indexed-evidence batches; all
+16 Cairn capture batches, eight generation arms and eight judgments completed.
+The fixed denominator is four for each arm and common resolved N is four.
+The official-style judge outcomes, manually checked by the primary against
+the frozen facts, are Cairn 3 correct / 1 incorrect / 0 unresolved and Mem0
+2 correct / 2 incorrect / 0 unresolved. In case order, Cairn/Mem0 outcomes
+are correct/incorrect, correct/correct, incorrect/correct, and
+correct/incorrect. The failed Cairn premise-change answer omitted the failed
+no-fee room premise and need for reconfirmation even though selected packed
+receipts contained the update and explicit nonadoption/noncancellation text.
+The original decision passage was not selected; complete decision-context
+retention and the model's causal failure are unproven. There was no retry,
+replacement, reclassification or answer repair.
+
+The whole run elapsed 347,599.914 ms. Per-arm and per-stage latency was not
+measured and must not be inferred. All 142 new requests settled with zero
+pending: 37 count, 37 Cairn generation, 16 Mem0 chat, 36 embedding, eight
+answer and eight judge. New conservative reservation was 1,121,062 micro-USD;
+known usage-estimated cost was 98,275 micro-USD for 105 rows, while 37 rows
+retain unknown cost. The actual prelaunch projection was 4,284 requests and
+1,365,856 micro-USD of reservation, below the 3,000,000-micro-USD packet
+ceiling. The cumulative post-run checkpoint is 19,420 requests and
+124,916,555 micro-USD reserved under the unchanged 200,000,000-micro-USD
+campaign cap, leaving 75,083,445 micro-USD. Reservation is not an invoice.
+The primary's fresh read-only inspection matched the saved checkpoint, and
+an independent reviewer matched all 142 guarded rows, amounts and outcomes,
+confirmed zero pending and found the settled prelaunch prefix unchanged. The
+older official-six v3 terminal report remains immutable; the separately
+authorized prelaunch unknown settlement kept its last row's 10-micro-USD
+reservation without producing a score for that halted run.
+
+Prelaunch non-author Standards and Spec reviews both passed the frozen public
+commit and private helper hashes. The primary reran the public fixture gate
+(3/3), pinned native gate (26/26) and private operator gate (10/10) on both
+Node 22.16 and 24.15; LongMemEval (193/193 on Node 24), generic tests
+(121/121) and JSON validation passed. The private operator assembly test
+deliberately pins runtime `fd1e09b`; after the report-only commit changes
+`HEAD`, that private gate is not rerun against a different head or altered.
+The final commit may change only this plan, the public evidence report,
+`docs/limitations.md` and `ROADMAP.md`. The primary must inspect that exact
+documentation diff, rerun public fixture/generic/validation checks, obtain
+both non-author final review axes and follow exact-head CI. No push or merge
+is delegated to this report worker. #273 remains an open dependency at
+`6a7fbf3dcc52ab6ee06ed7da7016f0f4f8aeea43` while main is `882fff3`.
+
+Report-delivery caller trace: `docs/limitations.md` (already linked from the
+README) and `ROADMAP.md` now link to the new evidence page; that page links
+back to this plan and the immutable official-six v3 result. No browser route,
+product copy, scorer, runtime, frozen fixture or private operator entrypoint
+changes. The original official-six result keeps its historical pending-state
+wording; the later settlement appears as a clearly subsequent status update.
+Before the documentation-only commit, the report worker reran the public
+fixture suite on Node 22.16.0 and 24.15.0 (3/3 each), `npm test` on Node
+22.16.0 (121/121), `npm run validate` (exit 0) and `git diff --check` (clean).
+The final Standards and Spec reviews and CI remain primary-owned delivery
+checks on the documentation commit. Token/cost telemetry for this worker is
+unavailable; no additional provider spend is inferred.

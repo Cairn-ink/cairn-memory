@@ -32,18 +32,24 @@ service must use the same public core, not separate engines.
   guarantee. Public retained evidence and historical cleanup are separate.
 
 - The explicit [indexed-evidence comparison profile](docs/plans/indexed-evidence-comparison.md)
-  is a separately identified offline checkpoint using the same public core and
-  native comparator. Qualification is absent, while partial capture still blocks
-  answers and fixed-N failures remain. Next is a separately frozen fresh pilot
-  with complete execution, followed by retention/retrieval/answer/cost diagnosis;
-  installed MCP/Hermes and current-decision reliability remain open gates.
+  uses the same public core and pinned native comparator without qualification.
+  Its [four-case real-model long-history pilot](docs/evidence/long-history-live-pilot.md)
+  completed all eight arms and judgments (Cairn 3/4, Mem0 2/4 correct;
+  common resolved N=4). One Cairn answer omitted a changed premise and need
+  for reconfirmation despite selected source receipts containing the premise
+  update. These authored diagnostic cases do not establish comparative
+  superiority, default MOC navigation or installed MCP/Hermes reliability.
+  Next is a fresh six-type official completion gate, followed only then by a
+  separately reviewed fresh fixed-30 proposal and product-level semantic work.
 
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
   completed, five failed and six blocked outcomes. Mechanical completion and
   paired scoreability failed; scoring never ran and there is no new accuracy.
-  One embedding request remains pending. First diagnose settlement offline
-  without altering that row; `open` ledger state is not resume authority.
+  At that original checkpoint one embedding request was pending. A separately
+  authorized later settlement marked it `unknown` without changing its
+  reservation or the halted observation; `open` ledger state is not resume
+  authority.
   Canonicality and slot-mapping boundaries remain under diagnosis. The opt-in
   indexed-evidence core slice was independently planned before this halt and
   remains an experiment, not an adopted remedy. Separately review future

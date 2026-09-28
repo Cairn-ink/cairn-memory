@@ -19,8 +19,18 @@ classification and recall can fail, and conflicting dated choices remain
 unresolved evidence. Successful empty extraction is not useful retention. This
 does not repair qualified semantics, establish a measured quality/cost result,
 authorize a paid run or expose a host flag. Frozen historical results remain
-unchanged; a new independently frozen pilot and installed-host acceptance are
-still required.
+unchanged. The later independently frozen four-case real-model pilot is
+reported below; installed-host acceptance is still required.
+
+The [four-case long-history live pilot](evidence/long-history-live-pilot.md)
+completed all eight arms and judgments with common resolved N=4: Cairn 3/4
+correct, Mem0 2/4 correct on authored synthetic questions. Its explicit
+indexed-evidence, bounded-source-scan path is opt-in; it does not validate
+default MOC navigation or installed MCP/Hermes use. One Cairn answer omitted
+important premise and reconfirmation information even though the relevant
+source passages were selected. Four simple authored cases cannot establish
+reliable current-decision reasoning, comparative superiority or an official
+benchmark score.
 
 This is the one place where Cairn Memory records what does not yet work, what
 the frozen evaluations found, and which claims the evidence does not support.
@@ -969,8 +979,43 @@ remains an experiment, not an adopted remedy; future protocol, resource and
 fresh-case review follows only after accounting is safe. No dispatch, replay,
 replacement or fixed-30 expansion follows from this failed gate.
 
+## Four-case opt-in long-history pilot completed, with answer omissions
+
+After the official-six v3 observation, a separately authorized accounting
+settlement marked its formerly pending embedding request `unknown`, keeping
+its 10-micro-USD reservation and the original halted report unchanged. The
+subsequent [fresh long-history pilot](evidence/long-history-live-pilot.md)
+used four new 60-message synthetic histories, four actual indexed-evidence
+batches per case and alternating first arms. It finished all 16 Cairn capture
+batches, all eight generation arms and all eight official-style judgments.
+The common resolved denominator is 4/4; Cairn was judged 3 correct and 1
+incorrect, Mem0 2 correct and 2 incorrect, with no unresolved judgments.
+This is a diagnostic result for the authored cases, not a statistical or
+causal comparison or a score for the six-type official cohort.
+
+In the failed Cairn premise-change case, selected, packed receipts included
+the no-fee room's unavailability and the source's explicit statement that
+Ferry Hall had not been chosen and the pop-up had not been cancelled. The
+answer still omitted the failed premise and need for reconfirmation. The
+original decision passage was not selected, so this observation does not
+establish complete decision-context retention
+or a model root cause. No case was retried or repaired. Native Mem0 add-record
+counts and Cairn admitted-card counts are different measures.
+
+All 142 new guarded requests settled with zero pending; 1,121,062 micro-USD
+was conservatively reserved and 98,275 micro-USD is known usage-estimated
+cost across 105 rows, leaving 37 rows with unknown cost. Reservation is not
+an invoice or proof of low operating cost. An independent read-only review
+matched the 142 guarded rows and unchanged settled prelaunch ledger prefix.
+The opt-in path omits qualification, does not exercise cold-reopened model
+recall, default MOC-led navigation, 1,025-card capacity, installed MCP/Hermes,
+or automatic supersession. A fresh six-type official completion and
+common-resolution gate, followed by separately reviewed fresh fixed-30 work,
+remains necessary before comparative or promotion claims.
+
 ## Where the evidence lives
 
+- [Four-case real-model long-history pilot](evidence/long-history-live-pilot.md)
 - [Fresh official-six v3 halted observation](evidence/qualification-official-v3.md)
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
 - [Fresh qualification meaning diagnostic](evidence/qualification-meaning-probe.md)
