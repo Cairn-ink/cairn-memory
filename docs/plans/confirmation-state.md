@@ -56,22 +56,45 @@ still allowed, including forgetEpisode, which follows physical links and forgets
 awaiting descendants with suppression. Source snapshots exclude awaiting items.
 
 Ordered capture durably holds only supersessions whose endpoints await review;
-independent transitions in the same batch apply immediately. Confirm rechecks
-the held endpoint revisions and receipt identities, retires the predecessor and
-writes `memory_supersessions` in the same transaction as the marker, receipt,
-index update and action ledger. Reject/forget drops the held work and leaves
+independent transitions in the same batch apply immediately unless their set
+needs qualified evaluation. Confirm and explicit admit/remember promotion
+recheck the predecessor revision and held receipt identities, retire the
+predecessor and write `memory_supersessions` in the same transaction as the
+review state, evidence and index changes. Confirm also records its action ledger
+in that transaction. Reject/forget drops the held work and leaves
 the predecessor current. Capture replay retains the original reconciliation
 result, even after review resolves its held work. A mixed batch may therefore
 return `confirmation_required` with a positive `retiredCount`.
 
 Conflict insertion checks `review_state === 'awaiting'` explicitly and holds
 those hints durably; other missing or non-current rows still fail loudly.
-Confirmation restores valid hints at the new revision. Held transitions and
-hints contain IDs/revisions and receipt IDs, not prose. Edits, changed evidence,
-explicit promotion, forgetting or intervening retirement invalidate their old
-revision-bound work; confirmation never overwrites a newer endpoint. A held
-qualified transition remains subject to the qualification fence and is not
-silently downgraded to legacy retirement.
+Confirmation and explicit promotion restore valid hints at the new revision.
+Held transitions and hints contain IDs/revisions and receipt IDs, not prose.
+Adding receipts through recapture preserves held work: a newer awaiting-item
+revision alone does not invalidate existing receipt evidence. Explicit promotion
+uses the same resolver as confirm, within its admission transaction. Content
+edits, missing bound receipts, forgetting or intervening predecessor retirement
+invalidate stale evidence; review never overwrites a changed predecessor.
+
+Review results expose `reviewEffects: {transitions, conflicts}`. Confirm always
+returns it; explicit `admit` and legacy `remember` return it only when promoting
+an awaiting row (including promotion through an option-off opener). Each
+transition has `previous` and `replacement` refs (`memoryId`, `revision`), a
+`status` (`applied`, `unresolved`, or `dropped`) and `reason` (null,
+`qualified_transition_required`, or `stale_evidence`). Qualified transitions are
+handed off in this typed result for the host to run the qualified path, never
+silently retired or discarded. Confirmation's action ledger preserves the
+outcome for replay. Conflicts identify the target `memoryId`, `status`
+(`restored` or `dropped`) and `reason` (null, `stale_evidence`, or `conflict_limit`).
+If either endpoint's conflict degree is full, restoration skips that hint rather
+than blocking review. `confirmation_conflicts.drop_reason` records the drop
+until endpoint invalidation/forgetting clears it; ordinary conflict insertion
+still enforces its hard limit.
+
+For a mixed batch, `qualified_transition_required` takes precedence when the
+independent set needs qualification, with `awaitingCount` also reporting how
+many transitions need review. Otherwise `confirmation_required` remains the
+reason for held work. See [capture](../capture.md) for the replay shape.
 
 Episode prose and retained passages cannot reliably be separated into confirmed
 and awaiting assertions. Conservatively hide an episode from list/get/start
@@ -139,7 +162,7 @@ replay and revision conflicts. `core/test/confirmation-migration.test.mjs` injec
 an actual v17 opener against v18. Parity tests execute existing synthetic fixture
 workflows against the recorded base and this implementation with the option off.
 
-## Verification
+## Verification record
 
 Commands use a worktree-local `TMPDIR` and synthetic scripted models.
 
@@ -147,7 +170,17 @@ Commands use a worktree-local `TMPDIR` and synthetic scripted models.
 | --- | --- |
 | `npm test` | Exit 0; 131 passed (Node 22.16) |
 | `npm run validate` | Exit 0 (Node 22.16) |
-| `npm run test:core` | Exit 0; 1,032 passed (Node 22.16) |
-| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0; 31 passed on each of Node 22.16 and 24.15 |
+| `npm run test:core` | Exit 0; 1,047 passed (Node 22.16) |
+| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0; 46 passed on each of Node 22.16 and 24.15 |
 | `git diff --check` | Exit 0 |
-| `npm run demo:store`, `npm run demo:capture`, `npm run demo:conflicts`, `npm run demo:episodes` | Each exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:store` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:history` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:moc` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:recall` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:admission` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:capture` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:conflicts` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:rebuild` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:continuation` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:episodes` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:session-context` | Exit 0 on Node 22.16 and 24.15 |

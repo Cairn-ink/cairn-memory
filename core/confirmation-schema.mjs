@@ -20,7 +20,8 @@ export function migrateVersion17(db) {
     CREATE TABLE confirmation_conflicts (
       memory_id TEXT NOT NULL REFERENCES memories(id), memory_revision INTEGER NOT NULL,
       target_id TEXT NOT NULL REFERENCES memories(id), target_revision INTEGER NOT NULL,
-      source TEXT NOT NULL, PRIMARY KEY(memory_id, target_id)
+      source TEXT NOT NULL, drop_reason TEXT CHECK(drop_reason IS NULL OR drop_reason='conflict_limit'),
+      PRIMARY KEY(memory_id, target_id)
     ) STRICT;
     CREATE VIEW review_hidden_episodes AS
       WITH RECURSIVE hidden(id) AS (

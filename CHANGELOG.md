@@ -17,7 +17,10 @@
   cairn-wiki `docs/plans/one-brain-u6.md` → “Confirmation burden”.
 - Confirmation completes held supersession and conflict links atomically;
   unrelated transitions in a mixed capture apply immediately. Rejection drops
-  the held work and preserves its current predecessor.
+  the held work and preserves its current predecessor. Explicit promotion also
+  resolves held work, and recapture preserves existing evidence. Full conflict
+  targets drop hints with a recorded reason instead of blocking review; typed
+  review outcomes expose transitions needing qualified evaluation.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

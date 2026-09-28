@@ -1,4 +1,4 @@
-import { decisionReviewOption, createConfirmationStorage } from './confirmation-storage.mjs';
+import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver } from './confirmation-storage.mjs';
 import { createSessionContextStorage } from './session-context.mjs';
 import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
@@ -178,15 +178,18 @@ export function createMemoryRuntime(input) {
         changed = true;
       }
       if (changed) {
-        conflictStorage.invalidateMemory(existing.id);
+        conflictStorage.invalidateMemory(existing.id, { preserveHeld: existing.review_state === 'awaiting' });
         mocStorage.invalidateMemory(ns, existing.id, now);
         db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?, review_state = ?,
           revision = revision + 1, updated_at = ? WHERE id = ?`)
           .run(kind, origin, confidence, reviewState, now, existing.id);
       }
       const memory = activeRow(ns, existing.id);
+      const reviewEffects = existing.review_state === 'awaiting' && reviewState !== 'awaiting'
+        ? resolveHeld(ns, memory) : undefined;
       return {
-        memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: true,
+        ...(reviewEffects ? { reviewEffects } : {}),
+        memory, ...(projection.legacy ? { legacyMemory: { ...legacyDto(memory), ...(reviewEffects ? { reviewEffects } : {}) } } : {}), deduplicated: true,
         indexRevision: changed ? advanceEpoch(ns) : epoch(ns), changed, insertedReceiptIds,
       };
     }
@@ -518,7 +521,8 @@ export function createMemoryRuntime(input) {
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
-  const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, supersessionStorage, conflictStorage });
+  const resolveHeld = createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage });
+  const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld });
 
   return Object.freeze({
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },

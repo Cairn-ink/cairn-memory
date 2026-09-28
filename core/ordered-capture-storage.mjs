@@ -144,8 +144,9 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
           row.replacement.id, row.replacement.revision, JSON.stringify(row.receiptIds));
         const qualified = immediate.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement));
         if (!qualified) for (const row of immediate) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
-        reconciliation = outcome(held.length ? 'confirmation_required' : qualified ? 'qualified_transition_required' : reason,
+        reconciliation = outcome(qualified ? 'qualified_transition_required' : held.length ? 'confirmation_required' : reason,
           qualified ? 0 : immediate.length);
+        if (qualified && held.length) reconciliation.awaitingCount = held.length;
         return { reconciliation };
       },
       complete() {

@@ -327,7 +327,8 @@ reconciliation: {
   status: 'applied' | 'complete_no_change' | 'unresolved',
   reason: null | 'candidate_limit' | 'unordered_sources' | 'context_budget'
     | 'qualified_transition_required' | 'confirmation_required',
-  retiredCount: 0 // 0–5; applied transitions in this pass, including mixed review batches
+  retiredCount: 0, // 0–5; applied transitions in this pass, including mixed review batches
+  awaitingCount: 1 // optional: only when qualification and held transitions coexist
 }
 ```
 
@@ -338,7 +339,17 @@ other transitions apply immediately, so `retiredCount` can be positive. Confirm
 re-drives valid held transitions atomically; reject discards them. The capture's
 original replay result does not change. `qualified_transition_required` means
 the retirement set needs qualified evaluation instead of legacy retirement;
-that fence still applies to the independent non-awaiting set. Context overflow
+that fence still applies to the independent non-awaiting set. If that set needs
+qualification and other transitions await review, `qualified_transition_required`
+takes precedence in `reason`, and `awaitingCount` reports the held transition
+count alongside it. These fields are preserved on completed-event replay.
+Confirm returns typed `reviewEffects.transitions` with actionable refs when held
+work needs `qualified_transition_required`, so the host can run the qualified path.
+
+An option-off opener recapturing onto an existing awaiting row can also return
+`confirmation_required`. It preserves the held evidence but cannot confirm or
+reject: the person must resolve it through a review-enabled `openMemoryCore`.
+This does not affect parity on stores without awaiting rows. Context overflow
 is unresolved; a missing required port,
 malformed output, cancellation or provider failure commits no admission.
 An empty successful extraction still advances stream progress. A new event at

@@ -1137,6 +1137,7 @@ synthetic session”); see the [contract](plans/confirmation-state.md).
 
 ## Where the evidence lives
 
+- [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
 - [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)
 - [Four-case real-model long-history pilot](evidence/long-history-live-pilot.md)

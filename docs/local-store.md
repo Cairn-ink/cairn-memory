@@ -262,11 +262,14 @@ refuse v17; hosts must stop/drain older processes before upgrading.
 
 ### Decision confirmation (CF-1)
 
-`decisionReview: 'required-v1'` holds automatically admitted inferred decisions
-in an independent review state. Ordinary reads exclude awaiting items even when
+`openMemoryCore({path, decisionReview: 'required-v1'})` holds automatically
+admitted inferred decisions in an independent review state. Ordinary reads exclude awaiting items even when
 this option is absent. Person-facing hosts may use `list({reviewState:'awaiting'})`
 and `get({includeAwaiting:true})`; model tools must not expose these switches.
 `confirm` and `reject` require an expected revision and durable action ID.
-Schema v18 eagerly adds the state and action ledger. See the
+`openMemoryStore` does not accept this option. Schema v18 eagerly adds
+`memories.review_state`, `confirmation_actions`, `confirmation_supersessions`,
+`confirmation_conflicts` (including its dropped-hint reason), and the
+`review_hidden_episodes` view, and updates index eligibility/readers. See the
 [contract appendix](plans/confirmation-state.md) for replay, episode visibility,
 and the direct-statement provenance limitation.

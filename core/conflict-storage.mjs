@@ -13,9 +13,9 @@ export function createConflictStorage({ db, activeRow, rawRow = activeRow, advan
     }
   }
 
-  function invalidateMemory(memoryId) {
-    db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? OR target_id=?').run(memoryId, memoryId);
-    db.prepare('DELETE FROM confirmation_supersessions WHERE previous_id=? OR replacement_id=?').run(memoryId, memoryId);
+  function invalidateMemory(memoryId, { preserveHeld = false } = {}) {
+    if (!preserveHeld) db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? OR target_id=?').run(memoryId, memoryId);
+    if (!preserveHeld) db.prepare('DELETE FROM confirmation_supersessions WHERE previous_id=? OR replacement_id=?').run(memoryId, memoryId);
     db.prepare("DELETE FROM memory_conflicts WHERE left_memory_id = ? OR right_memory_id = ?")
       .run(memoryId, memoryId);
   }
@@ -73,13 +73,29 @@ export function createConflictStorage({ db, activeRow, rawRow = activeRow, advan
   }
 
   function restore(ns, memory) {
-    const held = db.prepare('SELECT * FROM confirmation_conflicts WHERE memory_id=?').all(memory.id);
-    db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=?').run(memory.id);
+    const outcomes = [];
+    const held = db.prepare('SELECT * FROM confirmation_conflicts WHERE memory_id=? AND drop_reason IS NULL ORDER BY target_id').all(memory.id);
     for (const hint of held) {
       const target = activeRow(ns, hint.target_id);
-      if (hint.memory_revision !== memory.revision || !target || target.revision !== hint.target_revision) continue;
+      if (!target || target.revision !== hint.target_revision) {
+        db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? AND target_id=?').run(memory.id, hint.target_id);
+        outcomes.push({ memoryId: hint.target_id, status: 'dropped', reason: 'stale_evidence' });
+        continue;
+      }
+      const full = [memory.id, target.id].some(id => db.prepare(`SELECT count(*) n FROM memory_conflicts
+        WHERE left_memory_id=? OR right_memory_id=?`).get(id, id).n >= 5);
+      if (full) {
+        // Review must succeed even when another writer has filled a target's degree.
+        db.prepare("UPDATE confirmation_conflicts SET drop_reason='conflict_limit' WHERE memory_id=? AND target_id=?")
+          .run(memory.id, target.id);
+        outcomes.push({ memoryId: target.id, status: 'dropped', reason: 'conflict_limit' });
+        continue;
+      }
       insertBatch(ns, [{ memoryId: memory.id, hints: [{ memoryId: target.id, expectedRevision: target.revision }] }], hint.source);
+      db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? AND target_id=?').run(memory.id, target.id);
+      outcomes.push({ memoryId: target.id, status: 'restored', reason: null });
     }
+    return outcomes;
   }
 
   return { validateTargets, invalidateMemory, insertBatch, inspect, restore };

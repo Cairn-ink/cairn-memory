@@ -259,7 +259,8 @@ export function openMemoryCore(input) {
       const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
       const result = runtime.admit(ns, { ...memory, receipts, conflictHints, qualification, ...(Object.hasOwn(input, "procedural") ? { procedural: input.procedural } : {}) });
       return { memory: { id: result.memory.id, revision: result.memory.revision },
-        deduplicated: result.deduplicated, indexRevision: result.indexRevision };
+        deduplicated: result.deduplicated, indexRevision: result.indexRevision,
+        ...(result.reviewEffects ? { reviewEffects: result.reviewEffects } : {}) };
     });
   }
 
