@@ -1063,6 +1063,24 @@ source fidelity or installed MCP/Hermes reliability. A larger cohort requires
 a new frozen selection and resource check after the failed feasibility gate,
 not reuse of these six.
 
+## Indexed-window accounting is not semantic completeness
+
+The [N1 observer](plans/source-window-coverage.md) distinguishes exact offered
+windows matched to current admitted-member receipts from unmatched or
+ambiguous windows. A completed observation is not complete source retention;
+neither is a retention count a relevance or correctness score. An unmatched
+window may have been intentionally omitted by selective extraction. The
+public capture result does not expose validated extraction selection, so this
+observer reports it as unavailable rather than inferring it from receipts.
+
+The inspection is restricted to one fresh capture's bounded member set. It
+does not search the whole namespace or reconstruct a duplicate's historical
+execution. Repeated identical windows lack durable occurrence offsets and
+remain ambiguous. Missing, stale, closed or over-limit read evidence is
+unavailable, not zero retention. Synthetic gate integration verifies these
+mechanics, not model quality, installed-host behavior or a repaired score.
+The earlier official-six failures and feasibility gate remain unchanged.
+
 ## Where the evidence lives
 
 - [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)
