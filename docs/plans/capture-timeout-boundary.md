@@ -170,3 +170,46 @@ The final full `npm run test:openai` rerun passed 307/307 on Node 22.16 and
 307/307 on Node 24.15. The primary agent is separately rerunning affected
 full Node 24 suites for fixed-point acceptance; those results are not claimed
 by this worker's test-only correction record.
+
+### Final local acceptance
+
+Tested code candidate: `b4f7349aa31bf24b2a8f9e4d5a4e66d4c8ef7885`.
+This record supersedes the local pending entries above; the earlier failures
+and earlier-candidate results remain historical evidence. Node commands below
+used the pinned 22.16.0 and 24.15.0 runtimes, including child test processes.
+The worker ran the Node 22 gates; the primary independently ran the Node 24
+gates and the combined affected-file check on both runtimes. The worker's
+full OpenAI checks used the same final code and tests on both runtimes.
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `node tools/testing/run.mjs core/test/*.test.mjs` | 1005/1005 pass | 1005/1005 pass |
+| `npm run test:openai` | 307/307 pass | 307/307 pass |
+| `node tools/testing/run.mjs evaluation/live/test/*.test.mjs` | 341 pass, 30 expected skips, 0 fail | 341 pass, 30 expected skips, 0 fail |
+| `node tools/testing/run.mjs evaluation/longmemeval/test/*.test.mjs` | 193/193 pass | 193/193 pass |
+| `node tools/testing/run.mjs evaluation/experiment-budget/test/case-deadline-guard.test.mjs` | 21/21 pass | 21/21 pass |
+| `node tools/testing/run.mjs plugins/cairn-memory/test/*.test.mjs evaluation/architecture/test/*.test.mjs` | 121/121 pass | 121/121 pass |
+| `node scripts/validate-json.mjs` | pass | pass |
+| `node tools/testing/run.mjs core/test/model-call.test.mjs core/test/capture-invocation-deadline.test.mjs adapters/openai/test/capture-timeout-boundary.test.mjs evaluation/live/test/public-pilot.test.mjs` | 82/82 pass | 82/82 pass |
+
+The `npm run test:core`, `test:live-evidence-offline`, `test:longmemeval`,
+`npm test` and `npm run validate` aliases used by the worker invoke the
+corresponding direct commands above. The primary also inspected the complete
+diff, public-pilot projection and final real-adapter fixture.
+
+All six required synthetic demos passed on both runtimes: `node` followed by
+`examples/local-store.mjs`, `examples/capture.mjs`,
+`examples/openai-offline.mjs`, `evaluation/longmemeval/demo.mjs`,
+`evaluation/longmemeval/comparison-demo.mjs` and
+`evaluation/longmemeval/public-demo.mjs` (or their documented npm aliases).
+Demo files retain their fresh synthetic artifacts under their existing contract;
+ordinary tests use the owned runner. No historical scratch was cleaned.
+
+Independent Standards review passed on the tested code candidate. Independent
+Spec review found the implementation correct and independently passed the
+31 focused core/adapter checks on both runtimes, but required this final gate
+record before acceptance. This addendum is documentation-only; both reviewers
+must inspect its committed successor against the original base before push.
+Exact-head GitHub CI and mergeability remain delivery gates, recorded in the
+PR, not local results claimed here. No paid run, replay, rescoring, ledger
+mutation, release, deployment or provider-cause conclusion follows.
