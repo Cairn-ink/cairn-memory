@@ -49,6 +49,10 @@ test('frozen long-history gate traverses capture, cold recall and packed answer'
   assert.deepEqual(report.sourceWindowCoverage.omittedSource.windows,
     [{ ordinal: 1, retention: 'unmatched' }]);
   assert.ok(long.questions.every(row => row.stages.answerContextPresent));
+  assert.ok(long.questions.every(row => row.sourceTrace.source.currentSourceBinding === 'yes' &&
+    row.sourceTrace.rank.inputSourceBinding === 'yes' &&
+    row.sourceTrace.final.sourceBinding === 'yes' &&
+    row.sourceTrace.firstObservedGap === null));
   assert.ok(long.questions.every(row => row.stages.candidateVisible === false &&
     row.routingCueVisible === true && row.deliverySucceeded === true));
   assert.equal(long.questions[0].expectedRefTypeObserved, true);
@@ -72,6 +76,7 @@ test('frozen long-history gate traverses capture, cold recall and packed answer'
     assert.equal(publicJson.includes(forbidden), false, `aggregate leaked ${forbidden}`);
   }
   assert.ok(publicJson.length < 30000, 'bounded aggregate');
+  assert.ok(Buffer.byteLength(publicJson, 'utf8') <= 32 * 1024, 'source-free byte bound');
 });
 
 for (const [fault, expectedCapture, expectedAdmitted, expectedFailure] of [

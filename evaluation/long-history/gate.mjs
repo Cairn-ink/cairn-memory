@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -5,6 +6,7 @@ import { openMemoryCore } from '../../core/contract.mjs';
 import { countOpenAITokens } from '../../adapters/openai/index.mjs';
 import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
 import { createIndexedSourceWindowObserver } from '../architecture/source-window-coverage.mjs';
+import { createRetainedRecallTrace } from './recall-observation.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { VERSION, longCase, capacityCase, datedCase, faultControls } from './fixtures.mjs';
 
@@ -21,17 +23,25 @@ const ok = result => {
 };
 const metric = () => ({ calls: { extract: 0, classify: 0, select: 0, rank: 0 },
   inputTokens: 0, outputTokens: 0, tokenizerCalls: 0, tokenizerTokens: 0 });
+const recallTraceScope = new AsyncLocalStorage();
+export const withRecallTrace = (trace, operation) => recallTraceScope.run(trace, operation);
+export function recordScriptedRecallStage(method, request, output) {
+  try {
+    const trace = recallTraceScope.getStore();
+    if (method === 'select') trace?.recordSelect(request, output);
+    if (method === 'rank') trace?.recordRank(request, output);
+  } catch { /* Observation must not change the scripted model call. */ }
+  return output;
+}
 
 // This control sees only its invocation's model input. Evaluation expectations,
 // target IDs and the store stay in the runner, never on this object.
-function scriptedModel(metrics, frames, modes = {}) {
+export function scriptedModel(metrics, modes = {}) {
   const observe = (method, request, output) => {
     metrics.calls[method]++;
     metrics.inputTokens += token(JSON.stringify({ system: request.system, input: request.input }));
     metrics.outputTokens += token(JSON.stringify(output));
-    if (method === 'select' || method === 'rank') frames.push({ method,
-      input: structuredClone(request.input), output: structuredClone(output) });
-    return output;
+    return recordScriptedRecallStage(method, request, output);
   };
   return {
     contextWindow: 16_384,
@@ -92,64 +102,75 @@ const opened = (workspace, filename, model, candidatePolicy) => {
 };
 const passageIn = (receipts, marker) => receipts?.some(row => row.excerpt.includes(marker)) ?? false;
 
-function observePassage({ frames, recall, core, memory, marker, requiredSource, question, expectedRefType }) {
-  const detail = ok(core.get({ namespace, memoryId: memory.id }));
-  const exactSourceIn = receipts => receipts?.some(row => row.excerpt === requiredSource) ?? false;
-  const retained = exactSourceIn(detail.receipts);
-  const selectFrames = frames.filter(frame => frame.method === 'select');
-  const visibleRows = selectFrames.flatMap(frame => frame.input.maps.flatMap(map => map.items.map(item => ({
-    item, ref: refFromMap(item, map.namespaceIndex),
-  }))));
-  const matchingRef = visibleRows.filter(row => row.ref?.memoryId === memory.id);
-  const referenceVisible = matchingRef.length > 0;
-  const routingCueVisible = matchingRef.some(row => row.item.label?.includes(marker));
-  const candidateVisible = matchingRef.some(row => row.item.label?.includes(requiredSource));
-  const selected = selectFrames.some(frame => frame.output.refs.some(ref => ref.memoryId === memory.id));
-  const rankFrames = frames.filter(frame => frame.method === 'rank');
-  const rankInputSourceVisible = rankFrames.some(frame => frame.input.candidates.some(candidate =>
-    candidate.memory.id === memory.id && exactSourceIn(candidate.receipts)));
-  const ranked = rankFrames.some(frame => frame.output.refs.some(ref => ref.memoryId === memory.id));
-  const finalReturned = recall.ok && recall.value.memories.some(item => item.memory.id === memory.id &&
-    exactSourceIn(item.receipts));
-  let answerContextPresent = false;
-  let packedTokens = 0;
-  if (recall.ok) {
-    const units = recall.value.memories.map(item => ({ text: item.receipts.map(receipt => receipt.excerpt).join('\n') }));
-    const packed = packMixedAnswer({ question: { text: question, date: '2026-09-28' }, units, countTokens: token });
-    answerContextPresent = JSON.parse(packed.request.messages[1].content).evidence
-      .some(unit => unit.text.includes(requiredSource));
-    packedTokens = packed.totalEstimatedTokens;
-  }
+const stageValue = value => value === 'yes' ? true : value === 'no' ? false
+  : value === 'bypassed' ? 'bypassed' : 'not-run';
+const oldGap = gap => ({ 'retained-text': 'retained', 'source-binding': 'retained',
+  'reference-visible': 'reference-visible', selected: 'selected',
+  'rank-input-ref': 'rank-input-source-visible', 'rank-input-text': 'rank-input-source-visible',
+  'rank-input-source-binding': 'rank-input-source-visible', ranked: 'ranked',
+  'final-ref': 'final-returned', 'final-text': 'final-returned',
+  'final-source-binding': 'final-returned', 'answer-context-present': 'answer-context-present' })[gap]
+  ?? (gap === null ? null : 'not-run');
+
+// Preserve the gate's original aggregate stage keys while treating its new
+// source-bound trace as authority for progression. Candidate text in a label
+// remains an optional routing preview, not a required delivery stage.
+export function observePassage({ trace, packedTokens = 0, expectedRefType }) {
+  const source = trace.source ?? {};
+  const selection = trace.selection ?? {};
+  const rank = trace.rank ?? {};
+  const final = trace.final ?? {};
+  const answer = trace.answer ?? {};
+  const retained = trace.status === 'observed'
+    ? source.retainedText === 'yes' && source.currentSourceBinding === 'yes' : 'not-run';
+  const referenceVisible = stageValue(selection.referenceVisible);
+  const candidateVisible = stageValue(selection.candidateTextVisible);
+  const selected = stageValue(selection.accepted);
+  const rankInputSourceVisible = stageValue(rank.inputText);
+  const ranked = stageValue(rank.accepted);
+  const finalReturned = final.status === 'completed'
+    ? final.ref === 'yes' && final.text === 'yes' && final.sourceBinding === 'yes' : 'not-run';
+  const answerContextPresent = stageValue(answer.textPresent);
   const stages = { retained,
-    referenceVisible: retained ? referenceVisible : 'not-run',
-    candidateVisible: retained ? candidateVisible : 'not-run',
-    selected: referenceVisible ? selected : 'not-run',
-    rankInputSourceVisible: selected ? rankInputSourceVisible : 'not-run',
-    ranked: rankInputSourceVisible ? ranked : 'not-run',
-    finalReturned: ranked ? finalReturned : 'not-run',
-    answerContextPresent: finalReturned ? answerContextPresent : 'not-run' };
-  const firstMissing = !retained ? 'retained' : !candidateVisible ? 'candidate-visible'
-    : !selected ? 'selected' : !rankInputSourceVisible ? 'rank-input-source-visible'
-      : !ranked ? 'ranked' : !finalReturned ? 'final-returned'
-        : !answerContextPresent ? 'answer-context-present' : null;
-  const firstDeliveryFailure = !retained ? 'retained' : !referenceVisible ? 'reference-visible'
-    : !selected ? 'selected' : !rankInputSourceVisible ? 'rank-input-source-visible'
-      : !ranked ? 'ranked' : !finalReturned ? 'final-returned'
-        : !answerContextPresent ? 'answer-context-present' : null;
-  const deliverySucceeded = retained && selected && rankInputSourceVisible && ranked &&
-    finalReturned && answerContextPresent;
-  return { stages, routingCueVisible, firstMissing, firstDeliveryFailure,
-    deliverySucceeded, packedTokens,
-    ...(expectedRefType ? { expectedRefTypeObserved: matchingRef.some(row => row.item.type === expectedRefType) } : {}) };
+    referenceVisible: retained === true ? referenceVisible : 'not-run',
+    candidateVisible: retained === true ? candidateVisible : 'not-run',
+    selected: retained === true ? selected : 'not-run',
+    rankInputSourceVisible: selected === true ? rankInputSourceVisible : 'not-run',
+    ranked: rankInputSourceVisible === true ? ranked : 'not-run',
+    finalReturned: ranked === true ? finalReturned : 'not-run',
+    answerContextPresent: finalReturned === true ? answerContextPresent : 'not-run' };
+  const firstMissing = retained === 'not-run' ? 'not-run' : retained === false ? 'retained'
+    : candidateVisible === false ? 'candidate-visible'
+    : selected === false ? 'selected' : rankInputSourceVisible === false ? 'rank-input-source-visible'
+      : ranked === false ? 'ranked' : finalReturned === false ? 'final-returned'
+        : answerContextPresent === false ? 'answer-context-present' : null;
+  return { stages, routingCueVisible: stageValue(selection.routingTextVisible),
+    firstMissing, firstDeliveryFailure: oldGap(trace.firstObservedGap),
+    deliverySucceeded: trace.firstObservedGap === 'unavailable' ? 'not-run'
+      : trace.firstObservedGap === null, packedTokens, sourceTrace: trace,
+    ...(expectedRefType ? { expectedRefTypeObserved: selection.targetRefType === expectedRefType } : {}) };
 }
 
-async function inspectQuestion(store, modelFrames, memory, question, policy, expectedRefType) {
-  modelFrames.length = 0;
-  const recall = await store.core.recall({ readSet: [namespace], query: question.query,
-    contextMode: 'source-evidence', limit: 6 });
-  const observed = observePassage({ frames: modelFrames, recall, core: store.core,
-    memory, marker: question.marker, requiredSource: question.requiredSource,
-    question: question.query, expectedRefType });
+async function inspectQuestion(store, memory, question, policy, expectedRefType) {
+  const read = () => { try { return store.core.get({ namespace, memoryId: memory.id,
+    receiptLimit: 100 }); } catch { return null; } };
+  const before = read();
+  const readSet = [namespace];
+  const trace = createRetainedRecallTrace({ sourceProbe: { namespace, memoryId: memory.id,
+    client: 'synthetic-gate', sessionId: 'long-history', eventId: question.sourceId,
+    role: question.role ?? 'user', excerpt: question.requiredSource, routingCue: question.marker },
+  before, readSet });
+  const recall = await withRecallTrace(trace, () => store.core.recall({ readSet,
+    query: question.query, contextMode: 'source-evidence', limit: 6 }));
+  let packed = null;
+  if (recall.ok) {
+    const units = recall.value.memories.map(item => ({ text: item.receipts
+      .map(receipt => receipt.excerpt).join('\n') }));
+    packed = packMixedAnswer({ question: { text: question.query, date: '2026-09-28' },
+      units, countTokens: token });
+  }
+  const observed = observePassage({ trace: trace.finish({ recall, packed, after: read() }),
+    packedTokens: packed?.totalEstimatedTokens ?? 0, expectedRefType });
   return { key: question.key, policy, ...observed, recallOk: recall.ok,
     recallCoverage: recall.ok ? recall.value.coverage : 'not-run' };
 }
@@ -259,8 +280,7 @@ export async function runGate({ fault = null } = {}) {
   try {
     // Three source windows; the classifier proposes a real L1 for the first memory.
     report.cases[0].status = 'incomplete';
-    const longFrames = [];
-    const longStore = opened(workspace, 'long.sqlite', scriptedModel(metrics, longFrames));
+    const longStore = opened(workspace, 'long.sqlite', scriptedModel(metrics));
     dbPaths.push(longStore.path);
     const longWindowObserver = createIndexedSourceWindowObserver();
     let captured = await captureTracked(longStore.core,
@@ -283,8 +303,8 @@ export async function runGate({ fault = null } = {}) {
     const longRows = [];
     for (const [index, question] of longCase.questions.entries()) {
       const requiredSource = longCase.messages[0].content.slice(index * 800, (index + 1) * 800).trimEnd();
-      const row = await timeRead(() => inspectQuestion(longStore, longFrames, longMemories[index],
-        { ...question, requiredSource },
+      const row = await timeRead(() => inspectQuestion(longStore, longMemories[index],
+        { ...question, requiredSource, sourceId: longCase.messages[0].id },
         'default', index === 0 ? 'ref' : undefined));
       longRows.push(row);
       report.cases[0].questions[index] = { ...row, status: 'completed' };
@@ -300,9 +320,8 @@ export async function runGate({ fault = null } = {}) {
     // All 1,025 memories are admitted through capture; target is fixed by max ID
     // after all writes and before either recall. Both policies read this cold DB.
     report.cases[1].status = 'incomplete';
-    const capacityFrames = [];
     const capacityModes = {};
-    const capacityModel = scriptedModel(metrics, capacityFrames, capacityModes);
+    const capacityModel = scriptedModel(metrics, capacityModes);
     const capacityStore = opened(workspace, 'capacity.sqlite', capacityModel);
     dbPaths.push(capacityStore.path);
     const admitted = [];
@@ -347,21 +366,21 @@ export async function runGate({ fault = null } = {}) {
         .map(({ memoryId, revision }) => [memoryId, revision]));
       admitted.push(...result.admission.memories.map((memory, index) => ({ memory,
         expectedRevision: classifiedRevisions.get(memory.id) ?? memory.revision,
-        marker: messages[index].content.split(' ')[0], source: messages[index].content })));
+        marker: messages[index].content.split(' ')[0], source: messages[index].content,
+        sourceId: messages[index].id })));
       report.cases[1].eligibleMemories = admitted.length;
     }
     assertGate(admitted.length === capacityCase.count, 'capacity_total');
     const target = admitted.reduce((max, row) => row.memory.id > max.memory.id ? row : max);
     capacityStore.reopen();
     const capacityQuestion = { key: 'greatest-id-target', query: target.marker,
-      marker: target.marker, requiredSource: target.source };
-    const defaultRow = await timeRead(() => inspectQuestion(capacityStore, capacityFrames, target.memory,
+      marker: target.marker, requiredSource: target.source, sourceId: target.sourceId };
+    const defaultRow = await timeRead(() => inspectQuestion(capacityStore, target.memory,
       capacityQuestion, 'default'));
     report.cases[1].questions[0] = { ...defaultRow, status: 'completed' };
     capacityStore.close();
-    const optFrames = [];
-    const optStore = opened(workspace, 'capacity.sqlite', scriptedModel(metrics, optFrames), 'bounded-keyset-v1');
-    const optRow = await timeRead(() => inspectQuestion(optStore, optFrames, target.memory, capacityQuestion,
+    const optStore = opened(workspace, 'capacity.sqlite', scriptedModel(metrics), 'bounded-keyset-v1');
+    const optRow = await timeRead(() => inspectQuestion(optStore, target.memory, capacityQuestion,
       'bounded-keyset-v1'));
     report.cases[1].questions[1] = { ...optRow, status: 'completed' };
     assertGate(defaultRow.stages.retained && !defaultRow.stages.referenceVisible &&
@@ -374,8 +393,7 @@ export async function runGate({ fault = null } = {}) {
 
     // Distinct dated decisions and stated reasons remain separate source receipts.
     report.cases[2].status = 'incomplete';
-    const datedFrames = [];
-    const datedStore = opened(workspace, 'dated.sqlite', scriptedModel(metrics, datedFrames));
+    const datedStore = opened(workspace, 'dated.sqlite', scriptedModel(metrics));
     dbPaths.push(datedStore.path);
     const datedMemories = [];
     for (const [index, source] of datedCase.sources.entries()) {
@@ -389,8 +407,9 @@ export async function runGate({ fault = null } = {}) {
     datedStore.reopen();
     const datedRows = [];
     for (const [index, question] of datedCase.questions.entries()) {
-      const row = await timeRead(() => inspectQuestion(datedStore, datedFrames, datedMemories[index],
-        { ...question, requiredSource: datedCase.sources[index].content }, 'default'));
+      const row = await timeRead(() => inspectQuestion(datedStore, datedMemories[index],
+        { ...question, requiredSource: datedCase.sources[index].content,
+          sourceId: datedCase.sources[index].id, role: datedCase.sources[index].role }, 'default'));
       datedRows.push(row);
       report.cases[2].questions[index] = { ...row, status: 'completed' };
     }
@@ -438,10 +457,9 @@ async function runFaultControls(workspace, metrics, dbPaths, report) {
     return response;
   };
   const fixture = (filename, modes = {}) => {
-    const frames = [];
-    const store = opened(workspace, filename, scriptedModel(metrics, frames, modes));
+    const store = opened(workspace, filename, scriptedModel(metrics, modes));
     dbPaths.push(store.path);
-    return { store, frames };
+    return { store };
   };
   let test = fixture('malformed.sqlite', { extract: 'malformed' });
   let response = await captureFault('malformedExtraction', test.store,
@@ -487,9 +505,9 @@ async function runFaultControls(workspace, metrics, dbPaths, report) {
     response = ok(await captureFault(name, test.store,
       captureInput(name, [message(`fault-${name}`, 'faultmarker control source')])));
     test.store.reopen();
-    const row = await inspectQuestion(test.store, test.frames, response.admission.memories[0],
+    const row = await inspectQuestion(test.store, response.admission.memories[0],
       { key: name, query: 'faultmarker', marker: 'faultmarker',
-        requiredSource: 'faultmarker control source' }, 'default');
+        requiredSource: 'faultmarker control source', sourceId: `fault-${name}` }, 'default');
     stageRows[name] = { ...row.stages, firstDeliveryFailure: row.firstDeliveryFailure };
     controls[name] = row.firstDeliveryFailure === (name === 'emptySelection' ? 'selected' : 'ranked') &&
       row.stages.answerContextPresent === 'not-run';
