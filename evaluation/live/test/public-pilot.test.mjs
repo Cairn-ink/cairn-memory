@@ -7,6 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { setImmediate as immediate } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
 import { createExperimentBudget, reopenExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkBudgetExtension, authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
@@ -128,9 +129,9 @@ const fakeUpstream = ({ calls, chat = defaultChat, count = null, generation = nu
 const chatCalls = (calls) => calls.filter((call) => call.pathname === URLS.chat);
 
 async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, requestCap = 5_000,
-  maxCases = PILOT_DEFAULT_MAX_CASES } = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'cairn-public-pilot-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  maxCases = PILOT_DEFAULT_MAX_CASES, root: suppliedRoot } = {}) {
+  const root = suppliedRoot ?? await mkdtemp(path.join(tmpdir(), 'cairn-public-pilot-'));
+  if (!suppliedRoot) t.after(() => rm(root, { recursive: true, force: true }));
   const inputPath = path.join(root, 'source.json');
   const content = JSON.stringify(source);
   await writeFile(inputPath, content);
@@ -1943,6 +1944,33 @@ test('A3: the evidence-shape fallback labels requests when no run record backs t
   const positional = labelCapturedArms(entries(), fullRun);
   assert.deepEqual(positional.map((entry) => entry.armGuess), ['cairn', 'full-history', 'no-memory']);
   assert.ok(positional.every((entry) => entry.armLabelMethod === 'run-arm-order'));
+});
+
+test('pilot collector retains finite capture deadline reason and drops dynamic observer input', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'pilot-deadline-diagnostic-' });
+  const source = [fixture({ id: 'projected', answerTurn: 'The projected color is amber.' })];
+  const f = await setup(t, { source, root: workspace.path });
+  let session;
+  let emitted = false;
+  const generation = (body, _record, method) => {
+    if (method === 'extract' && !emitted) {
+      emitted = true;
+      const event = { version: 1, stage: 'extract', layer: 'core_call', reason: 'capture_deadline' };
+      session.memoryModel.onDiagnostic({ ...event, extra: RAW_PHRASE });
+      session.memoryModel.onDiagnostic({ ...event, reason: RAW_PHRASE });
+    }
+    const input = JSON.parse(body.input[0].content[0].text);
+    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+  };
+  session = f.session(null, null, generation);
+  workspace.defer(() => session.close());
+  const output = f.output('deadline-diagnostic');
+  await runPublicPilot({ pilot: f.pilot, session, directory: output });
+  const diagnostic = await readJson(output, 'cases', opaqueQuestionId('projected'), 'diagnostics.json');
+  assert.equal(emitted, true);
+  assert.deepEqual(diagnostic.memoryModel.records,
+    [{ version: 1, stage: 'extract', layer: 'core_call', reason: 'capture_deadline' }]);
+  assert.equal(JSON.stringify(diagnostic.memoryModel).includes(RAW_PHRASE), false);
 });
 
 test('PO1-PO4: case artifacts distinguish adapter and core rejection without changing generation', async (t) => {

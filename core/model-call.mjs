@@ -13,15 +13,20 @@ export async function callModel(model, method, system, input,
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
   let controller;
   let deadlineReported = false;
-  const check = () => {
+  let timeoutOrigin;
+  const check = (preservePriorTimeout = false) => {
     if (!deadline?.expired()) return;
+    // A per-call timer that already fired keeps its own cause even if the
+    // invocation clock expires before its rejection is observed.
+    if (preservePriorTimeout && timeoutOrigin === 'model_timeout') return;
     if (controller) {
+      timeoutOrigin = 'capture_deadline';
       coreDeadlineSignals.add(controller.signal);
       controller.abort();
     }
     if (!deadlineReported) {
       deadlineReported = true;
-      reject('model_timeout');
+      reject('model_timeout', 'capture_deadline');
     }
     fail('model_timeout');
   };
@@ -59,16 +64,23 @@ export async function callModel(model, method, system, input,
         return model[method]({ ...detached, signal: controller.signal });
       }),
       new Promise((_, reject) => {
+        const timeoutMs = deadline ? deadline.remainingMs() : 30_000;
+        // A 30-second tie belongs to the per-call ceiling. Decide which
+        // bound scheduled this timer before delayed callback dispatch.
+        const invocationLimited = deadline && timeoutMs < 30_000;
         timer = setTimeout(() => {
+          timeoutOrigin = invocationLimited && deadline.expired() ? 'capture_deadline' : 'model_timeout';
           coreDeadlineSignals.add(controller.signal);
           controller.abort();
           reject(new MemoryStoreError('model_timeout'));
-        }, deadline ? deadline.remainingMs() : 30_000);
+        }, timeoutMs);
       }),
     ]);
   } catch (error) {
-    check();
-    if (controller.signal.aborted || error?.code === 'model_timeout') reject('model_timeout');
+    check(true);
+    if (controller.signal.aborted || error?.code === 'model_timeout') {
+      reject('model_timeout', timeoutOrigin === 'capture_deadline' ? 'capture_deadline' : 'model_timeout');
+    }
     if (error?.name === 'AbortError') reject('model_cancelled');
     // Trusted adapters can reject exact provider framing or malformed output.
     // Do not forward arbitrary provider errors, payloads or authority codes.

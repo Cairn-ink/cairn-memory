@@ -65,7 +65,7 @@ const MODEL_DIAGNOSTIC_STAGES = new Set([
 ]);
 const MODEL_DIAGNOSTIC_REASONS = {
   core_call: new Set(['model_not_configured', 'context_budget_exceeded', 'token_count_unavailable',
-    'model_timeout', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',
+    'model_timeout', 'capture_deadline', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',
     'output_serialization', 'output_bounds']),
   core_validation: new Set(['invalid_extraction', 'invalid_extraction_output_shape',
     'invalid_extraction_item_shape', 'invalid_extraction_text', 'invalid_extraction_value',
