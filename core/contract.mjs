@@ -1,3 +1,4 @@
+import { isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -136,8 +137,7 @@ function success(value) {
 
 function failure(error) {
   let code = error instanceof MemoryStoreError ? error.code : "storage_error";
-  if (error?.code === "ERR_SQLITE_ERROR" && Number.isInteger(error.errcode) &&
-      [5, 6].includes(error.errcode & 0xff)) code = "storage_busy";
+  if (isStorageBusy(error)) code = "storage_busy";
   if (["invalid_identifier", "invalid_text", "invalid_memory", "invalid_receipt",
     "invalid_revision", "invalid_limit"].includes(code)) code = "invalid_input";
   return { ok: false, error: { code, retryable: code === "storage_busy" } };
@@ -809,7 +809,10 @@ export function openMemoryCore(input) {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline),
-          abandonAdmission: value => abandonAdmission(captureKey(value)), get, map,
+          abandonAdmission: (value, retryable) => sessionEpisodes && retryable
+            ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
+              token: contractId(value.token), retryable: true }))
+            : abandonAdmission(captureKey(value)), get, map,
           beginInitialClassification: value => beginInitialClassification(captureKey(value), deadline),
           failInitialClassification: value => failInitialClassification(captureKey(value)),
           applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),

@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { transaction } from './database.mjs';
+import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
@@ -84,9 +84,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       // A stop/discard closes old ownership even if its lease has not expired.
       if (original && guard(ns, { client, eventId: previous.coverage_event_id,
         payloadDigest: original.payload_digest }) === 'capture_evidence_closed') return true;
-      const active = admission?.lease_expires_at > Date.now() || row.writer_expires_at > Date.now() ||
-        db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND finished=0 AND expires_at>?')
-          .get(row.id, Date.now());
+      const active = admission?.lease_expires_at > Date.now();
       const evidence = db.prepare(`SELECT state,payload,expires_at FROM staged_capture_evidence WHERE ${eventWhere}`)
         .get(...boundary(ns), client, previous.coverage_event_id);
       const bypassResumable = original?.staging === 'not-staged' &&
@@ -186,14 +184,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     if (registered.payload_digest !== input.payloadDigest) return 'event_payload_conflict';
     return null;
   }
-  function admissionProcessing(ns, input) {
-    const registered = event(ns,input);
-    if (!registered) return false;
-    const row = read(ns,registered.episode_id), now = Date.now();
-    if (db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND finished=0 AND expires_at>?').get(row.id,now)) return true;
-    if (row.writer_expires_at > now && row.writer_token !== input.episodeWriterToken) return true;
-    return false;
-  }
   function admissionStarted(ns,input) {
     const registered=event(ns,input); if (!registered) return;
     db.prepare(`UPDATE episode_events SET admission='pending' WHERE ${eventWhere}`).run(...eventKey(ns,input));
@@ -222,11 +212,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         const denied = guard(ns, input); if (denied) fail(denied);
         return { episodeId: row.id, sessionKey: identity, position: prior.position, staging: prior.staging, duplicate: true,
           messageIds: db.prepare('SELECT message_id FROM episode_messages WHERE episode_id=? AND coverage_event_id=?').all(row.id, input.eventId).map(value => value.message_id),
-          ...(input.acquireWriter ? acquireWriter(row) : {}) };
+          ...(input.acquireWriter ? captureWriter(row) : {}) };
       }
       assertControl(ns, input.generation);
       if (db.prepare(`SELECT 1 FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, input))) fail('event_payload_conflict');
-      if (row?.writer_expires_at > Date.now() && row.writer_token !== input.writerToken) fail('episode_processing');
       const { fresh, unfinished } = messageCoverage(ns, row, input.client, ledger);
       if (!fresh.length) return { episodeId: row.id, sessionKey: identity, position: row.observed, overlap: true, processing: unfinished };
       const now = stagedEvidence.touch(ns, true), received = new Date(now).toISOString();
@@ -282,7 +271,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       db.prepare(`UPDATE session_episodes SET observed=?,last_received_at=?,generation=? WHERE id=?`).run(position, received, input.generation, row.id);
       save(ns, row, record);
       return { episodeId: row.id, sessionKey: identity, position, staging: staged ? 'staged' : 'not-staged', duplicate: false, messageIds,
-        ...(input.acquireWriter ? acquireWriter(read(ns, row.id)) : {}) };
+        ...(input.acquireWriter ? captureWriter(read(ns, row.id)) : {}) };
     });
   }
   // Preserve all reasons and keep terminal fences stronger than diagnostic failures.
@@ -343,8 +332,14 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     }
     advanceEpoch(ns);
   }
+  function captureWriter(row) {
+    const result = acquireWriter(row);
+    return result.processing ? { draftProcessing: true } : result;
+  }
   function acquireWriter(row) {
-    if (row.writer_expires_at > Date.now()) return { processing: true };
+    if (row.writer_expires_at > Date.now() || db.prepare(
+      'SELECT 1 FROM episode_attempts WHERE episode_id=? AND finished=0 AND expires_at>?')
+      .get(row.id, Date.now())) return { processing: true };
     const expired = db.prepare('SELECT * FROM episode_attempts WHERE episode_id=? AND finished=0 AND expires_at<=?')
       .all(row.id, Date.now());
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id };
@@ -385,7 +380,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       }
       assertControl(ns, input.generation);
       if (db.prepare(`SELECT 1 FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, input))) fail('event_payload_conflict');
-      if (row?.writer_expires_at > Date.now()) return { processing: true };
       const { fresh, unfinished } = messageCoverage(ns, row, input.client, messageLedger(input.messages));
       return { overlap: fresh.length === 0, processing: fresh.length === 0 && unfinished, episodeId: row?.id };
     });
@@ -438,18 +432,29 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   function failDraft(ns, input) {
     if (!['episode_failed','episode_timeout','invalid_model_output','context_budget_exceeded','capacity','expired','generation_conflict','missing_evidence'].includes(input.code)) fail('invalid_input');
-    return transaction(db, () => {
-      const { row, claim } = attempt(ns, input), record = JSON.parse(row.record);
-      db.prepare('UPDATE episode_attempts SET started=1 WHERE episode_id=? AND token=?').run(row.id, claim.token);
+    // Finalization authenticates ownership, not publication freshness. A correction,
+    // release or deletion fences prose, but cannot strand the owner's failure.
+    const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
+    if (input.busyTimeoutMs !== undefined) db.exec(`PRAGMA busy_timeout=${Math.max(0, Math.min(timeout, Math.floor(input.busyTimeoutMs)))}`);
+    try { return transaction(db, () => {
+      const row = read(ns, input.episodeId);
+      const claim = row && db.prepare('SELECT * FROM episode_attempts WHERE episode_id=? AND token=?').get(row.id, input.token);
+      if (!claim || claim.finished) return;
+      const record = JSON.parse(row.record);
+      db.prepare('UPDATE episode_attempts SET started=1,finished=1 WHERE episode_id=? AND token=?').run(row.id, claim.token);
       db.prepare('UPDATE session_episodes SET attempted=max(attempted,?) WHERE id=?').run(claim.watermark, row.id);
-      record.processing.state = record.gist ? 'incomplete' : 'failed'; record.processing.errorCode = input.code;
-      for (const registered of db.prepare('SELECT client,event_id FROM episode_events WHERE episode_id=? AND position<=? AND disposition=0').all(row.id,claim.watermark)) {
-        mergeGap(ns,{client:registered.client,eventId:registered.event_id},input.code);
+      for (const registered of db.prepare('SELECT client,event_id FROM episode_events WHERE episode_id=? AND position<=? AND disposition=0').all(row.id, claim.watermark)) {
+        mergeGap(ns, { client: registered.client, eventId: registered.event_id }, input.code);
       }
-      db.prepare('UPDATE episode_attempts SET finished=1 WHERE episode_id=? AND token=?').run(row.id, claim.token);
-      save(ns, row, record);
-      return { revision: row.revision+1 };
-    });
+      if (!row.deleted) {
+        record.processing.state = record.gist ? 'incomplete' : 'failed';
+        record.processing.errorCode = input.code;
+        save(ns, row, record);
+      }
+      return { revision: row.revision + 1 };
+    }); } finally {
+      if (input.busyTimeoutMs !== undefined) db.exec(`PRAGMA busy_timeout=${timeout}`);
+    }
   }
   function commitDraft(ns, input) {
     return transaction(db, () => {
@@ -711,8 +716,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       transaction(db, () => cleanupKeep(ns, kept, code));
       keepCleanup.delete(kept.key.eventId);
     } catch (error) {
-      if (!(error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) &&
-          [5, 6].includes(error.errcode & 0xff))) throw error;
+      if (!isStorageBusy(error)) throw error;
     }
   }
   function assertKeep(ns, kept) {
@@ -829,6 +833,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
               revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
     });
   }
-  return { prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionProcessing, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
+  return { prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
     claimWriter, releaseWriter, claimDraft, failDraft, commitDraft, correct, releaseCorrection, forget, inspect };
 }

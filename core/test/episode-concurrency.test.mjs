@@ -7,12 +7,11 @@ import { createMemoryRuntime } from '../runtime.mjs';
 import { setup,input,interpretation,counts,deferred,ns,options,ok,assertError } from '../testing/episode-capture-helpers.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
 
-function child(t,path,mode,onRetry) {
+function child(t,path,mode) {
   const process=fork(new URL('../testing/episode-capture-child.mjs',import.meta.url),[path,mode],{stdio:['ignore','ignore','pipe','ipc']});
   process.on('message', message => {
     if (message.stage !== 'retry') return;
-    try { onRetry?.(message); process.send('retry-granted'); }
-    catch (error) { process.emit('error', error); }
+    process.send('retry-granted');
   });
   let stderr='';process.stderr.on('data',data=>{stderr+=data;});
   process.on('exit',(code,signal)=>{if(code!==0&&!signal)process.emit('error',Error(stderr));});
@@ -29,12 +28,13 @@ function stage(process,name) {
   });
 }
 
-test('E5 two actual processes serialize interpretation; concurrent replay then lost-ack replay makes no calls',{timeout:30000},async t=>{
+test('E5 a live interpretation never blocks concurrent admission; lost-ack replay makes no calls',{timeout:30000},async t=>{
   const f=setup(t),a=child(t,f.path,'hold');
   assert.equal((await once(a,'message'))[0].stage,'interpreting');
   const b=child(t,f.path,'normal'),second=(await once(b,'message'))[0];
-  assert.equal(ok(second.result).processing,true);assert.deepEqual(second.calls,[]);
-  const completed=once(a,'message');a.send('continue');assert.equal(ok((await completed)[0].result).duplicate,false);
+  assert.equal(ok(second.result).admission.status, 'completed');
+  assert.deepEqual(second.calls, ['extract']);
+  const completed=once(a,'message');a.send('continue');assert.equal(ok((await completed)[0].result).duplicate,true);
   const replay=ok(await f.core.capture(input()));assert.equal(replay.duplicate,true);assert.equal(f.model.calls.length,0);
 });
 
@@ -127,33 +127,12 @@ test('E5 end versus lazy coalesces under one writer, with at most two jobs on la
 });
 
 for(const arm of ['success','failure'])test(`E4a two concurrent processes admit 140 ~16KiB captures, N16 ${arm}`,{timeout:180000},async t=>{
-  const f = setup(t), expired = new Map();
-  const onRetry = ({ eventId }) => {
-    // The child has returned from capture and waits at this IPC barrier. Advance
-    // only unfinished paid attempts with no writer; never expire an active model.
-    // This represents the real lease delay without polling wall time or sleeps.
-    try {
-      const rows = f.db.prepare(`UPDATE episode_attempts SET expires_at=0
-        WHERE started=1 AND finished=0 AND expires_at>0 AND episode_id IN (
-          SELECT e.episode_id FROM episode_events e JOIN session_episodes s ON s.id=e.episode_id
-          WHERE e.event_id=? AND s.writer_token IS NULL)
-        RETURNING episode_id,token,watermark`).all(eventId);
-      for (const row of rows) expired.set(row.token, row);
-    } catch (error) {
-      if (!(error.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) &&
-          [5, 6].includes(error.errcode & 0xff))) throw error;
-    }
-  };
-  const a = child(t, f.path, `heavy-${arm}-a`, onRetry), b = child(t, f.path, `heavy-${arm}-b`, onRetry);
+  const f = setup(t);
+  const a = child(t, f.path, `heavy-${arm}-a`), b = child(t, f.path, `heavy-${arm}-b`);
   await Promise.all([stage(a,'ready'),stage(b,'ready')]);
   const results=Promise.all([stage(a,'result'),stage(b,'result')]);a.send('start');b.send('start');
   for(const result of await results){assert.equal(result.admitted,70);assert.ok(result.calls<=7);}
   assert.equal(f.db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n,140);
-  for (const row of expired.values()) {
-    assert.equal(f.db.prepare('SELECT finished FROM episode_attempts WHERE token=?').get(row.token).finished, 1);
-    assert.ok(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events WHERE episode_id=? AND position=?')
-      .get(row.episode_id, row.watermark).gap_reasons).includes('episode_timeout'));
-  }
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
 });
 
@@ -459,4 +438,82 @@ for (const stop of [true, false]) test(`E3/E5 ${stop ? 'stop closes' : 'pause pr
       .flatMap(call => call.request.input.messages.map(message => message.content)), [1, 2].map(n => input(n).messages[0].content));
     assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 1);
   }
+});
+
+for (const mutation of ['correction', 'capacity release']) {
+  test(`E4/E5 ${mutation} during interpretation finishes its failure and admits this and the next batch`, async t => {
+    const entered = deferred(), release = deferred();
+    let hold = false;
+    const f = setup(t, { interpretEpisode: async request => {
+      if (hold) { entered.resolve(); await release.promise; }
+      return interpretation(request);
+    } }, { sessionEpisodes: { mode: 'episode-v1', draftEveryBatches: 2 } });
+    const first = ok(await f.core.capture(input()));
+    ok(await f.core.capture(input(2)));
+    hold = true;
+    const pending = f.core.capture(input(3));
+    await entered.promise;
+    if (mutation === 'correction') {
+      const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+      const source = detail.sources.items[0];
+      ok(f.core.correctEpisode({ namespace: ns, episodeId: first.episode.id, expectedRevision: detail.episode.revision,
+        patch: { gist: { text: 'Pinned correction', anchors: [{ sourceId: source.id, digest: source.digest, start: 0, end: 1 }] } } }));
+    } else {
+      const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+      t.after(() => runtime.close());
+      for (let i = 0; i < 64; i++) runtime.reserveEpisodeBatch(ns, {
+        ...batch(`pressure-${i}`, 'Protected', `pressure-${i}`), client: 'other',
+      });
+      assert.equal(ok(f.core.inspectCaptureEvidence({ namespace: ns, client: 'synthetic', eventId: input(2).eventId })).evidence.releaseReason, 'capacity');
+    }
+    release.resolve();
+    const captured = ok(await pending);
+    assert.deepEqual(captured.episode.error, { code: 'episode_failed', retryable: false });
+    assert.equal(captured.admission.status, 'completed');
+    assert.equal(ok(await f.core.capture(input(4))).admission.status, 'completed');
+    assert.equal(counts(f.model), 2); assert.equal(counts(f.model, 'extract'), 4);
+    assert.ok(f.db.prepare('SELECT finished FROM episode_attempts').all().every(row => row.finished === 1));
+    const event = f.db.prepare('SELECT gap_reasons FROM episode_events WHERE event_id=?').get(input(3).eventId);
+    assert.ok(JSON.parse(event.gap_reasons).includes('episode_failed'));
+    assert.ok(f.db.prepare('SELECT gap_reasons FROM episode_events').all().every(row => !row.gap_reasons.includes('episode_timeout')));
+    if (mutation === 'correction') assert.equal(ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id })).episode.gist, 'Pinned correction');
+  });
+}
+
+for (const started of [false, true]) {
+  test(`E5 ${started ? 'started' : 'reserved'} draft and writer leases never gate ordinary admission`, async t => {
+    const { episodeSnapshot } = await import('../episode-input.mjs');
+    const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+    t.after(() => runtime.close());
+    const snapshot = episodeSnapshot(input());
+    const registered = runtime.reserveEpisodeBatch(ns, { client: snapshot.client, sessionId: snapshot.sessionId,
+      eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest, generation: 'initial', clientLabel: 'Synthetic',
+      messages: snapshot.messages, view: snapshot.view });
+    const writer = runtime.claimEpisodeWriter(ns, { episodeId: registered.episodeId, generation: 'initial' });
+    const claim = runtime.claimEpisodeDraft(ns, { episodeId: registered.episodeId, generation: 'initial',
+      writerToken: writer.token, trigger: 'batch', watermark: 1, deferAttempt: true });
+    if (started) runtime.startEpisodeAttempt(ns, { episodeId: registered.episodeId, token: claim.token });
+    assert.equal(ok(await f.core.capture(input())).admission.status, 'completed');
+    assert.equal(ok(await f.core.capture(input(2))).admission.status, 'completed');
+    const attempt = f.db.prepare('SELECT started,finished,expires_at FROM episode_attempts').get();
+    assert.equal(attempt.started, +started); assert.equal(attempt.finished, 0);
+    assert.ok(attempt.expires_at > Date.now());
+    assert.equal(counts(f.model), 0); assert.equal(counts(f.model, 'extract'), 2);
+  });
+}
+
+test('E5 admission busy survives process restart; fake clock expires a genuinely stranded admission lease', { timeout: 25000 }, async t => {
+  const f = setup(t, { extract: () => { f.db.exec('BEGIN IMMEDIATE'); return { items: [] }; } });
+  try { assert.deepEqual(await f.core.capture(input()), { ok: false, error: { code: 'storage_busy', retryable: true } }); }
+  finally { f.db.exec('ROLLBACK'); }
+  assert.equal(f.db.prepare('SELECT state FROM staged_capture_evidence').get().state, 'pending');
+  f.core.close();
+  // The lost process cannot replay its cleanup map. Only its own admission lease
+  // bounds recovery; the still-live interpretation writer must not block it.
+  f.db.exec('UPDATE admission_claims SET lease_expires_at=0');
+  const restarted = child(t, f.path, 'normal');
+  const result = (await once(restarted, 'message'))[0];
+  assert.equal(ok(result.result).admission.status, 'completed');
+  assert.deepEqual(result.calls, ['extract']);
+  assert.equal(f.db.prepare('SELECT state FROM staged_capture_evidence').get().state, 'released');
 });

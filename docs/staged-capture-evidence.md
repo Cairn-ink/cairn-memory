@@ -111,7 +111,8 @@ background maintenance and general reliability claims are outside this slice.
 The storage runtime reserves a non-leased admission parent, an episode shell and
 observed event, message identity ledger, and optional payload in one transaction.
 Capture invokes these storage operations before interpretation and admission.
-Ordinary staging and its capacity error are unchanged. Episode ownership survives reopening without the option.
+Ordinary staging and its capacity error are unchanged. Episode ownership survives
+reopening without the option.
 
 Before capacity work, registration checks control generation, session deletion,
 event identity/digest and replay. It expires live payloads and releases successful

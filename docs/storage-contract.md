@@ -204,21 +204,38 @@ throw instead). They never expose raw database or provider errors.
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
 | `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
-A local SQLite busy/locked error before a draft starts returns retryable
-`storage_busy`. A draft reservation is consumed only immediately before calling
-the interpretation port, or on a terminal preparation failure. A lock before
-that point spends no attempt and records no permanent gap. If cleanup is also
-blocked, an unstarted reservation can be recovered after its 125-second lease
-expires, including after restart. After the interpretation starts, a local lock
-leaves the consumed attempt unfinished until an outcome is recorded.
-Lease-expiry recovery records `episode_timeout` and a coverage gap without
-repeating that interpretation call; a capture replay or end signal can perform
-this recovery.
+Interpretation never holds up ordinary admission. A reserved, started or stranded
+attempt and its writer lease cannot make admission report `processing`; only its
+own live admission lease can do that. The first due draft is attempted before
+extraction. Failure proceeds to normal extraction, independently of whether its
+failure outcome has already been recorded.
 
-An admission with a live admission lease can finish after its session writer
-expires. Deletion, forgetting, explicit discard and project stop remain closed
-fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
-and cannot reopen them or erase a capacity gap.
+A local SQLite busy/locked error before a draft starts returns retryable
+`storage_busy` in the episode outcome, spends no attempt and records no permanent
+gap. A draft reservation is consumed immediately before calling the port, or on
+a terminal preparation failure. An unstarted reservation whose cleanup is locked
+can be recovered after its 125-second lease expires, including after restart.
+
+After start, the owner records a finite failure and coverage gap. A correction,
+capacity release or other publication fence rejects stale content but still lets
+the owner finish its failure immediately. Failure finalization authenticates the
+attempt token without requiring its old revision or source fence. It preserves
+current corrected content and accumulated stronger deletion/discard gaps.
+
+If a lock prevents finalization, the owner makes up to 21 writes within a
+five-second budget, yielding between writes and limiting each SQLite wait to
+250 milliseconds or the remaining budget. If the store remains locked throughout,
+the consumed attempt stays unfinished. Admission still proceeds when writable,
+in this call or its immediate retry. A later capture or end signal recovers a
+stranded attempt after lease expiry as `episode_timeout` with a coverage gap,
+without repeating that interpretation call.
+
+Retryable admission busy errors preserve staged evidence. Cleanup returns the
+owned claim to reserved state; if cleanup is also locked, the process remembers
+it for the next claim. After restart the admission's own bounded lease permits
+recovery. Only terminal admission errors mark staged evidence failed. Deletion,
+forgetting, explicit discard and project stop remain closed admission fences
+(`capture_evidence_closed`); diagnostic failures cannot reopen them.
 
 The v16 `episode_messages` ledger has `(episode_id,message_id)` identity and
 stores `first_event_id` and `coverage_event_id` plus HMAC-SHA256 using the

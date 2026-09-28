@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { isStorageBusy } from './database.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
@@ -112,10 +113,10 @@ export async function captureMessages({ model, input, operations, captureQualifi
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
-    try { operations.abandonAdmission(owned); } catch { /* The bounded lease can expire. */ }
+    try { operations.abandonAdmission(owned, Boolean(episodeRun &&
+      (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy')))); } catch { /* The bounded lease can expire. */ }
     if (error instanceof MemoryStoreError) throw error;
-    if (episodeRun?.keep && error?.code === 'ERR_SQLITE_ERROR' &&
-        Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff)) fail('storage_busy');
+    if (episodeRun && isStorageBusy(error)) fail('storage_busy');
     fail(episodeRun?.keep ? 'storage_error' : 'extraction_failed');
   }
   const admission = { ...(episodeRun ? { status: 'completed' } : {}),

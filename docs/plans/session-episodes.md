@@ -692,17 +692,30 @@ inspection tests. The coordinator also approved `episode_attempts.started` in
 unmerged schema v16 to distinguish reserved attempts from consumed attempts.
 
 Further verification covers locks at draft commit and both post-call freshness
-checks. Started attempts remain unfinished until success, failure or lease expiry
-records an outcome; replay and end-signal recovery record a finite timeout gap
-without repeating the paid call. Closed bypassed batches release message ownership
-to newly submitted events after re-enable; pause retains resumable ownership.
-Keep assertion locks return retryable `storage_busy`. Regression tests exercise
-these boundaries with real SQLite locks and scripted models, without sleep-based
-synchronization. The heavy-day IPC harness advances unfinished attempt leases
-only after capture returns and no writer remains, then asserts a durable timeout
-gap. This avoids exhausting immediate retries before the real lease could expire;
-its admission and model-call budget assertions remain unchanged. Mode-off parity
-assertions are unchanged by their style cleanup.
+checks. Interpretation and admission are independent: draft state and writer
+leases never gate ordinary admission, which waits only on its own admission
+lease. A correction or capacity release prevents stale publication while the
+owner immediately finishes the attempt with a finite failure and coverage gap.
+Failure finalization preserves corrected content and stronger deletion fences.
+
+After a started attempt encounters a lock, the owner retries failure recording
+up to 20 times after the initial write, within five seconds. Each SQLite wait is
+bounded by 250 ms and the remaining budget. Only a store locked for that whole
+budget strands an attempt for lease-expiry recovery. Admission proceeds when writable in this call
+or its immediate retry; recovery records `episode_timeout` without another paid
+call. Retryable admission busy preserves staged evidence and releases its own
+claim when writable. A locked cleanup is retried in-process; after restart its
+ordinary admission lease bounds recovery.
+
+The heavy-day harness uses IPC barriers without clock advancement. Its failure
+arm is repeated at least 20 times at the verified HEAD. Explicit stranded-attempt
+lease-expiry tests alone advance the recovery clock. Regression tests cover
+correction and capacity fences, every post-call lock boundary, a lock lasting
+beyond the failure budget, admission busy replay, and concurrent admission while
+an interpretation is live. Closed bypassed batches release message ownership to
+new submissions after re-enable; pause retains resumable ownership. Keep locks
+remain retryable and all lock classification uses one exported SQLite helper.
+Mode-off frozen parity remains unchanged.
 
 ### Cross-plan shared files
 

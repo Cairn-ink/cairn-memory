@@ -13,6 +13,10 @@ import { migrateVersion13 } from './classification-journal-schema.mjs';
 
 import { migrateVersion14, migrateVersion15, EPISODE_SCHEMA_VERSION } from './episode-schema.mjs';
 
+export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
+export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
+  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
+
 const APPLICATION_ID = 0x43414952;
 const VERSION = EPISODE_SCHEMA_VERSION;
 
@@ -269,7 +273,7 @@ export function openDatabase(path) {
       fail("unsafe_database_file");
     }
   }
-  const db = new DatabaseSync(path, { timeout: 5_000 });
+  const db = new DatabaseSync(path, { timeout: STORAGE_BUSY_TIMEOUT_MS });
   try {
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {

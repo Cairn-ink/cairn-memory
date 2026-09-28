@@ -38,3 +38,11 @@ export function input(n=1,sessionId='private-session',extra={}) {
 export function counts(port,method='interpretEpisode') {return port.calls.filter(call=>call.method===method).length;}
 export function deferred() {let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
 export function assertError(result,code) {assert.equal(result.ok,false,JSON.stringify(result));assert.equal(result.error.code,code);}
+
+// Real storage seams with the public success envelope, for boundary injection.
+export function captureOperations(runtime) {
+  return Object.fromEntries(['finishAdmission', 'assertCaptureEvidence'].map(method =>
+    [method, input => ({ ok: true, value: runtime[method](ns, input) })]).concat([
+    ['abandonAdmission', (input, retryable) => runtime.abandonAdmission(ns, { ...input, retryable })],
+  ]));
+}

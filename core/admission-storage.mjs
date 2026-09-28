@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { transaction } from "./database.mjs";
+import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?";
@@ -59,6 +59,11 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
   }
 
   function claimAdmission(ns, input, hooks, stagedView, deadline) {
+    const pending = retryCleanup.get(cleanupKey(ns, input));
+    if (pending) {
+      abandonAdmission(ns, pending);
+      retryCleanup.delete(cleanupKey(ns, input));
+    }
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
     const result = transaction(db, () => {
       const now = time(ns, input, serialized !== null);
@@ -70,7 +75,6 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
           suppressedCount: row.suppressed_count, ...hooks?.replay() };
       }
-      if (episodes.admissionProcessing(ns,input)) return { processing: true };
       const prepared = hooks?.prepare(row);
       if (row && row.lease_expires_at > now) return { processing: true };
       const registered = episodes.event(ns, input);
@@ -144,19 +148,31 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     return result;
   }
 
+  // A locked cleanup remains owned in-process; after restart its admission lease
+  // bounds recovery. Never turn a retryable local lock into a terminal payload fence.
+  const retryCleanup = new Map();
+  const cleanupKey = (ns, input) => JSON.stringify(values(ns, input));
   function abandonAdmission(ns, input) {
-    return transaction(db, () => {
+    try { return transaction(db, () => {
       const now = time(ns, input);
       const row = read(ns, input);
       // The expired owner may record its failure, but cannot release a successor.
       if (row?.state !== 'pending' || row.payload_digest !== input.payloadDigest ||
         row.token !== input.token) return { abandoned: false };
-      if (!input.keepActionId) stagedEvidence.mark(ns, input, 'failed');
+      if (!input.keepActionId && !input.retryable) stagedEvidence.mark(ns, input, 'failed');
+      if (input.retryable) {
+        db.prepare(`UPDATE ${table(input)} SET state='reserved',token=NULL,lease_expires_at=NULL WHERE ${predicate(input)}`)
+          .run(...values(ns, input));
+        return { abandoned: true };
+      }
       if (!live(row, input, now)) return { abandoned: false };
       db.prepare(`UPDATE ${table(input)} SET lease_expires_at = 0 WHERE ${predicate(input)}`)
         .run(...values(ns, input));
       return { abandoned: true };
-    });
+    }); } catch (error) {
+      if (input.retryable && isStorageBusy(error)) retryCleanup.set(cleanupKey(ns, input), { ...input });
+      throw error;
+    }
   }
 
   function assertCaptureEvidence(ns, input) {

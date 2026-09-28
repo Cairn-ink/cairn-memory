@@ -1,5 +1,7 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { isStorageBusy, STORAGE_BUSY_TIMEOUT_MS } from './database.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
 import { captureMessages } from './capture.mjs';
 import { callModel } from './model-call.mjs';
@@ -8,9 +10,7 @@ import { fail, MemoryStoreError } from './validation.mjs';
 
 const system = readFileSync(new URL('./prompts/interpret-episode.md', import.meta.url), 'utf8');
 const promptDigest = createHash('sha256').update(system).digest('hex');
-const isBusy = error => error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) &&
-  [5, 6].includes(error.errcode & 0xff);
-const errorCode = error => isBusy(error) ? 'storage_busy'
+const errorCode = error => isStorageBusy(error) ? 'storage_busy'
   : error instanceof MemoryStoreError && error.code === 'model_timeout' ? 'episode_timeout'
   : error instanceof MemoryStoreError && ['context_budget_exceeded','invalid_model_output'].includes(error.code)
     ? error.code : 'episode_failed';
@@ -98,11 +98,29 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
   } catch (error) {
     const code = ['capacity', 'expired', 'missing_evidence', 'generation_conflict'].includes(error.code) ? error.code : errorCode(error);
     retryable = code === 'storage_busy' && !started;
-    try { if (owned && code !== 'storage_busy') runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
-    return { id: episodeId, status: 'failed', error: { code, retryable } };
+    const outcome = started && code === 'storage_busy' ? 'episode_failed' : code;
+    if (owned && !retryable) {
+      // One immediate write and at most 20 retries within five seconds.
+      // SQLite LOCKED may return without waiting: space retries as well as
+      // bounding SQLite BUSY waits, so neither code exhausts the count early.
+      const deadline = performance.now() + STORAGE_BUSY_TIMEOUT_MS;
+      for (let tries = 0; tries <= 20; tries++) {
+        const retryAt = Math.min(deadline, performance.now() + 250);
+        try {
+          runtime.failEpisodeDraft(ns, { ...owned, code: outcome,
+            busyTimeoutMs: Math.min(250, Math.max(0, deadline - performance.now())) });
+          break;
+        } catch (failure) {
+          if (!isStorageBusy(failure)) throw failure;
+          if (tries === 20 || performance.now() >= deadline) break;
+          await delay(Math.max(0, retryAt - performance.now()));
+        }
+      }
+    }
+    return { id: episodeId, status: 'failed', error: { code: outcome, retryable } };
   } finally {
-    try { if (owned) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
-    catch (error) { if (!isBusy(error)) throw error; }
+    try { if (owned && retryable) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
+    catch (error) { if (!isStorageBusy(error)) throw error; }
   }
 }
 
@@ -147,12 +165,7 @@ export async function captureEpisodeMessages(options) {
     const pending = runtime.pendingEpisodeSession(ns, batch);
     if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending, generation: batch.generation, trigger: 'lazy' });
   }
-  let registered;
-  try { registered = runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }); }
-  catch (error) {
-    if (error.code !== 'episode_processing') throw error;
-    return { processing: true, episode: { status: 'processing' }, admission: { status: 'processing' } };
-  }
+  const registered = runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
   const episodeId = registered.episodeId;
   if (registered.processing) return { processing: true, episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
   if (registered.overlap) return { duplicate: true, overlap: true, episode: { id: episodeId, status: 'not-run', reason: 'overlap' }, admission: { status: 'covered' } };
@@ -160,16 +173,16 @@ export async function captureEpisodeMessages(options) {
   const writerToken = registered.token;
   try {
     let state = runtime.episodeCaptureState(ns, { episodeId, client: batch.client, eventId: batch.eventId });
-    let episode = { id: episodeId, status: 'not-run', reason: registered.duplicate ? 'replay' : 'debounced' };
+    let episode = registered.draftProcessing ? { id: episodeId, status: 'processing' }
+      : { id: episodeId, status: 'not-run', reason: registered.duplicate ? 'replay' : 'debounced' };
     const due = !state.draftConsumed && state.admission !== 'completed' && (state.attempted === 0 ||
       registered.position - state.attempted >= state.draftEvery || snapshot.episodeContext.origin === 'precompact');
-    if (due) episode = await interpret({ runtime, ns, model, episodeId, generation: batch.generation,
+    if (due && writerToken) episode = await interpret({ runtime, ns, model, episodeId, generation: batch.generation,
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging });
-    if (episode.error?.code === 'storage_busy' && episode.error.retryable) fail('storage_busy');
     state = runtime.episodeCaptureState(ns, { episodeId, client: batch.client, eventId: batch.eventId });
     const deadline = startAdmission?.();
     const claim = runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,
-      payloadDigest: batch.payloadDigest, leaseMs: 125000, episodeWriterToken: writerToken });
+      payloadDigest: batch.payloadDigest, leaseMs: 125000 });
     // Only the HMAC session identity can enter newly admitted receipts.
     snapshot.sessionId = registered.sessionKey;
     const result = await captureMessages({ ...options, deadline,
@@ -177,7 +190,7 @@ export async function captureEpisodeMessages(options) {
     return { ...result, episode, ...(lazy ? { lazyEpisode: lazy } : {}),
       ...(result.duplicate ? { admission: { status: 'completed', memoryIds: result.memoryIds, suppressedCount: result.suppressedCount } }
         : result.processing ? { admission: { status: 'processing' } } : {}) };
-  } finally { runtime.releaseEpisodeWriter(ns, { episodeId, token: writerToken }); }
+  } finally { if (writerToken) runtime.releaseEpisodeWriter(ns, { episodeId, token: writerToken }); }
 }
 
 export async function keepEpisodeCapture(options) {
