@@ -186,11 +186,14 @@ admission adding receipts preserves tags and dependent episodes while retaining
 existing conflict/rationale/qualification invalidation semantics.
 Automatic tag proposals require episode-v1; legacy automatic outputs still reject tags.
 
-The operation envelope uses these episode-specific error codes (opening failures
+The operation envelope uses these episode and decision-review error codes (opening failures
 throw instead). They never expose raw database or provider errors.
 
 | Code | Meaning |
 | --- | --- |
+| `decision_review_required` | Confirm/reject requires `openMemoryCore` with `decisionReview: 'required-v1'`. |
+| `memory_not_awaiting` | The revision-matched item is not awaiting review. |
+| `action_conflict` | This namespace/actionId already names a different review payload or operation. |
 | `episode_identity_unavailable` | The private session-key secret is missing or corrupt; do not regenerate it for an existing store. |
 | `episode_mode_required` | The requested episode write/control seam requires the episode option. |
 | `episode_not_found` | The episode is absent, deleted or outside the exact namespace. |

@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { rationaleModel } from './rationale-model.mjs';
 export { ns, options, ok } from './episode-helpers.mjs';
 import { ns, options } from './episode-helpers.mjs';
@@ -24,11 +23,12 @@ export function model(overrides={}) {
   return wrapped;
 }
 export function setup(t, overrides={}, config={}) {
-  const dir=mkdtempSync(join(tmpdir(),'se2-capture-')),path=join(dir,'store.sqlite');
+  const ws=createTestWorkspace(t,{prefix:'se2-capture-'}),path=join(ws.path,'store.sqlite');
   const port=model(overrides),core=openMemoryCore({path,...options,model:port,...config});
-  const db=new DatabaseSync(path);db.exec('PRAGMA foreign_keys=ON');
-  t.after(()=>{core.close();db.close();rmSync(dir,{recursive:true,force:true});});
-  return {core,db,path,model:port};
+  ws.defer(()=>core.close());
+  const db=new DatabaseSync(path); ws.defer(()=>db.close());
+  db.exec('PRAGMA foreign_keys=ON');
+  return {core,db,path,model:port,ws};
 }
 export function input(n=1,sessionId='private-session',extra={}) {
   return {namespace:ns,client:'synthetic',sessionId,eventId:'event-'+createHash('sha256').update(sessionId+':'+n).digest('hex'),

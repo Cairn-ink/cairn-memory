@@ -13,27 +13,26 @@ import { openDatabase as oldOpen } from '../testing/confirmation-v17-database.mj
 const root = new URL('../../', import.meta.url).pathname;
 function baseline(t) {
   const ws = createTestWorkspace(t, { prefix: 'cf1-migration-' });
-  const old = { openMemoryCore({ path }) {
+  const old = { openSeedDatabase({ path }) {
     const db = oldOpen(path);
-    return { admit() {
+    let closed = false;
+    const close = () => { if (!closed) { db.close(); closed = true; } };
+    ws.defer(close);
+    return { seed() {
       db.exec(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,created_at,updated_at)
         VALUES('synthetic','parity','personal','','synthetic','Synthetic prior decision','decision','explicit',1,1,
           '2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');
         INSERT INTO namespace_epochs VALUES('parity','personal','',3);`);
-      return { ok: true };
-    }, close: () => db.close() };
+    }, close };
   } };
   return { ws, old };
 }
-const ns = { ownerId: 'parity', scope: 'personal', projectId: null };
-const admit = core => core.admit({ namespace: ns, memory: { content: 'Synthetic prior decision', kind: 'decision' },
-  receipts: [{ client: 'test', sessionId: 's', eventId: 'e', role: 'user', excerpt: 'Synthetic prior decision' }] });
 const tables = db => Object.fromEntries(db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all()
   .map(({ name }) => [name, db.prepare('SELECT * FROM ' + name).all()]));
 
-test('CF1 eager v17 migration preserves old values, revisions and epoch; actual older opener refuses v18', async t => {
-  const { ws, old } = await baseline(t); const path = join(ws.path, 'store.sqlite');
-  const core = old.openMemoryCore({ path }); assert.equal(admit(core).ok, true); core.close();
+test('CF1 eager v17 migration preserves old values, revisions and epoch; actual older opener refuses v18', t => {
+  const { ws, old } = baseline(t); const path = join(ws.path, 'store.sqlite');
+  const seedDb = old.openSeedDatabase({ path }); seedDb.seed(); seedDb.close();
   const db = new DatabaseSync(path); ws.defer(() => db.close());
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
   const before = tables(db);
@@ -47,17 +46,17 @@ test('CF1 eager v17 migration preserves old values, revisions and epoch; actual 
   assert.equal(db.prepare('SELECT review_state FROM memories').get().review_state, 'none');
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   const schema = db.prepare('SELECT * FROM sqlite_master ORDER BY name').all();
-  assert.throws(() => old.openMemoryCore({ path }), { code: 'unsupported_database' });
+  assert.throws(() => old.openSeedDatabase({ path }), { code: 'unsupported_database' });
   assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema);
   openMemoryCore({ path, decisionReview: 'required-v1' }).close();
   assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema);
 });
 
-test('CF1 injected late migration failure rolls back column, views, triggers, rows and schema version', async t => {
-  const { ws, old } = await baseline(t);
+test('CF1 injected late migration failure rolls back column, views, triggers, rows and schema version', t => {
+  const { ws, old } = baseline(t);
   for (const enabled of [false, true]) for (const collision of ['review_hidden_episodes', 'index_read_edges']) {
     const path = join(ws.path, `rollback-${enabled}-${collision}.sqlite`);
-    const core = old.openMemoryCore({ path }); admit(core); core.close();
+    const seedDb = old.openSeedDatabase({ path }); seedDb.seed(); seedDb.close();
     const db = new DatabaseSync(path); ws.defer(() => db.close());
     // Fail both after the new column/ledger and late in reader/trigger replacement.
     if (collision === 'index_read_edges') db.exec('DROP VIEW index_read_edges');
@@ -67,7 +66,7 @@ test('CF1 injected late migration failure rolls back column, views, triggers, ro
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
     assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema);
     assert.deepEqual(tables(db), before);
-    old.openMemoryCore({ path }).close();
+    old.openSeedDatabase({ path }).close();
   }
 });
 

@@ -7,7 +7,7 @@ export function decisionReviewOption(input) {
   return input.decisionReview === 'required-v1';
 }
 
-export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch }) {
+export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, supersessionStorage, conflictStorage }) {
   return function resolve(ns, action, input) {
     if (!enabled) fail('decision_review_required');
     const key = [ns.ownerId, ns.scope, ns.projectId, input.actionId];
@@ -33,6 +33,21 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
         if (!attach(row.id, input.receipt, now, insertedReceiptIds)) fail('invalid_receipt');
         db.prepare(`UPDATE memories SET review_state='confirmed',revision=revision+1,updated_at=? WHERE id=?`)
           .run(now, row.id);
+        // Held evidence is revision-bound. Drop stale work without interpreting
+        // confirmation as permission to overwrite later edits or retirements.
+        const held = db.prepare('SELECT * FROM confirmation_supersessions WHERE replacement_id=?').all(row.id);
+        db.prepare('DELETE FROM confirmation_supersessions WHERE replacement_id=?').run(row.id);
+        for (const transition of held) {
+          const previous = activeRow(ns, transition.previous_id);
+          const replacement = activeRow(ns, row.id);
+          const receiptIds = JSON.parse(transition.receipt_ids);
+          if (transition.replacement_revision !== row.revision || !previous ||
+              previous.revision !== transition.previous_revision || previous.currentness !== 'current' ||
+              previous.review_state === 'awaiting' || supersessionStorage.requiresQualification(previous, replacement) ||
+              receiptIds.some(id => !db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, row.id))) continue;
+          supersessionStorage.retire(ns, previous, replacement, receiptIds);
+        }
+        conflictStorage.restore(ns, row);
         result = { memory: { id: row.id, revision: row.revision + 1 },
           confirmationReceiptId: insertedReceiptIds[0], indexRevision: advanceEpoch(ns) };
       }

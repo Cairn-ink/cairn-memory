@@ -4,7 +4,7 @@ import { fail } from "./validation.mjs";
 const compareIds = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
 
 /** Revision-bound symmetric links. All callers own the enclosing transaction. */
-export function createConflictStorage({ db, activeRow, advanceEpoch }) {
+export function createConflictStorage({ db, activeRow, rawRow = activeRow, advanceEpoch }) {
   function validateTargets(ns, hints = []) {
     for (const hint of hints) {
       const target = activeRow(ns, hint.memoryId);
@@ -14,6 +14,8 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
   }
 
   function invalidateMemory(memoryId) {
+    db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? OR target_id=?').run(memoryId, memoryId);
+    db.prepare('DELETE FROM confirmation_supersessions WHERE previous_id=? OR replacement_id=?').run(memoryId, memoryId);
     db.prepare("DELETE FROM memory_conflicts WHERE left_memory_id = ? OR right_memory_id = ?")
       .run(memoryId, memoryId);
   }
@@ -21,8 +23,18 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
   function insertBatch(ns, entries, source) {
     let changed = false;
     for (const { memoryId, hints = [] } of entries) {
+      const raw = rawRow(ns, memoryId);
+      if (!raw) fail("memory_not_found");
+      if (raw.review_state === 'awaiting') {
+        if (hints.some(hint => hint.memoryId === memoryId)) fail("invalid_ref");
+        validateTargets(ns, hints);
+        for (const hint of hints) db.prepare(`INSERT INTO confirmation_conflicts
+          (memory_id,memory_revision,target_id,target_revision,source) VALUES(?,?,?,?,?)
+          ON CONFLICT DO NOTHING`).run(memoryId, raw.revision, hint.memoryId, hint.expectedRevision, source);
+        continue;
+      }
       const memory = activeRow(ns, memoryId);
-      if (!memory) continue; // Awaiting admissions do not participate in conflict navigation.
+      if (!memory) fail("memory_not_found");
       if (hints.some((hint) => memoryId === hint.memoryId)) fail("invalid_ref");
       validateTargets(ns, hints);
       for (const hint of hints) {
@@ -60,5 +72,15 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
     }).sort((a, b) => compareIds(a.memoryId, b.memoryId) || compareIds(a.source, b.source));
   }
 
-  return { validateTargets, invalidateMemory, insertBatch, inspect };
+  function restore(ns, memory) {
+    const held = db.prepare('SELECT * FROM confirmation_conflicts WHERE memory_id=?').all(memory.id);
+    db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=?').run(memory.id);
+    for (const hint of held) {
+      const target = activeRow(ns, hint.target_id);
+      if (hint.memory_revision !== memory.revision || !target || target.revision !== hint.target_revision) continue;
+      insertBatch(ns, [{ memoryId: memory.id, hints: [{ memoryId: target.id, expectedRevision: target.revision }] }], hint.source);
+    }
+  }
+
+  return { validateTargets, invalidateMemory, insertBatch, inspect, restore };
 }

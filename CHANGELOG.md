@@ -10,6 +10,14 @@
 - Eager additive schema v18 migration; older openers refuse it. See the
   [CF-1 contract](docs/plans/confirmation-state.md), including the limitation that
   automatic extraction cannot yet distinguish directly stated decisions.
+- **Decision (chichi, 2026-09-29):** conservative admission is chosen; all
+  automatic decisions wait when opted in, while explicit remember/admit stay
+  direct. Confirmation may be too burdensome. The provenance follow-up for
+  typed prompts marked with plugin 0.1.1's `promptSource` is recorded in
+  cairn-wiki `docs/plans/one-brain-u6.md` → “Confirmation burden”.
+- Confirmation completes held supersession and conflict links atomically;
+  unrelated transitions in a mixed capture apply immediately. Rejection drops
+  the held work and preserves its current predecessor.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

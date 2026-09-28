@@ -8,6 +8,7 @@ export { openMemoryCore } from "./contract.mjs";
 
 /** Embedded storage only. The caller, not this library, authenticates owners. */
 export function openMemoryStore(input) {
+  object(input, ["path", "sessionEpisodes"]);
   const runtime = createMemoryRuntime(input);
 
   function bindScope(input) {

@@ -1,8 +1,8 @@
-import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from './confirmation-schema.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from './confirmation-schema.mjs';
 import { fail } from "./validation.mjs";
 import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
 import { migrateVersion8 } from './ordered-capture-schema.mjs';

@@ -490,7 +490,7 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, advanceEpoch });
+  const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
   const qualificationStorage = createQualificationStorage({ db, receiptKey });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
@@ -518,7 +518,7 @@ export function createMemoryRuntime(input) {
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
-  const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch });
+  const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, supersessionStorage, conflictStorage });
 
   return Object.freeze({
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },

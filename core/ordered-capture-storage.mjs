@@ -134,19 +134,18 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         });
         const predecessors = new Set(resolved.map(row => row.previous.id));
         if (resolved.some(row => predecessors.has(row.replacement.id))) fail('invalid_ref');
-        // Decide the whole retirement set before the first retirement mutation.
-        // Preserve admissions and replay outcome, but never downgrade a qualified
-        // endpoint to legacy retirement based on a model verdict.
-        if (resolved.some(row => row.previous.review_state === 'awaiting' || row.replacement.review_state === 'awaiting')) {
-          reconciliation = outcome('confirmation_required');
-          return { reconciliation };
-        }
-        if (resolved.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement))) {
-          reconciliation = outcome('qualified_transition_required');
-          return { reconciliation };
-        }
-        for (const row of resolved) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
-        reconciliation = outcome(reason, resolved.length);
+        // Review holds only its dependent transitions. Preserve the existing
+        // qualification fence for the independently eligible retirement set.
+        const held = resolved.filter(row => row.previous.review_state === 'awaiting' || row.replacement.review_state === 'awaiting');
+        const immediate = resolved.filter(row => !held.includes(row));
+        for (const row of held) db.prepare(`INSERT INTO confirmation_supersessions
+          (previous_id,previous_revision,replacement_id,replacement_revision,receipt_ids)
+          VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`).run(row.previous.id, row.previous.revision,
+          row.replacement.id, row.replacement.revision, JSON.stringify(row.receiptIds));
+        const qualified = immediate.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement));
+        if (!qualified) for (const row of immediate) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
+        reconciliation = outcome(held.length ? 'confirmation_required' : qualified ? 'qualified_transition_required' : reason,
+          qualified ? 0 : immediate.length);
         return { reconciliation };
       },
       complete() {

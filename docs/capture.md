@@ -325,14 +325,21 @@ Successful ordered capture and completed replay additionally return:
 ```js
 reconciliation: {
   status: 'applied' | 'complete_no_change' | 'unresolved',
-  reason: null | 'candidate_limit' | 'unordered_sources' | 'context_budget',
-  retiredCount: 0 // 0–5; positive only for applied
+  reason: null | 'candidate_limit' | 'unordered_sources' | 'context_budget'
+    | 'qualified_transition_required' | 'confirmation_required',
+  retiredCount: 0 // 0–5; applied transitions in this pass, including mixed review batches
 }
 ```
 
 `complete_no_change` describes this bounded pass, not global semantic truth.
-`unresolved` admits the extracted items without retiring predecessors and keeps
-its reason for replay. Context overflow is unresolved; a missing required port,
+`unresolved` admits extracted items and keeps its reason for replay.
+`confirmation_required` holds only transitions that depend on awaiting items;
+other transitions apply immediately, so `retiredCount` can be positive. Confirm
+re-drives valid held transitions atomically; reject discards them. The capture's
+original replay result does not change. `qualified_transition_required` means
+the retirement set needs qualified evaluation instead of legacy retirement;
+that fence still applies to the independent non-awaiting set. Context overflow
+is unresolved; a missing required port,
 malformed output, cancellation or provider failure commits no admission.
 An empty successful extraction still advances stream progress. A new event at
 a reused position or at/below completed progress returns `capture_order_conflict`

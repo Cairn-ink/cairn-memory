@@ -23,8 +23,8 @@ function fixture(t, config = {}) {
   const calls = [];
   const model = { ...rationaleModel((method, request) => calls.push({ method, request })), extract: () => ({ items: [item()] }) };
   const core = openMemoryCore({ path, model, decisionReview: 'required-v1', ...config });
-  const db = new DatabaseSync(path);
-  ws.defer(() => core.close()); ws.defer(() => db.close());
+  ws.defer(() => core.close());
+  const db = new DatabaseSync(path); ws.defer(() => db.close());
   return { core, db, model, calls, path, ws };
 }
 const queue = core => ok(core.list({ namespace: ns, reviewState: 'awaiting' })).memories;
@@ -70,12 +70,12 @@ test('CF1 admission limitation and all ordinary readers, including option-off an
   const inspection = ok(f.core.inspectAdmission({ namespace: ns, client: 'scripted', eventId: 'one', includeInitialClassification: true }));
   assert.deepEqual(inspection.members, [{ status: 'closed' }]);
   assert.equal(f.db.prepare('SELECT count(*) n FROM index_read_memories').get().n, 0);
-  const off = openMemoryCore({ path: f.path, model: f.model }); t.after(() => off.close());
+  const off = openMemoryCore({ path: f.path, model: f.model }); f.ws.defer(() => off.close());
   await assertHidden(off, memory);
   error(off.list({ namespace: ns, reviewState: 'awaiting' }), 'invalid_input');
   error(get(off, memory.id, true), 'invalid_input');
   error(off.confirm({ ...action(memory), receipt: receipt() }), 'decision_review_required');
-  const legacy = openMemoryStore({ path: f.path }); t.after(() => legacy.close());
+  const legacy = openMemoryStore({ path: f.path }); f.ws.defer(() => legacy.close());
   const scope = legacy.scope({ ownerId: ns.ownerId });
   assert.equal(scope.get(memory.id), null); assert.deepEqual(scope.list(), []); assert.deepEqual(scope.search('chose'), []);
 });
@@ -99,7 +99,7 @@ test('CF1 confirm keeps origin and evidence, publishes atomically, survives rest
   assert.deepEqual(f.core.confirm(input), result);
   error(f.core.reject(action(memory)), 'action_conflict');
   error(f.core.confirm({ ...input, receipt: receipt('changed') }), 'action_conflict');
-  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); t.after(() => reopened.close());
+  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); f.ws.defer(() => reopened.close());
   assert.deepEqual(reopened.confirm(input), result);
   ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: detail.memory.revision }));
   assert.deepEqual(reopened.confirm(input), result);
@@ -111,7 +111,7 @@ test('CF1 reject is revision checked, suppressed, content-free and replay safe',
   error(f.core.reject({ ...action(memory), expectedRevision: memory.revision + 1 }), 'revision_conflict');
   const result = f.core.reject(action(memory)); assert.equal(ok(result).forgotten, true);
   assert.deepEqual(f.core.reject(action(memory)), result);
-  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); t.after(() => reopened.close());
+  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); f.ws.defer(() => reopened.close());
   assert.deepEqual(reopened.reject(action(memory)), result);
   error(reopened.reject({ ...action(memory), expectedRevision: memory.revision + 1 }), 'action_conflict');
   assert.equal(f.db.prepare('SELECT content FROM memories').get().content, null);
@@ -135,7 +135,7 @@ test('CF1 duplicates, mixed batches, explicit promotion and explicit remember st
   const detail = ok(get(f.core, original.id)); assert.equal(detail.memory.origin, 'explicit'); assert.equal(detail.memory.reviewState, 'none');
   f.model.extract = () => ({ items: [item()] }); ok(await f.core.capture(captureInput('again')));
   assert.equal(ok(get(f.core, original.id)).memory.origin, 'explicit');
-  const legacy = openMemoryStore({ path: f.path, decisionReview: 'required-v1' }); t.after(() => legacy.close());
+  const legacy = openMemoryStore({ path: f.path }); f.ws.defer(() => legacy.close());
   const remembered = legacy.scope({ ownerId: ns.ownerId }).remember({ content: 'Direct second choice.', kind: 'decision', origin: 'explicit', confidence: 1, receipt: receipt('remember') });
   assert.equal(remembered.origin, 'explicit'); assert.deepEqual(queue(f.core), []);
 });
@@ -167,7 +167,7 @@ for (const outcome of ['confirm', 'reject', 'forget']) test(`CF1 episode links h
   assert.deepEqual(ok(f.core.listEpisodes(request)).items, []);
   error(f.core.getEpisode({ namespace: episodeNs, episodeId: row.id }), 'episode_not_found');
   assert.deepEqual(ok(f.core.sessionStartContext({ namespace: episodeNs })).groups.nextSteps.items, []);
-  const off = openMemoryCore({ path: f.path, model: f.model }); t.after(() => off.close());
+  const off = openMemoryCore({ path: f.path, model: f.model }); f.ws.defer(() => off.close());
   assert.deepEqual(ok(off.listEpisodes(request)).items, []);
   error(off.getEpisode({ namespace: episodeNs, episodeId: row.id }), 'episode_not_found');
   if (outcome === 'forget') {
@@ -195,7 +195,7 @@ for (const outcome of ['confirm', 'reject']) test(`CF1 ${outcome} failure rolls 
     .map(table => f.db.prepare(`SELECT * FROM ${table}`).all()));
   assert.equal(after, before);
   f.db.exec('DROP TRIGGER fail_confirmation');
-  const peer = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); t.after(() => peer.close());
+  const peer = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); f.ws.defer(() => peer.close());
   const result = f.core[outcome](input); ok(result); assert.deepEqual(peer[outcome](input), result);
   error(peer[outcome]({ ...input, actionId: 'competing-action' }), outcome === 'confirm' ? 'revision_conflict' : 'memory_not_found');
   error(peer[outcome]({ ...input, namespace: { ...ns, ownerId: 'other' } }), 'memory_not_found');
@@ -280,7 +280,7 @@ test('CF1 bounded source scans exclude awaiting with both source candidate polic
   const f = fixture(t); ok(await f.core.capture(captureInput()));
   for (const sourceCandidatePolicy of [undefined, 'bounded-keyset-v1']) {
     const core = sourceCandidatePolicy ? openMemoryCore({ path: f.path, model: f.model, sourceCandidatePolicy }) : f.core;
-    if (core !== f.core) t.after(() => core.close());
+    if (core !== f.core) f.ws.defer(() => core.close());
     const result = ok(await core.recall({ readSet: [ns], query: 'I chose A', contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' }));
     assert.deepEqual(result.memories, []);
   }
@@ -302,4 +302,145 @@ for (const outcome of ['confirm', 'reject']) test(`CF1 simultaneous process ${ou
   const [first, second] = await Promise.all([run(), run()]); ok(first); assert.deepEqual(second, first);
   assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_actions').get().n, 1);
   assert.equal(f.db.prepare('SELECT revision FROM memories').get().revision, memory.revision + 1);
+});
+
+for (const resolution of ['confirm', 'reject']) test(`CF1 held supersession survives restart and ${resolution} resolves only its own work`, async t => {
+  const f = fixture(t);
+  f.model.extract = () => ({ items: [item({ content: 'Earlier active context.', kind: 'context' })] });
+  const first = ok(await f.core.capture({ ...captureInput('first'), causal: { streamId: 'stream', sequence: 1 } }));
+  const previous = first.admission.memories[0];
+  f.model.extract = () => ({ items: [item()] });
+  f.model.reconcile = () => ({ transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+    relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] });
+  const request = { ...captureInput('second'), causal: { streamId: 'stream', sequence: 2 } };
+  const captured = ok(await f.core.capture(request));
+  const memory = queue(f.core)[0];
+  assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_supersessions').get().n, 1);
+  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); f.ws.defer(() => reopened.close());
+  const input = { ...action(memory), ...(resolution === 'confirm' ? { receipt: receipt() } : {}) };
+  // The action ledger, retirement, confirmation receipt and index change share rollback.
+  f.db.exec("CREATE TRIGGER fail_confirmation BEFORE INSERT ON confirmation_actions BEGIN SELECT RAISE(ABORT,'injected'); END");
+  error(reopened[resolution](input), 'storage_error');
+  assert.equal(ok(get(f.core, previous.id)).memory.state, 'active');
+  assert.equal(queue(f.core).length, 1);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_supersessions').get().n, 1);
+  f.db.exec('DROP TRIGGER fail_confirmation');
+  const result = reopened[resolution](input); ok(result); assert.deepEqual(reopened[resolution](input), result);
+  assert.equal(ok(get(f.core, previous.id)).memory.state, resolution === 'confirm' ? 'historical' : 'active');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_supersessions').get().n, resolution === 'confirm' ? 1 : 0);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_supersessions').get().n, 0);
+  assert.deepEqual(ok(await f.core.capture(request)).reconciliation, captured.reconciliation);
+});
+
+test('CF1 mixed retirement batch immediately applies the independent non-awaiting transition', async t => {
+  const f = fixture(t);
+  f.model.extract = () => ({ items: ['Earlier A', 'Earlier B'].map(content => item({ content, kind: 'context' })) });
+  const first = ok(await f.core.capture({ ...captureInput('first'), causal: { streamId: 'stream', sequence: 1 } }));
+  const previous = Object.fromEntries(first.admission.memories.map(m => [ok(get(f.core, m.id)).memory.content, m]));
+  f.model.extract = () => ({ items: [item(), item({ content: 'Updated B', kind: 'context' })] });
+  f.model.reconcile = request => ({ transitions: ['Earlier A', 'Earlier B'].map((content, replacementIndex) => ({
+    replacementIndex, predecessorIndex: request.input.candidates.findIndex(c => c.content === content), evidenceIndices: [0],
+    relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' })) });
+  const next = ok(await f.core.capture({ ...captureInput('second'), causal: { streamId: 'stream', sequence: 2 } }));
+  assert.deepEqual(next.reconciliation, { status: 'unresolved', reason: 'confirmation_required', retiredCount: 1 });
+  assert.equal(ok(get(f.core, previous['Earlier A'].id)).memory.state, 'active');
+  assert.equal(ok(get(f.core, previous['Earlier B'].id)).memory.state, 'historical');
+  ok(f.core.confirm({ ...action(queue(f.core)[0]), receipt: receipt() }));
+  assert.equal(ok(get(f.core, previous['Earlier A'].id)).memory.state, 'historical');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_supersessions').get().n, 2);
+});
+
+for (const resolution of ['confirm', 'reject']) test(`CF1 ${resolution} restores or drops durable conflict hints`, t => {
+  const f = fixture(t);
+  const target = ok(f.core.admit({ namespace: ns, memory: { content: 'Earlier direct context', kind: 'context' }, receipts: [receipt('target')] })).memory;
+  const key = { namespace: ns, client: 'trusted', eventId: 'conflicting', payloadDigest: 'c'.repeat(64) };
+  const token = ok(f.core.claimAdmission({ ...key, leaseMs: 1000 })).token;
+  ok(f.core.finishAdmission({ ...key, token, items: [{ content, kind: 'decision', confidence: 0.8, receipts: [receipt('inferred')],
+    conflictHints: [{ memoryId: target.id, expectedRevision: target.revision, relation: 'contradicts' }] }] }));
+  const memory = queue(f.core)[0];
+  assert.deepEqual(ok(get(f.core, target.id)).conflicts, []);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_conflicts').get().n, 1);
+  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); f.ws.defer(() => reopened.close());
+  ok(reopened[resolution]({ ...action(memory), ...(resolution === 'confirm' ? { receipt: receipt() } : {}) }));
+  assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_conflicts').get().n, 0);
+  const conflicts = ok(get(f.core, target.id)).conflicts;
+  assert.equal(conflicts.length, resolution === 'confirm' ? 1 : 0);
+  if (resolution === 'confirm') {
+    assert.equal(conflicts[0].memoryId, memory.id);
+    assert.equal(conflicts[0].revision, memory.revision + 1);
+    assert.equal(ok(get(f.core, memory.id)).conflicts[0].memoryId, target.id);
+  }
+});
+
+test('CF1 legacy store refuses the core-only decisionReview option', t => {
+  const f = fixture(t);
+  assert.throws(() => openMemoryStore({ path: f.path, decisionReview: 'required-v1' }), { code: 'invalid_input' });
+});
+
+test('CF1 typical synthetic session measures whole-episode and startup context loss', async t => {
+  const turns = [
+    ['user', 'Plan the synthetic release. Next, run the offline checks.'],
+    ['assistant', 'We can compare storage and testing choices.'],
+    ['user', 'I choose SQLite for the synthetic release.'],
+    ['assistant', 'That gives us local transactions.'],
+    ['user', 'I choose scripted models for the tests.'],
+    ['assistant', 'The next step remains running the offline checks.'],
+  ];
+  const f = episodeSetup(t, { extract: () => ({ items: [
+    item({ content: turns[2][1], sourceIndices: [2] }), item({ content: turns[4][1], sourceIndices: [4] }),
+  ] }), interpretEpisode: request => ({ ...interpretation(request), nextStep: {
+    value: 'Run the offline checks.', anchors: [{ sourceIndex: 0, start: 0, end: turns[0][1].length }],
+  } }) }, { decisionReview: 'required-v1' });
+  ok(await f.core.capture(episodeInput(1, 'typical-synthetic', { messages: turns.map(([role, content], i) => ({
+    id: `turn-${i}`, role, content, occurredAt: `1901-02-03T04:0${i}:00.000Z`,
+  })) })));
+  const waiting = ok(f.core.list({ namespace: episodeNs, reviewState: 'awaiting' })).memories;
+  assert.equal(waiting.length, 2);
+  const episodeId = f.db.prepare('SELECT id FROM session_episodes').get().id;
+  const request = { namespace: episodeNs, since: '1901-02-01T00:00:00.000Z', until: '1901-02-10T00:00:00.000Z' };
+  const measure = () => {
+    const context = ok(f.core.sessionStartContext({ namespace: episodeNs }));
+    return { episodes: ok(f.core.listEpisodes(request)).items.length,
+      nextSteps: context.groups.nextSteps.items.length, procedural: context.groups.procedural.items.length };
+  };
+  const before = measure();
+  assert.deepEqual(before, { episodes: 0, nextSteps: 0, procedural: 0 });
+  error(f.core.getEpisode({ namespace: episodeNs, episodeId }), 'episode_not_found');
+  ok(f.core.confirm({ ...action(waiting[0], 'first'), namespace: episodeNs, receipt: receipt('first') }));
+  assert.deepEqual(measure(), before); // One live awaiting link still hides all context.
+  error(f.core.getEpisode({ namespace: episodeNs, episodeId }), 'episode_not_found');
+  ok(f.core.confirm({ ...action(waiting[1], 'second'), namespace: episodeNs, receipt: receipt('second') }));
+  const after = measure();
+  assert.deepEqual(after, { episodes: 1, nextSteps: 1, procedural: 0 });
+  const episode = ok(f.core.getEpisode({ namespace: episodeNs, episodeId }));
+  assert.ok(JSON.stringify(episode).includes('Run the offline checks.'));
+  t.diagnostic(JSON.stringify({ turns: 3, decisions: 2, before, after }));
+});
+
+for (const changed of ['predecessor', 'replacement']) test(`CF1 changing the held ${changed} invalidates stale retirement evidence`, async t => {
+  const f = fixture(t);
+  f.model.extract = () => ({ items: [item({ content: 'Earlier context', kind: 'context' })] });
+  const previous = ok(await f.core.capture({ ...captureInput('first'), causal: { streamId: 'stream', sequence: 1 } })).admission.memories[0];
+  f.model.extract = () => ({ items: [item()] });
+  f.model.reconcile = () => ({ transitions: [{ replacementIndex: 0, predecessorIndex: 0, evidenceIndices: [0],
+    relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] });
+  ok(await f.core.capture({ ...captureInput('second'), causal: { streamId: 'stream', sequence: 2 } }));
+  if (changed === 'predecessor') ok(f.core.correct({ namespace: ns, memoryId: previous.id,
+    expectedRevision: previous.revision, content: 'Updated direct context', kind: 'context', receipt: receipt('edit') }));
+  else ok(await f.core.capture(captureInput('new-evidence')));
+  ok(f.core.confirm({ ...action(queue(f.core)[0]), receipt: receipt() }));
+  assert.equal(ok(get(f.core, previous.id)).memory.state, 'active');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_supersessions').get().n, 0);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_supersessions').get().n, 0);
+});
+
+test('CF1 conflict insertion only skips awaiting rows; missing or historical sources fail loudly', async t => {
+  const { createConflictStorage } = await import('../conflict-storage.mjs');
+  const f = fixture(t);
+  const storage = createConflictStorage({ db: f.db, activeRow: () => undefined,
+    rawRow: () => undefined, advanceEpoch: () => assert.fail('unexpected epoch write') });
+  assert.throws(() => storage.insertBatch(ns, [{ memoryId: 'missing' }], 'inferred-hint'), { code: 'memory_not_found' });
+  const historical = createConflictStorage({ db: f.db, activeRow: () => undefined,
+    rawRow: () => ({ id: 'history', review_state: 'none', currentness: 'historical' }), advanceEpoch: () => assert.fail() });
+  assert.throws(() => historical.insertBatch(ns, [{ memoryId: 'history' }], 'inferred-hint'), { code: 'memory_not_found' });
 });
