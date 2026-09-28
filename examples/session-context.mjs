@@ -27,6 +27,8 @@ try {
     messages: [{ id: 'message', role: 'user', content: 'Review next change.', occurredAt: '2026-09-28T00:00:00.000Z' }] }));
   ok(writer.admit({ namespace, memory: { content: 'Keep reviews concise.', kind: 'instruction' }, receipts: [
     { client: 'demo', sessionId: 'explicit', eventId: 'instruction', role: 'user', excerpt: 'Keep reviews concise.' }] }));
+  ok(writer.admit({ namespace, memory: { content: 'The synthetic project uses SQLite.', kind: 'fact' }, receipts: [
+    { client: 'demo', sessionId: 'explicit', eventId: 'fact', role: 'user', excerpt: 'The synthetic project uses SQLite.' }] }));
   writer.close();
   const forbidden = () => { throw Error('Read paths must not generate'); };
   reader = openMemoryCore({ path, model: { countTokens: text => Array.from(text).length,
@@ -42,7 +44,12 @@ try {
     stepId: item.nextStep.id, actionId: 'demo-close', action: 'completed' };
   assert.deepEqual(ok(reader.closeEpisodeNextStep(close)), ok(reader.closeEpisodeNextStep(close)));
   assert.equal(ok(reader.sessionStartContext({ namespace })).groups.nextSteps.returned, 0);
-  console.log('Synthetic session context: scoped sources, framing, range read and inert closure replay verified.');
+  assert.equal(Object.hasOwn(context.groups, 'background'), false);
+  const background = ok(reader.sessionStartContext({ namespace, groups: { background: true }, maxTokens: 2000 }));
+  assert.equal(background.groups.background.returned, 1);
+  assert.equal(background.groups.background.items[0].memory.origin, 'explicit');
+  assert.equal(background.groups.background.items[0].receipts.length, 1);
+  console.log('Synthetic session context: opt-in background, scoped sources, framing, range read and inert closure replay verified.');
 } finally {
   reader?.close();
   writer.close();

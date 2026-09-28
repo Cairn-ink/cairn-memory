@@ -431,7 +431,7 @@ under the explicit admission rules below. No hosted HTTP schema is widened here.
 
 ## Session-start context, next steps and procedural memories
 
-`sessionStartContext({namespace,groups,maxTokens,maxChars})` defaults both
+`sessionStartContext({namespace,groups,maxTokens,maxChars,backgroundBudget})` defaults both
 `nextSteps` and `procedural` on; either/both can be false. No commitment retrieval.
 The exact project is the thread; personal scope is its own separate group.
 Return the newest open step per group, ordered by creation receipt ordinal then
@@ -440,6 +440,24 @@ marker, not an obligation or current assertion. Exclude incomplete/invalidated
 steps. A silent later episode never closes a step; an older still-open episode's
 step can resurface after the newer one closes. Each episode retains at most one
 step's text, with content-free replaced identities for replay.
+
+CF-2 adds the explicit request `groups: {background: true}` for current facts
+and context of either origin, with their origin and complete retained receipts.
+Without that switch (including false), the response stays byte-identical and
+has no background key. Awaiting, forgotten, suppressed and historical/superseded
+items are excluded, with exact owner/namespace isolation. Sort by memory update
+time descending, then ID ascending. No inference or confirmation is performed
+by this read. The host will map 習慣和背景 to procedural plus background later.
+
+Background fills after the existing groups and has its own `backgroundBudget`
+(default 500 local tokens / 2,000 UTF-16 units; ceilings 2,000 / 8,000) on the
+serialized nonempty items array, alongside the unchanged whole-envelope limits.
+It reports truncation independently and retains the untrusted framing and final
+atomic freshness reread. Group metadata consumes whole-envelope headroom;
+changing the background cap never rebalances the existing groups. At most six
+background items and twelve total items are returned. See the exact
+[session-start contract](../storage-contract.md#session-start-context), including
+conflict-and-retry semantics when an item is forgotten during assembly.
 
 A later draft can close/replace the visible step only through its exact guarded
 ID and anchors explicitly reporting completion/cancellation/replacement. Ambiguous
@@ -485,7 +503,7 @@ then ID. Keep no unsupported inferred tag just to improve context coverage.
 
 Default whole-envelope budget: 1,500 exact local tokens and 6,000 UTF-16 units;
 hard ceilings 2,000 tokens, 8,000 units, 24,000 UTF-8 bytes and 12 items (≤6 steps,
-≤6 procedures). Limits are positive integers. Probe ≤13 indexed candidates per
+≤6 procedures, ≤6 background items). Limits are positive integers. Probe ≤13 indexed candidates per
 group, consider ≤12; alternate whole sourced items in deterministic order, step
 first. Require all supporting step passages and complete retained memory receipts
 (up to the existing 100-receipt bound). Stop a group at an item that cannot fit;
