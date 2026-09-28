@@ -45,9 +45,13 @@ before a model boundary need not emit an event. Event values describe checks,
 not semantic truth or the provider's underlying root cause.
 
 `core_call:capture_deadline` means the trusted invocation-local capture budget
-was expired at a core model-call check or when its timer fired. The public
-operation still returns `model_timeout`. `core_call:model_timeout` remains the
-per-call timeout or an adapter-supplied timeout code; it alone does not prove
+was expired at a core model-call check or when its shorter timer fired. A timer
+scheduled at the 30-second per-call ceiling keeps `model_timeout` even if its
+callback runs after a longer capture budget expires. Equal bounds use the
+per-call reason. The public operation still returns `model_timeout`.
+`core_call:model_timeout` remains the per-call timeout, an adapter-supplied
+timeout code, or an invocation-limited timer that fired before trusted expiry
+could be verified; it alone does not prove
 which actor caused a stall. The adapter can separately observe
 `adapter:model_cancelled` after either core abort. These finite labels contain
 no timing, request, response, source or provider detail, and an expired budget

@@ -64,12 +64,16 @@ export async function callModel(model, method, system, input,
         return model[method]({ ...detached, signal: controller.signal });
       }),
       new Promise((_, reject) => {
+        const timeoutMs = deadline ? deadline.remainingMs() : 30_000;
+        // A 30-second tie belongs to the per-call ceiling. Decide which
+        // bound scheduled this timer before delayed callback dispatch.
+        const invocationLimited = deadline && timeoutMs < 30_000;
         timer = setTimeout(() => {
-          timeoutOrigin = deadline?.expired() ? 'capture_deadline' : 'model_timeout';
+          timeoutOrigin = invocationLimited && deadline.expired() ? 'capture_deadline' : 'model_timeout';
           coreDeadlineSignals.add(controller.signal);
           controller.abort();
           reject(new MemoryStoreError('model_timeout'));
-        }, deadline ? deadline.remainingMs() : 30_000);
+        }, timeoutMs);
       }),
     ]);
   } catch (error) {

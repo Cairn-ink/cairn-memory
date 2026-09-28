@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { setImmediate } from 'node:timers/promises';
 import { join } from 'node:path';
 import { createOpenAIModel } from '../index.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
@@ -22,10 +21,12 @@ const envelope = value => ({ object: 'response', model: 'gpt-4.1-mini-2025-04-14
     content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
   usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } });
 
-function hangingAdapter() {
+function hangingAdapter({ generationBlockMs = 0 } = {}) {
   const diagnostics = [];
   const signals = [];
   let generations = 0;
+  let announceGeneration;
+  const generationStarted = new Promise(resolve => { announceGeneration = resolve; });
   const model = createOpenAIModel({ apiKey: 'synthetic-offline-key',
     onDiagnostic: event => diagnostics.push(event),
     fetchImpl: (url, options) => {
@@ -33,13 +34,17 @@ function hangingAdapter() {
         object: 'response.input_tokens', input_tokens: 100 })));
       generations++;
       signals.push(options.signal);
+      announceGeneration();
+      // Model delayed event-loop delivery of an already-scheduled core timer.
+      // This is synthetic local blocking, not a provider-latency measurement.
+      if (generationBlockMs) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, generationBlockMs);
       return new Promise((_, reject) => {
         if (options.signal.aborted) reject(new DOMException('Synthetic cancellation', 'AbortError'));
         else options.signal.addEventListener('abort', () => reject(new DOMException('Synthetic cancellation', 'AbortError')),
           { once: true });
       });
     } });
-  return { model, diagnostics, signals, generations: () => generations };
+  return { model, diagnostics, signals, generationStarted, generations: () => generations };
 }
 
 test('synthetic real adapter separates per-call timeout, caller abort, and invocation deadline', async t => {
@@ -60,13 +65,24 @@ test('synthetic real adapter separates per-call timeout, caller abort, and invoc
   const caller = hangingAdapter();
   const callerController = new AbortController();
   const callerPending = caller.model.extract(extractRequest(callerController.signal));
-  while (caller.generations() === 0) await setImmediate();
-  callerController.abort('model_timeout'); // Forged reason must grant no core provenance.
-  await assert.rejects(callerPending, error => error.name === 'AbortError');
+  let readinessTimer;
+  try {
+    const ready = await Promise.race([
+      caller.generationStarted.then(() => true),
+      callerPending.then(() => false, () => false),
+      new Promise(resolve => { readinessTimer = setTimeout(() => resolve(false), 1_000); }),
+    ]);
+    assert.equal(ready, true, 'caller generation must start within the bounded wait');
+    callerController.abort('model_timeout'); // Forged reason must grant no core provenance.
+    await assert.rejects(callerPending, error => error.name === 'AbortError');
+  } finally {
+    clearTimeout(readinessTimer);
+    callerController.abort();
+  }
   assert.equal(isCoreModelDeadlineSignal(callerController.signal), false);
   assert.deepEqual(caller.diagnostics.map(event => event.reason), ['model_cancelled']);
 
-  const capture = hangingAdapter();
+  const capture = hangingAdapter({ generationBlockMs: 600 });
   const path = join(workspace.path, 'memory.sqlite');
   const core = openMemoryCore({ path, model: capture.model, captureDeadlineMs: 500 });
   workspace.defer(() => core.close());

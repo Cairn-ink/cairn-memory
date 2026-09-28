@@ -94,6 +94,54 @@ test('per-call timer keeps its origin if the invocation expires during abort del
   assert.deepEqual(events.map(event => event.reason), ['model_timeout']);
 });
 
+test('delayed per-call timer remains per-call after longer invocation expires', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const events = [];
+  let expired = false;
+  let signal;
+  let remainingCalls = 0;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    select: request => { signal = request.signal; return new Promise(() => {}); },
+    onDiagnostic: event => events.push(event) };
+  const pending = callModel(model, 'select', 'Synthetic', {}, { deadline: {
+    expired: () => expired,
+    remainingMs: () => { remainingCalls++; return 30_000; },
+  } });
+  const rejected = assert.rejects(pending, { code: 'model_timeout' });
+  await setImmediate();
+  assert.equal(remainingCalls, 1, 'the existing per-call ceiling was scheduled');
+  assert.equal(signal.aborted, false);
+  // Simulate an event loop blocked beyond the longer invocation deadline:
+  // expiry becomes visible before the already-scheduled per-call callback runs.
+  expired = true;
+  t.mock.timers.tick(30_000);
+  await rejected;
+  assert.equal(signal.aborted, true);
+  assert.equal(isCoreModelDeadlineSignal(signal), true);
+  assert.deepEqual(events.map(event => event.reason), ['model_timeout']);
+});
+
+test('invocation-limited timer firing before trusted expiry remains unclassified', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const events = [];
+  let signal;
+  const model = { contextWindow: 8192, countTokens: () => 1,
+    select: request => { signal = request.signal; return new Promise(() => {}); },
+    onDiagnostic: event => events.push(event) };
+  const pending = callModel(model, 'select', 'Synthetic', {}, { deadline: {
+    expired: () => false,
+    remainingMs: () => 500,
+  } });
+  const rejected = assert.rejects(pending, { code: 'model_timeout' });
+  await setImmediate();
+  assert.equal(signal.aborted, false);
+  t.mock.timers.tick(500);
+  await rejected;
+  assert.equal(signal.aborted, true);
+  assert.equal(isCoreModelDeadlineSignal(signal), true);
+  assert.deepEqual(events.map(event => event.reason), ['model_timeout']);
+});
+
 test('one core deadline aborts a pending two-phase adapter without extending phase two', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let signal;

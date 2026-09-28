@@ -43,6 +43,9 @@ use `model_timeout`; the per-call timer continues to report
 `core_call:model_timeout`. The observer event retains exactly
 `{version,stage,layer,reason}`. A provider-supplied timeout code or forged
 abort reason cannot acquire invocation-deadline attribution.
+The limiting timer is identified when scheduled: a timer at the 30-second
+per-call ceiling, including a tie, retains that reason if a longer invocation
+budget expires before its callback finally runs.
 Expiry in non-model capture work can still return `model_timeout` without an
 observer event; the new reason covers only the core model-call boundary.
 
@@ -119,3 +122,51 @@ The worker's full OpenAI suite preceded removal of one unused test import;
 the later Node 24 combined test ran that final test file. Primary's
 exact-commit Node 24 acceptance remains pending. All tests and demos used synthetic data;
 the three demos retain their fresh synthetic files by their documented design.
+
+### Review correction P2
+
+The Spec reviewer found a schedule-versus-dispatch ambiguity in candidate
+`24e09a0`: a 30-second per-call timer might dispatch late after a longer
+invocation budget has expired. At dispatch the old code relabeled that timer
+`capture_deadline`, despite the per-call ceiling being its scheduled bound.
+Before the correction, the deterministic command
+`node tools/testing/run.mjs --test-name-pattern='delayed per-call timer remains per-call' core/test/model-call.test.mjs`
+failed in under one second: actual `capture_deadline`, expected
+`model_timeout`. The test used mocked timers, a trusted deadline returning
+30,000 ms at scheduling, and expiry made visible before delayed dispatch.
+
+The corrected wrapper records whether the invocation bound was shorter than
+30,000 ms when scheduling. Only such a timer may report `capture_deadline`,
+and only if the trusted deadline is expired when it fires. A 30,000 ms tie
+remains per-call. The public error remains `model_timeout`, with unchanged
+timer values. The adapter test also replaces its unbounded caller-readiness
+poll with a one-second bounded wait and abort cleanup. Focused core/adapter
+tests passed 11/11 on Node 22.16 and 11/11 on Node 24.15 after correction.
+The full-suite results above belong to `24e09a0`; affected suites are being
+rerun against the correction candidate before final review.
+
+### Test timing correction
+
+The first Node 24 full OpenAI rerun failed the new synthetic boundary test at
+`adapters/openai/test/capture-timeout-boundary.test.mjs:96`: its public error
+was still `model_timeout`, but the core observer emitted `model_timeout`
+instead of the test's expected `capture_deadline`. Twenty finite focused Node
+24 repetitions of the same test reproduced one such failure and 19 passes.
+The implementation permits this result when an invocation-limited timer fires
+before the trusted monotonic deadline reports expiry; the observer must not
+claim expiry it has not established.
+
+The synthetic fake generation callback now blocks the local event loop for
+600 ms after a 500 ms capture budget has begun, so the pending timer cannot
+dispatch until that budget is genuinely expired. This models delayed timer
+delivery, not historical provider latency. A separate mocked-timer negative
+control covers an invocation-limited timer that fires before expiry and must
+retain the uncertain `model_timeout` reason. Production timers, codes and
+limits are unchanged. The corrected real-adapter boundary passed 10/10
+additional focused repetitions on Node 22.16 and 10/10 on Node 24.15.
+Combined core model-call and adapter boundary tests passed 12/12 on each
+runtime. The existing capture-invocation-deadline suite passed 19/19 on each.
+The final full `npm run test:openai` rerun passed 307/307 on Node 22.16 and
+307/307 on Node 24.15. The primary agent is separately rerunning affected
+full Node 24 suites for fixed-point acceptance; those results are not claimed
+by this worker's test-only correction record.
