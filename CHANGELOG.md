@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — session episode reads
+
+- Add bounded UTC episode/memory range reads with exact scope/client filters,
+  signed stale-aware cursors and whole-response byte budgets.
+- Add local session-start context with untrusted framing, sourced procedures and
+  the newest open step, exact counting, group budgets and final freshness checks.
+- Add guarded explicit step closure/replay and source-anchored interpreter
+  completion, cancellation and replacement using request-local step references.
+  Closed steps are omitted from prior context. Any later proposal, regardless of
+  wording, needs evidence received after closure and creates a new identity.
+  Explicit closure preserves an existing correction pin without adding one.
+  Public episode reads omit internal closure boundaries and proof bookkeeping.
+- Eagerly migrate stores to schema v17 with four read indexes and no table or
+  column changes. Older openers refuse the new version.
+
 ## Unreleased — test-owned temporary workspaces
 
 - Give ordinary offline test invocations isolated scratch with cleanup after

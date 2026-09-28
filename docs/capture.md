@@ -423,5 +423,5 @@ Automatic procedural tags use the episode extraction/qualification prompt varian
 Only preferences/instructions qualify, with 1–4 exact candidate anchors compiled to
 receipt spans during admission. Omission makes no tag decision. Explicit tags remain
 available independently. These are unassessed source interpretations, not execution
-permission. Range/startup reads and provider/MCP integration remain separate work.
+permission. Provider schemas and MCP exposure remain separate work.
 See `npm run demo:episodes` for a synthetic, offline example.

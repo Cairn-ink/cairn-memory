@@ -182,7 +182,7 @@ secure-erasure, complete-history or semantic-fidelity guarantee follows.
 The episode persistence/inspection, correction/deletion and explicit
 procedural-tag subset above is now implemented locally. Episode
 capture/interpretation now uses an injected port; trusted producer integrations
-remain separate work. Opening the store eagerly upgrades to v16 in either mode;
+remain separate work. Opening the store eagerly upgrades to v17 in either mode;
 staging alone still never enables episodes. Hosts must stop/drain older
 connections before upgrade; already-open old processes are not retroactively
 fenced. Feature-off access retains deletion/source fences. New retained passages
@@ -209,3 +209,28 @@ identity, creation ordinal/time, source IDs, source revision/fence and a
 classified admission result in a separate keep-action table. It neither archives
 additional transcript text nor turns interpretation into evidence.
 E1/E3/E5/E7/E11 cover these boundaries.
+
+### Local time reads and startup context
+
+Range reads and session-start context perform no generation, capture, draft or
+queue drain. They expose only one exact owner/namespace; client filters use exact
+equality. Event bounds remain unauthenticated, unknown intervals stay excluded
+with an explicit marker, and incomplete or partial coverage remains visible.
+Metadata pages retain whole records within a 64-KiB success envelope. Signed
+cursors correlate store, scope and page position; they are not encrypted credentials.
+Mutations invalidate pagination through the namespace epoch.
+
+Startup sources are sent only to the caller and its injected local exact token
+counter. Procedures carry complete retained receipts; steps carry all supporting
+passages. The response frames both as untrusted recollection without execution
+permission. Disabled groups contribute no content. A final atomic reread fences
+changed epochs, identities, tags and sources after counting. A host forwarding
+this response to a provider must reserve its own framing headroom and treat all
+content as data. Read budgets do not establish relevance or semantic support.
+
+Explicit step closure retains only content-free action/identity replay markers
+in the existing journal, with action IDs HMAC-bound using the private episode
+key. Replays cannot close a different step or advance a read epoch. Descriptive
+closure evidence remains source-bound and is cleared by source invalidation or
+conversation deletion. Schema v17 adds read indexes only; these indexes add no
+new source text or retention policy. Existing file, journal and backup limits apply.

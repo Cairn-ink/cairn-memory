@@ -22,6 +22,7 @@
     "demo:longmemeval-mixed": "node evaluation/longmemeval/mixed-demo.mjs",
     "test:mixed-native-local": "node tools/testing/run.mjs evaluation/longmemeval/testing/mixed-native.test.mjs",
     "test:core": "node tools/testing/run.mjs core/test/*.test.mjs",
+    "demo:session-context": "node examples/session-context.mjs",
     "demo:episodes": "node examples/session-episodes.mjs",
     "demo:store": "node examples/local-store.mjs",
     "demo:history": "node examples/historical-evidence.mjs",

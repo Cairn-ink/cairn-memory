@@ -4,7 +4,7 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15 data now upgrades it to v16 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16 data now upgrades it to v17 for
 [episode storage and explicit procedural tags](#episode-storage-foundation-se-1),
 [opt-in staged capture evidence](staged-capture-evidence.md),
 [source-backed proposed rationale](source-backed-rationale.md),
@@ -14,7 +14,7 @@ v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15 data now upgrades it to v16 for
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md), [admission claims](admission-claims.md) and
 the bounded [initial capture classification journal](capture.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v16.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v17.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
@@ -218,12 +218,12 @@ Episode mode now enables debounced capture through an injected interpretation po
 quick handling, explicit keep and automatic source-bound procedural tags.
 Mode-off capture remains unchanged. See [capture](capture.md#opt-in-session-episodes).
 
-Every open atomically upgrades an older committed format to v16, including with
+Every open atomically upgrades an older committed format to v17, including with
 episodes off. Explicit procedural tags are available immediately in both modes;
 no request triggers a lazy upgrade. Inspection and memory correction/forgetting
 still enforce episode dependencies with the feature off. The host must stop/drain
 **all** older-runtime processes and connections, including idle readers, before
-opening the store for upgrade. Older binaries reject v16 on subsequent opens;
+opening the store for upgrade. Older binaries reject v17 on subsequent opens;
 an already-open old process is not retroactively fenced. There is no downgrade.
 
 The upgrade runs within the existing immediate transaction with foreign keys on.
@@ -249,3 +249,12 @@ keyed digest of canonical role/text/event time, never plaintext text or role. It
 survives staging release and conversation deletion as content-free replay
 metadata. Episode-off capture never writes it. Older binaries refuse v16 with
 `unsupported_database`; stop and drain older connections before upgrading.
+
+
+The v16-to-v17 step adds only four read indexes: episode event end, first receipt
+time, open-step creation ordinal, and receipt time across memories. JSON keys
+use expression indexes; no columns, tables or source contents change. Every open,
+including episode-off opens, completes all required migrations in one transaction
+with foreign keys enabled and checked before recording version 17. A failed index
+creation rolls back the schema, rows and version together. Older v16 openers
+refuse v17; hosts must stop/drain older processes before upgrading.

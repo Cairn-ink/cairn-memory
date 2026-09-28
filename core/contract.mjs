@@ -1,3 +1,5 @@
+import { contextInput, assembleSessionContext } from './session-context.mjs';
+import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
 import { isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { episodeOptions, episodeClient } from './episode-storage.mjs';
@@ -911,6 +913,7 @@ export function openMemoryCore(input) {
   }
   const forgetEpisode = input => episodeMutation('forgetEpisode', ['episodeId','expectedRevision'], input);
   const correctEpisode = input => episodeMutation('correctEpisode', ['episodeId','expectedRevision','patch'], input);
+  const closeEpisodeNextStep = input => episodeMutation('closeEpisodeNextStep', ['episodeId','expectedRevision','stepId','actionId','action'], input);
   const releaseEpisodeCorrection = input => episodeMutation('releaseEpisodeCorrection', ['episodeId','expectedRevision','fields'], input);
   const getCaptureControl = input => episodeMutation('getCaptureControl', [], input);
   const setCapturePaused = input => episodeMutation('setCapturePaused', ['expectedGeneration','paused'], input);
@@ -923,6 +926,26 @@ export function openMemoryCore(input) {
         memoryId: contractId(input.memoryId), expectedRevision: contractRevision(input.expectedRevision) });
     });
   }
+  function sessionStartContext(input) {
+    return invoke(() => {
+      runtime.ready();
+      const config = contextInput(input), ns = contractNamespace(input.namespace);
+      return assembleSessionContext({ runtime, model, ns, config });
+    });
+  }
+  function timeRange(input, operation) {
+    return invoke(() => {
+      runtime.ready();
+      const filter = rangeInput(input, operation), ns = contractNamespace(input.namespace);
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: operation,
+        f: JSON.stringify(filter), l: filter.limit, order: rangeOrder(operation, filter) };
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      if (cursor) validateRangeAnchor(cursor.a, operation === 'listMemoriesByTime' && filter.timeBasis === 'receipt');
+      return rangePage(runtime.episodeRange(ns, operation, filter, cursor), filter, binding, encodeCursor, operation);
+    });
+  }
+  const listEpisodes = input => timeRange(input, 'listEpisodes');
+  const listMemoriesByTime = input => timeRange(input, 'listMemoriesByTime');
   function getEpisode(input) {
     return invoke(() => {
       runtime.ready();
@@ -933,7 +956,7 @@ export function openMemoryCore(input) {
       const pageSpecs = [['source', 'sources', 'id'], ['memory', 'memoryLinks', 'id'],
         ['policy', 'policies', 'position'], ['keep', 'keepActions', 'ordinal']];
       for (const name of ['source', 'memory', 'policy', 'keep']) {
-        const count = input[`${name}Limit`] ?? 20;
+        const count = input[`${name}Limit`] === undefined ? 20 : input[`${name}Limit`];
         if (!Number.isSafeInteger(count) || count < 1 || count > 50) throw new MemoryStoreError('invalid_input');
         const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'getEpisode', m: episodeId, p: name, l: count };
         const cursor = input[`${name}Cursor`] === undefined ? undefined : decodeCursor(input[`${name}Cursor`], binding);
@@ -950,7 +973,7 @@ export function openMemoryCore(input) {
       }
       output.status = 'complete';
       for (const [name, key, idKey] of [...pageSpecs].reverse()) {
-        while (Buffer.byteLength(JSON.stringify(output), 'utf8') > 65536 && output[key].items.length) {
+        while (Buffer.byteLength(envelopeText(output), 'utf8') > 65536 && output[key].items.length) {
           output[key].items.pop();
           output[key].exhausted = false;
           output.status = 'budget_exhausted';
@@ -958,14 +981,14 @@ export function openMemoryCore(input) {
           output[key].nextCursor = encodeCursor({ ...bindings[name], e: result.epoch, a: { id: after } });
         }
       }
-      if (Buffer.byteLength(JSON.stringify(output), 'utf8') > 65536 ||
+      if (Buffer.byteLength(envelopeText(output), 'utf8') > 65536 ||
           (output.status === 'budget_exhausted' && !output.sources.items.length && !output.memoryLinks.items.length && !output.policies.items.length && !output.keepActions.items.length)) throw new MemoryStoreError('context_item_too_large');
       return output;
     });
   }
 
   return Object.freeze({
-    getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
+    sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,

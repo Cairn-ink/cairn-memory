@@ -1,0 +1,224 @@
+{
+  "base": "91a3bc3cf5d84421b511668c28a30ffb74445423",
+  "tables": {
+    "admission_claims": [
+      {
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "client": "synthetic",
+        "event_id": "fixture",
+        "payload_digest": "96b690a55396aa5f7acd0581d984bfd4499e1d948c88b849380a6e7c43294ddd",
+        "state": "reserved",
+        "token": null,
+        "lease_expires_at": null,
+        "memory_ids": null,
+        "suppressed_count": null
+      }
+    ],
+    "capture_events": [],
+    "capture_initial_classification": [],
+    "capture_streams": [],
+    "episode_attempts": [
+      {
+        "episode_id": "b9cf7774-b75e-4621-9cd0-bd51c6959d21",
+        "marker": "batch:1",
+        "watermark": 1,
+        "token": "b9eb1842-e70c-4c7d-8c67-3b2074528cb5",
+        "expires_at": 1790575999264,
+        "revision": 2,
+        "source_fence": 1,
+        "generation": "initial",
+        "finished": 1,
+        "started": 1,
+        "outcome_code": null
+      }
+    ],
+    "episode_controls": [
+      {
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "generation": "initial",
+        "paused": 0,
+        "enabled": 1,
+        "ordinal": 1
+      }
+    ],
+    "episode_events": [
+      {
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "client": "synthetic",
+        "event_id": "fixture",
+        "episode_id": "b9cf7774-b75e-4621-9cd0-bd51c6959d21",
+        "payload_digest": "96b690a55396aa5f7acd0581d984bfd4499e1d948c88b849380a6e7c43294ddd",
+        "position": 1,
+        "ordinal": 1,
+        "generation": "initial",
+        "staging": "staged",
+        "gap": null,
+        "gap_reasons": "[]",
+        "admission": "reserved",
+        "disposition": 1,
+        "policy": "normal",
+        "policy_revision": null,
+        "policy_type": null,
+        "policy_at": null,
+        "created_at": "2026-09-28T06:11:14.237Z",
+        "message_ids": "[\"message-fixture\"]",
+        "omitted_count": 0,
+        "omitted_indices": "[]"
+      }
+    ],
+    "episode_identity": [
+      {
+        "singleton": 1,
+        "secret": "4f6c81bb3ce505affe9ede599565fa742a7af889c04ce8620060c9d62af32398"
+      }
+    ],
+    "episode_keep_actions": [],
+    "episode_memory_links": [],
+    "episode_messages": [
+      {
+        "episode_id": "b9cf7774-b75e-4621-9cd0-bd51c6959d21",
+        "message_id": "message-fixture",
+        "digest": "2b0e151f8cf9a58ef1804adc9cc7664fbf3aa961c12b8512f5d6c5b482a962e1",
+        "first_event_id": "fixture",
+        "coverage_event_id": "fixture"
+      }
+    ],
+    "episode_sources": [
+      {
+        "id": "4877e217-58c3-44d9-a154-1fce35e67467",
+        "episode_id": "b9cf7774-b75e-4621-9cd0-bd51c6959d21",
+        "origin_episode_id": "b9cf7774-b75e-4621-9cd0-bd51c6959d21",
+        "event_id": "fixture",
+        "message_id": "message-fixture",
+        "digest": "13371520427968009147df29ee51b07d8646732a9f23a70ba7e09c99f4f443be",
+        "role": "user",
+        "text": "Synthetic 中文 English 😀 evidence.",
+        "truncated": 0,
+        "ordinal": 1
+      }
+    ],
+    "index_edges": [],
+    "index_generations": [],
+    "index_memories": [],
+    "index_memory_refs": [],
+    "index_mocs": [],
+    "index_title_sources": [],
+    "memories": [
+      {
+        "id": "5cc2f6a5-3865-40c3-8a36-e6337451e33a",
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "fingerprint": "4630173f869a220e126a248be878d99f7e694814d699111946a9489725c053c4",
+        "content": "Synthetic standing instruction",
+        "kind": "instruction",
+        "origin": "explicit",
+        "confidence": 1,
+        "revision": 1,
+        "deleted": 0,
+        "created_at": "2026-09-28T06:11:14.290Z",
+        "updated_at": "2026-09-28T06:11:14.290Z",
+        "filing_status": "unfiled",
+        "currentness": "current"
+      }
+    ],
+    "memory_conflicts": [],
+    "memory_qualifications": [],
+    "memory_supersessions": [],
+    "moc_edges": [],
+    "moc_memory_refs": [],
+    "moc_title_sources": [],
+    "mocs": [],
+    "namespace_epochs": [
+      {
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "epoch": 4
+      }
+    ],
+    "namespace_index_state": [],
+    "procedural_tags": [],
+    "qualification_anchors": [],
+    "qualified_claim_bindings": [],
+    "qualified_slots": [],
+    "rationale_edges": [],
+    "receipt_causality": [],
+    "receipts": [
+      {
+        "id": "87b06e39-0595-43d9-aebf-8be5040edcf9",
+        "memory_id": "5cc2f6a5-3865-40c3-8a36-e6337451e33a",
+        "receipt_key": "95a33ab26febe1120f9283432a237e42145c1d6e07b6e1dc14f490763586edf5",
+        "client": "fixture",
+        "session_id": "synthetic",
+        "event_id": "fixture",
+        "role": "user",
+        "excerpt": "Synthetic standing instruction",
+        "created_at": "2026-09-28T06:11:14.290Z"
+      }
+    ],
+    "session_episodes": [
+      {
+        "id": "b9cf7774-b75e-4621-9cd0-bd51c6959d21",
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "client": "synthetic",
+        "session_key": "s1:49f351ea55a45a53be99eca471bb68820504c0986ec2fc5c71934baa4ecfc989",
+        "revision": 3,
+        "source_fence": 1,
+        "generation": "initial",
+        "draft_every": 8,
+        "deleted": 0,
+        "observed": 1,
+        "attempted": 1,
+        "covered": 1,
+        "first_received_at": "2026-09-28T06:11:14.237Z",
+        "last_received_at": "2026-09-28T06:11:14.237Z",
+        "updated_at": "2026-09-28T06:11:14.278Z",
+        "record": "{\"clientLabel\":\"Synthetic client\",\"eventStart\":null,\"eventEnd\":null,\"eventTimeCoverage\":\"unknown\",\"interpretedAt\":\"2026-09-28T06:11:14.277Z\",\"type\":\"work\",\"language\":\"mixed\",\"gist\":\"Synthetic 中文 gist\",\"outcome\":null,\"nextStep\":{\"id\":\"433eef69-c1ef-47c9-90e9-7d02bb726a5c\",\"text\":\"Review evidence\",\"status\":\"open\",\"anchors\":[{\"sourceId\":\"4877e217-58c3-44d9-a154-1fce35e67467\",\"digest\":\"13371520427968009147df29ee51b07d8646732a9f23a70ba7e09c99f4f443be\",\"start\":0,\"end\":33}],\"receiptOrdinal\":1},\"anchors\":{\"type\":[{\"sourceId\":\"4877e217-58c3-44d9-a154-1fce35e67467\",\"digest\":\"13371520427968009147df29ee51b07d8646732a9f23a70ba7e09c99f4f443be\",\"start\":0,\"end\":33}],\"gist\":[{\"sourceId\":\"4877e217-58c3-44d9-a154-1fce35e67467\",\"digest\":\"13371520427968009147df29ee51b07d8646732a9f23a70ba7e09c99f4f443be\",\"start\":0,\"end\":33}],\"nextStep\":[{\"sourceId\":\"4877e217-58c3-44d9-a154-1fce35e67467\",\"digest\":\"13371520427968009147df29ee51b07d8646732a9f23a70ba7e09c99f4f443be\",\"start\":0,\"end\":33}]},\"modelMetadata\":{\"adapter\":\"scripted\",\"model\":null,\"profile\":null,\"promptVersion\":\"storage-test\",\"digest\":\"cf07194ee232eb531e15f690000d19846dea69cf05504782658afcfacb9228a2\",\"portVersion\":\"episode-v1\"},\"semanticSupport\":\"unassessed\",\"editor\":{\"type\":{\"origin\":\"model\",\"pinned\":false},\"gist\":{\"origin\":\"model\",\"pinned\":false},\"outcome\":{\"origin\":\"model\",\"pinned\":false},\"nextStep\":{\"origin\":\"model\",\"pinned\":false}},\"processing\":{\"state\":\"ready\",\"missing\":0,\"expired\":0,\"omitted\":0,\"errorCode\":null}}",
+        "writer_token": "1002f943-91a8-471d-9974-26fde31f0fde",
+        "writer_expires_at": 1790575999250
+      }
+    ],
+    "staged_capture_clocks": [
+      {
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "watermark": 1790575874276
+      }
+    ],
+    "staged_capture_evidence": [
+      {
+        "owner_id": "synthetic",
+        "scope": "project",
+        "project_id": "project",
+        "client": "synthetic",
+        "event_id": "fixture",
+        "state": "pending",
+        "created_at": 1790575874237,
+        "expires_at": 1790662274237,
+        "payload": "{\"messages\":[{\"id\":\"message-fixture\",\"role\":\"user\",\"content\":\"Synthetic 中文 English 😀 evidence.\"}],\"retainedSourceWindow\":{\"maxUnitsPerMessage\":800,\"truncatedMessageIndices\":[]}}",
+        "payload_bytes": 184,
+        "event_mode": "episode-v1",
+        "release_reason": null,
+        "disposition": 1
+      }
+    ],
+    "store_metadata": [
+      {
+        "singleton": 1,
+        "store_id": "783fcad6-19d3-45c0-bc99-1d5b2195a35c",
+        "cursor_secret": "c70f58288f0138571cf1d25e945f3af7e288b84a9325afa67daaad3f04d50376"
+      }
+    ],
+    "suppressed": []
+  }
+}
