@@ -1,5 +1,15 @@
 # Known limitations
 
+The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
+scripted visible-input-only models and exact synthetic source receipts. A
+default 1,024-ID candidate prefix can miss a retained target among 1,025
+captured memories; explicit bounded keyset routing can carry that target into
+the packed answer request, while coverage remains `budget_exhausted`. These
+mechanical observations do not establish real-model extraction, semantic
+selection, answer accuracy, complete retention, current-choice judgment,
+installed-host readiness or cost superiority. Dated A/B sources remain
+separate evidence; the script emits no adopted latest choice.
+
 The opt-in [indexed-evidence mixed comparison profile](longmemeval-comparison.md#explicit-indexed-evidence-mixed-profile)
 has bounded synthetic coverage through the actual public core and pinned native
 Mem0 with fake HTTP. It omits qualification explicitly, retains the strict
@@ -9,8 +19,18 @@ classification and recall can fail, and conflicting dated choices remain
 unresolved evidence. Successful empty extraction is not useful retention. This
 does not repair qualified semantics, establish a measured quality/cost result,
 authorize a paid run or expose a host flag. Frozen historical results remain
-unchanged; a new independently frozen pilot and installed-host acceptance are
-still required.
+unchanged. The later independently frozen four-case real-model pilot is
+reported below; installed-host acceptance is still required.
+
+The [four-case long-history live pilot](evidence/long-history-live-pilot.md)
+completed all eight arms and judgments with common resolved N=4: Cairn 3/4
+correct, Mem0 2/4 correct on authored synthetic questions. Its explicit
+indexed-evidence, bounded-source-scan path is opt-in; it does not validate
+default MOC navigation or installed MCP/Hermes use. One Cairn answer omitted
+important premise and reconfirmation information even though the relevant
+source passages were selected. Four simple authored cases cannot establish
+reliable current-decision reasoning, comparative superiority or an official
+benchmark score.
 
 This is the one place where Cairn Memory records what does not yet work, what
 the frozen evaluations found, and which claims the evidence does not support.
@@ -959,8 +979,94 @@ remains an experiment, not an adopted remedy; future protocol, resource and
 fresh-case review follows only after accounting is safe. No dispatch, replay,
 replacement or fixed-30 expansion follows from this failed gate.
 
+## Four-case opt-in long-history pilot completed, with answer omissions
+
+After the official-six v3 observation, a separately authorized accounting
+settlement marked its formerly pending embedding request `unknown`, keeping
+its 10-micro-USD reservation and the original halted report unchanged. The
+subsequent [fresh long-history pilot](evidence/long-history-live-pilot.md)
+used four new 60-message synthetic histories, four actual indexed-evidence
+batches per case and alternating first arms. It finished all 16 Cairn capture
+batches, all eight generation arms and all eight official-style judgments.
+The common resolved denominator is 4/4; Cairn was judged 3 correct and 1
+incorrect, Mem0 2 correct and 2 incorrect, with no unresolved judgments.
+This is a diagnostic result for the authored cases, not a statistical or
+causal comparison or a score for the six-type official cohort.
+
+In the failed Cairn premise-change case, selected, packed receipts included
+the no-fee room's unavailability and the source's explicit statement that
+Ferry Hall had not been chosen and the pop-up had not been cancelled. The
+answer still omitted the failed premise and need for reconfirmation. The
+original decision passage was not selected, so this observation does not
+establish complete decision-context retention
+or a model root cause. No case was retried or repaired. Native Mem0 add-record
+counts and Cairn admitted-card counts are different measures.
+
+All 142 new guarded requests settled with zero pending; 1,121,062 micro-USD
+was conservatively reserved and 98,275 micro-USD is known usage-estimated
+cost across 105 rows, leaving 37 rows with unknown cost. Reservation is not
+an invoice or proof of low operating cost. An independent read-only review
+matched the 142 guarded rows and unchanged settled prelaunch ledger prefix.
+The opt-in path omits qualification, does not exercise cold-reopened model
+recall, default MOC-led navigation, 1,025-card capacity, installed MCP/Hermes,
+or automatic supersession. A fresh six-type official completion and
+common-resolution gate, followed by separately reviewed fresh fixed-30 work,
+remains necessary before comparative or promotion claims.
+
+## Fresh six-type official indexed-evidence cohort missed feasibility
+
+The [new official-six evidence packet](evidence/indexed-evidence-official-six.md)
+uses six previously unused LongMemEval-S questions, one per official type,
+separate from the four authored synthetic histories above. Its prospective
+seed and audited 142-ID exclusions were fixed before source preparation;
+all 148 future exclusions were sealed before cost inspection. The explicit
+opt-in indexed-evidence planner accepted all six source cases with 292 Cairn
+capture batches. A fresh whole-vector ceiling of 77,446 requests and
+14,702,404 microUSD of conservative reservation fit the fixed pilot cap,
+protected remainder and shared ledger checkpoint. Those were prelaunch upper
+bounds, not observed calls or upfront ledger reservations.
+
+The one-shot orchestration completed without a global halt, but Cairn
+completed ingestion and nonempty answers in 5/6 cases versus Mem0's 6/6.
+Common resolved judgments were 5/6; Cairn had 3 correct, 2 incorrect and 1
+unresolved, while Mem0 had 3 correct and 3 incorrect. The unresolved Cairn
+case failed its sixth capture batch with a settled `unknown` generation
+timeout after five successes. That failure is not an incorrect semantic
+judgment, nor proof of a provider cause or timeout remedy. Both incorrect
+Cairn answers were abstentions. The multi-session case had zero observed
+recalled cards, receipts and packed evidence units; why that path was empty
+remains unproven. In the temporal-reasoning case, the sole selected receipt
+lacked the target event and its timing, with no packing omission. This
+localizes an evidence-sufficiency miss without proving the fact was never
+stored or identifying a model root cause. The frozen 6/6 completion and
+common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
+
+Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
+conservative reservation. Known usage estimates were 2,452,595 microUSD for
+1,417 rows; 518 costs remain unknown, and none of the requests is pending.
+The cumulative shared checkpoint is 21,355 requests / 135,538,298 microUSD
+reserved. Reservation is not an invoice, and known usage is not total spend.
+The primary reconciled the unchanged parent prefix and all new guarded rows;
+an independent read-only audit confirmed the aggregate and accounting. This
+consistency check does not pass the failed feasibility or semantic gates.
+
+The public report names the frozen seed, source hash and revision so the
+method is inspectable. The selected IDs, complete exclusion roster and
+one-shot operator are retained privately, so the public aggregate alone is
+not a fully replayable benchmark packet.
+
+This pilot leaves the earlier official qualification failures and four-case
+synthetic diagnostic unchanged. Its selected subset cannot establish full-500
+LongMemEval accuracy, a general Cairn/Mem0 ranking, a causal effect of omitting
+qualification, default MOC navigation,
+source fidelity or installed MCP/Hermes reliability. A larger cohort requires
+a new frozen selection and resource check after the failed feasibility gate,
+not reuse of these six.
+
 ## Where the evidence lives
 
+- [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)
+- [Four-case real-model long-history pilot](evidence/long-history-live-pilot.md)
 - [Fresh official-six v3 halted observation](evidence/qualification-official-v3.md)
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)
 - [Fresh qualification meaning diagnostic](evidence/qualification-meaning-probe.md)
