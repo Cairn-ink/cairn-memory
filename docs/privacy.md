@@ -179,14 +179,33 @@ secure-erasure, complete-history or semantic-fidelity guarantee follows.
 
 ### SE-1 implementation boundary
 
-The episode persistence/inspection, correction/deletion and explicit procedural-tag
-subset above is now implemented locally. Episode capture/interpretation and trusted
-producer integrations remain proposed. Opening the store eagerly upgrades to v15 in either mode;
-mode-on capture is unavailable until SE-2; staging alone still never enables it.
-Hosts must stop/drain older connections before upgrade; already-open old processes
-are not retroactively fenced. Feature-off access retains deletion/source fences.
-New retained passages are source evidence, not receipts for remembered assertions.
-Capacity release and bypass leave content-free gaps and no active expiry, while
-conversation deletion suppresses even multi-source/historical derived memories.
-Inspection and tag writes invoke no model. Existing source/prompt/receipt contents
-remain unchanged when neither opt-in is used.
+The episode persistence/inspection, correction/deletion and explicit
+procedural-tag subset above is now implemented locally. Episode
+capture/interpretation now uses an injected port; trusted producer integrations
+remain separate work. Opening the store eagerly upgrades to v16 in either mode;
+staging alone still never enables episodes. Hosts must stop/drain older
+connections before upgrade; already-open old processes are not retroactively
+fenced. Feature-off access retains deletion/source fences. New retained passages
+are source evidence, not receipts for remembered assertions. Capacity release
+and bypass leave content-free gaps and no active expiry, while conversation
+deletion suppresses even multi-source/historical derived memories. Inspection
+and tag writes invoke no model. Existing source/prompt/receipt contents remain
+unchanged when neither opt-in is used.
+
+### Durable message identity metadata
+
+Schema v16 adds `episode_messages`: episode/message identity, first and coverage
+event IDs, and an HMAC-SHA256 digest of `["m1", role, canonicalText,
+eventTimeOrNull]`, using the existing private episode key. No message text or
+role is stored in this ledger. It prevents reused IDs from silently changing
+evidence after staging release. It remains content-free lineage/digest/fence
+metadata after conversation deletion; key holders can still test guesses, and
+identifiers retain correlation risk. Registration and capacity disposition are
+atomic. Episode-off captures leave the ledger empty. Upgrades do not backfill
+earlier messages, so overlap detection starts with post-upgrade registration.
+Provider payloads receive no ledger IDs/digests. Batch rows also retain bounded
+message-ID membership to fence superseded owners. Explicit keep records action
+identity, creation ordinal/time, source IDs, source revision/fence and a
+classified admission result in a separate keep-action table. It neither archives
+additional transcript text nor turns interpretation into evidence.
+E1/E3/E5/E7/E11 cover these boundaries.

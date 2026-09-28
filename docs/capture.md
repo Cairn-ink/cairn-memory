@@ -347,3 +347,81 @@ They do not duplicate transcript text or prove the model's semantics. See
 [acceptance boundary](plans/ordered-capture.md). Real-model cross-window quality
 and installed-host acceptance remain separate gates; the original failed audit
 is retained unchanged.
+
+## Opt-in session episodes
+
+Configure `sessionEpisodes: {mode:'episode-v1', draftEveryBatches:8}` together with
+`captureQualification:'source-bound-v2'` and `captureEvidence:'staged-v1'`.
+The injected model supplies `interpretEpisode({system,input,maxOutputTokens,signal})`;
+there is no provider default. Indexed-evidence capture rejects an own
+`sessionEpisodes` option with `invalid_input`, including undefined or an accessor,
+before reading option getters or opening storage. Causal capture is also excluded.
+Without episode mode, existing prompts, requests, output shapes, receipts and
+capture digests are unchanged; automatic procedural output still rejects.
+
+Episode captures additionally require trusted `episodeContext` with `clientLabel`,
+`generation` and `origin` (`ordinary` or `precompact`). Each message may supply a
+canonical UTC `occurredAt` or null. Missing times remain unknown. Session identity
+in new receipts is the store-local HMAC, never the submitted host session ID.
+Producers implement pause and skip-to-transcript-end barriers; source roles and
+clocks are submitted evidence, not authenticated authority.
+
+The first accepted batch drafts immediately; ordinary later batches draft every N
+further accepted batches (N=2–16, default 8). PreCompact, one end signal and one lazy
+visit by a later session can also draft. No read or daemon drafts. Identical events
+and wholly covered message overlaps buy no calls or accepted-batch count. Changed
+canonical text, role or event time on a previously registered message ID returns
+`event_payload_conflict` before staging or model work. Partial overlaps count once.
+This check survives release/restart for messages registered after the v16 upgrade.
+
+For B batches and P distinct PreCompact batches, calls are bounded by
+`min(B, 1 + floor((B-1)/N) + P) + E + L`, where E and L are at most one each.
+One capture drains at most one older session before its own draft: at most two
+30-second provider waits. Frequent real PreCompact events can approach per-batch
+cost. Failed attempts consume their allowance. Interpretation uses exact local
+counting, at most 6,000 input/1,024 output tokens, and no repair call. Current batch
+sources are mandatory; add newest undrafted whole messages next, then prior cited
+context. Old prior sources/prose drop when needed. Omitted positions remain gaps.
+
+Interpretation and admission have separate leases and outcomes. Only a fresh quick
+classification anchored in this batch skips extraction; subsequent debounced batches
+run normal extraction/qualification immediately. A failed interpretation also runs
+normal admission, even after an older quick label. The ordinary 125-second admission
+lease starts after episode work; an optional capture deadline starts at that point.
+Successful admission advances the producer cursor even if interpretation failed.
+Registered work can finish across pause. A stale-generation draft claim records
+a content-free gap and continues ordinary admission; project stop still discards
+and fences unfinished work. Completed replay restores acknowledgement without model calls.
+Producers must wait on `processing` while an overlapping original has a live lease
+or a pending payload within its replay window. An intact capacity-bypassed
+registration is also resumable until completed or abandoned. If its admission
+failed or was abandoned and no lease remains, a new event can register that
+evidence again. The original can replay messages it still owns when its evidence
+is resumable; closed evidence leaves a content-free gap. Completed overlaps still
+count zero.
+
+Results add `episode` (and `lazyEpisode` when attempted) alongside ordinary admission.
+A wholly covered overlap reports `admission.status:'covered'`; completed event replay
+reports `admission.status:'completed'`. Storage/capture validation and independently
+failed ordinary admission retain the normal error envelope.
+
+`endEpisodeSession({namespace,client,sessionId,generation,eventId})` is a host-only
+signal. `keepEpisode({namespace,episodeId,expectedRevision,actionId})` runs normal
+inferred extraction, qualification and placement over currently retained passages,
+never the gist. It bypasses debounce. Its durable action binds the source revision;
+identical completed replay makes no calls. Keep cannot recover omitted/expired text.
+Inspection exposes paged content-free keep actions in creation-ordinal order:
+`keepActions:{items,nextCursor,exhausted}`, with `keepLimit` (default 20, max 50)
+and `keepCursor`. Coverage records exact source IDs, revision and source fence,
+independently of later passage replacement. Explicit keep has its own
+action ledger; existing batch policies remain unchanged.
+Transient/unknown failures release the admission claim for retry by resubmitting
+the same `actionId`; only classified terminal failures replay without another
+model call.
+
+Automatic procedural tags use the episode extraction/qualification prompt variants.
+Only preferences/instructions qualify, with 1–4 exact candidate anchors compiled to
+receipt spans during admission. Omission makes no tag decision. Explicit tags remain
+available independently. These are unassessed source interpretations, not execution
+permission. Range/startup reads and provider/MCP integration remain separate work.
+See `npm run demo:episodes` for a synthetic, offline example.

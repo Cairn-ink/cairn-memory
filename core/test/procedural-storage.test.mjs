@@ -29,7 +29,7 @@ test('E10 explicit procedural admit works in both modes and uses the eagerly upg
     const result=ok(f.core.admit({namespace:ns,memory,receipts:[receipt()],procedural:{anchors:[{receiptIndex:0,start:0,end:6}]}}));
     const d=detail(f,result.memory.id);assert.equal(d.procedural.origin,'explicit');assert.equal(d.procedural.tagRevision,1);
     assert.equal(d.procedural.anchors[0].receiptId,d.receipts[0].id);
-    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,15);
+    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,16);
     assert.equal(f.core.admit({namespace:ns,memory:{...memory,kind:'fact'},receipts:[receipt()],procedural:{anchors:[{receiptIndex:0,start:0,end:6}]}}).error.code,'invalid_input');
   }
 });

@@ -21,6 +21,7 @@ export function fixture(t, config = {}) {
 }
 export function batch(id = 'one', text = 'Synthetic 中文 English 😀 evidence.', sessionId = 'private-host-session') {
   return { client: 'synthetic', clientLabel: 'Synthetic client', sessionId, eventId: id, payloadDigest: digest(id+text), generation: 'initial',
+    messages: [{ id: `message-${id}`, role: 'user', content: text, occurredAt: null }],
     view: { messages: [{ id: `message-${id}`, role: 'user', content: text }], retainedSourceWindow: { maxUnitsPerMessage: 800, truncatedMessageIndices: [] } } };
 }
 export function register(f, input = batch()) { return f.runtime.reserveEpisodeBatch(ns, input); }

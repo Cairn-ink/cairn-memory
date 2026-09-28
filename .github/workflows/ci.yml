@@ -52,6 +52,8 @@ jobs:
       - run: npm run demo:moc
       - run: npm run demo:recall
       - run: npm run demo:admission
+      # test:core includes the episode suites on both runtimes.
+      - run: npm run demo:episodes
       - run: npm run demo:capture
       - run: npm run demo:conflicts
       - run: npm run demo:rebuild

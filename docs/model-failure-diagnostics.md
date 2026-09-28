@@ -29,7 +29,7 @@ Each event is a frozen object with exactly four fields:
 
 - `version`: `1`
 - `stage`: `extract`, `classify`, `select`, `rank`, `reconcile`, `qualify`,
-  `qualifyCandidates`, `relate`, or `reviewBasis`
+  `qualifyCandidates`, `interpretEpisode`, `relate`, or `reviewBasis`
 - `layer`: `adapter`, `core_call`, or `core_validation`
 - `reason`: one of the static reasons for that layer below
 
