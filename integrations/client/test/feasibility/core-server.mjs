@@ -3,10 +3,10 @@
 // core store with a scripted model behind it. Records every received body so
 // the analysis can check delivered bytes. Harness only; this is not LAC.
 import { writeFileSync } from 'node:fs';
-import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { openMemoryCore } from '../../../../core/contract.mjs';
-import { appendRecord, readConfig, sha256 } from './lib/common.mjs';
+import { readConfig } from './lib/common.mjs';
+import { createRecordingServer } from './lib/core-http.mjs';
 import { createScriptedModel } from './lib/scripted-model.mjs';
 
 const root = process.argv[2];
@@ -38,28 +38,7 @@ async function handle(path, body) {
   return [404, { error: 'not_found' }];
 }
 
-const server = createServer(async (request, response) => {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > 256 * 1024) break;
-    chunks.push(chunk);
-  }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  const authorized = request.headers.authorization === `Bearer ${config.token}`;
-  let status = 401;
-  let reply = { error: 'unauthorized' };
-  if (authorized && size <= 256 * 1024) {
-    try { [status, reply] = await handle(request.url, JSON.parse(raw)); }
-    catch (error) { status = 500; reply = { error: 'harness_error', detail: String(error?.message ?? error) }; }
-  }
-  // Synthetic bodies only; kept inside the run's temporary directory.
-  appendRecord(root, 'bodies.jsonl', { step: config.step, path: request.url, bytes: Buffer.byteLength(raw),
-    sha256: sha256(raw), authorized, status, raw, reply });
-  response.writeHead(status, { 'content-type': 'application/json' });
-  response.end(JSON.stringify(reply));
-});
+const server = createRecordingServer({ root, config, handle });
 
 server.listen(0, '127.0.0.1', () => {
   writeFileSync(join(root, 'core', 'port'), String(server.address().port));
