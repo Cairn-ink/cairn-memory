@@ -174,6 +174,26 @@ were 6512640. These are local measurements, not provider billable tokens,
 provider latency or a performance SLA. Primary exact-head reruns and
 independent review remain pending.
 
+Primary acceptance on candidate `630661a8fd80ee490b5ec4a8312008cbf6cf1d6a`
+found a gate-reporting defect despite its green positive path: an unexpected
+capture failure was unwrapped before its batch was recorded, and the catch
+returned only already-pushed cases with empty controls/stage counts and
+incomplete write timing. The bounded correction predeclares all 208 positive
+batches, seven questions and eight controls, marks later work `not-run`, and
+records each attempted batch before checking its result. Failed admission is
+unknown unless a cold public read proves zero; post-admission classification
+failure retains its five admitted sources and is counted as a failed completed
+classification, not a fully completed batch. The total source-stage counts
+and elapsed write/read work remain available on failure. A fixed test-only
+selector fails extraction or classification at the second capacity batch; it
+never resumes the sequence or enters capacity recall, dated capture or controls.
+The failure CLI emits the bounded sanitized aggregate and exits nonzero.
+Focused precommit `node tools/testing/run.mjs --test-name-pattern='second capacity batch|test-only fault CLI' evaluation/long-history/gate.test.mjs`
+passed 3/3 in 1.583 s. The first full corrected `npm run test:long-history`
+passed 4/4 in 37.863 s; after the minor control-reporting refinement, its
+final affected rerun passed 4/4 in 34.612 s on Node 22.16.0. Neither
+failure-path run invokes the remaining 203 capacity batches.
+
 An independent base control used the pre-existing public-`admit` K7 test on
 Node 22.16.0: `node tools/testing/run.mjs --test-name-pattern='K7 public-admit source beyond' core/test/bounded-keyset-candidates.test.mjs`
 passed in 86.08 s. It establishes the prior 1,024-ID differential only; it
