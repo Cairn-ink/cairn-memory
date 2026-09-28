@@ -8,8 +8,13 @@ const count = (excluded, reason) => { excluded[reason] = (excluded[reason] ?? 0)
 function claudeRecord(record, excluded) {
   if (record?.type !== 'user' && record?.type !== 'assistant') return count(excluded, `type:${record?.type ?? 'none'}`);
   if (record.isSidechain) return count(excluded, 'sidechain');
+  // Meta and compaction-summary records are excluded whatever their role. The
+  // plugin (D1) keeps 0.1.0's assistant parse, so this is the one place the
+  // harness stays stricter than the plugin.
+  if (record.isMeta) return count(excluded, 'meta');
+  if (record.isCompactSummary) return count(excluded, 'compact-summary');
   // Machine-generated user records use the released plugin's rule (0.1.1), so
-  // the harness and the plugin exclude the same records.
+  // the harness and the plugin exclude the same user records.
   const machine = record.type === 'user' ? machineUserRecord(record) : null;
   if (machine) return count(excluded, machine);
   if (record.isVisibleInTranscriptOnly) return count(excluded, 'transcript-only');

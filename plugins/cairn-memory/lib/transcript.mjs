@@ -60,7 +60,12 @@ export function machineUserRecord(record) {
     : null;
 }
 
-function parseMessages(jsonl, sessionId, filterMachineRecords) {
+/**
+ * Every message 0.1.0 would parse, in order and with the same ids and content,
+ * each marked `withheld` when 0.1.1 does not send it. Batch boundaries and event
+ * ids are computed over all of them, so they stay exactly as 0.1.0 had them.
+ */
+export function transcriptWindow(jsonl, sessionId) {
   const messages = [];
   for (const [lineIndex, line] of jsonl.split("\n").entries()) {
     if (!line.trim()) continue;
@@ -72,7 +77,6 @@ function parseMessages(jsonl, sessionId, filterMachineRecords) {
     }
     if (record?.type !== "user" && record?.type !== "assistant") continue;
     const role = record.type;
-    if (filterMachineRecords && role === "user" && machineUserRecord(record)) continue;
     const content = textBlocks(record?.message?.content)
       .map(redactSecrets)
       .join("\n")
@@ -85,21 +89,21 @@ function parseMessages(jsonl, sessionId, filterMachineRecords) {
         : createHash("sha256")
             .update(`${sessionId}\0${lineIndex}\0${role}\0${content}`)
             .digest("hex");
-    messages.push({ id, role, content });
+    messages.push({ id, role, content, withheld: role === "user" && Boolean(machineUserRecord(record)) });
   }
   return messages;
 }
 
+const strip = ({ id, role, content }) => ({ id, role, content });
+
+/** The messages 0.1.1 sends. */
 export function transcriptMessages(jsonl, sessionId) {
-  return parseMessages(jsonl, sessionId, true);
+  return transcriptWindow(jsonl, sessionId).filter((message) => !message.withheld).map(strip);
 }
 
-/**
- * The 0.1.0 parse, kept only to retry a window 0.1.0 had already frozen, so its
- * batches and event ids stay identical across the upgrade.
- */
+/** The messages 0.1.0 sent; used for batch identity and tests, never for sending. */
 export function legacyTranscriptMessages(jsonl, sessionId) {
-  return parseMessages(jsonl, sessionId, false);
+  return transcriptWindow(jsonl, sessionId).map(strip);
 }
 
 export function captureEventId(sessionId, messages) {

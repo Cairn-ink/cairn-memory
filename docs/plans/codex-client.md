@@ -128,23 +128,46 @@ transcript byte offsets in its cursor files moved.
 again, so batch composition and event ids depend on the parser: `captureEventId`
 hashes the batch's message ids. Filtering never changes a kept message's id, which
 is its `uuid` or a hash of session, line index, role and content, counted over every
-line. Filtering does re-slice a window that contains machine records. Suppose 0.1.0
-froze such a window and an attempt was already stored: an acknowledged earlier batch
-of a multi-batch window, a lost reply, or a `processing` answer. Retried through the
-filter, the same typed messages would then arrive under a new event id and be stored
-twice.
+line. Had the filter re-sliced windows, a window 0.1.0 froze with an attempt already
+stored (an acknowledged earlier batch of a multi-batch window, a lost reply, or a
+`processing` answer) would send the same typed messages under a new event id, and
+they would be stored twice.
 
-0.1.1 therefore writes a content-free `<cursor>.filtered` marker next to the cursor
-before it freezes a window. A pending window without the marker was frozen by 0.1.0
-and is retried once with the 0.1.0 parse. Its batches and event ids are identical,
-so receiver idempotency covers stored, `processing` and lost-reply attempts, and
-every later window is filtered.
+0.1.1 therefore never re-slices. `transcriptWindow` returns every message the 0.1.0
+parse yields, in order, and marks those the rule withholds. Batches of 24 and their
+event ids are cut from that full list exactly as 0.1.0 cut them, and each batch then
+sends only its kept messages under that event id. A batch with no kept message
+completes without a request; a window with none advances the cursor without one.
+There is no legacy mode and no marker. A window 0.1.0 froze before the upgrade and a
+window 0.1.1 freezes are handled the same way on every attempt, so 0.1.1 never sends
+a withheld record. As in 0.1.0, a frozen window is retried on the session's later
+capture hooks until every batch is acknowledged. This is the one place the second
+exception changes a pending hosted range: its content, never its boundaries or ids.
 
-No typed text is lost. The 0.1.0 parse keeps everything 0.1.0 kept, the filter
-removes only machine records, and a window of machine records alone advances
-without a request. The cost is that one pending window per session may send its
-machine records once more, as 0.1.0 had already queued and attempted them.
-Downgrading to 0.1.0 after 0.1.1 marked a session is out of scope. The tests are in
+**Receiver idempotency with a filtered batch.** The hosted receiver keys a capture
+on user, client and event id only, as [the protocol](../protocol.md#post-apimemorycapture)
+requires, and does not compare payloads. It commits a batch's memories, their
+source receipts and the capture's `complete` status in one transaction. A failed
+attempt or a lost lease commits nothing, so no partial 0.1.0 batch can exist. For
+each legacy event id there are three cases:
+
+- 0.1.0 completed it. The filtered replay is answered `duplicate` and adds nothing,
+  and the typed messages in that batch were already processed once.
+- 0.1.0 never completed it. The filtered batch is the only version processed, so its
+  typed messages are processed once and its machine records never.
+- A 0.1.0 attempt still holds a fresh lease. The answer is `processing` and the
+  cursor stays. A later hook either gets `duplicate`, if that attempt completes, or
+  reclaims the event after the lease goes stale.
+
+No typed text is lost or processed twice. Two costs remain. A request 0.1.0 had
+already sent may still complete with its machine records. And whatever 0.1.0
+delivered stays with the service, because 0.1.1 deletes nothing. The local core in
+this repository does not serve this endpoint; its own capture paths reject a changed
+payload under a known event id (`event_payload_conflict`). A compatible service
+that did the same would refuse the filtered replay of a batch 0.1.0 had completed.
+The plugin would then stop advancing that session, rather than resend machine
+records ([limitations](../limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence)).
+Downgrading to 0.1.0 after 0.1.1 is out of scope. The tests are in
 [`capture-filter.test.mjs`](../../plugins/cairn-memory/test/capture-filter.test.mjs).
 
 ## One-command setup and distribution
@@ -931,7 +954,7 @@ ignored host output. All three are now fixed and tested offline:
 | Item | Outcome | Evidence |
 | --- | --- | --- |
 | Delivered-body privacy (A1 canaries, host part) | **Passed** for the candidate rules on both hosts | 17 hook-enabled invocations sent 12 capture and 13 recall bodies. None of them, the recall output, client state or the core store contained any canary: three fake secrets, tool output, reasoning (scripted summary), SessionStart and prompt hook context, project instructions, sandbox root, cwd, image path, PNG base64, magic or data URL, compaction prompt or summary text. Typed secrets reached the parsers and were redacted before delivery. The Codex compaction canaries come from one scripted run whose compaction settings were added by hand after setup; reproducing it from the committed setup is to verify. The offline A1 bound cases remain CX-3 gates. |
-| Claude transcript format and exclusions | **Passed** headless; interactive **to verify** | 2.1.283 writes `user` and `assistant` records beside `attachment` (hook context, `CLAUDE.md`, environment, session context, credential org, prompt snapshots), `queue-operation` (a mirror of the typed prompt), `last-prompt`, `atis-latch`, `cost-state`, `system` and `mode`. Hook context and project instructions are attachments, not user-role records. Thinking blocks were stored with empty text and a signature. Candidate rule: user text only when `promptSource` is present and the record is not `isMeta`, `isCompactSummary` or a tool result, with wrapper prefixes as defense in depth; assistant `text` blocks only. In `-p`, submitted prompts carry `promptSource`/`turnOrigin` `"sdk"`; command wrappers, command stdout, caveats, compaction summaries and `[Image: source: …]` notes carry neither. Since 0.1.1 the harness uses the plugin's rule instead, which does not require `promptSource`; see the [second D1 exception](#second-d1-exception-plugin-011-privacy-filter). |
+| Claude transcript format and exclusions | **Passed** headless; interactive **to verify** | 2.1.283 writes `user` and `assistant` records beside `attachment` (hook context, `CLAUDE.md`, environment, session context, credential org, prompt snapshots), `queue-operation` (a mirror of the typed prompt), `last-prompt`, `atis-latch`, `cost-state`, `system` and `mode`. Hook context and project instructions are attachments, not user-role records. Thinking blocks were stored with empty text and a signature. Candidate rule: user text only when `promptSource` is present and the record is not `isMeta`, `isCompactSummary` or a tool result, with wrapper prefixes as defense in depth; assistant `text` blocks only. In `-p`, submitted prompts carry `promptSource`/`turnOrigin` `"sdk"`; command wrappers, command stdout, caveats, compaction summaries and `[Image: source: …]` notes carry neither. Since 0.1.1 the harness uses the plugin's rule for user records instead, which does not require `promptSource`, and still drops meta and summary records of either role; see the [second D1 exception](#second-d1-exception-plugin-011-privacy-filter). |
 | Codex transcript format and exclusions | **Passed** | 0.157.1 still supplies a JSONL rollout, `~/.codex/sessions/YYYY/MM/DD/rollout-…-<thread>.jsonl`. Only `event_msg`/`item_completed` items `UserMessage` (`text` parts) and `AgentMessage` (`Text` parts) are conversation. User-role `response_item` messages mirror typed text but also carry AGENTS.md, environment context (cwd, sandbox roots) and Codex-generated `<image …>` wrappers; developer-role items carry hook context. `content_item_kinds` alone is insufficient: Codex labels its image wrapper and an error note `user.text`. Plaintext reasoning summaries appear in `response_item/reasoning` and `item_completed/Reasoning`; tools as `function_call`/`custom_tool_call`, their outputs and `CommandExecution`; images as `input_image` data URLs and `local_image` paths; compaction as `compacted` and `ContextCompaction` (the hand-configured scripted run only). All were excluded. The provisional `response_item` fixture shape above is not the conversation discriminator. |
 | Hook delivery, including SessionEnd | **Passed** headless; interactive **to verify** | Claude `-p`: `SessionStart` (`startup`, `resume`, `compact`), `UserPromptSubmit`, `Stop`, `PreCompact` (`manual`) and `SessionEnd` (`other`), including 55 ms after SIGTERM to the process group, with no `Stop` for the interrupted turn. For a new session the transcript file does not exist yet at `SessionStart` or `UserPromptSubmit`. Codex `exec`: `SessionStart` (`startup`), `UserPromptSubmit`, `Stop` (with `last_assistant_message`) and `SessionEnd` (`other`); `PreCompact`, `PostCompact` and `SessionStart` (`compact`) only in the hand-configured scripted compaction run, so their reproduction is to verify; no `SessionEnd` after SIGTERM (two runs). `--ephemeral` gives every hook `transcript_path: null`. Harness handlers took 2–64 ms, measured inside the hook process. |
 | Worker survival and source readability after teardown | **Passed**; enforced source authorization **to verify** | All 788 detached workers ran in their own session and outlived their hook. Twelve `SessionEnd` workers, across 11 sessions with a persisted source, waited 6 s and then read the whole file after the host process had exited, including one untraced run per host. Untraced hooks and workers had no seccomp filter or `no_new_privs` from either host, reached loopback and saw host PIDs in `/proc`; Codex's `bwrap --as-pid-1` sandbox applies to tool commands, not hooks. The reviewed worker did not check ownership, pause or symlinks before reading. Every path it read was one of the 14 harness-owned files verified under Cleanup, but that was not enforced; the enforcing worker is tested offline only. |

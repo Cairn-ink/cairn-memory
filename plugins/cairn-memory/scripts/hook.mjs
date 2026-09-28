@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 
-import { mkdir, open, stat, writeFile } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 import { homedir, platform, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
 import {
   captureCursorPath,
   readCaptureCursor,
   writeCaptureCursor,
 } from "../lib/capture-cursor.mjs";
-import {
-  captureEventId,
-  legacyTranscriptMessages,
-  transcriptMessages,
-} from "../lib/transcript.mjs";
+import { captureEventId, transcriptWindow } from "../lib/transcript.mjs";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
 import {
@@ -154,21 +150,6 @@ async function readSlice(path, offset, size) {
   return slice.subarray(0, position);
 }
 
-// Written before 0.1.1 freezes a session's first window. A pending window
-// without it was frozen by 0.1.0; retrying that window with the 0.1.0 parse keeps
-// its batches and event ids, so the receiver's idempotency still applies.
-const filterMarkerPath = (statePath) => `${statePath}.filtered`;
-
-async function frozenByFilter(statePath) {
-  try {
-    await stat(filterMarkerPath(statePath));
-    return true;
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
-  }
-}
-
 async function captureLocked(hookInput, statePath, generation) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
@@ -236,11 +217,10 @@ async function captureLocked(hookInput, statePath, generation) {
   const lastNewline = slice.lastIndexOf(0x0a);
   if (lastNewline < 0) return;
   const consumed = slice.subarray(0, lastNewline + 1);
-  const legacyWindow =
-    cursor.pendingEnd !== undefined && !(await frozenByFilter(statePath));
-  const parse = legacyWindow ? legacyTranscriptMessages : transcriptMessages;
-  const messages = parse(consumed.toString("utf8"), hookInput.session_id);
-  if (messages.length === 0) {
+  // Batches keep 0.1.0's boundaries and event ids, including for a window 0.1.0
+  // froze before an upgrade; only messages 0.1.1 keeps are ever sent.
+  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id);
+  if (!window.some((message) => !message.withheld)) {
     await writeCaptureCursor(statePath, {
       offset: offset + consumed.length,
       generation,
@@ -254,8 +234,6 @@ async function captureLocked(hookInput, statePath, generation) {
   if (cursor.pendingEnd === undefined) {
     // Freeze this extraction window before the first request. Retries keep the
     // same final batch and event id even if the transcript grows meanwhile.
-    await mkdir(dirname(statePath), { recursive: true, mode: 0o700 });
-    await writeFile(filterMarkerPath(statePath), "filter-1\n", { mode: 0o600 });
     await writeCaptureCursor(statePath, {
       offset,
       generation,
@@ -265,8 +243,13 @@ async function captureLocked(hookInput, statePath, generation) {
   }
 
   const projectId = await opaqueProjectId(dataDir, hookInput.cwd);
-  for (let index = 0; index < messages.length; index += 24) {
-    const batch = messages.slice(index, index + 24);
+  for (let index = 0; index < window.length; index += 24) {
+    const batch = window.slice(index, index + 24);
+    const messages = batch
+      .filter((message) => !message.withheld)
+      .map(({ id, role, content }) => ({ id, role, content }));
+    // A batch of machine records only has nothing to send; it completes as is.
+    if (messages.length === 0) continue;
     const started = await startIfActive(dataDir, generation, () =>
       post(
         "/api/memory/capture",
@@ -275,7 +258,7 @@ async function captureLocked(hookInput, statePath, generation) {
           event_id: captureEventId(hookInput.session_id, batch),
           session_id: hookInput.session_id,
           project_id: projectId,
-          messages: batch,
+          messages,
         },
         25_000,
       ),

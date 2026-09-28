@@ -2,12 +2,14 @@
 // Interactive Claude check for the 0.1.1 transcript filter. Manual, synthetic,
 // never run by npm test or CI. One gated interactive session runs in a private
 // tmux server (its own -L socket), targeted only by the session id it reports.
+// Signal handlers and the run deadline are in place before tmux starts; a failed
+// ledger write after launch tears the server and the host's process group down.
+// Every transcript read is authorized from the ledger and uses a verified handle.
 //
 //   node interactive-claude.mjs run               launch, drive, summarize record shapes
 //   node interactive-claude.mjs cleanup [--apply] remove this run's own host files via the ledger
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { legacyTranscriptMessages, machineUserRecord, transcriptMessages }
@@ -16,33 +18,18 @@ import { applyCleanup, planCleanup } from './lib/cleanup-plan.mjs';
 import { randomTag } from './lib/common.mjs';
 import { readLedger, writeLedger } from './lib/ledger.mjs';
 import { preflight } from './lib/preflight.mjs';
-import { claudeProjectDir, verifyPlainEntry } from './lib/source-access.mjs';
+import { createWaiter, launchPrivateTmux } from './lib/private-tmux.mjs';
+import { claudeProjectDir, readOwnedSource } from './lib/source-access.mjs';
+import { createInterruptGuard, SIGNAL_EXIT } from './lib/supervise.mjs';
 
 const ROOT = '/tmp/f0-interactive';
 const HOME = process.env.HOME;
 const CLAUDE = join(HOME, '.local/bin/claude');
 const PINS = { claude: '2.1.283 (Claude Code)', node: 'v22.16.0' };
 const BUDGET = 3;
+const RUN_DEADLINE_MS = 540_000;
 const PATH = `${join(HOME, '.nvm/versions/node/v22.16.0/bin')}:/usr/local/bin:/usr/bin:/bin`;
 const quote = value => `'${String(value).replace(/'/g, `'\\''`)}'`;
-
-function tmux(socket, ...args) {
-  const result = spawnSync('tmux', ['-L', socket, ...args], { encoding: 'utf8' });
-  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
-}
-
-async function waitFor(check, timeoutMs, label) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (check()) return true;
-    await delay(500);
-  }
-  throw new Error(`timeout_waiting_for:${label}`);
-}
-
-function readOwnTranscript(path) {
-  return existsSync(path) ? readFileSync(path, 'utf8') : '';
-}
 
 async function run() {
   const project = join(ROOT, 'project');
@@ -69,74 +56,77 @@ async function run() {
   ledger.used.claude++;
   const socket = `f0i-${tag.toLowerCase()}`;
   const record = { name: `claude-interactive#${ledger.used.claude}`, host: 'claude', preflight: gate.checks.map(check => check.name),
-    launch: { sessionId, cwd: project, startedAt: Date.now(), exitAt: null }, tmux: { socket, session: null } };
+    launch: { sessionId, cwd: project, startedAt: Date.now(), exitAt: null }, tmux: { socket, socketPath: null, session: null, panePid: null } };
   ledger.runs.push(record);
   writeLedger(ROOT, ledger); // the launch is recorded before the host starts
 
+  // Supervision is in place before tmux starts: signals reach the pane's group,
+  // and every wait also observes the interrupt and the overall deadline.
+  const guard = createInterruptGuard({ escalateMs: 5_000 });
+  guard.install();
+  const waitFor = createWaiter({ guard, deadline: Date.now() + RUN_DEADLINE_MS });
+  const transcriptPath = join(claudeProjectDir(HOME, project), `${sessionId}.jsonl`);
+  // Every read is authorized first and goes through a verified O_NOFOLLOW handle.
+  const transcript = () => readOwnedSource({ host: 'claude', sessionId, path: transcriptPath, cwd: project, ledger, home: HOME });
   const command = ['env', '-i', ...Object.entries(env).map(([key, value]) => `${key}=${value}`), CLAUDE, ...args]
     .map(quote).join(' ');
-  const created = tmux(socket, 'new-session', '-d', '-P', '-F', '#{session_id}', '-x', '200', '-y', '50', '-c', project, command);
-  if (created.status !== 0) throw new Error(`tmux_new_session_failed:${created.stderr.trim()}`);
-  record.tmux.session = created.stdout.trim();
-  writeLedger(ROOT, ledger);
-  const target = record.tmux.session;
-  const pane = () => tmux(socket, 'capture-pane', '-p', '-t', target, '-S', '-80').stdout;
-  const keys = (...keyArgs) => tmux(socket, 'send-keys', '-t', target, ...keyArgs);
-  const transcriptPath = join(claudeProjectDir(HOME, project), `${sessionId}.jsonl`);
-  const transcript = () => readOwnTranscript(transcriptPath);
-  // Typed text arrives as one burst, which the TUI treats as a paste; Enter must
-  // come well after it, or it becomes a newline. Submission is confirmed from
-  // the transcript, never from the screen (which echoes the typed text).
-  const typeLine = async (text, submitted) => {
-    keys('-l', text);
-    await waitFor(() => pane().includes(text.slice(0, 24)), 10_000, 'typed text visible');
-    await delay(2_000);
-    keys('Enter');
-    await waitFor(submitted, 20_000, `submitted: ${text.slice(0, 24)}`);
-  };
   const snapshots = [];
-  const snap = label => snapshots.push({ label, text: pane() });
-
+  let host = null;
   try {
-    await waitFor(() => /trust|for shortcuts|❯|>/i.test(pane()), 30_000, 'first screen');
+    host = await launchPrivateTmux({ socket, command, cwd: project, guard, onLaunch: ({ socketPath, session, panePid }) => {
+      Object.assign(record.tmux, { socketPath, session, panePid });
+      writeLedger(ROOT, ledger);
+    } });
+    const snap = label => snapshots.push({ label, text: host.pane() });
+    // Typed text arrives as one burst, which the TUI treats as a paste; Enter must
+    // come well after it, or it becomes a newline. Submission is confirmed from
+    // the transcript, never from the screen (which echoes the typed text).
+    const typeLine = async (text, submitted) => {
+      host.keys('-l', text);
+      await waitFor(() => host.pane().includes(text.slice(0, 24)), 10_000, 'typed text visible');
+      await delay(2_000);
+      host.keys('Enter');
+      await waitFor(submitted, 20_000, `submitted: ${text.slice(0, 24)}`);
+    };
+    await waitFor(() => /trust|for shortcuts|❯|>/i.test(host.pane()), 30_000, 'first screen');
     snap('first-screen');
-    if (/trust/i.test(pane())) { keys('Enter'); await delay(1_500); }
-    await waitFor(() => /for shortcuts|❯/.test(pane()), 30_000, 'input ready');
-    snap('ready');
+    if (/trust/i.test(host.pane())) { host.keys('Enter'); await delay(1_500); }
+    await waitFor(() => /for shortcuts|❯/.test(host.pane()), 30_000, 'input ready');
     await typeLine(`Synthetic interactive prompt ${canaries.typedOne}. Reply with exactly: OK1`,
-      () => transcript().includes(canaries.typedOne));
-    await waitFor(() => /"text":"OK1/.test(transcript()), 90_000, 'reply one');
+      async () => (await transcript()).includes(canaries.typedOne));
+    await waitFor(async () => /"text":"OK1/.test(await transcript()), 90_000, 'reply one');
     await delay(1_500);
     await typeLine(`<note> Synthetic prompt ${canaries.typedTwo} mentions command-name mid-sentence. Reply with exactly: OK2`,
-      () => transcript().includes(canaries.typedTwo));
-    await waitFor(() => /"text":"OK2/.test(transcript()), 90_000, 'reply two');
+      async () => (await transcript()).includes(canaries.typedTwo));
+    await waitFor(async () => /"text":"OK2/.test(await transcript()), 90_000, 'reply two');
     await delay(1_500);
-    snap('after-prompts');
-    keys('-l', '!');
+    host.keys('-l', '!');
     await delay(1_000);
-    await typeLine(`echo ${canaries.bash}`, () => transcript().includes(canaries.bash));
+    await typeLine(`echo ${canaries.bash}`, async () => (await transcript()).includes(canaries.bash));
     await delay(2_000);
     snap('after-bash');
-    await typeLine('/compact', () => transcript().includes('/compact'));
-    await waitFor(() => transcript().includes('"isCompactSummary":true'), 150_000, 'compaction');
+    await typeLine('/compact', async () => (await transcript()).includes('/compact'));
+    await waitFor(async () => (await transcript()).includes('"isCompactSummary":true'), 150_000, 'compaction');
     await delay(3_000);
     snap('after-compact');
     await typeLine('/exit', () => true);
-    await waitFor(() => tmux(socket, 'has-session', '-t', target).status !== 0, 30_000, 'exit');
+    await waitFor(() => !host.alive(), 30_000, 'exit');
   } catch (error) {
-    snap('failure');
     record.error = error.message;
+    // A failed launch (the ledger write included) has already been torn down.
+    if (!host && !guard.interrupted) throw error;
+    if (host) snapshots.push({ label: 'failure', text: host.pane() });
   } finally {
-    // Stop only this run's private tmux server.
-    if (tmux(socket, 'has-session', '-t', target).status === 0) tmux(socket, 'kill-session', '-t', target);
-    tmux(socket, 'kill-server');
+    if (host) await host.teardown();
+    guard.dispose();
     record.launch.exitAt = Date.now();
     writeLedger(ROOT, ledger);
     writeFileSync(join(ROOT, 'logs', 'panes.json'), JSON.stringify(snapshots, null, 2));
   }
-  const entry = await verifyPlainEntry(transcriptPath, 'file');
-  if (!entry.ok) throw new Error(`transcript_not_owned_or_missing:${entry.reason}`);
-  summarize(readFileSync(transcriptPath, 'utf8'), canaries, sessionId, record.error ?? null);
+  if (guard.interrupted) { process.exitCode = SIGNAL_EXIT[guard.interrupted]; return; }
+  const text = await transcript();
+  if (!text) throw new Error('transcript_missing');
+  summarize(text, canaries, sessionId, record.error ?? null);
 }
 
 function summarize(text, canaries, sessionId, error) {

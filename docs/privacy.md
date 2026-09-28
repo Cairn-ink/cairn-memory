@@ -11,7 +11,9 @@ The main risk in automatic memory is not bad retrieval. It is silently collectin
 
 ## Data flow
 
-After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service. From plugin 0.1.1 it skips user-role records that Claude Code writes itself: local-command output and caveats, compaction summaries, tool results, image-source notes and bash-mode wrappers.
+After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
+
+From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Assistant text is sent as before, including anything it quotes from those records. Only the record shapes and wrappers listed in the [plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
 
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
@@ -33,7 +35,6 @@ By default the plugin stores control state under `~/.cairn-memory/`:
 - `paused`: compatibility marker also honored as a pause;
 - `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
   keyed by a hash of the Claude session id;
-- `sessions/*.json.filtered` (0.1.1+): a content-free marker written before a session's capture window is frozen, so a window frozen by 0.1.0 is retried with its original batches;
 - process-owned lock files coordinating control changes and session capture.
 
 Stop and PreCompact pipe only session id, transcript path, working directory,

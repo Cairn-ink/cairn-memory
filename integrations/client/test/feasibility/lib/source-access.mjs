@@ -114,3 +114,30 @@ export async function openAuthorizedSource(authorization, fs = defaultFs) {
     throw error;
   }
 }
+
+/**
+ * Read a whole owned source through a verified handle. Returns '' while it does
+ * not exist yet. A symlink, a symlinked parent or another owner is refused before
+ * the path is opened; a swap after that check is refused by O_NOFOLLOW or by the
+ * inode check on the open handle. Either way nothing is read.
+ */
+export async function readOwnedSource({ host, sessionId, path, cwd, ledger, home, fs = defaultFs }) {
+  const authorization = await authorizeSource({ host, sessionId, suppliedPath: path, suppliedCwd: cwd, ledger, home,
+    isPaused: async () => false, fs });
+  if (!authorization.ok) {
+    if (authorization.reason === 'source_unavailable') return '';
+    throw new Error(`source_refused:${authorization.reason}`);
+  }
+  const handle = await openAuthorizedSource(authorization, fs);
+  try {
+    const { size } = await handle.stat();
+    const buffer = Buffer.alloc(size);
+    let position = 0;
+    while (position < size) {
+      const { bytesRead } = await handle.read(buffer, position, size - position, position);
+      if (!bytesRead) break;
+      position += bytesRead;
+    }
+    return buffer.subarray(0, position).toString('utf8');
+  } finally { await handle.close(); }
+}

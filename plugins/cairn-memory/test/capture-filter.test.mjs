@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { access, appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,11 +75,16 @@ test("fixture replay: machine-generated canaries never reach the body; every typ
   }
 });
 
-function upgradeTranscript() {
+function upgradeTranscript({ machineFirst = 0 } = {}) {
   const lines = [];
+  for (let index = 0; index < machineFirst; index += 1) {
+    lines.push({ type: "user", uuid: `machine-lead-${index}`,
+      message: { content: `<local-command-stdout>FXMACHINELEAD${index}</local-command-stdout>` } });
+  }
   for (let index = 0; index < 32; index += 1) {
     if (index % 4 === 1) {
-      lines.push({ type: "user", uuid: `machine-${index}`, message: { content: `<command-name>/cost</command-name> FXMACHINE${index}` } });
+      lines.push({ type: "user", uuid: `machine-${index}`,
+        message: { content: `<local-command-stdout>PRIVATE FXMACHINE${index}</local-command-stdout>` } });
     } else if (index % 2 === 0) {
       lines.push({ type: "user", uuid: `typed-${index}`, promptSource: "typed", message: { content: `Typed prompt FXTYPED${index}` } });
     } else {
@@ -89,51 +94,101 @@ function upgradeTranscript() {
   return `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`;
 }
 
-test("upgrade: a window 0.1.0 froze retries with its original batches, so nothing is stored twice or lost", async (t) => {
-  const workspace = createTestWorkspace(t, { prefix: "cairn-capture-upgrade-" });
+/** 0.1.0's batches for a window, each with its event id and the subset 0.1.1 sends. */
+function legacyPlan(text, sessionId) {
+  const legacy = legacyTranscriptMessages(text, sessionId);
+  const kept = new Set(transcriptMessages(text, sessionId).map((message) => message.id));
+  const batches = [];
+  for (let index = 0; index < legacy.length; index += 24) {
+    const batch = legacy.slice(index, index + 24);
+    batches.push({ eventId: captureEventId(sessionId, batch), batch,
+      sent: batch.filter((message) => kept.has(message.id)).map((message) => message.id) });
+  }
+  return batches;
+}
+
+/** The on-disk state after a window was frozen and its owner crashed before posting. */
+async function frozenWindow(workspace, sessionId, text) {
   const dataDir = join(workspace.path, "data");
   const transcript = join(workspace.path, "transcript.jsonl");
-  const sessionId = "session-upgrade";
-  const text = upgradeTranscript();
   await writeFile(transcript, text);
-  const legacy = legacyTranscriptMessages(text, sessionId);
-  const legacyBatches = [legacy.slice(0, 24), legacy.slice(24)];
-  const filtered = transcriptMessages(text, sessionId);
-  assert.equal(legacyBatches.length, 2);
-  // Without the handling, re-slicing the filtered list would give batch 1 a new event id.
-  assert.notEqual(captureEventId(sessionId, filtered.slice(0, 24)), captureEventId(sessionId, legacyBatches[0]));
-
-  // State 0.1.0 leaves behind: batch 1 stored, batch 2 failed, window frozen, no filter marker.
-  const server = await receiver(t);
-  server.stored.set(captureEventId(sessionId, legacyBatches[0]), legacyBatches[0]);
   const cursorPath = captureCursorPath(dataDir, sessionId);
   await mkdir(join(dataDir, "sessions"), { recursive: true });
   await writeCaptureCursor(cursorPath, { offset: 0, generation: "initial", discardUntilNewline: false,
     pendingEnd: Buffer.byteLength(text) });
+  return { dataDir, transcript, cursorPath };
+}
 
-  await capture({ port: server.port, dataDir, transcript, sessionId });
+const machineCount = (requests) => (JSON.stringify(requests).match(/FXMACHINE|PRIVATE/g) ?? []).length;
+
+test("upgrade: a frozen window never sends machine text, across three failures and the success", async (t) => {
+  // The reviewer's repro: 0.1.0 froze a window with <local-command-stdout> and crashed
+  // before posting; 0.1.1 then fails three times and succeeds.
+  const workspace = createTestWorkspace(t, { prefix: "cairn-capture-upgrade-" });
+  const sessionId = "session-upgrade";
+  const text = upgradeTranscript();
+  const { dataDir, transcript, cursorPath } = await frozenWindow(workspace, sessionId, text);
+  const plan = legacyPlan(text, sessionId);
+  assert.equal(plan.length, 2);
+  const server = await receiver(t, { fail: (_body, attempt) => attempt <= 3 });
+  for (let attempt = 0; attempt < 4; attempt += 1) await capture({ port: server.port, dataDir, transcript, sessionId });
+  assert.equal(machineCount(server.requests), 0, "machine text sent");
+  // Every attempt used 0.1.0's event ids and sent only the kept subset.
   assert.deepEqual(server.requests.map((request) => request.event_id),
-    legacyBatches.map((batch) => captureEventId(sessionId, batch)));
-  const ids = storedIds(server.stored);
-  assert.equal(new Set(ids).size, ids.length, "no message stored twice");
-  for (const message of filtered) assert.ok(ids.includes(message.id), `typed/assistant ${message.id} lost`);
-  assert.deepEqual(await readCaptureCursor(cursorPath),
-    { offset: Buffer.byteLength(text), generation: "initial", discardUntilNewline: false, pendingEnd: undefined });
-
-  // The next window is frozen by 0.1.1: filtered, and marked.
-  await appendFile(transcript, [
-    JSON.stringify({ type: "user", uuid: "typed-after", promptSource: "typed", message: { content: "Typed after upgrade FXTYPEDAFTER" } }),
-    JSON.stringify({ type: "user", uuid: "machine-after", message: { content: "<local-command-stdout>FXMACHINEAFTER</local-command-stdout>" } }),
-    "",
-  ].join("\n"));
-  await capture({ port: server.port, dataDir, transcript, sessionId });
-  const last = JSON.stringify(server.requests.at(-1));
-  assert.ok(last.includes("FXTYPEDAFTER"));
-  assert.equal(last.includes("FXMACHINEAFTER"), false);
-  await access(`${cursorPath}.filtered`);
+    [plan[0].eventId, plan[0].eventId, plan[0].eventId, plan[0].eventId, plan[1].eventId]);
+  for (const request of server.requests) {
+    const expected = plan.find((entry) => entry.eventId === request.event_id).sent;
+    assert.deepEqual(request.messages.map((message) => message.id), expected);
+  }
+  assert.deepEqual((await readCaptureCursor(cursorPath)).pendingEnd, undefined);
 });
 
-test("a window 0.1.1 froze keeps its filtered batches and event id on retry", async (t) => {
+test("a crash after the window is frozen and before any post changes nothing: same ids, no machine text", async (t) => {
+  // There is no marker: a window frozen by 0.1.0 and one frozen by 0.1.1 look the same on disk.
+  const workspace = createTestWorkspace(t, { prefix: "cairn-capture-crash-" });
+  const sessionId = "session-crash";
+  const text = upgradeTranscript();
+  const { dataDir, transcript } = await frozenWindow(workspace, sessionId, text);
+  const server = await receiver(t);
+  await capture({ port: server.port, dataDir, transcript, sessionId });
+  assert.deepEqual(server.requests.map((request) => request.event_id), legacyPlan(text, sessionId).map((entry) => entry.eventId));
+  assert.equal(machineCount(server.requests), 0);
+  const ids = storedIds(server.stored);
+  assert.deepEqual([...ids].sort(), transcriptMessages(text, sessionId).map((message) => message.id).sort());
+});
+
+test("a 0.1.0 batch of machine records only is completed without sending", async (t) => {
+  const workspace = createTestWorkspace(t, { prefix: "cairn-capture-machine-batch-" });
+  const sessionId = "session-machine-batch";
+  const text = upgradeTranscript({ machineFirst: 24 });
+  const { dataDir, transcript, cursorPath } = await frozenWindow(workspace, sessionId, text);
+  const plan = legacyPlan(text, sessionId);
+  assert.deepEqual(plan[0].sent, []);
+  const server = await receiver(t);
+  await capture({ port: server.port, dataDir, transcript, sessionId });
+  assert.deepEqual(server.requests.map((request) => request.event_id), plan.slice(1).map((entry) => entry.eventId));
+  assert.equal(machineCount(server.requests), 0);
+  assert.deepEqual((await readCaptureCursor(cursorPath)).offset, Buffer.byteLength(text));
+});
+
+test("dedup: a batch 0.1.0 already stored is acknowledged as a duplicate; no typed text is stored twice or lost", async (t) => {
+  const workspace = createTestWorkspace(t, { prefix: "cairn-capture-dedup-" });
+  const sessionId = "session-dedup";
+  const text = upgradeTranscript();
+  const { dataDir, transcript } = await frozenWindow(workspace, sessionId, text);
+  const plan = legacyPlan(text, sessionId);
+  // 0.1.0 stored batch 1 in full (machine text included) before batch 2 failed.
+  const server = await receiver(t);
+  server.stored.set(plan[0].eventId, plan[0].batch);
+  await capture({ port: server.port, dataDir, transcript, sessionId });
+  assert.equal(machineCount(server.requests), 0, "0.1.1 sent machine text");
+  assert.deepEqual(server.requests.map((request) => request.event_id), plan.map((entry) => entry.eventId));
+  const ids = storedIds(server.stored);
+  assert.equal(new Set(ids).size, ids.length, "a message was stored twice");
+  for (const message of transcriptMessages(text, sessionId)) assert.ok(ids.includes(message.id), `${message.id} lost`);
+});
+
+test("a retry keeps 0.1.0's boundaries and event ids and still sends only kept messages", async (t) => {
   const workspace = createTestWorkspace(t, { prefix: "cairn-capture-retry-" });
   const dataDir = join(workspace.path, "data");
   const transcript = join(workspace.path, "transcript.jsonl");
@@ -142,16 +197,13 @@ test("a window 0.1.1 froze keeps its filtered batches and event id on retry", as
   await writeFile(transcript, text);
   const server = await receiver(t, { fail: (_body, attempt) => attempt === 1 });
   await capture({ port: server.port, dataDir, transcript, sessionId });
-  await access(`${captureCursorPath(dataDir, sessionId)}.filtered`);
   await capture({ port: server.port, dataDir, transcript, sessionId });
-  const filtered = transcriptMessages(text, sessionId);
-  const expected = [filtered.slice(0, 24), filtered.slice(24)].filter((batch) => batch.length)
-    .map((batch) => captureEventId(sessionId, batch));
-  assert.deepEqual(server.requests.map((request) => request.event_id), [expected[0], ...expected]);
-  assert.equal(JSON.stringify(server.requests).includes("FXMACHINE"), false);
+  const plan = legacyPlan(text, sessionId);
+  assert.deepEqual(server.requests.map((request) => request.event_id), [plan[0].eventId, ...plan.map((entry) => entry.eventId)]);
+  assert.equal(machineCount(server.requests), 0);
   const ids = storedIds(server.stored);
   assert.equal(new Set(ids).size, ids.length);
-  assert.deepEqual(ids.sort(), filtered.map((message) => message.id).sort());
+  assert.deepEqual([...ids].sort(), transcriptMessages(text, sessionId).map((message) => message.id).sort());
 });
 
 test("a window of machine records only advances without sending anything", async (t) => {
