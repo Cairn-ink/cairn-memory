@@ -201,7 +201,7 @@ throw instead). They never expose raw database or provider errors.
 | `episode_sources_unavailable` | Explicit keep has no currently retained source passages. |
 | `missing_evidence` | The interpretation target has no available staged evidence. |
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
-| `episode_outcome_pending` | Failure recording is still locked after admission; the consumed attempt awaits finalization or lease-expiry recovery. |
+| `episode_outcome_pending` | Capture, end or lazy interpretation has no recorded failure outcome yet; non-retryable, awaiting lease-expiry recovery. |
 | `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
 Interpretation never holds up ordinary admission. A reserved, started or stranded
@@ -228,10 +228,13 @@ five-second budget, yielding between writes and limiting each SQLite wait to
 the consumed attempt stays unfinished. Admission still proceeds when writable,
 in this call or its immediate retry. After successful admission, the owner makes
 one additional failure write, bounded to 250 milliseconds. Success returns the
-recorded finite code; a still-locked write returns retryable
-`episode_outcome_pending`, not a claim that the failure is already recorded.
-A later capture or end signal recovers a stranded attempt after lease expiry as `episode_timeout` with a coverage gap,
-without repeating that interpretation call.
+recorded finite code. If another process already finished the attempt, the owner
+rereads and reports the stored processing code. With no stored code, or a write
+still locked, it reports `episode_outcome_pending` with `retryable: false`.
+End and lazy interpretation also return this code when failure recording remains
+locked. Retrying the same event before expiry does not finalize the consumed
+attempt or repeat interpretation. A later capture or end signal recovers it after
+lease expiry as `episode_timeout` with a coverage gap, without another paid call.
 
 Quick policy is recorded only while the batch is reserved with no live admission
 claim. Claiming admission atomically freezes and returns its policy before any

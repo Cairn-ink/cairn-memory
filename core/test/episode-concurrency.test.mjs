@@ -59,7 +59,9 @@ test('E5 fake clock recovers an expired stranded worker without letting it publi
   release.resolve();const stale=ok(await running);
   assert.equal(stale.duplicate, true);
   assert.deepEqual(stale.admission, { status: 'completed', memoryIds: [], suppressedCount: 0 });
-  assert.deepEqual(stale.episode.error, { code: 'episode_failed', retryable: false });
+  assert.deepEqual(stale.episode.error, { code: 'episode_timeout', retryable: false });
+  assert.equal(stale.episode.error.code,
+    JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record).processing.errorCode);
   assert.equal(f.db.prepare('SELECT state FROM admission_claims').get().state,'completed');
   assert.equal(f.db.prepare('SELECT interpretedAt FROM (SELECT json_extract(record,\'$.interpretedAt\') interpretedAt FROM session_episodes)').get().interpretedAt,null);
 });

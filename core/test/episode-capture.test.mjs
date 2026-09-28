@@ -565,9 +565,11 @@ test('E8 a raw keep assertion lock returns retryable storage_busy and the same a
 });
 
 for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
-  for (const finalWriteBusy of [false, true]) {
-    test(`E4/E5 lock beyond budget at ${boundary}; post-admission write ${finalWriteBusy
-      ? 'stays busy; fake clock tests stranded lease-expiry recovery' : 'records the failure'}`,
+  const outcomes = boundary === 'commitEpisodeDraft'
+    ? ['recorded', 'busy', 'recovered', 'no-outcome'] : ['recorded', 'busy'];
+  for (const finalWrite of outcomes) {
+    test(`E4/E5 lock beyond budget at ${boundary}; post-admission write ${finalWrite}; ` +
+      'fake clock covers stranded lease recovery only',
     { timeout: 20000 }, async t => {
       const { captureEpisodeMessages } = await import('../episode-capture.mjs');
       const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
@@ -577,7 +579,24 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
       const wrapped = { ...runtime,
         failEpisodeDraft(...args) {
           failureStart ??= performance.now(); failureWrites++;
-          if (admitted && finalWriteBusy) {
+          if (admitted && finalWrite === 'recovered') {
+            // A separate connection recovers the genuinely stranded attempt just
+            // before its original owner makes the extra post-admission write.
+            f.db.exec('UPDATE episode_attempts SET expires_at=0; ' +
+              'UPDATE session_episodes SET writer_expires_at=0');
+            const successor = createMemoryRuntime({ path: f.path,
+              sessionEpisodes: { mode: 'episode-v1' } });
+            try {
+              const episodeId = args[1].episodeId;
+              const writer = successor.claimEpisodeWriter(ns, { episodeId, generation: 'initial' });
+              successor.releaseEpisodeWriter(ns, { episodeId, token: writer.token });
+            } finally { successor.close(); }
+            const result = runtime.failEpisodeDraft(...args);
+            assert.equal(result, undefined);
+            return result;
+          }
+          if (admitted && finalWrite === 'no-outcome') return undefined;
+          if (admitted && finalWrite === 'busy') {
             f.db.exec('BEGIN IMMEDIATE');
             try { return runtime.failEpisodeDraft(...args); }
             finally { f.db.exec('ROLLBACK'); }
@@ -606,18 +625,26 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
         } } });
       assert.equal(locked, true); assert.equal(captured.admission.status, 'completed');
       assert.equal(failureWrites, writesBeforeAdmission + 1);
-      assert.deepEqual(captured.episode.error, finalWriteBusy
-        ? { code: 'episode_outcome_pending', retryable: true }
-        : { code: 'episode_failed', retryable: false });
-      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, finalWriteBusy ? 0 : 1);
-      if (!finalWriteBusy) {
+      const pending = ['busy', 'no-outcome'].includes(finalWrite);
+      const storedCode = finalWrite === 'recovered' ? 'episode_timeout' : 'episode_failed';
+      assert.deepEqual(captured.episode.error, {
+        code: pending ? 'episode_outcome_pending' : storedCode, retryable: false });
+      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, pending ? 0 : 1);
+      if (!pending) {
         assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
         const event = f.db.prepare('SELECT gap_reasons FROM episode_events').get();
-        assert.deepEqual(JSON.parse(event.gap_reasons), ['episode_failed']);
+        assert.deepEqual(JSON.parse(event.gap_reasons), [storedCode]);
         assert.equal(JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record)
-          .processing.errorCode, 'episode_failed');
+          .processing.errorCode, captured.episode.error.code);
         return;
       }
+      // Replaying the same event neither finalizes nor repeats interpretation.
+      const replay = ok(await f.core.capture(input()));
+      assert.equal(replay.duplicate, true);
+      assert.equal(replay.admission.status, 'completed');
+      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, 0);
+      assert.equal(JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record)
+        .processing.errorCode, null);
       // A still-live, stranded attempt must not delay admission of a different batch.
       assert.equal(ok(await f.core.capture(input(2))).admission.status, 'completed');
       assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
@@ -650,3 +677,45 @@ test('E4/E5 admission busy preserves staged evidence and the same event retries 
   assert.equal(f.db.prepare('SELECT state FROM staged_capture_evidence').get().state, 'released');
   assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
 });
+
+for (const trigger of ['end', 'lazy']) {
+  test(`E4 ${trigger} returns non-retryable pending outcome while failure recording stays locked`,
+  { timeout: 15000 }, async t => {
+    const { captureEpisodeMessages, endEpisode } = await import('../episode-capture.mjs');
+    let failNext = false;
+    const f = setup(t, { interpretEpisode: request => {
+      if (failNext) { failNext = false; throw Error('scripted failure'); }
+      return interpretation(request);
+    } });
+    const first = ok(await f.core.capture(input()));
+    ok(await f.core.capture(input(2)));
+    const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+    t.after(() => runtime.close());
+    let locked = false, failureWrites = 0;
+    const wrapped = { ...runtime,
+      failEpisodeDraft(...args) {
+        failureWrites++;
+        if (!locked) { f.db.exec('BEGIN IMMEDIATE'); locked = true; }
+        return runtime.failEpisodeDraft(...args);
+      },
+      releaseEpisodeWriter(...args) {
+        if (locked) { f.db.exec('ROLLBACK'); locked = false; }
+        return runtime.releaseEpisodeWriter(...args);
+      },
+    };
+    failNext = true;
+    const result = trigger === 'end'
+      ? await endEpisode({ runtime: wrapped, ns, model: f.model,
+        input: { client: 'synthetic', sessionId: 'private-session', generation: 'initial' } })
+      : await captureEpisodeMessages({ runtime: wrapped, ns, model: f.model,
+        input: input(1, 'next-session'), operations: captureOperations(runtime) });
+    const outcome = trigger === 'end' ? result.episode : result.lazyEpisode;
+    assert.deepEqual(outcome.error, { code: 'episode_outcome_pending', retryable: false });
+    assert.ok(failureWrites > 1 && failureWrites <= 21);
+    const state = runtime.episodeCaptureState(ns, { episodeId: first.episode.id });
+    assert.equal(state.unfinishedAttempt, true);
+    assert.equal(state.record.processing.errorCode, null);
+    assert.equal(counts(f.model), trigger === 'end' ? 2 : 3);
+    if (trigger === 'lazy') assert.equal(result.admission.status, 'completed');
+  });
+}

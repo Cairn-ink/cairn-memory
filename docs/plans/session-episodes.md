@@ -710,9 +710,12 @@ bounded by 250 ms and the remaining budget. Only a store locked for that whole
 budget strands an attempt for lease-expiry recovery. Admission proceeds when
 writable in this call or its immediate retry. After successful admission the
 owner tries one additional failure write, bounded to 250 milliseconds. A recorded
-outcome returns its finite code; another lock returns `episode_outcome_pending`.
-Lease-expiry recovery records `episode_timeout` without another paid call. Retryable admission busy preserves staged evidence and releases its own
-claim when writable. A locked cleanup is retried in-process; after restart its
+outcome returns its finite code. A no-op write rereads the stored processing code
+so concurrent recovery cannot be misreported. With no stored outcome, or another
+lock, capture, end and lazy paths return non-retryable `episode_outcome_pending`.
+Same-event replay does not finalize the consumed attempt; lease-expiry recovery
+records `episode_timeout` without another paid call. Retryable admission busy
+preserves staged evidence and releases its own claim when writable. A locked cleanup is retried in-process; after restart its
 ordinary admission lease bounds recovery.
 
 The heavy-day harness uses IPC barriers without clock advancement. Its failure

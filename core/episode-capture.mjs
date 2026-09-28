@@ -68,6 +68,19 @@ export function episodeRequest(model, snapshot) {
           ? [] : [index]) })) };
 }
 
+function recordDraftFailure(runtime, ns, failure) {
+  const written = runtime.failEpisodeDraft(ns, failure);
+  if (written?.revision !== undefined) return failure.code;
+  // Another owner may already have finalized the attempt during admission.
+  // Report its persisted outcome, rather than the code this owner tried to write.
+  try {
+    return runtime.episodeCaptureState(ns, { episodeId: failure.episodeId })
+      ?.record.processing.errorCode;
+  } catch (error) {
+    if (error.code !== 'episode_not_found') throw error;
+  }
+}
+
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken,
   trigger, watermark, staging, onPendingFailure }) {
   let owned, started = false, retryable = false;
@@ -112,7 +125,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       .includes(error.code) ? error.code : errorCode(error);
     retryable = code === 'storage_busy' && !started;
     const outcome = started && code === 'storage_busy' ? 'episode_failed' : code;
-    let pendingFailure = false;
+    let pendingFailure = false, reportedCode = outcome;
     if (owned && !retryable) {
       pendingFailure = true;
       // One immediate write and at most 20 retries within five seconds.
@@ -122,9 +135,9 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       for (let tries = 0; tries <= 20; tries++) {
         const retryAt = Math.min(deadline, performance.now() + 250);
         try {
-          runtime.failEpisodeDraft(ns, { ...owned, code: outcome,
+          reportedCode = recordDraftFailure(runtime, ns, { ...owned, code: outcome,
             busyTimeoutMs: Math.min(250, Math.max(0, deadline - performance.now())) });
-          pendingFailure = false;
+          pendingFailure = !reportedCode;
           break;
         } catch (failure) {
           if (!isStorageBusy(failure)) throw failure;
@@ -135,8 +148,8 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     }
     if (pendingFailure) onPendingFailure?.({ ...owned, code: outcome });
     return { id: episodeId, status: 'failed', error: pendingFailure
-      ? { code: 'episode_outcome_pending', retryable: true }
-      : { code: outcome, retryable } };
+      ? { code: 'episode_outcome_pending', retryable: false }
+      : { code: reportedCode, retryable } };
   } finally {
     try { if (owned && retryable) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
     catch (error) { if (!isStorageBusy(error)) throw error; }
@@ -226,8 +239,8 @@ export async function captureEpisodeMessages(options) {
       // Admission has made progress since finalization exhausted its budget.
       // Try once more without another model call or another retry loop.
       try {
-        runtime.failEpisodeDraft(ns, { ...pendingFailure, busyTimeoutMs: 250 });
-        episode.error = { code: pendingFailure.code, retryable: false };
+        const recorded = recordDraftFailure(runtime, ns, { ...pendingFailure, busyTimeoutMs: 250 });
+        episode.error = { code: recorded ?? 'episode_outcome_pending', retryable: false };
       } catch (error) {
         if (!isStorageBusy(error)) throw error;
       }
