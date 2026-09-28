@@ -43,6 +43,10 @@ const blank = label => ({ clientLabel: label, eventStart: null, eventEnd: null, 
 
 export function episodeMetadata(ns, row) {
   const record = JSON.parse(row.record);
+  // Closure guards and their proof stay in storage, outside public read fields.
+  delete record.nextStepClosedOrdinal;
+  delete record.stepClosure;
+  if (record.anchors) delete record.anchors.stepClosure;
   return { id: row.id, revision: row.revision, namespace: { ...ns, projectId: ns.projectId || null },
     sessionKey: row.session_key, client: row.client, firstReceivedAt: row.first_received_at,
     lastReceivedAt: row.last_received_at, updatedAt: row.updated_at, ...record,

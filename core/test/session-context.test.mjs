@@ -276,7 +276,7 @@ for(const action of ['completed','cancelled','replaced']) test(`E2/E10 capture i
   if(action==='replaced'){
     assert.notEqual(step.id,before.nextStep.id);assert.equal(step.text,'Review the replacement proposal');
   }else assert.equal(step.id,before.nextStep.id);
-  const closure=detail.episode.stepClosure;
+  const closure=JSON.parse(f.db.prepare('SELECT record FROM session_episodes WHERE id=?').get(current.id).record).stepClosure;
   assert.equal(closure.action,action);
   assert.ok(closure.anchors.every(anchor=>detail.sources.items.find(source=>source.id===anchor.sourceId)?.text===later.messages[0].content));
   const context=ok(f.core.sessionStartContext({namespace:ns}));
@@ -551,4 +551,100 @@ test('E2/E10 legacy closed records recover the journal boundary for fresh eviden
   const step = capturedDetail(f, first.id).episode.nextStep;
   assert.equal(step.status, 'open');
   assert.notEqual(step.id, before.nextStep.id);
+});
+
+for (const closure of ['interpreter', 'explicit', 'correction']) {
+  test(`E2/E9 public episode reads omit stored closure bookkeeping after ${closure} closure`, async t => {
+    const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: request => request.input.prior.nextStep
+      ? transitionInterpretation(request) : stepInterpretation(request) });
+    const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+    const before = capturedDetail(f, first.id).episode;
+    if (closure === 'interpreter') {
+      assert.equal(ok(await f.core.capture(nextCapture())).episode.status, 'interpreted');
+    } else if (closure === 'explicit') {
+      ok(f.core.closeEpisodeNextStep({ namespace: ns, episodeId: first.id, expectedRevision: before.revision,
+        stepId: before.nextStep.id, actionId: 'close-before-read', action: 'completed' }));
+    } else {
+      ok(f.core.correctEpisode({ namespace: ns, episodeId: first.id, expectedRevision: before.revision,
+        patch: { nextStep: null } }));
+    }
+    const row = f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(first.id);
+    const stored = JSON.parse(row.record);
+    assert.equal(typeof stored.nextStepClosedOrdinal, 'number');
+    if (closure === 'interpreter') {
+      assert.equal(stored.stepClosure.action, 'completed');
+      assert.ok(stored.anchors.stepClosure.length);
+    }
+    const detail = capturedDetail(f, first.id).episode;
+    const reads = [detail];
+    for (const timeBasis of ['event', 'receipt']) {
+      const since = timeBasis === 'event' ? detail.eventStart : detail.firstReceivedAt;
+      const end = timeBasis === 'event' ? detail.eventEnd : detail.lastReceivedAt;
+      const page = ok(f.core.listEpisodes({ namespace: ns, timeBasis, since,
+        until: new Date(Date.parse(end) + 1).toISOString() }));
+      assert.equal(page.items.length, 1);
+      reads.push(page.items[0]);
+    }
+    for (const read of reads) {
+      assert.equal(Object.hasOwn(read, 'nextStepClosedOrdinal'), false);
+      assert.equal(Object.hasOwn(read, 'stepClosure'), false);
+      assert.equal(Object.hasOwn(read.anchors, 'stepClosure'), false);
+      assert.deepEqual(Object.keys(read).sort(), Object.keys(before).sort());
+      for (const field of ['clientLabel', 'eventStart', 'eventEnd', 'eventTimeCoverage', 'interpretedAt',
+        'type', 'language', 'gist', 'outcome', 'nextStep', 'modelMetadata', 'semanticSupport', 'editor']) {
+        assert.deepEqual(read[field], stored[field], field);
+      }
+      assert.deepEqual(read.anchors, Object.fromEntries(['type', 'gist', 'outcome', 'nextStep']
+        .filter(field => Object.hasOwn(stored.anchors, field)).map(field => [field, stored.anchors[field]])));
+      assert.deepEqual(read.processing, { ...stored.processing, observed: row.observed, attempted: row.attempted, covered: row.covered });
+      assert.deepEqual({ id: read.id, revision: read.revision, namespace: read.namespace, sessionKey: read.sessionKey,
+        client: read.client, firstReceivedAt: read.firstReceivedAt, lastReceivedAt: read.lastReceivedAt, updatedAt: read.updatedAt },
+      { id: row.id, revision: row.revision, namespace: ns, sessionKey: row.session_key, client: row.client,
+        firstReceivedAt: row.first_received_at, lastReceivedAt: row.last_received_at, updatedAt: row.updated_at });
+    }
+    assert.deepEqual(f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(first.id), row);
+  });
+}
+
+test('E2/E10 legacy correction without a boundary or journal marker conservatively waits for later evidence', async t => {
+  const f = captureSetup(t, { countTokens: () => 1, interpretEpisode: stepInterpretation });
+  const first = ok(await f.core.capture(captureInput(1, 'current'))).episode;
+  const before = capturedDetail(f, first.id).episode;
+  ok(f.core.correctEpisode({ namespace: ns, episodeId: first.id, expectedRevision: before.revision,
+    patch: { nextStep: null } }));
+  f.db.prepare("UPDATE session_episodes SET record=json_remove(record,'$.nextStepClosedOrdinal') WHERE id=?").run(first.id);
+  f.db.prepare('DELETE FROM episode_attempts WHERE episode_id=? AND marker=?').run(first.id, 'step-identity:' + before.nextStep.id);
+  const legacy = capturedDetail(f, first.id).episode;
+  assert.equal(legacy.nextStep.status, 'closed');
+  assert.equal(legacy.editor.nextStep.pinned, true);
+  assert.equal(f.db.prepare("SELECT json_type(record,'$.nextStepClosedOrdinal') AS type FROM session_episodes WHERE id=?")
+    .get(first.id).type, null);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM episode_attempts WHERE episode_id=? AND marker=?')
+    .get(first.id, 'step-identity:' + before.nextStep.id).n, 0);
+  ok(f.core.releaseEpisodeCorrection({ namespace: ns, episodeId: first.id, expectedRevision: legacy.revision,
+    fields: ['nextStep'] }));
+  assert.equal(capturedDetail(f, first.id).episode.editor.nextStep.pinned, false);
+  const input = nextCapture('current', 'Please review the synthetic proposal as a new task.');
+  assert.equal(ok(await f.core.capture(input)).episode.status, 'interpreted');
+  const rejected = capturedDetail(f, first.id).episode;
+  assert.equal(rejected.processing.state, 'ready');
+  assert.equal(rejected.nextStep, null);
+  assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.returned, 0);
+  const boundary = f.db.prepare("SELECT json_extract(record,'$.nextStepClosedOrdinal') AS ordinal FROM session_episodes WHERE id=?")
+    .get(first.id).ordinal;
+  assert.equal(boundary, f.db.prepare('SELECT ordinal FROM episode_events WHERE episode_id=? AND event_id=?')
+    .get(first.id, input.eventId).ordinal);
+  const calls = counts(f.model);
+  ok(await f.core.capture(input));
+  assert.equal(counts(f.model), calls);
+  assert.deepEqual(capturedDetail(f, first.id).episode, rejected);
+  const fresh = captureInput(3, 'current');
+  fresh.episodeContext.origin = 'precompact';
+  assert.equal(ok(await f.core.capture(fresh)).episode.status, 'interpreted');
+  const step = capturedDetail(f, first.id).episode.nextStep;
+  assert.equal(step.status, 'open');
+  assert.notEqual(step.id, before.nextStep.id);
+  assert.equal(ok(f.core.sessionStartContext({ namespace: ns })).groups.nextSteps.items[0].nextStep.id, step.id);
+  assert.equal(f.db.prepare("SELECT json_extract(record,'$.nextStepClosedOrdinal') AS ordinal FROM session_episodes WHERE id=?")
+    .get(first.id).ordinal, boundary);
 });

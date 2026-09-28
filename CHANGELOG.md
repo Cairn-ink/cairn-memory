@@ -8,8 +8,10 @@
   the newest open step, exact counting, group budgets and final freshness checks.
 - Add guarded explicit step closure/replay and source-anchored interpreter
   completion, cancellation and replacement using request-local step references.
-  Closed steps are omitted from prior context; repeated text with new evidence
-  creates a new identity, and explicit closure permits later unpinned proposals.
+  Closed steps are omitted from prior context. Any later proposal, regardless of
+  wording, needs evidence received after closure and creates a new identity.
+  Explicit closure preserves an existing correction pin without adding one.
+  Public episode reads omit internal closure boundaries and proof bookkeeping.
 - Eagerly migrate stores to schema v17 with four read indexes and no table or
   column changes. Older openers refuse the new version.
 

@@ -445,7 +445,6 @@ episode JSON record, including interpreter closure and explicit closure/correcti
 This boundary survives drafts with a null step. No table or schema version changes.
 A supported proposal becomes a new open step with a new ID; older evidence yields
 `nextStep:null` without failing the draft. A legacy closed record without this field
-recovers the equivalent receipt boundary
-from its finished step-identity journal marker. If that marker is unavailable,
-it conservatively establishes a boundary at its next draft. These are provenance
-rules, not semantic judgments about recurrence.
+recovers the equivalent receipt boundary from its finished step-identity journal
+marker. If that marker is unavailable, it conservatively establishes a boundary
+at its next draft. These are provenance rules, not semantic judgments about recurrence.
