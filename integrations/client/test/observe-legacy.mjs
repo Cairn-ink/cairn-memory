@@ -146,10 +146,12 @@ export async function observeHosted(pluginRoot) {
     await writeFile(join(dataDir, 'project-key'), `${key}\n`, { mode: 0o600 });
     const record = (content, index) => JSON.stringify({ type: index % 2 ? 'assistant' : 'user',
       ...(index % 3 ? { uuid: `synthetic-${index}` } : {}), message: { content } }) + '\n';
+    // Tool-result blocks sit on assistant rows only: a user row carrying one is a
+    // tool result, which the 0.1.1 D1 privacy exception excludes as a whole.
     const rows = Array.from({ length: 25 }, (_, index) => record(index === 0 ?
       `${'🙂'.repeat(9999)}abc api_token=synthetic-secret` :
       [{ type: 'text', text: `Synthetic ${index} api_token=synthetic-secret 中文` },
-        { type: 'tool_result', content: 'EXCLUDED_TOOL_CANARY' }], index));
+        ...(index % 2 ? [{ type: 'tool_result', content: 'EXCLUDED_TOOL_CANARY' }] : [])], index));
     await writeFile(transcript, '\nmalformed\n' + rows.join('') + '{"partial":');
     const input = { session_id: session, transcript_path: transcript, cwd: '/synthetic/project',
       prompt: '  api_token=synthetic-secret 中文 🙂  ' };

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
+
+- The Claude Code plugin no longer sends a user-role record that Claude Code
+  marks as meta (local-command caveats, `[Image: source: …]` notes), a
+  compaction summary, a record that carries a tool result (the whole record), or
+  one whose text starts with a Claude Code wrapper (slash-command, local-command,
+  bash-mode, image-source, system-reminder, prompt-submit-hook or
+  task-notification). A `promptSource` that marks a submitted prompt keeps it,
+  whatever its text starts with. Typed prompts, assistant text, redaction,
+  bounds, message ids and wire session ids are unchanged.
+- Batches keep 0.1.0's boundaries and event ids, which are cut from every record
+  0.1.0 would have parsed. Each batch sends only the records 0.1.1 keeps, and a
+  batch or window with none completes without a request. A window 0.1.0 queued
+  before the upgrade is handled the same way. As before, it is retried on later
+  capture hooks until acknowledged, and no attempt sends a withheld record.
+  Nothing 0.1.0 already delivered is removed, and a request it had already sent
+  may still complete.
+- This is the second explicit D1 exception in `docs/plans/codex-client.md`
+  (decided 2026-09-29). Reconstructed synthetic fixtures and one interactive
+  synthetic session on Claude Code 2.1.283 verified it; see
+  `docs/limitations.md` for what that evidence does not cover.
+
 ## Unreleased — offline long-history stage gate
 
 - Add a maintainer-only, source-free synthetic gate that traces public capture,

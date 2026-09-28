@@ -15,7 +15,7 @@ The plugin has no npm dependencies. It needs the Node.js runtime already require
 ## Privacy controls
 
 - Automatic capture starts only after explicit plugin installation and is on by default.
-- Only textual user and assistant message blocks are allowlisted.
+- Only textual user and assistant message blocks are allowlisted. From 0.1.1, user-role records that Claude Code writes itself are not sent. That covers meta records (local-command caveats, image-source notes), compaction summaries, records carrying a tool result, and text that starts with a Claude Code wrapper (slash-command, local-command or bash-mode output, and similar). This includes retries of a window 0.1.0 had queued before the upgrade. Anything 0.1.0 already delivered stays with the service. Assistant text is unchanged. Details and limits are in the repository's `docs/privacy.md`.
 - Supported credential shapes are replaced locally with `[REDACTED]` in capture text and automatic recall queries before transmission; unrecognized secrets may remain.
 - Automatic recall sends the redacted current prompt, bounded to the protocol query limit, to the configured service.
 - Project paths are hashed locally into an opaque scope id.

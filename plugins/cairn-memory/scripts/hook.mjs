@@ -9,7 +9,7 @@ import {
   readCaptureCursor,
   writeCaptureCursor,
 } from "../lib/capture-cursor.mjs";
-import { captureEventId, transcriptMessages } from "../lib/transcript.mjs";
+import { captureEventId, transcriptWindow } from "../lib/transcript.mjs";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
 import {
@@ -217,8 +217,10 @@ async function captureLocked(hookInput, statePath, generation) {
   const lastNewline = slice.lastIndexOf(0x0a);
   if (lastNewline < 0) return;
   const consumed = slice.subarray(0, lastNewline + 1);
-  const messages = transcriptMessages(consumed.toString("utf8"), hookInput.session_id);
-  if (messages.length === 0) {
+  // Batches keep 0.1.0's boundaries and event ids, including for a window 0.1.0
+  // froze before an upgrade; only messages 0.1.1 keeps are ever sent.
+  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id);
+  if (!window.some((message) => !message.withheld)) {
     await writeCaptureCursor(statePath, {
       offset: offset + consumed.length,
       generation,
@@ -241,8 +243,13 @@ async function captureLocked(hookInput, statePath, generation) {
   }
 
   const projectId = await opaqueProjectId(dataDir, hookInput.cwd);
-  for (let index = 0; index < messages.length; index += 24) {
-    const batch = messages.slice(index, index + 24);
+  for (let index = 0; index < window.length; index += 24) {
+    const batch = window.slice(index, index + 24);
+    const messages = batch
+      .filter((message) => !message.withheld)
+      .map(({ id, role, content }) => ({ id, role, content }));
+    // A batch of machine records only has nothing to send; it completes as is.
+    if (messages.length === 0) continue;
     const started = await startIfActive(dataDir, generation, () =>
       post(
         "/api/memory/capture",
@@ -251,7 +258,7 @@ async function captureLocked(hookInput, statePath, generation) {
           event_id: captureEventId(hookInput.session_id, batch),
           session_id: hookInput.session_id,
           project_id: projectId,
-          messages: batch,
+          messages,
         },
         25_000,
       ),

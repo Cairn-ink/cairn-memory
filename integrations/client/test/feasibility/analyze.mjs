@@ -7,7 +7,7 @@ import { transcriptMessages } from '../../../../plugins/cairn-memory/lib/transcr
 import { canaryHits, canaryTable, plantedCheck } from './lib/canaries.mjs';
 import { readLedger } from './lib/ledger.mjs';
 import { parseTranscript } from './lib/parsers.mjs';
-import { expectedSourcePaths, ownerLaunch, verifyPlainEntry } from './lib/source-access.mjs';
+import { expectedSourcePaths, ownerLaunch, readOwnedSource } from './lib/source-access.mjs';
 
 const ROOT = process.env.F0_RUN_ROOT ?? '/tmp/f0-tmp/f0-run';
 const config = JSON.parse(readFileSync(join(ROOT, 'config.json'), 'utf8'));
@@ -25,17 +25,25 @@ const c = config.canaries;
 const CANARIES = canaryTable(c);
 const hits = text => canaryHits(CANARIES, text);
 
-/** The run's own sources: exact paths derived from ledger ownership, verified like any read. */
+/**
+ * The run's own sources: exact paths derived from ledger ownership, each read
+ * like any other through `readOwnedSource`. An absent or refused path is skipped.
+ */
 async function ownedTranscripts(run) {
   const sessionId = run.host === 'claude' ? run.launch?.sessionId : run.binding?.threadId;
   if (!sessionId) return [];
   const owner = ownerLaunch(ledger, run.host, sessionId);
   if (!owner.run) return [];
-  const paths = [];
+  const transcripts = [];
   for (const path of expectedSourcePaths(run.host, process.env.HOME, owner.run.launch, sessionId)) {
-    if ((await verifyPlainEntry(path, 'file')).ok) paths.push(path);
+    let text = '';
+    try {
+      text = await readOwnedSource({ host: run.host, sessionId, path, cwd: owner.run.launch.cwd, ledger,
+        home: process.env.HOME });
+    } catch { continue; }
+    if (text) transcripts.push({ path, text });
   }
-  return paths;
+  return transcripts;
 }
 
 function recordKind(host, record) {
@@ -50,9 +58,7 @@ function recordKind(host, record) {
   return [record?.type, p.type, p.role, p.item?.type].filter(Boolean).join('/');
 }
 
-function transcriptSummary(host, path) {
-  if (!path || !existsSync(path)) return { exists: false };
-  const text = readFileSync(path, 'utf8');
+function transcriptSummary(host, text) {
   const kinds = {};
   const canaryKinds = {};
   for (const line of text.split('\n').filter(Boolean)) {
@@ -77,10 +83,9 @@ function transcriptSummary(host, path) {
 }
 
 /** Windows of host-generated compaction summary text, used to prove it is never delivered. */
-function compactionWindows(host, path) {
-  if (!path || !existsSync(path)) return [];
+function compactionWindows(host, transcript) {
   const windows = [];
-  for (const line of lines(path)) {
+  for (const line of transcript.split('\n').filter(Boolean)) {
     let record;
     try { record = JSON.parse(line); } catch { continue; }
     let text = '';
@@ -133,10 +138,9 @@ function hostOutput(run) {
   return out;
 }
 
-function codexRateLimits(path) {
-  if (!path || !existsSync(path)) return null;
+function codexRateLimits(transcript) {
   const found = [];
-  for (const line of lines(path)) {
+  for (const line of transcript.split('\n').filter(Boolean)) {
     const record = JSON.parse(line);
     if (record.type === 'event_msg' && record.payload?.type === 'token_count') {
       const limits = record.payload.rate_limits;
@@ -217,9 +221,9 @@ for (const run of ledger.runs) {
   const hookConfinement = [...new Set(stepEvents.filter(e => e.confinement).map(e => `seccomp_filters=${e.confinement.Seccomp_filters}`))];
   const output = hostOutput(run);
   const capturedRoles = captureBodies.flatMap(b => JSON.parse(b.raw).messages.map(m => m.role));
-  const summaryWindows = transcripts.flatMap(path => compactionWindows(run.host, path));
-  const summaries = transcripts.map(path => ({ path, ...transcriptSummary(run.host, path),
-    ...(run.host === 'codex' ? { rateLimits: codexRateLimits(path) } : {}) }));
+  const summaryWindows = transcripts.flatMap(({ text }) => compactionWindows(run.host, text));
+  const summaries = transcripts.map(({ path, text }) => ({ path, ...transcriptSummary(run.host, text),
+    ...(run.host === 'codex' ? { rateLimits: codexRateLimits(text) } : {}) }));
   // Zero delivery hits only count for canaries this step actually planted in its own source.
   const found = new Set(summaries.flatMap(summary => Object.keys(summary.canaryKinds ?? {})));
   if (summaryWindows.length) found.add('compaction_summary_text');

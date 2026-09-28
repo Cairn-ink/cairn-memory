@@ -1,26 +1,25 @@
 // Candidate allowlist parsers under test. They are harness evidence for F0,
 // not the shipped CX-3 parser. Each returns { messages, excluded } where
 // excluded counts reasons only, never text.
+import { machineUserRecord } from '../../../../../plugins/cairn-memory/lib/transcript.mjs';
 
 const count = (excluded, reason) => { excluded[reason] = (excluded[reason] ?? 0) + 1; };
-
-// Claude Code writes machine-injected user-role wrappers into the transcript.
-const CLAUDE_INJECTED_PREFIXES = ['<system-reminder>', '<command-name>', '<command-message>',
-  '<command-args>', '<local-command-stdout>', '<local-command-stderr>', '<local-command-caveat>',
-  '<bash-input>', '<bash-stdout>', '<bash-stderr>', '<user-prompt-submit-hook>', '<task-notification>'];
 
 function claudeRecord(record, excluded) {
   if (record?.type !== 'user' && record?.type !== 'assistant') return count(excluded, `type:${record?.type ?? 'none'}`);
   if (record.isSidechain) return count(excluded, 'sidechain');
+  // Meta and compaction-summary records are excluded whatever their role. The
+  // plugin (D1) keeps 0.1.0's assistant parse, so this is the one place the
+  // harness stays stricter than the plugin.
   if (record.isMeta) return count(excluded, 'meta');
   if (record.isCompactSummary) return count(excluded, 'compact-summary');
+  // Machine-generated user records use the released plugin's rule (0.1.1), so
+  // the harness and the plugin exclude the same user records.
+  const machine = record.type === 'user' ? machineUserRecord(record) : null;
+  if (machine) return count(excluded, machine);
   if (record.isVisibleInTranscriptOnly) return count(excluded, 'transcript-only');
   const message = record.message;
   if (message?.role !== record.type) return count(excluded, 'role-mismatch');
-  if (record.type === 'user' && record.toolUseResult !== undefined) return count(excluded, 'tool-result');
-  // 2.1.283 headless evidence: submitted prompts carry promptSource/turnOrigin;
-  // command wrappers/output, caveats, summaries and image-source notes do not.
-  if (record.type === 'user' && typeof record.promptSource !== 'string') return count(excluded, 'user-without-prompt-source');
   if (record.type === 'assistant' && (message.model === '<synthetic>' || record.isApiErrorMessage)) {
     return count(excluded, 'synthetic-assistant');
   }
@@ -29,10 +28,6 @@ function claudeRecord(record, excluded) {
   const texts = [];
   for (const block of blocks) {
     if (block?.type !== 'text' || typeof block.text !== 'string') { count(excluded, `block:${block?.type ?? 'none'}`); continue; }
-    const trimmed = block.text.trimStart();
-    if (record.type === 'user' && CLAUDE_INJECTED_PREFIXES.some(prefix => trimmed.startsWith(prefix))) {
-      count(excluded, 'injected-wrapper'); continue;
-    }
     texts.push(block.text);
   }
   const text = texts.join('\n').trim();

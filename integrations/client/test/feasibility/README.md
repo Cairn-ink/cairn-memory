@@ -49,7 +49,12 @@ target, not local automatic capture.
   - automatic memory is not paused;
   - it is a regular, non-symlink file owned by this user under a non-symlinked parent.
 
-  Workers then read through one `O_NOFOLLOW` handle whose inode must match.
+  Workers, analysis and the interactive driver then open it component by component
+  from `/`. Each directory is opened with `O_DIRECTORY | O_NOFOLLOW` relative to the
+  handle already held (through `/proc/self/fd/<n>/<name>`, Linux's `openat` for
+  Node), and the file with `O_NOFOLLOW` relative to its parent. So no swap of the file
+  or any parent, at any point after the checks, can redirect the read. The open
+  handle's owner and inode must match what was authorized.
 - **Cleanup** plans from the ledger alone, re-verifies each path before `unlink`, and
   only `rmdir`s empty directories. Hook events are never read.
 - **Supervision.** It starts at spawn. SIGINT, SIGTERM and SIGHUP are forwarded to
@@ -71,8 +76,9 @@ target, not local automatic capture.
 | `core-server.mjs` | Loopback server with hosted-shaped endpoints over one temporary `core/` store and the scripted model in `lib/scripted-model.mjs`; records every received body. |
 | `fake-responses.mjs` | Scripted Responses provider for zero-quota Codex steps. Records header names only, never values. |
 | `analyze.mjs` | Writes `results.json`: canary hits, record kinds, parser replays, hook matrix, trace summary, quota-event schema and timings. Exits 1 on a missing canary value, an unplanted required canary, or any leak: delivered bodies, recall, state or checked host output. |
+| `interactive-claude.mjs` | One gated, ledgered interactive Claude session in a private tmux server (its own `-L` socket and no tmux configuration, targeted by the session id it reports), used to verify the 0.1.1 transcript filter. Signal handlers and the run deadline, a timer, are installed before launch. Every tmux call is an async client with its own timeout that kills it. The deadline, a signal or a failed ledger write after launch tears down the host's process group and then the private server, escalating to SIGKILL. That holds even while a check, a tmux call or the launch callback is pending, because the teardown exists before anything is spawned. The pane records its own pid, so a launch whose tmux client stalls can still be stopped. Every transcript read goes through `readOwnedSource`; `cleanup` removes its host files through the ledger. |
 | `cleanup.mjs` | Dry run by default; `--apply` removes only ledger-owned session files. |
-| `lib/` | `ledger`, `source-access`, `cleanup-plan`, `preflight`, `toml-hooks`, `supervise` and `canaries` hold the rules above; `core-http` records bodies and answers a handler failure with `harness_error` only, keeping its message in the local record; `parsers`, `common` and `scripted-model` support the probes. |
+| `lib/` | `ledger`, `source-access`, `cleanup-plan`, `preflight`, `toml-hooks`, `supervise`, `private-tmux` and `canaries` hold the rules above; `core-http` records bodies and answers a handler failure with `harness_error` only, keeping its message in the local record; `parsers`, `common` and `scripted-model` support the probes. |
 | `selftest/` | Offline tests of those rules with in-memory or test-owned filesystems and fake hosts. |
 
 ## Offline self-tests
