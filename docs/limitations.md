@@ -1,5 +1,30 @@
 # Known limitations
 
+The [official six-type indexed-evidence pilot](evidence/indexed-evidence-official-six.md)
+shows two distinct evidence gaps. Its multi-session case completed 52 capture
+batches and admitted 236 cards, yet recalled no cards or receipts; a subsequent
+read-only audit found some relevant exact source turns in retained receipts.
+The temporal case completed 44 batches and admitted 213 cards, but its only
+selected receipt lacked the target event and time. A read-only source-binding
+audit found the exact target turn in the prepared input and no receipt for its
+capture message, while adjacent-turn bindings had matching receipts. This places
+that exact-source loss at or before durable retention, without identifying the
+extractor's choice or proving the information absent from every paraphrase.
+The same audit mapped 601 of 950 unique planned source windows to retained
+receipts in the multi-session case and 558 of 919 in the temporal case;
+349 and 361 windows respectively were not retained. Every retained receipt
+mapped to a planned window. These are source-retention counts under selective
+admission, not relevance or quality scores; missing windows alone are not defects.
+Neither case had a card with more than four receipts, so a fifth-receipt preview
+cutoff cannot explain these outcomes. The run retained no candidate, select or
+rank frames, so the multi-session case's first retrieval-loss stage remains
+unknown. A completed capture batch and a full source-window input catalog do
+not imply every source window was admitted. Recall's `coverage: complete` describes eligible-card
+traversal, not retention of all submitted windows or semantic relevance.
+[Offline synthetic diagnostics](plans/indexed-recall-loss.md)
+show these distinctions mechanically; they do not repair the paid cases or
+measure real-model retrieval quality.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
