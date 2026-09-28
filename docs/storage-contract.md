@@ -204,6 +204,12 @@ throw instead). They never expose raw database or provider errors.
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
 | `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
+A local SQLite busy/locked error returns retryable `storage_busy`. A draft
+reservation is consumed only immediately before calling the interpretation port,
+or on a terminal preparation failure. A lock before that point spends no attempt
+and records no permanent gap. If cleanup is also blocked, an unstarted reservation
+can be recovered after its 125-second lease expires, including after restart.
+
 An admission with a live admission lease can finish after its session writer
 expires. Deletion, forgetting, explicit discard and project stop remain closed
 fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
@@ -241,8 +247,9 @@ Terminal model-validation/source failures have explicit outcome/code columns;
 transient or unknown failures release the owned claim and allow the same action
 to retry. Busy cleanup is retried by its in-process owner with the original token;
 after a crash, a new process may reclaim the action once its persisted 125-second
-admission lease expires. No in-memory cleanup entry is required for recovery. Completed actions replay
-without model calls. Unknown errors retain the ordinary `storage_error` label.
+admission lease expires. No in-memory cleanup entry is required for recovery.
+Completed actions replay without model calls. Unknown errors retain the ordinary
+`storage_error` label.
 
 `getEpisode` includes `keepActions:{items,nextCursor,exhausted}`. Supply `keepLimit`
 (default 20, maximum 50) and `keepCursor` to page all actions by creation ordinal.

@@ -451,10 +451,48 @@ test('E8 keep cleanup recognizes SQLite primary and extended busy/locked codes o
   const { createEpisodeStorage } = await import('../episode-storage.mjs');
   const kept = { key: { eventId: 'synthetic-action' } };
   for (const errcode of [5, 6, 261, 262]) {
-    const store = createEpisodeStorage({ db: { exec() { throw Object.assign(Error('synthetic lock'), { errcode }); } } });
+    const store = createEpisodeStorage({ db: { exec() { throw Object.assign(Error('synthetic lock'), { code: 'ERR_SQLITE_ERROR', errcode }); } } });
     assert.doesNotThrow(() => store.failKeep(ns, kept, 'storage_busy'));
   }
-  const error = Object.assign(Error('unclassified failure'), { code: 'SQLITE_BUSY' });
-  const store = createEpisodeStorage({ db: { exec() { throw error; } } });
-  assert.throws(() => store.failKeep(ns, kept, 'storage_error'), value => value === error);
+  for (const metadata of [{ code: 'SQLITE_BUSY' }, { code: 'storage_busy' }, { errcode: 5 },
+    { code: 'ERR_SQLITE_ERROR', errcode: 19 }]) {
+    const error = Object.assign(Error('unclassified failure'), metadata);
+    const store = createEpisodeStorage({ db: { exec() { throw error; } } });
+    assert.throws(() => store.failKeep(ns, kept, 'storage_error'), value => value === error);
+  }
 });
+
+for (const boundary of ['claimEpisodeDraft', 'snapshot-1', 'snapshot-2', 'snapshot-3', 'startEpisodeAttempt']) {
+  test(`E3/E5 a held lock at ${boundary} spends no draft allowance or model call`, { timeout: 15000 }, async t => {
+    const { captureEpisodeMessages, endEpisode } = await import('../episode-capture.mjs');
+    const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+    t.after(() => runtime.close());
+    let snapshots = 0, locked = false;
+    const wrapped = { ...runtime };
+    for (const method of ['claimEpisodeDraft', 'episodeDraftSnapshot', 'startEpisodeAttempt']) {
+      wrapped[method] = (...args) => {
+        const current = method === 'episodeDraftSnapshot' ? `snapshot-${++snapshots}` : method;
+        if (!locked && current === boundary) {
+          locked = true; f.db.exec('BEGIN IMMEDIATE');
+          try { return runtime[method](...args); }
+          finally { f.db.exec('ROLLBACK'); }
+        }
+        return runtime[method](...args);
+      };
+    }
+    await assert.rejects(captureEpisodeMessages({ runtime: wrapped, ns, model: f.model, input: input() }), { code: 'storage_busy' });
+    assert.equal(locked, true); assert.deepEqual(f.model.calls, []);
+    assert.equal(f.db.prepare('SELECT attempted FROM session_episodes').get().attempted, 0);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 0);
+    assert.deepEqual(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events').get().gap_reasons), []);
+    assert.equal(f.db.prepare('SELECT state FROM admission_claims').get().state, 'reserved');
+    // The end path exposes the same retryable local error without laundering it.
+    locked = false; snapshots = 0;
+    const ended = await endEpisode({ runtime: wrapped, ns, model: f.model,
+      input: { client: 'synthetic', sessionId: 'private-session', generation: 'initial', eventId: 'end' } });
+    assert.deepEqual(ended.episode.error, { code: 'storage_busy', retryable: true });
+    assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 0);
+    assert.equal(ok(await f.core.capture(input())).admission.status, 'completed');
+    assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
+  });
+}

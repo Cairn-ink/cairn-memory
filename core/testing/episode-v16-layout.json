@@ -299,6 +299,14 @@
       "notnull": 1,
       "dflt_value": "0",
       "pk": 0
+    },
+    {
+      "cid": 9,
+      "name": "started",
+      "type": "INTEGER",
+      "notnull": 1,
+      "dflt_value": "1",
+      "pk": 0
     }
   ],
   "episode_keep_actions": [

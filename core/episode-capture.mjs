@@ -8,7 +8,10 @@ import { fail, MemoryStoreError } from './validation.mjs';
 
 const system = readFileSync(new URL('./prompts/interpret-episode.md', import.meta.url), 'utf8');
 const promptDigest = createHash('sha256').update(system).digest('hex');
-const errorCode = error => error instanceof MemoryStoreError && error.code === 'model_timeout' ? 'episode_timeout'
+const isBusy = error => error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) &&
+  [5, 6].includes(error.errcode & 0xff);
+const errorCode = error => isBusy(error) ? 'storage_busy'
+  : error instanceof MemoryStoreError && error.code === 'model_timeout' ? 'episode_timeout'
   : error instanceof MemoryStoreError && ['context_budget_exceeded','invalid_model_output'].includes(error.code)
     ? error.code : 'episode_failed';
 
@@ -59,17 +62,23 @@ export function episodeRequest(model, snapshot) {
 }
 
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken, trigger, watermark, staging }) {
-  let owned;
+  let owned, retryable = false;
   try {
-    const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken, trigger, watermark });
+    const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken, trigger, watermark, deferAttempt: true });
     if (claim.consumed) return { id: episodeId, status: 'not-run', reason: 'consumed' };
     owned = { episodeId, token: claim.token };
     if (claim.skipReason) fail(claim.skipReason);
     if (staging === 'not-staged') fail('capacity');
     const snapshot = runtime.episodeDraftSnapshot(ns, owned);
     const planned = episodeRequest(model, snapshot);
+    let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
-      failureCode: 'episode_failed', validateFresh: () => runtime.episodeDraftSnapshot(ns, owned),
+      failureCode: 'episode_failed', validateFresh: () => {
+        runtime.episodeDraftSnapshot(ns, owned);
+        // callModel checks once during preparation and again immediately before
+        // invoking the port. Consume only at that second check, with no await.
+        if (++checks === 2) runtime.startEpisodeAttempt(ns, owned);
+      },
     });
     let committed;
     try {
@@ -85,9 +94,13 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       type: output.type.value, classificationTarget: snapshot.targetEventId };
   } catch (error) {
     const code = ['capacity', 'expired', 'missing_evidence', 'generation_conflict'].includes(error.code) ? error.code : errorCode(error);
-    try { if (owned) runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
-    return { id: episodeId, status: 'failed', error: { code, retryable: false } };
-  } finally { if (owned) runtime.settleEpisodeAttempt(ns, owned); }
+    retryable = code === 'storage_busy';
+    try { if (owned && !retryable) runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
+    return { id: episodeId, status: 'failed', error: { code, retryable } };
+  } finally {
+    try { if (owned) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
+    catch (error) { if (!isBusy(error)) throw error; }
+  }
 }
 
 async function auxiliary({ runtime, ns, model, episodeId, generation, trigger }) {
@@ -147,6 +160,7 @@ export async function captureEpisodeMessages(options) {
       registered.position - state.attempted >= state.draftEvery || snapshot.episodeContext.origin === 'precompact');
     if (due) episode = await interpret({ runtime, ns, model, episodeId, generation: batch.generation,
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging });
+    if (episode.error?.code === 'storage_busy') fail('storage_busy');
     state = runtime.episodeCaptureState(ns, { episodeId, client: batch.client, eventId: batch.eventId });
     const deadline = startAdmission?.();
     const claim = runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,

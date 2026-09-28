@@ -271,3 +271,121 @@ test('E3/E5 repeated abandoned ownership transfers fence every previous event', 
   assert.equal(counts(f.model, 'extract'), 3);
   assert.equal(f.db.prepare('SELECT observed FROM session_episodes').get().observed, 3);
 });
+
+for (const bypass of [false, true]) test(`E3/E4a/E5 ${bypass ? 'capacity-bypassed' : 'staged'} partial overlap preserves a reserved original's messages`, async t => {
+  const f = setup(t, { extract: ({ input }) => ({ items: input.messages.map(message => ({
+    content: message.content, kind: 'context', confidence: 0.5, sourceIndices: [message.index],
+  })) }) });
+  const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  if (bypass) for (let i = 0; i < 64; i++) {
+    runtime.reserveEpisodeBatch(ns, { ...batch(`protected-${i}`), client: 'quota' });
+  }
+  const { episodeSnapshot } = await import('../episode-input.mjs');
+  const original = input(1, 'overlap', { messages: [input(1).messages[0], input(2).messages[0]] });
+  const snapshot = episodeSnapshot(original);
+  const registered = runtime.reserveEpisodeBatch(ns, { clientLabel: 'Synthetic client', generation: 'initial',
+    client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
+    payloadDigest: snapshot.payloadDigest, messages: snapshot.messages, view: snapshot.view });
+  assert.equal(registered.staging, bypass ? 'not-staged' : 'staged');
+  assert.equal(f.db.prepare('SELECT state FROM admission_claims WHERE event_id=?').get(original.eventId).state, 'reserved');
+  // Restart after registration, before any admission lease.
+  runtime.close();
+  const successor = input(3, 'overlap', { messages: [input(1).messages[0], input(3).messages[0]] });
+  assert.equal(ok(await f.core.capture(successor)).admission.status, 'completed');
+  assert.equal(ok(await f.core.capture(original)).admission.status, 'completed');
+  assert.equal(ok(await f.core.capture(original)).admission.status, 'completed');
+  const extracted = f.model.calls.filter(call => call.method === 'extract')
+    .flatMap(call => call.request.input.messages.map(message => message.content));
+  assert.deepEqual(extracted.sort(), [1, 2, 3].map(n => input(n).messages[0].content).sort());
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memories').get().n, 3);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 2);
+  assert.equal(f.db.prepare('SELECT coverage_event_id FROM episode_messages WHERE episode_id=? AND message_id=?')
+    .get(registered.episodeId, 'message-1').coverage_event_id, original.eventId);
+});
+
+test('E3/E4a/E5 partial takeover of an abandoned bypass leaves the original replay its remaining message', async t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  for (let i = 0; i < 64; i++) runtime.reserveEpisodeBatch(ns, { ...batch(`protected-${i}`), client: 'quota' });
+  const { episodeSnapshot } = await import('../episode-input.mjs');
+  const original = input(1, 'takeover', { messages: [input(1).messages[0], input(2).messages[0]] });
+  const snapshot = episodeSnapshot(original);
+  const key = { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
+    clientLabel: 'Synthetic client', generation: 'initial', payloadDigest: snapshot.payloadDigest,
+    messages: snapshot.messages, view: snapshot.view };
+  const registered = runtime.reserveEpisodeBatch(ns, key);
+  const claim = runtime.claimAdmission(ns, { ...key, leaseMs: 125000 });
+  runtime.abandonAdmission(ns, { ...key, token: claim.token });
+  const successor = input(3, 'takeover', { messages: [input(1).messages[0], input(3).messages[0]] });
+  ok(await f.core.capture(successor)); ok(await f.core.capture(original));
+  const extracted = f.model.calls.filter(call => call.method === 'extract')
+    .map(call => call.request.input.messages.map(message => message.content));
+  assert.deepEqual(extracted, [[1, 3].map(n => input(n).messages[0].content), [input(2).messages[0].content]]);
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 2);
+  assert.equal(f.db.prepare('SELECT coverage_event_id FROM episode_messages WHERE episode_id=? AND message_id=?')
+    .get(registered.episodeId, 'message-1').coverage_event_id, successor.eventId);
+});
+
+test('E3/E5 busy draft cleanup lost at restart recovers an unspent attempt after lease expiry', { timeout: 30000 }, async t => {
+  const { captureEpisodeMessages } = await import('../episode-capture.mjs');
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  await assert.rejects(captureEpisodeMessages({ runtime: { ...runtime,
+    episodeDraftSnapshot(...args) {
+      f.db.exec('BEGIN IMMEDIATE');
+      return runtime.episodeDraftSnapshot(...args);
+    },
+  }, ns, model: f.model, input: input() }), error => error.code === 'ERR_SQLITE_ERROR' && (error.errcode & 0xff) === 5);
+  runtime.close(); f.db.exec('ROLLBACK');
+  assert.equal(f.db.prepare('SELECT started FROM episode_attempts').get().started, 0);
+  assert.equal(f.db.prepare('SELECT attempted FROM session_episodes').get().attempted, 0);
+  assert.deepEqual(f.model.calls, []);
+  f.db.exec('UPDATE episode_attempts SET expires_at=0; UPDATE session_episodes SET writer_expires_at=0');
+  const worker = child(t, f.path, 'normal');
+  const result = await stage(worker, 'result');
+  assert.equal(ok(result.result).admission.status, 'completed');
+  assert.deepEqual(result.calls, ['interpretEpisode', 'extract']);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 1);
+  assert.equal(f.db.prepare('SELECT started FROM episode_attempts').get().started, 1);
+  assert.equal(f.db.prepare('SELECT attempted FROM session_episodes').get().attempted, 1);
+  assert.deepEqual(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events').get().gap_reasons), []);
+});
+
+test('E3/E5 an expired unstarted lazy reservation remains eligible after restart', async t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  const registered = runtime.reserveEpisodeBatch(ns, batch('pending', 'Synthetic pending evidence', 'earlier'));
+  const writer = runtime.claimEpisodeWriter(ns, { episodeId: registered.episodeId, generation: 'initial' });
+  runtime.claimEpisodeDraft(ns, { episodeId: registered.episodeId, writerToken: writer.token,
+    generation: 'initial', trigger: 'lazy', watermark: 1, deferAttempt: true });
+  runtime.close();
+  f.db.exec('UPDATE episode_attempts SET expires_at=0; UPDATE session_episodes SET writer_expires_at=0');
+  const worker = child(t, f.path, 'normal');
+  const result = await stage(worker, 'result');
+  assert.equal(ok(result.result).lazyEpisode.status, 'interpreted');
+  assert.deepEqual(result.calls, ['interpretEpisode', 'interpretEpisode', 'extract']);
+  assert.deepEqual({ ...f.db.prepare("SELECT started,finished FROM episode_attempts WHERE marker='lazy'").get() },
+    { started: 1, finished: 1 });
+});
+
+test('E3/E5 a partial takeover records a gap for remaining failed staged evidence', async t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  t.after(() => runtime.close());
+  const { episodeSnapshot } = await import('../episode-input.mjs');
+  const original = input(1, 'failed-partial', { messages: [input(1).messages[0], input(2).messages[0]] });
+  const snapshot = episodeSnapshot(original);
+  const key = { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
+    clientLabel: 'Synthetic client', generation: 'initial', payloadDigest: snapshot.payloadDigest,
+    messages: snapshot.messages, view: snapshot.view };
+  const registered = runtime.reserveEpisodeBatch(ns, key);
+  const claim = runtime.claimAdmission(ns, { ...key, leaseMs: 125000 });
+  runtime.abandonAdmission(ns, { ...key, token: claim.token });
+  ok(await f.core.capture(input(3, 'failed-partial', { messages: [input(1).messages[0], input(3).messages[0]] })));
+  assertError(await f.core.capture(original), 'capture_evidence_closed');
+  assert.ok(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events WHERE event_id=?')
+    .get(original.eventId).gap_reasons).includes('missing_evidence'));
+  ok(await f.core.capture(input(2, 'failed-partial')));
+  const extracted = f.model.calls.filter(call => call.method === 'extract')
+    .flatMap(call => call.request.input.messages.map(message => message.content));
+  assert.deepEqual(extracted.sort(), [1, 2, 3].map(n => input(n).messages[0].content).sort());
+  assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 3);
+});

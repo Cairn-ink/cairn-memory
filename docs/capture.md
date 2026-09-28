@@ -412,7 +412,9 @@ Inspection exposes paged content-free keep actions in creation-ordinal order:
 and `keepCursor`. Coverage records exact source IDs, revision and source fence,
 independently of later passage replacement. Explicit keep has its own
 action ledger; existing batch policies remain unchanged.
-Transient/unknown failures release the admission claim for retry; only classified terminal failures replay without another model call.
+Transient/unknown failures release the admission claim for retry by resubmitting
+the same `actionId`; only classified terminal failures replay without another
+model call.
 
 Automatic procedural tags use the episode extraction/qualification prompt variants.
 Only preferences/instructions qualify, with 1–4 exact candidate anchors compiled to

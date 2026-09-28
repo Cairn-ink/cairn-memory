@@ -38,7 +38,7 @@
     "episode_identity": [
       {
         "singleton": 1,
-        "secret": "2d166cfd5bb2507b1e04942616b406fe29db856dae3940d782e198571eda187d"
+        "secret": "afe382c7ed4b5dfdd3dcd7129199856413dbc6c9b78aa4aaf5358b679e0d6391"
       }
     ],
     "episode_memory_links": [],
@@ -72,7 +72,7 @@
         "owner_id": "migration",
         "scope": "personal",
         "project_id": "",
-        "watermark": 1790553075330
+        "watermark": 1790556746985
       }
     ],
     "staged_capture_evidence": [
@@ -83,8 +83,8 @@
         "client": "synthetic",
         "event_id": "old",
         "state": "admitted",
-        "created_at": 1790553075304,
-        "expires_at": 1790639475304,
+        "created_at": 1790556746966,
+        "expires_at": 1790643146966,
         "payload": "{\"messages\":[{\"id\":\"message\",\"role\":\"user\",\"content\":\"Synthetic old evidence\"}],\"retainedSourceWindow\":{\"maxUnitsPerMessage\":800,\"truncatedMessageIndices\":[]}}",
         "payload_bytes": 159,
         "event_mode": "staged-v1",
@@ -95,8 +95,8 @@
     "store_metadata": [
       {
         "singleton": 1,
-        "store_id": "42426aa9-d3ed-4cdf-bde9-064b404e56ff",
-        "cursor_secret": "8ed10c09c6d75cce609484e629382a2f6ec4112e7e685749ef4f567d7c99dd68"
+        "store_id": "453c9418-7d3a-4792-8efb-2f8c14d56d44",
+        "cursor_secret": "1850cdcf7911eedaf311563ca91379bb071587ef40721f5044bba813007a8e39"
       }
     ],
     "suppressed": []

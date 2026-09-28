@@ -105,7 +105,8 @@ export function migrateVersion14(db) {
 /** v15 has no historical message ledger: only post-upgrade registrations enter it. */
 export function migrateVersion15(db) {
   if (db.prepare('PRAGMA foreign_keys').get().foreign_keys !== 1) fail('storage_error');
-  db.exec(`CREATE TABLE episode_messages (
+  db.exec(`ALTER TABLE episode_attempts ADD COLUMN started INTEGER NOT NULL DEFAULT 1 CHECK(started IN (0,1));
+    CREATE TABLE episode_messages (
     episode_id TEXT NOT NULL REFERENCES session_episodes(id),
     message_id TEXT NOT NULL CHECK(length(message_id) BETWEEN 1 AND 200),
     digest TEXT NOT NULL CHECK(${digestCheck('digest')}),

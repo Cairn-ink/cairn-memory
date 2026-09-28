@@ -510,6 +510,7 @@ export function createMemoryRuntime(input) {
     episodeCaptureState(ns, input) { ready(); return episodes.captureState(ns, input); },
     pendingEpisodeSession(ns, input) { ready(); return episodes.pendingSession(ns, input); },
     episodeDraftSnapshot(ns, input) { ready(); return episodes.draftSnapshot(ns, input); },
+    startEpisodeAttempt(ns, input) { ready(); return episodes.startAttempt(ns, input); },
     settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
     reserveEpisodeBatch(ns, input) { ready(); return episodes.reserveBatch(ns, input); },
