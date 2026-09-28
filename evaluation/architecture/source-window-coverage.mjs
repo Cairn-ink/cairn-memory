@@ -1,6 +1,7 @@
 import { captureSnapshot } from '../../core/capture-input.mjs';
 import { sourceWindowCatalog } from '../../core/source-windows.mjs';
 import { identifier } from '../../core/validation.mjs';
+import { types } from 'node:util';
 
 const SCOPE = 'capture-members-only/current-read';
 const MAX_WINDOWS = 64;
@@ -17,20 +18,22 @@ function unavailable(reason) {
 // Read only own data properties. Diagnostic input may contain hostile getters;
 // observing it must never execute more user code than the public call itself.
 function own(value, key) {
-  if (value === null || typeof value !== 'object') throw new Error('shape');
+  if (value === null || typeof value !== 'object' || types.isProxy(value)) throw new Error('shape');
   const descriptor = Object.getOwnPropertyDescriptor(value, key);
   if (!descriptor || !Object.hasOwn(descriptor, 'value')) throw new Error('shape');
   return descriptor.value;
 }
 
 function optional(value, key) {
-  if (value === null || typeof value !== 'object') throw new Error('shape');
+  if (value === null || typeof value !== 'object' || types.isProxy(value)) throw new Error('shape');
   return Object.hasOwn(value, key) ? own(value, key) : undefined;
 }
 
 function entries(value, maximum) {
-  if (!Array.isArray(value) || value.length > maximum) throw new Error('shape');
-  return Array.from({ length: value.length }, (_, index) => own(value, String(index)));
+  if (types.isProxy(value) || !Array.isArray(value)) throw new Error('shape');
+  const length = own(value, 'length');
+  if (!Number.isSafeInteger(length) || length > maximum) throw new Error('shape');
+  return Array.from({ length }, (_, index) => own(value, String(index)));
 }
 
 function safeInput(input) {

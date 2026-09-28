@@ -448,3 +448,30 @@ test('W4: mutated public response, input and read query cannot rebind the observ
   assert.equal(report.uniqueRetainedCount, 1);
   assert.equal(row.core.get({ namespace, memoryId: original.id }).ok, true);
 });
+
+test('W3: proxied input adds no observer property traps before exact public forwarding', async () => {
+  const { createIndexedSourceWindowObserver } = await import('../source-window-coverage.mjs');
+  const response = { ok: false, error: { code: 'synthetic_failure' } };
+  for (const proxiedField of ['namespace', 'message']) {
+    let descriptorTraps = 0;
+    const guarded = target => new Proxy(target, {
+      getOwnPropertyDescriptor(object, key) {
+        descriptorTraps++;
+        return Reflect.getOwnPropertyDescriptor(object, key);
+      },
+    });
+    const input = { namespace: proxiedField === 'namespace' ? guarded(namespace) : namespace,
+      client: 'synthetic', sessionId: 'one', eventId: 'one',
+      messages: [proxiedField === 'message'
+        ? guarded({ id: 'source', role: 'user', content: 'Synthetic source' })
+        : { id: 'source', role: 'user', content: 'Synthetic source' }] };
+    const observer = createIndexedSourceWindowObserver();
+    const result = await observer.capture({ capture(actual) {
+      assert.strictEqual(actual, input);
+      return response;
+    } }, input);
+    assert.strictEqual(result, response);
+    assert.equal(descriptorTraps, 0, proxiedField);
+    assert.equal(observer.finish({}).reason, 'invalid_input');
+  }
+});
