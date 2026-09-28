@@ -1,3 +1,5 @@
+import { exceedsRelationLimit } from './confirmation-schema.mjs';
+import { dropHeldWork } from './confirmation-storage.mjs';
 import { fail } from "./validation.mjs";
 
 // Match SQLite's BINARY ordering, including opaque IDs containing Unicode.
@@ -14,8 +16,7 @@ export function createConflictStorage({ db, activeRow, rawRow = activeRow, advan
   }
 
   function invalidateMemory(memoryId, { preserveHeld = false } = {}) {
-    if (!preserveHeld) db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? OR target_id=?').run(memoryId, memoryId);
-    if (!preserveHeld) db.prepare('DELETE FROM confirmation_supersessions WHERE previous_id=? OR replacement_id=?').run(memoryId, memoryId);
+    if (!preserveHeld) dropHeldWork(db, memoryId);
     db.prepare("DELETE FROM memory_conflicts WHERE left_memory_id = ? OR right_memory_id = ?")
       .run(memoryId, memoryId);
   }
@@ -50,7 +51,7 @@ export function createConflictStorage({ db, activeRow, rawRow = activeRow, advan
         for (const id of [memoryId, hint.memoryId]) {
           const degree = db.prepare(`SELECT count(*) AS n FROM memory_conflicts
             WHERE left_memory_id = ? OR right_memory_id = ?`).get(id, id).n;
-          if (degree > 5) fail("conflict_limit");
+          if (exceedsRelationLimit(degree, 0)) fail("conflict_limit");
         }
       }
     }
@@ -74,27 +75,25 @@ export function createConflictStorage({ db, activeRow, rawRow = activeRow, advan
 
   function restore(ns, memory) {
     const outcomes = [];
-    const held = db.prepare('SELECT * FROM confirmation_conflicts WHERE memory_id=? AND drop_reason IS NULL ORDER BY target_id').all(memory.id);
+    const held = db.prepare(`SELECT * FROM confirmation_conflicts WHERE memory_id=? AND status='pending' ORDER BY target_id`).all(memory.id);
     for (const hint of held) {
       const target = activeRow(ns, hint.target_id);
-      if (!target || target.revision !== hint.target_revision) {
-        db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? AND target_id=?').run(memory.id, hint.target_id);
+      if (!target) {
         outcomes.push({ memoryId: hint.target_id, status: 'dropped', reason: 'stale_evidence' });
         continue;
       }
-      const full = [memory.id, target.id].some(id => db.prepare(`SELECT count(*) n FROM memory_conflicts
-        WHERE left_memory_id=? OR right_memory_id=?`).get(id, id).n >= 5);
+      const full = [memory.id, target.id].some(id => exceedsRelationLimit(db.prepare(`SELECT count(*) n FROM memory_conflicts
+        WHERE left_memory_id=? OR right_memory_id=?`).get(id, id).n));
       if (full) {
         // Review must succeed even when another writer has filled a target's degree.
-        db.prepare("UPDATE confirmation_conflicts SET drop_reason='conflict_limit' WHERE memory_id=? AND target_id=?")
-          .run(memory.id, target.id);
         outcomes.push({ memoryId: target.id, status: 'dropped', reason: 'conflict_limit' });
         continue;
       }
       insertBatch(ns, [{ memoryId: memory.id, hints: [{ memoryId: target.id, expectedRevision: target.revision }] }], hint.source);
-      db.prepare('DELETE FROM confirmation_conflicts WHERE memory_id=? AND target_id=?').run(memory.id, target.id);
       outcomes.push({ memoryId: target.id, status: 'restored', reason: null });
     }
+    for (const result of outcomes) db.prepare('UPDATE confirmation_conflicts SET status=?,drop_reason=?,result=? WHERE memory_id=? AND target_id=?')
+      .run(result.status === 'restored' ? 'applied' : 'dropped', result.reason, JSON.stringify(result), memory.id, result.memoryId);
     return outcomes;
   }
 

@@ -136,12 +136,14 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         if (resolved.some(row => predecessors.has(row.replacement.id))) fail('invalid_ref');
         // Review holds only its dependent transitions. Preserve the existing
         // qualification fence for the independently eligible retirement set.
-        const held = resolved.filter(row => row.previous.review_state === 'awaiting' || row.replacement.review_state === 'awaiting');
+        // discover excludes awaiting predecessors; only the replacement can wait.
+        const held = resolved.filter(row => row.replacement.review_state === 'awaiting');
         const immediate = resolved.filter(row => !held.includes(row));
         for (const row of held) db.prepare(`INSERT INTO confirmation_supersessions
-          (previous_id,previous_revision,replacement_id,replacement_revision,receipt_ids)
-          VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`).run(row.previous.id, row.previous.revision,
-          row.replacement.id, row.replacement.revision, JSON.stringify(row.receiptIds));
+          (previous_id,previous_revision,replacement_id,replacement_revision,receipt_ids,previous_fingerprint,previous_receipt_ids)
+          VALUES(?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).run(row.previous.id, row.previous.revision,
+          row.replacement.id, row.replacement.revision, JSON.stringify(row.receiptIds), row.previous.fingerprint,
+          JSON.stringify(receipts(row.previous.id).map(receipt => receipt.id)));
         const qualified = immediate.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement));
         if (!qualified) for (const row of immediate) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
         reconciliation = outcome(qualified ? 'qualified_transition_required' : held.length ? 'confirmation_required' : reason,

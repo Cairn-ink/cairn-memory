@@ -20,7 +20,11 @@
   the held work and preserves its current predecessor. Explicit promotion also
   resolves held work, and recapture preserves existing evidence. Full conflict
   targets drop hints with a recorded reason instead of blocking review; typed
-  review outcomes expose transitions needing qualified evaluation.
+  review outcomes expose transitions needing qualified evaluation. Restating a
+  predecessor preserves held evidence too. Supersession overflow is recorded
+  without blocking review, and qualification hand-offs survive lost promotion
+  responses through durable outcomes and `listReviewTransitions`. Option-off
+  openers, including legacy remember, never return `reviewEffects`.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

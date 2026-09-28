@@ -1127,6 +1127,14 @@ CF-1.
   makes an invalidated shell readable again, not the rejected prose. The
   conservative rule remains because episode prose cannot reliably be split
   into confirmed and awaiting assertions.
+- **Awaiting predecessors are not reconciliation candidates.** If an awaiting
+  decision A is superseded by a later awaiting decision B, capture creates no
+  held supersession between them. Confirming both, in either order, leaves two
+  current decisions, even when they contradict each other. With review off,
+  reconciliation can retire A when admitting B. The review queue currently
+  cannot discover that missing transition; a separate reconciliation is needed
+  after review. Synthetic tests freeze this limitation rather than implying
+  that confirmation resolves every contradiction.
 - **Scope of evidence.** This is a 100% loss of episode context in one scripted
   fixture, not a measured frequency across real sessions or a model-quality
   result. Every session with at least one live awaiting decision has this cost.

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
+import { exceedsRelationLimit } from './confirmation-schema.mjs';
 import { fail } from './validation.mjs';
 
 export function decisionReviewOption(input) {
@@ -25,7 +26,8 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       if (row.review_state !== 'awaiting') fail('memory_not_awaiting');
       let result;
-      if (action === 'reject') result = forgetMutation(ns, row.id, input.expectedRevision);
+      if (action === 'reject') result = { ...forgetMutation(ns, row.id, input.expectedRevision),
+        reviewEffects: heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] } };
       else {
         if (row.currentness !== 'current') fail('memory_historical');
         const now = new Date().toISOString();
@@ -45,31 +47,58 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
   };
 }
 
+export function transitionResult(row, status, reason, predecessorRevision = row.previous_revision, replacementRevision = row.replacement_revision) {
+  return { predecessor: { memoryId: row.previous_id, revision: predecessorRevision },
+    replacement: { memoryId: row.replacement_id, revision: replacementRevision }, status, reason };
+}
+export function recordTransition(db, row, result) {
+  db.prepare('UPDATE confirmation_supersessions SET status=?,result=? WHERE previous_id=? AND replacement_id=?')
+    .run(result.status, JSON.stringify(result), row.previous_id, row.replacement_id);
+}
+export function dropHeldWork(db, memoryId, reason = 'stale_evidence') {
+  for (const row of db.prepare(`SELECT * FROM confirmation_supersessions
+    WHERE (previous_id=? OR replacement_id=?) AND status IN ('pending','unresolved')`).all(memoryId, memoryId)) {
+    recordTransition(db, row, transitionResult(row, 'dropped', reason));
+  }
+  for (const row of db.prepare(`SELECT * FROM confirmation_conflicts
+    WHERE (memory_id=? OR target_id=?) AND status='pending'`).all(memoryId, memoryId)) {
+    db.prepare("UPDATE confirmation_conflicts SET status='dropped',drop_reason=?,result=? WHERE memory_id=? AND target_id=?")
+      .run(reason, JSON.stringify({ memoryId: row.target_id, status: 'dropped', reason }), row.memory_id, row.target_id);
+  }
+}
+export function heldReviewEffects(db, memoryId) {
+  const transitions = db.prepare('SELECT result FROM confirmation_supersessions WHERE replacement_id=? AND result IS NOT NULL ORDER BY previous_id')
+    .all(memoryId).map(row => JSON.parse(row.result));
+  const conflicts = db.prepare('SELECT result FROM confirmation_conflicts WHERE memory_id=? AND result IS NOT NULL ORDER BY target_id')
+    .all(memoryId).map(row => JSON.parse(row.result));
+  return transitions.length || conflicts.length ? { transitions, conflicts } : undefined;
+}
+
 /** Shared by confirmation and explicit promotion, inside the caller's transaction. */
 export function createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage }) {
   return function resolveHeld(ns, row) {
-    const transitions = [];
-    const held = db.prepare('SELECT * FROM confirmation_supersessions WHERE replacement_id=? ORDER BY previous_id').all(row.id);
-    db.prepare('DELETE FROM confirmation_supersessions WHERE replacement_id=?').run(row.id);
+    const held = db.prepare("SELECT * FROM confirmation_supersessions WHERE replacement_id=? AND status='pending' ORDER BY previous_id").all(row.id);
     for (const transition of held) {
-      const previous = activeRow(ns, transition.previous_id);
+      const predecessor = activeRow(ns, transition.previous_id);
       const replacement = activeRow(ns, row.id);
-      const receiptIds = JSON.parse(transition.receipt_ids);
-      const refs = { previous: { memoryId: transition.previous_id, revision: transition.previous_revision },
-        replacement: { memoryId: replacement.id, revision: replacement.revision } };
-      if (!previous || previous.revision !== transition.previous_revision || previous.currentness !== 'current' ||
-          previous.review_state === 'awaiting' || receiptIds.some(id =>
-            !db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, row.id))) {
-        transitions.push({ ...refs, status: 'dropped', reason: 'stale_evidence' });
-        continue;
+      const evidenceExists = (ids, memoryId) => JSON.parse(ids).every(id =>
+        db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, memoryId));
+      let status = 'applied', reason = null;
+      // Awaiting predecessors are never reconciliation candidates. Receipt-only
+      // revisions preserve this proof; content identity and bound sources fence it.
+      if (!predecessor || predecessor.currentness !== 'current' || predecessor.fingerprint !== transition.previous_fingerprint ||
+          !evidenceExists(transition.previous_receipt_ids, transition.previous_id) || !evidenceExists(transition.receipt_ids, row.id)) {
+        status = 'dropped'; reason = 'stale_evidence';
+      } else if (exceedsRelationLimit(db.prepare('SELECT count(*) n FROM memory_supersessions WHERE replacement_memory_id=?').get(row.id).n)) {
+        status = 'dropped'; reason = 'supersession_limit';
+      } else if (supersessionStorage.requiresQualification(predecessor, replacement)) {
+        status = 'unresolved'; reason = 'qualified_transition_required';
       }
-      if (supersessionStorage.requiresQualification(previous, replacement)) {
-        transitions.push({ ...refs, status: 'unresolved', reason: 'qualified_transition_required' });
-        continue;
-      }
-      supersessionStorage.retire(ns, previous, replacement, receiptIds);
-      transitions.push({ ...refs, status: 'applied', reason: null });
+      const result = transitionResult(transition, status, reason, predecessor?.revision, replacement.revision);
+      recordTransition(db, transition, result);
+      if (status === 'applied') supersessionStorage.retire(ns, predecessor, replacement, JSON.parse(transition.receipt_ids));
     }
-    return { transitions, conflicts: conflictStorage.restore(ns, row) };
+    conflictStorage.restore(ns, row);
+    return heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] };
   };
 }

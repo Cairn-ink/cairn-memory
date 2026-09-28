@@ -1,6 +1,8 @@
 import { installIndexReaders } from './index-schema.mjs';
 
 export const CONFIRMATION_SCHEMA_VERSION = 18;
+export const RELATION_LIMIT = 5;
+export const exceedsRelationLimit = (existing, added = 1) => existing + added > RELATION_LIMIT;
 
 // Called inside the opener's schema transaction, including feature-off opens.
 export function migrateVersion17(db) {
@@ -15,12 +17,15 @@ export function migrateVersion17(db) {
     CREATE TABLE confirmation_supersessions (
       previous_id TEXT NOT NULL REFERENCES memories(id), previous_revision INTEGER NOT NULL,
       replacement_id TEXT NOT NULL REFERENCES memories(id), replacement_revision INTEGER NOT NULL,
-      receipt_ids TEXT NOT NULL, PRIMARY KEY(previous_id, replacement_id)
+      receipt_ids TEXT NOT NULL, previous_fingerprint TEXT NOT NULL, previous_receipt_ids TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','unresolved','applied','dropped')),
+      result TEXT, PRIMARY KEY(previous_id, replacement_id)
     ) STRICT;
     CREATE TABLE confirmation_conflicts (
       memory_id TEXT NOT NULL REFERENCES memories(id), memory_revision INTEGER NOT NULL,
       target_id TEXT NOT NULL REFERENCES memories(id), target_revision INTEGER NOT NULL,
-      source TEXT NOT NULL, drop_reason TEXT CHECK(drop_reason IS NULL OR drop_reason='conflict_limit'),
+      source TEXT NOT NULL, drop_reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','dropped')), result TEXT,
       PRIMARY KEY(memory_id, target_id)
     ) STRICT;
     CREATE VIEW review_hidden_episodes AS

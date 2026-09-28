@@ -344,7 +344,12 @@ qualification and other transitions await review, `qualified_transition_required
 takes precedence in `reason`, and `awaitingCount` reports the held transition
 count alongside it. These fields are preserved on completed-event replay.
 Confirm returns typed `reviewEffects.transitions` with actionable refs when held
-work needs `qualified_transition_required`, so the host can run the qualified path.
+work needs `qualified_transition_required`, so the host can run the qualified path. Unresolved transitions remain durable
+and are recoverable through review-enabled `listReviewTransitions`, including
+when an explicit promotion response is lost. Review caps held retirements at
+five and records any excess as `supersession_limit`; it does not cap held rows
+at capture time. Awaiting predecessors are excluded from candidates, so two
+successive awaiting decisions will both stay current if both are confirmed.
 
 An option-off opener recapturing onto an existing awaiting row can also return
 `confirmation_required`. It preserves the held evidence but cannot confirm or

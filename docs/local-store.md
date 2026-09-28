@@ -107,7 +107,9 @@ change their permissions. On Windows, restrict access using filesystem ACLs.
 | `store.close()` | Idempotent; subsequent scope operations fail |
 
 Returned records contain `id`, `content`, `kind`, `scope`, `projectId`, `origin`,
-`confidence`, `revision`, timestamps, and Source Receipts. This is an internal
+`confidence`, `revision`, timestamps, and Source Receipts. Legacy records never
+include `reviewEffects`, including when remember promotes an awaiting item.
+This is an internal
 JavaScript contract, **not an extension to the v0.1 HTTP schema**; adapters must
 map fields and enforce their own protocol.
 
@@ -269,7 +271,8 @@ and `get({includeAwaiting:true})`; model tools must not expose these switches.
 `confirm` and `reject` require an expected revision and durable action ID.
 `openMemoryStore` does not accept this option. Schema v18 eagerly adds
 `memories.review_state`, `confirmation_actions`, `confirmation_supersessions`,
-`confirmation_conflicts` (including its dropped-hint reason), and the
+`confirmation_conflicts` (with durable statuses/results and dropped-hint reasons),
+bound predecessor fingerprints and receipt IDs for held work, and the
 `review_hidden_episodes` view, and updates index eligibility/readers. See the
 [contract appendix](plans/confirmation-state.md) for replay, episode visibility,
 and the direct-statement provenance limitation.

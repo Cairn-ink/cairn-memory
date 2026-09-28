@@ -51,14 +51,16 @@ so cursors cannot cross visibility modes.
 
 Awaiting rows retain admission lineage, source receipts and episode links for
 lifecycle cleanup, but cannot be placed, classified, corrected, superseded,
-qualified-transitioned or used as rationale targets until resolved. Forget is
+qualified-transitioned or used as rationale targets until resolved. Awaiting
+predecessors are excluded from reconciliation, so confirming two successive
+awaiting decisions leaves both current; see the [limitation](../limitations.md#decision-confirmation-hides-whole-episode-context). Forget is
 still allowed, including forgetEpisode, which follows physical links and forgets
 awaiting descendants with suppression. Source snapshots exclude awaiting items.
 
-Ordered capture durably holds only supersessions whose endpoints await review;
+Ordered capture durably holds only supersessions whose replacement awaits review;
 independent transitions in the same batch apply immediately unless their set
 needs qualified evaluation. Confirm and explicit admit/remember promotion
-recheck the predecessor revision and held receipt identities, retire the
+recheck the predecessor content identity, currentness and bound receipts, retire the
 predecessor and write `memory_supersessions` in the same transaction as the
 review state, evidence and index changes. Confirm also records its action ledger
 in that transaction. Reject/forget drops the held work and leaves
@@ -70,26 +72,50 @@ Conflict insertion checks `review_state === 'awaiting'` explicitly and holds
 those hints durably; other missing or non-current rows still fail loudly.
 Confirmation and explicit promotion restore valid hints at the new revision.
 Held transitions and hints contain IDs/revisions and receipt IDs, not prose.
-Adding receipts through recapture preserves held work: a newer awaiting-item
-revision alone does not invalidate existing receipt evidence. Explicit promotion
-uses the same resolver as confirm, within its admission transaction. Content
-edits, missing bound receipts, forgetting or intervening predecessor retirement
-invalidate stale evidence; review never overwrites a changed predecessor.
+Restating either endpoint, adding receipts, and filing changes preserve held
+work. A newer predecessor or replacement revision alone does not invalidate its
+original evidence. Capture binds the predecessor's fingerprint and receipt IDs
+alongside the replacement receipt IDs. Review checks that identity, the bound
+receipts and currentness, not an exact predecessor revision. Content edits,
+missing receipts, forgetting and retirement invalidate work with a recorded
+`dropped/stale_evidence` outcome. No lifecycle path silently deletes a held row.
+The private tables retain content-free terminal outcomes as well as pending work.
 
-Review results expose `reviewEffects: {transitions, conflicts}`. Confirm always
-returns it; explicit `admit` and legacy `remember` return it only when promoting
-an awaiting row (including promotion through an option-off opener). Each
-transition has `previous` and `replacement` refs (`memoryId`, `revision`), a
-`status` (`applied`, `unresolved`, or `dropped`) and `reason` (null,
-`qualified_transition_required`, or `stale_evidence`). Qualified transitions are
-handed off in this typed result for the host to run the qualified path, never
-silently retired or discarded. Confirmation's action ledger preserves the
-outcome for replay. Conflicts identify the target `memoryId`, `status`
-(`restored` or `dropped`) and `reason` (null, `stale_evidence`, or `conflict_limit`).
-If either endpoint's conflict degree is full, restoration skips that hint rather
-than blocking review. `confirmation_conflicts.drop_reason` records the drop
-until endpoint invalidation/forgetting clears it; ordinary conflict insertion
-still enforces its hard limit.
+Review-enabled results expose `reviewEffects: {transitions, conflicts}`. Confirm
+and reject always return it; `admit` returns stored outcomes on promotion and
+subsequent admissions of that memory. An unchanged admit replay therefore
+recovers the same effects even after a lost response. These are durable row
+outcomes: a later qualified resolution or invalidation updates them. Confirm's
+action ledger separately preserves the exact original action result. Forgetting
+a replacement also returns its recorded effects when review is enabled.
+**Option-off openers never return `reviewEffects`**, including promotion through
+`openMemoryCore` without the option and every legacy `openMemoryStore.remember`.
+They still apply valid held work atomically and retain outcomes for an enabled
+opener to recover; all legacy record shapes remain unchanged.
+
+Each transition has `predecessor` and `replacement` refs (`memoryId`, `revision`),
+a `status` (`applied`, `unresolved`, or `dropped`) and `reason` (null,
+`qualified_transition_required`, `stale_evidence`, or `supersession_limit`).
+Qualified transitions remain durably `unresolved` on confirmation or promotion,
+including legacy remember; the qualified retirement path marks them applied,
+and invalidation records a drop. A review-enabled opener can recover them with
+`listReviewTransitions({namespace, limit?, cursor?})`, returning `transitions`,
+`nextCursor`, and `exhausted`. Its signed cursor binds namespace and page size;
+a namespace epoch change gives `cursor_stale`. The listing returns current
+endpoint revisions for the host's qualified-path revision checks. Hosts reserve
+this method for the person's review UI, not model tools. No adapter exposes it.
+
+Limits are enforced at review time, not by limiting captured held rows. Pending
+supersessions are processed in predecessor-ID order: apply up to the shared
+five-link limit and record remaining transitions as `dropped/supersession_limit`.
+Filling the last slot, including through the qualified path, also records a
+limit drop for any earlier unresolved hand-offs targeting that replacement.
+Conflicts use the same shared constant and capacity comparison. Their outcomes
+identify the target `memoryId`, `status` (`restored` or `dropped`) and `reason`
+(null, `stale_evidence`, or `conflict_limit`). A full endpoint drops the hint
+instead of blocking review. `confirmation_conflicts` retains both its result
+and drop reason; ordinary conflict insertion still enforces the hard limit.
+Neither conflict nor supersession capacity can fail confirm or promotion.
 
 For a mixed batch, `qualified_transition_required` takes precedence when the
 independent set needs qualification, with `awaitingCount` also reporting how
@@ -130,7 +156,8 @@ expires and no daily ask cap belongs in the core.
 ## Schema and parity
 
 Schema v18 adds review_state, the action ledger, `confirmation_supersessions`
-and `confirmation_conflicts`, eagerly on every open, including option-off opens. All DDL, index-reader replacement and version change
+and `confirmation_conflicts` with bound-evidence metadata, durable statuses and
+content-free outcome records, eagerly on every open, including option-off opens. All DDL, index-reader replacement and version change
 are transactional; any failure rolls back. v17 and older openers refuse v18.
 Index readers and rebuild eligibility exclude awaiting rows; promotion inserts
 into a published projection atomically even when it was previously absent.
@@ -164,23 +191,25 @@ workflows against the recorded base and this implementation with the option off.
 
 ## Verification record
 
-Commands use a worktree-local `TMPDIR` and synthetic scripted models.
+Commands use a worktree-local `TMPDIR` and synthetic scripted models. General
+checks and the full core suite run on Node 22.16; confirmation tests and all
+11 demos run on both Node 22.16 and 24.15.
 
 | Command | Result |
 | --- | --- |
-| `npm test` | Exit 0; 131 passed (Node 22.16) |
-| `npm run validate` | Exit 0 (Node 22.16) |
-| `npm run test:core` | Exit 0; 1,047 passed (Node 22.16) |
-| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0; 46 passed on each of Node 22.16 and 24.15 |
+| `npm test` | Exit 0; 131 passed |
+| `npm run validate` | Exit 0 |
+| `npm run test:core` | Exit 0; 1,066 passed |
+| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0 on both runtimes; 65 passed each |
 | `git diff --check` | Exit 0 |
-| `npm run demo:store` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:history` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:moc` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:recall` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:admission` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:capture` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:conflicts` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:rebuild` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:continuation` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:episodes` | Exit 0 on Node 22.16 and 24.15 |
-| `npm run demo:session-context` | Exit 0 on Node 22.16 and 24.15 |
+| `npm run demo:store` | Exit 0 on both runtimes |
+| `npm run demo:history` | Exit 0 on both runtimes |
+| `npm run demo:moc` | Exit 0 on both runtimes |
+| `npm run demo:recall` | Exit 0 on both runtimes |
+| `npm run demo:admission` | Exit 0 on both runtimes |
+| `npm run demo:capture` | Exit 0 on both runtimes |
+| `npm run demo:conflicts` | Exit 0 on both runtimes |
+| `npm run demo:rebuild` | Exit 0 on both runtimes |
+| `npm run demo:continuation` | Exit 0 on both runtimes |
+| `npm run demo:episodes` | Exit 0 on both runtimes |
+| `npm run demo:session-context` | Exit 0 on both runtimes |

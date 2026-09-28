@@ -191,7 +191,7 @@ throw instead). They never expose raw database or provider errors.
 
 | Code | Meaning |
 | --- | --- |
-| `decision_review_required` | Confirm/reject requires `openMemoryCore` with `decisionReview: 'required-v1'`. |
+| `decision_review_required` | Confirm/reject and unresolved review listing require `openMemoryCore` with `decisionReview: 'required-v1'`. |
 | `memory_not_awaiting` | The revision-matched item is not awaiting review. |
 | `action_conflict` | This namespace/actionId already names a different review payload or operation. |
 | `episode_identity_unavailable` | The private session-key secret is missing or corrupt; do not regenerate it for an existing store. |
@@ -462,4 +462,9 @@ The [confirmation-state appendix](plans/confirmation-state.md) extends this
 contract with opt-in review, person-only awaiting reads, revision-checked
 `confirm`/`reject`, durable replay identities, and eager additive schema v18.
 Review is independent of currentness and filing. Older openers refuse v18;
-option-off openers retain their DTO shapes and exclude awaiting rows.
+option-off openers retain their DTO shapes and exclude awaiting rows. They never
+return `reviewEffects`, even when an explicit admit promotes an awaiting row.
+Review-enabled `admit` returns durable held-work outcomes on promotion and replay.
+`listReviewTransitions({namespace,limit?,cursor?})` recovers unresolved qualified
+hand-offs with current endpoint revisions; it requires the review option and
+uses namespace/limit-bound signed cursors fenced by the namespace epoch.

@@ -1,4 +1,4 @@
-import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver } from './confirmation-storage.mjs';
+import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver, heldReviewEffects } from './confirmation-storage.mjs';
 import { createSessionContextStorage } from './session-context.mjs';
 import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
@@ -178,7 +178,7 @@ export function createMemoryRuntime(input) {
         changed = true;
       }
       if (changed) {
-        conflictStorage.invalidateMemory(existing.id, { preserveHeld: existing.review_state === 'awaiting' });
+        conflictStorage.invalidateMemory(existing.id, { preserveHeld: true });
         mocStorage.invalidateMemory(ns, existing.id, now);
         db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?, review_state = ?,
           revision = revision + 1, updated_at = ? WHERE id = ?`)
@@ -186,10 +186,10 @@ export function createMemoryRuntime(input) {
       }
       const memory = activeRow(ns, existing.id);
       const reviewEffects = existing.review_state === 'awaiting' && reviewState !== 'awaiting'
-        ? resolveHeld(ns, memory) : undefined;
+        ? resolveHeld(ns, memory) : heldReviewEffects(db, memory.id);
       return {
-        ...(reviewEffects ? { reviewEffects } : {}),
-        memory, ...(projection.legacy ? { legacyMemory: { ...legacyDto(memory), ...(reviewEffects ? { reviewEffects } : {}) } } : {}), deduplicated: true,
+        ...(decisionReview && reviewEffects ? { reviewEffects } : {}),
+        memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: true,
         indexRevision: changed ? advanceEpoch(ns) : epoch(ns), changed, insertedReceiptIds,
       };
     }
@@ -255,7 +255,8 @@ export function createMemoryRuntime(input) {
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
-      return { forgotten: true, indexRevision: advanceEpoch(ns) };
+      const reviewEffects = decisionReview ? heldReviewEffects(db, id) : undefined;
+      return { forgotten: true, indexRevision: advanceEpoch(ns), ...(reviewEffects ? { reviewEffects } : {}) };
   }
 
   function forget(ns, id, expectedRevision) {
@@ -525,6 +526,20 @@ export function createMemoryRuntime(input) {
   const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld });
 
   return Object.freeze({
+    listReviewTransitions(ns, count, after, expectedEpoch) {
+      ready();
+      if (!decisionReview) fail('decision_review_required');
+      return transaction(db, () => {
+        const current = epoch(ns);
+        if (expectedEpoch !== undefined && current !== expectedEpoch) fail('cursor_stale');
+        const rows = db.prepare(`SELECT t.*,p.revision AS predecessor_current_revision,m.revision AS replacement_current_revision
+          FROM confirmation_supersessions t JOIN memories m ON m.id=t.replacement_id JOIN memories p ON p.id=t.previous_id
+          WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND t.status='unresolved'
+          AND (t.replacement_id,t.previous_id) > (?,?) ORDER BY t.replacement_id,t.previous_id LIMIT ?`)
+          .all(...boundary(ns), after?.replacementId ?? '', after?.predecessorId ?? '', count + 1);
+        return { rows, epoch: current };
+      });
+    },
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },
     resolveReview(ns, action, input) { ready(); return resolveReview(ns, action, input); },
     prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },

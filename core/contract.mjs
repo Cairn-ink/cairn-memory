@@ -331,6 +331,22 @@ export function openMemoryCore(input) {
     });
   }
 
+  function listReviewTransitions(input) {
+    return invoke(() => {
+      runtime.ready(); object(input, ['namespace', 'limit', 'cursor']);
+      const ns = contractNamespace(input.namespace), count = contractLimit(input.limit);
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'listReviewTransitions', l: count };
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      const page = runtime.listReviewTransitions(ns, count, cursor?.a, cursor?.e);
+      const rows = page.rows.slice(0, count), last = rows.at(-1), exhausted = page.rows.length <= count;
+      return { transitions: rows.map(row => ({ ...JSON.parse(row.result),
+          predecessor: { memoryId: row.previous_id, revision: row.predecessor_current_revision },
+          replacement: { memoryId: row.replacement_id, revision: row.replacement_current_revision } })), exhausted,
+        nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
+          a: { replacementId: last.replacement_id, predecessorId: last.previous_id } }) };
+    });
+  }
+
   function resolveReview(action, input) {
     return invoke(() => {
       runtime.ready();
@@ -1011,6 +1027,7 @@ export function openMemoryCore(input) {
   return Object.freeze({
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
+    listReviewTransitions,
     confirm: input => resolveReview('confirm', input), reject: input => resolveReview('reject', input),
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,

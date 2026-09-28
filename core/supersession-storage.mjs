@@ -1,3 +1,5 @@
+import { exceedsRelationLimit } from './confirmation-schema.mjs';
+import { recordTransition, transitionResult } from './confirmation-storage.mjs';
 import { fail } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId];
@@ -29,7 +31,7 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
       retiredCount: 0, indexRevision: epoch(ns) };
     const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
       WHERE replacement_memory_id = ?`).get(replacement.id).n;
-    if (incoming + previous.length > 5) fail('supersession_limit');
+    if (exceedsRelationLimit(incoming, previous.length)) fail('supersession_limit');
     const retired = previous.map(memory => retireMutation(ns, memory, replacement, verdict.receiptIds));
     return { status: 'applied', reason: null, retiredCount: retired.length,
       previous: retired.map(result => result.previous),
@@ -43,13 +45,25 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
     if (previous.id === replacement.id) fail('invalid_ref');
     const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
       WHERE replacement_memory_id = ?`).get(replacement.id).n;
-    if (incoming >= 5) fail('supersession_limit');
+    if (exceedsRelationLimit(incoming)) fail('supersession_limit');
     db.prepare(`INSERT INTO memory_supersessions
       (owner_id, scope, project_id, previous_memory_id, previous_revision,
        replacement_memory_id, replacement_revision, receipt_ids)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(...boundary(ns), previous.id,
       previous.revision, replacement.id, replacement.revision, JSON.stringify(receiptIds));
     const now = new Date().toISOString();
+    const held = db.prepare("SELECT * FROM confirmation_supersessions WHERE previous_id=? AND replacement_id=? AND status IN ('pending','unresolved')")
+      .get(previous.id, replacement.id);
+    if (held) recordTransition(db, held, transitionResult(held, 'applied', null, previous.revision, replacement.revision));
+    // Closing the last slot also closes earlier qualification hand-offs. They
+    // must not remain unresolved once this successor cannot accept another link.
+    if (exceedsRelationLimit(incoming + 1)) {
+      for (const pending of db.prepare(`SELECT * FROM confirmation_supersessions
+        WHERE replacement_id=? AND status IN ('pending','unresolved')`).all(replacement.id)) {
+        recordTransition(db, pending, { ...(pending.result ? JSON.parse(pending.result) : transitionResult(pending, 'dropped', 'supersession_limit')),
+          status: 'dropped', reason: 'supersession_limit' });
+      }
+    }
     suppress(ns, previous.fingerprint);
     invalidateConflicts(previous.id);
     invalidateMemory(ns, previous.id, now);

@@ -253,7 +253,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const memory = memories.get(item.memoryId);
         const revision = nextRevision.get(item.memoryId);
         const filed = desiredByMemory.get(item.memoryId).size ? "filed" : "unfiled";
-        if (revision !== memory.revision) invalidateConflicts(item.memoryId);
+        if (revision !== memory.revision) invalidateConflicts(item.memoryId, { preserveHeld: true });
         updateMemory.run(filed, revision, revision, now, item.memoryId);
         deleteRefs.run(item.memoryId);
         for (const mocId of desiredByMemory.get(item.memoryId))
