@@ -5,7 +5,7 @@ export const VERSION = 1;
 const window = (marker, description) => {
   const passage = `${marker} ${description}`;
   if (passage.length > 800) throw new Error('fixture_window_too_large');
-  return passage + 'x'.repeat(800 - passage.length);
+  return passage + 'x'.repeat(799 - passage.length) + ' ';
 };
 
 export const longSource = [
@@ -23,6 +23,7 @@ export const longCase = Object.freeze({
     { key: 'tail', query: 'tailmarker', marker: 'tailmarker' },
   ],
   expectedWindowCount: 3,
+  classification: 'first extracted memory proposed as new L1; front must be a filed ref',
 });
 
 export const capacityCase = Object.freeze({
