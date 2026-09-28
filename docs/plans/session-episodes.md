@@ -8,6 +8,8 @@ Read with [capture](../capture.md), [staged evidence](../staged-capture-evidence
 [architecture boundaries](../architecture-boundaries.md) and the
 [reliability contract](memory-reliability-contract.md).
 
+Confirmation state is specified in the [CF-1 appendix](confirmation-state.md).
+
 ## Product decisions supplied by the coordinator (2026-09-27)
 
 1. New engine behavior belongs in this public core. Hosted adoption follows the
