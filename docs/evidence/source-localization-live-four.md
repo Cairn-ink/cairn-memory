@@ -32,7 +32,8 @@ selected from stored cards or model output.
 
 Cairn used explicit `indexed-evidence-v1` capture and source-evidence recall
 with `bounded-source-scan` selection and limit six. This is not default MOC-led
-recall. The existing answer prompt, context and limits were shared between arms.
+recall. Both arms used the same answer prompt format and limits, with their own
+retrieved evidence as context.
 Memory and answer calls used `gpt-4.1-mini-2025-04-14`; the independent
 official-style judge used `gpt-4o-2024-08-06`. The comparator was pinned native
 Mem0 2.2.0. The core, native gateway, models, prompts, counters, guards and

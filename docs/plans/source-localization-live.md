@@ -342,4 +342,5 @@ On the combined report candidate, primary personally reran
 and pinned strict plugin/marketplace validation on both Node 22.16 and 24.15;
 all passed with no skipped tests. These docs-only checks complement, rather
 than replace, the full runtime/native evidence above. Final independent review
-and latest-head CI are recorded in the PR against the report commit.
+and latest-head CI remain delivery gates; their eventual results belong in the
+PR against the final report commit.
