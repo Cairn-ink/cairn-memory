@@ -1,12 +1,15 @@
 // Fixtures for the private tmux self-tests; not a test file itself. Fake hosts
-// run in a real private tmux server (its own -L socket, no configuration), and a
-// fake tmux client never exits. Each test records its socket, the pane's process
-// group and every fake client's pid, and removes exactly those afterwards, never
-// by matching process names.
+// run in a real private tmux server (its own -L socket, no configuration); a
+// fake tmux client never exits; or an in-process tmux client answers at once
+// while the pane is a real process. Each test records its socket, the pane's
+// process group and every fake client's pid, and removes exactly those
+// afterwards, never by matching process names.
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { existsSync, lstatSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import { createTestWorkspace } from '../../../../../tools/testing/workspace.mjs';
 import { createWaiter, launchPrivateTmux, tmux } from '../lib/private-tmux.mjs';
 import { createInterruptGuard } from '../lib/supervise.mjs';
@@ -103,4 +106,42 @@ export function fakeTmux(t, { startsPane = false } = {}) {
     killRecorded(seen, false);
   });
   return { workspace, pids };
+}
+
+/**
+ * Tmux clients answered in-process at once, so a deadline of a few milliseconds
+ * falls after the launch. The pane stays a real process, started here in a new
+ * session as tmux would start it, so nothing slow sits between the run's start
+ * and its launch callback: `new-session` reports that pid, with no server pid,
+ * and every other call exits 1. `spawn` is restored after the test, and the
+ * pane's process group is recorded for cleanup.
+ */
+export function instantTmux(t, { paneCommand, cwd }) {
+  const childProcess = createRequire(import.meta.url)('node:child_process');
+  const original = childProcess.spawn;
+  const pane = original('/bin/sh', ['-c', `exec ${paneCommand}`], { cwd, detached: true, stdio: 'ignore' });
+  childProcess.spawn = (file, args, options) => {
+    if (file !== 'tmux') return original(file, args, options);
+    const client = new EventEmitter();
+    Object.assign(client, { stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null, signalCode: null,
+      kill: () => true });
+    const status = args.includes('new-session') ? 0 : 1;
+    client.stdout.on('end', () => {
+      client.exitCode = status;
+      client.emit('exit', status, null);
+      client.emit('close', status, null);
+    });
+    setImmediate(() => {
+      client.stderr.end();
+      client.stdout.end(status === 0 ? `$0 ${pane.pid} 0 /nonexistent/f0-instant-tmux\n` : '');
+    });
+    return client;
+  };
+  syncBuiltinESMExports();
+  t.after(() => {
+    childProcess.spawn = original;
+    syncBuiltinESMExports();
+    killRecorded([pane.pid], true);
+  });
+  return { pane };
 }
