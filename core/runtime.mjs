@@ -1,3 +1,5 @@
+import { createSessionContextStorage } from './session-context.mjs';
+import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash, randomUUID } from "node:crypto";
@@ -490,7 +492,9 @@ export function createMemoryRuntime(input) {
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch });
   const stagedEvidence = createStagedEvidenceStorage({ db });
+  const episodeReads = createEpisodeReads({ db, epoch });
   const proceduralStorage = createProceduralStorage({ db, activeRow, advanceEpoch, epoch });
+  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage });
   let episodes;
   try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation }); }
   catch (error) { db.close(); throw error; }
@@ -529,6 +533,9 @@ export function createMemoryRuntime(input) {
     setCapturePaused(ns, input) { ready(); return episodes.setControl(ns, input); },
     setProjectCapture(ns, input) { ready(); return episodes.setControl(ns, input, true); },
     setProceduralMemory(ns, input) { ready(); return proceduralStorage.set(ns, input); },
+    closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
+    sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
+    episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recallSnapshot, sourceSnapshot,

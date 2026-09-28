@@ -2,6 +2,8 @@
   "core/admission-storage.mjs",
   "core/episode-schema.mjs",
   "core/episode-storage.mjs",
+  "core/episode-reads.mjs",
+  "core/session-context.mjs",
   "core/episode-input.mjs",
   "core/episode-capture.mjs",
   "core/prompts/interpret-episode.md",

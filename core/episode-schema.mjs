@@ -1,13 +1,30 @@
 import { randomBytes } from 'node:crypto';
 import { fail } from './validation.mjs';
 
-export const EPISODE_SCHEMA_VERSION = 16;
+export const EPISODE_SCHEMA_VERSION = 17;
 export const ADMISSION_LEASE_MS = 125_000;
 export const STAGED_PAYLOAD_MAX_BYTES = 128 * 1024;
 export const HEX_DIGEST = /^[0-9a-f]{64}$/;
 const digestCheck = column => `length(${column})=64 AND ${column} NOT GLOB '*[^0-9a-f]*'`;
 const namespaceCheck = `CHECK(scope IN ('personal','project')), CHECK((scope='personal' AND project_id='') OR
   (scope='project' AND length(project_id)>0))`;
+
+/** Read-only access paths; no table/column or stored-record changes. */
+export function migrateVersion16(db) {
+  if (db.prepare('PRAGMA foreign_keys').get().foreign_keys !== 1) fail('storage_error');
+  db.exec(`
+    CREATE INDEX episode_event_read ON session_episodes(owner_id,scope,project_id,
+      json_extract(record,'$.eventEnd') DESC,id) WHERE deleted=0;
+    CREATE INDEX episode_receipt_read ON session_episodes(owner_id,scope,project_id,
+      first_received_at DESC,id) WHERE deleted=0;
+    CREATE INDEX episode_open_step_read ON session_episodes(owner_id,scope,project_id,
+      json_extract(record,'$.nextStep.receiptOrdinal') DESC,id)
+      WHERE deleted=0 AND json_extract(record,'$.processing.state')='ready'
+        AND json_extract(record,'$.nextStep.status')='open';
+    CREATE INDEX receipt_time_read ON receipts(created_at DESC,id,memory_id);
+  `);
+  if (db.prepare('PRAGMA foreign_key_check').all().length) fail('storage_error');
+}
 
 /** Caller holds transaction(). Snapshot/drop children first: CASCADE must not erase the journal. */
 export function migrateVersion14(db) {

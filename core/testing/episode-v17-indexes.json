@@ -1,0 +1,18 @@
+[
+  {
+    "name": "episode_event_read",
+    "sql": "CREATE INDEX episode_event_read ON session_episodes(owner_id,scope,project_id,\n      json_extract(record,'$.eventEnd') DESC,id) WHERE deleted=0"
+  },
+  {
+    "name": "episode_open_step_read",
+    "sql": "CREATE INDEX episode_open_step_read ON session_episodes(owner_id,scope,project_id,\n      json_extract(record,'$.nextStep.receiptOrdinal') DESC,id)\n      WHERE deleted=0 AND json_extract(record,'$.processing.state')='ready'\n        AND json_extract(record,'$.nextStep.status')='open'"
+  },
+  {
+    "name": "episode_receipt_read",
+    "sql": "CREATE INDEX episode_receipt_read ON session_episodes(owner_id,scope,project_id,\n      first_received_at DESC,id) WHERE deleted=0"
+  },
+  {
+    "name": "receipt_time_read",
+    "sql": "CREATE INDEX receipt_time_read ON receipts(created_at DESC,id,memory_id)"
+  }
+]

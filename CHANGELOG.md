@@ -7,6 +7,33 @@
   packing. It records the known 1,024-ID default-prefix miss, explicit negative
   controls and per-batch outcomes without changing product policy or models.
 
+## Unreleased — optional episode provider
+
+- Add explicitly configured OpenAI episode interpretation with bounded source
+  anchors, prior-step references, typed failures and content-free diagnostics.
+  No episode model is selected by default.
+- Use automatic procedural-tag schemas only with the core's episode prompts;
+  preserve legacy request/output bytes and diagnostics. Offline fake-HTTP tests
+  and the demo cover capture, retained sources, receipt-bound tags and replay.
+  No hosted/MCP generation, paid grant or model-fidelity claim is added.
+- Normalize malformed episode source/target arrays to `invalid_openai_request`
+  before HTTP, consistent with other malformed adapter requests.
+
+## Unreleased — session episode reads
+
+- Add bounded UTC episode/memory range reads with exact scope/client filters,
+  signed stale-aware cursors and whole-response byte budgets.
+- Add local session-start context with untrusted framing, sourced procedures and
+  the newest open step, exact counting, group budgets and final freshness checks.
+- Add guarded explicit step closure/replay and source-anchored interpreter
+  completion, cancellation and replacement using request-local step references.
+  Closed steps are omitted from prior context. Any later proposal, regardless of
+  wording, needs evidence received after closure and creates a new identity.
+  Explicit closure preserves an existing correction pin without adding one.
+  Public episode reads omit internal closure boundaries and proof bookkeeping.
+- Eagerly migrate stores to schema v17 with four read indexes and no table or
+  column changes. Older openers refuse the new version.
+
 ## Unreleased — test-owned temporary workspaces
 
 - Give ordinary offline test invocations isolated scratch with cleanup after

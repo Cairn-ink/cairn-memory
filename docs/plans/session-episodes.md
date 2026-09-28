@@ -743,6 +743,147 @@ still-pending outcome at commit and both post-call snapshot boundaries. The stal
 harness. Verification repeats the heavy-day failure arm ten times and the full
 capacity suite twenty times under concurrent load, each with isolated temp data.
 
+### SE-3 verification
+
+maintainer-approved: schema v17 adds read indexes
+
+The eager v17 migration adds four indexes and changes no tables or columns.
+Every committed v14/v15/v16 open, including episode-off opens, upgrades in one
+transaction with foreign keys enabled and checked before the version is recorded.
+Committed SQL/JSON fixtures are generated offline; tests never access Git or
+regenerate fixtures. The frozen v16 opener refuses v17. Index creation failure
+rolls back all preceding migration work, rows and the version.
+
+Range reads use signed store/namespace/operation/filter/limit/order/last-key/epoch
+cursors, exact client equality and indexed keysets. Event order uses an expression
+index over the stored JSON event end; receipt order uses first receipt time.
+Memory receipt order scans the receipt-time index and uses `receipts.memory_id`
+for the final tie-breaker, equal to the joined memory ID without a SQLite sort.
+Revision and procedural order reuse `namespace_memories`. Source, lineage, policy
+and keep inspection reuse the existing SE-1/SE-2 page indexes. No source clock is
+inferred; unknown event intervals, partial coverage and incomplete shells retain
+explicit markers. The complete success envelope, including cursors, fits 64 KiB.
+
+Startup binds one exact namespace and returns its newest eligible open step;
+older open steps resurface when newer ones close. The six-step ceiling does not
+imply a scope union. Both groups are independently switchable and budgeted.
+Indexed probes read at most thirteen identities per group and materialize at most
+twelve candidates. Whole sourced items alternate step first; a non-fitting item
+stops only its group. The local counter observes the complete success envelope.
+The final atomic reread distinguishes changed epochs from changed identities,
+tags or complete evidence, with no callback afterwards. All recollection retains
+the contract's exact untrusted framing.
+
+Explicit step actions and replaced identities have content-free replay markers
+in the existing finished-attempt journal under distinct prefixes. They cannot
+acquire leases, schedule interpretation or consume draft allowances. Action IDs
+are HMAC-bound. Later draft storage transitions require the exact open-step ID
+and revision, newer source anchors and explicit completion/cancellation/replacement;
+a null disposition preserves an open step, including with dropped prior context.
+Source invalidation clears descriptive closure evidence and never resurrects the
+old proposal.
+
+| SE-3 responsibility / touched gate | Tests (under `core/test/`) |
+| --- | --- |
+| Indexed event/receipt episode reads and receipt/revision memory reads; E9 | `episode-reads.test.mjs`: named production query plans without temporary sorting, exact-client variants, bounded large-history keysets, tied orders, DST caller boundaries, half-open edges, receipt multiplicity, labeled history |
+| Honest time/coverage, exact owner/project/client isolation and deletion; E1/E7/E9 | `episode-reads.test.mjs`: event/receipt disagreement, unknown/partial shells, two owners and two projects, foreign clients, forgotten content/digest exclusion |
+| Signed opaque cursor binding, tampering, restart, no-op replay and stale epochs; E9 | `episode-reads.test.mjs`: store/namespace/operation/filter/limit binding, tampered/oversized tokens, registration/admission replay, mutation yields `cursor_stale`; inherited `episode-storage.test.mjs` covers independent inspection pages |
+| Whole-envelope 64-KiB prefix budgets, strict inputs and bounds; E2/E9 | `episode-reads.test.mjs`: public multilingual whole-record pages, cursor/envelope overhead, oversized-first-item failure, UTC/range/state/field/limit rejection |
+| Startup groups, newest step, procedural order, limits and source completeness; E10 | `session-context.test.mjs`: exact indexed thirteen-row probes, twelve-candidate consideration, group switches, alternation, complete receipts, oversized group stopping, default/hard budgets, exact framing and namespace isolation |
+| No read generation, local counting and final freshness; E3/E5/E10 | `episode-reads.test.mjs` and `session-context.test.mjs`: throwing generation ports, absent/throwing/async/invalid counters, epoch/identity/tag/source mutation during counting, no callback after authoritative reread |
+| Open-step semantics, guarded transitions, closure replay and source loss; E2/E7/E10 | `session-context.test.mjs`: silent later episode, older-step resurfacing, inert explicit replay, foreign/stale guards, newer-source-only completion/cancellation/replacement, pinned steps, missing replacement, source correction invalidation, two successful repeated-text drafts after interpreter/explicit closure, old-anchor omission and new proposals after dismissal |
+| Mode isolation and procedural eligibility in both modes; E10 | `session-context.test.mjs`: public facade in both modes; inherited `episode-mode-parity.test.mjs` and migration parity compare committed prompt/request/output/row/digest and diagnostic fixtures |
+| Eager atomic v17 upgrade and older-opener exclusion; E11 | `episode-migration.test.mjs`: committed v14/v15/v16 fixtures in both modes, preserved rows/FKs, frozen index layout, repeated open, failed-index rollback and frozen v16 refusal; existing schema-version assertions advance from 16 to 17 |
+| Shipped modules and synthetic demo; E11 | Artifact manifest includes `episode-reads.mjs` and `session-context.mjs`; existing artifact suite checks installed contents. `demo:session-context` is registered alongside every existing core demo on both CI runtimes |
+
+The rationale test's synthetic v11 downgrade additionally drops the new receipt
+index before reopening; episode indexes disappear with their existing table drop.
+Other inherited migration-test edits change only current-version assertions.
+No hosted schema, MCP tool, provider schema, paid call, real-data experiment or
+semantic-fidelity claim is introduced.
+
+
+maintainer-approved: interpreter-driven step closure wiring in the capture port and episode prompt
+
+The episode interpreter receives a request-local `stepRef` only when the prior
+open step and its supporting passages fit and the step is unpinned. Core retains
+the exact durable step ID and revision locally, checks the returned reference and
+maps it to those guards before the atomic draft commit. Durable IDs are not added
+to the model request. The prompt instructs the interpreter to preserve the step
+on silence, ambiguous chronology, historical quotation, assistant advice or
+dropped prior context, and requires explicit new evidence for a transition.
+Core validates references and anchors; it cannot judge those source semantics.
+
+`session-context.test.mjs` adds end-to-end scripted capture coverage for E2/E5/E10:
+all three transitions with new anchors, closure replay without model calls or
+revision/epoch/journal changes, and older-step resurfacing in startup context.
+It rejects forged/foreign/missing references, injected durable guards, pinned
+steps, omitted prior-step references and a correction during interpretation.
+E3/E10 scripts label inputs with those five cases, return a null disposition and
+assert that the step is preserved, along with the prompt's instructions. They
+prove null-disposition preservation and request wiring, not recognition of
+ambiguous chronology, historical quotations or assistant advice by core or a model.
+The committed SE-2 episode-off parity tests remain unchanged; no prompt-digest or
+fixture expectation requires adjustment.
+
+Closed steps are never offered as `prior.nextStep`. Every later proposal, whatever
+its wording, requires newly supplied passages from the same episode with receipt
+ordinals strictly newer than closure. The existing JSON record stores the closure
+ordinal, preserving it through null-step drafts; no schema change is needed. Legacy
+closed records recover the equivalent boundary from the existing step-identity
+journal, conservatively using the next draft's receipt position if unavailable.
+Explicit closure neither adds nor removes correction pins.
+
+Round-two E2/E10 regressions in `session-context.test.mjs` cover punctuation,
+“again” and paraphrases anchored only to old evidence after both closure routes,
+two consecutive rejected proposals followed by fresh evidence, a captured but
+undrafted pre-dismissal passage, and preservation of a correction pin with inert
+closure replay. All eight regressions failed on the pre-fix implementation. A ninth
+compatibility check covers recovery of the boundary from a legacy journal marker.
+
+Known limits: receipt-time reads use a global time index without a namespace
+prefix. They scan other namespaces' receipts in the same database file and filter
+ownership per row. The limit+1 eligible-result cap does not bound scanned rows;
+cost grows with other namespaces in that file. Hosted deployments should use one
+database file per owner to limit this cost. Separately, `processing.attempted` can
+change during pagination without advancing the namespace epoch; this predates SE-3.
+
+The round-one test concurrency cap was reverted. Verification uses the unchanged,
+uncapped core test runner; any host-load deadline failures are reported separately.
+
+### SE-4 verification
+
+The OpenAI adapter exposes `interpretEpisode` only with an explicit `episodeModel`,
+using existing profiles and the shared bounded count/generation transport. No
+episode classifier/provider default, paid guard route or grant is added. Actual
+adapter/model/profile metadata accompanies the configured port. Source identities,
+closure guards, interpretation orchestration and persistence remain core-owned.
+
+Current main's extract/qualifyCandidates ports carry no separate episode-mode
+argument: core selects their exact trusted system prompts from its snapshotted
+option. The adapter recognizes those prompt identities to choose separate tag
+schemas. It never infers mode from source text or model capabilities. Optional
+fields use strict closed-object alternatives. Episode qualification uses named
+item slots with original candidate indices and decodes to core's array shape;
+legacy evidence-pool transport stays unchanged. Adaptive catalog fit/dispatch
+uses the same episode schema and snapshot. No core contract or schema changes.
+
+| Provider responsibility / touched gate | Tests under `adapters/openai/test/` |
+| --- | --- |
+| E1/E2 request-local source/step references, languages, Unicode, raw/normalized bounds, partial/foreign output and sixteen-source cap | `episodes.test.mjs`: detached count/generation snapshots, English/Chinese/mixed labels, step action correlation, malformed-output matrix, closure-proof source bound and real-core completion/cancellation/replacement replay |
+| E3/E4 explicit configuration, no retries/default, bounded input/output, cancellation and finite private diagnostics | `episodes.test.mjs`: all explicit profiles, local/server/usage/body bounds, malformed response, observer failures, pre/in-flight abort and real-core admission after interpretation failure |
+| E7/E8 retained-source capture, deletion, quick/non-drafted policy and inert replay/reads | `procedural.test.mjs`: fake-HTTP capture, exact receipt binding, episode forgetting, first quick then ordinary tagged admission; `episodes.test.mjs`: failed interpretation replay |
+| E10 automatic tags only with episode prompts, strict kind/candidate binding, inline/catalog dispatch | `procedural.test.mjs`: optional/true/false/null tags across all kinds, omitted/partial qualifications, duplicate/foreign/oversized candidate citations and adaptive fit |
+| E10 legacy byte parity and unexpected-tag rejection | `episode-mode-parity.test.mjs`: 126 committed base cases for all ten legacy methods, indexed extraction, adaptive qualification and extraction profiles, comparing exact count/generation bodies, serialized output/failures and diagnostic sequences; real-core legacy tag rejection |
+| E11 installed sources and offline demonstration | Existing artifact suite; `demo:openai-offline` additionally exercises interpretation, retained sources, automatic procedural receipts, startup, replay and conversation forgetting |
+
+The parity oracle was generated offline against `7f9ee869`, extending the committed
+SE-2 core fixtures with provider transport bytes. Tests never invoke Git or rebuild
+the oracle. New SQLite fixtures use `createTestWorkspace`; all provider responses
+are fake HTTP and synthetic keys are assembled from fragments. The artifact
+allowlist already includes every runtime module/prompt used here, so it needs no
+new entry. These checks do not establish real-model fidelity or provider framing.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,

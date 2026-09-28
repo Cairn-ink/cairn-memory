@@ -140,3 +140,31 @@ document checks during drafting included a primary rerun of generic tests
 fixed-diff review and CI remain delivery gates. This result blocks fixed-30
 expansion. The next work is bounded offline diagnosis of the timeout and
 empty/temporal evidence paths.
+
+## Delivery integration with newer main
+
+While this one-shot experiment ran against immutable public runtime
+`19623ad277c3552e041d4c793313fda178b98b61`, `main` advanced to
+`c3eba8982458f7f62e6e1e0a75877be503de1a3f` through separate episode
+work in PRs #275 and #276. The delivery branch is integrating that head only
+to prepare its public documentation PR. The changelog conflict preserves this
+branch's offline long-history entry alongside #275's bounded episode reads,
+session-start context and schema v17 entry, and #276's explicit OpenAI episode
+interpreter and procedural-tag entry with legacy parity. Existing indexed
+evidence entries remain intact. Of 58 incoming files, 55 were verified
+byte-identical to upstream; CHANGELOG, package and CI are the three join
+files. The auto-merged episode code is not part of
+the pilot runtime and cannot change its recorded outcomes, accounting or
+failed feasibility gate.
+
+On the integrated, still-uncommitted delivery candidate, the primary ran a
+clean-environment serial offline gate on both Node 22.16.0 and 24.15.0, with
+no provider key or paid call. Each runtime passed generic 121/121, core
+1001/1001, OpenAI 304/304, LongMemEval 193/193, long-history 5/5,
+long-history-live offline 3/3, workspace lifecycle 25/25 and actual-core plus
+pinned-native fake-HTTP 26/26. JSON validation and all sixteen owned-runner
+demos also exited zero on each runtime. All 50 commands exited zero, with no
+failed, cancelled or skipped tests; total serial elapsed time was 1,238,838 ms.
+This verifies the delivery integration, not the immutable paid experiment's
+semantic success. Final exact-head Standards and Spec review and PR CI remain
+pending after the merge commit.
