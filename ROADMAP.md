@@ -20,7 +20,12 @@ service must use the same public core, not separate engines.
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
   preserves the default-prefix miss as an expected negative control and
-  exercises explicit bounded keyset source routing. Real-model and installed
+  exercises explicit bounded keyset source routing. Its
+  [indexed-window observation](docs/plans/source-window-coverage.md) checks
+  complete retained-window coverage and an omitted-source negative control
+  after cold reopen, without exposing source text or inferring model selection.
+  These are synthetic accounting checks, not semantic completeness or a
+  correction to the paid-case results. Real-model and installed
   host acceptance, semantic/current-state quality, and a fresh paired paid
   comparison remain separate gates.
 

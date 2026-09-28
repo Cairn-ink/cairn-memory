@@ -1,6 +1,6 @@
 # Indexed source-window coverage: N1
 
-Status: acceptance contract before implementation. Base:
+Status: offline implementation accepted; final independent review and CI pending. Base:
 `304ac6fcb9b71ec2eade579bfb0877e409167e10`. Worktree:
 `source-window-coverage`; branch: `feat/source-window-coverage`.
 
@@ -240,3 +240,81 @@ and 24.15.0 run it. The fixed serialized-report bound was checked against a
 These are scripted offline checks, not a measured improvement in real-model
 retention or answer quality. Final exact-head gates, primary acceptance and
 independent review are still pending.
+
+### Primary acceptance and first independent review
+
+The primary inspected the seven-file candidate
+`3a6eaea334c8f526dfdbaa4775d81bdd7169ecfd` against the fixed base and personally
+ran these commands with `NODE_DISABLE_COMPILE_CACHE=1` and the named Node
+runtime first on `PATH`:
+
+| Exact-candidate command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `npm test` | 132/132, 4.37s | 132/132, 4.14s |
+| `npm run test:long-history` | 5/5, 34.55s | 5/5, 32.80s |
+
+The latter exercises actual indexed capture, cold reopen and answer packing,
+with the unchanged 208 planned batches, 1,030 admitted cards, seven required
+passages and eight expected negative controls. The observer adds accounting
+for only the three-window positive capture and one-window omission control;
+it does not claim coverage of all 208 captures.
+
+Independent Standards review found one documentation gap: `CONTRIBUTING.md`
+requires `ROADMAP.md` to reflect an evidence-gate change. Independent Spec
+review passed W1–W6 and found the W7 record lacked the exact tested SHA and
+primary results. The Spec reviewer also reran the focused 11/11 suite on both
+runtimes. This record and the scoped roadmap note address those gaps; a
+successor candidate still requires both complete-diff reviews and latest-head
+CI. No review of the earlier candidate is represented as a review of a later
+commit.
+
+The primary also requested a bounded proxy-input negative control before
+final acceptance: snapshotting must not execute an extra descriptor trap and
+thereby change the input sent to the underlying public capture. The worker
+must first record a failing test, then make only the smallest observer-side
+correction and rerun the affected gates. This does not authorize a core change.
+
+| Responsibility | Owner and routing | Evidence and supervision |
+| --- | --- | --- |
+| W1–W6 implementation | `source_window_coverage6`, GPT-6 Sol/high | Fixed-base red loop; primary inspection corrected classification-subset, metadata snapshot, read identity and cleanup assumptions before freeze. |
+| Architecture and acceptance | Primary | Owns shared protocol/limitations/roadmap integration; directly inspected the diff and reran both final consumer paths above. |
+| Standards review | `reliability_diag_standards6`, independent reviewer | Exact `3a6eaea` diff; one roadmap-record finding, no other actionable finding. |
+| Spec review | `reliability_diag_spec6`, independent reviewer | Exact `3a6eaea` diff; W1–W6 pass, one W7 evidence-record finding. |
+
+One post-freeze correction round completed as recorded below. Agent token/cost
+and total elapsed time are not exposed and are not inferred from model labels. All new tests
+use synthetic local data; no provider call, paid-case replay or operational
+ledger access was made.
+
+### Proxy correction and exact-code acceptance
+
+The worker ran this negative control before changing the helper:
+
+```text
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs --test-name-pattern='proxied input adds no observer property traps' evaluation/architecture/test/source-window-coverage.test.mjs
+exit 1; tests 1; pass 0; fail 1; duration 43.79ms
+AssertionError: extra descriptor trap calls: actual 3, expected 0
+```
+
+The forwarding test received the original input/result, but observing a
+proxied namespace invoked three additional user descriptor traps. Rejecting
+proxies from diagnostic snapshots before descriptor access prevents that
+side effect; the public call still receives the original input and the report
+is unavailable. The same test now covers a proxied message too. Array length
+is read once through the own-data-property guard. The targeted command then
+passed 1/1 in 41.23ms. No public-core validation or behavior was changed.
+
+The two-file code correction is
+`4f3a282a90795004b113d06dadd45dd6ee966967`. After inspecting its exact diff,
+the primary personally reran the affected gates with that code SHA:
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `NODE_DISABLE_COMPILE_CACHE=1 npm test` | 133/133, 4.55s | 133/133, 4.25s |
+| `NODE_DISABLE_COMPILE_CACHE=1 npm run test:long-history` | 5/5, 33.80s | 5/5, 32.10s |
+
+The final integration adds only the roadmap and this evidence record to that
+tested code. Its final commit must receive both full-diff review axes and
+latest-head CI before delivery; the PR records that exact delivery SHA.
+N1 supplies trustworthy bounded accounting, not improved semantic retention,
+retrieval accuracy, a repaired historical score or completed N2/N3.
