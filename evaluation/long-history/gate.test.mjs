@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { runGate } from './gate.mjs';
+import { runGate, sameColdMemoryIdentities } from './gate.mjs';
 import { capacityCase, longCase, datedCase } from './fixtures.mjs';
 
 test('frozen long-history gate traverses capture, cold recall and packed answer', async () => {
@@ -107,6 +107,18 @@ for (const [fault, expectedCapture, expectedAdmitted, expectedFailure] of [
     }
   });
 }
+
+test('equal cold count with a replaced identity or revision cannot certify zero admission', () => {
+  const prior = [{ id: 'first', revision: 2 }, { id: 'second', revision: 3 }];
+  assert.equal(sameColdMemoryIdentities(prior, [{ id: 'second', revision: 3 },
+    { id: 'first', revision: 2 }]), true);
+  assert.equal(sameColdMemoryIdentities(prior, [{ id: 'second', revision: 3 },
+    { id: 'replacement', revision: 2 }]), false);
+  assert.equal(sameColdMemoryIdentities(prior, [{ id: 'second', revision: 4 },
+    { id: 'first', revision: 2 }]), false);
+  assert.equal(sameColdMemoryIdentities(prior, [{ id: 'first', revision: 2 },
+    { id: 'first', revision: 2 }]), false);
+});
 
 test('test-only fault CLI exits nonzero with a sanitized aggregate', () => {
   const child = spawnSync(process.execPath, ['tools/testing/run.mjs', '--script',

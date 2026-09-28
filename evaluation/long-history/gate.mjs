@@ -167,6 +167,25 @@ const faultBatchNames = ['malformedExtraction', 'failedClassification', 'omitted
   'emptySelection', 'emptyRank', 'lifecycle'];
 const gateFaults = ['capacity-second-malformed-extraction', 'capacity-second-classification-failure'];
 
+// Exact cold identity, not cardinality, is needed to infer zero admission from
+// a failed capture. The caller keeps these IDs private; no row enters the report.
+export function sameColdMemoryIdentities(expected, observed) {
+  if (!Array.isArray(expected) || !Array.isArray(observed) || expected.length !== observed.length) return false;
+  const known = new Map();
+  for (const row of expected) {
+    if (typeof row?.id !== 'string' || !Number.isSafeInteger(row.revision) ||
+        known.has(row.id)) return false;
+    known.set(row.id, row.revision);
+  }
+  const seen = new Set();
+  for (const row of observed) {
+    if (typeof row?.id !== 'string' || !Number.isSafeInteger(row.revision) ||
+        seen.has(row.id) || known.get(row.id) !== row.revision) return false;
+    seen.add(row.id);
+  }
+  return true;
+}
+
 export async function runGate({ fault = null } = {}) {
   if (fault !== null && !gateFaults.includes(fault)) throw new TypeError('invalid_gate_fault');
   const workspace = createTestWorkspace(null, { prefix: 'cairn-long-history-' });
@@ -288,7 +307,9 @@ export async function runGate({ fault = null } = {}) {
       if (!captured.response.ok && batch === 1 && fault === 'capacity-second-malformed-extraction') {
         const cold = await timeRead(() => { capacityStore.reopen();
           return capacityStore.core.list({ namespace, limit: 100 }); });
-        if (cold.ok && cold.value.exhausted && cold.value.memories.length === admitted.length) {
+        const expected = admitted.map(row => ({ id: row.memory.id, revision: row.expectedRevision }));
+        if (cold.ok && cold.value.exhausted &&
+            sameColdMemoryIdentities(expected, cold.value.memories)) {
           report.batchOutcomes.capacity1025[batch].admitted = 0;
         }
       }
@@ -311,7 +332,10 @@ export async function runGate({ fault = null } = {}) {
       result = captured.value;
       assertGate(result.classification.status === 'applied', 'capacity_classification');
       assertGate(result.admission.memories.length === messages.length, 'capacity_admission');
+      const classifiedRevisions = new Map(result.classification.memoryRevisions
+        .map(({ memoryId, revision }) => [memoryId, revision]));
       admitted.push(...result.admission.memories.map((memory, index) => ({ memory,
+        expectedRevision: classifiedRevisions.get(memory.id) ?? memory.revision,
         marker: messages[index].content.split(' ')[0], source: messages[index].content })));
       report.cases[1].eligibleMemories = admitted.length;
     }

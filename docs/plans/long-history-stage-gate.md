@@ -194,6 +194,19 @@ passed 4/4 in 37.863 s; after the minor control-reporting refinement, its
 final affected rerun passed 4/4 in 34.612 s on Node 22.16.0. Neither
 failure-path run invokes the remaining 203 capacity batches.
 
+Fresh Standards review found one remaining proof gap in the malformed
+second-batch control: equal cold list counts could hide replacement of an old
+memory. Zero new admission is now certified only when a complete cold public
+list has the exact five earlier IDs and their expected post-classification
+revisions; otherwise the failed batch's admitted count remains unknown/null.
+The private identity predicate rejects an equal-count replacement, revision
+change or duplicate. Focused
+`node tools/testing/run.mjs --test-name-pattern='second capacity batch|equal cold count|test-only fault CLI' evaluation/long-history/gate.test.mjs`
+passed 4/4 in 1.920 s on Node 22.16.0. This narrows the diagnostic proof only;
+the frozen positive fixtures, product behavior and aggregate privacy contract
+are unchanged. The affected full `npm run test:long-history` rerun passed
+5/5 in 38.158 s on Node 22.16.0.
+
 An independent base control used the pre-existing public-`admit` K7 test on
 Node 22.16.0: `node tools/testing/run.mjs --test-name-pattern='K7 public-admit source beyond' core/test/bounded-keyset-candidates.test.mjs`
 passed in 86.08 s. It establishes the prior 1,024-ID differential only; it
