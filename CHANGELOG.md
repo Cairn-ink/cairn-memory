@@ -11,6 +11,27 @@
   artifact/failure retention, formal evaluation evidence and paid/live commands
   retain their contracts; historical temporary files are outside this change.
 
+## Unreleased — opt-in episode capture
+
+- Add debounced episode interpretation through an injected port, bounded first,
+  periodic, PreCompact, end and lazy attempts, independent admission recovery,
+  per-batch quick policy and idempotent explicit keep from retained passages.
+  Local draft locks preserve unspent attempts for retry, including after restart.
+  Started attempts retain unfinished state until an outcome or timeout is recorded.
+  `episode_outcome_pending` reports an unavailable outcome from capture, end or
+  lazy interpretation. It is non-retryable; stranded attempts await lease-expiry
+  recovery. Failure reporting uses the original attempt's recorded code.
+- Keep actions retain paged source coverage and explicit outcomes in dedicated
+  storage, use a separate admission identity, and support retry after interruption.
+- Add source-anchored automatic procedural proposals only in episode-v1. Legacy
+  prompt/request/output/receipt/digest behavior remains unchanged without it.
+- Release staging at either successful completion order; under pressure reclaim
+  admitted episode backlog or bypass staging while continuing normal admission.
+  Overlap ownership preserves resumable messages and admits each at most once.
+- Eagerly upgrade committed stores to v16 with a content-free keyed message ledger.
+  Reused message IDs reject changed role/text/time after release and restart.
+  Older messages are not backfilled; older binaries refuse v16.
+
 ## Unreleased — opt-in episode storage
 
 - Add the local episode storage and inspection foundation: source-bound retained

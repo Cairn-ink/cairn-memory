@@ -3,7 +3,8 @@
 `captureEvidence: 'staged-v1'` separates a bounded submitted source view from
 successful interpretation. It requires source-bound-v2 capture and is off by
 default. This is a shared-core feature, not a new memory engine or hosted
-endpoint. Local stdio MCP offers [explicit staging and keyless access](standalone-mcp.md#optional-staged-source-inspection)
+endpoint. Local stdio MCP offers [explicit staging and keyless
+access](standalone-mcp.md#optional-staged-source-inspection)
 over the same contract. Causal capture is rejected in this first
 version. No model is trained, selected or called by enabling inspection.
 
@@ -108,9 +109,10 @@ background maintenance and general reliability claims are outside this slice.
 ## Opt-in episode ownership (SE-1)
 
 The storage runtime reserves a non-leased admission parent, an episode shell and
-observed event, and optional payload in one transaction. SE-2 will call these
-model-free seams around capture. Ordinary staging and its capacity error are
-unchanged. Episode ownership survives reopening without the option.
+observed event, message identity ledger, and optional payload in one transaction.
+Capture invokes these storage operations before interpretation and admission.
+Ordinary staging and its capacity error are unchanged. Episode ownership survives
+reopening without the option.
 
 Before capacity work, registration checks control generation, session deletion,
 event identity/digest and replay. It expires live payloads and releases successful
@@ -133,3 +135,11 @@ completion order, including empty results. Released inspection returns
 Release does not close completed admission replay. A failed draft leaves payloads
 available; only live payloads have the original 24-hour upper bound. Explicit
 expiry/discard and pressure reclamation fence in-flight draft publication.
+
+The episode capture path acquires admission only after optional interpretation.
+Both completion orders call the storage release seam: draft commit releases an
+already-admitted payload, while admission completion releases an already-disposed
+payload. Empty and freshly quick results count as completed admission. A failed
+interpretation alone never closes staging or spends the memory admission lease.
+When all quota is protected, the registered no-staging decision runs ordinary v2
+admission from the canonical submitted input; replay cannot stage it later.

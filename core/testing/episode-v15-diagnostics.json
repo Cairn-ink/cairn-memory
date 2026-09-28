@@ -1,0 +1,41 @@
+{
+  "base": "13e5039999e526a0d0e25c62739a3ec067120d27",
+  "cases": [
+    {
+      "missing": "commitment",
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "invalid_model_output",
+          "retryable": false
+        }
+      },
+      "diagnostics": [
+        {
+          "version": 1,
+          "stage": "qualifyCandidates",
+          "layer": "core_validation",
+          "reason": "invalid_qualification"
+        }
+      ]
+    },
+    {
+      "missing": "itemIndex",
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "invalid_model_output",
+          "retryable": false
+        }
+      },
+      "diagnostics": [
+        {
+          "version": 1,
+          "stage": "qualifyCandidates",
+          "layer": "core_validation",
+          "reason": "invalid_qualification"
+        }
+      ]
+    }
+  ]
+}

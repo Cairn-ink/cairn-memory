@@ -96,14 +96,14 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1 or v3–v14 format performs an atomic upgrade to v15, retaining
+Opening the committed v1 or v3–v15 format performs an atomic upgrade to v16, retaining
 existing memory/source data, revisions and suppression. Back up the file while
 all older-runtime processes and connections (including idle readers) are closed
 before upgrading meaningful data. The host must stop/drain those connections
 before opening the store for upgrade, even with episodes disabled. No request
 performs a lazy upgrade. Mixed-version coexistence is unsupported;
 an already-open old process is not retroactively fenced. Older binaries cannot
-open v15; there is no downgrade tool. Existing receipts remain unordered; no past
+open v16; there is no downgrade tool. Existing receipts remain unordered; no past
 chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
@@ -141,9 +141,9 @@ The local envelope facade adds `getEpisode`, `correctEpisode`,
 `releaseEpisodeCorrection`, `forgetEpisode`, `getCaptureControl`,
 `setCapturePaused`, `setProjectCapture`, and `setProceduralMemory`. No HTTP/MCP
 schema or provider interface is widened. `getEpisode` needs no model or mode
-option on a v15 store. It takes the plan's exact namespace/episode ID and
-independent source/memory/policy limits/cursors (20 default, 50 maximum).
-`{episode,sources,memoryLinks,policies,status}` returns each page as
+option on a v16 store. It takes the plan's exact namespace/episode ID and
+independent source/memory/policy/keep limits/cursors (20 default, 50 maximum).
+`{episode,sources,memoryLinks,policies,keepActions,status}` returns each page as
 `{items,nextCursor,exhausted}`. Signed cursors bind store, namespace, episode,
 page kind, limit and epoch; mutation returns `cursor_stale`. Pages retain whole
 items under 64 KiB and report `budget_exhausted` when truncated. Source roles and
@@ -184,7 +184,7 @@ memory revision, receipts and conflict/qualification/rationale links. Filing
 preserves tags; content correction and forgetting clear them. Deduplicated
 admission adding receipts preserves tags and dependent episodes while retaining
 existing conflict/rationale/qualification invalidation semantics.
-Automatic tag proposal remains SE-2; legacy automatic outputs still reject tags.
+Automatic tag proposals require episode-v1; legacy automatic outputs still reject tags.
 
 The operation envelope uses these episode-specific error codes (opening failures
 throw instead). They never expose raw database or provider errors.
@@ -196,12 +196,128 @@ throw instead). They never expose raw database or provider errors.
 | `episode_not_found` | The episode is absent, deleted or outside the exact namespace. |
 | `generation_conflict` | The supplied control generation is stale. Reread controls. |
 | `capture_disabled` | Capture is paused or disabled for that scope; new work cannot start. |
-| `episode_processing` | Another live session writer owns the episode. Retry after it completes/expires. |
 | `stale_episode` | The draft claim expired, was consumed, or lost its revision/source fence. Discard its result. |
 | `episode_step_conflict` | A draft would replace an existing open next step without a supported disposition transition. |
-| `episode_capture_not_available` | SE-1 supplies storage only; public episode capture awaits SE-2. |
+| `episode_sources_unavailable` | Explicit keep has no currently retained source passages. |
+| `missing_evidence` | The interpretation target has no available staged evidence. |
+| `episode_failed` | The interpretation call failed; ordinary admission continues. |
+| `episode_outcome_pending` | This capture, end or lazy attempt has no identifiable outcome available within the budget; non-retryable. Stranded attempts await lease-expiry recovery. |
+| `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
-An admission with a live admission lease can finish after its session writer
-expires. Deletion, forgetting, explicit discard and project stop remain closed
-fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
-and cannot reopen them or erase a capacity gap.
+Interpretation never holds up ordinary admission. A reserved, started or stranded
+attempt and its writer lease cannot make admission report `processing`; only its
+own live admission lease can do that. The first due draft is attempted before
+extraction. Failure proceeds to normal extraction, independently of whether its
+failure outcome has already been recorded.
+
+A local SQLite busy/locked error before a draft starts returns retryable
+`storage_busy` in the episode outcome, spends no attempt and records no permanent
+gap. A draft reservation is consumed immediately before calling the port, or on
+a terminal preparation failure. An unstarted reservation whose cleanup is locked
+can be recovered after its 125-second lease expires, including after restart.
+
+After start, the owner records a finite failure and coverage gap. A correction,
+capacity release or other publication fence rejects stale content but still lets
+the owner finish its failure immediately. Failure finalization authenticates the
+attempt token without requiring its old revision or source fence. It preserves
+current corrected content and accumulated stronger deletion/discard gaps.
+
+If a lock prevents finalization, the owner makes up to 21 writes within a
+five-second budget, yielding between writes and limiting each SQLite wait to
+250 milliseconds or the remaining budget. If the store remains locked throughout,
+the consumed attempt stays unfinished. Admission still proceeds when writable,
+in this call or its immediate retry. After successful admission, the owner makes
+one additional failure write, bounded to 250 milliseconds. Success returns the
+recorded finite code. If another process already finished the attempt, the owner
+uses a plain read of that token's `episode_attempts.outcome_code`, bounded by the
+remaining write budget. Later attempts cannot replace that outcome. The nullable
+column is content-free v16 metadata; older attempt outcomes are not reconstructed.
+With no identifiable code, or a read or write still locked, it reports
+`episode_outcome_pending` with `retryable: false`.
+End and lazy interpretation also return this code when failure recording remains
+locked. Retrying the same event before expiry does not finalize the consumed
+attempt or repeat interpretation. A later capture or end signal recovers it after
+lease expiry as `episode_timeout` with a coverage gap, without another paid call.
+
+Quick policy is recorded only while the batch is reserved with no live admission
+claim. Claiming admission atomically freezes and returns its policy before any
+extraction. A later quick draft cannot rewrite a pending or completed batch.
+Completion records that frozen policy and its basis with the admission result in
+one transaction: an extracted batch remains `normal`; a batch already marked
+`skip-quick` completes without extraction.
+
+Retryable admission busy errors preserve staged evidence. Cleanup returns the
+owned claim to reserved state; if cleanup is also locked, the process remembers
+it for the next claim. After restart the admission's own bounded lease permits
+recovery. Only terminal admission errors mark staged evidence failed. Deletion,
+forgetting, explicit discard and project stop remain closed admission fences
+(`capture_evidence_closed`); diagnostic failures cannot reopen them.
+
+The v16 `episode_messages` ledger has `(episode_id,message_id)` identity and
+stores `first_event_id` and `coverage_event_id` plus HMAC-SHA256 using the
+existing private episode key over `["m1", role, canonicalText,
+eventTimeOrNull]`. Its rows register atomically with the batch. Completed or
+legitimately in-flight matching identities count zero; an abandoned/failed
+original without a live lease permits new registration while preserving the
+first event ID. Bounded batch message-ID membership fences transferred messages
+against admission by a previous owner. A resumable original can still admit its
+remaining messages; a closed stage records a content-free gap for any remainder.
+Different digests reject with `event_payload_conflict`. It holds no source
+plaintext or role and survives deletion as content-free fence metadata.
+Upgrading v15 creates an empty ledger; earlier messages are not reconstructed.
+Both v14 and v15 opens upgrade eagerly to v16, including feature-off opens, with
+foreign keys on and rollback on failure.
+
+`endEpisodeSession({namespace,client,sessionId,generation,eventId})` is an
+explicit host signal in episode mode. Client keys use `[A-Za-z0-9._-]{1,64}`.
+It consumes at most one end allowance when undrafted evidence exists and never
+completes an admission or changes an already completed batch policy. Missing or
+capacity-bypassed evidence records its actual gap reason, not a token-budget error.
+
+`keepEpisode({namespace,episodeId,expectedRevision,actionId})` bypasses debounce
+and admits from currently retained passages, never interpretation prose. The
+opaque action binds exact source IDs, source revision and source fence in dedicated
+`episode_keep_actions` rows; coverage remains inspectable after later drafts
+replace the passages. Keep policy is recorded beside source batches; their policy,
+type, basis and admission status remain unchanged. Keep admissions use a separate
+table and admission-key column; client keys and event IDs remain unchanged.
+Per-episode keep ordinals have their own counter (the transactional maximum plus
+one) and never advance the namespace receipt ordinal.
+Terminal model-validation/source failures have explicit outcome/code columns;
+transient or unknown failures release the owned claim and allow the same action
+to retry. Busy cleanup is retried by its in-process owner with the original token;
+after a crash, a new process may reclaim the action once its persisted 125-second
+admission lease expires. No in-memory cleanup entry is required for recovery.
+Completed actions replay without model calls. Unknown errors retain the ordinary
+`storage_error` label.
+
+`getEpisode` includes `keepActions:{items,nextCursor,exhausted}`. Supply `keepLimit`
+(default 20, maximum 50) and `keepCursor` to page all actions by creation ordinal.
+Each item contains `actionKey`, `ordinal`, `createdAt`, `policy:'explicit-keep'`,
+`admission` (`pending`, `completed`, `failed` or `retryable`), nullable `errorCode`,
+and `sourceCoverage:{sourceIds,revision,sourceFence}`. Cursors share the existing
+namespace/episode/limit/epoch binding, stale-cursor checks and 64-KiB response budget.
+Source IDs are lineage metadata; this page does not retain additional source text.
+
+Gap reasons use a fixed vocabulary with codes at most 64 ASCII characters.
+Policy pages carry omissions separately as `omittedCount` and bounded
+`omittedMessageIndices` (positions 0–23). Pause permits registered work to finish;
+a stale-generation draft attempt consumes its marker, records `generation_conflict`
+and proceeds to admission. Project stop and deletion fences remain stronger.
+
+Fixed gap codes: `forgotten`, `discarded`, `expired`, `capacity`, `omitted`,
+`episode_failed`, `episode_timeout`, `invalid_model_output`,
+`context_budget_exceeded`, `generation_conflict`, `missing_evidence`.
+Interpretation outcomes may return `missing_evidence`, `episode_failed` or
+`episode_timeout` in addition to the validation, budget and fence codes above.
+These consume the attempt without blocking ordinary admission.
+
+An identical overlap stays `processing` while its original admission has a live
+lease or its pending payload remains within the retention/replay window. An
+intact capacity-bypassed registration is also resumable until completed,
+abandoned or closed by a discard/stop fence, even without a staged payload. Once
+abandoned, failed, released or expired, evidence may move to a new event; the
+old event cannot admit transferred messages. Completed originals always count
+zero. Every episode-mode capture result includes `admission.status`
+(`completed`, `covered` or `processing`); episode-off result shapes are
+unchanged.

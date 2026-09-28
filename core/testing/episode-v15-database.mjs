@@ -2,23 +2,19 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fail } from "./validation.mjs";
-import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
-import { migrateVersion8 } from './ordered-capture-schema.mjs';
-import { migrateVersion9 } from './claim-qualification-schema.mjs';
-import { migrateVersion10 } from './qualified-transition-schema.mjs';
-import { migrateVersion11 } from './rationale-schema.mjs';
-import { migrateVersion12 } from './staged-evidence-schema.mjs';
-import { migrateVersion13 } from './classification-journal-schema.mjs';
+import { fail } from "../validation.mjs";
+import { migrateVersion6, installIndexReaders } from "../index-schema.mjs";
+import { migrateVersion8 } from '../ordered-capture-schema.mjs';
+import { migrateVersion9 } from '../claim-qualification-schema.mjs';
+import { migrateVersion10 } from '../qualified-transition-schema.mjs';
+import { migrateVersion11 } from '../rationale-schema.mjs';
+import { migrateVersion12 } from '../staged-evidence-schema.mjs';
+import { migrateVersion13 } from '../classification-journal-schema.mjs';
 
-import { migrateVersion14, migrateVersion15, EPISODE_SCHEMA_VERSION } from './episode-schema.mjs';
-
-export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
-export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
-  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
+import { migrateVersion14, EPISODE_SCHEMA_VERSION } from '../episode-schema.mjs';
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = EPISODE_SCHEMA_VERSION;
+const VERSION = 15;
 
 function createVersion3(db) {
   db.exec(`
@@ -273,7 +269,7 @@ export function openDatabase(path) {
       fail("unsafe_database_file");
     }
   }
-  const db = new DatabaseSync(path, { timeout: STORAGE_BUSY_TIMEOUT_MS });
+  const db = new DatabaseSync(path, { timeout: 5_000 });
   try {
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
@@ -411,11 +407,8 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
       }
-      if (!(appId === APPLICATION_ID && version === 15)) {
-        upgradeCommittedSchema();
-        migrateVersion14(db);
-      }
-      migrateVersion15(db);
+      upgradeCommittedSchema();
+      migrateVersion14(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

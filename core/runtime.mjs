@@ -497,18 +497,28 @@ export function createMemoryRuntime(input) {
   stagedEvidence.setEpisodes(episodes);
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes,
+    classificationJournal, episodes, proceduralStorage,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
 
   return Object.freeze({
+    prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },
+    failEpisodeKeep(ns,input,code) { ready(); return episodes.failKeep(ns,input,code); },
+    assertEpisodeKeep(ns,input) { ready(); return episodes.assertKeep(ns,input); },
+    validateEpisodeBatch(ns, input) { ready(); return episodes.validateBatch(ns, input); },
+    episodeCaptureState(ns, input) { ready(); return episodes.captureState(ns, input); },
+    pendingEpisodeSession(ns, input) { ready(); return episodes.pendingSession(ns, input); },
+    episodeDraftSnapshot(ns, input) { ready(); return episodes.draftSnapshot(ns, input); },
+    startEpisodeAttempt(ns, input) { ready(); return episodes.startAttempt(ns, input); },
+    settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
     reserveEpisodeBatch(ns, input) { ready(); return episodes.reserveBatch(ns, input); },
     setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },
     claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
     releaseEpisodeWriter(ns, input) { ready(); return episodes.releaseWriter(ns, input); },
     claimEpisodeDraft(ns, input) { ready(); return episodes.claimDraft(ns, input); },
+    episodeDraftOutcome(ns, input) { ready(); return episodes.draftOutcome(ns, input); },
     failEpisodeDraft(ns, input) { ready(); return episodes.failDraft(ns, input); },
     commitEpisodeDraft(ns, input) { ready(); return episodes.commitDraft(ns, input); },
     getEpisode(ns, input, pages) { ready(); return episodes.inspect(ns, input, pages); },

@@ -595,6 +595,154 @@ The base binary rejects v15 on both runtimes; hosts must stop/drain older connec
 Artifact and installed synthetic-rationale gates passed on both runtimes.
 Whitespace checks passed. No semantic-fidelity or paid-pilot claim is made.
 
+### SE-2 verification
+
+Episode capture now orchestrates the independent session writer, interpretation
+attempt and admission lease. First/periodic/PreCompact/end/lazy attempts use durable
+markers; only a newly classified current batch receives quick policy. Interpretation
+failure falls through to ordinary admission. Both existing storage completion seams
+release staging once admission and selected-passage disposition are complete.
+Automatic procedural proposals use the v2 candidate path only in episode-v1.
+Explicit keep uses retained passages, a revision-bound action journal and ordinary
+admission; completed or terminally failed action replay makes no additional model
+call. Transient/unknown failures release their claim for retry. Dedicated keep-action
+rows retain source coverage and paged creation ordinals after later drafts.
+
+The durable message identity decision adds a STRICT message ledger in schema v16. Each
+per-episode message ID binds an HMAC of canonical role/text/event time and its first
+event ID, without storing plaintext text or role. Identical overlaps count zero;
+changed bindings reject atomically; partial overlaps count once. These content-free
+rows survive release, restart and conversation deletion. Eager v14/v15 upgrades run
+atomically with foreign keys on. The v15 step creates an empty ledger: detection
+covers post-upgrade registrations only. Committed synthetic fixtures and the frozen
+v15 opener require no Git history, archive or network access at test time.
+
+| SE-2 responsibility / touched gate | Tests (under `core/test/`) |
+| --- | --- |
+| HMAC receipt identity, local-only metadata and content-free ledger; E1 | `episode-capture.test.mjs`: fresh quick/provider payload inspection, ledger row inspection and deletion; `procedural-capture.test.mjs`: HMAC receipts; inherited identity/key tests in `episode-storage.test.mjs` |
+| Strict interpretation fields, mixed scripts, malformed Unicode, foreign/split anchors and source bounds; E2 | `episode-capture.test.mjs`: malformed/oversized outputs, language/source examples, foreign and split-surrogate anchors; inherited storage field/pin tests |
+| First/periodic N2/8/16, B1/8/9/17, first+PreCompact coalescing, end/lazy caps, reopened sessions, overlap/restart; E3 | `episode-capture.test.mjs`: scheduling and message identity cases; `episode-concurrency.test.mjs`: crash/replay and end/lazy races |
+| Throw/timeout/malformed/budget fallback, mandatory source budget and prior trimming; E4 | `episode-capture.test.mjs`: failure after old quick, real 30-second abort with fresh admission lease, prior-only overflow and visible gaps |
+| Heavy day, N16/140 approximately 16 KiB payloads, two sessions/processes, sustained failure, protected bypass, N8/129 baseline, both release orders and stale draft fence; E4a | `episode-capture.test.mjs`, `episode-concurrency.test.mjs`; inherited `episode-capacity.test.mjs` and `episode-staging-release.test.mjs` retain count/byte/minimal-prefix, legacy protection, expiry and rollback gates |
+| Two processes, expired worker, crash after interpretation before admission lease, replay and callback fences; E5 | `episode-concurrency.test.mjs`: IPC barriers without sleep synchronization, stale worker, overlap registered between validation and reservation, end/lazy, forget/discard/stop/pause and correction during keep |
+| Paused/project-stop/re-enable generations and no personal fallback; E6 | `episode-capture.test.mjs`: synthetic Claude/Codex producer bindings, withheld partial text and restart; `episode-concurrency.test.mjs`: in-flight pause versus stop |
+| Conversation deletion, kept-memory lineage/suppression, correction and retained-source invalidation; E7 | `episode-capture.test.mjs`: deletion leaves content-free ledger; `episode-concurrency.test.mjs`: keep correction/deletion; inherited multi-source/historical/feature-off storage tests |
+| Fresh quick only, seven ordinary debounced batches with seven qualification calls and admissions, old-context anchor rejection, non-retroactive end policy, keep source coverage/replay/failure; E8 | `episode-capture.test.mjs`, `episode-concurrency.test.mjs` |
+| Event-time validation and existing episode inspection; E9 | `episode-capture.test.mjs`; inherited `episode-storage.test.mjs` inspection/cursor tests. Range reads and startup context remain the retrieval package |
+| Automatic tags in episode-v1, exact receipt binding, invalid-kind/foreign rejection and legacy byte parity; E10 | `procedural-capture.test.mjs`, `episode-mode-parity.test.mjs`: committed v14/v15 fixtures and indexed-evidence getter rejection; inherited `procedural-storage.test.mjs` checks tag-only preservation and mutation invalidation |
+| Eager v16 migration/rollback, older-opener exclusion, atomic registration, release/replay and shipped files; E11 | `episode-migration.test.mjs`, `episode-capture.test.mjs`, `episode-concurrency.test.mjs`; existing artifact suite checks the updated allowlist. Provider/MCP generation remains separate work |
+
+Main integration preserves the already-implemented release calls rather than adding
+second releases. Admission lineage now resolves actual message receipt IDs rather
+than assuming the batch event ID is the receipt event ID. The former mode-unavailable
+test now validates malformed input. Existing current-version assertions advance to
+16; the synthetic v11 rationale fixture drops both `episode_messages` and
+`episode_keep_actions` before reopening, alongside the earlier episode tables.
+
+The four new suites run under `test:core`; `demo:episodes` is registered on both CI
+core runtimes. The demo verifies retained passage inspection, quick policy, keep,
+release and replay with a scripted port. No paid calls, real data, hosted changes,
+provider default, semantic-fidelity claim or trusted-producer compatibility claim
+is introduced.
+
+Review corrections add regression coverage for pre-draft pause/stop and crash,
+consumed PreCompact replay, transient keep lock recovery, 27-action paging and
+coverage persistence, event-ID namespace isolation, frozen mode-off diagnostics,
+query-count parity, shared full-message digests, abandoned overlap recovery,
+finite omission codes and truthful capacity gaps on end/lazy work. The unused
+`test:episodes` script is removed; `test:core` continues registering every suite.
+
+Further verification separates keep admission state and coverage into the v16
+`episode_keep_actions` table, with independent action ordinals and no batch-policy
+mutation. Capture-event message membership fences every superseded owner;
+reserved evidence stays resumable until its lease or replay window ends. End
+signals have no capture-event identity lookup. Interpretation diagnostics document
+`interpretEpisode`; mode-off diagnostic and request fixtures remain unchanged.
+Regression coverage includes failed keep after completed quick, crash/keep/quick
+replay, busy cleanup with new-process lease recovery, capture/end and capture/keep
+ID collisions, reserved/abandoned/expired/released/completed overlaps, and partial
+message extraction. The v16 layout expectation is generated offline alongside
+committed v15 fixtures, never generated by tests.
+
+Maintainer-approved scope additions: the synthetic v11 rationale fixture drops
+both `episode_messages` and `episode_keep_actions`. Schema v16 adds the dedicated
+keep-actions table and the `episode_events` omission count/index columns alongside
+the message ledger. Migration rollback is checked before ledger creation and
+after the batch-column changes, at dedicated keep-table creation.
+
+The approved data-only full-`messages` additions populate the large retained view
+in `episode-capacity.test.mjs` and the E2/E9 paged-inspection case in
+`episode-storage.test.mjs`. Those additions leave assertions unchanged. A separate
+approved single-assertion replacement claims and finishes admission while the
+draft remains live, proving interpretation cannot block admission. Further
+approved edits rename the two stale test titles and add bounded `storage_busy`
+retry only to the capacity test's concurrent child reservation loop.
+
+Overlap verification covers reserved capacity-bypassed and staged batches with
+partial overlaps, plus partial takeover of an abandoned bypass. Resumable messages
+keep their owner; replay extracts only the messages still owned by that batch.
+Failed staged evidence retains its closed fence; partial takeover records a
+content-free gap for any remainder, which a new submitted event can recover.
+A draft reservation now records whether its attempt has started. Local SQLite
+busy/locked failures before the model call remain retryable, create no permanent
+gap and spend no attempt allowance. Unstarted reservations whose cleanup was
+blocked recover after lease expiry, including in a new process; started attempts
+remain consumed. The v16 committed layout expectation includes this content-free
+flag, defaulting to consumed for older attempts. Held-lock regression tests cover
+claim, all pre-call snapshot boundaries, start, and restart recovery. Keep cleanup
+uses the same SQLite primary/extended busy-code detection as the public facade.
+
+Other maintainer-approved scope additions are the single `demo:episodes` entry in
+`CONTRIBUTING.md`, the `interpretEpisode` stage in
+`docs/model-failure-diagnostics.md`, and `episode_attempts.started` in unmerged
+schema v16 to distinguish reserved attempts from consumed attempts.
+
+Further verification covers locks at draft commit and both post-call freshness
+checks. Interpretation and admission are independent: draft state and writer
+leases never gate ordinary admission, which waits only on its own admission
+lease. A correction or capacity release prevents stale publication while the
+owner immediately finishes the attempt with a finite failure and coverage gap.
+Failure finalization preserves corrected content and stronger deletion fences.
+
+After a started attempt encounters a lock, the owner retries failure recording
+up to 20 times after the initial write, within five seconds. Each SQLite wait
+is bounded by 250 ms and the remaining budget. Only a store locked for that
+whole budget strands an attempt for lease-expiry recovery. Admission proceeds
+when writable in this call or its immediate retry. After successful admission
+the owner tries one additional failure write, bounded to 250 milliseconds. A
+recorded outcome returns its finite code. A no-op write uses a plain read of
+that token's content-free `outcome_code`, within the remaining 250 ms budget.
+Later attempts cannot change the reported code; unidentified older outcomes
+stay pending. With no stored outcome, or another lock, capture, end and lazy
+paths return non-retryable `episode_outcome_pending`. Same-event replay does
+not finalize the consumed attempt; lease-expiry recovery records
+`episode_timeout` without another paid call. Retryable admission busy
+preserves staged evidence and releases its own claim when writable. A locked
+cleanup is retried in-process; after restart its ordinary admission lease
+bounds recovery.
+
+The heavy-day harness uses IPC barriers without clock advancement. Its failure
+arm is repeated at least 20 times at the verified HEAD. Explicit stranded-attempt
+lease-expiry tests alone advance the recovery clock. Crash replays run with the
+original writer lease still live; the model-timeout test uses the real timer.
+Regression tests cover
+correction and capacity fences, every post-call lock boundary, a lock lasting
+beyond the failure budget, admission busy replay, and concurrent admission while
+an interpretation is live. Closed bypassed batches release message ownership to
+new submissions after re-enable; pause retains resumable ownership. Keep locks
+remain retryable and all lock classification uses one exported SQLite helper.
+Mode-off frozen parity remains unchanged.
+
+Quick policy is decided only for a reserved batch without a live admission claim.
+The claim freezes its policy atomically; completion records the same policy and
+basis with the admission result. Two-process regressions cover extraction claimed
+before a quick draft commits and the reverse order, where replay skips extraction.
+Held-lock regressions cover both successful post-admission finalization and a
+still-pending outcome at commit and both post-call snapshot boundaries. The stale
+`episode_processing` code is absent from the documented vocabulary and the child
+harness. Verification repeats the heavy-day failure arm ten times and the full
+capacity suite twenty times under concurrent load, each with isolated temp data.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,

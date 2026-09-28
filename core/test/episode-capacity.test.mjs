@@ -6,6 +6,7 @@ import { createMemoryRuntime } from '../runtime.mjs';
 function large(id, session='private-host-session', units=780) {
   const input=batch(id,'x'.repeat(units),session);
   input.view.messages=Array.from({length:20},(_,i)=>({id:`${id}-${i}`,role:'user',content:'x'.repeat(units)}));
+  input.messages=input.view.messages.map(message=>({...message,occurredAt:null}));
   input.payloadDigest=digest(JSON.stringify(input.view));return input;
 }
 const payloadCount=f=>f.db.prepare('SELECT count(*) n FROM staged_capture_evidence WHERE payload IS NOT NULL').get().n;
@@ -86,7 +87,7 @@ test('E4a per-event staging overflow bypasses before reclaiming any eligible pay
   assert.deepEqual(f.db.prepare('SELECT * FROM staged_capture_evidence').all(),before);
 });
 
-test('E5 two processes serialize a session; expired attempts stay consumed and admission recovers after crash',async t=>{
+test('E5 live drafts permit admission and expired attempts stay consumed; crash replay is in episode-concurrency.test.mjs',async t=>{
   const {execFileSync}=await import('node:child_process');
   const f=fixture(t),input=batch(),r=register(f,input),job=draft(f,r,input);
   const run=body=>JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',`
@@ -94,7 +95,8 @@ test('E5 two processes serialize a session; expired attempts stay consumed and a
     const runtime=createMemoryRuntime({path:${JSON.stringify(f.path)},sessionEpisodes:{mode:'episode-v1'}});
     const ns=${JSON.stringify(ns)};const result=${body};runtime.close();console.log(JSON.stringify(result));`],{encoding:'utf8'}));
   assert.deepEqual(run(`runtime.claimEpisodeWriter(ns,{episodeId:${JSON.stringify(r.episodeId)},generation:'initial'})`),{processing:true});
-  assert.deepEqual(f.runtime.claimAdmission(ns,{...input,leaseMs:125000}),{processing:true});
+  assert.equal(f.runtime.finishAdmission(ns,{...input,
+    token:f.runtime.claimAdmission(ns,{...input,leaseMs:125000}).token,items:[]}).duplicate,false);
   f.db.exec('UPDATE episode_attempts SET expires_at=0; UPDATE session_episodes SET writer_expires_at=0');
   const successor=run(`runtime.claimEpisodeWriter(ns,{episodeId:${JSON.stringify(r.episodeId)},generation:'initial'})`);
   assert.ok(successor.token);
@@ -114,8 +116,16 @@ test('E5 concurrent processes admit independent sessions under shared capacity p
       const runtime=createMemoryRuntime({path:${JSON.stringify(f.path)},sessionEpisodes:{mode:'episode-v1',draftEveryBatches:16}}),ns=${JSON.stringify(ns)};
       for(let i=0;i<70;i++){
         const eventId=${JSON.stringify(client)}+i,view={messages:Array.from({length:20},(_,j)=>({id:eventId+'-'+j,role:'user',content:'x'.repeat(780)})),retainedSourceWindow:{maxUnitsPerMessage:800,truncatedMessageIndices:[]}};
-        const input={client:${JSON.stringify(client)},clientLabel:'Synthetic process',sessionId:'private-session',eventId,generation:'initial',payloadDigest:createHash('sha256').update(JSON.stringify(view)).digest('hex'),view};
-        runtime.reserveEpisodeBatch(ns,input);const claim=runtime.claimAdmission(ns,{...input,leaseMs:125000});
+        const input={client:${JSON.stringify(client)},clientLabel:'Synthetic process',sessionId:'private-session',eventId,generation:'initial',payloadDigest:createHash('sha256').update(JSON.stringify(view)).digest('hex'),view,messages:view.messages.map(message=>({...message,occurredAt:null}))};
+        const {isStorageBusy}=await import(${JSON.stringify(new URL('../database.mjs',import.meta.url).href)});
+        for(let retry=0;;retry++){
+          try { runtime.reserveEpisodeBatch(ns,input); break; }
+          catch(error){
+            if(retry>=20 || !(error.code==='storage_busy' || isStorageBusy(error)))throw error;
+            await new Promise(resolve=>setTimeout(resolve,25));
+          }
+        }
+        const claim=runtime.claimAdmission(ns,{...input,leaseMs:125000});
         runtime.finishAdmission(ns,{...input,token:claim.token,items:[]});
       }runtime.close();`;
     const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','ignore','pipe']});let error='';
