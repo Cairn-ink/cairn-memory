@@ -709,7 +709,9 @@ ordinary admission lease bounds recovery.
 
 The heavy-day harness uses IPC barriers without clock advancement. Its failure
 arm is repeated at least 20 times at the verified HEAD. Explicit stranded-attempt
-lease-expiry tests alone advance the recovery clock. Regression tests cover
+lease-expiry tests alone advance the recovery clock. Crash replays run with the
+original writer lease still live; the model-timeout test uses the real timer.
+Regression tests cover
 correction and capacity fences, every post-call lock boundary, a lock lasting
 beyond the failure budget, admission busy replay, and concurrent admission while
 an interpretation is live. Closed bypassed batches release message ownership to

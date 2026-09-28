@@ -199,14 +199,13 @@ test('E8 failed explicit keep replay has a durable outcome and makes no further 
   assert.equal(ok(f.core.getEpisode({namespace:ns,episodeId:result.episode.id})).keepActions.items[0].errorCode,'invalid_model_output');
 });
 
-test('E4 actual 30-second abort precedes a fresh 125-second admission lease (mock clock, no sleep)',async t=>{
+test('E4 real 30-second abort precedes a fresh 125-second admission lease', { timeout: 45000 }, async t=>{
   const {deferred}=await import('../testing/episode-capture-helpers.mjs');const entered=deferred();let signal;
-  t.mock.timers.enable({apis:['setTimeout']});
   const f=setup(t,{interpretEpisode:request=>{signal=request.signal;entered.resolve();return new Promise(()=>{});},
     extract:()=>{const row=f.db.prepare('SELECT state,lease_expires_at FROM admission_claims').get();assert.equal(row.state,'pending');assert.ok(row.lease_expires_at-Date.now()>124000);return {items:[]};}});
   const pending=f.core.capture(input());await entered.promise;
   const reserved=f.db.prepare('SELECT state,lease_expires_at FROM admission_claims').get();assert.equal(reserved.state,'reserved');assert.equal(reserved.lease_expires_at,null);
-  t.mock.timers.tick(30000);const result=ok(await pending);assert.equal(signal.aborted,true);assert.equal(result.episode.error.code,'episode_timeout');
+  const result=ok(await pending);assert.equal(signal.aborted,true);assert.equal(result.episode.error.code,'episode_timeout');
 });
 
 test('E3/E4a v16 ledger, parent, shell and staging registration roll back together',async t=>{

@@ -44,13 +44,12 @@ test('E5 crash after durable interpretation before admission lease, restart reco
   assert.equal(f.db.prepare('SELECT state FROM admission_claims').get().state,'reserved');
   assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished,1);
   const exit=once(a,'exit');a.kill('SIGKILL');await exit;
-  f.db.exec('UPDATE session_episodes SET writer_expires_at=0');
   const result=ok(await f.core.capture(input()));assert.equal(counts(f.model),0);assert.equal(counts(f.model,'extract'),1);
-  assert.equal(result.episode.reason,'replay');
+  assert.equal(result.episode.status,'processing');assert.equal(result.admission.status,'completed');
   assert.equal(ok(f.core.inspectCaptureEvidence({namespace:ns,client:'synthetic',eventId:input().eventId})).evidence.state,'released');
 });
 
-test('E5 expired worker cannot publish, release successor or consume its memory lease',async t=>{
+test('E5 fake clock recovers an expired stranded worker without letting it publish or consume successor leases',async t=>{
   const entered=deferred(),release=deferred();
   const f=setup(t,{interpretEpisode:async r=>{entered.resolve();await release.promise;return interpretation(r);}});
   const running=f.core.capture(input());await entered.promise;
@@ -188,11 +187,11 @@ test('E5 crash before draft, pause, replay, unpause and replay preserve ordinary
 test('E5 crash after PreCompact consumes its marker before generation checks on replay', async t => {
   const f = setup(t), worker = child(t, f.path, 'crash-after-precompact'); await stage(worker, 'drafted');
   const exit = once(worker, 'exit'); worker.kill('SIGKILL'); await exit;
-  f.db.exec('UPDATE session_episodes SET writer_expires_at=0');
   ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: 'initial', paused: true }));
   const value = input(); value.episodeContext.origin = 'precompact';
   const replay = ok(await f.core.capture(value));
-  assert.equal(replay.episode.reason, 'replay'); assert.equal(counts(f.model), 0);
+  assert.equal(replay.episode.status, 'processing'); assert.equal(replay.admission.status, 'completed');
+  assert.equal(counts(f.model), 0);
   assert.equal(counts(f.model, 'extract'), 1);
   assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 1);
 });
@@ -201,7 +200,6 @@ test('E5/E8 crash after quick policy, then keep, then replay preserves skip with
   const f = setup(t), worker = child(t, f.path, 'crash-after-quick');
   assert.equal((await once(worker, 'message'))[0].stage, 'drafted');
   const exited = once(worker, 'exit'); worker.kill('SIGKILL'); await exited;
-  f.db.exec('UPDATE session_episodes SET writer_expires_at=0');
   const before = f.db.prepare('SELECT * FROM episode_events').get();
   assert.equal(before.policy, 'skip-quick'); assert.equal(before.admission, 'reserved');
   const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: before.episode_id }));
@@ -211,7 +209,7 @@ test('E5/E8 crash after quick policy, then keep, then replay preserves skip with
   assert.equal(counts(f.model, 'extract'), 1); assert.equal(counts(f.model), 0);
 });
 
-test('E5/E8 busy keep cleanup lost at restart recovers in a new process after lease expiry', { timeout: 45000 }, async t => {
+test('E5/E8 fake clock recovers a stranded keep lease in a new process after busy cleanup was lost', { timeout: 45000 }, async t => {
   let lock = false;
   const f = setup(t, { interpretEpisode: r => interpretation(r, 'quick-one-off-question'), extract: () => {
     if (lock) f.db.exec('BEGIN IMMEDIATE');
@@ -332,7 +330,7 @@ test('E3/E4a/E5 partial takeover of an abandoned bypass leaves the original repl
     .get(registered.episodeId, 'message-1').coverage_event_id, successor.eventId);
 });
 
-test('E3/E5 busy draft cleanup lost at restart recovers an unspent attempt after lease expiry', { timeout: 30000 }, async t => {
+test('E3/E5 fake clock recovers a stranded unspent draft lease after busy cleanup was lost at restart', { timeout: 30000 }, async t => {
   const { captureEpisodeMessages } = await import('../episode-capture.mjs');
   const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
   await assert.rejects(captureEpisodeMessages({ runtime: { ...runtime,
@@ -356,7 +354,7 @@ test('E3/E5 busy draft cleanup lost at restart recovers an unspent attempt after
   assert.deepEqual(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events').get().gap_reasons), []);
 });
 
-test('E3/E5 an expired unstarted lazy reservation remains eligible after restart', async t => {
+test('E3/E5 fake clock recovers a stranded unstarted lazy lease after restart', async t => {
   const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
   const registered = runtime.reserveEpisodeBatch(ns, batch('pending', 'Synthetic pending evidence', 'earlier'));
   const writer = runtime.claimEpisodeWriter(ns, { episodeId: registered.episodeId, generation: 'initial' });
