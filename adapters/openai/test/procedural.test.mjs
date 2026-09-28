@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fakeModel, request, qualifications, setup, captureInput, ok, ns, prompts } from '../../../core/testing/openai-episodes.mjs';
+import { fakeModel, request, interpretation, qualifications, setup, captureInput, ok, ns, prompts } from './openai-episodes.mjs';
 import { createQualificationTextCatalog } from '../../../core/qualification-text-catalog.mjs';
 
 const input = () => ({ items: [{ itemIndex: 0, content: 'Use diagrams', kind: 'preference',
@@ -89,7 +89,6 @@ test('E1/E8/E10 fake HTTP capture retains sources, binds procedural receipts and
 });
 
 test('E8 only a fresh quick episode skips extraction; the next batch uses automatic tag schemas', async t => {
-  const { interpretation, qualifications } = await import('../../../core/testing/openai-episodes.mjs');
   const f = setup(t, { respond: (method, input) => {
     if (method === 'interpretEpisode') return interpretation(input, 'quick-one-off-question');
     if (method === 'extract') return { items: [{ content: 'Use diagrams', kind: 'preference', confidence: 1,

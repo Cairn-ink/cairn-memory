@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
-import { createOpenAIModel } from '../../adapters/openai/index.mjs';
-import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
-import { qualificationCandidatesPrompt } from '../qualification-candidates-prompt.mjs';
-import { openMemoryCore } from '../index.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { createOpenAIModel } from '../index.mjs';
+import { DEFAULT_MODEL } from '../profiles.mjs';
+import { qualificationCandidatesPrompt } from '../../../core/qualification-candidates-prompt.mjs';
+import { openMemoryCore } from '../../../core/index.mjs';
 
 export const prompts = Object.fromEntries(['interpret-episode', 'extract-episode-sources', 'qualify-episode-candidates']
   .map(name => [name, name === 'qualify-episode-candidates'
-    ? qualificationCandidatesPrompt(new URL(`../prompts/${name}.md`, import.meta.url))
-    : readFileSync(new URL(`../prompts/${name}.md`, import.meta.url), 'utf8')]));
+    ? qualificationCandidatesPrompt(new URL(`../../../core/prompts/${name}.md`, import.meta.url))
+    : readFileSync(new URL(`../../../core/prompts/${name}.md`, import.meta.url), 'utf8')]));
 export const ns = { ownerId: 'synthetic', scope: 'project', projectId: 'episode-test' };
 export const sourceText = '請在 review 使用 diagrams 😀。';
 export const interpretationInput = () => ({ sources: [{ sourceIndex: 0, role: 'user', text: sourceText }],

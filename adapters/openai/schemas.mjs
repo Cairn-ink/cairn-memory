@@ -69,13 +69,13 @@ export function episodeSchemasFor(method, input) {
   }
   if (method !== 'interpretEpisode') invalid();
   exactData(input, ['sources', 'classificationTarget', 'prior']);
-  denseArray(input.sources, 1, 1552);
+  try { denseArray(input.sources, 1, 1552); } catch { invalid(); }
   input.sources.forEach((source, position) => {
     exactData(source, ['sourceIndex', 'role', 'text']);
     if (source.sourceIndex !== position || !['user', 'assistant'].includes(source.role) ||
         typeof source.text !== 'string' || !source.text.length || source.text.length > 800 || !source.text.isWellFormed()) invalid();
   });
-  denseArray(input.classificationTarget, 1, 24);
+  try { denseArray(input.classificationTarget, 1, 24); } catch { invalid(); }
   if (new Set(input.classificationTarget).size !== input.classificationTarget.length ||
       input.classificationTarget.some(value => index(value) >= input.sources.length)) invalid();
   if (!input.prior || typeof input.prior !== 'object' || Array.isArray(input.prior) ||

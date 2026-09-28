@@ -29,7 +29,8 @@ the 272K-token long-context surcharge threshold. Rates checked 2026-09-11.
 See [Luna acceptance](plans/luna-extraction.md) for frozen comparison gates and
 the original cumulative-budget boundary. No automatic fallback is introduced.
 
-The default remains `gpt-4.1-mini-2025-04-14` for the existing methods; episode interpretation has no default. An explicit
+The default remains `gpt-4.1-mini-2025-04-14` for the existing methods; episode
+interpretation has no default. An explicit
 `extractionModel: 'gpt-5.4-mini-2026-03-17'` option on `createOpenAIModel` selects
 that snapshot for extraction only, with `reasoning: { effort: 'none' }` on both
 count and generation. Classification, selection and ranking keep the existing
@@ -144,6 +145,22 @@ diagnostics; fake-HTTP core integration verifies retained passages, receipt-boun
 tags, failure gaps, startup reads and replay. These checks establish transport
 and provenance plumbing, not model fidelity or semantic support. No real-provider
 episode acceptance or hosted/MCP generation is claimed.
+
+The adapter's test helpers and frozen oracle live in `adapters/openai/test/`.
+To re-freeze the oracle, prepare a clean checkout at `7f9ee869`, install its
+adapter dependencies, then run the maintainer-only generator from the current
+checkout (Node 22.16 or newer):
+
+```sh
+npm ci --prefix "/absolute/clean/7f9ee869-checkout/adapters/openai"
+node adapters/openai/test/generate-openai-legacy-fixture.mjs \
+  --write "/absolute/clean/7f9ee869-checkout"
+```
+
+The generator verifies the pinned base and clean tracked files, then rebuilds
+the `{base,cases}` wrapper using fake HTTP and the frozen core request fixtures.
+Review the resulting fixture diff before committing. Tests only read the oracle;
+they never invoke Git or regenerate it, and neither path calls a real provider.
 
 ### Transport authority
 

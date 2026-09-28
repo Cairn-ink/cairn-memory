@@ -1,11 +1,12 @@
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 // Frozen against 7f9ee869 before adapter changes. Tests never invoke Git or
 // regenerate the oracle; transport bodies and returned values are exact bytes.
-export async function captureOpenAIParity(root) {
+export async function captureOpenAIParity(root = new URL('../../../', import.meta.url)) {
+  if (root instanceof URL) root = fileURLToPath(root);
   const { createOpenAIModel } = await import(pathToFileURL(`${root}/adapters/openai/index.mjs`));
-  const fixture = JSON.parse(readFileSync(new URL('./episode-v15-fixture.json', import.meta.url), 'utf8'));
+  const fixture = JSON.parse(readFileSync(new URL('../../../core/testing/episode-v15-fixture.json', import.meta.url), 'utf8'));
   const results = [];
   const messages = [{ index: 0, role: 'user', content: 'Synthetic evidence.' }];
   const candidates = { items: [{ itemIndex: 0, content: 'Synthetic preference', kind: 'preference',

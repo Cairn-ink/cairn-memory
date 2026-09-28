@@ -86,7 +86,6 @@ try {
   assert.equal(calls.length, 12);
   console.log('PASS: real tokenizer + offline adapter → capture → classify → recall → correct → forget');
   console.log(`Synthetic database retained at ${path}`);
-  console.log('HTTP/model responses are scripted. No real provider request, measured framing or semantic-quality claim.');
 } finally { core.close(); }
 
 const episodes = openMemoryCore({ path, model, captureQualification: 'source-bound-v2',
@@ -112,3 +111,4 @@ try {
   ok(episodes.forgetEpisode({ namespace, episodeId: detail.episode.id, expectedRevision: detail.episode.revision }));
   console.log('PASS: offline episode interpretation → automatic procedural tag → startup → inert replay → forget');
 } finally { episodes.close(); }
+console.log('HTTP/model responses are scripted. No real provider request, measured framing or semantic-quality claim.');

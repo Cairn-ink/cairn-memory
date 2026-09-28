@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fakeModel, interpretation, interpretationInput, request, envelope, setup, captureInput, ok, ns } from '../../../core/testing/openai-episodes.mjs';
+import { fakeModel, interpretation, interpretationInput, request, envelope, setup, captureInput, ok, ns } from './openai-episodes.mjs';
 import { DEFAULT_MODEL, EXPERIMENTAL_EXTRACTION_MODEL, LUNA_EXTRACTION_MODEL, SOL_RATIONALE_MODEL } from '../profiles.mjs';
 import { callModel } from '../../../core/model-call.mjs';
+import { episodeSchemasFor } from '../schemas.mjs';
 
 test('E3 interpretation has no default; explicit profiles select only the new port', async () => {
   const absent = fakeModel({ episodeModel: undefined });
@@ -159,6 +160,29 @@ test('E4 local budget, malformed requests and in-flight abort stop before genera
   await assert.rejects(cancelled.model.interpretEpisode({ ...request(), signal: controller.signal }), { name: 'AbortError' });
   assert.equal(cancelled.calls.length, 1);
   assert.deepEqual(cancelled.diagnostics.map(event => event.reason), ['model_cancelled']);
+});
+
+test('E4 malformed interpretation arrays use the adapter request error before HTTP', async () => {
+  const invalidRequest = error => {
+    assert.equal(error.constructor, Error);
+    assert.equal(error.message, 'invalid_openai_request');
+    assert.equal(error.code, undefined);
+    return true;
+  };
+  for (const classificationTarget of [undefined, null, {}, [], Array(25).fill(0), Array(1),
+    [0, 0], [-1], [1], [0.5], ['0']]) {
+    const input = { ...interpretationInput(), classificationTarget };
+    assert.throws(() => episodeSchemasFor('interpretEpisode', input), invalidRequest);
+    const f = fakeModel();
+    await assert.rejects(f.model.interpretEpisode(request('interpret-episode', input)), invalidRequest);
+    assert.equal(f.calls.length, 0);
+    assert.deepEqual(f.diagnostics, [
+      { version: 1, stage: 'interpretEpisode', layer: 'adapter', reason: 'request_invalid' },
+    ]);
+  }
+  for (const sources of [null, [], Array(1553), Array(1)]) {
+    assert.throws(() => episodeSchemasFor('interpretEpisode', { ...interpretationInput(), sources }), invalidRequest);
+  }
 });
 
 test('E1/E4 transport errors and bounded response bodies disclose no private provider text', async () => {

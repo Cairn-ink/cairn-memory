@@ -9,6 +9,8 @@
   preserve legacy request/output bytes and diagnostics. Offline fake-HTTP tests
   and the demo cover capture, retained sources, receipt-bound tags and replay.
   No hosted/MCP generation, paid grant or model-fidelity claim is added.
+- Normalize malformed episode source/target arrays to `invalid_openai_request`
+  before HTTP, consistent with other malformed adapter requests.
 
 ## Unreleased — session episode reads
 
