@@ -33,7 +33,7 @@ export function migrateVersion6(db) {
 
 // Refresh only readers and their maintenance triggers; generations and progress
 // are durable and must survive a schema upgrade unchanged.
-export function installIndexReaders(db, currentOnly = false) {
+export function installIndexReaders(db, currentOnly = false, review = false) {
   const same = (a, b) => `${a}.owner_id = ${b}.owner_id AND ${a}.scope = ${b}.scope AND ${a}.project_id = ${b}.project_id`;
   const active = (alias) => `SELECT active_generation FROM namespace_index_state s WHERE ${same('s', alias)}`;
   const definitions = [
@@ -52,6 +52,11 @@ export function installIndexReaders(db, currentOnly = false) {
       valid: `${same('p','c')} AND p.level = 2 AND c.level = 1 AND p.revision = r.parent_revision AND c.revision = r.child_revision`, owner: 'p' },
   ];
   for (const d of definitions) {
+    const reviewFilter = !review ? '' : d.raw === 'memories'
+      ? " AND r.review_state != 'awaiting'"
+      : ['moc_title_sources', 'moc_memory_refs'].includes(d.raw)
+        ? " AND NOT EXISTS (SELECT 1 FROM memories h WHERE h.id=r.memory_id AND h.review_state='awaiting')" : '';
+    d.valid += reviewFilter;
     if (currentOnly) {
       db.exec(`DROP VIEW ${d.view};
         DROP TRIGGER index_${d.raw}_insert;
@@ -67,7 +72,7 @@ export function installIndexReaders(db, currentOnly = false) {
         ? " AND NOT EXISTS (SELECT 1 FROM memories h WHERE h.id = r.memory_id AND h.currentness = 'historical')"
         : '';
     db.exec(`CREATE VIEW ${d.view} AS
-      SELECT r.* FROM ${d.raw} r${rawOwner} WHERE (${active(d.owner)}) IS NULL${rawCurrent}
+      SELECT r.* FROM ${d.raw} r${rawOwner} WHERE (${active(d.owner)}) IS NULL${rawCurrent}${reviewFilter}
       UNION ALL SELECT r.* FROM ${d.from}
       JOIN ${d.projection} i ON ${match} AND i.generation = (${active(d.owner)})
       WHERE ${d.valid};`);
@@ -92,8 +97,10 @@ export function installIndexReaders(db, currentOnly = false) {
       DELETE FROM ${d.projection} WHERE ${d.keys.map(k => `${k} = NEW.${k}`).join(' AND ')}
         AND generation IN (${generations})
         AND NOT EXISTS (SELECT 1 FROM ${d.from} WHERE ${newMatch} AND ${d.valid});`;
+    const promote = review && d.raw === 'memories'
+      ? insert.replace(`WHERE ${newMatch}`, `WHERE OLD.review_state = 'awaiting' AND NEW.review_state != 'awaiting' AND ${newMatch}`) : '';
     db.exec(`CREATE TRIGGER index_${d.raw}_insert AFTER INSERT ON ${d.raw} BEGIN ${insert} END;
-      CREATE TRIGGER index_${d.raw}_update AFTER UPDATE ON ${d.raw} BEGIN ${refresh} END;
+      CREATE TRIGGER index_${d.raw}_update AFTER UPDATE ON ${d.raw} BEGIN ${refresh}${promote} END;
       CREATE TRIGGER index_${d.raw}_delete AFTER DELETE ON ${d.raw} BEGIN ${remove} END;`);
   }
 }

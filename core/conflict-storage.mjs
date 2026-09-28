@@ -22,6 +22,7 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
     let changed = false;
     for (const { memoryId, hints = [] } of entries) {
       const memory = activeRow(ns, memoryId);
+      if (!memory) continue; // Awaiting admissions do not participate in conflict navigation.
       if (hints.some((hint) => memoryId === hint.memoryId)) fail("invalid_ref");
       validateTargets(ns, hints);
       for (const hint of hints) {

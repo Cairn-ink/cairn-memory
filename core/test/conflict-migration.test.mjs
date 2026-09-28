@@ -14,7 +14,7 @@ const tables = ['memories', 'receipts', 'suppressed', 'namespace_epochs', 'store
 const snapshot = (db) => tables.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map((row) => {
   if (table === 'memories' && Object.hasOwn(row, 'currentness')) {
     assert.equal(row.currentness, 'current');
-    const { currentness, ...preserved } = row; return preserved;
+    const { currentness, review_state, ...preserved } = row; return preserved;
   }
   return { ...row };
 }));
@@ -55,7 +55,7 @@ test('K09 v5→v9 preserves all values, claims, placements, suppression and sign
   const before = snapshot(db);
   const saved = cursor(db);
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.deepEqual(snapshot(db), before);
   const list = core.list({ namespace, limit: 1, cursor: saved });
   assert.equal(list.ok, true, JSON.stringify(list));
@@ -84,7 +84,7 @@ test('K09 v5 DDL collision preserves schema and state then retries', (t) => {
   assert.equal(db.prepare('SELECT preserve_me FROM memory_conflicts').get().preserve_me, 'survivor');
   db.exec('DROP TABLE memory_conflicts');
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.deepEqual(snapshot(db), before);
 });
 
@@ -100,6 +100,6 @@ test('K09 v5 writer contention leaves old schema intact and retryable', (t) => {
     assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), schema);
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.deepEqual(snapshot(db), before);
 });

@@ -1,6 +1,6 @@
 # CF-1: confirmation state appendix
 
-Status: proposed contract; implementation and tests are not yet present.
+Status: implemented in CF-1; synthetic acceptance tests accompany the implementation.
 
 Extends [session episodes](session-episodes.md). Acceptance: cairn-wiki
 `origin/main:docs/plans/one-brain-u6.md`, D1, D6 and CF-1; one-brain-v1,
@@ -24,7 +24,8 @@ existing way to record direct statements as explicit. Chichi must decide whether
 to enable this conservative behavior or commission a provenance contract first.
 
 An inferred duplicate attaches evidence and keeps awaiting; it cannot demote an
-explicit or confirmed item. An explicit duplicate promotes an awaiting item to
+explicit or confirmed item. Pre-existing `none` rows are not retroactively
+reviewed on duplication. An explicit duplicate promotes an awaiting item to
 `none`, with explicit origin, using existing duplicate semantics. Mixed batches
 resolve final revisions after all duplicates; non-awaiting members still classify.
 
@@ -37,7 +38,7 @@ source snapshots and recall-index eligibility. `list({reviewState:'awaiting'})`
 is the explicit person-facing review listing; `get({includeAwaiting:true})`
 provides paged evidence for review. Both require the option. Hosts must reserve
 these switches for the authenticated person's review UI, never model tools.
-Opted-in memory DTOs expose `reviewState`; option-off DTOs retain existing shape.
+Opted-in ordinary memory DTOs expose `reviewState`; option-off DTOs retain existing shape.
 Review pagination binds its selection so cursors cannot cross visibility modes.
 
 Awaiting rows retain admission lineage, source receipts and episode links for
@@ -51,15 +52,18 @@ and awaiting assertions. Conservatively hide an episode from list/get/start
 context while it has a live awaiting memory link, including passages borrowed
 from such episodes. Physical links and episode mutation APIs remain intact so a
 person can delete a conversation by its known identity. This may temporarily hide
-unrelated episode content; confirmation/promotion restores reader eligibility.
+unrelated episode content; confirmation/promotion restores reader eligibility. Rejection restores an
+invalidated episode shell with its event interval, while forget still removes
+its prose and retained passages. It does not restore rejected content.
 
 ## Confirm and reject
 
 `confirm({namespace,memoryId,expectedRevision,actionId,receipt})` requires a user
 receipt and the option. It only accepts awaiting current items, increments the
 revision, retains `agent-inferred`, sets `confirmed`, attaches the confirmation
-receipt without replacing source receipts, and updates index eligibility and the
-namespace epoch in one transaction. It does not reuse correct. It leaves filing
+receipt without replacing source receipts (a distinct receipt identity is required), and updates index eligibility and the
+namespace epoch in one transaction. The result identifies the new receipt as
+`confirmationReceiptId`. It does not reuse correct. It leaves filing
 unfiled; subsequent classification is a separate operation.
 
 `reject({namespace,memoryId,expectedRevision,actionId})` requires the option and
@@ -87,11 +91,23 @@ With the option absent, existing fixture API/model bytes stay identical
 New schema columns are additive storage metadata, not legacy DTO fields.
 Option-off openers cannot explicitly expose or resolve awaiting rows.
 
+## Episode availability impact
+
+One live awaiting decision hides its entire session episode and episodes borrowing
+its passages. A session that yields at least one new inferred decision therefore
+loses episode context until every waiting link is resolved. Sessions with no such
+items remain available. Synthetic tests demonstrate the rule, not a measured
+frequency: there is no representative capture sample from which to estimate the
+fraction of typical sessions affected. Rejection restores an invalidated shell,
+not startup next-step prose.
+
 ## Acceptance mapping
 
 `core/test/confirmation-state.test.mjs` covers state independence, admission and
 its direct-statement limitation, duplicate and mixed-batch behavior, every reader,
 classification and lifecycle paths, confirmation/rejection receipts, suppression,
-replay and revision conflicts. Migration tests inject a DDL failure and exercise
+replay and revision conflicts. `core/test/confirmation-migration.test.mjs` injects a DDL failure and exercises
 an actual v17 opener against v18. Parity tests execute existing synthetic fixture
 workflows against the recorded base and this implementation with the option off.
+
+See the [verification record](confirmation-state-verification.md) for checks and the changed-file inventory.

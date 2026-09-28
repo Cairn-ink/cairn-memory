@@ -96,14 +96,14 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1 or v3–v16 format performs an atomic upgrade to v17, retaining
+Opening the committed v1 or v3–v17 format performs an atomic upgrade to v18, retaining
 existing memory/source data, revisions and suppression. Back up the file while
 all older-runtime processes and connections (including idle readers) are closed
 before upgrading meaningful data. The host must stop/drain those connections
 before opening the store for upgrade, even with episodes disabled. No request
 performs a lazy upgrade. Mixed-version coexistence is unsupported;
 an already-open old process is not retroactively fenced. Older binaries cannot
-open v17; there is no downgrade tool. Existing receipts remain unordered; no past
+open v18; there is no downgrade tool. Existing receipts remain unordered; no past
 chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
@@ -141,7 +141,7 @@ The local envelope facade adds `getEpisode`, `correctEpisode`,
 `releaseEpisodeCorrection`, `forgetEpisode`, `getCaptureControl`,
 `setCapturePaused`, `setProjectCapture`, and `setProceduralMemory`. No HTTP/MCP
 schema or provider interface is widened. `getEpisode` needs no model or mode
-option on a v17 store. It takes the plan's exact namespace/episode ID and
+option on a v18 store. It takes the plan's exact namespace/episode ID and
 independent source/memory/policy/keep limits/cursors (20 default, 50 maximum).
 `{episode,sources,memoryLinks,policies,keepActions,status}` returns each page as
 `{items,nextCursor,exhausted}`. Signed cursors bind store, namespace, episode,
@@ -265,7 +265,7 @@ remaining messages; a closed stage records a content-free gap for any remainder.
 Different digests reject with `event_payload_conflict`. It holds no source
 plaintext or role and survives deletion as content-free fence metadata.
 Upgrading v15 creates an empty ledger; earlier messages are not reconstructed.
-The v14, v15 and v16 formats upgrade eagerly to v17, including feature-off opens, with
+The v14, v15, v16 and v17 formats upgrade eagerly to v18, including feature-off opens, with
 foreign keys on and rollback on failure.
 
 `endEpisodeSession({namespace,client,sessionId,generation,eventId})` is an
@@ -452,3 +452,11 @@ A supported proposal becomes a new open step with a new ID; older evidence yield
 recovers the equivalent receipt boundary from its finished step-identity journal
 marker. If that marker is unavailable, it conservatively establishes a boundary
 at its next draft. These are provenance rules, not semantic judgments about recurrence.
+
+## Decision review (CF-1)
+
+The [confirmation-state appendix](plans/confirmation-state.md) extends this
+contract with opt-in review, person-only awaiting reads, revision-checked
+`confirm`/`reject`, durable replay identities, and eager additive schema v18.
+Review is independent of currentness and filing. Older openers refuse v18;
+option-off openers retain their DTO shapes and exclude awaiting rows.

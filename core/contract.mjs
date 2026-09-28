@@ -1,3 +1,4 @@
+import { decisionReviewOption } from './confirmation-storage.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -148,7 +149,8 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview']);
+  const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
   const evidenceOnly = captureSourcePolicy === 'indexed-evidence-v1';
@@ -188,7 +190,7 @@ export function openMemoryCore(input) {
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
-  const runtime = createMemoryRuntime({ path: input.path, ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+  const runtime = createMemoryRuntime({ path: input.path, ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
   const { storeId, cursorSecret } = runtime.identity;
 
   function namespaceBinding(ns) {
@@ -264,17 +266,19 @@ export function openMemoryCore(input) {
   function list(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "statuses", "states", "limit", "cursor"]);
+      object(input, ["namespace", "statuses", "states", "limit", "cursor", "reviewState"]);
       const ns = contractNamespace(input.namespace);
+      if (input.reviewState !== undefined && (!decisionReview || input.reviewState !== 'awaiting')) throw new MemoryStoreError('invalid_input');
       const selected = statuses(input.statuses);
       const selectedStates = states(input.states);
       const count = contractLimit(input.limit);
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: "list",
         f: selected.join(","), l: count,
+        ...(input.reviewState ? { reviewState: input.reviewState } : {}),
         ...(selectedStates.length === 1 ? { states: selectedStates[0] } : {}) };
       let cursor;
       if (input.cursor !== undefined) cursor = decodeCursor(input.cursor, binding);
-      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e, selectedStates);
+      const page = runtime.listPage(ns, selected, count, cursor?.a, cursor?.e, selectedStates, input.reviewState);
       const memories = page.rows.slice(0, count);
       const exhausted = page.rows.length <= count;
       const last = memories.at(-1);
@@ -287,7 +291,8 @@ export function openMemoryCore(input) {
   function get(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memoryId", "receiptLimit", "receiptCursor", "includeQualification"]);
+      object(input, ["namespace", "memoryId", "receiptLimit", "receiptCursor", "includeQualification", "includeAwaiting"]);
+      if (Object.hasOwn(input, 'includeAwaiting') && (typeof input.includeAwaiting !== 'boolean' || input.includeAwaiting && !decisionReview)) throw new MemoryStoreError('invalid_input');
       if (Object.hasOwn(input, 'includeQualification') && typeof input.includeQualification !== 'boolean') {
         throw new MemoryStoreError('invalid_input');
       }
@@ -295,10 +300,10 @@ export function openMemoryCore(input) {
       const memoryId = contractId(input.memoryId);
       const count = contractLimit(input.receiptLimit);
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: "get",
-        m: memoryId, l: count };
+        m: memoryId, l: count, ...(input.includeAwaiting ? { includeAwaiting: true } : {}) };
       let cursor;
       if (input.receiptCursor !== undefined) cursor = decodeCursor(input.receiptCursor, binding);
-      const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e, input.includeQualification === true);
+      const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e, input.includeQualification === true, input.includeAwaiting === true);
       const receipts = page.receipts.slice(0, count);
       const exhausted = page.receipts.length <= count;
       const last = receipts.at(-1);
@@ -322,6 +327,21 @@ export function openMemoryCore(input) {
       const result = runtime.correct(ns, memoryId, { ...memory, receipts: [receipt] },
         expectedRevision, { detail: true });
       return { memory: result.detail, indexRevision: result.indexRevision };
+    });
+  }
+
+  function resolveReview(action, input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['namespace', 'memoryId', 'expectedRevision', 'actionId', ...(action === 'confirm' ? ['receipt'] : [])]);
+      const ns = contractNamespace(input.namespace);
+      const value = { memoryId: contractId(input.memoryId), expectedRevision: contractRevision(input.expectedRevision),
+        actionId: contractId(input.actionId) };
+      if (action === 'confirm') {
+        value.receipt = contractReceipt(input.receipt);
+        if (value.receipt.role !== 'user') throw new MemoryStoreError('invalid_input');
+      }
+      return runtime.resolveReview(ns, action, value);
     });
   }
 
@@ -814,7 +834,7 @@ export function openMemoryCore(input) {
           abandonAdmission: (value, retryable) => sessionEpisodes && retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
-            : abandonAdmission(captureKey(value)), get, map,
+            : abandonAdmission(captureKey(value)), get, map, isAwaiting: id => runtime.isAwaiting(ns, id),
           beginInitialClassification: value => beginInitialClassification(captureKey(value), deadline),
           failInitialClassification: value => failInitialClassification(captureKey(value)),
           applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),
@@ -990,6 +1010,7 @@ export function openMemoryCore(input) {
   return Object.freeze({
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
+    confirm: input => resolveReview('confirm', input), reject: input => resolveReview('reject', input),
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,

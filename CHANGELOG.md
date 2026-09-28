@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — core decision confirmation
+
+- Opt-in `decisionReview: 'required-v1'` holds automatically admitted inferred
+  decisions for person-facing review. Ordinary readers, including option-off
+  openers, exclude awaiting memories and episodes containing their context.
+- `confirm` preserves inferred origin and source receipts; `reject` forgets with
+  suppression. Both use revision checks and durable replay identities.
+- Eager additive schema v18 migration; older openers refuse it. See the
+  [CF-1 contract](docs/plans/confirmation-state.md), including the limitation that
+  automatic extraction cannot yet distinguish directly stated decisions.
+
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 
 - The Claude Code plugin no longer sends a user-role record that Claude Code

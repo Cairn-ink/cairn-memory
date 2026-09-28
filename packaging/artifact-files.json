@@ -1,5 +1,7 @@
 [
   "core/admission-storage.mjs",
+  "core/confirmation-schema.mjs",
+  "core/confirmation-storage.mjs",
   "core/episode-schema.mjs",
   "core/episode-storage.mjs",
   "core/episode-reads.mjs",

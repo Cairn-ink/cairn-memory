@@ -75,7 +75,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
       validate(ns, s, order);
       if (!items.length) return { candidates: [], reason: null };
       const rows = db.prepare(`SELECT * FROM memories WHERE ${where}
-        AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT 13`).all(...boundary(ns));
+        AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT 13`).all(...boundary(ns));
       if (rows.length > 12) return { candidates: [], reason: 'candidate_limit' };
       const fingerprints = new Set(items.map(item => item.fingerprint));
       const candidates = rows.filter(row => !fingerprints.has(row.fingerprint))
@@ -137,6 +137,10 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         // Decide the whole retirement set before the first retirement mutation.
         // Preserve admissions and replay outcome, but never downgrade a qualified
         // endpoint to legacy retirement based on a model verdict.
+        if (resolved.some(row => row.previous.review_state === 'awaiting' || row.replacement.review_state === 'awaiting')) {
+          reconciliation = outcome('confirmation_required');
+          return { reconciliation };
+        }
         if (resolved.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement))) {
           reconciliation = outcome('qualified_transition_required');
           return { reconciliation };
