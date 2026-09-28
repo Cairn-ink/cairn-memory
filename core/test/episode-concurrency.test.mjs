@@ -7,9 +7,13 @@ import { createMemoryRuntime } from '../runtime.mjs';
 import { setup,input,interpretation,counts,deferred,ns,options,ok,assertError } from '../testing/episode-capture-helpers.mjs';
 import { batch } from '../testing/episode-helpers.mjs';
 
-function child(t,path,mode) {
+function child(t,path,mode,onRetry) {
   const process=fork(new URL('../testing/episode-capture-child.mjs',import.meta.url),[path,mode],{stdio:['ignore','ignore','pipe','ipc']});
-  process.on('message',message=>{if(message.stage==='retry')process.send('retry-granted');});
+  process.on('message', message => {
+    if (message.stage !== 'retry') return;
+    try { onRetry?.(message); process.send('retry-granted'); }
+    catch (error) { process.emit('error', error); }
+  });
   let stderr='';process.stderr.on('data',data=>{stderr+=data;});
   process.on('exit',(code,signal)=>{if(code!==0&&!signal)process.emit('error',Error(stderr));});
   t.after(()=>{if(process.exitCode===null)process.kill('SIGKILL');});
@@ -123,11 +127,33 @@ test('E5 end versus lazy coalesces under one writer, with at most two jobs on la
 });
 
 for(const arm of ['success','failure'])test(`E4a two concurrent processes admit 140 ~16KiB captures, N16 ${arm}`,{timeout:180000},async t=>{
-  const f=setup(t),a=child(t,f.path,`heavy-${arm}-a`),b=child(t,f.path,`heavy-${arm}-b`);
+  const f = setup(t), expired = new Map();
+  const onRetry = ({ eventId }) => {
+    // The child has returned from capture and waits at this IPC barrier. Advance
+    // only unfinished paid attempts with no writer; never expire an active model.
+    // This represents the real lease delay without polling wall time or sleeps.
+    try {
+      const rows = f.db.prepare(`UPDATE episode_attempts SET expires_at=0
+        WHERE started=1 AND finished=0 AND expires_at>0 AND episode_id IN (
+          SELECT e.episode_id FROM episode_events e JOIN session_episodes s ON s.id=e.episode_id
+          WHERE e.event_id=? AND s.writer_token IS NULL)
+        RETURNING episode_id,token,watermark`).all(eventId);
+      for (const row of rows) expired.set(row.token, row);
+    } catch (error) {
+      if (!(error.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) &&
+          [5, 6].includes(error.errcode & 0xff))) throw error;
+    }
+  };
+  const a = child(t, f.path, `heavy-${arm}-a`, onRetry), b = child(t, f.path, `heavy-${arm}-b`, onRetry);
   await Promise.all([stage(a,'ready'),stage(b,'ready')]);
   const results=Promise.all([stage(a,'result'),stage(b,'result')]);a.send('start');b.send('start');
   for(const result of await results){assert.equal(result.admitted,70);assert.ok(result.calls<=7);}
   assert.equal(f.db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n,140);
+  for (const row of expired.values()) {
+    assert.equal(f.db.prepare('SELECT finished FROM episode_attempts WHERE token=?').get(row.token).finished, 1);
+    assert.ok(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events WHERE episode_id=? AND position=?')
+      .get(row.episode_id, row.watermark).gap_reasons).includes('episode_timeout'));
+  }
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
 });
 

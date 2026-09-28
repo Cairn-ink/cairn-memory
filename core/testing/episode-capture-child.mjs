@@ -41,7 +41,7 @@ if (mode === 'keep-retry') {
       retryCodes.push(result.error?.code ?? 'processing');
       if (retryCodes.length > 10) retryCodes.shift();
       const resume=new Promise(resolve=>process.once('message',resolve));
-      await send({stage:'retry'});await resume;
+      await send({ stage: 'retry', eventId: value.eventId }); await resume;
     }
     if(!result.ok || !result.value.admission || result.value.processing)throw Error(JSON.stringify({ result, batch: n, retryCodes }));
     admitted++;

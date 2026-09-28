@@ -698,7 +698,11 @@ without repeating the paid call. Closed bypassed batches release message ownersh
 to newly submitted events after re-enable; pause retains resumable ownership.
 Keep assertion locks return retryable `storage_busy`. Regression tests exercise
 these boundaries with real SQLite locks and scripted models, without sleep-based
-synchronization. Mode-off parity assertions are unchanged by their style cleanup.
+synchronization. The heavy-day IPC harness advances unfinished attempt leases
+only after capture returns and no writer remains, then asserts a durable timeout
+gap. This avoids exhausting immediate retries before the real lease could expire;
+its admission and model-call budget assertions remain unchanged. Mode-off parity
+assertions are unchanged by their style cleanup.
 
 ### Cross-plan shared files
 
