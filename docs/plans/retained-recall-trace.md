@@ -1,6 +1,7 @@
 # Retained-source recall trace: N2
 
-Status: acceptance contract before implementation. Fixed base:
+Status: implemented candidate; final primary acceptance and independent review
+are in progress. Fixed base:
 `88d9556d09d0a7082cae20ea89c2f8fadd64c0d1` (N1, PR #282, with upstream
 plugin 0.1.1 integrated).
 Branch: `diag/retained-recall-trace`; isolated worktree:
@@ -252,14 +253,19 @@ probe, separate `retainedText`, `currentSourceBinding`, `currentRevision`,
 `finalText`, `finalSourceBinding` and `answerTextPresent` statuses. Text
 visibility does not imply tuple identity. The flattened answer pack cannot
 prove source role/identity, so its binding status is explicitly unavailable.
-Core success plus stage sequence is required to call a proposal accepted;
-failed validation remains proposal-only. Complete-map strategy plus a target
-rank candidate establishes a bypassed, selected ref without a select callback.
+An actual matching rank input proves selection progression even if a later
+stage fails. A successful final target reference proves rank acceptance;
+a contradictory earlier proposal alone cannot prove it. Failed validation
+remains proposal-only. Complete-map strategy plus a target rank candidate
+establishes a bypassed, selected ref without a select callback.
 Unavailable, truncated, failed and never-run states remain distinct. The
 `firstObservedGap` enum is set only after all earlier necessary stages are
 positively established; otherwise it is unavailable or null for delivered
-source. New fields do not change the gate's seven-passage denominator, negative
-controls or existing report/version semantics.
+source. The original aggregate keys and version remain, with unavailable stages
+represented by their legacy `not-run` value. The new `sourceTrace` distinguishes
+unavailable from never-run. Attribution defects are corrected without changing
+the gate's seven-passage denominator, existing negative controls or normal-run
+results; this is not a retroactive rewrite of historical reports.
 
 The existing fresh `runGate` is the real consumer: `inspectQuestion` supplies
 one trace for each of its seven required passages, and existing empty-select,
@@ -303,3 +309,52 @@ an own data property. Final focused tests passed 12/12 on Node 22.16.0 (TAP
 final exact-candidate gate rerun, independent review and CI are still pending.
 No commit, push or PR had been made from the worker worktree when this evidence
 was recorded.
+
+### Primary acceptance and ownership
+
+The bounded implementer used actual `gpt-6-sol` at high reasoning effort.
+The primary owns architecture, caller audit, shared-document integration and
+acceptance, and read the actual helper, caller and tests before accepting the
+candidate. Shared integration edits are restricted to this plan, `ROADMAP.md`,
+`docs/protocol.md` and `docs/limitations.md`; runtime implementation remained
+delegated. Independent reviewers have not implemented this candidate. Agent
+token usage and cost telemetry are unavailable and are not inferred.
+
+Worker code candidate `fcf9f7ab0d13e5378a90296d8424e6d52a6d14e8` contains
+only the five scoped plan/evaluation files. Primary reran the complete
+`npm run test:long-history` on that committed code with
+`NODE_DISABLE_COMPILE_CACHE=1` and the named runtime first on `PATH`:
+17/17 on Node 22.16.0 (39,670.346 ms), and 17/17 on Node 24.15.0
+(38,423.683 ms). This includes the original 208-batch, 1,030-card gate,
+seven required passages and eight negative controls. The synthetic fifth-source
+loss remains a negative control, not a newly corrected retrieval outcome.
+
+The primary also ran these unchanged compatibility paths in this worktree:
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `npm test` | 143/143, 4.28 s | 143/143, 3.79 s |
+| `npm run test:workspace-lifecycle` | 25/25, 14.05 s | 25/25, 14.29 s |
+| `npm run validate` | Pass, version 0.1.1 | Pass, version 0.1.1 |
+
+Those commands used `NODE_DISABLE_COMPILE_CACHE=1`. Inspection with
+`git diff --exit-code 88d9556 HEAD -- core adapters plugins integrations tools
+package.json .github schemas evaluation/architecture evaluation/longmemeval`
+confirmed their code and configuration unchanged at the worker candidate.
+Strict plugin and marketplace validation uses the identical locked maintainer
+binary (2.1.260) already installed in the N1 worktree, resolved through `PATH`
+while validating the N2 worktree paths; no second large dependency installation,
+lockfile change, publication or real-host session is involved. There is no
+TypeScript gate in this JavaScript repository.
+
+Test-only candidate `7e06f1e56a849171ffb342946be08e60553f400b` adds
+resource-bound and disclosure controls without changing the helper or gate.
+The primary reran `npm run test:long-history` on that exact candidate:
+18/18 on Node 22.16.0 (39,182.658 ms) and 18/18 on Node 24.15.0
+(38,475.073 ms), with no failures or skips. Strict plugin and marketplace
+validation also passed on both runtimes using the arrangement above.
+
+Independent fixed-diff Standards and Spec reviews and latest-head CI remain
+delivery gates. No
+provider call, paid-case replay, operational ledger access/reset, merge, release,
+deployment or historical cleanup occurred. Main and unrelated work are preserved.

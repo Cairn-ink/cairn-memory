@@ -24,6 +24,10 @@ service must use the same public core, not separate engines.
   [indexed-window observation](docs/plans/source-window-coverage.md) checks
   complete retained-window coverage and an omitted-source negative control
   after cold reopen, without exposing source text or inferring model selection.
+  The [retained-source trace](docs/plans/retained-recall-trace.md) separates
+  model proposals from accepted progression and recognizes the explicit
+  complete-map bypass. It follows one exact current source through the
+  existing offline recall/answer path, not a new production telemetry path.
   These are synthetic accounting checks, not semantic completeness or a
   correction to the paid-case results. Real-model and installed
   host acceptance, semantic/current-state quality, and a fresh paired paid

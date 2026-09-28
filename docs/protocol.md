@@ -105,6 +105,28 @@ late results to another capture. Ordinary test cleanup does not authorize
 removal of historical artifacts. See the
 [N1 acceptance plan](plans/source-window-coverage.md).
 
+### Offline retained-source recall observation
+
+The [N2 trace](plans/retained-recall-trace.md) observes one synthetic source
+probe through one single-namespace offline recall. Its expected namespace and
+source tuple come from the authored input, never an evaluator answer or model
+request. At most two public reads, each limited to 100 receipts without pagination,
+bind that source to a current memory revision before and after the operation.
+Incomplete, foreign, changed or unavailable evidence cannot establish current
+source delivery. The receipt role and identity remain distinct from matching
+text: flattened answer text alone does not establish either.
+
+The existing scripted model supplies bounded per-call observations; no new
+provider wrapper, prompt, default, retry, storage field or hosted telemetry
+is introduced. A proposal is not accepted merely because it appears in model
+output, and an explicit complete-map bypass does not require a select callback.
+Closed call-context observations cannot be rebound to a later recall. The
+report is limited to 32 KiB of fixed statuses and counts, excluding
+source text, question, namespace, identifiers, hashes, paths and raw errors.
+This is a maintainer diagnostic, not a semantic verifier or execution authority.
+Answer payloads over its 64 KiB observation limit remain unavailable; this
+does not change the actual answer packer's budget or declare evidence lost.
+
 ### Offline synthetic evidence-lineage boundary
 
 The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through
