@@ -815,6 +815,143 @@ versions/sanitized outcomes, forget the synthetic memories, and never retain rea
 transcripts as evidence. Context-disabled installations cannot pass the recall
 injection part until A7; do not substitute a direct API check for human acceptance.
 
+## F0 results
+
+Run on 2026-09-28 under chichi's explicit authorization for synthetic sessions on
+their Claude Code and Codex subscriptions, with the disposable harness in
+`integrations/client/test/feasibility/` at base `c3eba89`. Pins: Claude Code
+`2.1.283`, `codex-cli 0.157.1`, Node `v22.16.0`, Ubuntu 22.04.3 on WSL2 (Linux
+`5.15.167.4-microsoft-standard-WSL2`). Budget used: 11 of 24 Claude invocations
+(9 with a model call) and 14 of 24 Codex invocations (6 with a real model, 8
+against a loopback scripted Responses provider that uses no quota). One host
+process ran at a time; no API key or paid call was used. Sessions, prompts,
+projects and credential-shaped strings were synthetic; fake secrets were assembled
+from fragments at runtime. Both hosts captured into and recalled from one temporary
+core store with a scripted model port, through the extracted seam over loopback.
+Only canary names appear below. This is pinned-host feasibility evidence: it does
+not build CX-2/CX-3/LAC/HMA and does not replace A1–A9 or human acceptance.
+
+### Review corrections
+
+An independent review of the first harness found five defects, now fixed and tested
+offline. No host was run for this revision; anything that needs a new host run is
+listed under "Still to verify".
+
+1. Workers read hook-supplied paths before checking ownership or pause state. They
+   now require a session from the launch ledger (Claude IDs the harness generated;
+   Codex threads the orchestrator saw its own process report), the exact host path
+   derived from it, no pause, and a regular non-symlink file opened `O_NOFOLLOW`.
+2. Cleanup accepted session IDs from hook events. It now uses the ledger alone and
+   re-verifies each path before removal.
+3. Nothing stopped a step when isolation was unproven. A fail-closed preflight now
+   gates every host step: pins read from the binaries, no managed or system policy,
+   the Claude exclusion flags, no Codex user, system or project hook source, trust
+   bypass only for harness hooks, and for real Codex model-only steps a scripted proof
+   that no user skill reaches the model. On this machine the Claude and Codex
+   hook-path gates pass and the Codex model-only gate fails.
+4. The scripted-compaction settings were added by hand after setup; setup now
+   initializes them, and analysis fails when a step's required canary never reached
+   its own source instead of skipping the check.
+5. The orchestrator had no signal handling. SIGINT, SIGTERM and SIGHUP are now
+   forwarded to the host's process group and escalate to SIGKILL, and the launch is
+   recorded before waiting.
+
+A second review found that items 3 and 5 still had gaps, and that the analysis
+ignored host output. All three are now fixed and tested offline:
+- The gate treated unreadable files as absent and missed quoted TOML forms such as
+  `["hooks"]` and `"hooks".Stop`. Now only `ENOENT` counts as absent, and a
+  validating detector blocks any hooks key path and any line it cannot classify.
+- A failed launch write left the host unsupervised. Supervision now starts at spawn,
+  and that failure terminates and reaps the host.
+- A canary in checked host output did not fail the analysis. It now does.
+
+### Isolation proof
+
+| Host | Configuration | Evidence |
+| --- | --- | --- |
+| Claude | `-p --setting-sources project,local --strict-mcp-config --mcp-config '{"mcpServers":{}}' --session-id <uuid>`; hooks only in the temporary project's `.claude/settings.json`; clean environment without `TMUX` or parent `CLAUDE*` variables. | The person's user settings register one hook command on seven events. Nothing was created or changed at user level; the canary was that existing command. In 8 execve-traced invocations it never ran, while the harness's project hooks did (positive control). `init` listed no MCP servers, only the built-in `agents-md` and `telemetry` plugins, and built-in skills and agents only. The instructions attachment held the project `CLAUDE.md` alone. No MCP or plugin process started. |
+| Codex | `exec --ignore-user-config --ignore-rules --skip-git-repo-check --json`; sixteen `--disable` features (apps, plugins, remote plugins, browser and computer use, image generation, multi-agent, goals, tool suggestions, daemon auto-start, shell snapshots, memories and others); `history.persistence="none"`, `allow_login_shell=false`, `web_search="disabled"`, a temporary `log_dir`; hooks only as `-c hooks.<Event>=[…]` with `--dangerously-bypass-hook-trust`. | No user hook source exists (no `~/.codex/hooks.json`, no `[hooks]` in `config.toml`), so the bypass covered harness hooks only. The user config's MCP servers never started in 11 traced invocations. Hooks ran as children of the pinned 0.157.1 process, not the running 0.158.0 managed daemon. The scripted provider saw host tools only and no `Authorization` header. **Gap:** all 13 user skills in `~/.codex/skills` still appear in model-visible developer instructions, even with `--enable skip_host_skill_discovery`. The gap was found after the first real-model Codex run, yet five more real-model Codex runs followed (recall, image, tool and two model-only); they should have stopped. An empty `/tmp/.codex` (dated 2026-05-15) sat above the temporary project throughout; the gate now accepts an ancestor `.codex` only when it is readable and empty. |
+
+### Outcomes
+
+| Item | Outcome | Evidence |
+| --- | --- | --- |
+| Delivered-body privacy (A1 canaries, host part) | **Passed** for the candidate rules on both hosts | 17 hook-enabled invocations sent 12 capture and 13 recall bodies. None of them, the recall output, client state or the core store contained any canary: three fake secrets, tool output, reasoning (scripted summary), SessionStart and prompt hook context, project instructions, sandbox root, cwd, image path, PNG base64, magic or data URL, compaction prompt or summary text. Typed secrets reached the parsers and were redacted before delivery. The Codex compaction canaries come from one scripted run whose compaction settings were added by hand after setup; reproducing it from the committed setup is to verify. The offline A1 bound cases remain CX-3 gates. |
+| Claude transcript format and exclusions | **Passed** headless; interactive **to verify** | 2.1.283 writes `user` and `assistant` records beside `attachment` (hook context, `CLAUDE.md`, environment, session context, credential org, prompt snapshots), `queue-operation` (a mirror of the typed prompt), `last-prompt`, `atis-latch`, `cost-state`, `system` and `mode`. Hook context and project instructions are attachments, not user-role records. Thinking blocks were stored with empty text and a signature. Candidate rule: user text only when `promptSource` is present and the record is not `isMeta`, `isCompactSummary` or a tool result, with wrapper prefixes as defense in depth; assistant `text` blocks only. In `-p`, submitted prompts carry `promptSource`/`turnOrigin` `"sdk"`; command wrappers, command stdout, caveats, compaction summaries and `[Image: source: …]` notes carry neither. |
+| Codex transcript format and exclusions | **Passed** | 0.157.1 still supplies a JSONL rollout, `~/.codex/sessions/YYYY/MM/DD/rollout-…-<thread>.jsonl`. Only `event_msg`/`item_completed` items `UserMessage` (`text` parts) and `AgentMessage` (`Text` parts) are conversation. User-role `response_item` messages mirror typed text but also carry AGENTS.md, environment context (cwd, sandbox roots) and Codex-generated `<image …>` wrappers; developer-role items carry hook context. `content_item_kinds` alone is insufficient: Codex labels its image wrapper and an error note `user.text`. Plaintext reasoning summaries appear in `response_item/reasoning` and `item_completed/Reasoning`; tools as `function_call`/`custom_tool_call`, their outputs and `CommandExecution`; images as `input_image` data URLs and `local_image` paths; compaction as `compacted` and `ContextCompaction` (the hand-configured scripted run only). All were excluded. The provisional `response_item` fixture shape above is not the conversation discriminator. |
+| Hook delivery, including SessionEnd | **Passed** headless; interactive **to verify** | Claude `-p`: `SessionStart` (`startup`, `resume`, `compact`), `UserPromptSubmit`, `Stop`, `PreCompact` (`manual`) and `SessionEnd` (`other`), including 55 ms after SIGTERM to the process group, with no `Stop` for the interrupted turn. For a new session the transcript file does not exist yet at `SessionStart` or `UserPromptSubmit`. Codex `exec`: `SessionStart` (`startup`), `UserPromptSubmit`, `Stop` (with `last_assistant_message`) and `SessionEnd` (`other`); `PreCompact`, `PostCompact` and `SessionStart` (`compact`) only in the hand-configured scripted compaction run, so their reproduction is to verify; no `SessionEnd` after SIGTERM (two runs). `--ephemeral` gives every hook `transcript_path: null`. Harness handlers took 2–64 ms, measured inside the hook process. |
+| Worker survival and source readability after teardown | **Passed**; enforced source authorization **to verify** | All 788 detached workers ran in their own session and outlived their hook. Twelve `SessionEnd` workers, across 11 sessions with a persisted source, waited 6 s and then read the whole file after the host process had exited, including one untraced run per host. Untraced hooks and workers had no seccomp filter or `no_new_privs` from either host, reached loopback and saw host PIDs in `/proc`; Codex's `bwrap --as-pid-1` sandbox applies to tool commands, not hooks. The reviewed worker did not check ownership, pause or symlinks before reading. Every path it read was one of the 14 harness-owned files verified under Cleanup, but that was not enforced; the enforcing worker is tested offline only. |
+| Both hosts on one temporary core | **Passed** | The same cwd and key gave one project ID. Each host's `UserPromptSubmit` recall returned the memory captured by the other host (receipt clients `claude-code` and `codex`), and in the recall runs each model answered with both synthetic code words from the injected context. The Codex answer came from a run without proven model isolation (user skills in context), so the pass rests on the hook-level recall replies in both directions and the Claude answer. Injected recollections stayed in excluded hook-context records and were not re-captured. |
+| `claude -p` quota signal | **Passed**, partial windows | Each of the 7 completed model runs checked carried one `rate_limit_event` in `stream-json` (the SIGTERM run ended before one was emitted; the last untraced run was not checked), with `status`, `rateLimitType`, `resetsAt`, overage fields and `unifiedWindows.five_hour`/`seven_day` `utilization` and `resetsAt` (numbers). Model-specific seven-day windows and statuses other than `allowed` were not observed. |
+| Codex quota signal | **Partial** | Persisted rollouts carry `event_msg/token_count.rate_limits.primary` (`used_percent`, `window_minutes`, `resets_at`); `secondary` was null. `exec --json` output has no rate-limit event, so an ephemeral model-only worker sees no quota signal. |
+| Claude model-only isolation | **Passed** with host residue | `-p --model haiku --safe-mode --setting-sources '' --strict-mcp-config --mcp-config '{"mcpServers":{}}' --tools '' --disable-slash-commands --no-session-persistence --system-prompt …`: `init` shows no tools, MCP servers, skills or slash commands, and no hook, transcript, `session-env` or auto-memory access occurred. The host still rewrites `~/.claude.json` and rotates its backups, keeps a transient per-PID session registry, runs `git` and `rg`, reads other Claude processes' command lines with `ps`, and queries the Windows policy registry through WSL interop. Output came back fenced despite the system prompt; HMA should validate structured output (`--json-schema` exists, untested). |
+| Codex model-only isolation | **Failed** as configured | `--ephemeral`, no hooks, shell, exec and image tools disabled, environment, apps and collaboration instructions off: only `request_user_input` remains and no rollout is written, but user skills are still injected, shared SQLite stores are opened and a trivial prompt sends 11,130 input tokens. |
+| Host-CLI latency | Claude **measured**, recall budget unmet; Codex **to verify** | Untraced, one call: Claude Haiku 2.98 s and 3.46 s wall (host `duration_ms` 1.09 s and 1.64 s). Core recall needs select and rank calls, so the 2 s `UserPromptSubmit` budget is out of reach, as decision 8 assumed. Codex `gpt-6-luna` took 4.57 s, but with user skills in its prompt (11,130 input tokens), so it does not measure an isolated worker. |
+
+### Findings that need product changes
+
+Recorded here, not fixed in F0:
+
+1. **Released Claude parser.** `plugins/cairn-memory/lib/transcript.mjs` (0.1.0)
+   would capture machine-generated user-role records: the compaction summary, the
+   `isMeta` local-command caveat and `[Image: source: <path>]` note,
+   `<command-name>` wrappers and `<local-command-stdout>` output, which includes
+   hook output. D1 freezes hosted Claude behaviour, so fixing it needs its own
+   separately versioned proposal; the new profile should use the structural rule above.
+2. **Codex session storage.** Besides the rollout, `exec` opens shared SQLite stores
+   read-write (`state_5`, `thread_history_1`, `logs_2`, `queue_1`, `goals_1`,
+   `memories_1`) and rewrites `models_cache.json`; `--ephemeral` avoids only the
+   rollout and `thread_history_1`. Privacy text for HMA and Codex capture must not
+   treat the rollout as the only copy.
+3. **Unbounded Codex retries.** With its provider unreachable, `codex exec` reported
+   `Reconnecting... waiting for network` for about 4.5 minutes until its processes
+   were killed (`unbounded_connection_retries` is stable and on). HMA needs an
+   external deadline that kills the process group; whether disabling that feature
+   bounds retries is untested.
+4. **Claude auto-memory.** Hook-enabled `-p` runs listed an auto-memory directory
+   derived from the working directory even with user settings excluded; it was empty
+   here. The model-only configuration never touched it, but other headless use must
+   assume person-owned memory can load.
+
+### Still to verify
+
+- Interactive TUI modes on both hosts: hook delivery, `promptSource` values,
+  SessionEnd on terminal close, and resume, fork and sidechain layouts.
+- A real plaintext reasoning canary: Claude stored empty thinking text and Codex's
+  real summaries did not contain the planted value; the scripted summary did and was
+  excluded.
+- Codex compaction with a real model. Only scripted compaction ran; a harness
+  provider that kept reporting high usage made Codex compact about 380 times until
+  the run was killed.
+- Codex model-only exclusion of user skills (per-skill `skills.config` entries are
+  an untested candidate), then its latency, quota signal and bounded retries under
+  that isolation.
+- The enforcing worker, ledger-only cleanup, preflight gate and signal forwarding on
+  the pinned hosts; they are tested offline with fakes only.
+- Scripted Codex compaction reproduced from the committed setup, including
+  `PreCompact`, `PostCompact` and compaction-text exclusion.
+- Whether Codex reads a non-empty ancestor `.codex` directory.
+- Model-specific quota windows, statuses other than `allowed` and overage for `claude -p`.
+- macOS, non-WSL Linux, Node 20 and 24, and PID namespaces other than the host's.
+
+### Cleanup
+
+The hosts wrote session files for these runs. By exact path from hook records,
+ledger IDs and traces, cross-checked by a second route, the harness deleted 14
+transcripts and rollouts, then removed 7 directories that were empty and named after
+a run session ID or the temporary project. The tool used then also accepted session IDs
+from hook events, so each deletion was re-verified after review. The 6 Claude IDs are
+`--session-id` values the orchestrator generated; `/compact` resumed one of them. The
+9 Codex IDs are `thread.started` values from the stdout of processes it launched,
+each a UUIDv7 whose timestamp equals its rollout file's local creation second. The ID
+set used held exactly the 23 ledger IDs, so no ID came from hook input alone. It did not edit shared host files:
+`~/.claude.json` (rewritten each run; it has no entry for the temporary paths), its
+rotated backups, Claude's model-catalog cache, Codex's SQLite stores,
+`models_cache.json` and `installation_id`. Rows for the synthetic Codex threads (9
+persisted, 5 ephemeral) may remain in those stores. They were not opened because they also hold the
+person's real sessions; removing those rows, for example with `codex delete <id>`,
+needs separate approval.
+
 ## Ordered packages and exclusive file ownership
 
 Future allowed files only; this docs packet edits this contract and the setup plan.
