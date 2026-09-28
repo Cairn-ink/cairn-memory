@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../contract.mjs';
 
 // Scripted semantic decisions test orchestration and source authority, not model quality.
@@ -26,8 +25,11 @@ const error = (r, code) => assert.deepEqual(r, { ok: false, error: { code, retry
 const detail = (core, id, ns = namespace) => ok(core.get({ namespace: ns, memoryId: id }));
 const list = (core, ns = namespace) => ok(core.list({ namespace: ns })).memories;
 const receipt = (eventId, excerpt = eventId) => ({ client: 'synthetic', sessionId: 'session', eventId, role: 'user', excerpt });
+const workspaces = new WeakMap();
 function fixture(t, options = {}) {
-  const path = join(mkdtempSync(join(tmpdir(), 'cairn-ordered-')), 'memory.sqlite');
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-ordered-' });
+  workspaces.set(t, workspace);
+  const path = join(workspace.path, 'memory.sqlite');
   const calls = [];
   const model = { contextWindow: 8192, countTokens: () => 1,
     extract: ({ input }) => ({ items: [item(input.messages[0].content)] }),
@@ -39,8 +41,10 @@ function fixture(t, options = {}) {
       return fn(request);
     };
   }
-  const core = openMemoryCore({ path, model }); const db = new DatabaseSync(path);
-  t.after(() => { core.close(); db.close(); });
+  const core = openMemoryCore({ path, model });
+  workspace.defer(() => core.close());
+  const db = new DatabaseSync(path);
+  workspace.defer(() => db.close());
   return { core, db, path, model, calls };
 }
 const material = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('admission_claims','capture_events') ORDER BY name").all()
@@ -80,7 +84,7 @@ test('Q4 historical restatement keeps current Monday and a later explicit change
   assert.deepEqual(detail(core, old).supersession, before.supersession);
   assert.equal(detail(core, old).receipts.length, before.receipts.length + 1);
   assert.equal(detail(core, old).receipts.at(-1).excerpt, quote);
-  const cold = openMemoryCore({ path }); t.after(() => cold.close());
+  const cold = openMemoryCore({ path }); workspaces.get(t).defer(() => cold.close());
   assert.equal(detail(cold, old).memory.state, 'active');
   model.reconcile = () => ({ transitions: [transition()] });
   const changed = ok(await core.capture(capture(3, tuesday)));
@@ -175,7 +179,7 @@ test('O1/O2 cold completed replay precedes highwater and returns immutable conte
   const { core, db, path } = fixture(t); const old = await first(core);
   const result = ok(await core.capture(capture(2))); const replacement = result.admission.memories[0].id;
   const before = material(db); core.close();
-  const reopened = openMemoryCore({ path }); t.after(() => reopened.close());
+  const reopened = openMemoryCore({ path }); workspaces.get(t).defer(() => reopened.close());
   assert.deepEqual(ok(await reopened.capture(capture(1, friday))), { duplicate: true, memoryIds: [old], suppressedCount: 0, reconciliation: noChange });
   assert.deepEqual(ok(await reopened.capture(capture(2))), { duplicate: true, memoryIds: [replacement], suppressedCount: 0, reconciliation: applied });
   assert.deepEqual(material(db), before);
@@ -347,7 +351,7 @@ test('O2 correction or forget during judgment fences all admission and retiremen
     let entered; let release; const ready = new Promise((resolve) => { entered = resolve; });
     const { core, db, path } = fixture(t, { reconcile: () => new Promise((resolve) => { release = resolve; entered(); }) });
     const old = await first(core); const pending = core.capture(capture(2)); await ready;
-    const other = openMemoryCore({ path }); t.after(() => other.close());
+    const other = openMemoryCore({ path }); workspaces.get(t).defer(() => other.close());
     const revision = detail(other, old).memory.revision;
     if (action === 'forget') ok(other.forget({ namespace, memoryId: old, expectedRevision: revision }));
     else ok(other.correct({ namespace, memoryId: old, expectedRevision: revision, content: 'Actually Wednesday', kind: 'fact', receipt: receipt('corrected') }));
@@ -372,7 +376,7 @@ test('O2 concurrent later completion invalidates a pending highwater snapshot wi
   let entered; let release; const ready = new Promise((resolve) => { entered = resolve; });
   const { core, db, path } = fixture(t, { reconcile: () => new Promise((resolve) => { release = resolve; entered(); }) });
   await first(core); const pending = core.capture(capture(2)); await ready;
-  const other = openMemoryCore({ path, model: { contextWindow: 8192, countTokens: () => 1, extract: () => ({ items: [] }) } }); t.after(() => other.close());
+  const other = openMemoryCore({ path, model: { contextWindow: 8192, countTokens: () => 1, extract: () => ({ items: [] }) } }); workspaces.get(t).defer(() => other.close());
   ok(await other.capture(capture(3))); const before = material(db);
   release({ transitions: [transition()] }); error(await pending, 'capture_order_conflict'); assert.deepEqual(material(db), before);
 });
@@ -459,7 +463,7 @@ test('O2 an expired judgment owner cannot overwrite or abandon a completed succe
   db.exec("UPDATE admission_claims SET lease_expires_at=0 WHERE event_id='event-2'");
   const other = openMemoryCore({ path, model: { contextWindow: 8192, countTokens: () => 1,
     extract: () => ({ items: [item(monday)] }), reconcile: () => ({ transitions: [transition()] }) } });
-  t.after(() => other.close()); const committed = ok(await other.capture(capture(2))); assert.deepEqual(committed.reconciliation, applied);
+  workspaces.get(t).defer(() => other.close()); const committed = ok(await other.capture(capture(2))); assert.deepEqual(committed.reconciliation, applied);
   const before = material(db); release({ transitions: [transition()] }); error(await pending, 'stale_admission');
   assert.deepEqual(material(db), before);
   assert.deepEqual(ok(await core.capture(capture(2))).reconciliation, applied);
@@ -498,7 +502,12 @@ test('O2 real process race binds one stream position to one event', { timeout: 1
     process.send('ready');process.once('message',async()=>{process.send(await core.capture(JSON.parse(process.argv[2])));core.close();process.disconnect();});`;
   const workers = ['a', 'b'].map((eventId) => {
     const child = spawn(process.execPath, ['--input-type=module', '-e', program, path, JSON.stringify(capture(1, monday, { eventId }))],
-      { env: { NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] }); t.after(() => child.kill());
+      { env: { NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+    const closed = new Promise(resolve => child.once('close', resolve));
+    workspaces.get(t).defer(async () => {
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+      await closed;
+    });
     let isReady = false; let hasResult = false;
     const ready = new Promise((resolve, reject) => { child.on('message', (m) => { if (m === 'ready') { isReady = true; resolve(); } });
       child.once('error', reject); child.once('exit', (code) => { if (!isReady) reject(new Error(`worker exited before ready: ${code}`)); }); });

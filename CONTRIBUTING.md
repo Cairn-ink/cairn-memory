@@ -12,6 +12,61 @@ changes, `ROADMAP.md`.
 
 ## Before opening a pull request
 
+Ordinary offline `npm test` and `test:*` suites use
+`tools/testing/run.mjs`, which gives each invocation a fresh owned temporary
+directory and removes it after the test processes finish, including assertion
+and setup failures. Run a selected suite directly with
+`node tools/testing/run.mjs --test-name-pattern='pattern' core/test/example.test.mjs`;
+arguments, working directory and test concurrency are preserved. The opt-in
+native suites keep their existing prerequisites. Paid/live commands are separate
+and never wrapped by this runner.
+
+New fixtures should use `createTestWorkspace(t, { prefix })` from
+`tools/testing/workspace.mjs`. It registers teardown immediately; use
+`workspace.defer(() => resource.close())` for resources that must close before
+removal. Deferred callbacks run in reverse order and every callback is attempted;
+cleanup errors fail the test. Shared file fixtures may pass `null` and call
+`await workspace.cleanup()` in their outer `finally`/file teardown. The outer
+runner also removes legacy scratch created under standard `TMPDIR`/`TMP`/`TEMP`.
+It does not intercept arbitrary explicit paths or promise that every legacy
+fixture disposes its files immediately. Public build/install output, demos,
+formal evaluation databases and ledgers keep their existing retention contracts.
+The runner owns only its newly created test directory. The parent `npm` process
+starts first and may write its own Node compile cache (for example
+`node-compile-cache`) into the caller's `TMPDIR`; that cache is outside the
+test workspace and is not removed by this runner. For a strict parent-TMPDIR
+residue probe, set `NODE_DISABLE_COMPILE_CACHE=1` on the parent npm invocation,
+for example `NODE_DISABLE_COMPILE_CACHE=1 npm run test:workspace-lifecycle`.
+Other tool-managed caches remain governed by their own lifecycles; do not sweep
+the caller's temporary directory to make a test probe pass.
+
+Run `npm run test:workspace-lifecycle` on Node 22.16 and 24.15 with the isolated
+OpenAI dependencies installed. It verifies real subprocess success/failure,
+cleanup failures, concurrent/repeated runs, actual ordered/paired/semantic
+fixtures and the sanitized packaging child environment. Packaging children
+forward only validated standard temp paths in addition to their existing
+allowlist; application environment and credentials remain excluded.
+
+On supported POSIX hosts, the runner owns a child process group and waits for
+its members to stop before cleanup; catchable SIGINT/SIGTERM/SIGHUP terminate
+the group and escalate after two seconds. Linux excludes zombies awaiting the
+host reaper using `/proc`; other POSIX hosts conservatively wait until the
+kernel reports the whole group absent. An unverifiable group, including a
+permission error or a group that remains visible after termination, fails and
+retains scratch. Windows is unsupported: the runner fails before creating a
+workspace or launching a child. The lifecycle gate is verified on Linux/WSL;
+the other POSIX path is exercised by a simulated-platform process-group test,
+not a native macOS run. Deliberately detached sessions, SIGKILL and host
+crashes cannot guarantee cleanup. A replaced workspace root also fails and
+is retained. No historical-directory sweep is performed. Direct `node --test`
+commands bypass the invocation safety net.
+
+CI utility scripts can use explicit `--script` mode, for example
+`node tools/testing/run.mjs --script packaging/prepare-cache.mjs` and
+`node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs`.
+These retain their public-registry network behavior and are separate from
+offline tests. Standalone utility commands keep their existing behavior.
+
 For `evaluation/live` changes, install the isolated OpenAI and MCP dependency
 sets and run `npm run test:live-evidence-offline` on Node 22.16 and 24. These
 tests never use a provider key or authorize paid calls. Actual pinned-host and
@@ -85,8 +140,8 @@ These use fake HTTP and need no key. Real-provider tests require explicitly
 approved credential scope and budget.
 For qualification wire-format changes, also run the opt-in installed rationale
 gate on both core runtimes after installing both adapter dependency sets and
-running `node packaging/prepare-cache.mjs`:
-`CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node --test evaluation/live/test/rationale-pilot.test.mjs`.
+running `node tools/testing/run.mjs --script packaging/prepare-cache.mjs`:
+`CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node tools/testing/run.mjs evaluation/live/test/rationale-pilot.test.mjs`.
 This is synthetic HTTP only. The ordinary offline evidence suite skips these
 installed cases, so its success does not substitute for this CI gate.
 The opt-in `npm run test:openai-live -- --live --budget-usd 0.25` uses synthetic
@@ -99,10 +154,10 @@ exercise actual stdio client/server calls using synthetic stores and scripted
 models only. Run on both core Node versions; CI has a separate MCP matrix.
 No key or paid request is needed. See `docs/standalone-mcp.md`.
 For local artifact changes, install both isolated adapter dependency sets above,
-then explicitly run `node packaging/prepare-cache.mjs` (public registry metadata
+then explicitly run `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` (public registry metadata
 requests), followed by `npm run test:artifact` on Node22.16 and24. `npm ci` alone
 does not populate the metadata needed by an offline nested-shrinkwrap install.
-CI also runs `node packaging/verify-clean-cache.mjs`, a network-enabled fresh-cache
+CI also runs `node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs`, a network-enabled fresh-cache
 regression separate from ordinary offline tests. Tests build inspected private
 archives and install them offline into explicitly prefixed temporary projects;
 there are no model calls, global installs or registry publications. See

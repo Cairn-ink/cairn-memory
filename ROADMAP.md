@@ -16,6 +16,13 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [test workspace lifecycle gate](docs/plans/test-workspace-lifecycle.md)
+  checks fresh invocation-owned scratch through real offline fixtures and
+  subprocess success, failure and Linux termination on Node 22.16 and 24.15.
+  Canonical test commands dispose scratch after resources stop; direct Node
+  commands, detached sessions, SIGKILL and host crashes remain outside that
+  guarantee. Public retained evidence and historical cleanup are separate.
+
 - The explicit [indexed-evidence comparison profile](docs/plans/indexed-evidence-comparison.md)
   is a separately identified offline checkpoint using the same public core and
   native comparator. Qualification is absent, while partial capture still blocks

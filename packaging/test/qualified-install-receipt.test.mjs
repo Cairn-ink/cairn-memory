@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import test from 'node:test';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { installPreview } from '../install-preview.mjs';
 import { command } from '../build.mjs';
 
-const target = () => join(mkdtempSync(join(tmpdir(), 'cairn-qualified-receipt-')), 'new');
+const target = t => join(createTestWorkspace(t, { prefix: 'cairn-qualified-receipt-' }).path, 'new');
 const args = directory => ['--directory', directory, '--owner', 'synthetic-owner'];
 
-test('IR1 invalid/null/missing/duplicate mode flags reject before commands or target writes', () => {
-  const directory = target(); const parent = join(directory, '..'); const before = readdirSync(parent); let calls = 0;
+test('IR1 invalid/null/missing/duplicate mode flags reject before commands or target writes', t => {
+  const directory = target(t); const parent = join(directory, '..'); const before = readdirSync(parent); let calls = 0;
   for (const extra of [ ['--capture-qualification'], ['--capture-qualification', null], ['--capture-qualification', undefined],
     ['--capture-qualification', ''], ['--capture-qualification', 'source-bound-v3'], ['--capture-qualification', ' source-bound-v2'],
     ['--capture-qualification', 'source-bound-v2', '--capture-qualification', 'source-bound-v1'],
@@ -21,8 +21,8 @@ test('IR1 invalid/null/missing/duplicate mode flags reject before commands or ta
 });
 
 for (const mode of [undefined, 'source-bound-v1', 'source-bound-v2']) {
-  test(`IR2 actual offline install forwards exact ${mode ?? 'absent'} mode into check and receipt without credential reads`, { timeout: 120000 }, () => {
-    const directory = target(); const originalEnv = process.env; let keyReads = 0; const calls = []; let checked;
+  test(`IR2 actual offline install forwards exact ${mode ?? 'absent'} mode into check and receipt without credential reads`, { timeout: 120000 }, t => {
+    const directory = target(t); const originalEnv = process.env; let keyReads = 0; const calls = []; let checked;
     process.env = new Proxy(originalEnv, { get(object, key) {
       if (key === 'OPENAI_API_KEY') { keyReads++; throw new Error('Credential lookup prohibited in installer'); }
       return Reflect.get(object, key);
@@ -55,9 +55,9 @@ for (const mode of [undefined, 'source-bound-v1', 'source-bound-v2']) {
   });
 }
 
-test('IR3 mismatched or missing check mode retains partial installation and never writes a misleading receipt', () => {
+test('IR3 mismatched or missing check mode retains partial installation and never writes a misleading receipt', t => {
   for (const reported of [undefined, 'source-bound-v1', 'other']) {
-    const directory = target(); let calls = 0;
+    const directory = target(t); let calls = 0;
     assert.throws(() => installPreview([...args(directory), '--capture-qualification', 'source-bound-v2'], {
       runCommand(executable, arguments_) {
         calls++; if (executable === 'npm') return '';

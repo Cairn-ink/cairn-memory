@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -20,8 +20,18 @@ const extraFiles = [
 
 // npm receives no application environment, credentials or project npm config.
 export function command(executable, args, cwd, userconfig) {
+  const temp = {};
+  for (const key of ['TMPDIR', 'TMP', 'TEMP']) {
+    const value = process.env[key];
+    if (value === undefined) continue;
+    if (!isAbsolute(value) || value.includes('\0') || !lstatSync(value).isDirectory()) {
+      throw new Error('invalid_artifact_temp_directory');
+    }
+    temp[key] = value;
+  }
   const result = spawnSync(executable, args, { cwd, encoding: 'utf8', timeout: 120000,
     maxBuffer: 4 * 1024 * 1024, env: { PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ''}`,
+      ...temp,
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       npm_config_userconfig: userconfig, npm_config_audit: 'false', npm_config_fund: 'false' } });
   if (result.error || result.status !== 0) throw new Error('artifact_command_failed');

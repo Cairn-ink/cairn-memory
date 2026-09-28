@@ -15,6 +15,17 @@
 - Eagerly migrate stores to schema v17 with four read indexes and no table or
   column changes. Older openers refuse the new version.
 
+## Unreleased — test-owned temporary workspaces
+
+- Give ordinary offline test invocations isolated scratch with cleanup after
+  success, failure and catchable POSIX termination; reject unsupported Windows
+  before test launch. Close migrated fixture
+  resources before exact owned-directory removal, and verify residual scratch
+  through real subprocess and fixture gates. Packaging children preserve only
+  validated standard temporary paths in their sanitized environment. Public
+  artifact/failure retention, formal evaluation evidence and paid/live commands
+  retain their contracts; historical temporary files are outside this change.
+
 ## Unreleased — opt-in episode capture
 
 - Add debounced episode interpretation through an injected port, bounded first,

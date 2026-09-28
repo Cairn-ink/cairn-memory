@@ -21,6 +21,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm ci --prefix adapters/openai
       - run: npm ci --prefix adapters/mcp
+      - run: npm run test:workspace-lifecycle
       - run: npm run test:live-evidence-offline
 
   test:
@@ -110,11 +111,11 @@ jobs:
       - run: npm ci --prefix adapters/mcp
       - run: npm ci --prefix adapters/openai
       - run: npm run test:mcp
-      - run: node packaging/verify-clean-cache.mjs
-      - run: node packaging/prepare-cache.mjs
+      - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
+      - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
       - run: npm run test:artifact
       - name: Installed rationale experiment with synthetic HTTP only
-        run: CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node --test evaluation/live/test/rationale-pilot.test.mjs
+        run: CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node tools/testing/run.mjs evaluation/live/test/rationale-pilot.test.mjs
 
   experiment-budget:
     runs-on: ubuntu-latest
