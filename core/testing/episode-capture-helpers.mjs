@@ -33,7 +33,7 @@ export function setup(t, overrides={}, config={}) {
 export function input(n=1,sessionId='private-session',extra={}) {
   return {namespace:ns,client:'synthetic',sessionId,eventId:'event-'+createHash('sha256').update(sessionId+':'+n).digest('hex'),
     episodeContext:{clientLabel:'Synthetic client',generation:'initial',origin:'ordinary'},
-    messages:[{id:`message-${n}`,role:'user',content:`Synthetic 中文 English 😀 evidence ${n}.`,occurredAt:'2026-09-28T00:00:00.000Z'}],...extra};
+    messages:[{id:`message-${n}`,role:'user',content:`Synthetic 中文 English 😀 evidence ${n}.`,occurredAt:'1901-02-03T04:05:06.789Z'}],...extra};
 }
 export function counts(port,method='interpretEpisode') {return port.calls.filter(call=>call.method===method).length;}
 export function deferred() {let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}

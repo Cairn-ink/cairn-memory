@@ -34,14 +34,16 @@ if (mode === 'keep-retry') {
   let admitted=0;
   for(let n=1;n<=70;n++) {
     const value=input(n,mode);value.messages=Array.from({length:20},(_,i)=>({id:`m-${n}-${i}`,role:'user',content:`Batch ${n} `+'x'.repeat(780)}));
-    let result;
+    let result; const retryCodes = [];
     for(let tries=0;tries<1000;tries++) {
       result=await core.capture(value);
       if (!(result.ok && result.value.processing) && !['episode_processing','storage_busy'].includes(result.error?.code)) break;
+      retryCodes.push(result.error?.code ?? 'processing');
+      if (retryCodes.length > 10) retryCodes.shift();
       const resume=new Promise(resolve=>process.once('message',resolve));
       await send({stage:'retry'});await resume;
     }
-    if(!result.ok || !result.value.admission || result.value.processing)throw Error(JSON.stringify(result));
+    if(!result.ok || !result.value.admission || result.value.processing)throw Error(JSON.stringify({ result, batch: n, retryCodes }));
     admitted++;
   }
   core.close();await send({stage:'result',admitted,calls:port.calls.filter(c=>c.method==='interpretEpisode').length});process.disconnect();

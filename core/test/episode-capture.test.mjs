@@ -50,7 +50,7 @@ test('E1/E2/E8 a fresh quick skips only its batch; seven debounced batches admit
   const evidence=ok(f.core.inspectCaptureEvidence({namespace:ns,client:'synthetic',eventId:input().eventId})).evidence;
   assert.equal(evidence.state,'released');assert.equal(evidence.expiresAt,null);assert.equal(evidence.view,null);
   const payload=JSON.stringify(f.model.calls);
-  for(const forbidden of ['private-session','Synthetic client','2026-09-28','generation'])assert.ok(!payload.includes(forbidden),forbidden);
+  for(const forbidden of ['private-session','Synthetic client','1901-02-03','generation'])assert.ok(!payload.includes(forbidden),forbidden);
   // Existing placement classification carries namespace routing; episode interpretation does not.
   assert.ok(!JSON.stringify(f.model.calls.filter(call=>call.method==='interpretEpisode')).includes('ownerId'));
   assert.ok(!JSON.stringify(f.db.prepare('SELECT * FROM episode_messages').all()).includes('evidence'));
