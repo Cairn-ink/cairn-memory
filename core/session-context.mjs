@@ -20,16 +20,17 @@ export function contextQuery(ns, group) {
   const params = [ns.ownerId, ns.scope, ns.projectId, 13];
   const sql = group === 'nextSteps' ? `SELECT e.* FROM session_episodes e INDEXED BY episode_open_step_read
     WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND e.deleted=0
+      AND e.id NOT IN (SELECT id FROM review_hidden_episodes)
       AND json_extract(e.record,'$.processing.state')='ready' AND json_extract(e.record,'$.nextStep.status')='open'
     ORDER BY json_extract(e.record,'$.nextStep.receiptOrdinal') DESC,e.id ASC LIMIT ?`
     : `SELECT m.* FROM memories m INDEXED BY namespace_memories
-    WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND m.deleted=0 AND m.currentness='current'
+    WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND m.deleted=0 AND m.review_state!='awaiting' AND m.currentness='current'
       AND (m.kind='instruction' OR (m.kind='preference' AND EXISTS
         (SELECT 1 FROM procedural_tags p WHERE p.memory_id=m.id AND p.positive=1)))
     ORDER BY m.updated_at DESC,m.id ASC LIMIT ?`;
   return { sql, params };
 }
-export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage }) {
+export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview }) {
   function step(row) {
     const record = JSON.parse(row.record), nextStep = record.nextStep;
     const sources = [];
@@ -53,7 +54,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
     let evidence;
     try { evidence = readSourceEvidence(row); }
     catch (error) {
-      if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row), tooLarge: true };
+      if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
       throw error;
     }
     const tag = proceduralStorage.inspect(row.id);
@@ -63,7 +64,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       try { sourceSpan(receipt.excerpt, anchor.start, anchor.end); }
       catch { fail('storage_error'); }
     }
-    return { memory: { ...memoryMetadata(row), content: row.content }, receipts: evidence.receipts,
+    return { memory: { ...memoryMetadata(row, decisionReview), content: row.content }, receipts: evidence.receipts,
       ...(tag ? { procedural: tag } : {}), semanticSupport: 'unassessed' };
   }
   return function snapshot(ns, groups, expected) {

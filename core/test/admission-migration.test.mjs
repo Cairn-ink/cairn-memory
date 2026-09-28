@@ -42,7 +42,7 @@ const tables = ['memories', 'receipts', 'suppressed', 'namespace_epochs', 'store
 const snapshot = (db) => tables.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map((row) => {
   if (table === 'memories' && Object.hasOwn(row, 'currentness')) {
     assert.equal(row.currentness, 'current');
-    const { currentness, ...preserved } = row; return preserved;
+    const { currentness, review_state, ...preserved } = row; return preserved;
   }
   return { ...row };
 }));
@@ -53,7 +53,7 @@ test('v4→v9 preserves complete store state and authenticated cursors', (t) => 
   const savedCursor = cursor(db);
   const core = openMemoryCore({ path });
   t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.deepEqual(snapshot(db), before);
   const page = core.list({ namespace, limit: 1, cursor: savedCursor });
   assert.equal(page.ok, true, JSON.stringify(page));
@@ -88,6 +88,6 @@ test('v4 upgrade blocked by another writer remains intact and retries', (t) => {
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path });
   t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.deepEqual(snapshot(db), before);
 });

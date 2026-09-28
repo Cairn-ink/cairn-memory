@@ -4,7 +4,8 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16 data now upgrades it to v17 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to v18 for
+[opt-in decision confirmation](plans/confirmation-state.md),
 [episode storage and explicit procedural tags](#episode-storage-foundation-se-1),
 [opt-in staged capture evidence](staged-capture-evidence.md),
 [source-backed proposed rationale](source-backed-rationale.md),
@@ -14,7 +15,7 @@ v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16 data now upgrades it to v17 
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md), [admission claims](admission-claims.md) and
 the bounded [initial capture classification journal](capture.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v17.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v18.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
@@ -106,7 +107,9 @@ change their permissions. On Windows, restrict access using filesystem ACLs.
 | `store.close()` | Idempotent; subsequent scope operations fail |
 
 Returned records contain `id`, `content`, `kind`, `scope`, `projectId`, `origin`,
-`confidence`, `revision`, timestamps, and Source Receipts. This is an internal
+`confidence`, `revision`, timestamps, and Source Receipts. Legacy records never
+include `reviewEffects`, including when remember promotes an awaiting item.
+This is an internal
 JavaScript contract, **not an extension to the v0.1 HTTP schema**; adapters must
 map fields and enforce their own protocol.
 
@@ -218,12 +221,12 @@ Episode mode now enables debounced capture through an injected interpretation po
 quick handling, explicit keep and automatic source-bound procedural tags.
 Mode-off capture remains unchanged. See [capture](capture.md#opt-in-session-episodes).
 
-Every open atomically upgrades an older committed format to v17, including with
+Every open atomically upgrades an older committed format to v18, including with
 episodes off. Explicit procedural tags are available immediately in both modes;
 no request triggers a lazy upgrade. Inspection and memory correction/forgetting
 still enforce episode dependencies with the feature off. The host must stop/drain
 **all** older-runtime processes and connections, including idle readers, before
-opening the store for upgrade. Older binaries reject v17 on subsequent opens;
+opening the store for upgrade. Older binaries reject v18 on subsequent opens;
 an already-open old process is not retroactively fenced. There is no downgrade.
 
 The upgrade runs within the existing immediate transaction with foreign keys on.
@@ -258,3 +261,18 @@ including episode-off opens, completes all required migrations in one transactio
 with foreign keys enabled and checked before recording version 17. A failed index
 creation rolls back the schema, rows and version together. Older v16 openers
 refuse v17; hosts must stop/drain older processes before upgrading.
+
+### Decision confirmation (CF-1)
+
+`openMemoryCore({path, decisionReview: 'required-v1'})` holds automatically
+admitted inferred decisions in an independent review state. Ordinary reads exclude awaiting items even when
+this option is absent. Person-facing hosts may use `list({reviewState:'awaiting'})`
+and `get({includeAwaiting:true})`; model tools must not expose these switches.
+`confirm` and `reject` require an expected revision and durable action ID.
+`openMemoryStore` does not accept this option. Schema v18 eagerly adds
+`memories.review_state`, `confirmation_actions`, `confirmation_supersessions`,
+`confirmation_conflicts` (with durable statuses/results and dropped-hint reasons),
+bound predecessor fingerprints and receipt IDs for held work, and the
+`review_hidden_episodes` view, and updates index eligibility/readers. See the
+[contract appendix](plans/confirmation-state.md) for replay, episode visibility,
+and the direct-statement provenance limitation.

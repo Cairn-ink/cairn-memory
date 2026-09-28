@@ -10,12 +10,15 @@ export async function reviewCapturedRationale({ snapshot, admission, classificat
     deadline?.check();
     const guards = classification.status === 'applied'
       ? classification.memoryRevisions : admission.memories.map(({ id, revision }) => ({ memoryId: id, revision }));
-    const refs = admission.memories.map(({ id, revision }) => {
+    const refs = admission.memories.flatMap(({ id, revision }) => {
       const expected = guards.find(ref => ref.memoryId === id)?.revision ?? revision;
-      const { memory } = unwrap(operations.get({ namespace: snapshot.namespace, memoryId: id }));
+      const inspected = operations.get({ namespace: snapshot.namespace, memoryId: id });
+      if (!inspected.ok && inspected.error.code === 'memory_not_found' && operations.isAwaiting?.(id)) return [];
+      const { memory } = unwrap(inspected);
       if (memory.revision !== expected || memory.state !== 'active') fail('revision_conflict');
-      return { memoryId: id, revision: expected };
+      return [{ memoryId: id, revision: expected }];
     });
+    if (!refs.length) return { status: 'skipped', reason: 'empty' };
     const fullQuery = sourceMessages.map(message => message.content).join('\n');
     let query = fullQuery.slice(0, 4000);
     if (!query.isWellFormed()) query = query.slice(0, -1);

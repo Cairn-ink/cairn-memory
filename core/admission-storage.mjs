@@ -39,7 +39,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         try { ids.forEach(identifier); } catch { fail('storage_error'); }
         const findCurrent = db.prepare(`SELECT revision, filing_status FROM memories
           WHERE owner_id = ? AND scope = ? AND project_id = ? AND id = ?
-            AND deleted = 0 AND currentness = 'current'`);
+            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
         const members = ids.map((id) => {
           const current = findCurrent.get(ns.ownerId, ns.scope, ns.projectId, id);
           return current ? { status: 'current', memoryId: id, revision: current.revision,
@@ -122,7 +122,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         activeItems.push(item);
       }
       const entries = activeItems.map((item) => {
-        const result = admitMutation(ns, item);
+        const result = admitMutation(ns, item, { automatic: true });
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);

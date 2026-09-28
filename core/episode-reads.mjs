@@ -45,7 +45,7 @@ export function rangeQuery(ns, operation, f, after) {
     time = f.timeBasis === 'event' ? "json_extract(e.record,'$.eventEnd')" : 'e.first_received_at';
     id = 'e.id';
     sql = `SELECT e.* FROM session_episodes e INDEXED BY ${f.timeBasis === 'event' ? 'episode_event_read' : 'episode_receipt_read'}`;
-    clauses.push(where('e'), 'e.deleted=0');
+    clauses.push(where('e'), 'e.deleted=0', 'e.id NOT IN (SELECT id FROM review_hidden_episodes)');
     if (f.timeBasis === 'event') {
       clauses.push(`${time}>=?`, "json_extract(e.record,'$.eventStart')<?"); params.push(f.since,f.until);
     } else { clauses.push(`${time}>=?`,`${time}<?`); params.push(f.since,f.until); }
@@ -56,7 +56,7 @@ export function rangeQuery(ns, operation, f, after) {
     sql = receipt ? `SELECT m.*,r.id AS receipt_id,r.created_at AS receipt_time,r.client AS receipt_client
       FROM receipts r INDEXED BY receipt_time_read CROSS JOIN memories m ON m.id=r.memory_id`
       : 'SELECT m.* FROM memories m INDEXED BY namespace_memories';
-    clauses.push(where('m'), 'm.deleted=0', `m.currentness IN (${f.states.map(()=>'?').join(',')})`, `${time}>=?`, `${time}<?`);
+    clauses.push(where('m'), 'm.deleted=0', "m.review_state != 'awaiting'", `m.currentness IN (${f.states.map(()=>'?').join(',')})`, `${time}>=?`, `${time}<?`);
     params.push(...f.states.map(s=>s === 'active' ? 'current' : s), f.since, f.until);
     if (f.client !== null) {
       clauses.push(receipt ? 'r.client=?' : 'EXISTS (SELECT 1 FROM receipts r WHERE r.memory_id=m.id AND r.client=?)');
@@ -72,12 +72,13 @@ export function rangeQuery(ns, operation, f, after) {
   params.push(f.limit+1);
   return { sql, params };
 }
-export function memoryMetadata(row) {
+export function memoryMetadata(row, decisionReview = false) {
   return { id: row.id, revision: row.revision, kind: row.kind, origin: row.origin, confidence: row.confidence,
+    ...(decisionReview ? { reviewState: row.review_state } : {}),
     state: row.currentness === 'current' ? 'active' : 'historical', filingStatus: row.filing_status,
     createdAt: row.created_at, updatedAt: row.updated_at };
 }
-export function createEpisodeReads({ db, epoch }) {
+export function createEpisodeReads({ db, epoch, decisionReview }) {
   return function read(ns, operation, filter, cursor) {
     return transaction(db, () => {
       const current = epoch(ns);
@@ -90,7 +91,7 @@ export function createEpisodeReads({ db, epoch }) {
           return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
         }
         const receipt = filter.timeBasis === 'receipt';
-        return { item: { memory: memoryMetadata(row), ...(receipt ? { receipt: {
+        return { item: { memory: memoryMetadata(row, decisionReview), ...(receipt ? { receipt: {
           id: row.receipt_id, createdAt: row.receipt_time, client: row.receipt_client } } : {}) },
           key: receipt ? { time: row.receipt_time, id: row.receipt_id, memoryId: row.id } : { time: row.updated_at, id: row.id } };
       }) };

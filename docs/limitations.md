@@ -1098,8 +1098,59 @@ The evidence behind it is narrow:
   They are not recorded transcripts. They show the rule handles those shapes,
   not that those are all the shapes Claude Code writes.
 
+## Decision confirmation hides whole episode context
+
+CF-1's optional `decisionReview: 'required-v1'` uses conservative admission,
+chosen by **chichi on 2026-09-29**. Every automatically captured decision waits,
+including paraphrases of the person's direct statements; explicit remember/admit
+stay direct. The extractor has no provenance contract that can reliably tell
+those statements from inference. Chichi noted that confirming all of these is
+probably too much. The follow-up admits decisions from the person's typed
+prompts, marked by plugin 0.1.1's `promptSource`, as direct; it is recorded in
+cairn-wiki `docs/plans/one-brain-u6.md` → “Confirmation burden” and is not part of
+CF-1.
+
+- **Measured synthetic cost.** The fixture built from the existing episode
+  capture helpers has three user/assistant turns, two automatically captured
+  decisions and one next step. Nothing is reviewed initially. All episode
+  context is hidden until both decisions are confirmed:
+
+  | Reader | Neither confirmed | One confirmed | Both confirmed |
+  | --- | --- | --- | --- |
+  | `listEpisodes` | 0 episodes | 0 episodes | 1 episode |
+  | `getEpisode` | `episode_not_found` | `episode_not_found` | readable with next step |
+  | `sessionStartContext` next steps | 0 | 0 | 1 |
+  | `sessionStartContext` procedural items | 0 | 0 | 0 |
+
+- **Whole-episode rule.** One live awaiting link hides the episode's unrelated
+  prose and next step too, as well as episodes borrowing its passages. Rejection
+  makes an invalidated shell readable again, not the rejected prose. The
+  conservative rule remains because episode prose cannot reliably be split
+  into confirmed and awaiting assertions.
+- **Scope of evidence.** This is a 100% loss of episode context in one scripted
+  fixture, not a measured frequency across real sessions or a model-quality
+  result. Every session with at least one live awaiting decision has this cost.
+  The option is off by default; U-6 will measure the burden in dogfood.
+
+The measurement is asserted in `core/test/confirmation-state.test.mjs` (“typical
+synthetic session”); see the [contract](plans/confirmation-state.md).
+
+## Awaiting predecessors are not reconciliation candidates
+
+If an awaiting decision A is superseded by a later awaiting decision B, capture
+creates no held supersession between them. Confirming both, in either order,
+leaves two current decisions, even when they contradict each other. With review off,
+reconciliation can retire A when admitting B. The review queue currently
+cannot discover that missing transition; a separate reconciliation is needed
+after review. Synthetic tests freeze this limitation rather than implying
+that confirmation resolves every contradiction.
+
+Evidence: `core/test/confirmation-state.test.mjs` tests both confirmation orders.
+
 ## Where the evidence lives
 
+- [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
+- [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
 - [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)
 - [Four-case real-model long-history pilot](evidence/long-history-live-pilot.md)

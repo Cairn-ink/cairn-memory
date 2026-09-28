@@ -23,7 +23,9 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
     deadline?.check();
     const guards = [];
     for (const admitted of admission.memories) {
-      const { memory } = unwrap(operations.get({ namespace, memoryId: admitted.id }));
+      const inspected = operations.get({ namespace, memoryId: admitted.id });
+      if (!inspected.ok && inspected.error.code === 'memory_not_found' && operations.isAwaiting?.(admitted.id)) continue;
+      const { memory } = unwrap(inspected);
       if (memory.revision !== admitted.revision) fail('revision_conflict');
       if (memory.filing.status === 'unfiled') guards.push({ memoryId: admitted.id, revision: admitted.revision });
     }

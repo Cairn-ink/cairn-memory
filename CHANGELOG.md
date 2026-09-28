@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased — core decision confirmation
+
+- Opt-in `decisionReview: 'required-v1'` holds automatically admitted inferred
+  decisions for person-facing review. Ordinary readers, including option-off
+  openers, exclude awaiting memories and episodes containing their context.
+- `confirm` preserves inferred origin and source receipts; `reject` forgets with
+  suppression. Both use revision checks and durable replay identities.
+- Eager additive schema v18 migration; older openers refuse it. See the
+  [CF-1 contract](docs/plans/confirmation-state.md), including the limitation that
+  automatic extraction cannot yet distinguish directly stated decisions.
+- **Decision (chichi, 2026-09-29):** conservative admission is chosen; all
+  automatic decisions wait when opted in, while explicit remember/admit stay
+  direct. Confirmation may be too burdensome. The provenance follow-up for
+  typed prompts marked with plugin 0.1.1's `promptSource` is recorded in
+  cairn-wiki `docs/plans/one-brain-u6.md` → “Confirmation burden”.
+- Confirmation completes held supersession and conflict links atomically;
+  unrelated transitions in a mixed capture apply immediately. Rejection drops
+  the held work and preserves its current predecessor. Explicit promotion also
+  resolves held work, and recapture preserves existing evidence. Full conflict
+  targets drop hints with a recorded reason instead of blocking review; typed
+  review outcomes expose transitions needing qualified evaluation. Restating a
+  predecessor preserves held evidence too. Supersession overflow is recorded
+  without blocking review, and qualification hand-offs survive lost promotion
+  responses through durable outcomes and `listReviewTransitions`. Option-off
+  openers, including legacy remember, never return `reviewEffects`. Fresh held
+  evidence re-arms terminal pair records. Mutation effects describe only that
+  call; terminal lineage outcomes remain available through the review listing's
+  status filter. Conflict outcomes, including pending hints and drops caused by
+  endpoint edits or conversation forgetting, are recoverable through
+  `listReviewConflicts`. Effects identify both endpoints. Reject uses `rejected`;
+  forget uses `forgotten`. Hidden hint inserts preserve ordinary cursors, while
+  re-arming a prior outcome advances the epoch. Supersession upserts re-arm only
+  dropped rows.
+
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 
 - The Claude Code plugin no longer sends a user-role record that Claude Code

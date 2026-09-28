@@ -1,3 +1,4 @@
+import { exceedsRelationLimit } from './relation-limits.mjs';
 import { fail } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId];
@@ -5,13 +6,13 @@ const where = 'owner_id = ? AND scope = ? AND project_id = ?';
 
 /** Durable directional history. Mutation callers own the enclosing transaction. */
 export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
-  invalidateConflicts, invalidateMemory, evaluateQualified, evaluateQualifiedSet, epoch }) {
+  invalidateConflicts, invalidateMemory, evaluateQualified, evaluateQualifiedSet, epoch, recordHeldRetirement }) {
   const requiresQualification = (previous, replacement) => Boolean(db.prepare(
     'SELECT 1 FROM memory_qualifications WHERE memory_id IN (?, ?) LIMIT 1').get(previous.id, replacement.id));
 
-  function retire(ns, previous, replacement, receiptIds) {
+  function retire(ns, previous, replacement, receiptIds, collectReviewEffects) {
     if (requiresQualification(previous, replacement)) fail('qualified_transition_required');
-    return retireMutation(ns, previous, replacement, receiptIds);
+    return retireMutation(ns, previous, replacement, receiptIds, collectReviewEffects);
   }
 
   function retireQualified(ns, previous, replacement) {
@@ -29,7 +30,7 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
       retiredCount: 0, indexRevision: epoch(ns) };
     const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
       WHERE replacement_memory_id = ?`).get(replacement.id).n;
-    if (incoming + previous.length > 5) fail('supersession_limit');
+    if (exceedsRelationLimit(incoming + previous.length)) fail('supersession_limit');
     const retired = previous.map(memory => retireMutation(ns, memory, replacement, verdict.receiptIds));
     return { status: 'applied', reason: null, retiredCount: retired.length,
       previous: retired.map(result => result.previous),
@@ -39,19 +40,22 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
 
   // The only bypass of the legacy fence is this lexical helper reached after
   // qualified policy evaluation. No public DTO or model output can supply a capability.
-  function retireMutation(ns, previous, replacement, receiptIds) {
+  function retireMutation(ns, previous, replacement, receiptIds, collectReviewEffects) {
     if (previous.id === replacement.id) fail('invalid_ref');
     const incoming = db.prepare(`SELECT count(*) AS n FROM memory_supersessions
       WHERE replacement_memory_id = ?`).get(replacement.id).n;
-    if (incoming >= 5) fail('supersession_limit');
+    if (exceedsRelationLimit(incoming + 1)) fail('supersession_limit');
     db.prepare(`INSERT INTO memory_supersessions
       (owner_id, scope, project_id, previous_memory_id, previous_revision,
        replacement_memory_id, replacement_revision, receipt_ids)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(...boundary(ns), previous.id,
       previous.revision, replacement.id, replacement.revision, JSON.stringify(receiptIds));
     const now = new Date().toISOString();
+    const reviewEffects = recordHeldRetirement(previous, replacement, incoming + 1);
     suppress(ns, previous.fingerprint);
-    invalidateConflicts(previous.id);
+    const dropped = invalidateConflicts(previous.id);
+    collectReviewEffects?.({ transitions: [...reviewEffects, ...(dropped?.transitions ?? [])],
+      conflicts: dropped?.conflicts ?? [] });
     invalidateMemory(ns, previous.id, now);
     db.prepare(`UPDATE memories SET currentness = 'historical', revision = revision + 1,
       updated_at = ? WHERE ${where} AND id = ?`).run(now, ...boundary(ns), previous.id);

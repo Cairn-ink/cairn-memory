@@ -29,7 +29,7 @@ export function createClassificationJournalStorage({ db }) {
     WHERE ${claimWhere}`).get(...key(ns, input));
   const claim = (ns, input) => db.prepare(`SELECT state,memory_ids,payload_digest FROM admission_claims
     WHERE ${claimWhere}`).get(...key(ns, input));
-  const current = db.prepare(`SELECT revision,filing_status FROM memories
+  const current = db.prepare(`SELECT revision,filing_status,review_state FROM memories
     WHERE owner_id=? AND scope=? AND project_id=? AND id=?
       AND deleted=0 AND currentness='current'`);
   const currentRows = (ns, bound) => bound.map(({ memoryId, revision }) => {
@@ -79,7 +79,7 @@ export function createClassificationJournalStorage({ db }) {
     const { bound, final } = checked(ns, input, row);
     const applicable = row.status === 'applied' || row.status === 'skipped_already_filed'
       ? final : bound;
-    if (currentRows(ns, applicable).some(value => !value)) return { status: 'unknown' };
+    if (currentRows(ns, applicable).some(value => !value || value.review_state === 'awaiting')) return { status: 'unknown' };
     return { status: row.status };
   }
 
@@ -92,7 +92,7 @@ export function createClassificationJournalStorage({ db }) {
       if (row.status !== 'not_started' || !same(bound, all)) fail('revision_conflict');
       const rows = currentRows(ns, bound);
       if (rows.some(value => !value)) fail('revision_conflict');
-      const unfiled = bound.filter((ref, index) => rows[index].filing_status === 'unfiled');
+      const unfiled = bound.filter((ref, index) => rows[index].filing_status === 'unfiled' && rows[index].review_state !== 'awaiting');
       if (!same(chosen, unfiled)) fail('revision_conflict');
       if (!chosen.length) {
         db.prepare(`UPDATE capture_initial_classification

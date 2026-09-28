@@ -1,10 +1,11 @@
+import { exceedsRelationLimit } from "./relation-limits.mjs";
 import { fail } from "./validation.mjs";
 
 // Match SQLite's BINARY ordering, including opaque IDs containing Unicode.
 const compareIds = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
 
 /** Revision-bound symmetric links. All callers own the enclosing transaction. */
-export function createConflictStorage({ db, activeRow, advanceEpoch }) {
+export function createConflictStorage({ db, activeRow, rawRow = activeRow, advanceEpoch, dropHeldWork }) {
   function validateTargets(ns, hints = []) {
     for (const hint of hints) {
       const target = activeRow(ns, hint.memoryId);
@@ -13,15 +14,38 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
     }
   }
 
-  function invalidateMemory(memoryId) {
+  function invalidateMemory(memoryId, { preserveHeld = false, reason } = {}) {
+    const effects = preserveHeld ? undefined : dropHeldWork(memoryId, reason);
     db.prepare("DELETE FROM memory_conflicts WHERE left_memory_id = ? OR right_memory_id = ?")
       .run(memoryId, memoryId);
+    return effects;
   }
 
   function insertBatch(ns, entries, source) {
     let changed = false;
     for (const { memoryId, hints = [] } of entries) {
+      const raw = rawRow(ns, memoryId);
+      if (!raw) fail("memory_not_found");
+      if (raw.review_state === "awaiting") {
+        if (hints.some(hint => hint.memoryId === memoryId)) fail("invalid_ref");
+        validateTargets(ns, hints);
+        for (const hint of hints) {
+          const previous = db.prepare("SELECT status FROM confirmation_conflicts WHERE memory_id=? AND target_id=?")
+            .get(memoryId, hint.memoryId);
+          db.prepare(`INSERT INTO confirmation_conflicts
+          (memory_id,memory_revision,target_id,target_revision,source) VALUES(?,?,?,?,?)
+          ON CONFLICT(memory_id,target_id) DO UPDATE SET
+            memory_revision=excluded.memory_revision,target_revision=excluded.target_revision,
+            source=excluded.source,status='pending',result=NULL,drop_reason=NULL
+          WHERE confirmation_conflicts.status <> 'pending'`).run(memoryId, raw.revision, hint.memoryId, hint.expectedRevision, source);
+          // New hidden hints do not invalidate ordinary readers. Re-arming
+          // replaces a listed outcome, so existing review cursors must expire.
+          if (previous && previous.status !== "pending") changed = true;
+        }
+        continue;
+      }
       const memory = activeRow(ns, memoryId);
+      if (!memory) fail("memory_not_found");
       if (hints.some((hint) => memoryId === hint.memoryId)) fail("invalid_ref");
       validateTargets(ns, hints);
       for (const hint of hints) {
@@ -37,7 +61,7 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
         for (const id of [memoryId, hint.memoryId]) {
           const degree = db.prepare(`SELECT count(*) AS n FROM memory_conflicts
             WHERE left_memory_id = ? OR right_memory_id = ?`).get(id, id).n;
-          if (degree > 5) fail("conflict_limit");
+          if (exceedsRelationLimit(degree)) fail("conflict_limit");
         }
       }
     }
@@ -59,5 +83,29 @@ export function createConflictStorage({ db, activeRow, advanceEpoch }) {
     }).sort((a, b) => compareIds(a.memoryId, b.memoryId) || compareIds(a.source, b.source));
   }
 
-  return { validateTargets, invalidateMemory, insertBatch, inspect };
+  function restore(ns, memory) {
+    const outcomes = [];
+    const held = db.prepare(`SELECT * FROM confirmation_conflicts WHERE memory_id=? AND status='pending' ORDER BY target_id`).all(memory.id);
+    for (const hint of held) {
+      const target = activeRow(ns, hint.target_id);
+      if (!target) {
+        outcomes.push({ memoryId: memory.id, targetId: hint.target_id, status: "dropped", reason: "stale_evidence" });
+        continue;
+      }
+      const full = [memory.id, target.id].some(id => exceedsRelationLimit(db.prepare(`SELECT count(*) n FROM memory_conflicts
+        WHERE left_memory_id=? OR right_memory_id=?`).get(id, id).n + 1));
+      if (full) {
+        // Review must succeed even when another writer has filled a target's degree.
+        outcomes.push({ memoryId: memory.id, targetId: target.id, status: "dropped", reason: "conflict_limit" });
+        continue;
+      }
+      insertBatch(ns, [{ memoryId: memory.id, hints: [{ memoryId: target.id, expectedRevision: target.revision }] }], hint.source);
+      outcomes.push({ memoryId: memory.id, targetId: target.id, status: "restored", reason: null });
+    }
+    for (const result of outcomes) db.prepare("UPDATE confirmation_conflicts SET status=?,drop_reason=?,result=? WHERE memory_id=? AND target_id=?")
+      .run(result.status === "restored" ? "applied" : "dropped", result.reason, JSON.stringify(result), memory.id, result.targetId);
+    return outcomes;
+  }
+
+  return { validateTargets, invalidateMemory, insertBatch, inspect, restore };
 }

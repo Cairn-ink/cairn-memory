@@ -132,19 +132,23 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       .run(JSON.stringify(record), iso(), row.id);
     advanceEpoch(ns);
   }
-  function invalidate(ns, id) {
+  function invalidate(ns, id, preserveInterval = false) {
     const row = read(ns, id);
     if (!row || row.deleted) return;
     const record = blank(null); record.processing.state = 'invalidated';
+    if (preserveInterval) {
+      const previous = JSON.parse(row.record);
+      for (const key of ['eventStart', 'eventEnd', 'eventTimeCoverage']) record[key] = previous[key];
+    }
     db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(id);
     db.prepare('UPDATE session_episodes SET source_fence=source_fence+1,writer_token=NULL,writer_expires_at=NULL WHERE id=?').run(id);
     save(ns, row, record);
   }
-  function invalidateMemory(ns, memoryId) {
+  function invalidateMemory(ns, memoryId, preserveInterval = false) {
     const roots = db.prepare('SELECT episode_id FROM episode_memory_links WHERE memory_id=?').all(memoryId);
-    for (const { episode_id: id } of roots) invalidateSources(ns, id);
+    for (const { episode_id: id } of roots) invalidateSources(ns, id, preserveInterval);
   }
-  function invalidateSources(ns, id) {
+  function invalidateSources(ns, id, preserveInterval = false) {
     // Capture consumers before deleting passages, including zero-memory episodes.
     const pending = [id], seen = new Set();
     while (pending.length) {
@@ -153,7 +157,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       seen.add(current);
       for (const row of db.prepare('SELECT DISTINCT episode_id FROM episode_sources WHERE origin_episode_id=?').all(current)) pending.push(row.episode_id);
     }
-    for (const current of seen) invalidate(ns, current);
+    for (const current of seen) invalidate(ns, current, preserveInterval);
   }
   function setControl(ns, input, project = false) {
     if (!options) fail('episode_mode_required');
@@ -938,12 +942,13 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const currentEpoch = epoch(ns);
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
       const row = live(ns, input.episodeId);
+      if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
       const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
         .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
           originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
           role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
       const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
-        WHERE l.episode_id=? AND l.id>? AND m.deleted=0
+        WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
           AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
         .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).map(link => ({ id: link.id, memoryId: link.memory_id,
           admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));

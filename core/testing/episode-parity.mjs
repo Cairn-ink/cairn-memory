@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
 // Compare legacy bytes, excluding only generated identities and wall-clock values.
-// New v15 staging metadata is schema-only and is deliberately not projected here.
+// Additive schema-only metadata is deliberately not projected into legacy parity.
 export async function captureEpisodeParity(root, path, config) {
   const { openMemoryCore } = await import(pathToFileURL(root + '/core/index.mjs'));
   const { rationaleModel } = await import(pathToFileURL(root + '/core/testing/rationale-model.mjs'));
@@ -26,6 +26,7 @@ export async function captureEpisodeParity(root, path, config) {
   try {
     rows = Object.fromEntries(['memories', 'receipts', 'admission_claims'].map(name =>
       [name, db.prepare('SELECT * FROM ' + name).all()]));
+    rows.memories = rows.memories.map(({ review_state, ...legacy }) => legacy);
     rows.staged_capture_evidence = db.prepare(`SELECT owner_id,scope,project_id,client,event_id,
       state,created_at,expires_at,payload,payload_bytes FROM staged_capture_evidence`).all();
   } finally { db.close(); }

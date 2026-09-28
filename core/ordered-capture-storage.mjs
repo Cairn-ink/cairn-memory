@@ -75,7 +75,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
       validate(ns, s, order);
       if (!items.length) return { candidates: [], reason: null };
       const rows = db.prepare(`SELECT * FROM memories WHERE ${where}
-        AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT 13`).all(...boundary(ns));
+        AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT 13`).all(...boundary(ns));
       if (rows.length > 12) return { candidates: [], reason: 'candidate_limit' };
       const fingerprints = new Set(items.map(item => item.fingerprint));
       const candidates = rows.filter(row => !fingerprints.has(row.fingerprint))
@@ -134,15 +134,25 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
         });
         const predecessors = new Set(resolved.map(row => row.previous.id));
         if (resolved.some(row => predecessors.has(row.replacement.id))) fail('invalid_ref');
-        // Decide the whole retirement set before the first retirement mutation.
-        // Preserve admissions and replay outcome, but never downgrade a qualified
-        // endpoint to legacy retirement based on a model verdict.
-        if (resolved.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement))) {
-          reconciliation = outcome('qualified_transition_required');
-          return { reconciliation };
-        }
-        for (const row of resolved) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
-        reconciliation = outcome(reason, resolved.length);
+        // Review holds only its dependent transitions. Preserve the existing
+        // qualification fence for the independently eligible retirement set.
+        // discover excludes awaiting predecessors; only the replacement can wait.
+        const held = resolved.filter(row => row.replacement.review_state === 'awaiting');
+        const immediate = resolved.filter(row => !held.includes(row));
+        for (const row of held) db.prepare(`INSERT INTO confirmation_supersessions
+          (previous_id,previous_revision,replacement_id,replacement_revision,receipt_ids,previous_fingerprint,previous_receipt_ids)
+          VALUES(?,?,?,?,?,?,?) ON CONFLICT(previous_id,replacement_id) DO UPDATE SET
+            previous_revision=excluded.previous_revision,replacement_revision=excluded.replacement_revision,
+            receipt_ids=excluded.receipt_ids,previous_fingerprint=excluded.previous_fingerprint,
+            previous_receipt_ids=excluded.previous_receipt_ids,status='pending',result=NULL
+          WHERE confirmation_supersessions.status = 'dropped'`).run(row.previous.id, row.previous.revision,
+          row.replacement.id, row.replacement.revision, JSON.stringify(row.receiptIds), row.previous.fingerprint,
+          JSON.stringify(receipts(row.previous.id).map(receipt => receipt.id)));
+        const qualified = immediate.some(row => supersessionStorage.requiresQualification(row.previous, row.replacement));
+        if (!qualified) for (const row of immediate) supersessionStorage.retire(ns, row.previous, row.replacement, row.receiptIds);
+        reconciliation = outcome(qualified ? 'qualified_transition_required' : held.length ? 'confirmation_required' : reason,
+          qualified ? 0 : immediate.length);
+        if (qualified && held.length) reconciliation.awaitingCount = held.length;
         return { reconciliation };
       },
       complete() {

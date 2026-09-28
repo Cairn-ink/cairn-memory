@@ -33,7 +33,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     const sources = db.prepare(`SELECT s.memory_revision, memory.* FROM moc_title_sources s
       LEFT JOIN memories memory ON memory.id = s.memory_id WHERE s.moc_id = ?`).all(moc.id);
     if (sources.length === 0 || sources.some((source) => !source.id || source.deleted ||
-        source.currentness !== 'current' ||
+        source.currentness !== 'current' || source.review_state === 'awaiting' ||
         source.owner_id !== moc.owner_id || source.scope !== moc.scope ||
         source.project_id !== moc.project_id || source.revision !== source.memory_revision)) return null;
     return moc.title;
@@ -146,7 +146,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const memories = new Map();
       for (const item of items) {
         const memory = db.prepare(`SELECT * FROM memories WHERE ${namespaceWhere}
-          AND id = ? AND deleted = 0 AND currentness = 'current'`).get(...boundary(ns), item.memoryId);
+          AND id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`).get(...boundary(ns), item.memoryId);
         if (!memory) fail("memory_not_found");
         if (memory.revision !== expected.get(item.memoryId)) fail("revision_conflict");
         memories.set(item.memoryId, memory);
@@ -253,7 +253,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const memory = memories.get(item.memoryId);
         const revision = nextRevision.get(item.memoryId);
         const filed = desiredByMemory.get(item.memoryId).size ? "filed" : "unfiled";
-        if (revision !== memory.revision) invalidateConflicts(item.memoryId);
+        if (revision !== memory.revision) invalidateConflicts(item.memoryId, { preserveHeld: true });
         updateMemory.run(filed, revision, revision, now, item.memoryId);
         deleteRefs.run(item.memoryId);
         for (const mocId of desiredByMemory.get(item.memoryId))
@@ -331,7 +331,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (expected.size !== ids.length || ids.some((id) => !expected.has(id))) fail("invalid_input");
       const memories = ids.map((id) => {
         const memory = db.prepare(`SELECT * FROM memories WHERE ${namespaceWhere}
-          AND id = ? AND deleted = 0 AND currentness = 'current'`).get(...boundary(ns), id);
+          AND id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`).get(...boundary(ns), id);
         if (!memory) fail("memory_not_found");
         if (memory.revision !== expected.get(id)) fail("revision_conflict");
         return memoryDto(memory, true);
@@ -403,13 +403,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const { scan, page, top } = BOUNDED_KEYSET_SOURCE_CANDIDATES;
         const physicalPage = db.prepare(`SELECT id, revision FROM memories
           INDEXED BY capture_current_memories WHERE ${namespaceWhere}
-            AND deleted = 0 AND currentness = 'current' AND id > ? ORDER BY id LIMIT ?`);
+            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' AND id > ? ORDER BY id LIMIT ?`);
         const sentinel = db.prepare(`SELECT id FROM memories INDEXED BY capture_current_memories
-          WHERE ${namespaceWhere} AND deleted = 0 AND currentness = 'current' AND id > ?
+          WHERE ${namespaceWhere} AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' AND id > ?
           ORDER BY id LIMIT 1`);
         const projected = projectPrepare(`SELECT id, revision, content FROM memories
           WHERE ${namespaceWhere} AND id = ? AND revision = ?
-            AND deleted = 0 AND currentness = 'current'`);
+            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
         let lastId = '';
         let visited = 0;
         let more = false;
@@ -454,7 +454,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       } else {
         const scanned = db.prepare(`SELECT id, revision, content, deleted, currentness FROM memories
           INDEXED BY capture_current_memories WHERE ${namespaceWhere}
-            AND deleted = 0 AND currentness = 'current' ORDER BY id LIMIT ?`)
+            AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?`)
           .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
         for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
           if (memory.deleted || memory.currentness !== 'current') continue;
