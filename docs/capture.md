@@ -393,9 +393,12 @@ Registered work can finish across pause. A stale-generation draft claim records
 a content-free gap and continues ordinary admission; project stop still discards
 and fences unfinished work. Completed replay restores acknowledgement without model calls.
 Producers must wait on `processing` while an overlapping original has a live lease
-or a pending payload within its replay window. If its admission
+or a pending payload within its replay window. An intact capacity-bypassed
+registration is also resumable until completed or abandoned. If its admission
 failed or was abandoned and no lease remains, a new event can register that
-evidence again. Completed overlaps still count zero.
+evidence again. The original can replay messages it still owns when its evidence
+is resumable; closed evidence leaves a content-free gap. Completed overlaps still
+count zero.
 
 Results add `episode` (and `lazyEpisode` when attempted) alongside ordinary admission.
 A wholly covered overlap reports `admission.status:'covered'`; completed event replay

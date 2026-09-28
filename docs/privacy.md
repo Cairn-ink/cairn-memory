@@ -194,17 +194,18 @@ remain unchanged when neither opt-in is used.
 
 ### Durable message identity metadata
 
-Schema v16 adds `episode_messages`: episode/message identity, first and coverage event IDs, and
-an HMAC-SHA256 digest of `["m1", role, canonicalText, eventTimeOrNull]`, using the
-existing private episode key. No message text or role is stored in this ledger.
-It prevents reused IDs from silently changing evidence after staging release.
-It remains content-free lineage/digest/fence metadata after conversation deletion;
-key holders can still test guesses, and identifiers retain correlation risk.
-Registration and capacity disposition are atomic. Episode-off captures leave the
-ledger empty. Upgrades do not backfill earlier messages, so overlap detection starts
-with post-upgrade registration. Provider payloads receive no ledger IDs/digests.
-Batch rows also retain bounded message-ID membership to fence superseded owners.
-Explicit keep records action identity, creation ordinal/time, source IDs, source
-revision/fence and a classified admission result in a separate keep-action table.
-It neither archives additional transcript text nor turns interpretation into
-evidence. E1/E3/E5/E7/E11 cover these boundaries.
+Schema v16 adds `episode_messages`: episode/message identity, first and coverage
+event IDs, and an HMAC-SHA256 digest of `["m1", role, canonicalText,
+eventTimeOrNull]`, using the existing private episode key. No message text or
+role is stored in this ledger. It prevents reused IDs from silently changing
+evidence after staging release. It remains content-free lineage/digest/fence
+metadata after conversation deletion; key holders can still test guesses, and
+identifiers retain correlation risk. Registration and capacity disposition are
+atomic. Episode-off captures leave the ledger empty. Upgrades do not backfill
+earlier messages, so overlap detection starts with post-upgrade registration.
+Provider payloads receive no ledger IDs/digests. Batch rows also retain bounded
+message-ID membership to fence superseded owners. Explicit keep records action
+identity, creation ordinal/time, source IDs, source revision/fence and a
+classified admission result in a separate keep-action table. It neither archives
+additional transcript text nor turns interpretation into evidence.
+E1/E3/E5/E7/E11 cover these boundaries.

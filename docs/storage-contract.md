@@ -215,18 +215,20 @@ expires. Deletion, forgetting, explicit discard and project stop remain closed
 fences (`capture_evidence_closed`); draft failure merges diagnostic gap reasons
 and cannot reopen them or erase a capacity gap.
 
-The v16 `episode_messages` ledger has `(episode_id,message_id)` identity and stores
-`first_event_id` and `coverage_event_id` plus HMAC-SHA256 using the existing private episode key over
-`["m1", role, canonicalText, eventTimeOrNull]`. Its rows register atomically with the
-batch. Completed or legitimately in-flight matching identities count zero; an
-abandoned/failed original without a live lease permits new registration while
-preserving the first event ID. Bounded batch message-ID membership fences every
-previous owner after a transfer, including repeated abandoned transfers. Different
-digests reject with
-`event_payload_conflict`. It holds no source plaintext or role and survives deletion
-as content-free fence metadata. Upgrading v15 creates an empty ledger; earlier
-messages are not reconstructed. Both v14 and v15 opens upgrade eagerly to v16,
-including feature-off opens, with foreign keys on and rollback on failure.
+The v16 `episode_messages` ledger has `(episode_id,message_id)` identity and
+stores `first_event_id` and `coverage_event_id` plus HMAC-SHA256 using the
+existing private episode key over `["m1", role, canonicalText,
+eventTimeOrNull]`. Its rows register atomically with the batch. Completed or
+legitimately in-flight matching identities count zero; an abandoned/failed
+original without a live lease permits new registration while preserving the
+first event ID. Bounded batch message-ID membership fences transferred messages
+against admission by a previous owner. A resumable original can still admit its
+remaining messages; a closed stage records a content-free gap for any remainder.
+Different digests reject with `event_payload_conflict`. It holds no source
+plaintext or role and survives deletion as content-free fence metadata.
+Upgrading v15 creates an empty ledger; earlier messages are not reconstructed.
+Both v14 and v15 opens upgrade eagerly to v16, including feature-off opens, with
+foreign keys on and rollback on failure.
 
 `endEpisodeSession({namespace,client,sessionId,generation,eventId})` is an
 explicit host signal in episode mode. Client keys use `[A-Za-z0-9._-]{1,64}`.
@@ -273,8 +275,10 @@ Interpretation outcomes may return `missing_evidence`, `episode_failed` or
 These consume the attempt without blocking ordinary admission.
 
 An identical overlap stays `processing` while its original admission has a live
-lease or its pending payload remains within the retention/replay window. Once
-abandoned, failed, released or expired, evidence may move to a new event; the old
-event is fenced against later admission. Completed originals always count zero.
+lease or its pending payload remains within the retention/replay window. An intact
+capacity-bypassed registration is also resumable until completed or abandoned,
+even without a staged payload. Once abandoned, failed, released or expired,
+evidence may move to a new event; the old event cannot admit transferred messages.
+Completed originals always count zero.
 Every episode-mode capture result includes `admission.status` (`completed`,
 `covered` or `processing`); episode-off result shapes are unchanged.
