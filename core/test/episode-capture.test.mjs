@@ -565,50 +565,74 @@ test('E8 a raw keep assertion lock returns retryable storage_busy and the same a
 });
 
 for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
-  test(`E4/E5 lock beyond failure budget at ${boundary}: admission proceeds; fake clock tests stranded lease-expiry recovery`, { timeout: 20000 }, async t => {
-    const { captureEpisodeMessages } = await import('../episode-capture.mjs');
-    const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
-    t.after(() => runtime.close());
-    let snapshots = 0, states = 0, locked = false, failureWrites = 0, failureStart;
-    const wrapped = { ...runtime,
-      failEpisodeDraft(...args) {
-        failureStart ??= performance.now(); failureWrites++;
-        return runtime.failEpisodeDraft(...args);
-      },
-      episodeCaptureState(...args) {
-        if (++states === 2) {
+  for (const finalWriteBusy of [false, true]) {
+    test(`E4/E5 lock beyond budget at ${boundary}; post-admission write ${finalWriteBusy
+      ? 'stays busy; fake clock tests stranded lease-expiry recovery' : 'records the failure'}`,
+    { timeout: 20000 }, async t => {
+      const { captureEpisodeMessages } = await import('../episode-capture.mjs');
+      const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+      t.after(() => runtime.close());
+      let snapshots = 0, locked = false, failureWrites = 0, failureStart, writesBeforeAdmission;
+      let admitted = false;
+      const wrapped = { ...runtime,
+        failEpisodeDraft(...args) {
+          failureStart ??= performance.now(); failureWrites++;
+          if (admitted && finalWriteBusy) {
+            f.db.exec('BEGIN IMMEDIATE');
+            try { return runtime.failEpisodeDraft(...args); }
+            finally { f.db.exec('ROLLBACK'); }
+          }
+          return runtime.failEpisodeDraft(...args);
+        },
+        claimAdmission(...args) {
           // The owner exhausted finalization while a real SQLite lock was held.
           // Release at the admission boundary, not by advancing a production clock.
           assert.ok(performance.now() - failureStart >= 4900);
           assert.ok(failureWrites > 1 && failureWrites <= 21);
+          writesBeforeAdmission = failureWrites;
           f.db.exec('ROLLBACK');
-        }
-        return runtime.episodeCaptureState(...args);
-      },
-    };
-    for (const method of ['episodeDraftSnapshot', 'commitEpisodeDraft']) wrapped[method] = (...args) => {
-      const current = method === 'episodeDraftSnapshot' ? `snapshot-${++snapshots}` : method;
-      if (!locked && current === boundary) { locked = true; f.db.exec('BEGIN IMMEDIATE'); }
-      return runtime[method](...args);
-    };
-    const captured = await captureEpisodeMessages({ runtime: wrapped, ns, model: f.model,
-      input: input(), operations: captureOperations(runtime) });
-    assert.equal(locked, true); assert.equal(captured.admission.status, 'completed');
-    assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, 0);
-    // A still-live, stranded attempt must not delay admission of a different batch.
-    assert.equal(ok(await f.core.capture(input(2))).admission.status, 'completed');
-    assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
-    // Only this explicit lease-recovery test uses a fake clock.
-    f.db.exec('UPDATE episode_attempts SET expires_at=0');
-    const reopened = openMemoryCore({ path: f.path, ...options, model: f.model });
-    t.after(() => reopened.close());
-    assert.equal(ok(await reopened.capture(input())).admission.status, 'completed');
-    assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, 1);
-    assert.equal(JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record).processing.errorCode, 'episode_timeout');
-    const event = f.db.prepare('SELECT gap_reasons FROM episode_events WHERE event_id=?').get(input().eventId);
-    assert.deepEqual(JSON.parse(event.gap_reasons), ['episode_timeout']);
-    assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
-  });
+          return runtime.claimAdmission(...args);
+        },
+      };
+      for (const method of ['episodeDraftSnapshot', 'commitEpisodeDraft']) wrapped[method] = (...args) => {
+        const current = method === 'episodeDraftSnapshot' ? `snapshot-${++snapshots}` : method;
+        if (!locked && current === boundary) { locked = true; f.db.exec('BEGIN IMMEDIATE'); }
+        return runtime[method](...args);
+      };
+      const operations = captureOperations(runtime);
+      const captured = await captureEpisodeMessages({ runtime: wrapped, ns, model: f.model,
+        input: input(), operations: { ...operations, finishAdmission(value) {
+          const result = operations.finishAdmission(value); admitted = true; return result;
+        } } });
+      assert.equal(locked, true); assert.equal(captured.admission.status, 'completed');
+      assert.equal(failureWrites, writesBeforeAdmission + 1);
+      assert.deepEqual(captured.episode.error, finalWriteBusy
+        ? { code: 'episode_outcome_pending', retryable: true }
+        : { code: 'episode_failed', retryable: false });
+      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, finalWriteBusy ? 0 : 1);
+      if (!finalWriteBusy) {
+        assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
+        const event = f.db.prepare('SELECT gap_reasons FROM episode_events').get();
+        assert.deepEqual(JSON.parse(event.gap_reasons), ['episode_failed']);
+        assert.equal(JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record)
+          .processing.errorCode, 'episode_failed');
+        return;
+      }
+      // A still-live, stranded attempt must not delay admission of a different batch.
+      assert.equal(ok(await f.core.capture(input(2))).admission.status, 'completed');
+      assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
+      // Only this explicit lease-recovery test uses a fake clock.
+      f.db.exec('UPDATE episode_attempts SET expires_at=0');
+      const reopened = openMemoryCore({ path: f.path, ...options, model: f.model });
+      t.after(() => reopened.close());
+      assert.equal(ok(await reopened.capture(input())).admission.status, 'completed');
+      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, 1);
+      assert.equal(JSON.parse(f.db.prepare('SELECT record FROM session_episodes').get().record).processing.errorCode, 'episode_timeout');
+      const event = f.db.prepare('SELECT gap_reasons FROM episode_events WHERE event_id=?').get(input().eventId);
+      assert.deepEqual(JSON.parse(event.gap_reasons), ['episode_timeout']);
+      assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
+    });
+  }
 }
 
 test('E4/E5 admission busy preserves staged evidence and the same event retries immediately', { timeout: 20000 }, async t => {

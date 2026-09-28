@@ -196,12 +196,12 @@ throw instead). They never expose raw database or provider errors.
 | `episode_not_found` | The episode is absent, deleted or outside the exact namespace. |
 | `generation_conflict` | The supplied control generation is stale. Reread controls. |
 | `capture_disabled` | Capture is paused or disabled for that scope; new work cannot start. |
-| `episode_processing` | Another live session writer owns the episode. Retry after it completes/expires. |
 | `stale_episode` | The draft claim expired, was consumed, or lost its revision/source fence. Discard its result. |
 | `episode_step_conflict` | A draft would replace an existing open next step without a supported disposition transition. |
 | `episode_sources_unavailable` | Explicit keep has no currently retained source passages. |
 | `missing_evidence` | The interpretation target has no available staged evidence. |
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
+| `episode_outcome_pending` | Failure recording is still locked after admission; the consumed attempt awaits finalization or lease-expiry recovery. |
 | `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
 Interpretation never holds up ordinary admission. A reserved, started or stranded
@@ -226,9 +226,19 @@ If a lock prevents finalization, the owner makes up to 21 writes within a
 five-second budget, yielding between writes and limiting each SQLite wait to
 250 milliseconds or the remaining budget. If the store remains locked throughout,
 the consumed attempt stays unfinished. Admission still proceeds when writable,
-in this call or its immediate retry. A later capture or end signal recovers a
-stranded attempt after lease expiry as `episode_timeout` with a coverage gap,
+in this call or its immediate retry. After successful admission, the owner makes
+one additional failure write, bounded to 250 milliseconds. Success returns the
+recorded finite code; a still-locked write returns retryable
+`episode_outcome_pending`, not a claim that the failure is already recorded.
+A later capture or end signal recovers a stranded attempt after lease expiry as `episode_timeout` with a coverage gap,
 without repeating that interpretation call.
+
+Quick policy is recorded only while the batch is reserved with no live admission
+claim. Claiming admission atomically freezes and returns its policy before any
+extraction. A later quick draft cannot rewrite a pending or completed batch.
+Completion records that frozen policy and its basis with the admission result in
+one transaction: an extracted batch remains `normal`; a batch already marked
+`skip-quick` completes without extraction.
 
 Retryable admission busy errors preserve staged evidence. Cleanup returns the
 owned claim to reserved state; if cleanup is also locked, the process remembers

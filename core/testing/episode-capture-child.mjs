@@ -37,7 +37,7 @@ if (mode === 'keep-retry') {
     let result; const retryCodes = [];
     for(let tries=0;tries<1000;tries++) {
       result=await core.capture(value);
-      if (!(result.ok && result.value.processing) && !['episode_processing','storage_busy'].includes(result.error?.code)) break;
+      if (!(result.ok && result.value.processing) && result.error?.code !== 'storage_busy') break;
       retryCodes.push(result.error?.code ?? 'processing');
       if (retryCodes.length > 10) retryCodes.shift();
       const resume=new Promise(resolve=>process.once('message',resolve));
@@ -55,10 +55,14 @@ if (mode === 'keep-retry') {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);
   }});
 } else {
-  const port=model(mode==='hold'?{interpretEpisode:async request=>{
+  const port=model(['hold', 'quick-hold'].includes(mode)?{interpretEpisode:async request=>{
     await send({stage:'interpreting'});
-    await new Promise(resolve=>process.once('message',resolve));return interpretation(request);
-  }}:{});
+    await new Promise(resolve=>process.once('message',resolve));return interpretation(request, mode === 'quick-hold' ? 'quick-one-off-question' : 'work');
+  }}:mode === 'extract-hold' ? { extract: async () => {
+    await send({ stage: 'extracting' });
+    await new Promise(resolve => process.once('message', resolve));
+    return { items: [] };
+  } } : {});
   const core=openMemoryCore({path,...options,model:port});
   const result=await core.capture(input());core.close();await send({stage:'result',result,calls:port.calls.map(call=>call.method)});process.disconnect();
 }

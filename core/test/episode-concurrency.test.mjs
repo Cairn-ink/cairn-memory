@@ -515,3 +515,38 @@ test('E5 admission busy survives process restart; fake clock expires a genuinely
   assert.deepEqual(result.calls, ['extract']);
   assert.equal(f.db.prepare('SELECT state FROM staged_capture_evidence').get().state, 'released');
 });
+
+test('E8 two processes: extraction claimed before quick commit keeps normal policy', { timeout: 30000 }, async t => {
+  const f = setup(t), a = child(t, f.path, 'quick-hold');
+  await stage(a, 'interpreting');
+  const b = child(t, f.path, 'extract-hold');
+  await stage(b, 'extracting');
+  assert.equal(f.db.prepare('SELECT admission FROM episode_events').get().admission, 'pending');
+  const first = stage(a, 'result'); a.send('continue');
+  const interpreted = ok((await first).result);
+  assert.equal(interpreted.episode.status, 'interpreted');
+  assert.equal(interpreted.admission.status, 'processing');
+  const during = f.db.prepare('SELECT policy,policy_revision,policy_type FROM episode_events').get();
+  assert.deepEqual({ ...during }, { policy: 'normal', policy_revision: null, policy_type: null });
+  const second = stage(b, 'result'); b.send('continue');
+  const extracted = await second;
+  assert.equal(ok(extracted.result).admission.status, 'completed');
+  assert.deepEqual(extracted.calls, ['extract']);
+  const completed = f.db.prepare('SELECT policy,policy_revision,policy_type,admission FROM episode_events').get();
+  assert.deepEqual({ ...completed }, { ...during, admission: 'completed' });
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: interpreted.episode.id }));
+  assert.equal(detail.policies.items[0].policy, 'normal');
+  assert.equal(detail.policies.items[0].admission, 'completed');
+});
+
+test('E8 two processes: quick commit before admission claim skips replay extraction', { timeout: 30000 }, async t => {
+  const f = setup(t), a = child(t, f.path, 'crash-after-quick');
+  await stage(a, 'drafted');
+  const before = f.db.prepare('SELECT policy,policy_revision,policy_type FROM episode_events').get();
+  assert.equal(before.policy, 'skip-quick');
+  const b = child(t, f.path, 'normal'), result = await stage(b, 'result');
+  assert.equal(ok(result.result).admission.status, 'completed');
+  assert.deepEqual(result.calls, []);
+  const after = f.db.prepare('SELECT policy,policy_revision,policy_type,admission FROM episode_events').get();
+  assert.deepEqual({ ...after }, { ...before, admission: 'completed' });
+});

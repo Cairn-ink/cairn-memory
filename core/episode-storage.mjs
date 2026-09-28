@@ -187,6 +187,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   function admissionStarted(ns,input) {
     const registered=event(ns,input); if (!registered) return;
     db.prepare(`UPDATE episode_events SET admission='pending' WHERE ${eventWhere}`).run(...eventKey(ns,input));
+    return registered.policy;
   }
   function reserveBatch(ns, input) {
     if (!options) fail('episode_mode_required');
@@ -305,7 +306,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const registered=event(ns,input); if (!registered) fail('episode_not_found');
       const denied=guard(ns,input); if (denied) fail(denied);
       const row=live(ns,registered.episode_id),record=JSON.parse(row.record);
-      if (registered.admission==='completed') fail('stale_admission');
+      if (registered.admission !== 'reserved') fail('stale_admission');
       if (input.policy==='skip-quick') {
         if (row.revision!==revision(input.expectedRevision) || record.type!=='quick-one-off-question' || !registered.disposition || registered.staging!=='staged') fail('revision_conflict');
         const anchored=(record.anchors.type??[]).some(anchor=>db.prepare('SELECT 1 FROM episode_sources WHERE id=? AND episode_id=? AND event_id=?')
@@ -320,7 +321,12 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   function admitted(ns, input, entries) {
     const registered = event(ns, input);
     if (!registered) return keepAdmitted(ns,input,entries);
-    db.prepare(`UPDATE episode_events SET admission='completed',policy_at=coalesce(policy_at,?) WHERE ${eventWhere}`).run(iso(),...eventKey(ns, input));
+    // The admission claim froze this policy before extraction could begin.
+    // Commit its basis and completion together; a concurrent draft cannot change it.
+    db.prepare(`UPDATE episode_events SET admission='completed',policy=?,
+      policy_revision=?,policy_type=?,policy_at=coalesce(policy_at,?) WHERE ${eventWhere}`)
+      .run(registered.policy, registered.policy_revision, registered.policy_type,
+        iso(), ...eventKey(ns, input));
     for (const entry of entries) {
       const memory = db.prepare('SELECT revision FROM memories WHERE id=?').get(entry.memoryId);
       const receiptIds = (entry.item?.receipts ?? []).flatMap(receipt => db.prepare(
@@ -576,7 +582,13 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (input.classificationEventId && record.type === 'quick-one-off-question') {
         const anchored = record.anchors.type.some(anchor => sources.some(source => source.id === anchor.sourceId && source.event_id === input.classificationEventId));
         if (anchored) db.prepare(`UPDATE episode_events SET policy='skip-quick',policy_revision=?,policy_type=?,policy_at=?
-          WHERE ${eventWhere} AND admission!='completed' AND disposition=1`).run(row.revision+1,record.type,iso(),...boundary(ns),row.client,input.classificationEventId);
+          WHERE ${eventWhere} AND admission='reserved' AND disposition=1
+          AND NOT EXISTS (SELECT 1 FROM admission_claims a
+            WHERE a.owner_id=episode_events.owner_id AND a.scope=episode_events.scope
+              AND a.project_id=episode_events.project_id AND a.client=episode_events.client
+              AND a.event_id=episode_events.event_id AND a.lease_expires_at>?)`)
+          .run(row.revision+1, record.type, iso(), ...boundary(ns), row.client,
+            input.classificationEventId, Date.now());
       }
       return { revision: row.revision+1 };
     });

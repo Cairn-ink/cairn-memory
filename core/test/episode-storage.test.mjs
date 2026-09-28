@@ -149,7 +149,7 @@ test('E2/E7 model revision preserves pinned prose and original anchors, and corr
   assert.throws(()=>f.runtime.commitEpisodeDraft(ns,cj.commit),/stale_episode/);
 });
 
-test('E11 mode validation is snapshotted and mode-on capture is deferred to SE-2', async t=>{
+test('E11 mode validation is snapshotted and malformed episode capture is rejected', async t=>{
   for(const n of [1,17,2.5,null]) assert.throws(()=>openMemoryCore({path:':memory:',...options,sessionEpisodes:{mode:'episode-v1',draftEveryBatches:n}}),/invalid_input/);
   assert.throws(()=>openMemoryCore({path:':memory:',sessionEpisodes:{mode:'episode-v1'}}),/invalid_input/);
   const f=fixture(t),core=openMemoryCore({path:f.path,...options});t.after(()=>core.close());

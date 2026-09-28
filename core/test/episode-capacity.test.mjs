@@ -87,7 +87,7 @@ test('E4a per-event staging overflow bypasses before reclaiming any eligible pay
   assert.deepEqual(f.db.prepare('SELECT * FROM staged_capture_evidence').all(),before);
 });
 
-test('E5 two processes serialize a session; expired attempts stay consumed and admission recovers after crash',async t=>{
+test('E5 live drafts permit admission and expired attempts stay consumed; crash replay is in episode-concurrency.test.mjs',async t=>{
   const {execFileSync}=await import('node:child_process');
   const f=fixture(t),input=batch(),r=register(f,input),job=draft(f,r,input);
   const run=body=>JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',`
@@ -117,7 +117,15 @@ test('E5 concurrent processes admit independent sessions under shared capacity p
       for(let i=0;i<70;i++){
         const eventId=${JSON.stringify(client)}+i,view={messages:Array.from({length:20},(_,j)=>({id:eventId+'-'+j,role:'user',content:'x'.repeat(780)})),retainedSourceWindow:{maxUnitsPerMessage:800,truncatedMessageIndices:[]}};
         const input={client:${JSON.stringify(client)},clientLabel:'Synthetic process',sessionId:'private-session',eventId,generation:'initial',payloadDigest:createHash('sha256').update(JSON.stringify(view)).digest('hex'),view,messages:view.messages.map(message=>({...message,occurredAt:null}))};
-        runtime.reserveEpisodeBatch(ns,input);const claim=runtime.claimAdmission(ns,{...input,leaseMs:125000});
+        const {isStorageBusy}=await import(${JSON.stringify(new URL('../database.mjs',import.meta.url).href)});
+        for(let retry=0;;retry++){
+          try { runtime.reserveEpisodeBatch(ns,input); break; }
+          catch(error){
+            if(retry>=20 || !(error.code==='storage_busy' || isStorageBusy(error)))throw error;
+            await new Promise(resolve=>setTimeout(resolve,25));
+          }
+        }
+        const claim=runtime.claimAdmission(ns,{...input,leaseMs:125000});
         runtime.finishAdmission(ns,{...input,token:claim.token,items:[]});
       }runtime.close();`;
     const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','ignore','pipe']});let error='';

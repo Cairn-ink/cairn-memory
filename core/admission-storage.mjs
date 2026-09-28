@@ -90,9 +90,9 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
           .run(...key(ns, input), input.payloadDigest, token, now + input.leaseMs);
       }
-      if (registered) episodes.admissionStarted(ns,input);
+      const episodePolicy = registered ? episodes.admissionStarted(ns, input) : undefined;
       if (serialized && !registered) stagedEvidence.insert(ns, input, serialized, now);
-      return { token, ...prepared };
+      return { token, ...prepared, ...(registered ? { episodePolicy } : {}) };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
