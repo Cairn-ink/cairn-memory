@@ -52,10 +52,14 @@ target, not local automatic capture.
   Workers then read through one `O_NOFOLLOW` handle whose inode must match.
 - **Cleanup** plans from the ledger alone, re-verifies each path before `unlink`, and
   only `rmdir`s empty directories. Hook events are never read.
-- **Interrupts.** Supervision starts at spawn. SIGINT, SIGTERM and SIGHUP are
-  forwarded to the host's process group, which escalates to SIGKILL after 5 s. A
-  signal before launch prevents the launch, and a failed launch-ledger write
-  terminates and reaps the host before the error is raised.
+- **Supervision.** It starts at spawn. SIGINT, SIGTERM and SIGHUP are forwarded to
+  the host's process group, which escalates to SIGKILL after 5 s, and a signal
+  before launch prevents the launch. Every callback the supervisor runs after spawn
+  goes through one failure path. That covers `onSpawn` (the launch-ledger write) and
+  `onStdoutLine` for each line and for the final partial line at stdout end, which
+  writes the Codex thread binding. Its first exception sends SIGTERM to the group,
+  then SIGKILL after the bound, reaps the host, and rejects with that exception.
+  Later callbacks are skipped, so the call settles once.
 
 ## Pieces
 
