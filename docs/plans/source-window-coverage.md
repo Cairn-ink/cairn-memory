@@ -336,3 +336,32 @@ workflow. Current `CONTRIBUTING.md` and CI requirements are unchanged; root
 package and plugin versions now consistently follow upstream 0.1.1. Old green
 CI does not certify the integration: affected local gates, both review axes
 and all latest-head CI must pass again before N2 implementation or delivery.
+
+The integration code SHA is
+`fba0338c94a801d031f7070e61c30b5efddb4e32`. Primary verification, with the
+specified Node binary first on `PATH` and `NODE_DISABLE_COMPILE_CACHE=1`:
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `npm test` | 143/143, 4.33s | 143/143, 4.09s |
+| `npm run test:long-history` | 5/5, 36.62s | 5/5, 34.91s |
+| `npm run test:longmemeval` | 193/193, 38.60s | 193/193, 37.77s |
+| `npm run test:workspace-lifecycle` | 25/25, 16.44s | 25/25, 16.20s |
+| `node tools/testing/run.mjs integrations/client/test/feasibility/selftest/*.selftest.mjs` | 66/66, 7.50s | 66/66, 7.53s |
+| `npm run validate` | pass, consistent 0.1.1 | pass, consistent 0.1.1 |
+| `npm run validate --prefix tools/plugin-validation` | pass | pass |
+
+The self-tests above use fake hosts and owned synthetic filesystems, not the
+manual F0 runner, real subscriptions or historical artifacts. Before running
+them, the primary read their harness README and retained its separation of
+offline self-tests from real-host authorization. The generic increase from
+133 to 143 reflects upstream plugin tests, not extra N1 quality evidence.
+
+`git diff --exit-code 9a6a285 HEAD -- evaluation` passed at this code SHA:
+the evaluated N1 helper and consumer are unchanged. The equivalent comparison
+to `c558593` for `plugins`, `integrations`, `package.json`, `.claude-plugin`,
+`.github` and `CONTRIBUTING.md` also passed: upstream behavior was preserved.
+The delivery diff against current main remains the eight N1 files. This final
+addendum is documentation-only; final independent reviews must cover the
+integration and the complete current-main-to-head delivery diff, and the PR
+must record successful CI for its new exact head rather than reuse old CI.
