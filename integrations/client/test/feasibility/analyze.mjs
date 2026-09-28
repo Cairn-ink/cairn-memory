@@ -4,11 +4,14 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { transcriptMessages } from '../../../../plugins/cairn-memory/lib/transcript.mjs';
+import { canaryHits, canaryTable, plantedCheck } from './lib/canaries.mjs';
+import { readLedger } from './lib/ledger.mjs';
 import { parseTranscript } from './lib/parsers.mjs';
+import { expectedSourcePaths, ownerLaunch, verifyPlainEntry } from './lib/source-access.mjs';
 
-const ROOT = '/tmp/f0-tmp/f0-run';
+const ROOT = process.env.F0_RUN_ROOT ?? '/tmp/f0-tmp/f0-run';
 const config = JSON.parse(readFileSync(join(ROOT, 'config.json'), 'utf8'));
-const ledger = JSON.parse(readFileSync(join(ROOT, 'ledger.json'), 'utf8'));
+const ledger = readLedger(ROOT);
 const lines = path => (existsSync(path) ? readFileSync(path, 'utf8').split('\n').filter(Boolean) : []);
 const jsonl = path => lines(path).map(line => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean);
 const events = jsonl(join(ROOT, 'logs', 'events.jsonl'));
@@ -18,15 +21,22 @@ const recalls = jsonl(join(ROOT, 'logs', 'recalls.jsonl'));
 const c = config.canaries;
 
 // Canaries that must never reach delivered bodies, state or recall output.
-const CANARIES = {
-  secret_sk: c.secrets[0], secret_ghp: c.secrets[1], secret_password: c.secrets[2],
-  tool_output: c.tool, reasoning: c.reasoning, reasoning_scripted: c.reasoningFake,
-  injected_session_start: c.injectStart, injected_prompt_hook: c.injectPrompt, project_instructions: c.doc,
-  sandbox_root: c.sandbox, cwd_path: c.cwd, image_path: c.imagePath,
-  image_png_base64: c.imageBase64.slice(100, 148), image_png_magic: 'iVBORw0KGgo', image_data_url: 'data:image/',
-  ...(c.compactMarker ? { compact_prompt_scripted: c.compactMarker, compact_summary_scripted: c.compactSummary } : {}),
-};
-const hits = text => Object.entries(CANARIES).filter(([, value]) => text.includes(value)).map(([name]) => name);
+// canaryTable throws on any missing value, so no check is ever skipped.
+const CANARIES = canaryTable(c);
+const hits = text => canaryHits(CANARIES, text);
+
+/** The run's own sources: exact paths derived from ledger ownership, verified like any read. */
+async function ownedTranscripts(run) {
+  const sessionId = run.host === 'claude' ? run.launch?.sessionId : run.binding?.threadId;
+  if (!sessionId) return [];
+  const owner = ownerLaunch(ledger, run.host, sessionId);
+  if (!owner.run) return [];
+  const paths = [];
+  for (const path of expectedSourcePaths(run.host, process.env.HOME, owner.run.launch, sessionId)) {
+    if ((await verifyPlainEntry(path, 'file')).ok) paths.push(path);
+  }
+  return paths;
+}
 
 function recordKind(host, record) {
   if (host === 'claude') {
@@ -184,11 +194,11 @@ function stateScan() {
 }
 
 const results = { pins: config.pins, platform: `${process.platform} ${readFileSync('/proc/version', 'utf8').split(' ').slice(0, 3).join(' ')}`,
-  budget: ledger, runs: [] };
+  budget: ledger, runs: [], plantFailures: [] };
 for (const run of ledger.runs) {
   const label = run.label ?? run.name;
   const stepEvents = events.filter(e => e.step === label);
-  const transcripts = [...new Set(stepEvents.map(e => e.transcriptPath).filter(p => typeof p === 'string'))];
+  const transcripts = await ownedTranscripts(run);
   const delivered = {};
   for (const e of stepEvents.filter(e => e.phase === 'delivered')) delivered[e.label] = (delivered[e.label] ?? 0) + 1;
   const hookMs = stepEvents.filter(e => e.phase === 'hook_exit').map(e => `${e.label}:${e.elapsedMs}`);
@@ -208,7 +218,14 @@ for (const run of ledger.runs) {
   const output = hostOutput(run);
   const capturedRoles = captureBodies.flatMap(b => JSON.parse(b.raw).messages.map(m => m.role));
   const summaryWindows = transcripts.flatMap(path => compactionWindows(run.host, path));
-  results.runs.push({ label, host: run.host, fakeModel: run.fakeModel, traced: run.traced, exitCode: run.exitCode,
+  const summaries = transcripts.map(path => ({ path, ...transcriptSummary(run.host, path),
+    ...(run.host === 'codex' ? { rateLimits: codexRateLimits(path) } : {}) }));
+  // Zero delivery hits only count for canaries this step actually planted in its own source.
+  const found = new Set(summaries.flatMap(summary => Object.keys(summary.canaryKinds ?? {})));
+  if (summaryWindows.length) found.add('compaction_summary_text');
+  const planted = plantedCheck({ plants: run.plants, mayPlant: run.mayPlant }, found, CANARIES);
+  if (!planted.ok) results.plantFailures.push({ label, missing: planted.missing, unknown: planted.unknown });
+  results.runs.push({ planted, label, host: run.host, fakeModel: run.fakeModel, traced: run.traced, exitCode: run.exitCode,
     timedOut: run.timedOut ?? false, wallMs: run.wallMs, firstOutputMs: run.firstOutputMs, sessionId: run.sessionId,
     hooksDelivered: delivered, hookExitMs: hookMs, hookConfinement, hookHost: [...new Set(stepEvents.flatMap(e => e.ancestry?.[0]?.comm ?? []))],
     workers: stepWorkers, workerStarts,
@@ -222,10 +239,17 @@ for (const run of ledger.runs) {
       recalledClients: [...new Set(stepRecalls.flatMap(r => r.memories.map(m => m.receiptClient)))],
       recalledWords: [c.wordClaude, c.wordCodex].filter(word => JSON.stringify(stepRecalls).includes(word)) },
     output,
-    transcripts: transcripts.map(path => ({ path, ...transcriptSummary(run.host, path),
-      ...(run.host === 'codex' ? { rateLimits: codexRateLimits(path) } : {}) })),
+    transcripts: summaries,
     trace: traceSummary(run.stracePath) });
 }
 results.stateCanaries = stateScan();
 writeFileSync(join(ROOT, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 1));
+// Unplanted required canaries or any leak make the analysis fail rather than pass silently.
+const leaks = results.runs.filter(run => run.delivery.canariesInCapture.length || run.delivery.canariesInRecallRequests.length ||
+  run.delivery.canariesInRecallReplies.length || run.delivery.compactionTextInCapture);
+if (results.plantFailures.length || leaks.length || results.stateCanaries.length) {
+  console.error(JSON.stringify({ plantFailures: results.plantFailures, leaks: leaks.map(run => run.label),
+    stateCanaries: results.stateCanaries }));
+  process.exitCode = 1;
+}

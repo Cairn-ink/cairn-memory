@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Detached capture worker: reads only the transcript path its hook supplied,
-// parses it with the candidate allowlist, redacts and bounds each message, and
-// posts batches through the extracted client seam. Harness only.
+// Detached capture worker. Before touching the hook-supplied transcript it
+// requires a harness-owned session (from the launch ledger), the exact host
+// location for that session, no active pause, and a regular non-symlink file.
+// It then reads only through one O_NOFOLLOW handle, applies the candidate
+// allowlist, redacts and bounds each message, and posts batches through the
+// extracted client seam. Harness only.
 import { existsSync } from 'node:fs';
-import { lstat, open } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { captureCursorPath, readCaptureCursor, writeCaptureCursor } from '../../capture-cursor.mjs';
 import { readControlState, startIfActive } from '../../control-state.mjs';
@@ -13,7 +15,9 @@ import { redactSecrets } from '../../redact.mjs';
 import { createJsonPoster } from '../../transport-hosted.mjs';
 import { appendRecord, boundUtf16, commandName, confinement, errorDetail, hostClient, processPlacement, readBoundedStdin,
   readConfig, sha256, wireSessionId } from './lib/common.mjs';
+import { tryReadLedger } from './lib/ledger.mjs';
 import { parseTranscript } from './lib/parsers.mjs';
+import { authorizeSource, openAuthorizedSource, ownerLaunch } from './lib/source-access.mjs';
 
 const MAX_READ = 1024 * 1024;
 const root = process.argv[2];
@@ -33,28 +37,33 @@ function canonical(value) {
   return { content: redactSecrets(bounded.text).trim(), truncated: bounded.truncated };
 }
 
-async function readRange(path, start, end) {
-  const handle = await open(path, 'r');
-  try {
-    const buffer = Buffer.alloc(end - start);
-    let position = 0;
-    while (position < buffer.length) {
-      const { bytesRead } = await handle.read(buffer, position, buffer.length - position, start + position);
-      if (!bytesRead) break;
-      position += bytesRead;
-    }
-    return buffer.subarray(0, position);
-  } finally { await handle.close(); }
+async function readRange(handle, start, end) {
+  const buffer = Buffer.alloc(Math.max(0, end - start));
+  let position = 0;
+  while (position < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, position, buffer.length - position, start + position);
+    if (!bytesRead) break;
+    position += bytesRead;
+  }
+  return buffer.subarray(0, position);
 }
 
-async function captureLocked(cursorPath, generation, summary) {
+/** A Codex binding appears once the orchestrator reads `thread.started`; wait a bounded time for it. */
+async function ownerLedger() {
+  for (let attempt = 0; ; attempt++) {
+    const ledger = tryReadLedger(root);
+    const owner = ownerLaunch(ledger, job.host, job.session_id);
+    if (job.host !== 'codex' || owner.run || attempt >= 8 || owner.reason !== 'not_a_harness_session') return ledger;
+    await delay(250);
+  }
+}
+
+async function captureLocked(handle, cursorPath, generation, summary) {
   const cursor = await readCaptureCursor(cursorPath) ?? { offset: 0, generation, discardUntilNewline: false };
-  const stat = await lstat(job.transcript_path);
-  summary.transcript = { regular: stat.isFile(), symlink: stat.isSymbolicLink(), size: stat.size };
-  if (!stat.isFile()) { summary.status = 'not_regular_file'; return; }
-  const end = Math.min(stat.size, cursor.offset + MAX_READ);
+  const { size } = await handle.stat();
+  const end = Math.min(size, cursor.offset + MAX_READ);
   if (end <= cursor.offset) { summary.status = 'nothing_new'; return; }
-  const slice = await readRange(job.transcript_path, cursor.offset, end);
+  const slice = await readRange(handle, cursor.offset, end);
   summary.readAt = Date.now();
   summary.hostAliveAtRead = hostAlive();
   summary.bytesRead = slice.length;
@@ -100,20 +109,25 @@ try {
   if (job.delayMs) await delay(job.delayMs);
   summary.sourceCheckedAt = Date.now();
   summary.hostAliveAtCheck = hostAlive();
-  if (typeof job.transcript_path !== 'string') summary.status = 'transcript_unavailable';
-  else if (!existsSync(job.transcript_path)) summary.status = 'source_unavailable';
-  else {
-    // Readability probe of the authorized source, independent of cursor progress.
-    const whole = await readRange(job.transcript_path, 0, Math.min((await lstat(job.transcript_path)).size, 8 * 1024 * 1024));
-    summary.sourceProbe = { at: Date.now(), hostAlive: hostAlive(), bytes: whole.length, sha256: sha256(whole) };
-    const control = await readControlState(config.stateDir);
-    if (control.paused) summary.status = 'paused';
-    else {
+  let control;
+  const authorization = await authorizeSource({ host: job.host, sessionId: job.session_id,
+    suppliedPath: job.transcript_path, suppliedCwd: job.cwd, ledger: await ownerLedger(), home: process.env.HOME,
+    isPaused: async () => { control = await readControlState(config.stateDir); return control.paused; } });
+  summary.authorization = authorization.ok ? 'harness_source' : authorization.reason;
+  if (!authorization.ok) {
+    summary.status = ['paused', 'transcript_unavailable', 'source_unavailable'].includes(authorization.reason)
+      ? authorization.reason : 'refused';
+  } else {
+    const handle = await openAuthorizedSource(authorization);
+    try {
+      // Readability probe of the authorized source, independent of cursor progress.
+      const whole = await readRange(handle, 0, Math.min(authorization.size, 8 * 1024 * 1024));
+      summary.sourceProbe = { at: Date.now(), hostAlive: hostAlive(), bytes: whole.length, sha256: sha256(whole) };
       const cursorPath = captureCursorPath(config.stateDir, `${job.host}:${job.session_id}`);
-      const locked = await withFileLock(`${cursorPath}.lock`, () => captureLocked(cursorPath, control.generation, summary),
+      const locked = await withFileLock(`${cursorPath}.lock`, () => captureLocked(handle, cursorPath, control.generation, summary),
         { timeoutMs: 250, pollMs: 25 });
       if (!locked) summary.status = 'cursor_busy';
-    }
+    } finally { await handle.close(); }
   }
 } catch (error) {
   summary.status = 'error';

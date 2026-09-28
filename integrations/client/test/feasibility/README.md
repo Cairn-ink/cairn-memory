@@ -19,26 +19,71 @@ target, not local automatic capture.
 - `TMPDIR=/tmp/f0-tmp`. Everything the harness owns lives under
   `/tmp/f0-tmp/f0-run`; delete that directory afterwards.
 
+## Safety rules the code enforces
+
+- **Isolation gate.** `run.mjs step` first runs `lib/preflight.mjs`. It checks:
+  - installed versions against the pins, read from the binaries;
+  - no Claude managed settings file or Windows policy key;
+  - Claude user settings excluded and MCP strict and empty;
+  - project hooks are the harness's own;
+  - no Codex `hooks.json`, `[hooks]` table, system or managed config;
+  - no non-empty ancestor `.codex`;
+  - trust bypass only for harness hooks;
+  - for a real Codex model-only step, a scripted run of the identical configuration
+    whose requests contained no user skill name.
+
+  Any failed or unevaluable check blocks the step before it is counted; there is no
+  override.
+- **Launch ledger.** Only the orchestrator writes `ledger.json`. It records each launch
+  before the host starts, and a Codex thread only when its own process prints
+  `thread.started`.
+- **Source ownership.** Hooks, workers, analysis and cleanup accept a transcript only
+  if all of these hold:
+  - its session is in the ledger;
+  - its path is the exact host location derived from that launch;
+  - automatic memory is not paused;
+  - it is a regular, non-symlink file owned by this user under a non-symlinked parent.
+
+  Workers then read through one `O_NOFOLLOW` handle whose inode must match.
+- **Cleanup** plans from the ledger alone, re-verifies each path before `unlink`, and
+  only `rmdir`s empty directories. Hook events are never read.
+- **Interrupts.** SIGINT, SIGTERM and SIGHUP are forwarded to the host's process
+  group, which escalates to SIGKILL after 5 s. A signal before launch prevents the
+  launch.
+
 ## Pieces
 
 | File | Role |
 | --- | --- |
-| `run.mjs` | `setup` creates the synthetic project, canaries and hook settings; `step <name>` runs one budgeted host step (ledger counts every attempt before it starts; at most 24 per host). Hosts get a clean environment, their own process group and, for traced steps, an execve/file-write `strace`. |
-| `hook.mjs` | Hook entry for both hosts. Records delivery (fields, transcript state, process placement, seccomp status), recalls through the extracted seam and injects context, and launches a detached worker for `Stop`, `SessionEnd`, `PreCompact` and `PostCompact`. Always exits 0. |
-| `worker.mjs` | Detached worker. Reads only the hook-supplied transcript, applies the candidate allowlist, canonicalizes, redacts and bounds each message, and posts batches through the seam (`identity`, `redact`, `control-state`, `file-lock`, `capture-cursor`, `transport-hosted`). Also probes whole-file readability after an optional delay. |
+| `run.mjs` | `setup` creates the synthetic project, canaries (including scripted-compaction settings) and hook settings. `preflight <name>` evaluates the gate without launching. `step <name>` runs one gated, budgeted host step (at most 24 per host). Hosts get a clean environment, their own process group and, for traced steps, an execve/file-write `strace`. |
+| `hook.mjs` | Hook entry for both hosts. Records delivery and process placement, recalls through the extracted seam and injects context, and launches a detached worker for harness-owned sessions only. Always exits 0. |
+| `worker.mjs` | Detached worker. Authorizes the source, then applies the candidate allowlist, canonicalizes, redacts and bounds each message, and posts batches through the seam. |
 | `core-server.mjs` | Loopback server with hosted-shaped endpoints over one temporary `core/` store and the scripted model in `lib/scripted-model.mjs`; records every received body. |
 | `fake-responses.mjs` | Scripted Responses provider for zero-quota Codex steps. Records header names only, never values. |
-| `analyze.mjs` | Writes `results.json`: canary hits in delivered bodies, recall output and state; record kinds per transcript; candidate and released-parser replays; hook matrix; trace summary; quota-event schema; timings. |
-| `cleanup.mjs` | Dry run by default; `--apply` unlinks only host files whose path contains one of the run's exact session IDs, then removes now-empty directories named by those IDs (never recursive). Shared host files are reported as residue. |
+| `analyze.mjs` | Writes `results.json`: canary hits, record kinds, parser replays, hook matrix, trace summary, quota-event schema and timings. Exits 1 on a missing canary value, an unplanted required canary, or any leak. |
+| `cleanup.mjs` | Dry run by default; `--apply` removes only ledger-owned session files. |
+| `lib/` | `ledger`, `source-access`, `cleanup-plan`, `preflight`, `supervise` and `canaries` hold the rules above; `parsers`, `common` and `scripted-model` support the probes. |
+| `selftest/` | Offline tests of those rules with in-memory or test-owned filesystems and fake hosts. |
+
+## Offline self-tests
+
+```sh
+PATH="$HOME/.nvm/versions/node/v22.16.0/bin:$PATH" \
+  node tools/testing/run.mjs integrations/client/test/feasibility/selftest/*.selftest.mjs
+```
+
+They start no real host.
 
 ## Typical order
 
 ```sh
 export TMPDIR=/tmp/f0-tmp PATH="$HOME/.nvm/versions/node/v22.16.0/bin:$PATH"
 node run.mjs setup
-node run.mjs step claude-precheck        # no model call: isolation and hooks only
-node run.mjs step codex-precheck         # scripted provider: zero quota
-node run.mjs step claude-capture         # then codex-capture, *-recall, *-image, ...
+node run.mjs preflight claude-capture     # gate only; no launch
+node run.mjs step claude-precheck         # no model call: isolation and hooks only
+node run.mjs step codex-precheck          # scripted provider: zero quota
+node run.mjs step codex-model-only-fake   # records the skill proof a real model-only step needs
+node run.mjs step claude-capture          # then codex-capture, *-recall, *-image, ...
 node analyze.mjs > /tmp/f0-tmp/analysis.json
 node cleanup.mjs && node cleanup.mjs --apply
 rm -rf /tmp/f0-tmp

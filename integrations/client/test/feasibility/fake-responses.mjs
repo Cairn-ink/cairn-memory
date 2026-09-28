@@ -14,8 +14,9 @@ let turn = 0;
 
 const sse = events => events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('');
 const done = item => ({ type: 'response.output_item.done', item });
-// A step may report large usage to make the host start its own auto-compaction.
-const usageTokens = config.fakeUsageTokens?.[config.step] ?? 1;
+// A step (by name, so retries behave the same) may report large usage to make
+// the host start its own auto-compaction; setup initializes this configuration.
+const usageTokens = config.fakeUsageTokens?.[config.stepName] ?? 1;
 const completed = id => ({ type: 'response.completed', response: { id, usage: { input_tokens: usageTokens,
   input_tokens_details: { cached_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 },
   total_tokens: usageTokens + 1 } } });
@@ -46,7 +47,7 @@ const server = createServer(async (request, response) => {
     response.end('{"error":"not_found"}');
     return;
   }
-  if (config.canaries.compactMarker && raw.includes(config.canaries.compactMarker)) {
+  if (raw.includes(config.canaries.compactMarker)) {
     response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
     response.end(sse([{ type: 'response.created', response: { id: `resp_${index}` } },
       done({ type: 'message', role: 'assistant', id: `msg_${index}`,
