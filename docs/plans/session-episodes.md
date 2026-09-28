@@ -851,6 +851,39 @@ change during pagination without advancing the namespace epoch; this predates SE
 The round-one test concurrency cap was reverted. Verification uses the unchanged,
 uncapped core test runner; any host-load deadline failures are reported separately.
 
+### SE-4 verification
+
+The OpenAI adapter exposes `interpretEpisode` only with an explicit `episodeModel`,
+using existing profiles and the shared bounded count/generation transport. No
+episode classifier/provider default, paid guard route or grant is added. Actual
+adapter/model/profile metadata accompanies the configured port. Source identities,
+closure guards, interpretation orchestration and persistence remain core-owned.
+
+Current main's extract/qualifyCandidates ports carry no separate episode-mode
+argument: core selects their exact trusted system prompts from its snapshotted
+option. The adapter recognizes those prompt identities to choose separate tag
+schemas. It never infers mode from source text or model capabilities. Optional
+fields use strict closed-object alternatives. Episode qualification uses named
+item slots with original candidate indices and decodes to core's array shape;
+legacy evidence-pool transport stays unchanged. Adaptive catalog fit/dispatch
+uses the same episode schema and snapshot. No core contract or schema changes.
+
+| Provider responsibility / touched gate | Tests under `adapters/openai/test/` |
+| --- | --- |
+| E1/E2 request-local source/step references, languages, Unicode, raw/normalized bounds, partial/foreign output and sixteen-source cap | `episodes.test.mjs`: detached count/generation snapshots, English/Chinese/mixed labels, step action correlation, malformed-output matrix, closure-proof source bound and real-core completion/cancellation/replacement replay |
+| E3/E4 explicit configuration, no retries/default, bounded input/output, cancellation and finite private diagnostics | `episodes.test.mjs`: all explicit profiles, local/server/usage/body bounds, malformed response, observer failures, pre/in-flight abort and real-core admission after interpretation failure |
+| E7/E8 retained-source capture, deletion, quick/non-drafted policy and inert replay/reads | `procedural.test.mjs`: fake-HTTP capture, exact receipt binding, episode forgetting, first quick then ordinary tagged admission; `episodes.test.mjs`: failed interpretation replay |
+| E10 automatic tags only with episode prompts, strict kind/candidate binding, inline/catalog dispatch | `procedural.test.mjs`: optional/true/false/null tags across all kinds, omitted/partial qualifications, duplicate/foreign/oversized candidate citations and adaptive fit |
+| E10 legacy byte parity and unexpected-tag rejection | `episode-mode-parity.test.mjs`: 126 committed base cases for all ten legacy methods, indexed extraction, adaptive qualification and extraction profiles, comparing exact count/generation bodies, serialized output/failures and diagnostic sequences; real-core legacy tag rejection |
+| E11 installed sources and offline demonstration | Existing artifact suite; `demo:openai-offline` additionally exercises interpretation, retained sources, automatic procedural receipts, startup, replay and conversation forgetting |
+
+The parity oracle was generated offline against `7f9ee869`, extending the committed
+SE-2 core fixtures with provider transport bytes. Tests never invoke Git or rebuild
+the oracle. New SQLite fixtures use `createTestWorkspace`; all provider responses
+are fake HTTP and synthetic keys are assembled from fragments. The artifact
+allowlist already includes every runtime module/prompt used here, so it needs no
+new entry. These checks do not establish real-model fidelity or provider framing.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,

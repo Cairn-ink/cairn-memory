@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — optional episode provider
+
+- Add explicitly configured OpenAI episode interpretation with bounded source
+  anchors, prior-step references, typed failures and content-free diagnostics.
+  No episode model is selected by default.
+- Use automatic procedural-tag schemas only with the core's episode prompts;
+  preserve legacy request/output bytes and diagnostics. Offline fake-HTTP tests
+  and the demo cover capture, retained sources, receipt-bound tags and replay.
+  No hosted/MCP generation, paid grant or model-fidelity claim is added.
+- Normalize malformed episode source/target arrays to `invalid_openai_request`
+  before HTTP, consistent with other malformed adapter requests.
+
 ## Unreleased — session episode reads
 
 - Add bounded UTC episode/memory range reads with exact scope/client filters,

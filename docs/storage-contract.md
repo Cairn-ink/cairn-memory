@@ -442,6 +442,10 @@ closure, every proposed step, regardless of wording, must cite only newly suppli
 event passages from that episode received after closure. The namespace receipt
 ordinal at closure is stored as content-free `nextStepClosedOrdinal` in the existing
 episode JSON record, including interpreter closure and explicit closure/correction.
+`getEpisode` and `listEpisodes` omit `nextStepClosedOrdinal`, `stepClosure` and
+`anchors.stepClosure`.
+A source cited only by the closure proof stays in the episode's retained sources,
+visible and deletable through forget, even though no public anchor cites it.
 This boundary survives drafts with a null step. No table or schema version changes.
 A supported proposal becomes a new open step with a new ID; older evidence yields
 `nextStep:null` without failing the draft. A legacy closed record without this field
