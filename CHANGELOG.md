@@ -6,7 +6,8 @@
   signed stale-aware cursors and whole-response byte budgets.
 - Add local session-start context with untrusted framing, sourced procedures and
   the newest open step, exact counting, group budgets and final freshness checks.
-- Add guarded explicit step closure/replay and source-anchored draft transitions.
+- Add guarded explicit step closure/replay and source-anchored interpreter
+  completion, cancellation and replacement using request-local step references.
 - Eagerly migrate stores to schema v17 with four read indexes and no table or
   column changes. Older openers refuse the new version.
 

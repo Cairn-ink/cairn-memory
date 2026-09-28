@@ -3,6 +3,7 @@ import test from 'node:test';
 import { openMemoryCore } from '../index.mjs';
 import { fixture,batch,register,draft,inspect,ns,ok,options } from '../testing/episode-helpers.mjs';
 import { contextQuery,contextInput,assembleSessionContext,SESSION_FRAMING } from '../session-context.mjs';
+import { setup as captureSetup, input as captureInput, interpretation, counts } from '../testing/episode-capture-helpers.mjs';
 
 function readyEpisode(f,name='one',step='Review evidence') {
   const b=batch(name,'Synthetic proposal: review evidence.',name), r=register(f,b),job=draft(f,r,b);
@@ -228,3 +229,123 @@ test('E3/E10 public startup facade is model-free in both modes and returns only 
   }
   assert.equal(f.core.sessionStartContext({namespace:ns}).error.code,'token_count_unavailable');
 });
+
+function stepInterpretation(request) {
+  const result=interpretation(request);
+  result.nextStep={...result.gist,value:'Review the synthetic proposal'};
+  return result;
+}
+function transitionInterpretation(request,action='completed') {
+  const result=interpretation(request);
+  result.disposition={stepRef:request.input.prior.nextStep?.stepRef,action,anchors:result.gist.anchors};
+  if(action==='replaced')result.nextStep={...result.gist,value:'Review the replacement proposal'};
+  return result;
+}
+function nextCapture(session='current',content='I completed the synthetic proposal review.',role='user') {
+  const input=captureInput(2,session);
+  input.episodeContext.origin='precompact';
+  input.messages[0]={...input.messages[0],content,role};
+  return input;
+}
+function capturedDetail(f,id,namespace=ns) {
+  return ok(f.core.getEpisode({namespace,episodeId:id}));
+}
+function correctCapturedStep(f,id) {
+  const {episode,sources}=capturedDetail(f,id),source=sources.items[0];
+  return ok(f.core.correctEpisode({namespace:ns,episodeId:id,expectedRevision:episode.revision,
+    patch:{nextStep:{text:'Review the corrected proposal',anchors:[{sourceId:source.id,digest:source.digest,start:0,end:5}]}}}));
+}
+
+for(const action of ['completed','cancelled','replaced']) test(`E2/E10 capture interpreter ${action} binds local guards, uses new anchors and replays inertly`,async t=>{
+  const f=captureSetup(t,{countTokens:()=>1,interpretEpisode:request=>request.input.prior.nextStep
+    ?transitionInterpretation(request,action):stepInterpretation(request)});
+  const older=ok(await f.core.capture(captureInput(1,'older'))).episode;
+  const current=ok(await f.core.capture(captureInput(1,'current'))).episode;
+  const before=capturedDetail(f,current.id).episode;
+  assert.equal(ok(f.core.sessionStartContext({namespace:ns})).groups.nextSteps.items[0].episodeId,current.id);
+  const later=nextCapture('current',action==='replaced'?'Replace that review with a review of the replacement proposal.'
+    :action==='cancelled'?'I cancelled the synthetic proposal review.':'I completed the synthetic proposal review.');
+  const captured=ok(await f.core.capture(later));assert.equal(captured.episode.status,'interpreted');
+  const request=f.model.calls.filter(call=>call.method==='interpretEpisode').at(-1).request;
+  assert.equal(request.input.prior.nextStep.stepRef,'prior-next-step');
+  assert.ok(!JSON.stringify(request.input).includes(before.nextStep.id));
+  assert.ok(!JSON.stringify(request.input).includes(current.id));
+  assert.equal(Object.hasOwn(request.input.prior.nextStep,'expectedRevision'),false);
+  const detail=capturedDetail(f,current.id),step=detail.episode.nextStep;
+  assert.equal(step.status,action==='replaced'?'open':'closed');
+  if(action==='replaced'){
+    assert.notEqual(step.id,before.nextStep.id);assert.equal(step.text,'Review the replacement proposal');
+  }else assert.equal(step.id,before.nextStep.id);
+  const closure=detail.episode.stepClosure;
+  assert.equal(closure.action,action);
+  assert.ok(closure.anchors.every(anchor=>detail.sources.items.find(source=>source.id===anchor.sourceId)?.text===later.messages[0].content));
+  const context=ok(f.core.sessionStartContext({namespace:ns}));
+  assert.equal(context.groups.nextSteps.items[0].episodeId,action==='replaced'?current.id:older.id);
+  const calls=counts(f.model),rows=f.db.prepare('SELECT * FROM episode_attempts ORDER BY token').all();
+  ok(await f.core.capture(later));
+  assert.equal(counts(f.model),calls);assert.deepEqual(capturedDetail(f,current.id),detail);
+  assert.deepEqual(ok(f.core.sessionStartContext({namespace:ns})),context);
+  assert.deepEqual(f.db.prepare('SELECT * FROM episode_attempts ORDER BY token').all(),rows);
+});
+
+for(const [scenario,content,role] of [
+  ['silence','The weather was pleasant.','user'],
+  ['ambiguous chronology','At some point that review was complete, perhaps before this proposal.','user'],
+  ['historical quote','An old note said: "I completed the review."','user'],
+  ['assistant advice','You should mark the review completed.','assistant'],
+  ['dropped prior context','I completed a review, but the earlier proposal is unavailable.','user'],
+]) test(`E3/E10 capture preserves the open step on ${scenario}`,async t=>{
+  let omit=false;
+  const f=captureSetup(t,{countTokens:text=>omit&&text.includes('Synthetic 中文 English')?6001:1,
+    interpretEpisode:request=>{
+      if(!omit)return stepInterpretation(request);
+      assert.match(request.system,/Silence, ambiguous chronology, historical quotations/);
+      assert.match(request.system,/assistant advice cannot close it/);
+      assert.match(request.system,/Dropped prior context cannot close it/);
+      if(scenario==='dropped prior context')assert.equal(request.input.prior.nextStep,undefined);
+      else assert.equal(request.input.prior.nextStep.stepRef,'prior-next-step');
+      return interpretation(request);
+    }});
+  const current=ok(await f.core.capture(captureInput(1,'current'))).episode;
+  const before=capturedDetail(f,current.id).episode.nextStep;
+  omit=true;
+  // Only the dropped-context case rejects prior sources during request packing.
+  if(scenario!=='dropped prior context')f.model.countTokens=()=>1;
+  const result=ok(await f.core.capture(nextCapture('current',content,role)));
+  assert.equal(result.episode.status,'interpreted');
+  assert.deepEqual(capturedDetail(f,current.id).episode.nextStep,before);
+});
+
+for(const variant of ['forged','foreign','missing-reference','durable-guard-injection','pinned','dropped-reference','stale-revision'])
+  test(`E2/E5/E10 capture rejects ${variant} interpreter closure`,async t=>{
+    let current,foreign,closing=false;
+    const f=captureSetup(t,{countTokens:()=>1,interpretEpisode:request=>{
+      if(!closing)return stepInterpretation(request);
+      const result=transitionInterpretation(request);
+      if(variant==='forged')result.disposition.stepRef='invented-step';
+      if(variant==='foreign')result.disposition.stepRef=capturedDetail(f,foreign.id,{...ns,ownerId:'other',projectId:'other'}).episode.nextStep.id;
+      if(variant==='missing-reference')delete result.disposition.stepRef;
+      if(variant==='durable-guard-injection')result.disposition.stepId=capturedDetail(f,current.id).episode.nextStep.id;
+      if(variant==='pinned'||variant==='dropped-reference'){
+        assert.equal(request.input.prior.nextStep?.stepRef,undefined);
+        result.disposition.stepRef='prior-next-step';
+      }
+      if(variant==='stale-revision')correctCapturedStep(f,current.id);
+      return result;
+    }});
+    foreign=ok(await f.core.capture({...captureInput(1,'foreign'),namespace:{...ns,ownerId:'other',projectId:'other'}})).episode;
+    const foreignBefore=capturedDetail(f,foreign.id,{...ns,ownerId:'other',projectId:'other'});
+    current=ok(await f.core.capture(captureInput(1,'current'))).episode;
+    if(variant==='pinned')correctCapturedStep(f,current.id);
+    const before=capturedDetail(f,current.id).episode.nextStep;
+    closing=true;
+    if(variant==='dropped-reference')f.model.countTokens=text=>text.includes('Synthetic 中文 English')?6001:1;
+    const result=ok(await f.core.capture(nextCapture()));
+    assert.equal(result.episode.status,'failed');
+    assert.equal(result.episode.error.code,variant==='stale-revision'?'episode_failed':'invalid_model_output');
+    const after=capturedDetail(f,current.id).episode.nextStep;
+    if(variant==='stale-revision'){
+      assert.equal(after.status,'open');assert.equal(after.text,'Review the corrected proposal');assert.notEqual(after.id,before.id);
+    }else assert.deepEqual(after,before);
+    assert.deepEqual(capturedDetail(f,foreign.id,{...ns,ownerId:'other',projectId:'other'}),foreignBefore);
+  });

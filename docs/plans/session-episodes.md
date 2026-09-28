@@ -833,8 +833,22 @@ No hosted schema, MCP tool, provider schema, paid call, real-data experiment or
 semantic-fidelity claim is introduced.
 
 
-The guarded draft storage seam is implemented and tested. The current episode-v1
-interpreter request still omits prior-step guards, and its prompt still requires
-null dispositions. Connecting model-selected transitions to this seam needs a
-separately authorized request/prompt change; those files are outside this retrieval
-assignment. No ordinary-capture closure integration is claimed by this appendix.
+maintainer-approved: interpreter-driven step closure wiring in the capture port and episode prompt
+
+The episode interpreter receives a request-local `stepRef` only when the prior
+open step and its supporting passages fit and the step is unpinned. Core retains
+the exact durable step ID and revision locally, checks the returned reference and
+maps it to those guards before the atomic draft commit. Durable IDs are not added
+to the model request. Silence, ambiguous chronology, historical quotation,
+assistant advice and dropped prior context preserve the open step; the prompt
+requires explicit new evidence for completion, cancellation or replacement.
+
+`session-context.test.mjs` adds end-to-end scripted capture coverage for E2/E5/E10:
+all three transitions with new anchors, closure replay without model calls or
+revision/epoch/journal changes, and older-step resurfacing in startup context.
+It rejects forged/foreign/missing references, injected durable guards, pinned
+steps, omitted prior-step references and a correction during interpretation.
+E3/E10 scripts also exercise the five preservation cases above and assert the
+prompt's instructions. These scripts verify wiring and provenance guards, not
+semantic fidelity of a model. The committed SE-2 episode-off parity tests remain
+unchanged; no prompt-digest or fixture expectation requires adjustment.

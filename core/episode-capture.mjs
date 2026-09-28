@@ -6,7 +6,7 @@ import { episodeSnapshot } from './episode-input.mjs';
 import { captureMessages } from './capture.mjs';
 import { callModel } from './model-call.mjs';
 import { countTokens } from './model-budget.mjs';
-import { fail, MemoryStoreError } from './validation.mjs';
+import { fail, MemoryStoreError, object } from './validation.mjs';
 
 const system = readFileSync(new URL('./prompts/interpret-episode.md', import.meta.url), 'utf8');
 const promptDigest = createHash('sha256').update(system).digest('hex');
@@ -55,11 +55,14 @@ export function episodeRequest(model, snapshot) {
     const anchors = snapshot.record.anchors[field];
     if (!value || !anchors?.length || anchors.some(anchor => !included.has(anchor.sourceId))) continue;
     prior[field] = { value: field === 'nextStep' ? value.text : value,
+      ...(field === 'nextStep' && value.status === 'open' && !snapshot.record.editor?.nextStep?.pinned
+        ? { stepRef: 'prior-next-step' } : {}),
       anchors: anchors.map(anchor => ({ sourceIndex: included.get(anchor.sourceId),
         start: anchor.start, end: anchor.end })) };
     if (!fits()) delete prior[field];
   }
   return { input: request(), refs,
+    stepGuard: prior.nextStep?.stepRef ? { stepId: snapshot.record.nextStep.id, expectedRevision: snapshot.revision } : null,
     priorOmitted: snapshot.sources.length - included.size,
     dispositions: snapshot.events.map(event => ({ eventId: event.eventId,
       omitted: event.view.messages.length - counts.get(event.eventId),
@@ -105,7 +108,15 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     });
     let committed;
     try {
-      committed = runtime.commitEpisodeDraft(ns, { ...owned, result: output, sources: planned.refs,
+      object(output, ['type','language','gist','outcome','nextStep','disposition']);
+      let result = output;
+      if (output.disposition !== null) {
+        object(output.disposition, ['stepRef','action','anchors']);
+        if (!planned.stepGuard || output.disposition.stepRef !== 'prior-next-step') fail('invalid_model_output');
+        result = { ...output, disposition: { ...planned.stepGuard,
+          action: output.disposition.action, anchors: output.disposition.anchors } };
+      }
+      committed = runtime.commitEpisodeDraft(ns, { ...owned, result, sources: planned.refs,
         dispositions: planned.dispositions, priorOmitted: planned.priorOmitted,
         ...(trigger === 'batch' ? { classificationEventId: snapshot.targetEventId } : {}),
         modelMetadata: { adapter: null, model: null, profile: null, ...model.episodeMetadata,

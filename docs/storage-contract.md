@@ -419,3 +419,12 @@ an anchored new step. Stale IDs/revisions, prior-source-only closure and missing
 replacement evidence reject atomically. No disposition preserves the prior open
 step, including when prior context was omitted. These guards establish provenance,
 not semantic entailment of the interpretation.
+
+The episode capture port exposes only a request-local `prior.nextStep.stepRef`,
+when the unpinned open step and all of its supporting passages fit the request.
+The interpreter returns `{stepRef,action,anchors}`; core checks the exact reference
+and supplies the stored step ID/revision locally. Missing, forged or unavailable
+references reject as `invalid_model_output`; concurrent changes still fail the
+ordinary draft freshness checks. The episode prompt requires explicit new evidence
+and preserves steps on silence, ambiguous chronology, historical quotation,
+assistant advice or dropped context. Episode-off prompts and requests are unchanged.
