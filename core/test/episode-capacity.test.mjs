@@ -95,7 +95,8 @@ test('E5 two processes serialize a session; expired attempts stay consumed and a
     const runtime=createMemoryRuntime({path:${JSON.stringify(f.path)},sessionEpisodes:{mode:'episode-v1'}});
     const ns=${JSON.stringify(ns)};const result=${body};runtime.close();console.log(JSON.stringify(result));`],{encoding:'utf8'}));
   assert.deepEqual(run(`runtime.claimEpisodeWriter(ns,{episodeId:${JSON.stringify(r.episodeId)},generation:'initial'})`),{processing:true});
-  assert.deepEqual(f.runtime.claimAdmission(ns,{...input,leaseMs:125000}),{processing:true});
+  assert.equal(f.runtime.finishAdmission(ns,{...input,
+    token:f.runtime.claimAdmission(ns,{...input,leaseMs:125000}).token,items:[]}).duplicate,false);
   f.db.exec('UPDATE episode_attempts SET expires_at=0; UPDATE session_episodes SET writer_expires_at=0');
   const successor=run(`runtime.claimEpisodeWriter(ns,{episodeId:${JSON.stringify(r.episodeId)},generation:'initial'})`);
   assert.ok(successor.token);
