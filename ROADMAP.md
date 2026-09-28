@@ -32,6 +32,11 @@ service must use the same public core, not separate engines.
   that trace for the actual mixed runner with a prospectively bound source
   probe. Its offline integration must pass before new real-model localization;
   it does not expand candidate limits or establish a retrieval improvement.
+  The next [four-case localization packet](docs/plans/source-localization-live.md)
+  freezes new source histories, questions and probe coordinates before paid
+  execution. It separates long-message detail, decision/rationale updates,
+  changed premises and event/import time. Preparation is not a new score;
+  the private operator and one-shot budget gates must pass before launch.
   These are synthetic accounting checks, not semantic completeness or a
   correction to the paid-case results. Real-model and installed
   host acceptance, semantic/current-state quality, and a fresh paired paid

@@ -1119,6 +1119,17 @@ the known fifth-receipt miss does not explain the prior cases with four or fewer
 receipts. Fresh real-model localization precedes that product decision; earlier
 scores, failures and feasibility requirements remain unchanged.
 
+The [four-case localization packet](plans/source-localization-live.md) adds
+fresh authored source histories and separate evaluator fixtures, with one
+prospectively fixed canonical-window probe per case. Each contains 60 submitted
+messages and four actual indexed-evidence batches; the longest original
+message is 1,798 UTF-16 units. Repetitive authored background and a single probe
+make this a bounded diagnostic, not representative long-history coverage or a
+replacement for the official benchmark. Source-only preparation and its frozen
+digests do not establish retention, semantic accuracy, automatic dependency
+maintenance, default MOC retrieval or installed-host behavior. No new paid
+result is claimed at this preparation checkpoint.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the
