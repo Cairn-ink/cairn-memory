@@ -32,8 +32,17 @@ service must use the same public core, not separate engines.
   that trace for the actual mixed runner with a prospectively bound source
   probe. Its offline integration must pass before new real-model localization;
   it does not expand candidate limits or establish a retrieval improvement.
-  These are synthetic accounting checks, not semantic completeness or a
-  correction to the paid-case results. Real-model and installed
+  The next [four-case localization packet](docs/plans/source-localization-live.md)
+  froze new histories, questions and probes before its one-shot paid execution.
+  Its [completed diagnostic](docs/evidence/source-localization-live-four.md)
+  completed all eight arms: Cairn 3/4 correct, Mem0 4/4, common resolved N=4.
+  Two Cairn traces were observed; two were unavailable because one source
+  window belonged to multiple cards. The failed premise-change answer and
+  that tracing limit are retained, not claimed repaired. The next bounded
+  checkpoint is offline shared-source tracing and premise/context coverage;
+  it does not replace the failed official-six gate or establish superiority.
+  The offline checks and authored real-model diagnostic do not establish
+  semantic completeness or repair earlier paid-case results. Installed
   host acceptance, semantic/current-state quality, and a fresh paired paid
   comparison remain separate gates.
 
