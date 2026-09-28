@@ -917,7 +917,9 @@ listed under "Still to verify".
 1. Workers read hook-supplied paths before checking ownership or pause state. They
    now require a session from the launch ledger (Claude IDs the harness generated;
    Codex threads the orchestrator saw its own process report), the exact host path
-   derived from it, no pause, and a regular non-symlink file opened `O_NOFOLLOW`.
+   derived from it, no pause, and a regular non-symlink file owned by this user. The
+   file is opened component by component from `/`, never following a symlink, so a
+   parent swapped after the checks cannot redirect the read.
 2. Cleanup accepted session IDs from hook events. It now uses the ledger alone and
    re-verifies each path before removal.
 3. Nothing stopped a step when isolation was unproven. A fail-closed preflight now

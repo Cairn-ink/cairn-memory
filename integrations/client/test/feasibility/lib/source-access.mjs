@@ -4,7 +4,7 @@
 // Hook input is never trusted for either fact.
 import { constants } from 'node:fs';
 import { lstat, open, readdir, realpath, rmdir, unlink } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, normalize } from 'node:path';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // A Codex thread must be created within its launch, allowing for clock granularity.
@@ -96,16 +96,62 @@ export async function authorizeSource({ host, sessionId, suppliedPath, suppliedC
   if (await isPaused()) return { ok: false, reason: 'paused' };
   const entry = await verifyPlainEntry(suppliedPath, 'file', { fs, uid });
   if (!entry.ok) return entry;
-  return { ok: true, path: suppliedPath, run: owner.run, size: entry.stat.size,
+  return { ok: true, path: suppliedPath, home, run: owner.run, size: entry.stat.size,
     identity: { dev: entry.stat.dev, ino: entry.stat.ino } };
 }
 
-/** Open without following a final symlink, and confirm it is the inode that was authorized. */
-export async function openAuthorizedSource(authorization, fs = defaultFs) {
-  const handle = await fs.open(authorization.path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+const DIRECTORY_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+// O_NONBLOCK keeps a FIFO planted at the path from blocking the open; it is refused below.
+const FILE_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+const within = (path, root) => typeof root === 'string' && (path === root || path.startsWith(`${root}/`));
+
+/**
+ * Open an absolute path one component at a time from `/`. Each directory is
+ * opened with O_DIRECTORY | O_NOFOLLOW relative to the directory handle already
+ * held, through `/proc/self/fd/<n>/<name>` (Linux's openat(2) for Node), and the
+ * file relative to its parent's handle with O_NOFOLLOW. No component can be a
+ * symlink, and swapping or renaming any of them after it is opened cannot
+ * redirect a later step. Directories at or below `ownedRoot` must belong to `uid`.
+ */
+async function openBeneathRoot(path, { ownedRoot, uid, fs }) {
+  if (!isAbsolute(path) || normalize(path) !== path || path.endsWith('/')) throw new Error('source_path_not_canonical');
+  const names = path.split('/').slice(1);
+  let directory = await fs.open('/', DIRECTORY_FLAGS);
+  let reached = '';
+  try {
+    for (const name of names.slice(0, -1)) {
+      let next;
+      try { next = await fs.open(`/proc/self/fd/${directory.fd}/${name}`, DIRECTORY_FLAGS); }
+      catch (error) {
+        // ENOTDIR or ELOOP: the component is now a symlink or not a directory.
+        if (error?.code !== 'ENOTDIR' && error?.code !== 'ELOOP') throw error;
+        throw Object.assign(new Error('source_changed'), { code: error.code });
+      }
+      await directory.close();
+      directory = next;
+      reached = `${reached}/${name}`;
+      if (within(reached, ownedRoot) && uid !== undefined && (await directory.stat()).uid !== uid) {
+        throw new Error('source_changed');
+      }
+    }
+    return await fs.open(`/proc/self/fd/${directory.fd}/${names.at(-1)}`, FILE_FLAGS);
+  } finally {
+    await directory.close();
+  }
+}
+
+/**
+ * Open the authorized source through a chain of verified directory handles, and
+ * confirm on the open handle that it is the regular, owned file whose inode was
+ * authorized. What is read is what was checked, whatever happens to the path
+ * between authorization and the open.
+ */
+export async function openAuthorizedSource(authorization, fs = defaultFs, uid = process.getuid?.()) {
+  const handle = await openBeneathRoot(authorization.path, { ownedRoot: authorization.home, uid, fs });
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.dev !== authorization.identity.dev || stat.ino !== authorization.identity.ino) {
+    if (!stat.isFile() || (uid !== undefined && stat.uid !== uid) || stat.dev !== authorization.identity.dev
+      || stat.ino !== authorization.identity.ino) {
       throw new Error('source_changed');
     }
     return handle;
@@ -118,8 +164,9 @@ export async function openAuthorizedSource(authorization, fs = defaultFs) {
 /**
  * Read a whole owned source through a verified handle. Returns '' while it does
  * not exist yet. A symlink, a symlinked parent or another owner is refused before
- * the path is opened; a swap after that check is refused by O_NOFOLLOW or by the
- * inode check on the open handle. Either way nothing is read.
+ * anything is opened. A swap after those checks, at any point up to the open, is
+ * refused by the component-by-component open or by the checks on its handle.
+ * Either way nothing is read.
  */
 export async function readOwnedSource({ host, sessionId, path, cwd, ledger, home, fs = defaultFs }) {
   const authorization = await authorizeSource({ host, sessionId, suppliedPath: path, suppliedCwd: cwd, ledger, home,

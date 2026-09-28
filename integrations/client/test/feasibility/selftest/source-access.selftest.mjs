@@ -40,7 +40,7 @@ function memoryFs(entries) {
       calls.push(['open', path]);
       const entry = entries.files?.[path];
       let closed = false;
-      return { stat: async () => statOf({ ...entry, ino: entries.openIno ?? entry.ino }), close: async () => { closed = true; },
+      return { stat: async () => statOf(entry), close: async () => { closed = true; },
         get closed() { return closed; } };
     },
   } };
@@ -98,11 +98,12 @@ test('a symlinked ancestor or another owner is refused before the source is open
   assert.equal(foreignOwner.calls.some(([call]) => call === 'open'), false);
 });
 
-test('an owned regular file is authorized, and an inode swap after authorization is rejected', async () => {
-  const harness = memoryFs({ files: { [claudePath]: { kind: 'file', ino: 7 } }, openIno: 99 });
+test('an owned regular file is authorized with its identity, before anything is opened', async () => {
+  const harness = memoryFs({ files: { [claudePath]: { kind: 'file', ino: 7 } } });
   const { result } = await authorize({}, harness);
   assert.equal(result.ok, true);
-  await assert.rejects(openAuthorizedSource(result, harness.fs), /source_changed/);
+  assert.deepEqual(result.identity, { dev: 1, ino: 7 });
+  assert.equal(harness.calls.some(([call]) => call === 'open'), false);
 });
 
 test('Codex ownership needs an observed binding inside the launch window and the exact rollout name', async () => {
@@ -121,7 +122,7 @@ test('Codex ownership needs an observed binding inside the launch window and the
   assert.equal((await codex({ suppliedPath: renamed })).reason, 'unexpected_location');
 });
 
-test('on a real filesystem, a symlinked source is refused and O_NOFOLLOW blocks a swap after authorization', async t => {
+test('on a real filesystem, a symlinked source is refused, and a swap after authorization is refused on the handle', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'f0-source-access-' });
   const home = join(workspace.path, 'home');
   const cwd = join(workspace.path, 'project');
@@ -143,4 +144,13 @@ test('on a real filesystem, a symlinked source is refused and O_NOFOLLOW blocks 
   renameSync(source, `${source}.real`);
   symlinkSync(foreign, source);
   await assert.rejects(openAuthorizedSource(authorization), error => error.code === 'ELOOP');
+  // Another regular file renamed into place: opened, but its inode was not authorized.
+  renameSync(source, `${source}.link2`);
+  writeFileSync(`${source}.other`, '{"other":true}\n');
+  renameSync(`${source}.other`, source);
+  await assert.rejects(openAuthorizedSource(authorization), /source_changed/);
+  // The original file back in place is accepted.
+  renameSync(`${source}.real`, source);
+  const handle = await openAuthorizedSource(authorization);
+  await handle.close();
 });

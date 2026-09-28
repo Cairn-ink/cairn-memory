@@ -23,16 +23,24 @@ export function createInterruptGuard({ signals = process, escalateMs = 5_000 } =
   let received = null;
   let pid = null;
   let escalation = null;
+  let notify;
+  const whenInterrupted = new Promise(resolve => { notify = resolve; });
   const forward = signal => {
     if (!pid) return;
     signalGroup(pid, signal);
     escalation ??= setTimeout(() => signalGroup(pid, 'SIGKILL'), escalateMs);
   };
-  const handlers = new Map(TERMINATING_SIGNALS.map(signal => [signal, () => { received ??= signal; forward(signal); }]));
+  const handlers = new Map(TERMINATING_SIGNALS.map(signal => [signal, () => {
+    received ??= signal;
+    notify(received);
+    forward(signal);
+  }]));
   return {
     install() { for (const [signal, handler] of handlers) signals.on(signal, handler); },
     attach(childPid) { pid = childPid; if (received) forward(received); },
     get interrupted() { return received; },
+    /** Resolves with the first signal, so waits can end at once rather than at their next poll. */
+    get whenInterrupted() { return whenInterrupted; },
     /** After the host exits, wait for its whole group to go, escalating once the bound passes. */
     async settle() {
       if (!pid || !received) return;

@@ -1,11 +1,12 @@
 // Offline self-test for the interactive driver's transcript reads: every poll is
-// authorized from the ledger and read through a verified O_NOFOLLOW handle, so a
-// transcript (or its parent) swapped for a symlink while polling is refused and
-// the symlink's target is never read.
+// authorized from the ledger and opened component by component without following
+// a symlink, so a transcript (or its parent) swapped for a symlink while polling,
+// at any point between the checks and the open, is refused and the symlink's
+// target is never read. Reads are tracked by inode, whatever path opened them.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { appendFileSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -14,11 +15,19 @@ import { createWaiter } from '../lib/private-tmux.mjs';
 import { claudeProjectDir, readOwnedSource } from '../lib/source-access.mjs';
 import { createInterruptGuard } from '../lib/supervise.mjs';
 
-/** The real filesystem, recording every call; `afterLstat` can swap entries at the worst moment. */
-function recordingFs({ afterLstat } = {}) {
+/**
+ * The real filesystem, recording every call with the inode it reached;
+ * `afterRealpath` and `afterLstat` can swap entries at the worst moments.
+ */
+function recordingFs({ afterRealpath, afterLstat } = {}) {
   const calls = [];
   return { calls, fs: {
-    realpath: async path => { calls.push(['realpath', path]); return realpath(path); },
+    realpath: async path => {
+      calls.push(['realpath', path]);
+      const resolved = await realpath(path);
+      afterRealpath?.(path);
+      return resolved;
+    },
     lstat: async path => {
       calls.push(['lstat', path]);
       const stat = await lstat(path);
@@ -28,8 +37,9 @@ function recordingFs({ afterLstat } = {}) {
     open: async (path, flags) => {
       calls.push(['open', path]);
       const handle = await open(path, flags);
-      return { stat: () => handle.stat(), close: () => handle.close(),
-        read: (...args) => { calls.push(['read', path]); return handle.read(...args); } };
+      const { ino } = await handle.stat();
+      return { fd: handle.fd, stat: () => handle.stat(), close: () => handle.close(),
+        read: (...args) => { calls.push(['read', path, ino]); return handle.read(...args); } };
     },
   } };
 }
@@ -51,7 +61,7 @@ function setup(t) {
   return { dir, path, foreign, foreignDir, read };
 }
 
-const touched = (calls, path) => calls.filter(([call, target]) => (call === 'open' || call === 'read') && target === path);
+const readsOf = (calls, ino) => calls.filter(([call, , target]) => call === 'read' && target === ino);
 
 test('an absent transcript reads as empty and a regular one is read in full on each poll', async t => {
   const run = setup(t);
@@ -73,6 +83,8 @@ test('a transcript swapped for a symlink during polling stops the poll without r
   const recording = recordingFs();
   const waitFor = createWaiter({ guard: createInterruptGuard({ signals: new EventEmitter() }), deadline: Date.now() + 5_000,
     intervalMs: 20 });
+  t.after(() => waitFor.dispose?.());
+  const owned = statSync(run.path).ino;
   let polls = 0;
   const poll = waitFor(async () => {
     if (++polls === 3) { renameSync(run.path, `${run.path}.moved`); symlinkSync(run.foreign, run.path); }
@@ -80,10 +92,10 @@ test('a transcript swapped for a symlink during polling stops the poll without r
   }, 5_000, 'reply');
   await assert.rejects(poll, /source_refused:symlink$/);
   assert.equal(polls, 3);
-  assert.equal(touched(recording.calls, run.path).filter(([call]) => call === 'read').length, 2, 'only the two owned polls read');
+  assert.equal(readsOf(recording.calls, owned).length, 2, 'only the two owned polls read');
   const afterSwap = recording.calls.slice(recording.calls.findLastIndex(([call]) => call === 'realpath'));
   assert.deepEqual(afterSwap.map(([call]) => call), ['realpath', 'lstat']);
-  assert.deepEqual(touched(recording.calls, run.foreign), []);
+  assert.deepEqual(readsOf(recording.calls, statSync(run.foreign).ino), []);
 });
 
 test('a parent swapped for a symlink during polling stops the poll without reading the target', async t => {
@@ -97,7 +109,24 @@ test('a parent swapped for a symlink during polling stops the poll without readi
   const before = recording.calls.length;
   await assert.rejects(run.read(recording.fs), /source_refused:symlinked_parent$/);
   assert.deepEqual(recording.calls.slice(before), [['realpath', run.dir]]);
-  assert.deepEqual(touched(recording.calls, run.foreign), []);
+  assert.deepEqual(readsOf(recording.calls, statSync(run.foreign).ino), []);
+});
+
+test('a parent swapped between the realpath check and the lstat is refused without reading the target', async t => {
+  // The window the check-then-open design left open: lstat, open and the inode
+  // check all see the foreign file through the new symlinked parent.
+  const run = setup(t);
+  mkdirSync(run.dir, { recursive: true });
+  writeFileSync(run.path, '{"owned":1}\n');
+  const recording = recordingFs({ afterRealpath: path => {
+    if (path !== run.dir) return;
+    renameSync(run.dir, `${run.dir}.moved`);
+    symlinkSync(run.foreignDir, run.dir);
+  } });
+  let content = null;
+  await assert.rejects(async () => { content = await run.read(recording.fs); });
+  assert.equal(content, null);
+  assert.deepEqual(readsOf(recording.calls, statSync(run.foreign).ino), []);
 });
 
 test('a swap between the check and the open is refused on the handle, before any read', async t => {
@@ -112,8 +141,9 @@ test('a swap between the check and the open is refused on the handle, before any
   } });
   await assert.rejects(file.read(swapFile.fs), error => error.code === 'ELOOP');
   assert.equal(swapFile.calls.some(([call]) => call === 'read'), false);
+  assert.deepEqual(readsOf(swapFile.calls, statSync(file.foreign).ino), []);
 
-  // Its parent: the open follows the new parent, and the inode check closes that handle unread.
+  // Its parent: the component-by-component open refuses the symlinked directory.
   const parent = setup(t);
   mkdirSync(parent.dir, { recursive: true });
   writeFileSync(parent.path, '{"owned":1}\n');
@@ -124,4 +154,5 @@ test('a swap between the check and the open is refused on the handle, before any
   } });
   await assert.rejects(parent.read(swapParent.fs), /source_changed/);
   assert.equal(swapParent.calls.some(([call]) => call === 'read'), false);
+  assert.deepEqual(readsOf(swapParent.calls, statSync(parent.foreign).ino), []);
 });
