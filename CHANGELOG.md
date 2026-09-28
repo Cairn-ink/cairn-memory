@@ -6,6 +6,7 @@
   periodic, PreCompact, end and lazy attempts, independent admission recovery,
   per-batch quick policy and idempotent explicit keep from retained passages.
   Local draft locks preserve unspent attempts for retry, including after restart.
+  Started attempts retain unfinished state until an outcome or timeout is recorded.
 - Keep actions retain paged source coverage and explicit outcomes in dedicated
   storage, use a separate admission identity, and support retry after interruption.
 - Add source-anchored automatic procedural proposals only in episode-v1. Legacy

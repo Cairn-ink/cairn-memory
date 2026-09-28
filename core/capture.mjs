@@ -114,6 +114,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned); } catch { /* The bounded lease can expire. */ }
     if (error instanceof MemoryStoreError) throw error;
+    if (episodeRun?.keep && error?.code === 'ERR_SQLITE_ERROR' &&
+        Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff)) fail('storage_busy');
     fail(episodeRun?.keep ? 'storage_error' : 'extraction_failed');
   }
   const admission = { ...(episodeRun ? { status: 'completed' } : {}),

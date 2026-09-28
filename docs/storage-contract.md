@@ -204,11 +204,16 @@ throw instead). They never expose raw database or provider errors.
 | `episode_failed` | The interpretation call failed; ordinary admission continues. |
 | `episode_timeout` | The bounded interpretation call timed out; ordinary admission continues. |
 
-A local SQLite busy/locked error returns retryable `storage_busy`. A draft
-reservation is consumed only immediately before calling the interpretation port,
-or on a terminal preparation failure. A lock before that point spends no attempt
-and records no permanent gap. If cleanup is also blocked, an unstarted reservation
-can be recovered after its 125-second lease expires, including after restart.
+A local SQLite busy/locked error before a draft starts returns retryable
+`storage_busy`. A draft reservation is consumed only immediately before calling
+the interpretation port, or on a terminal preparation failure. A lock before
+that point spends no attempt and records no permanent gap. If cleanup is also
+blocked, an unstarted reservation can be recovered after its 125-second lease
+expires, including after restart. After the interpretation starts, a local lock
+leaves the consumed attempt unfinished until an outcome is recorded.
+Lease-expiry recovery records `episode_timeout` and a coverage gap without
+repeating that interpretation call; a capture replay or end signal can perform
+this recovery.
 
 An admission with a live admission lease can finish after its session writer
 expires. Deletion, forgetting, explicit discard and project stop remain closed
@@ -275,10 +280,11 @@ Interpretation outcomes may return `missing_evidence`, `episode_failed` or
 These consume the attempt without blocking ordinary admission.
 
 An identical overlap stays `processing` while its original admission has a live
-lease or its pending payload remains within the retention/replay window. An intact
-capacity-bypassed registration is also resumable until completed or abandoned,
-even without a staged payload. Once abandoned, failed, released or expired,
-evidence may move to a new event; the old event cannot admit transferred messages.
-Completed originals always count zero.
-Every episode-mode capture result includes `admission.status` (`completed`,
-`covered` or `processing`); episode-off result shapes are unchanged.
+lease or its pending payload remains within the retention/replay window. An
+intact capacity-bypassed registration is also resumable until completed,
+abandoned or closed by a discard/stop fence, even without a staged payload. Once
+abandoned, failed, released or expired, evidence may move to a new event; the
+old event cannot admit transferred messages. Completed originals always count
+zero. Every episode-mode capture result includes `admission.status`
+(`completed`, `covered` or `processing`); episode-off result shapes are
+unchanged.

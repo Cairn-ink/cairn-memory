@@ -62,7 +62,7 @@ export function episodeRequest(model, snapshot) {
 }
 
 async function interpret({ runtime, ns, model, episodeId, generation, writerToken, trigger, watermark, staging }) {
-  let owned, retryable = false;
+  let owned, started = false, retryable = false;
   try {
     const claim = runtime.claimEpisodeDraft(ns, { episodeId, generation, writerToken, trigger, watermark, deferAttempt: true });
     if (claim.consumed) return { id: episodeId, status: 'not-run', reason: 'consumed' };
@@ -77,7 +77,10 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
         runtime.episodeDraftSnapshot(ns, owned);
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
-        if (++checks === 2) runtime.startEpisodeAttempt(ns, owned);
+        if (++checks === 2) {
+          runtime.startEpisodeAttempt(ns, owned);
+          started = true;
+        }
       },
     });
     let committed;
@@ -94,8 +97,8 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
       type: output.type.value, classificationTarget: snapshot.targetEventId };
   } catch (error) {
     const code = ['capacity', 'expired', 'missing_evidence', 'generation_conflict'].includes(error.code) ? error.code : errorCode(error);
-    retryable = code === 'storage_busy';
-    try { if (owned && !retryable) runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
+    retryable = code === 'storage_busy' && !started;
+    try { if (owned && code !== 'storage_busy') runtime.failEpisodeDraft(ns, { ...owned, code }); } catch { /* Source/deletion fences win. */ }
     return { id: episodeId, status: 'failed', error: { code, retryable } };
   } finally {
     try { if (owned) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
@@ -105,10 +108,12 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
 
 async function auxiliary({ runtime, ns, model, episodeId, generation, trigger }) {
   const state = runtime.episodeCaptureState(ns, { episodeId });
-  if (!state || state.observed <= state.attempted) return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
+  if (!state || (state.observed <= state.attempted && !state.unfinishedAttempt)) return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
   const writer = runtime.claimEpisodeWriter(ns, { episodeId, generation });
   if (writer.processing) return { id: episodeId, status: 'processing' };
   try {
+    // Acquiring the writer recovers expired attempts even when there is no new draft.
+    if (state.observed <= state.attempted) return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
     return await interpret({ runtime, ns, model, episodeId, generation, writerToken: writer.token,
       trigger, watermark: state.observed });
   } finally { runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token }); }
@@ -160,7 +165,7 @@ export async function captureEpisodeMessages(options) {
       registered.position - state.attempted >= state.draftEvery || snapshot.episodeContext.origin === 'precompact');
     if (due) episode = await interpret({ runtime, ns, model, episodeId, generation: batch.generation,
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging });
-    if (episode.error?.code === 'storage_busy') fail('storage_busy');
+    if (episode.error?.code === 'storage_busy' && episode.error.retryable) fail('storage_busy');
     state = runtime.episodeCaptureState(ns, { episodeId, client: batch.client, eventId: batch.eventId });
     const deadline = startAdmission?.();
     const claim = runtime.claimAdmission(ns, { client: batch.client, eventId: batch.eventId,

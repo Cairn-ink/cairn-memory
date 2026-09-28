@@ -389,3 +389,48 @@ test('E3/E5 a partial takeover records a gap for remaining failed staged evidenc
   assert.deepEqual(extracted.sort(), [1, 2, 3].map(n => input(n).messages[0].content).sort());
   assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 3);
 });
+
+for (const stop of [true, false]) test(`E3/E5 ${stop ? 'stop closes' : 'pause preserves'} a crashed bypassed original's overlap ownership`, async t => {
+  const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+  for (let i = 0; i < 64; i++) runtime.reserveEpisodeBatch(ns, { ...batch(`protected-${i}`), client: 'quota' });
+  const { episodeSnapshot } = await import('../episode-input.mjs');
+  const original = input(1, 'controls', { messages: [input(1).messages[0], input(2).messages[0]] });
+  const snapshot = episodeSnapshot(original);
+  const registered = runtime.reserveEpisodeBatch(ns, { clientLabel: 'Synthetic client', generation: 'initial',
+    client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
+    payloadDigest: snapshot.payloadDigest, messages: snapshot.messages, view: snapshot.view });
+  assert.equal(registered.staging, 'not-staged');
+  runtime.close(); // Crash after registration, before an admission lease.
+  const changed = stop
+    ? ok(f.core.setProjectCapture({ namespace: ns, expectedGeneration: 'initial', enabled: false }))
+    : ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: 'initial', paused: true }));
+  if (!stop) {
+    assert.equal(f.db.prepare('SELECT gap FROM episode_events WHERE event_id=?').get(original.eventId).gap, 'capacity');
+  }
+  const resumed = stop
+    ? ok(f.core.setProjectCapture({ namespace: ns, expectedGeneration: changed.generation, enabled: true }))
+    : ok(f.core.setCapturePaused({ namespace: ns, expectedGeneration: changed.generation, paused: false }));
+  const successor = input(3, 'controls', { messages: [input(1).messages[0]],
+    episodeContext: { clientLabel: 'Synthetic client', generation: resumed.generation, origin: 'ordinary' } });
+  const result = ok(await f.core.capture(successor));
+  if (stop) {
+    assert.equal(result.admission.status, 'completed');
+    assertError(await f.core.capture(original), 'capture_evidence_closed');
+    assert.equal(f.db.prepare('SELECT gap FROM episode_events WHERE event_id=?').get(original.eventId).gap, 'discarded');
+    assert.equal(f.db.prepare('SELECT coverage_event_id FROM episode_messages WHERE episode_id=? AND message_id=?')
+      .get(registered.episodeId, 'message-1').coverage_event_id, successor.eventId);
+    assert.deepEqual(f.model.calls.filter(call => call.method === 'extract')
+      .flatMap(call => call.request.input.messages.map(message => message.content)), [input(1).messages[0].content]);
+    assert.ok(f.model.calls.filter(call => call.method === 'interpretEpisode')
+      .every(call => !JSON.stringify(call.request).includes(input(2).messages[0].content)));
+    assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 2);
+  } else {
+    assert.equal(result.admission.status, 'processing');
+    assert.equal(counts(f.model, 'extract'), 0);
+    assert.equal(ok(await f.core.capture(original)).admission.status, 'completed');
+    assert.equal(ok(await f.core.capture(successor)).admission.status, 'covered');
+    assert.deepEqual(f.model.calls.filter(call => call.method === 'extract')
+      .flatMap(call => call.request.input.messages.map(message => message.content)), [1, 2].map(n => input(n).messages[0].content));
+    assert.equal(f.db.prepare('SELECT observed FROM session_episodes WHERE id=?').get(registered.episodeId).observed, 1);
+  }
+});

@@ -80,12 +80,15 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const admission = db.prepare(`SELECT state,lease_expires_at FROM admission_claims WHERE ${eventWhere}`)
         .get(...boundary(ns), client, previous.coverage_event_id);
       if (admission?.state === 'completed') return false;
+      const original = event(ns, { client, eventId: previous.coverage_event_id });
+      // A stop/discard closes old ownership even if its lease has not expired.
+      if (original && guard(ns, { client, eventId: previous.coverage_event_id,
+        payloadDigest: original.payload_digest }) === 'capture_evidence_closed') return true;
       const active = admission?.lease_expires_at > Date.now() || row.writer_expires_at > Date.now() ||
         db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND finished=0 AND expires_at>?')
           .get(row.id, Date.now());
       const evidence = db.prepare(`SELECT state,payload,expires_at FROM staged_capture_evidence WHERE ${eventWhere}`)
         .get(...boundary(ns), client, previous.coverage_event_id);
-      const original = event(ns, { client, eventId: previous.coverage_event_id });
       const bypassResumable = original?.staging === 'not-staged' &&
         (admission?.state === 'reserved' || (admission?.state === 'pending' && admission.lease_expires_at > 0));
       const resumable = bypassResumable ||
@@ -599,6 +602,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!row) return null;
       const registered = input.eventId ? event(ns, input) : null;
       return { episodeId: row.id, revision: row.revision, observed: row.observed, attempted: row.attempted,
+        unfinishedAttempt: Boolean(db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND finished=0').get(row.id)),
         covered: row.covered, draftEvery: row.draft_every, record: JSON.parse(row.record),
         policy: registered?.policy, admission: registered?.admission,
         draftConsumed: registered ? Boolean(db.prepare('SELECT 1 FROM episode_attempts WHERE episode_id=? AND marker=?').get(row.id, `batch:${registered.position}`)) : false,
@@ -618,18 +622,19 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     });
   }
   function settleAttempt(ns, input) {
-    // A stale callback can consume only its own attempt, never publish or release a successor.
+    // Only commit/failure/expiry may finish an attempt. Cleanup cannot erase an
+    // unfinished paid call whose outcome could not be stored under a local lock.
     return transaction(db, () => {
       const row = read(ns, input.episodeId);
       if (!row) return;
       if (input.retryable) {
         db.prepare('DELETE FROM episode_attempts WHERE episode_id=? AND token=? AND started=0').run(row.id, input.token);
-      } else {
-        db.prepare(`UPDATE session_episodes SET attempted=max(attempted,coalesce(
-          (SELECT watermark FROM episode_attempts WHERE episode_id=? AND token=?),0)) WHERE id=?`)
-          .run(row.id, input.token, row.id);
+        return;
       }
-      db.prepare('UPDATE episode_attempts SET finished=1,started=1 WHERE episode_id=? AND token=?').run(row.id, input.token);
+      db.prepare(`UPDATE session_episodes SET attempted=max(attempted,coalesce(
+        (SELECT watermark FROM episode_attempts WHERE episode_id=? AND token=?),0)) WHERE id=?`)
+        .run(row.id, input.token, row.id);
+      db.prepare('UPDATE episode_attempts SET started=1 WHERE episode_id=? AND token=?').run(row.id, input.token);
     });
   }
   // Busy cleanup can retry in this process; after restart the persisted admission lease expires.

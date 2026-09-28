@@ -179,18 +179,18 @@ secure-erasure, complete-history or semantic-fidelity guarantee follows.
 
 ### SE-1 implementation boundary
 
-The episode persistence/inspection, correction/deletion and explicit procedural-tag
-subset above is now implemented locally. Episode capture/interpretation now uses
-an injected port; trusted producer integrations
+The episode persistence/inspection, correction/deletion and explicit
+procedural-tag subset above is now implemented locally. Episode
+capture/interpretation now uses an injected port; trusted producer integrations
 remain separate work. Opening the store eagerly upgrades to v16 in either mode;
-staging alone still never enables episodes.
-Hosts must stop/drain older connections before upgrade; already-open old processes
-are not retroactively fenced. Feature-off access retains deletion/source fences.
-New retained passages are source evidence, not receipts for remembered assertions.
-Capacity release and bypass leave content-free gaps and no active expiry, while
-conversation deletion suppresses even multi-source/historical derived memories.
-Inspection and tag writes invoke no model. Existing source/prompt/receipt contents
-remain unchanged when neither opt-in is used.
+staging alone still never enables episodes. Hosts must stop/drain older
+connections before upgrade; already-open old processes are not retroactively
+fenced. Feature-off access retains deletion/source fences. New retained passages
+are source evidence, not receipts for remembered assertions. Capacity release
+and bypass leave content-free gaps and no active expiry, while conversation
+deletion suppresses even multi-source/historical derived memories. Inspection
+and tag writes invoke no model. Existing source/prompt/receipt contents remain
+unchanged when neither opt-in is used.
 
 ### Durable message identity metadata
 

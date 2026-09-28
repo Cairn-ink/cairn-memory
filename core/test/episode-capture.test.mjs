@@ -496,3 +496,79 @@ for (const boundary of ['claimEpisodeDraft', 'snapshot-1', 'snapshot-2', 'snapsh
     assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
   });
 }
+
+for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5', 'failEpisodeDraft']) {
+  for (const recovery of ['replay', 'end']) {
+    test(`E3/E5 paid draft lock at ${boundary} records a gap on ${recovery} recovery`, { timeout: 15000 }, async t => {
+      const { captureEpisodeMessages } = await import('../episode-capture.mjs');
+      const f = setup(t, boundary === 'failEpisodeDraft' ? { interpretEpisode: () => ({ invalid: true }) } : {});
+      const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
+      t.after(() => runtime.close());
+      let snapshots = 0, locked = false;
+      const wrapped = { ...runtime };
+      for (const method of ['episodeDraftSnapshot', 'commitEpisodeDraft', 'failEpisodeDraft']) {
+        wrapped[method] = (...args) => {
+          const current = method === 'episodeDraftSnapshot' ? `snapshot-${++snapshots}` : method;
+          if (!locked && current === boundary) {
+            locked = true; f.db.exec('BEGIN IMMEDIATE');
+            try { return runtime[method](...args); }
+            finally { f.db.exec('ROLLBACK'); }
+          }
+          return runtime[method](...args);
+        };
+      }
+      const blocked = await captureEpisodeMessages({ runtime: wrapped, ns, model: f.model, input: input() });
+      assert.equal(locked, true);
+      assert.deepEqual(blocked.episode.error, {
+        code: boundary === 'failEpisodeDraft' ? 'invalid_model_output' : 'storage_busy', retryable: false,
+      });
+      assert.equal(blocked.admission.status, 'processing');
+      assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 0);
+      const attempt = f.db.prepare('SELECT * FROM episode_attempts').get();
+      assert.equal(attempt.started, 1); assert.equal(attempt.finished, 0);
+      // Even cleanup incorrectly labelled retryable cannot consume a paid attempt.
+      runtime.settleEpisodeAttempt(ns, { episodeId: attempt.episode_id, token: attempt.token, retryable: true });
+      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, 0);
+      assert.equal(f.db.prepare('SELECT attempted FROM session_episodes').get().attempted, 1);
+      assert.equal(ok(await f.core.capture(input())).admission.status, 'processing');
+      f.db.exec('UPDATE episode_attempts SET expires_at=0; UPDATE session_episodes SET writer_expires_at=0');
+      runtime.close();
+      const reopened = openMemoryCore({ path: f.path, ...options, model: f.model });
+      t.after(() => reopened.close());
+      if (recovery === 'end') {
+        const ended = ok(await reopened.endEpisodeSession({ namespace: ns, client: 'synthetic',
+          sessionId: 'private-session', generation: 'initial', eventId: 'recover-paid' }));
+        assert.equal(ended.episode.reason, 'no-undrafted-evidence');
+      } else assert.equal(ok(await reopened.capture(input())).admission.status, 'completed');
+      const row = f.db.prepare('SELECT * FROM session_episodes').get();
+      assert.equal(JSON.parse(row.record).processing.state, 'failed');
+      assert.equal(JSON.parse(row.record).processing.errorCode, 'episode_timeout');
+      assert.deepEqual(JSON.parse(f.db.prepare('SELECT gap_reasons FROM episode_events').get().gap_reasons), ['episode_timeout']);
+      assert.equal(f.db.prepare('SELECT finished FROM episode_attempts').get().finished, 1);
+      assert.equal(f.db.prepare('SELECT count(*) n FROM episode_attempts').get().n, 1);
+      assert.equal(row.attempted, 1); assert.equal(row.covered, 0);
+      assert.equal(ok(await reopened.capture(input())).admission.status, 'completed');
+      assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 1);
+    });
+  }
+}
+
+test('E8 a raw keep assertion lock returns retryable storage_busy and the same action can complete', { timeout: 30000 }, async t => {
+  let lock = true;
+  const f = setup(t, { interpretEpisode: r => interpretation(r, 'quick-one-off-question'), extract: () => {
+    if (lock) f.db.exec('BEGIN EXCLUSIVE');
+    return { items: [] };
+  } });
+  const first = ok(await f.core.capture(input()));
+  const detail = ok(f.core.getEpisode({ namespace: ns, episodeId: first.episode.id }));
+  const action = { namespace: ns, episodeId: first.episode.id, expectedRevision: detail.episode.revision, actionId: 'assert-lock' };
+  try {
+    const result = await f.core.keepEpisode(action);
+    assert.deepEqual(result, { ok: false, error: { code: 'storage_busy', retryable: true } });
+  } finally { f.db.exec('ROLLBACK'); }
+  assert.equal(f.db.prepare('SELECT keep_state FROM episode_keep_actions').get().keep_state, 'pending');
+  lock = false;
+  assert.equal(ok(await f.core.keepEpisode(action)).admission.status, 'completed');
+  assert.equal(f.db.prepare('SELECT keep_state FROM episode_keep_actions').get().keep_state, 'completed');
+  assert.equal(counts(f.model), 1); assert.equal(counts(f.model, 'extract'), 2);
+});
