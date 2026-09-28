@@ -76,6 +76,35 @@ No new HTTP/plugin/MCP/native capture field, telemetry, permission, model,
 archive, storage schema or default is introduced. See
 [indexed source windows](retained-source-windows.md).
 
+### Offline indexed-window coverage observation
+
+The maintainer-only indexed-window observer wraps one fresh embedded capture
+without changing its input, result, exception or model calls. After capture,
+explicit bounded public reads can compare the offered canonical windows with
+current receipts of that capture's admitted members. This is not a namespace
+scan, a transcript archive or evidence of the extractor's historical choices.
+Selection is explicitly unavailable because the public capture result does
+not expose validated selected indices.
+
+The transient join uses exact client/session/message identity, attributed
+role and canonical text. Output excludes those values, source-derived hashes,
+paths and arbitrary errors; it contains only fixed versions/scopes/statuses,
+bounded counts and at most 64 window ordinals. Identical offered source tuples
+have ambiguous occurrence coverage rather than receiving duplicate credit.
+At most five member reads of 100 receipts each are bracketed by two admission
+inspections. Incomplete pages, changed revisions, closed members or unavailable
+metadata cannot become complete retention. Fresh classification revisions are
+accounted for separately from admission revisions. A report is a bounded
+current-member observation, not an atomic global or historical snapshot.
+
+The observer is consumed by the fresh offline long-history gate, uses no key
+and retains no additional source in the store. No core/MCP/HTTP/hosted
+telemetry field, provider request, default or paid authorization is added.
+The source-free report has a fixed byte bound; closed observers cannot attach
+late results to another capture. Ordinary test cleanup does not authorize
+removal of historical artifacts. See the
+[N1 acceptance plan](plans/source-window-coverage.md).
+
 ### Offline synthetic evidence-lineage boundary
 
 The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through
