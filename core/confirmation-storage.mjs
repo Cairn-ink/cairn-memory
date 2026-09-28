@@ -26,9 +26,10 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       if (row.review_state !== 'awaiting') fail('memory_not_awaiting');
       let result;
-      if (action === 'reject') result = { reviewEffects: { transitions: [], conflicts: [] },
-        ...forgetMutation(ns, row.id, input.expectedRevision, 'rejected') };
-      else {
+      if (action === 'reject') {
+        const forgotten = forgetMutation(ns, row.id, input.expectedRevision, 'rejected');
+        result = { ...forgotten, reviewEffects: forgotten.reviewEffects ?? { transitions: [], conflicts: [] } };
+      } else {
         if (row.currentness !== 'current') fail('memory_historical');
         const now = new Date().toISOString();
         const insertedReceiptIds = [];
@@ -65,25 +66,21 @@ export function dropHeldWork(db, memoryId, reason = 'stale_evidence') {
   }
   for (const row of db.prepare(`SELECT * FROM confirmation_conflicts
     WHERE (memory_id=? OR target_id=?) AND status='pending'`).all(memoryId, memoryId)) {
-    const result = { memoryId: row.target_id, status: 'dropped', reason };
+    const result = { memoryId: row.memory_id, targetId: row.target_id, status: 'dropped', reason };
     db.prepare("UPDATE confirmation_conflicts SET status='dropped',drop_reason=?,result=? WHERE memory_id=? AND target_id=?")
       .run(reason, JSON.stringify(result), row.memory_id, row.target_id);
     effects.conflicts.push(result);
   }
   return effects.transitions.length || effects.conflicts.length ? effects : undefined;
 }
-function heldReviewEffects(db, memoryId) {
-  const transitions = db.prepare('SELECT result FROM confirmation_supersessions WHERE replacement_id=? AND result IS NOT NULL ORDER BY previous_id')
-    .all(memoryId).map(row => JSON.parse(row.result));
-  const conflicts = db.prepare('SELECT result FROM confirmation_conflicts WHERE memory_id=? AND result IS NOT NULL ORDER BY target_id')
-    .all(memoryId).map(row => JSON.parse(row.result));
-  return transitions.length || conflicts.length ? { transitions, conflicts } : undefined;
-}
-
 /** Shared by confirmation and explicit promotion, inside the caller's transaction. */
 export function createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage }) {
   return function resolveHeld(ns, row) {
-    const before = heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] };
+    const transitions = new Map(), conflicts = new Map();
+    const collect = effects => {
+      for (const result of effects.transitions) transitions.set(JSON.stringify([result.predecessor.memoryId, result.replacement.memoryId]), result);
+      for (const result of effects.conflicts) conflicts.set(JSON.stringify([result.memoryId, result.targetId]), result);
+    };
     const held = db.prepare("SELECT * FROM confirmation_supersessions WHERE replacement_id=? AND status='pending' ORDER BY previous_id").all(row.id);
     for (const transition of held) {
       const predecessor = activeRow(ns, transition.previous_id);
@@ -103,26 +100,33 @@ export function createHeldReviewResolver({ db, activeRow, supersessionStorage, c
       }
       const result = transitionResult(transition, status, reason, predecessor?.revision, replacement.revision);
       recordTransition(db, transition, result);
-      if (status === 'applied') supersessionStorage.retire(ns, predecessor, replacement, JSON.parse(transition.receipt_ids));
+      collect({ transitions: [result], conflicts: [] });
+      if (status === 'applied') supersessionStorage.retire(ns, predecessor, replacement, JSON.parse(transition.receipt_ids), collect);
     }
-    conflictStorage.restore(ns, row);
-    const after = heldReviewEffects(db, row.id) ?? { transitions: [], conflicts: [] };
-    return Object.fromEntries(Object.entries(after).map(([kind, results]) => [kind,
-      results.filter(result => !before[kind].some(old => JSON.stringify(old) === JSON.stringify(result)))]));
+    collect({ transitions: [], conflicts: conflictStorage.restore(ns, row) });
+    return { transitions: [...transitions.values()], conflicts: [...conflicts.values()] };
   };
 }
 
 /** Called by the lineage writer after insertion, before endpoint invalidation. */
-export function recordHeldRetirement(db, previous, replacement, incoming) {
+export function recordHeldRetirement(db, previous, replacement, linked) {
+  const outcomes = [];
   const held = db.prepare("SELECT * FROM confirmation_supersessions WHERE previous_id=? AND replacement_id=? AND status IN ('pending','unresolved')")
     .get(previous.id, replacement.id);
-  if (held) recordTransition(db, held, transitionResult(held, 'applied', null, previous.revision, replacement.revision));
+  if (held) {
+    const result = transitionResult(held, 'applied', null, previous.revision, replacement.revision);
+    recordTransition(db, held, result);
+    outcomes.push(result);
+  }
   // Closing the last slot also closes earlier qualification hand-offs.
-  if (exceedsRelationLimit(incoming + 1)) {
+  if (exceedsRelationLimit(linked + 1)) {
     for (const pending of db.prepare(`SELECT * FROM confirmation_supersessions
       WHERE replacement_id=? AND status IN ('pending','unresolved')`).all(replacement.id)) {
-      recordTransition(db, pending, { ...(pending.result ? JSON.parse(pending.result) : transitionResult(pending, 'dropped', 'supersession_limit')),
-        status: 'dropped', reason: 'supersession_limit' });
+      const result = { ...(pending.result ? JSON.parse(pending.result) : transitionResult(pending, 'dropped', 'supersession_limit')),
+        status: 'dropped', reason: 'supersession_limit' };
+      recordTransition(db, pending, result);
+      outcomes.push(result);
     }
   }
+  return outcomes;
 }

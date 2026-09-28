@@ -1138,9 +1138,8 @@ synthetic session”); see the [contract](plans/confirmation-state.md).
 ## Awaiting predecessors are not reconciliation candidates
 
 If an awaiting decision A is superseded by a later awaiting decision B, capture
-creates no
-held supersession between them. Confirming both, in either order, leaves two
-current decisions, even when they contradict each other. With review off,
+creates no held supersession between them. Confirming both, in either order,
+leaves two current decisions, even when they contradict each other. With review off,
 reconciliation can retire A when admitting B. The review queue currently
 cannot discover that missing transition; a separate reconciliation is needed
 after review. Synthetic tests freeze this limitation rather than implying

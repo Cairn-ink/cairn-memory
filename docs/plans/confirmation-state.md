@@ -77,14 +77,16 @@ work. A newer predecessor or replacement revision alone does not invalidate its
 original evidence. Capture binds the predecessor's fingerprint and receipt IDs
 alongside the replacement receipt IDs. Review checks that identity, the bound
 receipts and currentness, not an exact predecessor revision. Content edits,
-missing receipts, forgetting and retirement invalidate work with a recorded
-`dropped/stale_evidence` outcome. No lifecycle path silently deletes a held row.
+missing receipts and retirement invalidate work with a recorded
+`dropped/stale_evidence` outcome. Forget and forgetEpisode instead use
+`dropped/forgotten`. No lifecycle path silently deletes a held row.
 Rejection instead records `dropped/rejected` for the work it drops.
 The private tables retain content-free terminal outcomes as well as pending work.
-A fresh hold for the same pair replaces any non-pending row with new revisions
-and evidence, resets it to pending, and clears its result and conflict drop reason.
-An already-pending row keeps its original proof. These tables record the latest
-outcome per pair, not an append-only audit trail: re-arming replaces the earlier
+A fresh conflict hint for the same pair replaces a non-pending row with new
+revisions, resets it to pending, and clears its result and drop reason. A fresh
+supersession hold re-arms only dropped rows; applied and unresolved rows retain
+their outcome and proof. An already-pending row keeps its original proof. These
+tables record the latest outcome per pair, not an append-only audit trail: re-arming replaces the earlier
 outcome. Confirm/reject action-ledger results remain immutable.
 
 Review-enabled results expose `reviewEffects: {transitions, conflicts}` for work
@@ -93,9 +95,10 @@ performed by that call. Confirm and reject always return it; promotion through
 return old outcomes, and forget returns only the drops it performs, omitting
 `reviewEffects` if it drops nothing. Confirm/reject action replay returns the
 original call's recorded result. Other lost responses are recovered through the
-review listing, not by repeating admit. Durable pair outcomes remain available
-there until a new hold replaces them; later qualified resolution or invalidation
-updates the outcome.
+review listings, not by repeating admit: `listReviewTransitions` recovers lineage
+and `listReviewConflicts` recovers hints. Durable pair outcomes remain available
+there until an eligible new hold replaces them; later qualified resolution or
+invalidation updates the outcome.
 **Option-off openers never return `reviewEffects`**, including promotion through
 `openMemoryCore` without the option and every legacy `openMemoryStore.remember`.
 They still apply valid held work atomically and retain outcomes for an enabled
@@ -103,7 +106,8 @@ opener to recover; all legacy record shapes remain unchanged.
 
 Each transition has `predecessor` and `replacement` refs (`memoryId`, `revision`),
 a `status` (`applied`, `unresolved`, or `dropped`) and `reason` (null,
-`qualified_transition_required`, `stale_evidence`, `rejected`, or `supersession_limit`).
+`qualified_transition_required`, `stale_evidence`, `forgotten`, `rejected`, or
+`supersession_limit`).
 Qualified transitions remain durably `unresolved` on confirmation or promotion,
 including legacy remember; the qualified retirement path marks them applied,
 and invalidation records a drop. A review-enabled opener can recover them with
@@ -122,11 +126,27 @@ five-link limit and record remaining transitions as `dropped/supersession_limit`
 Filling the last slot, including through the qualified path, also records a
 limit drop for any earlier unresolved hand-offs targeting that replacement.
 Conflicts use the same shared constant and capacity comparison. Their outcomes
-identify the target `memoryId`, `status` (`restored` or `dropped`) and `reason`
-(null, `stale_evidence`, `rejected`, or `conflict_limit`). A full endpoint drops the hint
-instead of blocking review. `confirmation_conflicts` retains both its result
+identify the source `memoryId` whose hint was held and its `targetId`, plus
+`status` (`restored` or `dropped`) and `reason`
+(null, `stale_evidence`, `forgotten`, `rejected`, or `conflict_limit`). A full
+endpoint drops the hint instead of blocking review. `confirmation_conflicts` retains both its result
 and drop reason; ordinary conflict insertion still enforces the hard limit.
 Neither conflict nor supersession capacity can fail confirm or promotion.
+
+`listReviewConflicts({namespace, limit?, cursor?, status?})` returns `conflicts`,
+`nextCursor`, and `exhausted`. Each conflict has the same source `memoryId` and
+`targetId` as mutation effects. Status defaults to `all`; filters are `pending`,
+`restored`, and `dropped`. Pending and restored hints have null reason. The
+listing requires review to be enabled, uses signed cursors bound to namespace,
+operation, status and page size, and fences cursors by the namespace epoch.
+Drops from correct, supersede, forget and forgetEpisode remain listable, including
+after either endpoint is forgotten. Confirm/promotion restoration and limit drops
+are recoverable after a lost response. No adapter exposes this person-only API.
+
+Inserting a new hidden hint alone does not advance the namespace epoch, so
+ordinary list cursors remain valid. Re-arming a prior outcome does advance it:
+that replaces a review-visible result and expires existing cursors. Review pages
+use keyset order; a new hint inserted before a cursor appears on a fresh listing.
 
 For a mixed batch, `qualified_transition_required` takes precedence when the
 independent set needs qualification, with `awaitingCount` also reporting how
@@ -202,16 +222,16 @@ workflows against the recorded base and this implementation with the option off.
 
 ## Verification record
 
-Commands use a worktree-local `TMPDIR` and synthetic scripted models. General
-checks and the full core suite run on Node 22.16; confirmation tests and all
+Commands use a worktree-local `TMPDIR` and `npm_config_cache`, and synthetic scripted models. General
+checks and the full core suite run on Node 22.16; confirmation tests, artifact tests and all
 11 demos run on both Node 22.16 and 24.15.
 
 | Command | Result |
 | --- | --- |
 | `npm test` | Exit 0; 131 passed |
 | `npm run validate` | Exit 0 |
-| `npm run test:core` | Exit 0; 1,075 passed |
-| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0 on both runtimes; 74 passed each |
+| `npm run test:core` | Exit 0; 1,088 passed |
+| `node tools/testing/run.mjs core/test/confirmation-*.test.mjs` | Exit 0 on both runtimes; 87 passed each |
 | `git diff --check` | Exit 0 |
 | `npm run demo:store` | Exit 0 on both runtimes |
 | `npm run demo:history` | Exit 0 on both runtimes |
@@ -224,4 +244,4 @@ checks and the full core suite run on Node 22.16; confirmation tests and all
 | `npm run demo:continuation` | Exit 0 on both runtimes |
 | `npm run demo:episodes` | Exit 0 on both runtimes |
 | `npm run demo:session-context` | Exit 0 on both runtimes |
-| `npm run test:artifact` | Exit 1; npm packaging subprocess cannot write the read-only `/home/chichieh/.npm` cache (`EROFS`) |
+| `npm run test:artifact` | Exit 0 on both runtimes; 86 passed each |

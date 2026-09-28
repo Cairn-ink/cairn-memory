@@ -191,7 +191,7 @@ throw instead). They never expose raw database or provider errors.
 
 | Code | Meaning |
 | --- | --- |
-| `decision_review_required` | Confirm/reject and unresolved review listing require `openMemoryCore` with `decisionReview: 'required-v1'`. |
+| `decision_review_required` | Confirm/reject and both review listings require `openMemoryCore` with `decisionReview: 'required-v1'`. |
 | `memory_not_awaiting` | The revision-matched item is not awaiting review. |
 | `action_conflict` | This namespace/actionId already names a different review payload or operation. |
 | `episode_identity_unavailable` | The private session-key secret is missing or corrupt; do not regenerate it for an existing store. |
@@ -466,10 +466,18 @@ option-off openers retain their DTO shapes and exclude awaiting rows. They never
 return `reviewEffects`, even when an explicit admit promotes an awaiting row.
 Review-enabled mutations return only the `reviewEffects` performed by that call;
 later admit or forget never repeats old applied outcomes. Confirm/reject action
-replay preserves the original result. Reject drops use the reason `rejected`.
+replay preserves the original result. Reject drops use `rejected`; forget and forgetEpisode drops use `forgotten`.
 `listReviewTransitions({namespace,limit?,cursor?,status?})` recovers durable
 outcomes with current endpoint revisions. Status defaults to `unresolved`;
 `applied`, `dropped`, or `all` includes terminal outcomes. It requires the review
 option and uses namespace/limit/status-bound signed cursors fenced by the epoch.
-Fresh held evidence replaces a non-pending pair's prior outcome; pending proof
-is retained. The pair tables are not an append-only audit trail.
+`listReviewConflicts({namespace,limit?,cursor?,status?})` recovers conflict hints,
+including drops from correct, supersede and conversation forgetting. Status
+defaults to `all`; filters are `pending`, `restored`, and `dropped`. Entries and
+conflict effects identify the source `memoryId` and `targetId`, plus status and
+reason. It has the same review-option and cursor-binding requirements.
+New hidden hints alone preserve the epoch; re-arming a previous conflict outcome
+advances it. New hints before a keyset cursor appear on a fresh listing.
+Fresh conflict evidence replaces a non-pending pair's outcome. Supersession
+holds re-arm only dropped rows; pending, unresolved and applied proof is retained.
+The pair tables are not an append-only audit trail.

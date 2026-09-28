@@ -240,7 +240,7 @@ export function createMemoryRuntime(input) {
     });
   }
 
-  function forgetMutation(ns, id, expectedRevision, reason = 'stale_evidence') {
+  function forgetMutation(ns, id, expectedRevision, reason = 'forgotten') {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
@@ -508,7 +508,7 @@ export function createMemoryRuntime(input) {
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
-    recordHeldRetirement: (previous, replacement, incoming) => recordHeldRetirement(db, previous, replacement, incoming) });
+    recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview });
   const proceduralStorage = createProceduralStorage({ db, activeRow: visibleRow, advanceEpoch, epoch });
@@ -528,6 +528,20 @@ export function createMemoryRuntime(input) {
   const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld });
 
   return Object.freeze({
+    listReviewConflicts(ns, count, status, after, expectedEpoch) {
+      ready();
+      if (!decisionReview) fail('decision_review_required');
+      return transaction(db, () => {
+        const current = epoch(ns);
+        if (expectedEpoch !== undefined && current !== expectedEpoch) fail('cursor_stale');
+        const rows = db.prepare(`SELECT c.* FROM confirmation_conflicts c JOIN memories m ON m.id=c.memory_id
+          WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND (?='all' OR c.status=?)
+          AND (c.memory_id,c.target_id) > (?,?) ORDER BY c.memory_id,c.target_id LIMIT ?`)
+          .all(...boundary(ns), status, status === 'restored' ? 'applied' : status,
+            after?.memoryId ?? '', after?.targetId ?? '', count + 1);
+        return { rows, epoch: current };
+      });
+    },
     listReviewTransitions(ns, count, status, after, expectedEpoch) {
       ready();
       if (!decisionReview) fail('decision_review_required');

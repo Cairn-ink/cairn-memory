@@ -516,7 +516,7 @@ for (const route of ['confirm', 'admit', 'remember']) for (const full of [false,
     conflictHints: [{ memoryId: target.id, expectedRevision: target.revision, relation: 'contradicts' }] }));
   const result = promote(f, route);
   if (route === 'remember') assert.equal(Object.hasOwn(result, 'reviewEffects'), false);
-  else assert.deepEqual(result.reviewEffects.conflicts, [{ memoryId: target.id, status: full ? 'dropped' : 'restored', reason: full ? 'conflict_limit' : null }]);
+  else assert.deepEqual(result.reviewEffects.conflicts, [{ memoryId: memory.id, targetId: target.id, status: full ? 'dropped' : 'restored', reason: full ? 'conflict_limit' : null }]);
   assert.equal(ok(get(f.core, memory.id)).memory.state, 'active');
   assert.equal(queue(f.core).length, 0);
   assert.equal(ok(get(f.core, target.id)).conflicts.length, full ? 5 : 1);
@@ -722,7 +722,7 @@ for (const mutation of ['correct', 'forget']) test(`CF1 ${mutation} records a dr
   assert.deepEqual(result.reviewEffects.transitions, []);
   const recorded = ok(f.core.listReviewTransitions({ namespace: ns, status: 'dropped' })).transitions[0];
   assert.equal(recorded.status, 'dropped');
-  assert.equal(recorded.reason, 'stale_evidence');
+  assert.equal(recorded.reason, mutation === 'forget' ? 'forgotten' : 'stale_evidence');
   assert.equal(f.db.prepare('SELECT count(*) n FROM confirmation_supersessions').get().n, 1);
 });
 
@@ -767,12 +767,12 @@ for (const review of [true, false]) test(`CF1 corrected conflict target accepts 
     const held = f.db.prepare('SELECT * FROM confirmation_conflicts').get();
     assert.equal(held.status, 'pending'); assert.equal(held.result, null); assert.equal(held.drop_reason, null);
     assert.equal(held.target_revision, corrected.revision);
-    assert.deepEqual(promote(f, 'confirm').reviewEffects.conflicts, [{ memoryId: target.id, status: 'restored', reason: null }]);
+    assert.deepEqual(promote(f, 'confirm').reviewEffects.conflicts, [{ memoryId: held.memory_id, targetId: target.id, status: 'restored', reason: null }]);
   }
   assert.equal(ok(get(f.core, target.id)).conflicts.length, 1);
 });
 
-for (const status of ['pending', 'dropped', 'applied', 'unresolved']) test(`CF1 supersession upsert ${status === 'pending' ? 'preserves pending proof' : `re-arms ${status} proof`}`, async t => {
+for (const status of ['pending', 'dropped', 'applied', 'unresolved']) test(`CF1 supersession upsert ${status === 'dropped' ? 're-arms dropped proof' : `preserves ${status} proof`}`, async t => {
   const f = fixture(t); const { previous } = await heldPair(f.core, f.model);
   const original = f.db.prepare('SELECT * FROM confirmation_supersessions').get();
   // Storage-level terminal-row injection: public correction makes the predecessor
@@ -782,15 +782,22 @@ for (const status of ['pending', 'dropped', 'applied', 'unresolved']) test(`CF1 
   const result = ok(await f.core.capture({ ...captureInput('fresh-proof'), causal: { streamId: 'stream', sequence: 3 } }));
   assert.equal(result.reconciliation.reason, 'confirmation_required');
   const held = f.db.prepare('SELECT * FROM confirmation_supersessions').get();
-  assert.equal(held.status, 'pending'); assert.equal(held.result, null);
-  if (status === 'pending') assert.deepEqual(held, original);
-  else {
+  if (status !== 'dropped') {
+    assert.deepEqual({ ...held }, { ...original, status, result: status === 'pending' ? null : JSON.stringify({ status }) });
+  } else {
+    assert.equal(held.status, 'pending'); assert.equal(held.result, null);
     assert.ok(held.replacement_revision > original.replacement_revision);
     assert.notEqual(held.receipt_ids, original.receipt_ids);
     assert.equal(held.previous_revision, previous.revision);
   }
-  assert.equal(promote(f, 'confirm').reviewEffects.transitions[0].status, 'applied');
-  assert.equal(ok(get(f.core, previous.id)).memory.state, 'historical');
+  const effects = promote(f, 'confirm').reviewEffects.transitions;
+  if (['pending', 'dropped'].includes(status)) {
+    assert.equal(effects[0].status, 'applied');
+    assert.equal(ok(get(f.core, previous.id)).memory.state, 'historical');
+  } else {
+    assert.deepEqual(effects, []);
+    assert.equal(ok(get(f.core, previous.id)).memory.state, 'active');
+  }
 });
 
 test('CF1 reject records distinct drops for pending lineage and conflicts and replays them', async t => {
@@ -799,7 +806,7 @@ test('CF1 reject records distinct drops for pending lineage and conflicts and re
   const input = action(queue(f.core)[0], 'reject-held');
   const result = ok(f.core.reject(input));
   assert.equal(result.reviewEffects.transitions[0].reason, 'rejected');
-  assert.deepEqual(result.reviewEffects.conflicts, [{ memoryId: target.id, status: 'dropped', reason: 'rejected' }]);
+  assert.deepEqual(result.reviewEffects.conflicts, [{ memoryId: input.memoryId, targetId: target.id, status: 'dropped', reason: 'rejected' }]);
   assert.deepEqual(ok(f.core.reject(input)), result);
   assert.equal(ok(f.core.listReviewTransitions({ namespace: ns, status: 'dropped' })).transitions[0].reason, 'rejected');
 });
@@ -823,4 +830,117 @@ test('CF1 review listing validates and binds its outcome filter', async t => {
   for (const status of ['pending', null, 1]) error(f.core.listReviewTransitions({ namespace: ns, status }), 'invalid_input');
   assert.equal(ok(f.core.listReviewTransitions({ namespace: ns, status: 'applied' })).transitions.length, 5);
   assert.equal(ok(f.core.listReviewTransitions({ namespace: ns, status: 'dropped' })).transitions.length, 1);
+});
+
+function trustedHint(core, namespace, target, eventId, decision = content, evidence = 'inference') {
+  const key = { namespace, client: 'trusted', eventId, payloadDigest: 'f'.repeat(64) };
+  const token = ok(core.claimAdmission({ ...key, leaseMs: 1000 })).token;
+  return ok(core.finishAdmission({ ...key, token, items: [{ content: decision, kind: 'decision', confidence: 0.8,
+    receipts: [receipt(evidence)], conflictHints: [{ memoryId: target.id, expectedRevision: target.revision, relation: 'contradicts' }] }] })).memories[0];
+}
+const conflictOutcomes = (core, status = 'all', namespace = ns) => ok(core.listReviewConflicts({ namespace, status })).conflicts;
+
+for (const mutation of ['correct', 'supersede']) test(`CF1 ${mutation} conflict drops remain listable after confirmation`, t => {
+  const f = fixture(t); const target = heldHint(f), decision = queue(f.core)[0];
+  const base = { namespace: ns, memoryId: target.id, expectedRevision: target.revision };
+  if (mutation === 'correct') ok(f.core.correct({ ...base, content: 'Corrected target', kind: 'context', receipt: receipt('correct') }));
+  else ok(f.core.supersede({ ...base, replacement: { content: 'Replacement target', kind: 'context' }, receipts: [receipt('supersede')] }));
+  assert.deepEqual(promote(f, 'confirm').reviewEffects.conflicts, []);
+  assert.deepEqual(conflictOutcomes(f.core, 'dropped'), [{ memoryId: decision.id, targetId: target.id, status: 'dropped', reason: 'stale_evidence' }]);
+});
+
+test('CF1 lost promotion response with a conflict limit is recoverable after restart', t => {
+  const f = fixture(t); const target = heldHint(f), decision = queue(f.core)[0];
+  for (let i = 0; i < 5; i++) ok(f.core.admit({ namespace: ns,
+    memory: { content: `Conflict ${i}`, kind: 'context' }, receipts: [receipt(`conflict-${i}`)],
+    conflictHints: [{ memoryId: target.id, expectedRevision: target.revision, relation: 'contradicts' }] }));
+  promote(f, 'admit'); // Response deliberately discarded.
+  assert.equal(Object.hasOwn(promote(f, 'admit'), 'reviewEffects'), false);
+  const reopened = openMemoryCore({ path: f.path, decisionReview: 'required-v1' }); f.ws.defer(() => reopened.close());
+  assert.deepEqual(conflictOutcomes(reopened, 'dropped'), [{ memoryId: decision.id, targetId: target.id, status: 'dropped', reason: 'conflict_limit' }]);
+});
+
+for (const route of ['confirm', 'admit']) test(`CF1 ${route} restored conflict outcomes remain listable`, t => {
+  const f = fixture(t); const target = heldHint(f), decision = queue(f.core)[0];
+  const expected = { memoryId: decision.id, targetId: target.id, status: 'pending', reason: null };
+  assert.deepEqual(conflictOutcomes(f.core, 'pending'), [expected]);
+  promote(f, route);
+  assert.deepEqual(conflictOutcomes(f.core, 'restored'), [{ ...expected, status: 'restored' }]);
+  assert.deepEqual(conflictOutcomes(f.core, 'pending'), []);
+});
+
+test('CF1 forgetting a shared conflict target identifies every dropped source hint', t => {
+  const f = fixture(t); const target = heldHint(f), first = queue(f.core)[0];
+  const second = trustedHint(f.core, ns, target, 'second-decision', 'A different decision.');
+  const result = ok(f.core.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision }));
+  assert.equal(result.reviewEffects.conflicts.length, 2);
+  assert.deepEqual(new Set(result.reviewEffects.conflicts.map(c => c.memoryId)), new Set([first.id, second.id]));
+  assert.ok(result.reviewEffects.conflicts.every(c => c.targetId === target.id && c.reason === 'forgotten'));
+  assert.deepEqual(new Set(conflictOutcomes(f.core, 'dropped').map(JSON.stringify)), new Set(result.reviewEffects.conflicts.map(JSON.stringify)));
+});
+
+for (const resolution of ['reject', 'forget']) test(`CF1 ${resolution} exposes its distinct reason with consistent result keys`, t => {
+  const f = fixture(t); const target = heldHint(f), decision = queue(f.core)[0];
+  const input = action(decision); if (resolution === 'forget') delete input.actionId;
+  const result = ok(f.core[resolution](input));
+  const reason = resolution === 'reject' ? 'rejected' : 'forgotten';
+  assert.deepEqual(Object.keys(result), ['forgotten', 'indexRevision', 'reviewEffects']);
+  assert.deepEqual(result.reviewEffects.conflicts, [{ memoryId: decision.id, targetId: target.id, status: 'dropped', reason }]);
+  assert.deepEqual(conflictOutcomes(f.core, 'dropped'), result.reviewEffects.conflicts);
+});
+
+for (const endpoint of ['source', 'target']) test(`CF1 forgetEpisode leaves the forgotten ${endpoint} conflict outcome listable`, async t => {
+  const f = episodeSetup(t, { extract: () => ({ items: [item(endpoint === 'target' ? { content: 'Inside episode target', kind: 'context' } : {})] }) }, { decisionReview: 'required-v1' });
+  ok(await f.core.capture(episodeInput()));
+  const target = endpoint === 'target' ? ok(f.core.list({ namespace: episodeNs })).memories[0]
+    : ok(f.core.admit({ namespace: episodeNs, memory: { content: 'Outside episode target', kind: 'context' }, receipts: [receipt('outside')] })).memory;
+  const decision = trustedHint(f.core, episodeNs, target, 'episode-hint');
+  const episode = f.db.prepare('SELECT id,revision FROM session_episodes').get();
+  ok(f.core.forgetEpisode({ namespace: episodeNs, episodeId: episode.id, expectedRevision: episode.revision }));
+  assert.deepEqual(conflictOutcomes(f.core, 'dropped', episodeNs), [{ memoryId: decision.id, targetId: target.id, status: 'dropped', reason: 'forgotten' }]);
+});
+
+test('CF1 hidden hint insertion preserves ordinary cursors; re-arming expires them', t => {
+  const f = fixture(t); heldHint(f);
+  const target = ok(f.core.admit({ namespace: ns, memory: { content: 'Second target', kind: 'context' }, receipts: [receipt('target-two')] })).memory;
+  const first = ok(f.core.list({ namespace: ns, limit: 1 })); assert.ok(first.nextCursor);
+  trustedHint(f.core, ns, target, 'new-hidden-hint');
+  ok(f.core.list({ namespace: ns, limit: 1, cursor: first.nextCursor }));
+  const corrected = ok(f.core.correct({ namespace: ns, memoryId: target.id, expectedRevision: target.revision,
+    content: 'Second target corrected', kind: 'context', receipt: receipt('target-corrected') })).memory;
+  const afterCorrection = ok(f.core.list({ namespace: ns, limit: 1 }));
+  const review = ok(f.core.listReviewConflicts({ namespace: ns, limit: 1 }));
+  trustedHint(f.core, ns, corrected, 're-armed-hint');
+  error(f.core.list({ namespace: ns, limit: 1, cursor: afterCorrection.nextCursor }), 'cursor_stale');
+  error(f.core.listReviewConflicts({ namespace: ns, limit: 1, cursor: review.nextCursor }), 'cursor_stale');
+});
+
+test('CF1 conflict review listing validates and binds paging, namespace, operation and status', t => {
+  const f = fixture(t); const target = heldHint(f);
+  trustedHint(f.core, ns, target, 'two', 'Second awaiting decision');
+  trustedHint(f.core, ns, target, 'three', 'Third awaiting decision');
+  let cursor; const ids = [];
+  do {
+    const page = ok(f.core.listReviewConflicts({ namespace: ns, limit: 1, ...(cursor ? { cursor } : {}) }));
+    ids.push(...page.conflicts.map(c => c.memoryId)); cursor = page.nextCursor;
+  } while (cursor);
+  assert.equal(new Set(ids).size, 3);
+  const first = ok(f.core.listReviewConflicts({ namespace: ns, limit: 1 }));
+  for (const patch of [{ limit: 2 }, { status: 'pending' }, { namespace: { ...ns, ownerId: 'other' } }]) {
+    error(f.core.listReviewConflicts({ namespace: ns, limit: 1, cursor: first.nextCursor, ...patch }), 'invalid_cursor');
+  }
+  error(f.core.listReviewTransitions({ namespace: ns, limit: 1, status: 'all', cursor: first.nextCursor }), 'invalid_cursor');
+  for (const patch of [{ status: 'applied' }, { status: null }, { limit: 0 }, { extra: true }]) error(f.core.listReviewConflicts({ namespace: ns, ...patch }), 'invalid_input');
+  error(f.core.listReviewConflicts({ namespace: ns, cursor: 'bad' }), 'invalid_cursor');
+  assert.deepEqual(conflictOutcomes(f.core, 'all', { ...ns, ownerId: 'other' }), []);
+  const off = openMemoryCore({ path: f.path }); f.ws.defer(() => off.close());
+  error(off.listReviewConflicts({ namespace: ns }), 'decision_review_required');
+});
+
+test('CF1 confirming lineage reports conflict drops caused by that retirement', async t => {
+  const f = fixture(t); const { previous } = await heldPair(f.core, f.model);
+  const decision = trustedHint(f.core, ns, previous, 'lineage-conflict');
+  const expected = { memoryId: decision.id, targetId: previous.id, status: 'dropped', reason: 'stale_evidence' };
+  assert.deepEqual(promote(f, 'confirm').reviewEffects.conflicts, [expected]);
+  assert.deepEqual(conflictOutcomes(f.core, 'dropped'), [expected]);
 });

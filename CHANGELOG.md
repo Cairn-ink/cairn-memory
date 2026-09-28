@@ -27,7 +27,12 @@
   openers, including legacy remember, never return `reviewEffects`. Fresh held
   evidence re-arms terminal pair records. Mutation effects describe only that
   call; terminal lineage outcomes remain available through the review listing's
-  status filter. Rejection records the distinct drop reason `rejected`.
+  status filter. Conflict outcomes, including pending hints and drops caused by
+  endpoint edits or conversation forgetting, are recoverable through
+  `listReviewConflicts`. Effects identify both endpoints. Reject uses `rejected`;
+  forget uses `forgotten`. Hidden hint inserts preserve ordinary cursors, while
+  re-arming a prior outcome advances the epoch. Supersession upserts re-arm only
+  dropped rows.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

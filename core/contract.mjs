@@ -331,6 +331,23 @@ export function openMemoryCore(input) {
     });
   }
 
+  function listReviewConflicts(input) {
+    return invoke(() => {
+      runtime.ready(); object(input, ['namespace', 'limit', 'cursor', 'status']);
+      const ns = contractNamespace(input.namespace), count = contractLimit(input.limit);
+      const status = input.status ?? 'all';
+      if (input.status === null || !['pending', 'restored', 'dropped', 'all'].includes(status)) throw new MemoryStoreError('invalid_input');
+      const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'listReviewConflicts', l: count, q: status };
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      const page = runtime.listReviewConflicts(ns, count, status, cursor?.a, cursor?.e);
+      const rows = page.rows.slice(0, count), last = rows.at(-1), exhausted = page.rows.length <= count;
+      return { conflicts: rows.map(row => ({ memoryId: row.memory_id, targetId: row.target_id,
+          status: row.status === 'applied' ? 'restored' : row.status, reason: row.drop_reason })), exhausted,
+        nextCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
+          a: { memoryId: last.memory_id, targetId: last.target_id } }) };
+    });
+  }
+
   function listReviewTransitions(input) {
     return invoke(() => {
       runtime.ready(); object(input, ['namespace', 'limit', 'cursor', 'status']);
@@ -1029,7 +1046,7 @@ export function openMemoryCore(input) {
   return Object.freeze({
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
-    listReviewTransitions,
+    listReviewTransitions, listReviewConflicts,
     confirm: input => resolveReview('confirm', input), reject: input => resolveReview('reject', input),
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
