@@ -318,3 +318,21 @@ tested code. Its final commit must receive both full-diff review axes and
 latest-head CI before delivery; the PR records that exact delivery SHA.
 N1 supplies trustworthy bounded accounting, not improved semantic retention,
 retrieval accuracy, a repaired historical score or completed N2/N3.
+
+### Main integration after first green CI
+
+PR #282 at `9a6a28560a3f70dcea8428c8a13856239e4a0e27` received both
+independent PASS reviews and all 21 successful CI/CodeQL checks. Before final
+handoff, main advanced to `c558593bd7dc4700a09235aeb8ebbd93184a0ea4`
+(already merged PR #279), making the PR conflict in `docs/limitations.md`.
+The primary returned the PR to draft and integrated that main into the
+isolated branch. The only conflict was two independent appended limitations
+sections; both are retained without modifying their content.
+
+Plugin 0.1.1, its machine-record filter and client-harness changes belong to
+upstream #279, not N1. This integration does not publish or merge a release.
+The primary owns this narrow integration resolution under the shared-file
+workflow. Current `CONTRIBUTING.md` and CI requirements are unchanged; root
+package and plugin versions now consistently follow upstream 0.1.1. Old green
+CI does not certify the integration: affected local gates, both review axes
+and all latest-head CI must pass again before N2 implementation or delivery.

@@ -77,7 +77,9 @@ The owner's hosted free-quota decision requires clients to honor refusals: the
 handling (no cursor advance, no retry storm, visible `quota_reached`, resume gate)
 and the shared background-worker cap. Payload bounds and wire session IDs remain
 unchanged. The released 0.1.0 plugin's behavior is unchanged; these controls apply
-only after upgrade, and status must report the limitation until then.
+only after upgrade, and status must report the limitation until then. A second
+explicit exception, the plugin 0.1.1 privacy filter, is set out
+[below](#second-d1-exception-plugin-011-privacy-filter).
 Shared state controls are the explicitly agreed integration change. Profile choice
 is fixed by host and installed target, never by conversation text:
 
@@ -92,6 +94,81 @@ Any further change to that hosted behavior beyond the explicit quota/concurrency
 exception requires its own separately versioned proposal, outside CX/LAC. New
 worker budgets/cursors below apply only to Codex hosted and the two local-core clients, except the expressly shared pause and
 quota/concurrency controls; the latter require both clients to be upgraded.
+
+### Second D1 exception: plugin 0.1.1 privacy filter
+
+**Decision (chichi, 2026-09-29, 「F0 修」):** plugin 0.1.1 stops sending user-role
+records that Claude Code generates itself, which 0.1.0 sent as if the person had
+typed them (F0 finding 1). A user record is no longer sent when it:
+
+- is `isMeta` (local-command caveats, `[Image: source: …]` notes);
+- is a compaction summary (`isCompactSummary`);
+- carries a tool result (`toolUseResult`, or any `tool_result` block): the whole record;
+- has text that, after leading whitespace, starts with a Claude Code wrapper:
+  `<command-name>`, `<command-message>`, `<command-args>`, `<local-command-stdout>`,
+  `<local-command-stderr>`, `<local-command-caveat>`, `[Image: source:`, `<bash-input>`,
+  `<bash-stdout>`, `<bash-stderr>`, `<system-reminder>`, `<user-prompt-submit-hook>`
+  or `<task-notification>`. The wrapper rule does not apply when `promptSource` marks
+  a submitted prompt. On Claude Code 2.1.283 that value is `sdk` in print mode (F0)
+  and `typed` in the interactive TUI, which was verified in one synthetic session;
+  machine records carry no `promptSource`. Older hosts may omit it, so it is never
+  required.
+
+Unchanged: assistant records (text blocks only), redaction, the 20,000-unit and
+24-message bounds, message ids, wire session IDs, the cursor file, transport and
+retries. The same rule is `machineUserRecord` in
+[`transcript.mjs`](../../plugins/cairn-memory/lib/transcript.mjs); the F0 harness
+parser calls it, and a parity self-test compares both over synthetic fixtures. The
+D1 golden fixture's synthetic tool-result blocks moved from user to assistant rows,
+because a user row carrying one is now excluded; it was regenerated from base
+`93e52b7`, and its payload bytes, message and event ids are unchanged. Only the
+transcript byte offsets in its cursor files moved.
+
+**Upgrade and pending retries.** A retry re-reads its frozen window and parses it
+again, so batch composition and event ids depend on the parser: `captureEventId`
+hashes the batch's message ids. Filtering never changes a kept message's id, which
+is its `uuid` or a hash of session, line index, role and content, counted over every
+line. Had the filter re-sliced windows, a window 0.1.0 froze with an attempt already
+stored (an acknowledged earlier batch of a multi-batch window, a lost reply, or a
+`processing` answer) would send the same typed messages under a new event id, and
+they would be stored twice.
+
+0.1.1 therefore never re-slices. `transcriptWindow` returns every message the 0.1.0
+parse yields, in order, and marks those the rule withholds. Batches of 24 and their
+event ids are cut from that full list exactly as 0.1.0 cut them, and each batch then
+sends only its kept messages under that event id. A batch with no kept message
+completes without a request; a window with none advances the cursor without one.
+There is no legacy mode and no marker. A window 0.1.0 froze before the upgrade and a
+window 0.1.1 freezes are handled the same way on every attempt, so 0.1.1 never sends
+a withheld record. As in 0.1.0, a frozen window is retried on the session's later
+capture hooks until every batch is acknowledged. This is the one place the second
+exception changes a pending hosted range: its content, never its boundaries or ids.
+
+**Receiver idempotency with a filtered batch.** The hosted receiver keys a capture
+on user, client and event id only, as [the protocol](../protocol.md#post-apimemorycapture)
+requires, and does not compare payloads. It commits a batch's memories, their
+source receipts and the capture's `complete` status in one transaction. A failed
+attempt or a lost lease commits nothing, so no partial 0.1.0 batch can exist. For
+each legacy event id there are three cases:
+
+- 0.1.0 completed it. The filtered replay is answered `duplicate` and adds nothing,
+  and the typed messages in that batch were already processed once.
+- 0.1.0 never completed it. The filtered batch is the only version processed, so its
+  typed messages are processed once and its machine records never.
+- A 0.1.0 attempt still holds a fresh lease. The answer is `processing` and the
+  cursor stays. A later hook either gets `duplicate`, if that attempt completes, or
+  reclaims the event after the lease goes stale.
+
+No typed text is lost or processed twice. Two costs remain. A request 0.1.0 had
+already sent may still complete with its machine records. And whatever 0.1.0
+delivered stays with the service, because 0.1.1 deletes nothing. The local core in
+this repository does not serve this endpoint; its own capture paths reject a changed
+payload under a known event id (`event_payload_conflict`). A compatible service
+that did the same would refuse the filtered replay of a batch 0.1.0 had completed.
+The plugin would then stop advancing that session, rather than resend machine
+records ([limitations](../limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence)).
+Downgrading to 0.1.0 after 0.1.1 is out of scope. The tests are in
+[`capture-filter.test.mjs`](../../plugins/cairn-memory/test/capture-filter.test.mjs).
 
 ## One-command setup and distribution
 
@@ -762,7 +839,7 @@ still validate the shipped integration; F0 cannot substitute for them.
 | A3 — Identity | All A3 fixtures below; after explicit adoption, >=16 mixed processes return the same project ID across restart. Include root/option delivery, conflicting env/record, creator crashes, permissions and PID namespace rejection. |
 | A4 — Cursor | >24 messages, partial/malformed/oversized lines, appends and replacement; first/middle/last-batch timeouts, `processing`, lost reply and crash before cursor write. Stable IDs, no premature advance and idempotent receiver; progress only while authorized hooks remain. Last hook with several pending batches → close → restart/new session must retain a visible gap, never read old sources from new hooks or backfill paused bytes; absent sources never show complete. Episode lazy catch-up does not drain client backlog. Locally excluded records never masquerade as acknowledgement. |
 | A5 — Fail-open | Stalled/oversized stdin, null path, outage/auth failure, bad reply, spawn/lock/state failure and unsupported schema. Bounded successful hook exits, valid Stop JSON, no blocking output; explicit controls fail visibly. Check worker lifetime and LAC's >30 s scripted success, lease cooldown and termination. |
-| A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits and normal retries unchanged; verify the explicit D1 quota/concurrency exception separately. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
+| A6 — Installed/profile parity | Real generated artifacts, no repository-relative imports; Claude hosted golden bodies/session IDs/limits and normal retries unchanged; verify the explicit D1 quota/concurrency exception and the 0.1.1 privacy filter separately. New profile uses normalized bounds/hashed IDs only on its designated paths. Actual scripted core proves shared project recall, isolation and correction/forget; Node 20 plugin can launch >=22.16 local runtime. |
 | A7 — Context authority/lifecycle | Framing/filter/size fixtures reject hostile authority/execution requests in recall and session context, without receipt stripping or stale injection. A positive fixture proves “Prefer diagrams.” survives unchanged as quoted preference data with its receipt, without becoming an authoritative directive. Keep defaults disabled until authorized pinned-host adversarial evaluation passes. Sibling conformance separately verifies context/end capability, deduplication and incomplete-capture semantics. |
 | A8 — Installer/distribution | [Installer gates](one-command-setup.md#a8-installer-gates): fake CLIs on `PATH`, temporary homes, packed CLI; assert dry-run starts zero host processes and writes nothing. Cover joint setup/adoption, Claude >=2.1.147 configuration/manual fallback, consent disclosures, trust, missing home, separate token removal and tarball scripts/version checks. Assert the two-target choice, no hosted model API key/BYOK or hybrid mode, and Codex-only headless `codex exec` with the Codex CLI model `gpt-6-luna` pending the Chinese-quality check. Disclose unavailable host-CLI automatic recall until the separate core generation-free path lands; SessionStart is a budgeted store read without HMA, independently gated by A7 for Codex. Episode-capable local core with LAC running the reviewed episode configuration requires summary/retention/provider disclosures before capture consent; hosted, unsupported core or LAC without that reviewed configuration reports episodes unavailable without enabling or claiming them active. No real host installation, network/provider calls or publication. |
 | A9 — Runtime usage/latency | Both clients dispatch simultaneously against one target: shared cap 2, restart/unknown liveness, uncertain billing charged against daily counts, plan-window thresholds/early stop, missing signal fallback and API-key exemption from window guards. Hosted quota with/without reset, mid-batch budget refusal and repeated resume never advance cursor or storm; stable IDs prevent duplicate admission. Until the separate core generation-free recall path lands, host-CLI automatic recall stays unavailable; fake slow headless model startup never extends hook budgets. SessionStart reads stored next steps/procedural memories within existing budgets with zero HMA/model calls, independently of model startup; Codex context remains disabled by default until A7 passes. Explicit MCP recall remains model-ranked and usable. Scripted HMA ports/termination/isolation and LAC host-latency/episode review; no real host calls in CI. |
@@ -840,7 +917,9 @@ listed under "Still to verify".
 1. Workers read hook-supplied paths before checking ownership or pause state. They
    now require a session from the launch ledger (Claude IDs the harness generated;
    Codex threads the orchestrator saw its own process report), the exact host path
-   derived from it, no pause, and a regular non-symlink file opened `O_NOFOLLOW`.
+   derived from it, no pause, and a regular non-symlink file owned by this user. The
+   file is opened component by component from `/`, never following a symlink, so a
+   parent swapped after the checks cannot redirect the read.
 2. Cleanup accepted session IDs from hook events. It now uses the ledger alone and
    re-verifies each path before removal.
 3. Nothing stopped a step when isolation was unproven. A fail-closed preflight now
@@ -877,7 +956,7 @@ ignored host output. All three are now fixed and tested offline:
 | Item | Outcome | Evidence |
 | --- | --- | --- |
 | Delivered-body privacy (A1 canaries, host part) | **Passed** for the candidate rules on both hosts | 17 hook-enabled invocations sent 12 capture and 13 recall bodies. None of them, the recall output, client state or the core store contained any canary: three fake secrets, tool output, reasoning (scripted summary), SessionStart and prompt hook context, project instructions, sandbox root, cwd, image path, PNG base64, magic or data URL, compaction prompt or summary text. Typed secrets reached the parsers and were redacted before delivery. The Codex compaction canaries come from one scripted run whose compaction settings were added by hand after setup; reproducing it from the committed setup is to verify. The offline A1 bound cases remain CX-3 gates. |
-| Claude transcript format and exclusions | **Passed** headless; interactive **to verify** | 2.1.283 writes `user` and `assistant` records beside `attachment` (hook context, `CLAUDE.md`, environment, session context, credential org, prompt snapshots), `queue-operation` (a mirror of the typed prompt), `last-prompt`, `atis-latch`, `cost-state`, `system` and `mode`. Hook context and project instructions are attachments, not user-role records. Thinking blocks were stored with empty text and a signature. Candidate rule: user text only when `promptSource` is present and the record is not `isMeta`, `isCompactSummary` or a tool result, with wrapper prefixes as defense in depth; assistant `text` blocks only. In `-p`, submitted prompts carry `promptSource`/`turnOrigin` `"sdk"`; command wrappers, command stdout, caveats, compaction summaries and `[Image: source: …]` notes carry neither. |
+| Claude transcript format and exclusions | **Passed** headless; interactive **to verify** | 2.1.283 writes `user` and `assistant` records beside `attachment` (hook context, `CLAUDE.md`, environment, session context, credential org, prompt snapshots), `queue-operation` (a mirror of the typed prompt), `last-prompt`, `atis-latch`, `cost-state`, `system` and `mode`. Hook context and project instructions are attachments, not user-role records. Thinking blocks were stored with empty text and a signature. Candidate rule: user text only when `promptSource` is present and the record is not `isMeta`, `isCompactSummary` or a tool result, with wrapper prefixes as defense in depth; assistant `text` blocks only. In `-p`, submitted prompts carry `promptSource`/`turnOrigin` `"sdk"`; command wrappers, command stdout, caveats, compaction summaries and `[Image: source: …]` notes carry neither. Since 0.1.1 the harness uses the plugin's rule for user records instead, which does not require `promptSource`, and still drops meta and summary records of either role; see the [second D1 exception](#second-d1-exception-plugin-011-privacy-filter). |
 | Codex transcript format and exclusions | **Passed** | 0.157.1 still supplies a JSONL rollout, `~/.codex/sessions/YYYY/MM/DD/rollout-…-<thread>.jsonl`. Only `event_msg`/`item_completed` items `UserMessage` (`text` parts) and `AgentMessage` (`Text` parts) are conversation. User-role `response_item` messages mirror typed text but also carry AGENTS.md, environment context (cwd, sandbox roots) and Codex-generated `<image …>` wrappers; developer-role items carry hook context. `content_item_kinds` alone is insufficient: Codex labels its image wrapper and an error note `user.text`. Plaintext reasoning summaries appear in `response_item/reasoning` and `item_completed/Reasoning`; tools as `function_call`/`custom_tool_call`, their outputs and `CommandExecution`; images as `input_image` data URLs and `local_image` paths; compaction as `compacted` and `ContextCompaction` (the hand-configured scripted run only). All were excluded. The provisional `response_item` fixture shape above is not the conversation discriminator. |
 | Hook delivery, including SessionEnd | **Passed** headless; interactive **to verify** | Claude `-p`: `SessionStart` (`startup`, `resume`, `compact`), `UserPromptSubmit`, `Stop`, `PreCompact` (`manual`) and `SessionEnd` (`other`), including 55 ms after SIGTERM to the process group, with no `Stop` for the interrupted turn. For a new session the transcript file does not exist yet at `SessionStart` or `UserPromptSubmit`. Codex `exec`: `SessionStart` (`startup`), `UserPromptSubmit`, `Stop` (with `last_assistant_message`) and `SessionEnd` (`other`); `PreCompact`, `PostCompact` and `SessionStart` (`compact`) only in the hand-configured scripted compaction run, so their reproduction is to verify; no `SessionEnd` after SIGTERM (two runs). `--ephemeral` gives every hook `transcript_path: null`. Harness handlers took 2–64 ms, measured inside the hook process. |
 | Worker survival and source readability after teardown | **Passed**; enforced source authorization **to verify** | All 788 detached workers ran in their own session and outlived their hook. Twelve `SessionEnd` workers, across 11 sessions with a persisted source, waited 6 s and then read the whole file after the host process had exited, including one untraced run per host. Untraced hooks and workers had no seccomp filter or `no_new_privs` from either host, reached loopback and saw host PIDs in `/proc`; Codex's `bwrap --as-pid-1` sandbox applies to tool commands, not hooks. The reviewed worker did not check ownership, pause or symlinks before reading. Every path it read was one of the 14 harness-owned files verified under Cleanup, but that was not enforced; the enforcing worker is tested offline only. |
@@ -892,12 +971,14 @@ ignored host output. All three are now fixed and tested offline:
 
 Recorded here, not fixed in F0:
 
-1. **Released Claude parser.** `plugins/cairn-memory/lib/transcript.mjs` (0.1.0)
-   would capture machine-generated user-role records: the compaction summary, the
+1. **Released Claude parser — fixed in 0.1.1**, see the
+   [second D1 exception](#second-d1-exception-plugin-011-privacy-filter).
+   `plugins/cairn-memory/lib/transcript.mjs` (0.1.0) would capture
+   machine-generated user-role records: the compaction summary, the
    `isMeta` local-command caveat and `[Image: source: <path>]` note,
    `<command-name>` wrappers and `<local-command-stdout>` output, which includes
-   hook output. D1 freezes hosted Claude behaviour, so fixing it needs its own
-   separately versioned proposal; the new profile should use the structural rule above.
+   hook output. The fix is that separately versioned D1 exception; the new profile
+   should use the same rule.
 2. **Codex session storage.** Besides the rollout, `exec` opens shared SQLite stores
    read-write (`state_5`, `thread_history_1`, `logs_2`, `queue_1`, `goals_1`,
    `memories_1`) and rewrites `models_cache.json`; `--ephemeral` avoids only the
@@ -915,8 +996,9 @@ Recorded here, not fixed in F0:
 
 ### Still to verify
 
-- Interactive TUI modes on both hosts: hook delivery, `promptSource` values,
-  SessionEnd on terminal close, and resume, fork and sidechain layouts.
+- Interactive TUI modes on both hosts: hook delivery, SessionEnd on terminal close,
+  and resume, fork and sidechain layouts. Claude's interactive `promptSource` value
+  (`typed`) was verified on 2026-09-29 for the 0.1.1 filter.
 - A real plaintext reasoning canary: Claude stored empty thinking text and Codex's
   real summaries did not contain the planted value; the scripted summary did and was
   excluded.

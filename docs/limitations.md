@@ -1081,8 +1081,44 @@ unavailable, not zero retention. Synthetic gate integration verifies these
 mechanics, not model quality, installed-host behavior or a repaired score.
 The earlier official-six failures and feasibility gate remain unchanged.
 
+## Claude plugin 0.1.1 filter rests on narrow evidence
+
+Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the
+[second D1 exception](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)).
+The evidence behind it is narrow:
+
+- **One version, one interactive session.** Only one synthetic interactive
+  session on Claude Code 2.1.283 showed that interactive typed prompts carry
+  `promptSource: "typed"`. F0's print-mode runs on the same version showed
+  `"sdk"`. No other version was checked, and no other entry point (IDE
+  extensions, the desktop app, resumed or forked sessions).
+- **`promptSource` is not required.** The rule excludes on structure (meta,
+  compaction summary, tool result) and on a fixed list of wrapper prefixes;
+  `promptSource` only exempts a submitted prompt from the prefix check. Requiring
+  it would drop every typed prompt on a host that omits or renames the field,
+  and one version's evidence cannot show the field is stable. The trade-off has
+  two sides. On such a host, a typed prompt that itself starts with a wrapper
+  (for example pasted command output) is not sent. And a new kind of
+  machine-written user record that no rule recognizes is sent until the rule is
+  updated.
+- **Windows queued before the upgrade.** 0.1.1 keeps 0.1.0's batch boundaries
+  and event ids and removes withheld records from each batch, so a window 0.1.0
+  froze is retried without machine records. Whatever 0.1.0 already delivered
+  stays with the service, and so does a request it had already sent that later
+  completes; 0.1.1 deletes nothing. The replay relies on the receiver keying a
+  capture on its event id alone, as the protocol and the hosted service do. A
+  compatible service that also compared payloads would refuse the filtered replay
+  of a batch 0.1.0 had completed. That session's capture would then stop
+  advancing rather than resend machine records.
+- **Reconstructed fixtures.** The two 2.1.283 fixtures in
+  `plugins/cairn-memory/test/fixtures/` are synthetic reconstructions of the
+  record shapes seen in F0 and in the interactive session, with canary text.
+  They are not recorded transcripts. They show the rule handles those shapes,
+  not that those are all the shapes Claude Code writes.
+
 ## Where the evidence lives
 
+- [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
 - [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)
 - [Four-case real-model long-history pilot](evidence/long-history-live-pilot.md)
 - [Fresh official-six v3 halted observation](evidence/qualification-official-v3.md)

@@ -640,10 +640,10 @@
     ],
     "cursorPath": "sessions/44b6c59a516d5b66d16f861ddb211b0de8e3cd5d05bbe1ddd07a5235be2bd8a5.json",
     "cursorFiles": [
-      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":44507}",
-      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":44507}",
-      "{\"offset\":44507,\"generation\":\"initial\",\"discardUntilNewline\":false}",
-      "{\"offset\":44624,\"generation\":\"initial\",\"discardUntilNewline\":false}"
+      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":43835}",
+      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":43835}",
+      "{\"offset\":43835,\"generation\":\"initial\",\"discardUntilNewline\":false}",
+      "{\"offset\":43952,\"generation\":\"initial\",\"discardUntilNewline\":false}"
     ],
     "outcomes": [
       {

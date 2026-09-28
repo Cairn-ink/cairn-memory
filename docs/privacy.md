@@ -13,6 +13,8 @@ The main risk in automatic memory is not bad retrieval. It is silently collectin
 
 After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
 
+From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Assistant text is sent as before, including anything it quotes from those records. Only the record shapes and wrappers listed in the [plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
 code points (also within the public schema's 4,000-character limit). Redaction runs
