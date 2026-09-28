@@ -28,6 +28,10 @@ service must use the same public core, not separate engines.
   model proposals from accepted progression and recognizes the explicit
   complete-map bypass. It follows one exact current source through the
   existing offline recall/answer path, not a new production telemetry path.
+  [Fresh source localization](docs/plans/fresh-source-localization.md) prepares
+  that trace for the actual mixed runner with a prospectively bound source
+  probe. Its offline integration must pass before new real-model localization;
+  it does not expand candidate limits or establish a retrieval improvement.
   These are synthetic accounting checks, not semantic completeness or a
   correction to the paid-case results. Real-model and installed
   host acceptance, semantic/current-state quality, and a fresh paired paid

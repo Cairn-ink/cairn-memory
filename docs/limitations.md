@@ -1106,7 +1106,18 @@ product correction and new prospectively frozen quality evidence are still
 needed before any claim of better reliability or comparative accuracy.
 The current observer is single-namespace and bounds answer inspection to
 64 KiB; larger actual answer payloads are unobserved, not failed delivery.
-It is not yet wired into the paid runner or a real host.
+At the N2 checkpoint it is wired only into the offline gate, not the paid
+runner or a real host.
+
+The subsequent [fresh source-localization candidate](plans/fresh-source-localization.md)
+prepares an explicit trace in the mixed evaluation runner; offline integration
+is not a paid run or an installed-host result. It concerns one prospectively
+chosen source, not every relevant passage. The finite lookup cannot establish
+global absence, and unchanged fake-HTTP outcomes do not prove semantic quality.
+The primary has not adopted a larger receipt window or a new search index:
+the known fifth-receipt miss does not explain the prior cases with four or fewer
+receipts. Fresh real-model localization precedes that product decision; earlier
+scores, failures and feasibility requirements remain unchanged.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 

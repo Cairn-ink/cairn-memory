@@ -127,6 +127,20 @@ This is a maintainer diagnostic, not a semantic verifier or execution authority.
 Answer payloads over its 64 KiB observation limit remain unavailable; this
 does not change the actual answer packer's budget or declare evidence lost.
 
+The [fresh mixed-runner integration](plans/fresh-source-localization.md) is an
+explicit evaluation-only opt-in. Preparation binds at most one authored
+source-window probe per case (at most 30 cases) before constructing the guard;
+neither the probe nor an expected answer enters model requests. At most five
+public reads inspect the designated capture batch's admitted members, with one
+further read fencing the matched source after recall/packing. Each read has a
+100-receipt limit and must be exhausted. This is not a namespace-wide search.
+Unmatched, ambiguous, incomplete or stale evidence remains unobserved, not
+global absence or semantic failure. The source-free trace keeps N2's limits.
+Request metadata is projected at call entry and output at settlement; late
+completion cannot join a later case. Disabled observation preserves the old
+protocol and output. Formal run artifacts remain retained separately from
+ordinary test scratch; no historical artifact is rewritten or cleaned here.
+
 ### Offline synthetic evidence-lineage boundary
 
 The maintainer-only `demo:synthetic-lineage` runs fixed synthetic sources through

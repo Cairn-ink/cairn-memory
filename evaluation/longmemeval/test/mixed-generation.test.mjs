@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 
-import { prepareMixedComparison, summarizeAttemptsForOrdinal } from '../mixed-generation.mjs';
+import { prepareMixedComparison, runMixedGeneration,
+  summarizeAttemptsForOrdinal } from '../mixed-generation.mjs';
 import { packMixedAnswer } from '../mixed-answer.mjs';
 import { verifyMixedCapturePlan } from '../mixed-plan.mjs';
 import { prepareMixedSourceCase } from '../mixed-source.mjs';
@@ -136,6 +137,73 @@ test('M2/M3 source-only preparation freezes exact public projection and fixed ro
   assert.equal(Object.isFrozen(result.roster[0].arms[0]), true);
   row.question.text = 'caller mutation after preparation';
   assert.equal(result.preflight[0].status, 'ready');
+});
+
+test('P1 indexed source probe binds protocol without changing disabled preparation', async () => {
+  const row = sourceRow();
+  const base = { sourceCases: [row], armOrders: [['cairn', 'mem0']],
+    comparisonProfile: 'indexed-evidence-v1', ...descriptors() };
+  const absent = prepareMixedComparison(base);
+  const disabled = prepareMixedComparison({ ...base, sourceProbes: [null] });
+  assert.deepEqual(disabled, absent);
+  const first = prepareMixedComparison({ ...base, sourceProbes: [
+    { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' },
+  ] });
+  const changed = prepareMixedComparison({ ...base, sourceProbes: [
+    { batchIndex: 0, windowIndex: 0, routingCue: 'memory fact' },
+  ] });
+  assert.notEqual(first.manifest.contextProtocolSha256, absent.manifest.contextProtocolSha256);
+  assert.notEqual(first.roster[0].protocolDigest, changed.roster[0].protocolDigest);
+  assert.equal(JSON.stringify(first).includes('Synthetic memory fact.'), false);
+  const schedule = first.roster.flatMap(item => item.armOrder.map(name => ({
+    phase: 'generation', caseId: item.arms.find(arm => arm.name === name).scopeId })));
+  const guard = { mixedSourcePairCapability: { manifest: first.manifest, roster: first.roster,
+    rosterDigest: hash('cairn.lme.mixed-source-pair.roster.v1', first.roster),
+    schedule: [...schedule, ...schedule.map(item => ({ ...item, phase: 'scoring' }))] },
+  isHalted: () => false, withCaseScope: () => assert.fail('changed probe dispatched') };
+  await assert.rejects(runMixedGeneration({ prepared: changed, guard,
+    apiKey: 'synthetic-only', cairnStoreRoot: '/not-read' }),
+  { code: 'mixed_guard_mismatch' });
+  for (const sourceProbes of [null, [], [{ batchIndex: 0, windowIndex: 0,
+    routingCue: 'not in this window' }], [{ batchIndex: 0, windowIndex: 0,
+    routingCue: 'x'.repeat(201) }]]) {
+    assert.throws(() => prepareMixedComparison({ ...base, sourceProbes }),
+      { code: 'invalid_source_probes' });
+  }
+  const accessor = { batchIndex: 0, windowIndex: 0 };
+  Object.defineProperty(accessor, 'routingCue', { enumerable: true,
+    get() { assert.fail('probe getter must not run'); } });
+  assert.throws(() => prepareMixedComparison({ ...base, sourceProbes: [accessor] }),
+    { code: 'invalid_source_probes' });
+  let getterCalls = 0, proxyCalls = 0;
+  const optionsGetter = { ...base };
+  Object.defineProperty(optionsGetter, 'sourceProbes', { enumerable: true, get() {
+    getterCalls++; throw new Error('getter trap');
+  } });
+  assert.throws(() => prepareMixedComparison(optionsGetter),
+    { code: 'invalid_mixed_preparation' });
+  const optionsProxy = new Proxy(base, { getOwnPropertyDescriptor() {
+    proxyCalls++; throw new Error('proxy trap');
+  } });
+  assert.throws(() => prepareMixedComparison(optionsProxy),
+    { code: 'invalid_mixed_preparation' });
+  assert.equal(getterCalls, 0);
+  assert.equal(proxyCalls, 0);
+  const nestedProxy = new Proxy({}, { getOwnPropertyDescriptor() {
+    proxyCalls++; throw new Error('nested proxy trap');
+  } });
+  assert.throws(() => prepareMixedComparison({ ...base, sourceProbes: [
+    { batchIndex: 0, windowIndex: 0, routingCue: { nestedProxy } },
+  ] }), { code: 'invalid_source_probes' });
+  assert.equal(proxyCalls, 0);
+  assert.throws(() => prepareMixedComparison({ ...descriptors(), sourceCases: [row],
+    armOrders: [['cairn', 'mem0']], sourceProbes: [null] }),
+  { code: 'invalid_source_probes' });
+  const tooMany = Array.from({ length: 31 }, (_, index) => sourceRow(`probe-${index}`));
+  assert.throws(() => prepareMixedComparison({ ...descriptors(), sourceCases: tooMany,
+    armOrders: tooMany.map(() => ['cairn', 'mem0']),
+    comparisonProfile: 'indexed-evidence-v1', sourceProbes: tooMany.map(() => null) }),
+  { code: 'invalid_source_probes' });
 });
 
 test('M3 fixed protocol and scope golden is accepted by actual X authority', t => {

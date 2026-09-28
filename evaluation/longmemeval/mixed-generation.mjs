@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { lstatSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
+import { types } from 'node:util';
 
 import { countOpenAITokens, createOpenAIModel } from '../../adapters/openai/index.mjs';
 import { DEFAULT_MODEL, modelProfile } from '../../adapters/openai/profiles.mjs';
@@ -18,6 +19,8 @@ import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
   MIXED_ANSWER_TIMEOUT_MS, packMixedAnswer } from './mixed-answer.mjs';
 import { prepareMixedSourceCase, mixedSourcePolicy } from './mixed-source.mjs';
+import { locateMixedSource, observedMixedCairnModel,
+  unavailableSourceTrace } from './mixed-source-observation.mjs';
 import { OFFICIAL_JUDGE_MODEL, OFFICIAL_QUESTION_TYPES,
   OFFICIAL_UPSTREAM_COMMIT } from './official-scoring.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from './public-comparison.mjs';
@@ -109,7 +112,7 @@ function staticNativeFit(input) {
 }
 
 function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256,
-  comparisonProfile }) {
+  comparisonProfile, sourceObservationEnabled = false }) {
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   if (typeof cairnRuntimeArtifactSha256 !== 'string' || !SHA256.test(cairnRuntimeArtifactSha256)) {
     fail('invalid_cairn_artifact_descriptor');
@@ -137,6 +140,12 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     context.cairnQualification = 'not-requested';
     context.captureSourcePolicy = 'indexed-evidence-v1';
     delete context.qualificationDispatchPolicy;
+    if (sourceObservationEnabled) {
+      context.version = 'mixed-indexed-evidence-context-v2';
+      context.sourceObservation = { version: 'one-current-source-trace-v1',
+        maxCases: 30, maxBatchMembers: 5, maxReceiptsPerMember: 100,
+        maxAfterReads: 1, reportBytes: 32 * 1024 };
+    }
   }
   const answer = { version: 'mixed-answer-v1', model: MIXED_ANSWER_MODEL,
     instruction: PUBLIC_ANSWER_INSTRUCTION, contextWindow: MIXED_ANSWER_CONTEXT_WINDOW,
@@ -172,10 +181,13 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
 }
 
 export function prepareMixedComparison(options) {
+  if (types.isProxy(options)) fail('invalid_mixed_preparation');
   const profileDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'comparisonProfile');
+  const probesDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'sourceProbes');
   const raw = ownOptions(options, ['sourceCases', 'armOrders', 'nativeArtifact',
     'nativeConfiguration', 'cairnRuntimeArtifactSha256',
-    ...(profileDescriptor ? ['comparisonProfile'] : [])], 'invalid_mixed_preparation');
+    ...(profileDescriptor ? ['comparisonProfile'] : []),
+    ...(probesDescriptor ? ['sourceProbes'] : [])], 'invalid_mixed_preparation');
   if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
@@ -189,7 +201,40 @@ export function prepareMixedComparison(options) {
       fail('invalid_arm_orders');
     }
   }
-  const manifest = protocolManifest(raw);
+  if (probesDescriptor) {
+    const proposed = raw.sourceProbes;
+    if (raw.comparisonProfile !== 'indexed-evidence-v1' || source.sourceCases.length > 30
+      || types.isProxy(proposed) || !Array.isArray(proposed)
+      || proposed.length !== source.sourceCases.length
+      || Object.keys(proposed).length !== proposed.length) fail('invalid_source_probes');
+    for (let index = 0; index < proposed.length; index++) {
+      const descriptor = Object.getOwnPropertyDescriptor(proposed, String(index));
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')
+        || types.isProxy(descriptor.value)) fail('invalid_source_probes');
+      const candidate = descriptor.value;
+      if (candidate === null) continue;
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)
+        || Reflect.ownKeys(candidate).length !== 3) fail('invalid_source_probes');
+      const fields = {};
+      for (const key of ['batchIndex', 'windowIndex', 'routingCue']) {
+        const field = Object.getOwnPropertyDescriptor(candidate, key);
+        if (!field || !Object.hasOwn(field, 'value') || types.isProxy(field.value)) {
+          fail('invalid_source_probes');
+        }
+        fields[key] = field.value;
+      }
+      if (!Number.isSafeInteger(fields.batchIndex) || fields.batchIndex < 0
+        || Object.is(fields.batchIndex, -0)
+        || !Number.isSafeInteger(fields.windowIndex) || fields.windowIndex < 0
+        || Object.is(fields.windowIndex, -0)
+        || !wellFormed(fields.routingCue) || !fields.routingCue
+        || fields.routingCue.length > 200) fail('invalid_source_probes');
+    }
+  }
+  const sourceProbes = probesDescriptor
+    ? freeze(sourceSnapshot({ sourceProbes: raw.sourceProbes }).sourceProbes) : null;
+  const observationEnabled = sourceProbes?.some(probe => probe !== null) ?? false;
+  const manifest = protocolManifest({ ...raw, sourceObservationEnabled: observationEnabled });
   const preflight = [];
   const plans = [];
   const batchCounts = [];
@@ -204,6 +249,20 @@ export function prepareMixedComparison(options) {
         ? error.code : 'source_preflight_failed';
     }
     plans.push(plan);
+    const probe = sourceProbes?.[index] ?? null;
+    if (probe !== null) {
+      exact(probe, ['batchIndex', 'windowIndex', 'routingCue'], 'invalid_source_probes');
+      const { batchIndex, windowIndex, routingCue } = probe;
+      if (!Number.isSafeInteger(batchIndex) || batchIndex < 0 || Object.is(batchIndex, -0)
+        || !Number.isSafeInteger(windowIndex) || windowIndex < 0 || Object.is(windowIndex, -0)
+        || !wellFormed(routingCue) || !routingCue || routingCue.length > 200) {
+        fail('invalid_source_probes');
+      }
+      const window = plan?.cairnPlan.batches[batchIndex]?.indexedWindows[windowIndex];
+      if (!window || window.index !== windowIndex || !window.content.includes(routingCue)) {
+        fail('invalid_source_probes');
+      }
+    }
     const questionId = row.question.question_id;
     const status = plan ? 'ready' : 'failed';
     const preflightRow = { questionId, status, reason: plan ? null : reason,
@@ -213,7 +272,8 @@ export function prepareMixedComparison(options) {
     const armOrder = source.armOrders[index];
     const protocolDigest = hash(CASE_DOMAIN, { manifest, question: row.question,
       namespace: row.namespace, caseDigest: plan?.caseDigest ?? null,
-      preflight: { status, reason: preflightRow.reason }, armOrder });
+      preflight: { status, reason: preflightRow.reason }, armOrder,
+      ...(probe === null ? {} : { sourceProbe: probe }) });
     roster.push({ questionId, protocolDigest, armOrder,
       arms: ARM_NAMES.map(name => ({ name,
         scopeId: `lme-case-${hash(SCOPE_DOMAIN, [questionId, name])}` })) });
@@ -223,6 +283,7 @@ export function prepareMixedComparison(options) {
     manifest, roster, counts: { fixedN: source.sourceCases.length, batchCounts }, preflight });
   PREPARED.set(projection, { sourceCases: source.sourceCases, armOrders: source.armOrders,
     plans, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
+    sourceProbes: observationEnabled ? sourceProbes : null,
     manifestDigest: hash(MANIFEST_DOMAIN, manifest), rosterDigest: hash(ROSTER_DOMAIN, roster) });
   return projection;
 }
@@ -276,14 +337,16 @@ function revokeSemanticOnly(handle, guard, allowedLocalOrdinals) {
 }
 
 async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, holdCore,
-  allowedLocalOrdinals }) {
+  allowedLocalOrdinals, sourceProbe, holdSourceTrace }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
   const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
-  const model = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
+  const originalModel = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
     ...(evidenceOnly ? {} : { qualificationInputMode: 'adaptive-text-catalog-v1' }),
     onDiagnostic: modelDiagnostics.onDiagnostic });
+  const observation = sourceProbe ? observedMixedCairnModel(originalModel) : null;
+  const model = observation?.model ?? originalModel;
   const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
     ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
       : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
@@ -299,18 +362,40 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     if (ingestion.kind !== 'capture_outcome'
       || ingested.outcomes.some(item => item.status !== 'completed')) {
       revokeSemanticOnly(handle, guard, allowedLocalOrdinals);
+      const recallTrace = sourceProbe ? unavailableSourceTrace('ingestion_incomplete') : null;
+      if (recallTrace) holdSourceTrace(recallTrace);
       return { failed: 'ingestion_incomplete', diagnostics: { stage: 'ingestion',
-        ingestion, modelDiagnostics: modelDiagnostics.snapshot() } };
+        ingestion, modelDiagnostics: modelDiagnostics.snapshot(),
+        ...(recallTrace ? { recallTrace } : {}) } };
     }
-    const recalled = await core.recall({ readSet: [row.namespace], query: plan.mem0Input.query,
-      limit: 6, contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });
-    if (recalled?.ok !== true) { revokeSemanticOnly(handle, guard, allowedLocalOrdinals); fail('recall_failed'); }
-    let evidence;
-    try { evidence = verifiedEvidence(recalled.value,
-      input => core.get(input), plan, row.namespace); }
-    catch (error) { revokeSemanticOnly(handle, guard, allowedLocalOrdinals); throw error; }
-    const packed = packMixedAnswer({ question: { text: row.question.text,
-      date: plan.canonicalQuestionDate }, units: evidence.units, countTokens: countOpenAITokens });
+    const located = sourceProbe ? locateMixedSource({ core, namespace: row.namespace,
+      plan, ingested, probe: sourceProbe }) : null;
+    let recallTrace = located?.report ?? null;
+    if (recallTrace) holdSourceTrace(recallTrace);
+    let recalled = null, packed = null, evidence;
+    try {
+      const recallInput = { readSet: [row.namespace], query: plan.mem0Input.query,
+        limit: 6, contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' };
+      recalled = observation
+        ? await observation.recall(located?.trace, core, recallInput)
+        : await core.recall(recallInput);
+      if (recalled?.ok !== true) {
+        revokeSemanticOnly(handle, guard, allowedLocalOrdinals); fail('recall_failed');
+      }
+      try { evidence = verifiedEvidence(recalled.value,
+        input => core.get(input), plan, row.namespace); }
+      catch (error) { revokeSemanticOnly(handle, guard, allowedLocalOrdinals); throw error; }
+      packed = packMixedAnswer({ question: { text: row.question.text,
+        date: plan.canonicalQuestionDate }, units: evidence.units, countTokens: countOpenAITokens });
+    } finally {
+      if (located?.trace) {
+        let after = null;
+        try { after = core.get({ namespace: row.namespace, memoryId: located.memoryId,
+          receiptLimit: 100 }); } catch { /* N2 reports unavailable. */ }
+        recallTrace = located.trace.finish({ recall: recalled, packed, after });
+        holdSourceTrace(recallTrace);
+      }
+    }
     const answer = await completionOnce({ guard, stage: 'answer', request: packed.request,
       apiKey, timeoutMs: MIXED_ANSWER_TIMEOUT_MS, transport });
     const admitted = ingested.outcomes.reduce((sum, item) => sum
@@ -319,7 +404,8 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
       admittedMemories: admitted,
       recalledCards: evidence.units.length, receiptCount: evidence.provenance.length,
       provenance: evidence.provenance, selectedIndices: packed.selectedIndices,
-      duplicateIndices: packed.duplicateIndices, omittedIndices: packed.omittedIndices } };
+      duplicateIndices: packed.duplicateIndices, omittedIndices: packed.omittedIndices,
+      ...(recallTrace ? { recallTrace } : {}) } };
   } finally { await transport.drain(); }
 }
 
@@ -401,7 +487,8 @@ export async function runMixedGeneration(options) {
         haltReason = 'global_accounting_unsettled'; break;
       }
       const transport = trackedTransport();
-      let outcome, local = null, entered = false, workSettled = false, ownedCore = null;
+      let outcome, local = null, entered = false, workSettled = false,
+        ownedCore = null, sourceTrace = null;
       try {
         outcome = await guard.withCaseScope(identity, async handle => {
           entered = true;
@@ -410,7 +497,9 @@ export async function runMixedGeneration(options) {
             try {
               local = name === 'cairn'
                 ? await cairnCase({ guard, apiKey, root, row, plan, handle, transport,
-                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals })
+                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals,
+                  sourceProbe: privateData.sourceProbes?.[index] ?? null,
+                  holdSourceTrace: report => { sourceTrace = report; } })
                 : await nativeCase({ guard, apiKey, plan,
                   nativeArtifact: privateData.nativeArtifact,
                   nativeConfiguration: privateData.nativeConfiguration, handle, transport,
@@ -418,7 +507,8 @@ export async function runMixedGeneration(options) {
                   allowedLocalOrdinals });
             } catch (error) {
               local = { failed: reasonOf(error, 'arm_execution_failed'),
-                diagnostics: { stage: 'execution' } };
+                diagnostics: { stage: 'execution',
+                  ...(sourceTrace ? { recallTrace: sourceTrace } : {}) } };
             }
             return local;
           } finally { await transport.drain(); workSettled = true; }

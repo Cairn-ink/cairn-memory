@@ -90,7 +90,7 @@ function visibleRef(item, namespaceIndex) {
   return null;
 }
 
-function projectSelect(request, output, probe, revision) {
+function projectSelectInput(request, probe, revision) {
   const input = own(request, 'input');
   const maps = rows(own(input, 'maps'), 2);
   let itemCount = 0, visible = false, routingText = false, candidateText = false;
@@ -111,6 +111,11 @@ function projectSelect(request, output, probe, revision) {
       candidateText ||= label.includes(probe.excerpt);
     }
   }
+  return { visible: yesNo(visible), routingText: yesNo(routingText),
+    candidateText: yesNo(candidateText), targetRefType, visibleItemCount: itemCount };
+}
+
+function projectSelectOutput(output, probe, revision) {
   const refs = rows(own(output, 'refs'), 24);
   let proposal = false, wrongRevision = false;
   for (const ref of refs) {
@@ -120,14 +125,11 @@ function projectSelect(request, output, probe, revision) {
     if (targetRef(ref, probe, revision)) proposal = true;
     else wrongRevision = true;
   }
-  return { visible: yesNo(visible), routingText: yesNo(routingText),
-    candidateText: yesNo(candidateText), targetRefType,
-    proposal: yesNo(proposal),
-    wrongRevision: yesNo(wrongRevision), visibleItemCount: itemCount,
+  return { proposal: yesNo(proposal), wrongRevision: yesNo(wrongRevision),
     returnedRefCount: refs.length };
 }
 
-function projectRank(request, output, probe, source) {
+function projectRankInput(request, probe, source) {
   const input = own(request, 'input');
   const candidates = rows(own(input, 'candidates'), MAX_CANDIDATES);
   let ref = false, text = false, binding = false;
@@ -143,11 +145,15 @@ function projectRank(request, output, probe, source) {
         role: probe.role, excerpt: probe.excerpt })) binding = true;
     }
   }
+  return { inputRef: yesNo(ref), inputText: yesNo(text), inputSourceBinding: yesNo(binding),
+    inputCandidateCount: candidates.length };
+}
+
+function projectRankOutput(output, probe, source) {
   const refs = rows(own(output, 'refs'), 12);
   let proposal = false;
   for (const item of refs) if (targetRef(item, probe, source.revision)) proposal = true;
-  return { inputRef: yesNo(ref), inputText: yesNo(text), inputSourceBinding: yesNo(binding),
-    proposal: yesNo(proposal), inputCandidateCount: candidates.length, returnedRefCount: refs.length };
+  return { proposal: yesNo(proposal), returnedRefCount: refs.length };
 }
 
 function projectFinal(response, probe, source) {
@@ -234,7 +240,7 @@ const unavailableReport = reason => ({ version: 1, scope: 'one-current-source/on
 /** One source, one actual recall and pack; IDs/text remain transient. */
 export function createRetainedRecallTrace(options) {
   let probe = null, initial = { status: 'unavailable' }, select = [], rank = null;
-  let selectCalls = 0, rankCalls = 0, overflowed = false, closed = false;
+  let selectCalls = 0, rankCalls = 0, overflowed = false, invalidSettlement = false, closed = false;
   try {
     const sourceProbe = own(options, 'sourceProbe');
     const before = own(options, 'before');
@@ -257,22 +263,43 @@ export function createRetainedRecallTrace(options) {
     if (initial.status !== 'observed' || !initial.binding) throw new Error('shape');
   } catch { probe = null; if (initial.status === 'observed') initial = { status: 'unavailable',
     reason: 'source_binding_missing' }; }
-  const recordSelect = (request, output) => {
-    if (closed) return;
-    if (selectCalls === 2) { overflowed = true; return; }
+  const beginSelect = (request) => {
+    if (closed) return () => {};
+    if (selectCalls === 2) { overflowed = true; return () => {}; }
     selectCalls++;
-    try { select.push(probe && initial.status === 'observed'
-      ? projectSelect(request, output, probe, initial.revision) : null); }
-    catch { select.push(null); }
+    const index = select.push(null) - 1;
+    let entry = null, settled = false;
+    try { if (probe && initial.status === 'observed') {
+      entry = projectSelectInput(request, probe, initial.revision);
+    } } catch { /* Malformed observation does not affect the model call. */ }
+    return output => {
+      if (closed) return;
+      if (settled) { invalidSettlement = true; select[index] = null; return; }
+      settled = true;
+      try { if (entry) select[index] = { ...entry,
+        ...projectSelectOutput(output, probe, initial.revision) }; }
+      catch { select[index] = null; }
+      entry = null;
+    };
   };
-  const recordRank = (request, output) => {
-    if (closed) return;
-    if (rankCalls === 1) { overflowed = true; return; }
+  const beginRank = (request) => {
+    if (closed) return () => {};
+    if (rankCalls === 1) { overflowed = true; return () => {}; }
     rankCalls++;
-    try { rank = probe && initial.status === 'observed'
-      ? projectRank(request, output, probe, initial) : null; }
-    catch { rank = null; }
+    let entry = null, settled = false;
+    try { if (probe && initial.status === 'observed') entry = projectRankInput(request, probe, initial); }
+    catch { /* Malformed observation does not affect the model call. */ }
+    return output => {
+      if (closed) return;
+      if (settled) { invalidSettlement = true; rank = null; return; }
+      settled = true;
+      try { if (entry) rank = { ...entry, ...projectRankOutput(output, probe, initial) }; }
+      catch { rank = null; }
+      entry = null;
+    };
   };
+  const recordSelect = (request, output) => { beginSelect(request)(output); };
+  const recordRank = (request, output) => { beginRank(request)(output); };
   const finish = (options) => {
     if (closed) return unavailableReport('already_finished');
     closed = true;
@@ -280,8 +307,9 @@ export function createRetainedRecallTrace(options) {
       const recall = own(options, 'recall');
       const packed = own(options, 'packed');
       const after = own(options, 'after');
-      if (!probe || initial.status !== 'observed' || overflowed) {
-        return unavailableReport(overflowed ? 'truncated' : initial.reason ?? 'source_unavailable');
+      if (!probe || initial.status !== 'observed' || overflowed || invalidSettlement) {
+        return unavailableReport(overflowed ? 'truncated'
+          : invalidSettlement ? 'observation_failed' : initial.reason ?? 'source_unavailable');
       }
       const later = sourceRead(after, probe, initial);
       if (later.status !== 'observed') return unavailableReport(later.reason ?? later.status);
@@ -336,5 +364,5 @@ export function createRetainedRecallTrace(options) {
     } catch { return unavailableReport('observation_failed'); }
     finally { probe = null; select = []; rank = null; }
   };
-  return Object.freeze({ recordSelect, recordRank, finish });
+  return Object.freeze({ beginSelect, beginRank, recordSelect, recordRank, finish });
 }
