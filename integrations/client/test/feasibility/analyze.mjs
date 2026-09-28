@@ -245,11 +245,15 @@ for (const run of ledger.runs) {
 results.stateCanaries = stateScan();
 writeFileSync(join(ROOT, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 1));
-// Unplanted required canaries or any leak make the analysis fail rather than pass silently.
-const leaks = results.runs.filter(run => run.delivery.canariesInCapture.length || run.delivery.canariesInRecallRequests.length ||
-  run.delivery.canariesInRecallReplies.length || run.delivery.compactionTextInCapture);
+// Unplanted required canaries or any leak (delivered bodies, recall, state or
+// checked host output) make the analysis fail rather than pass silently.
+const leakKinds = run => Object.entries({
+  capture: run.delivery.canariesInCapture.length, recallRequest: run.delivery.canariesInRecallRequests.length,
+  recallReply: run.delivery.canariesInRecallReplies.length, compactionText: run.delivery.compactionTextInCapture,
+  visibleOutput: run.output.visibleCanaries.length,
+}).filter(([, count]) => count).map(([kind]) => kind);
+const leaks = results.runs.map(run => ({ label: run.label, kinds: leakKinds(run) })).filter(leak => leak.kinds.length);
 if (results.plantFailures.length || leaks.length || results.stateCanaries.length) {
-  console.error(JSON.stringify({ plantFailures: results.plantFailures, leaks: leaks.map(run => run.label),
-    stateCanaries: results.stateCanaries }));
+  console.error(JSON.stringify({ plantFailures: results.plantFailures, leaks, stateCanaries: results.stateCanaries }));
   process.exitCode = 1;
 }

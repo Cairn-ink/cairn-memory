@@ -4,7 +4,7 @@
 // under the fake home, so no host process can start.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -95,4 +95,53 @@ test('analysis fails when a required canary never reached the owned source of it
     content: [{ type: 'tool_result', content: config.canaries.tool }] } })}\n`);
   const planted = analyze();
   assert.equal(planted.status, 0, planted.stderr);
+});
+
+test('analysis fails when a planted canary reappears in checked host output', t => {
+  const o = orchestrator(t);
+  assert.equal(o.call('setup').status, 0);
+  const config = JSON.parse(readFileSync(join(o.root, 'config.json'), 'utf8'));
+  const sessionId = '7a6d1c2e-7b1a-4c3d-8e9f-0a1b2c3d4e5f';
+  const stdoutPath = join(o.root, 'logs', 'host', 'claude-capture.stdout');
+  const ledger = JSON.parse(readFileSync(join(o.root, 'ledger.json'), 'utf8'));
+  ledger.runs.push({ name: 'claude-capture', label: 'claude-capture', host: 'claude', plants: ['tool_output'], mayPlant: [],
+    stdoutPath, launch: { sessionId, cwd: config.project, startedAt: Date.now() - 1_000, exitAt: Date.now() } });
+  writeFileSync(join(o.root, 'ledger.json'), JSON.stringify(ledger));
+  const source = join(claudeProjectDir(o.home, config.project), `${sessionId}.jsonl`);
+  mkdirSync(join(source, '..'), { recursive: true });
+  // The canary is planted in the source only as tool output, as the step intends.
+  writeFileSync(source, `${JSON.stringify({ type: 'user', toolUseResult: {}, message: { role: 'user',
+    content: [{ type: 'tool_result', content: config.canaries.tool }] } })}\n`);
+  const assistant = text => `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } })}\n`;
+  const analyze = () => spawnSync(process.execPath, [ANALYZE], { env: { PATH: process.env.PATH, HOME: o.home,
+    F0_RUN_ROOT: o.root }, encoding: 'utf8', timeout: 30_000 });
+  writeFileSync(stdoutPath, assistant('DONE'));
+  const clean = analyze();
+  assert.equal(clean.status, 0, clean.stderr);
+  writeFileSync(stdoutPath, assistant(`The file says ${config.canaries.tool}.`));
+  const leaked = analyze();
+  assert.equal(leaked.status, 1);
+  assert.deepEqual(JSON.parse(leaked.stderr.trim().split('\n').at(-1)).leaks,
+    [{ label: 'claude-capture', kinds: ['visibleOutput'] }]);
+});
+
+test('the gate exits non-zero for a quoted hooks table or an unreadable Codex user config', t => {
+  const o = orchestrator(t);
+  assert.equal(o.call('setup').status, 0);
+  mkdirSync(join(o.home, '.codex'));
+  const config = join(o.home, '.codex', 'config.toml');
+  const gate = () => {
+    const result = o.call('preflight', 'codex-capture');
+    return { status: result.status, check: JSON.parse(result.stdout).checks.find(entry => entry.name === 'codex_no_user_hooks_table') };
+  };
+  writeFileSync(config, 'model = "x"\n["hooks"]\n');
+  const quoted = gate();
+  assert.deepEqual([quoted.status, quoted.check.ok], [1, false]);
+  writeFileSync(config, '"hooks".Stop = []\n');
+  assert.deepEqual([gate().status, gate().check.ok], [1, false]);
+  writeFileSync(config, 'model = "x"\n');
+  chmodSync(config, 0o000);
+  let unreadable;
+  try { unreadable = gate(); } finally { chmodSync(config, 0o600); }
+  assert.deepEqual([unreadable.status, unreadable.check.ok, unreadable.check.detail], [1, false, 'unreadable: EACCES']);
 });

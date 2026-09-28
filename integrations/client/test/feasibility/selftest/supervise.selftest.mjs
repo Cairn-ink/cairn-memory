@@ -9,10 +9,10 @@ import test from 'node:test';
 import { createTestWorkspace } from '../../../../../tools/testing/workspace.mjs';
 import { createInterruptGuard, superviseHost, TERMINATING_SIGNALS } from '../lib/supervise.mjs';
 
-// A fake host that ignores SIGTERM and starts a grandchild that ignores it too.
+// A fake host that ignores SIGTERM (recording each one) and starts a grandchild that ignores it too.
 const STUBBORN = `
 const { spawn } = require('node:child_process');
-process.on('SIGTERM', () => {});
+process.on('SIGTERM', () => { if (process.argv[2]) require('node:fs').appendFileSync(process.argv[2], 'SIGTERM\\n'); });
 const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { stdio: 'ignore' });
 require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ host: process.pid, grandchild: child.pid }));
 console.log('ready');
@@ -95,4 +95,44 @@ test('dispose removes every signal handler', () => {
   assert.ok(TERMINATING_SIGNALS.every(signal => signals.listenerCount(signal) === 1));
   guard.dispose();
   assert.ok(TERMINATING_SIGNALS.every(signal => signals.listenerCount(signal) === 0));
+});
+
+test('a failing launch write (ENOSPC) terminates, escalates and reaps the host, then rejects', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'f0-supervise-onspawn-' });
+  const pidsFile = join(workspace.path, 'pids.json');
+  const signalsFile = join(workspace.path, 'signals.log');
+  const signals = new EventEmitter();
+  const guard = createInterruptGuard({ signals, escalateMs: 400 });
+  guard.install();
+  t.after(() => guard.dispose());
+  let closedAfter = null;
+  const started = Date.now();
+  await assert.rejects(superviseHost({ command: process.execPath, args: ['-e', STUBBORN, pidsFile, signalsFile],
+    cwd: workspace.path, env: { PATH: process.env.PATH }, guard, timeoutMs: 60_000, escalateMs: 400,
+    onSpawn: () => {
+      // Stand-in for a slow ledger write: wait until the host has installed its handler, then fail.
+      const sleeper = new Int32Array(new SharedArrayBuffer(4));
+      for (let i = 0; i < 250 && !existsSync(pidsFile); i++) Atomics.wait(sleeper, 0, 0, 20);
+      throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    } }), error => { closedAfter = Date.now() - started; return error.code === 'ENOSPC'; });
+  const pids = JSON.parse(readFileSync(pidsFile, 'utf8'));
+  assert.match(readFileSync(signalsFile, 'utf8'), /SIGTERM/, 'the host received SIGTERM');
+  assert.equal(alive(pids.host), false, 'the host was killed and reaped');
+  for (let i = 0; i < 40 && alive(pids.grandchild); i++) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(alive(pids.grandchild), false, 'the host group is gone');
+  assert.ok(closedAfter >= 400 && closedAfter < 10_000, `escalated after the bound (${closedAfter} ms)`);
+});
+
+test('a host that exits on SIGTERM is reaped without waiting for the bound when the launch write fails', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'f0-supervise-onspawn-polite-' });
+  const guard = createInterruptGuard({ signals: new EventEmitter(), escalateMs: 5_000 });
+  guard.install();
+  t.after(() => guard.dispose());
+  const started = Date.now();
+  let pid;
+  await assert.rejects(superviseHost({ command: process.execPath, args: ['-e', POLITE], cwd: workspace.path,
+    env: { PATH: process.env.PATH }, guard, timeoutMs: 60_000, escalateMs: 5_000,
+    onSpawn: launch => { pid = launch.pid; throw Object.assign(new Error('no space'), { code: 'ENOSPC' }); } }), /no space/);
+  assert.ok(Date.now() - started < 4_000);
+  assert.equal(alive(pid), false);
 });

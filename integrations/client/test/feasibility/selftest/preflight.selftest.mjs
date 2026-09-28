@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { preflight, skillSetDigest } from '../lib/preflight.mjs';
+import { tomlHookDeclarations } from '../lib/toml-hooks.mjs';
 
 const HOME = '/home/synthetic';
 const PINS = { claude: '2.1.283 (Claude Code)', codex: 'codex-cli 0.157.1', node: 'v22.16.0' };
@@ -9,7 +10,8 @@ const BINARIES = { claude: '/bin/claude', codex: '/bin/codex' };
 const HOOK = '/node /harness/hook.mjs /tmp/f0-tmp/f0-run ';
 const CWD = '/tmp/f0-tmp/f0-run/project';
 
-function deps({ files = {}, dirs = {}, entries = {}, versions = {}, reg = 1, nodeVersion = 'v22.16.0', throwOn } = {}) {
+// `errors` maps a path to the error code its probe and read report (EACCES, EISDIR, ...).
+function deps({ files = {}, errors = {}, dirs = {}, entries = {}, versions = {}, reg = 1, nodeVersion = 'v22.16.0', throwOn } = {}) {
   return {
     exec: (command, args) => {
       if (command === throwOn) throw new Error('exec failed');
@@ -19,8 +21,10 @@ function deps({ files = {}, dirs = {}, entries = {}, versions = {}, reg = 1, nod
       }
       return { status: reg, stdout: '' };
     },
-    exists: path => Object.hasOwn(files, path),
-    readText: path => files[path] ?? null,
+    probe: path => (Object.hasOwn(errors, path) ? { state: 'error', code: errors[path] }
+      : Object.hasOwn(files, path) ? { state: 'present' } : { state: 'absent' }),
+    readText: path => (Object.hasOwn(errors, path) ? { state: 'error', code: errors[path] }
+      : Object.hasOwn(files, path) ? { state: 'ok', text: files[path] } : { state: 'absent' }),
     listDirs: path => dirs[path] ?? [],
     listEntries: path => (Object.hasOwn(entries, path) ? entries[path] : []),
     nodeVersion,
@@ -114,4 +118,70 @@ test('an unevaluable check fails closed', () => {
   const result = run({ host: 'codex' }, codexArgs, { throwOn: BINARIES.codex });
   assert.equal(result.ok, false);
   assert.deepEqual(failed(result), ['preflight_evaluable']);
+});
+
+const HOOK_FORMS = ['[hooks]', '["hooks"]', "['hooks']", '[ hooks ]', '[hooks.Stop]', '[[hooks.Stop]]', '[ "hooks" . Stop ]',
+  '[[ \'hooks\'.SessionStart ]]', 'hooks.Stop = []', '"hooks".Stop = []', "'hooks'.Stop = []", 'hooks . Stop = []',
+  'hooks = { Stop = [] }', 'hooks = {}', '"\\u0068ooks" = {}', 'Hooks.Stop = []'];
+
+test('every quoted, dotted, escaped and inline hooks form is detected, after other statements too', () => {
+  for (const form of HOOK_FORMS) {
+    // A key belongs to the most recent table, so root-level key forms can only follow root keys.
+    const context = form.startsWith('[') ? 'model = "x"\n[features]\nfast = true\n\n' : 'model = "x"\nfast = true\n\n';
+    for (const text of [`${form}\n`, `${context}${form}\n`]) {
+      const found = tomlHookDeclarations(text);
+      assert.ok(found.hooks.length > 0 && found.unclassified.length === 0, `${JSON.stringify(text)} -> ${JSON.stringify(found)}`);
+    }
+  }
+});
+
+test('hooks text inside values, comments or other tables is not a hook source', () => {
+  const clean = [
+    'model = "gpt"', '# [hooks]', 'note = "[hooks]" # hooks = 1', "path = '[hooks.Stop]'",
+    'args = [\n  "[hooks]",\n  \'hooks.Stop = []\',\n] # multi-line array', 'doc = """\n[hooks]\nhooks.Stop = []\n"""',
+    "lit = '''\n[hooks]\n'''", '[features]', 'hooks = true', '[mcp_servers.x.hooks]', 'command = "y"',
+    '[projects."/home/p/hooks"]', 'trust_level = "trusted"', 'inline = { hooks = { Stop = [] } }',
+  ].join('\n');
+  assert.deepEqual(tomlHookDeclarations(`${clean}\n`), { hooks: [], unclassified: [] });
+});
+
+test('lines the detector cannot classify are reported so the gate fails closed', () => {
+  for (const text of ['[unterminated\n', 'key = "unterminated\n', '= 1\n', '[ [hooks] ]\n', 'foo bar = 1\n',
+    'x =\n', 'arr = [1, 2\n', 'doc = """never closed\n', 'k = 1 trailing\n', '"\\q" = 1\n',
+    'x = abc[\n[hooks]\n]\n', 'x = [abc\n[hooks]\n]\n', 'x = { a = 1 b = 2 }\n', 'x = [1 2]\n']) {
+    assert.ok(tomlHookDeclarations(text).unclassified.length > 0, JSON.stringify(text));
+  }
+});
+
+test('each hooks form and an unclassifiable Codex user config block the preflight', () => {
+  for (const form of [...HOOK_FORMS, 'foo bar = 1']) {
+    const result = run({ host: 'codex' }, codexArgs, { files: { [`${HOME}/.codex/config.toml`]: `${form}\n` } });
+    assert.equal(result.ok, false, form);
+    assert.deepEqual(failed(result), ['codex_no_user_hooks_table'], form);
+  }
+});
+
+test('unreadable files block: Codex user config, Claude ancestor settings and every probed path', () => {
+  const step = { host: 'codex' };
+  for (const code of ['EACCES', 'EISDIR', 'EIO', 'ENOTDIR']) {
+    const config = run(step, codexArgs, { errors: { [`${HOME}/.codex/config.toml`]: code } });
+    assert.deepEqual([config.ok, failed(config)], [false, ['codex_no_user_hooks_table']], code);
+    assert.match(config.failures[0].detail, new RegExp(code));
+  }
+  assert.deepEqual(failed(run(step, codexArgs, { errors: { [`${HOME}/.codex/hooks.json`]: 'EACCES' } })), ['codex_no_user_hooks_json']);
+  assert.deepEqual(failed(run(step, codexArgs, { errors: { '/etc/codex': 'EACCES' } })), ['codex_no_system_config']);
+  assert.ok(failed(run(step, codexArgs, { errors: { '/tmp/.codex': 'EACCES' } })).includes('codex_no_project_config'));
+  const files = { [`${CWD}/.claude/settings.json`]: settings };
+  for (const code of ['EACCES', 'EISDIR', 'EIO']) {
+    const ancestor = run(claudeStep, claudeArgs, { files, errors: { '/tmp/.claude/settings.json': code } });
+    assert.deepEqual([ancestor.ok, failed(ancestor)], [false, ['claude_project_hooks_are_harness']], code);
+    const own = run(claudeStep, claudeArgs, { errors: { [`${CWD}/.claude/settings.json`]: code } });
+    assert.deepEqual([own.ok, failed(own)], [false, ['claude_project_hooks_are_harness']], code);
+  }
+  assert.deepEqual(failed(run(claudeStep, claudeArgs, { files, errors: { '/tmp/f0-tmp/.claude/settings.local.json': 'EACCES' } })),
+    ['claude_no_local_settings']);
+  assert.deepEqual(failed(run(claudeStep, claudeArgs, { files, errors: { '/etc/claude-code/managed-settings.json': 'EACCES' } })),
+    ['claude_no_managed_settings_file']);
+  assert.deepEqual(failed(run(claudeStep, claudeArgs, { files, errors: { '/mnt/c/Windows/System32/reg.exe': 'EACCES' } })),
+    ['claude_policy_query_evaluable']);
 });

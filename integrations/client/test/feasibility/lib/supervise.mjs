@@ -48,18 +48,37 @@ export function createInterruptGuard({ signals = process, escalateMs = 5_000 } =
   };
 }
 
+/** SIGTERM the host's group, SIGKILL it once `escalateMs` passes, and wait until the host is reaped. */
+async function terminateGroup(pid, closed, escalateMs) {
+  signalGroup(pid, 'SIGTERM');
+  const exited = await Promise.race([closed.then(() => true), delay(escalateMs).then(() => false)]);
+  if (!exited || groupAlive(pid)) signalGroup(pid, 'SIGKILL');
+  await closed;
+  for (let i = 0; i < 40 && groupAlive(pid); i++) await delay(50);
+}
+
 /**
- * Run one host process. `onSpawn` runs synchronously after spawn so the caller
- * can persist the launch before waiting; `onStdoutLine` sees each stdout line.
+ * Run one host process. Supervision (signal forwarding and the deadline) is in
+ * place from the moment of spawn, before any caller code runs. `onSpawn` then
+ * persists the launch; if it throws, the host is terminated and reaped and the
+ * error is rethrown. `onStdoutLine` sees each stdout line.
  */
 export async function superviseHost({ command, args, cwd, env, stdin = '', guard, timeoutMs, escalateMs = 5_000,
   probeInterruptAfterMs, onSpawn = () => {}, onStdoutLine = () => {} }) {
   if (guard.interrupted) throw new Error(`interrupted_before_launch:${guard.interrupted}`);
   const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
   const startedAt = Date.now();
+  const closed = new Promise(resolve => child.once('close', (exitCode, signal) => resolve({ exitCode, signal })));
   const spawnError = new Promise(resolve => child.once('error', resolve));
-  if (child.pid) onSpawn({ pid: child.pid, startedAt });
   guard.attach(child.pid);
+  let timedOut = false;
+  let probeInterruptAt = null;
+  const timers = [];
+  timers.push(setTimeout(() => {
+    timedOut = true;
+    signalGroup(child.pid, 'SIGTERM');
+    timers.push(setTimeout(() => signalGroup(child.pid, 'SIGKILL'), escalateMs));
+  }, timeoutMs));
   const out = [];
   const err = [];
   let firstOutputAt = null;
@@ -74,21 +93,22 @@ export async function superviseHost({ command, args, cwd, env, stdin = '', guard
   });
   child.stderr.on('data', chunk => err.push(chunk));
   child.stdin.on('error', () => {});
+  if (child.pid) {
+    try { onSpawn({ pid: child.pid, startedAt }); }
+    catch (error) {
+      for (const timer of timers) clearTimeout(timer);
+      await terminateGroup(child.pid, closed, escalateMs);
+      throw error;
+    }
+  }
+  // The prompt is written only after the launch is persisted.
   child.stdin.end(stdin);
-  let timedOut = false;
-  let probeInterruptAt = null;
-  const timers = [];
   // Deliberate teardown probe: signal the host's own group mid-response.
   if (probeInterruptAfterMs) {
     timers.push(setTimeout(() => { probeInterruptAt = Date.now(); signalGroup(child.pid, 'SIGTERM'); }, probeInterruptAfterMs));
   }
-  timers.push(setTimeout(() => {
-    timedOut = true;
-    signalGroup(child.pid, 'SIGTERM');
-    timers.push(setTimeout(() => signalGroup(child.pid, 'SIGKILL'), escalateMs));
-  }, timeoutMs));
   const outcome = await Promise.race([
-    new Promise(resolve => child.once('close', (exitCode, signal) => resolve({ exitCode, signal }))),
+    closed,
     spawnError.then(error => ({ exitCode: null, signal: null, error: error.code ?? String(error) })),
   ]);
   if (pending) onStdoutLine(pending);

@@ -1,22 +1,29 @@
 // Fail-closed isolation preflight. Every real-host step must pass it; any
 // failed or unevaluable check blocks the step. I/O is injected for tests.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { sha256 } from './common.mjs';
+import { tomlHookDeclarations } from './toml-hooks.mjs';
 
 const REG = '/mnt/c/Windows/System32/reg.exe';
 const CLAUDE_POLICY_KEYS = ['HKLM\\SOFTWARE\\Policies\\ClaudeCode', 'HKCU\\SOFTWARE\\Policies\\ClaudeCode'];
-// A `[hooks]`/`[[hooks.X]]` table or a dotted `hooks.` / `hooks =` key in TOML.
-const TOML_HOOKS = /^\s*(?:\[\[?\s*hooks\b|hooks\s*[.=])/m;
 
+// Only ENOENT means absent. Every other error (EACCES, EISDIR, ENOTDIR, EIO, ...)
+// means the file cannot be evaluated, and the check that needed it blocks.
 export const defaultDeps = {
   exec: (command, args, env) => {
     const result = spawnSync(command, args, { encoding: 'utf8', timeout: 15_000, env, stdio: ['ignore', 'pipe', 'pipe'] });
     return { status: result.status, stdout: result.stdout ?? '', error: result.error?.code ?? null };
   },
-  exists: path => existsSync(path),
-  readText: path => { try { return readFileSync(path, 'utf8'); } catch { return null; } },
+  probe: path => {
+    try { lstatSync(path); return { state: 'present' }; }
+    catch (error) { return error?.code === 'ENOENT' ? { state: 'absent' } : { state: 'error', code: error?.code ?? 'unknown' }; }
+  },
+  readText: path => {
+    try { return { state: 'ok', text: readFileSync(path, 'utf8') }; }
+    catch (error) { return error?.code === 'ENOENT' ? { state: 'absent' } : { state: 'error', code: error?.code ?? 'unknown' }; }
+  },
   // Skills may be directories or symlinks to them; hidden entries are the host's own.
   listDirs: path => {
     try {
@@ -41,9 +48,13 @@ function ancestors(cwd, home) {
 
 export const skillSetDigest = names => sha256(JSON.stringify([...names].sort()));
 
+const describe = result => (result.state === 'error' ? `unreadable: ${result.code}` : result.state);
+
 export function preflight({ step, built, pins, home, binaries, hookPrefix, ledger, isolationDigest, env, deps = defaultDeps }) {
   const checks = [];
   const check = (name, ok, detail = null) => checks.push({ name, ok: Boolean(ok), detail });
+  // Absence is proven only by ENOENT; presence or an unreadable path both fail.
+  const absent = (name, path) => { const result = deps.probe(path); check(name, result.state === 'absent', describe(result)); };
   try {
     const version = deps.exec(binaries[step.host], ['--version'], env);
     check('host_version_matches_pin', version.status === 0 && version.stdout.trim() === pins[step.host], version.stdout.trim() || version.error);
@@ -53,8 +64,10 @@ export function preflight({ step, built, pins, home, binaries, hookPrefix, ledge
       const sources = valueAfter(args, '--setting-sources');
       check('claude_user_settings_excluded', sources !== undefined && !sources.split(',').includes('user'), sources ?? 'flag missing');
       check('claude_strict_empty_mcp', args.includes('--strict-mcp-config') && valueAfter(args, '--mcp-config') === '{"mcpServers":{}}');
-      check('claude_no_managed_settings_file', !deps.exists('/etc/claude-code/managed-settings.json'));
-      if (deps.exists(REG)) {
+      absent('claude_no_managed_settings_file', '/etc/claude-code/managed-settings.json');
+      const reg = deps.probe(REG);
+      check('claude_policy_query_evaluable', reg.state !== 'error', describe(reg));
+      if (reg.state === 'present') {
         for (const key of CLAUDE_POLICY_KEYS) {
           const query = deps.exec(REG, ['query', key], env);
           // reg.exe exits 1 when the key is absent; anything else means a policy may inject hooks.
@@ -62,31 +75,35 @@ export function preflight({ step, built, pins, home, binaries, hookPrefix, ledge
         }
       }
       for (const dir of ancestors(cwd, home)) {
-        const local = join(dir, '.claude', 'settings.local.json');
-        check(`claude_no_local_settings:${dir}`, !deps.exists(local));
+        absent(`claude_no_local_settings:${dir}`, join(dir, '.claude', 'settings.local.json'));
         const settings = deps.readText(join(dir, '.claude', 'settings.json'));
-        if (settings === null) continue;
-        let commands;
-        try { commands = Object.values(JSON.parse(settings).hooks ?? {}).flat().flatMap(group => group.hooks ?? []).map(h => h.command); }
-        catch { commands = null; }
+        if (settings.state === 'absent') continue;
+        let commands = null;
+        if (settings.state === 'ok') {
+          try { commands = Object.values(JSON.parse(settings.text).hooks ?? {}).flat().flatMap(group => group.hooks ?? []).map(h => h.command); }
+          catch { commands = null; }
+        }
         check(`claude_project_hooks_are_harness:${dir}`, dir === cwd && Array.isArray(commands) &&
-          commands.every(command => typeof command === 'string' && command.startsWith(hookPrefix)));
+          commands.every(command => typeof command === 'string' && command.startsWith(hookPrefix)),
+        settings.state === 'ok' ? (commands ? null : 'unparseable') : describe(settings));
       }
     } else {
       check('codex_user_config_ignored', args.includes('--ignore-user-config'));
-      check('codex_no_user_hooks_json', !deps.exists(join(home, '.codex', 'hooks.json')));
+      absent('codex_no_user_hooks_json', join(home, '.codex', 'hooks.json'));
       const userConfig = deps.readText(join(home, '.codex', 'config.toml'));
-      check('codex_no_user_hooks_table', userConfig === null || !TOML_HOOKS.test(userConfig));
-      check('codex_no_system_config', !deps.exists('/etc/codex'));
-      for (const name of ['managed_config.toml', 'requirements.toml']) {
-        check(`codex_no_${name}`, !deps.exists(join(home, '.codex', name)));
-      }
+      if (userConfig.state === 'ok') {
+        const found = tomlHookDeclarations(userConfig.text);
+        check('codex_no_user_hooks_table', found.hooks.length === 0 && found.unclassified.length === 0,
+          `hook lines ${found.hooks.length}; unclassified lines ${found.unclassified.length}`);
+      } else check('codex_no_user_hooks_table', userConfig.state === 'absent', describe(userConfig));
+      absent('codex_no_system_config', '/etc/codex');
+      for (const name of ['managed_config.toml', 'requirements.toml']) absent(`codex_no_${name}`, join(home, '.codex', name));
       // A project `.codex` directory is harmless only when it is readable and empty.
       for (const dir of ancestors(cwd, home)) {
-        const projectConfig = join(dir, '.codex');
-        const entries = deps.exists(projectConfig) ? deps.listEntries(projectConfig) : [];
+        const probe = deps.probe(join(dir, '.codex'));
+        const entries = probe.state === 'absent' ? [] : probe.state === 'present' ? deps.listEntries(join(dir, '.codex')) : null;
         check(`codex_no_project_config:${dir}`, Array.isArray(entries) && entries.length === 0,
-          entries === null ? 'unreadable' : entries.length ? `${entries.length} entries` : null);
+          entries === null ? (probe.state === 'error' ? describe(probe) : 'unreadable') : entries.length ? `${entries.length} entries` : null);
       }
       const hookValues = args.filter((arg, i) => args[i - 1] === '-c' && arg.startsWith('hooks.'));
       if (args.includes('--dangerously-bypass-hook-trust')) {

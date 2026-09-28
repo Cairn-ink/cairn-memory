@@ -856,6 +856,15 @@ listed under "Still to verify".
    forwarded to the host's process group and escalate to SIGKILL, and the launch is
    recorded before waiting.
 
+A second review found that items 3 and 5 still had gaps, and that the analysis
+ignored host output. All three are now fixed and tested offline:
+- The gate treated unreadable files as absent and missed quoted TOML forms such as
+  `["hooks"]` and `"hooks".Stop`. Now only `ENOENT` counts as absent, and a
+  validating detector blocks any hooks key path and any line it cannot classify.
+- A failed launch write left the host unsupervised. Supervision now starts at spawn,
+  and that failure terminates and reaps the host.
+- A canary in checked host output did not fail the analysis. It now does.
+
 ### Isolation proof
 
 | Host | Configuration | Evidence |

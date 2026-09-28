@@ -32,6 +32,11 @@ target, not local automatic capture.
   - for a real Codex model-only step, a scripted run of the identical configuration
     whose requests contained no user skill name.
 
+  Only `ENOENT` counts as absent; an unreadable file (`EACCES`, `EISDIR`, `EIO`, ...)
+  cannot be evaluated. The Codex user config goes through `lib/toml-hooks.mjs`, a
+  validating detector that flags any key path starting with `hooks` in bare, quoted,
+  escaped, dotted, header or inline form, and any line it cannot classify.
+
   Any failed or unevaluable check blocks the step before it is counted; there is no
   override.
 - **Launch ledger.** Only the orchestrator writes `ledger.json`. It records each launch
@@ -47,9 +52,10 @@ target, not local automatic capture.
   Workers then read through one `O_NOFOLLOW` handle whose inode must match.
 - **Cleanup** plans from the ledger alone, re-verifies each path before `unlink`, and
   only `rmdir`s empty directories. Hook events are never read.
-- **Interrupts.** SIGINT, SIGTERM and SIGHUP are forwarded to the host's process
-  group, which escalates to SIGKILL after 5 s. A signal before launch prevents the
-  launch.
+- **Interrupts.** Supervision starts at spawn. SIGINT, SIGTERM and SIGHUP are
+  forwarded to the host's process group, which escalates to SIGKILL after 5 s. A
+  signal before launch prevents the launch, and a failed launch-ledger write
+  terminates and reaps the host before the error is raised.
 
 ## Pieces
 
@@ -60,9 +66,9 @@ target, not local automatic capture.
 | `worker.mjs` | Detached worker. Authorizes the source, then applies the candidate allowlist, canonicalizes, redacts and bounds each message, and posts batches through the seam. |
 | `core-server.mjs` | Loopback server with hosted-shaped endpoints over one temporary `core/` store and the scripted model in `lib/scripted-model.mjs`; records every received body. |
 | `fake-responses.mjs` | Scripted Responses provider for zero-quota Codex steps. Records header names only, never values. |
-| `analyze.mjs` | Writes `results.json`: canary hits, record kinds, parser replays, hook matrix, trace summary, quota-event schema and timings. Exits 1 on a missing canary value, an unplanted required canary, or any leak. |
+| `analyze.mjs` | Writes `results.json`: canary hits, record kinds, parser replays, hook matrix, trace summary, quota-event schema and timings. Exits 1 on a missing canary value, an unplanted required canary, or any leak: delivered bodies, recall, state or checked host output. |
 | `cleanup.mjs` | Dry run by default; `--apply` removes only ledger-owned session files. |
-| `lib/` | `ledger`, `source-access`, `cleanup-plan`, `preflight`, `supervise` and `canaries` hold the rules above; `parsers`, `common` and `scripted-model` support the probes. |
+| `lib/` | `ledger`, `source-access`, `cleanup-plan`, `preflight`, `toml-hooks`, `supervise` and `canaries` hold the rules above; `parsers`, `common` and `scripted-model` support the probes. |
 | `selftest/` | Offline tests of those rules with in-memory or test-owned filesystems and fake hosts. |
 
 ## Offline self-tests
