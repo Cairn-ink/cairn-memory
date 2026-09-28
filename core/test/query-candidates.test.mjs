@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../contract.mjs';
 import { openMemoryStore } from '../index.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
@@ -22,16 +21,20 @@ const refs = (input) => input.maps.flatMap(({ namespaceIndex, items }) => items.
 const rank = ({ input }) => ({ refs: input.candidates.slice(0, input.limit).map(({ namespaceIndex, memory }) => ({
   namespaceIndex, memoryId: memory.id, revision: memory.revision,
 })) });
+const workspaces = new WeakMap();
 function fixture(t, wanted = [], options = {}) {
-  const path = join(mkdtempSync(join(tmpdir(), 'cairn-query-candidates-')), 'memory.sqlite');
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-query-candidates-' });
+  workspaces.set(t, workspace);
+  const path = join(workspace.path, 'memory.sqlite');
   // This visibility oracle measures literal reachability, never model quality.
   const select = ({ input }) => ({ refs: refs(input).filter((ref) => wanted.includes(ref.memoryId)) });
   const model = createMockRecallModel({ countTokens: () => 1, select: [select, select], rank: [rank], ...options });
   const core = openMemoryCore({ path, model });
+  workspace.defer(() => core.close());
   const db = new DatabaseSync(path);
   let closed = false;
-  const close = () => { if (!closed) { db.close(); core.close(); closed = true; } };
-  t.after(close);
+  const close = () => { if (!closed) { try { db.close(); } finally { core.close(); closed = true; } } };
+  workspace.defer(close);
   return { core, db, model, wanted, path, close };
 }
 function admit(core, content, namespace = ns) {
@@ -211,7 +214,7 @@ test('source scoring uses only the first four stable-ID receipts with strict bod
     addReceipt(f.db, id(4), receiptId, excerpt);
   }
   const runtime = createMemoryRuntime({ path: f.path });
-  t.after(() => runtime.close());
+  workspaces.get(t).defer(() => runtime.close());
   const score = createQueryScore('amber cobalt');
   const page = runtime.queryCandidateRows({ ...ns, projectId: '' }, {
     score, memoryLabel: value => value, sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT,
@@ -333,7 +336,7 @@ test('legacy correction and forgetting fence source previews during select and r
         excerpt: `cedar sextant legacy source ${action}` }],
     })).memory;
     f.wanted.push(saved.id);
-    const legacy = openMemoryStore({ path: f.path }); t.after(() => legacy.close());
+    const legacy = openMemoryStore({ path: f.path }); workspaces.get(t).defer(() => legacy.close());
     const scope = legacy.scope({ ownerId: ns.ownerId });
     let changed = false;
     f.model.select = ({ input }) => {
@@ -401,7 +404,7 @@ test('current 1023/1024/1025 boundaries skip preceding and interleaved history/t
       (i) => i <= prefix ? (i % 2 ? 'historical' : 'deleted') :
         (i - prefix) % 3 === 1 ? 'current' : (i - prefix) % 3 === 2 ? 'historical' : 'deleted');
     const runtime = createMemoryRuntime({ path: f.path });
-    t.after(() => runtime.close());
+    workspaces.get(t).defer(() => runtime.close());
     const scored = [];
     const score = createQueryScore('Lantern');
     const page = runtime.queryCandidateRows({ ...ns, projectId: '' }, {
@@ -435,10 +438,10 @@ test('many retired records cannot starve a single current sourced target, includ
   await check(f.core);
   f.close(); // Close every SQLite handle before reopening the persisted store.
   const reopened = openMemoryCore({ path: f.path, model: f.model });
-  t.after(() => reopened.close());
+  workspaces.get(t).defer(() => reopened.close());
   await check(reopened);
   const db = new DatabaseSync(f.path);
-  t.after(() => db.close());
+  workspaces.get(t).defer(() => db.close());
   const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT id,revision,content,deleted,currentness
     FROM memories INDEXED BY capture_current_memories
     WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND currentness='current'
@@ -661,7 +664,7 @@ test('current scan scores at most 1024 bodies, excludes sentinel, and uses the p
   const f = fixture(t);
   seed(f.db, 1025, (i) => `記憶 body ${i}`, () => 'current', i => `bounded base receipt ${i}`);
   const runtime = createMemoryRuntime({ path: f.path });
-  t.after(() => runtime.close());
+  workspaces.get(t).defer(() => runtime.close());
   const scored = [];
   const page = runtime.queryCandidateRows({ ...ns, projectId: '' }, {
     score: (body) => { scored.push(body); return 0; }, memoryLabel: (body) => body,
@@ -728,10 +731,10 @@ test('missing current partial index fails closed before selection, including reo
   await check(f.core);
   f.close();
   const reopened = openMemoryCore({ path: f.path, model: f.model });
-  t.after(() => reopened.close());
+  workspaces.get(t).defer(() => reopened.close());
   await check(reopened);
   const db = new DatabaseSync(f.path);
-  t.after(() => db.close());
+  workspaces.get(t).defer(() => db.close());
   assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='capture_current_memories'").get().n, 0);
 });
 

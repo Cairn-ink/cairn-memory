@@ -1,23 +1,28 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { command, packageName, runtimeFiles } from '../build.mjs';
 import { installPreview } from '../install-preview.mjs';
 
 const requireSDK = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(requireSDK.resolve('@modelcontextprotocol/client'));
 const { StdioClientTransport } = await import(requireSDK.resolve('@modelcontextprotocol/client/stdio'));
-const temporary = () => mkdtempSync(join(tmpdir(), 'cairn-preview-installer-test-'));
+const workspaces = new WeakMap();
+function workspace(t) {
+  if (!workspaces.has(t)) workspaces.set(t, createTestWorkspace(t, { prefix: 'cairn-preview-installer-test-' }));
+  return workspaces.get(t);
+}
+const temporary = t => workspace(t).path;
 const readJSON = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const hash = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const args = (directory) => ['--directory', directory, '--owner', 'synthetic-owner'];
 
-test('installer rejects invalid arguments and unsafe targets before writing', () => {
-  const parent = temporary();
+test('installer rejects invalid arguments and unsafe targets before writing', t => {
+  const parent = temporary(t);
   const target = join(parent, 'new');
   const existing = join(parent, 'existing');
   mkdirSync(existing);
@@ -38,8 +43,8 @@ test('installer rejects invalid arguments and unsafe targets before writing', ()
   assert.equal(existsSync(target), false);
 });
 
-test('failed npm install retains partial state, hides child errors and writes no receipt', () => {
-  const target = join(temporary(), 'new');
+test('failed npm install retains partial state, hides child errors and writes no receipt', t => {
+  const target = join(temporary(t), 'new');
   assert.throws(() => installPreview(args(target), { runCommand(executable, arguments_, cwd) {
     assert.equal(executable, 'npm');
     assert.equal(arguments_[arguments_.indexOf('--prefix') + 1], join(target, 'app'));
@@ -56,8 +61,8 @@ test('failed npm install retains partial state, hides child errors and writes no
   assert.throws(() => installPreview(args(target)), /cairn_preview_install_failed/);
 });
 
-test('failed installed configuration check retains app and omits receipt', () => {
-  const target = join(temporary(), 'new');
+test('failed installed configuration check retains app and omits receipt', t => {
+  const target = join(temporary(t), 'new');
   let calls = 0;
   assert.throws(() => installPreview(args(target), { runCommand(executable) {
     calls++;
@@ -70,7 +75,7 @@ test('failed installed configuration check retains app and omits receipt', () =>
 });
 
 test('fresh installation protects ancestor, proves source identity and supports SDK lifecycle/restart', { timeout: 120000 }, async (t) => {
-  const parent = temporary();
+  const parent = temporary(t);
   writeFileSync(join(parent, 'package.json'), JSON.stringify({ name: 'ancestor-must-not-change', private: true }));
   writeFileSync(join(parent, '.npmrc'), 'registry=https://invalid.example/\n');
   const ancestorHash = hash(join(parent, 'package.json'));
@@ -116,7 +121,7 @@ test('fresh installation protects ancestor, proves source identity and supports 
 
   async function connect() {
     const client = new Client({ name: 'synthetic-preview-installer', version: '1.0.0' });
-    t.after(async () => { await client.close(); });
+    workspace(t).defer(async () => { await client.close(); });
     await client.connect(new StdioClientTransport({ ...report.stdio, cwd: join(target, 'app'),
       env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' }));
     return client;

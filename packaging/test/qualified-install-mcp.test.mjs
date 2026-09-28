@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { command } from '../build.mjs';
 import { installPreview } from '../install-preview.mjs';
 import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
@@ -12,8 +12,13 @@ import { qualificationPoolWire } from '../../adapters/openai/test/qualification-
 const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
 const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
-function install(mode) {
-  const directory = join(mkdtempSync(join(tmpdir(), 'cairn-qualified-receipt-')), 'new');
+const workspaces = new WeakMap();
+function workspace(t) {
+  if (!workspaces.has(t)) workspaces.set(t, createTestWorkspace(t, { prefix: 'cairn-qualified-receipt-' }));
+  return workspaces.get(t);
+}
+function install(t, mode) {
+  const directory = join(workspace(t).path, 'new');
   const report = installPreview(['--directory', directory, '--owner', 'synthetic-receipt-owner',
     ...(mode ? ['--capture-qualification', mode] : [])], {
     runCommand: (executable, args, cwd, userconfig) => command(executable,
@@ -24,7 +29,7 @@ function install(mode) {
 }
 async function start(t, receipt, env) {
   const client = new Client({ name: 'synthetic-install-receipt', version: '1.0.0' });
-  t.after(() => client.close());
+  workspace(t).defer(() => client.close());
   // Consume the generated command and args unchanged, including its mode flag.
   await client.connect(new StdioClientTransport({ command: receipt.stdio.command,
     args: receipt.stdio.args, env, stderr: 'ignore' }));
@@ -38,7 +43,7 @@ async function call(client, name, args) {
 }
 test('I3 exact installed qualified receipt supports capture, both recall contexts, inspection and zero-HTTP cold replay',
   { timeout: 120000 }, async t => {
-    const receipt = install('source-bound-v2');
+    const receipt = install(t, 'source-bound-v2');
     assert.equal(receipt.captureQualification, 'source-bound-v2');
     assert.equal(receipt.stdio.args.filter(arg => arg === '--capture-qualification').length, 1);
     const messages = [{ role: 'assistant', content: 'You could take the tram 🚋.' },
@@ -88,7 +93,7 @@ test('I3 exact installed qualified receipt supports capture, both recall context
         output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
         usage: { input_tokens: 100, output_tokens: 100, total_tokens: 200 } });
     } } });
-    t.after(() => proxy.close());
+    workspace(t).defer(() => proxy.close());
     // Test-only preload replaces HTTP routing, not installed CLI arguments or
     // startup. Native external fetch is unreachable; only the parent proxy runs.
     const preload = `const nativeFetch=globalThis.fetch;globalThis.fetch=(url,options)=>{
@@ -124,7 +129,7 @@ test('I3 exact installed qualified receipt supports capture, both recall context
   });
 
 test('I3 absent installer mode keeps generated receipt and actual installed five-tool default', { timeout: 120000 }, async t => {
-  const receipt = install(); assert.equal(Object.hasOwn(receipt, 'captureQualification'), false);
+  const receipt = install(t); assert.equal(Object.hasOwn(receipt, 'captureQualification'), false);
   assert.equal(receipt.stdio.args.includes('--capture-qualification'), false);
   const client = await start(t, receipt, { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' });
   const tools = (await client.listTools()).tools;

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { runQualifiedComparison, QUALIFIED_COMPARISON_CANDIDATES } from '../qualified-comparison.mjs';
 
@@ -14,7 +14,7 @@ const sources = () => ({ version: 'qualified-reconciliation-holdout-v1', cases: 
       : `開發測試設定${index}是${window ? '藍色' : '紅色'}。` }] })),
   query: index < 4 ? 'What is the development setting?' : '開發測試設定是甚麼？',
 })) });
-const directory = () => mkdtempSync(join(tmpdir(), 'cairn-qualified-comparison-test-'));
+const directory = t => createTestWorkspace(t, { prefix: 'cairn-qualified-comparison-test-' }).path;
 function scripted(calls, { failExtract = false, transportFailure } = {}) {
   return { contextWindow: 100000, countTokens: () => 1,
     extract: ({ input }) => {
@@ -35,21 +35,21 @@ function scripted(calls, { failExtract = false, transportFailure } = {}) {
       memoryId: candidate.memory.id, revision: candidate.memory.revision })) }),
   };
 }
-function setup(overrides = {}) {
+function setup(t, overrides = {}) {
   const calls = []; const opens = []; const checkpoints = []; const answers = [];
   const model = scripted(calls);
   const factory = options => {
     opens.push({ ...options });
     return openMemoryCore({ path: options.path, ...(options.withModel ? { model } : {}) });
   };
-  const options = { sources: sources(), directory: directory(), candidates: { baseline: factory, qualified: factory },
+  const options = { sources: sources(), directory: directory(t), candidates: { baseline: factory, qualified: factory },
     answer: async input => { answers.push(structuredClone(input)); return { text: 'Development-only scripted answer.' }; },
     persist: async event => { checkpoints.push(event); }, shouldHalt: () => false, ...overrides };
   return { options, calls, opens, checkpoints, answers };
 }
 
-test('paired schedule uses 16 independent SQLite arms, cold snapshots and source-only answers', async () => {
-  const run = setup(); const report = await runQualifiedComparison(run.options);
+test('paired schedule uses 16 independent SQLite arms, cold snapshots and source-only answers', async t => {
+  const run = setup(t); const report = await runQualifiedComparison(run.options);
   assert.equal(report.status, 'completed', JSON.stringify(report));
   assert.deepEqual(report.candidates, QUALIFIED_COMPARISON_CANDIDATES);
   assert.equal(report.arms.length, 16);
@@ -83,10 +83,10 @@ test('paired schedule uses 16 independent SQLite arms, cold snapshots and source
   }
 });
 
-test('closed source/config validation rejects malformed cases and evaluator fields before any work', async () => {
+test('closed source/config validation rejects malformed cases and evaluator fields before any work', async t => {
   const patches = [null, {}, { rubric: {} }, { answer: null }, { shouldHalt: null }];
   for (const patch of patches) {
-    const run = setup(); const options = patch === null ? null : { ...run.options, ...patch };
+    const run = setup(t); const options = patch === null ? null : { ...run.options, ...patch };
     if (patch && !Object.keys(patch).length) options.sources = {};
     await assert.rejects(runQualifiedComparison(options), /invalid_comparison_options/);
     assert.equal(run.opens.length, 0); assert.equal(run.checkpoints.length, 0);
@@ -95,17 +95,17 @@ test('closed source/config validation rejects malformed cases and evaluator fiel
     s => { s.cases[0].language = 'zh'; }, s => { s.cases[0].expected = 'secret rubric'; },
     s => { s.cases[0].windows[0].messages[0].role = 'system'; },
     s => { s.cases[0].windows[0].messages = Array(1); }]) {
-    const run = setup(); mutate(run.options.sources);
+    const run = setup(t); mutate(run.options.sources);
     await assert.rejects(runQualifiedComparison(run.options), /invalid_comparison_options/);
     assert.equal(run.opens.length, 0);
   }
-  const run = setup(); run.options[Symbol('extra')] = true;
+  const run = setup(t); run.options[Symbol('extra')] = true;
   await assert.rejects(runQualifiedComparison(run.options), /invalid_comparison_options/);
 });
 
-test('unsafe directories reject without creating databases', async () => {
+test('unsafe directories reject without creating databases', async t => {
   for (const mode of ['occupied', 'permissions', 'relative']) {
-    const run = setup();
+    const run = setup(t);
     if (mode === 'occupied') writeFileSync(join(run.options.directory, 'sentinel'), 'preserve');
     if (mode === 'permissions') chmodSync(run.options.directory, 0o755);
     if (mode === 'relative') run.options.directory = '.';
@@ -114,8 +114,8 @@ test('unsafe directories reject without creating databases', async () => {
   }
 });
 
-test('malformed capture is retained without retries; independent scheduled arms continue', async () => {
-  const run = setup(); const brokenCalls = [];
+test('malformed capture is retained without retries; independent scheduled arms continue', async t => {
+  const run = setup(t); const brokenCalls = [];
   run.options.candidates.baseline = options => openMemoryCore({ path: options.path,
     ...(options.withModel ? { model: scripted(brokenCalls, { failExtract: true }) } : {}) });
   const report = await runQualifiedComparison(run.options);
@@ -128,8 +128,8 @@ test('malformed capture is retained without retries; independent scheduled arms 
   assert.ok(report.arms.filter(entry => entry.arm === 'qualified').every(entry => entry.status === 'completed'));
 });
 
-test('latched transport failure globally halts despite core returning a sanitized envelope', async () => {
-  let halted = false; const calls = []; const run = setup({ shouldHalt: () => halted });
+test('latched transport failure globally halts despite core returning a sanitized envelope', async t => {
+  let halted = false; const calls = []; const run = setup(t, { shouldHalt: () => halted });
   run.options.candidates.baseline = options => openMemoryCore({ path: options.path,
     ...(options.withModel ? { model: scripted(calls, { transportFailure: () => { halted = true; } }) } : {}) });
   const report = await runQualifiedComparison(run.options);
@@ -139,9 +139,9 @@ test('latched transport failure globally halts despite core returning a sanitize
   assert.ok(!JSON.stringify(report).includes('PRIVATE_FAILURE'));
 });
 
-test('persistence failure stops calls, retains partial observations and is never retried', async () => {
+test('persistence failure stops calls, retains partial observations and is never retried', async t => {
   for (const stopAt of [0, 2]) {
-    const run = setup(); let attempts = 0;
+    const run = setup(t); let attempts = 0;
     run.options.persist = async event => { attempts++; if (event.sequence === stopAt) throw Error('PRIVATE_FAILURE'); };
     const report = await runQualifiedComparison(run.options);
     assert.equal(report.status, 'halted'); assert.equal(attempts, stopAt + 1);
@@ -152,8 +152,8 @@ test('persistence failure stops calls, retains partial observations and is never
   }
 });
 
-test('answer failures preserve prior evidence and stop globally without a second answer', async () => {
-  const run = setup(); let answers = 0;
+test('answer failures preserve prior evidence and stop globally without a second answer', async t => {
+  const run = setup(t); let answers = 0;
   run.options.answer = async () => { answers++; throw Error('PRIVATE_FAILURE'); };
   const report = await runQualifiedComparison(run.options);
   assert.equal(report.status, 'halted'); assert.equal(answers, 1);
@@ -163,18 +163,18 @@ test('answer failures preserve prior evidence and stop globally without a second
   assert.ok(!JSON.stringify(report).includes('PRIVATE_FAILURE'));
 });
 
-test('operator prehalt and throwing factory stop globally with all scheduled identities retained', async () => {
-  const run = setup({ shouldHalt: () => true });
+test('operator prehalt and throwing factory stop globally with all scheduled identities retained', async t => {
+  const run = setup(t, { shouldHalt: () => true });
   const report = await runQualifiedComparison(run.options);
   assert.equal(report.status, 'halted'); assert.ok(report.arms.every(entry => entry.status === 'not_run'));
   assert.equal(run.opens.length, 0); assert.deepEqual(readdirSync(run.options.directory), []);
-  const broken = setup(); broken.options.candidates.baseline = () => { throw Error('PRIVATE_FAILURE'); };
+  const broken = setup(t); broken.options.candidates.baseline = () => { throw Error('PRIVATE_FAILURE'); };
   const failed = await runQualifiedComparison(broken.options);
   assert.equal(failed.status, 'halted'); assert.ok(failed.arms.slice(1).every(entry => entry.status === 'not_run'));
 });
 
-test('failed recall retains its envelope and never fabricates an answer or retries', async () => {
-  const run = setup(); let selections = 0;
+test('failed recall retains its envelope and never fabricates an answer or retries', async t => {
+  const run = setup(t); let selections = 0;
   run.options.candidates.baseline = options => {
     const model = scripted([]);
     model.select = () => { selections++; throw Error('PRIVATE_FAILURE'); };
@@ -189,8 +189,8 @@ test('failed recall retains its envelope and never fabricates an answer or retri
   assert.equal(run.answers.length, 8);
 });
 
-test('close failure globally halts and retains capture observations', async () => {
-  const run = setup();
+test('close failure globally halts and retains capture observations', async t => {
+  const run = setup(t);
   run.options.candidates.baseline = options => {
     const core = openMemoryCore({ path: options.path, model: scripted([]) });
     return { ...core, close: () => { core.close(); throw Error('PRIVATE_FAILURE'); } };
@@ -203,8 +203,8 @@ test('close failure globally halts and retains capture observations', async () =
   assert.ok(report.arms.slice(1).every(entry => entry.status === 'not_run'));
 });
 
-test('detached persistence and halted callback after intent cannot alter evidence or start model work', async () => {
-  const run = setup(); let halted = false;
+test('detached persistence and halted callback after intent cannot alter evidence or start model work', async t => {
+  const run = setup(t); let halted = false;
   run.options.shouldHalt = () => halted;
   run.options.persist = async event => {
     event.report.arms[0].namespace.ownerId = 'mutated-checkpoint';
@@ -216,9 +216,9 @@ test('detached persistence and halted callback after intent cannot alter evidenc
   assert.ok(report.arms[0].windows.every(window => window.status === 'not_run'));
 });
 
-test('cold snapshot mismatch or read failure halts all later arms, not only the current case', async () => {
+test('cold snapshot mismatch or read failure halts all later arms, not only the current case', async t => {
   for (const fault of ['mismatch', 'read-failure', 'source-binding']) {
-    const run = setup();
+    const run = setup(t);
     const factory = options => {
       run.opens.push({ ...options });
       const core = openMemoryCore({ path: options.path, ...(options.withModel ? { model: scripted(run.calls) } : {}) });
