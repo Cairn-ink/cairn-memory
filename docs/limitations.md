@@ -1081,6 +1081,33 @@ unavailable, not zero retention. Synthetic gate integration verifies these
 mechanics, not model quality, installed-host behavior or a repaired score.
 The earlier official-six failures and feasibility gate remain unchanged.
 
+## Retained-source trace does not repair retrieval quality
+
+The [N2 observation contract](plans/retained-recall-trace.md) distinguishes
+the explicit complete-map route, which can correctly bypass a select callback,
+from a model-selected route. It also separates model-proposed references from
+progress proven by later validated stages. The prior frame-only diagnostic
+could mislabel a delivered complete-map source as invisible, or a rejected
+proposal as selected; correcting that attribution is not improved retrieval.
+
+A fresh synthetic control still retains a fifth source receipt but fails to
+select its card when the candidate label omits the relevant cue. A visible
+receipt query and the explicit complete-map control deliver their source.
+This is a bounded scripted routing contrast, not evidence that a real model
+would always fail, nor the cause of earlier consumed cases with at most four
+receipts per card. Earlier official scores and the failed feasibility gate
+remain unchanged.
+
+The trace concerns one expected source and its current revision, not all
+relevant evidence. It does not infer a semantic cause from a missing callback,
+reconstruct historical executions or prove source identity from flattened
+answer text. Incomplete or changed observations remain unavailable. A scoped
+product correction and new prospectively frozen quality evidence are still
+needed before any claim of better reliability or comparative accuracy.
+The current observer is single-namespace and bounds answer inspection to
+64 KiB; larger actual answer payloads are unobserved, not failed delivery.
+It is not yet wired into the paid runner or a real host.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the
