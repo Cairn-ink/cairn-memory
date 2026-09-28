@@ -1013,8 +1013,59 @@ or automatic supersession. A fresh six-type official completion and
 common-resolution gate, followed by separately reviewed fresh fixed-30 work,
 remains necessary before comparative or promotion claims.
 
+## Fresh six-type official indexed-evidence cohort missed feasibility
+
+The [new official-six evidence packet](evidence/indexed-evidence-official-six.md)
+uses six previously unused LongMemEval-S questions, one per official type,
+separate from the four authored synthetic histories above. Its prospective
+seed and audited 142-ID exclusions were fixed before source preparation;
+all 148 future exclusions were sealed before cost inspection. The explicit
+opt-in indexed-evidence planner accepted all six source cases with 292 Cairn
+capture batches. A fresh whole-vector ceiling of 77,446 requests and
+14,702,404 microUSD of conservative reservation fit the fixed pilot cap,
+protected remainder and shared ledger checkpoint. Those were prelaunch upper
+bounds, not observed calls or upfront ledger reservations.
+
+The one-shot orchestration completed without a global halt, but Cairn
+completed ingestion and nonempty answers in 5/6 cases versus Mem0's 6/6.
+Common resolved judgments were 5/6; Cairn had 3 correct, 2 incorrect and 1
+unresolved, while Mem0 had 3 correct and 3 incorrect. The unresolved Cairn
+case failed its sixth capture batch with a settled `unknown` generation
+timeout after five successes. That failure is not an incorrect semantic
+judgment, nor proof of a provider cause or timeout remedy. Both incorrect
+Cairn answers were abstentions. The multi-session case had zero observed
+recalled cards, receipts and packed evidence units; why that path was empty
+remains unproven. In the temporal-reasoning case, the sole selected receipt
+lacked the target event and its timing, with no packing omission. This
+localizes an evidence-sufficiency miss without proving the fact was never
+stored or identifying a model root cause. The frozen 6/6 completion and
+common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
+
+Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
+conservative reservation. Known usage estimates were 2,452,595 microUSD for
+1,417 rows; 518 costs remain unknown, and none of the requests is pending.
+The cumulative shared checkpoint is 21,355 requests / 135,538,298 microUSD
+reserved. Reservation is not an invoice, and known usage is not total spend.
+The primary reconciled the unchanged parent prefix and all new guarded rows;
+an independent read-only audit confirmed the aggregate and accounting. This
+consistency check does not pass the failed feasibility or semantic gates.
+
+The public report names the frozen seed, source hash and revision so the
+method is inspectable. The selected IDs, complete exclusion roster and
+one-shot operator are retained privately, so the public aggregate alone is
+not a fully replayable benchmark packet.
+
+This pilot leaves the earlier official qualification failures and four-case
+synthetic diagnostic unchanged. Its selected subset cannot establish full-500
+LongMemEval accuracy, a general Cairn/Mem0 ranking, a causal effect of omitting
+qualification, default MOC navigation,
+source fidelity or installed MCP/Hermes reliability. A larger cohort requires
+a new frozen selection and resource check after the failed feasibility gate,
+not reuse of these six.
+
 ## Where the evidence lives
 
+- [Fresh official-six indexed-evidence packet](evidence/indexed-evidence-official-six.md)
 - [Four-case real-model long-history pilot](evidence/long-history-live-pilot.md)
 - [Fresh official-six v3 halted observation](evidence/qualification-official-v3.md)
 - [Installed qualified source-pair launch](qualified-source-pair-launch.md)

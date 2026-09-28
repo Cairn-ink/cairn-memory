@@ -39,8 +39,14 @@ service must use the same public core, not separate engines.
   for reconfirmation despite selected source receipts containing the premise
   update. These authored diagnostic cases do not establish comparative
   superiority, default MOC navigation or installed MCP/Hermes reliability.
-  Next is a fresh six-type official completion gate, followed only then by a
-  separately reviewed fresh fixed-30 proposal and product-level semantic work.
+  The separate [fresh six-type official indexed-evidence packet](docs/evidence/indexed-evidence-official-six.md)
+  had six ready source preparations, but the one-shot run failed the frozen
+  completion/paired-scoreability gate: Cairn 5/6 ingestions and answers,
+  Mem0 6/6, common resolved N=5. Judgments were Cairn 3/2/1 and Mem0 3/3/0
+  correct/incorrect/unresolved. One Cairn capture timed out; the cause remains
+  unproven. Do not expand to fixed-30 now. Diagnose the timeout, empty
+  multi-session retrieval and temporal evidence path offline, then separately
+  review any new proposal. Default MOC and product semantic gates remain open.
 
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
@@ -60,12 +66,11 @@ service must use the same public core, not separate engines.
   completed 24/24 attempts and 31 cards, but adjudicated full-six semantic success
   was 13/24. False observation/fact commitment, claimant/time omissions and an
   exact-anchor failure remain; clarified guidance is not a semantic validator.
-  Next is fresh long-history six-type paired feasibility using the merged fixes,
-  while retaining source fidelity as an unresolved product gate. No consumed
-  cohort tuning/replay or reliability/promotion claim. Source-only operator review
-  and v3 budget projection precede dispatch; six common resolved cases are required
-  before a separately assessed fresh fixed-30. Ordinary installed Hermes/MCP is
-  still a separate gate.
+  The later indexed-evidence official-six packet missed its 6/6 completion and
+  common-resolution gate, while source fidelity remains an unresolved product
+  gate. No consumed cohort tuning/replay or reliability/promotion claim. Its
+  source-only operator and resource projection were reviewed before dispatch;
+  fixed-30 remains blocked. Ordinary installed Hermes/MCP is a separate gate.
 
 - The [paired ingestion semantic probe](docs/evidence/ingestion-semantic-probe.md)
   concludes **do not adopt combined**: mechanical completion was 23/24 baseline
@@ -191,9 +196,10 @@ reliability work below without declaring older failure gates resolved.
    reproduced offline, and the [bounded qualification partition](docs/plans/bounded-qualification-partitions.md)
    passed engineering gates; neither establishes semantic accuracy or a paid
    result. Qualification slot mapping and source fidelity still need separate
-   falsifiers and a reviewed product correction. Review the v3 resource/cap
-   projection and obtain a fresh grant before considering a newly frozen
-   feasibility probe; do not replay consumed cases.
+   falsifiers and a reviewed product correction. The later opt-in
+   [indexed-evidence official-six packet](docs/evidence/indexed-evidence-official-six.md)
+   also failed its 6/6 completion and common-resolution gate. Diagnose its
+   timeout and evidence-sufficiency misses offline; do not replay consumed cases.
    The [direct candidate-ID wire experiment](docs/plans/direct-candidate-wire-experiment.md)
    is offline-only and recommends revision, not production adoption: its
    synthetic five-item intermediate case increases qualifier pairs from one

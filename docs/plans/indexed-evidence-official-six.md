@@ -71,3 +71,72 @@ Worker credentials, corpus/evaluator access and paid execution are prohibited.
 Private acceptance records retain exact paths/hashes and commands without
 publishing answers or account data. Final delivery records results and ownership
 below after verification; no completed outcome is claimed prospectively.
+
+## Implementation and prelaunch checkpoint
+
+The primary retained runtime `19623ad277c3552e041d4c793313fda178b98b61`
+unchanged. Bounded GPT-6 Sol/high workers adapted private source preparation
+and the one-shot operator; the primary accepted the actual source and budget
+boundaries, inspected the changed logic and reran key tests. Separate non-author
+Standards and Spec reviews passed the exact private preparation hashes before
+source preparation and the exact bound operator hashes before paid dispatch.
+The operator review noted a nonblocking no-op synthetic cleanup hook; owned
+workspace cleanup was separately verified. Actual worker elapsed time, token
+use and cost telemetry were unavailable and are not inferred.
+
+The accepted source-only preparation selected six new official IDs from the
+remaining inventory after excluding the audited 142-ID union. It sealed all
+148 future exclusions before inspecting source cost. The six were ready with
+batch vector `[50,52,50,44,45,51]`, 292 total. The explicit indexed resource projection
+bounded the whole cohort at 77,446 requests / 14,702,404 microUSD of
+conservative reservation. The settled prelaunch shared checkpoint was 19,420
+requests / 124,916,555 microUSD reserved, with zero pending. These are
+prelaunch bounds and starting balances, not post-run usage. Source-only
+assembly and one-shot preflight matched the frozen roster and bounds.
+
+The frozen seed was `cairn-indexed-evidence-official-six-20260928-caSehK`;
+the cleaned source SHA-256 was
+`d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`
+at declared revision `98d7416c24c778c2fee6e6f3006e7a073259d48f`.
+The selected IDs, full exclusion roster and private operator are retained
+outside the public report; its protocol and aggregate do not enable exact
+public replay of this cohort.
+
+Primary-owned synthetic/offline verification passed on both Node 22.16 and
+24.15: source-preparation 28/28, operator 20/20, actual-core plus pinned-native
+fake-HTTP 26/26, focused public 34/34, and workspace lifecycle 25/25. Full
+LongMemEval 193/193, generic 121/121 and JSON validation passed on Node 24
+at the recorded checkpoint. The [public evidence report](../evidence/indexed-evidence-official-six.md)
+records method, the primary-verified terminal aggregate and limitations.
+The primary owns terminal aggregate inspection, raw-to-public equivalence,
+final report acceptance, scoped commit and PR delivery. Implementation workers
+did not read the actual corpus, evaluator, key, live ledger database or provider
+output. A separate authorized non-author auditor inspected retained terminal
+generation, scoring, accounting and checkpoint evidence read-only after the run.
+
+## Terminal aggregate and remaining review
+
+The one-shot orchestration completed without a global generation or scoring
+halt, while S7 feasibility failed. Cairn completed ingestion and nonempty
+answers for 5/6; Mem0 completed 6/6; the common resolved denominator is 5/6.
+Judgments were Cairn 3 correct / 2 incorrect / 1 unresolved and Mem0 3 / 3 / 0.
+The fifth Cairn case reported `model_timeout` during capture after five of 45
+planned batches; its next batch failed and 39 were not run. The case scope
+recorded `failed/deadline`. Its generation timeout settled `unknown` with
+zero pending, while the fixed remaining arms continued under local isolation.
+A timeout cause or repair is not established. No consumed case was
+replayed or replaced.
+
+Actual new accounting was 1,935 guarded requests and 10,621,743 microUSD of
+conservative reservation. Known usage was 2,452,595 microUSD on 1,417 rows;
+518 costs remain unknown. The cumulative checkpoint is 21,355 requests /
+135,538,298 microUSD reserved, leaving 64,461,702 under the 200,000,000 cap.
+The primary matched the saved checkpoint, unchanged parent prefix and all
+1,935 new guarded rows. An independent non-author read-only audit confirmed
+all twelve arm outcomes, eleven resolved judgments, accounting tail, source
+pins and caps; this does not pass the semantic or feasibility gates. Final
+document checks during drafting included a primary rerun of generic tests
+(121/121) and JSON validation on Node 24 plus `git diff --check`; the final
+fixed-diff review and CI remain delivery gates. This result blocks fixed-30
+expansion. The next work is bounded offline diagnosis of the timeout and
+empty/temporal evidence paths.
