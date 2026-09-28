@@ -18,7 +18,7 @@ test('E10 frozen committed v14/v15 mode-off prompts, requests, outputs, rows and
       const path = join(dir, `${version}-${index}.sqlite`);
       assert.deepEqual(await captureEpisodeParity(new URL('../../', import.meta.url).pathname, path, config), expected);
       const db = new DatabaseSync(path);
-      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 16);
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
       assert.equal(db.prepare('SELECT count(*) n FROM episode_messages').get().n, 0);
       db.close();
     }

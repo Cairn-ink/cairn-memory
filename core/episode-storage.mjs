@@ -41,6 +41,16 @@ const blank = label => ({ clientLabel: label, eventStart: null, eventEnd: null, 
   anchors: {}, modelMetadata: null, semanticSupport: 'unassessed', editor: {},
   processing: { state: 'pending', missing: 0, expired: 0, omitted: 0, errorCode: null } });
 
+export function episodeMetadata(ns, row) {
+  const record = JSON.parse(row.record);
+  // Internal replay identities and closure journals are not descriptive read data.
+  const { stepActions, replacedSteps, ...visible } = record;
+  return { id: row.id, revision: row.revision, namespace: { ...ns, projectId: ns.projectId || null },
+    sessionKey: row.session_key, client: row.client, firstReceivedAt: row.first_received_at,
+    lastReceivedAt: row.last_received_at, updatedAt: row.updated_at, ...visible,
+    processing: { ...record.processing, observed: row.observed, attempted: row.attempted, covered: row.covered } };
+}
+
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
 export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation }) {
   const read = (ns, id) => db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=?`)
@@ -486,7 +496,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const { row, claim } = attempt(ns, input), old = JSON.parse(row.record);
       object(input.result, ['type','language','gist','outcome','nextStep','disposition']);
       if (['type','language','gist','outcome','nextStep','disposition'].some(key => !Object.hasOwn(input.result,key))) fail('invalid_input');
-      if (input.result.disposition != null) fail('invalid_input'); // Step transitions belong to SE-3.
       let sources = denseArray(input.sources, 1, 1552).map(ref => {
         object(ref, ['eventId','messageId','sourceId']);
         if (ref.sourceId !== undefined) {
@@ -519,6 +528,22 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         return { sourceId: source.id, digest: source.digest, start: anchor.start, end: anchor.end };
       });
       const result = input.result, record = { ...old, anchors: {}, editor: { ...old.editor } };
+      let transition = null;
+      if (result.disposition !== null) {
+        const value = object(result.disposition, ['stepId','expectedRevision','action','anchors']);
+        if (!old.nextStep || old.nextStep.status !== 'open' || value.stepId !== old.nextStep.id ||
+            value.expectedRevision !== row.revision || old.editor.nextStep?.pinned ||
+            !['completed','cancelled','replaced'].includes(value.action)) fail('episode_step_conflict');
+        transition = { stepId: value.stepId, action: value.action, anchors: anchors(value.anchors) };
+        // Closure must cite new evidence, never the prior step or copied historical context.
+        const originalOrdinal = old.nextStep.receiptOrdinal;
+        if (transition.anchors.some(anchor => {
+          const source = sources.find(source => source.id === anchor.sourceId);
+          return source.origin_episode_id !== row.id || source.ordinal <= originalOrdinal;
+        })) fail('episode_step_conflict');
+        if ((value.action === 'replaced') !== (result.nextStep !== null)) fail('episode_step_conflict');
+      }
+
       if (typeof result.language !== 'string' || result.language.length > 35 ||
         !/^(mixed|[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*)$/.test(result.language)) fail('invalid_input');
       record.language = result.language;
@@ -537,9 +562,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         }
         record.editor[field] = { origin: 'model', pinned: false };
       }
-      if (old.nextStep?.status === 'open' && result.nextStep != null && !old.editor.nextStep?.pinned && result.nextStep.value !== old.nextStep.text) fail('episode_step_conflict');
+      if (!transition && old.nextStep?.status === 'open' && result.nextStep != null && !old.editor.nextStep?.pinned && result.nextStep.value !== old.nextStep.text) fail('episode_step_conflict');
       for (const field of fields) {
-        if (old.editor[field]?.pinned || (field === 'nextStep' && old.nextStep?.status === 'open')) {
+        if (old.editor[field]?.pinned || (field === 'nextStep' && old.nextStep?.status === 'open' && !transition)) {
           record[field] = old[field]; record.editor[field] = old.editor[field];
           if (old.anchors[field]) record.anchors[field] = old.anchors[field];
           for (const anchor of old.anchors[field] ?? []) {
@@ -550,6 +575,26 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
             }
           }
         }
+      }
+
+      if (transition) {
+        record.stepClosure = transition;
+        record.anchors.stepClosure = transition.anchors;
+        if (transition.action !== 'replaced') {
+          record.nextStep = { ...old.nextStep, status: 'closed' };
+          record.anchors.nextStep = old.nextStep.anchors;
+          for (const anchor of old.nextStep.anchors) {
+            const source = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id=?').get(row.id,anchor.sourceId);
+            if (!source) fail('revision_conflict');
+            if (!sources.some(item=>item.id===source.id)) sources.push(source);
+          }
+        }
+        rememberStep(row, old.nextStep.id, transition.action === 'replaced' ? 'replaced' : 'closed');
+      } else {
+        // A closed identity cannot be silently recreated by an unguarded draft.
+        if (old.nextStep?.status === 'closed' && result.nextStep !== null && result.nextStep.value === old.nextStep.text)
+          fail('episode_step_conflict');
+        delete record.stepClosure;
       }
       const cited = new Set(Object.values(record.anchors).flat().map(anchor => anchor.sourceId));
       sources = sources.filter(source => cited.has(source.id));
@@ -775,6 +820,38 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       return { ...anchor };
     });
   }
+  // Separate marker prefixes keep these content-free identities out of draft
+  // scheduling. Finished rows cannot acquire/recover leases or consume attempts.
+  function rememberStep(row, stepId, status) {
+    db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished,started)
+      VALUES(?,?,?,?,0,?,?,?,1,1) ON CONFLICT(episode_id,marker) DO NOTHING`)
+      .run(row.id, 'step-identity:'+stepId, row.observed, status, row.revision, row.source_fence, row.generation);
+  }
+  function closeNextStep(ns, input) {
+    identifier(input.actionId); identifier(input.stepId); revision(input.expectedRevision);
+    if (!['completed','dismissed'].includes(input.action)) fail('invalid_input');
+    return transaction(db, () => {
+      const row = live(ns, input.episodeId);
+      const marker = 'step-action:'+createHmac('sha256',Buffer.from(secret(),'hex')).update(input.actionId).digest('hex');
+      const token = sourceDigest(JSON.stringify([input.stepId,input.expectedRevision,input.action]));
+      const prior = db.prepare('SELECT token,revision FROM episode_attempts WHERE episode_id=? AND marker=?').get(row.id,marker);
+      if (prior) {
+        if (prior.token !== token) fail('event_payload_conflict');
+        return { closed: true, revision: prior.revision+1 };
+      }
+      if (row.revision !== input.expectedRevision) fail('revision_conflict');
+      const record = JSON.parse(row.record);
+      if (record.nextStep?.id !== input.stepId || record.nextStep.status !== 'open') fail('episode_step_conflict');
+      correctionAnchors(row,record.nextStep.anchors);
+      record.nextStep = { ...record.nextStep,status:'closed' };
+      record.editor.nextStep = { origin:'explicit-correction',pinned:true };
+      rememberStep(row,input.stepId,'closed');
+      db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished,started)
+        VALUES(?,?,?,?,0,?,?,?,1,1)`).run(row.id,marker,row.observed,token,row.revision,row.source_fence,row.generation);
+      save(ns,row,record);
+      return { closed:true,revision:row.revision+1 };
+    });
+  }
   function correct(ns, input) {
     object(input.patch, fields);
     if (!Object.keys(input.patch).length) fail('invalid_input');
@@ -784,14 +861,18 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       for (const [field, value] of Object.entries(input.patch)) {
         if (value === null) {
           if (field === 'gist') fail('invalid_input');
-          if (field === 'nextStep' && record.nextStep) record.nextStep = { ...record.nextStep, status: 'closed' };
+          if (field === 'nextStep' && record.nextStep) {
+            rememberStep(row, record.nextStep.id, 'closed');
+            record.nextStep = { ...record.nextStep, status: 'closed' };
+          }
           else record[field] = null;
           if (field !== 'nextStep') delete record.anchors[field];
         } else {
           object(value, ['text','anchors']);
           const text = episodeText(value.text, field === 'gist' ? 400 : 240);
           record.anchors[field] = correctionAnchors(row, value.anchors);
-          record[field] = field === 'nextStep' ? { id: record.nextStep?.id ?? randomUUID(), text, status: 'open',
+          if (field === 'nextStep' && record.nextStep && (record.nextStep.status !== 'open' || record.nextStep.text !== text)) rememberStep(row, record.nextStep.id, 'replaced');
+          record[field] = field === 'nextStep' ? { id: record.nextStep?.status === 'open' && record.nextStep.text === text ? record.nextStep.id : randomUUID(), text, status: 'open',
             anchors: record.anchors[field], receiptOrdinal: control(ns)?.ordinal ?? 0 } : text;
         }
         record.editor[field] = { origin: 'explicit-correction', pinned: true };
@@ -833,16 +914,17 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   function inspect(ns, input, pages) {
     return transaction(db, () => {
       stagedEvidence.touch(ns);
-      const row = live(ns, input.episodeId), currentEpoch = epoch(ns);
+      const currentEpoch = epoch(ns);
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
-      const record = JSON.parse(row.record);
+      const row = live(ns, input.episodeId);
       const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
         .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
           originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
           role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
       const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
-        WHERE l.episode_id=? AND l.id>? AND m.deleted=0 ORDER BY l.id LIMIT ?`)
-        .all(row.id, pages.memory.after ?? '', pages.memory.limit+1).map(link => ({ id: link.id, memoryId: link.memory_id,
+        WHERE l.episode_id=? AND l.id>? AND m.deleted=0
+          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
+        .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).map(link => ({ id: link.id, memoryId: link.memory_id,
           admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id
@@ -850,10 +932,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         .all(row.id, pages.policy.after ?? 0, pages.policy.limit+1).map(e => ({ position: e.position, eventId: e.event_id,
           policy: e.policy, basisRevision: e.policy_revision, type: e.policy_type, decidedAt: e.policy_at, receivedAt: e.created_at, admission: e.admission,
           gapReasons: JSON.parse(e.gap_reasons), omittedCount: e.omitted_count, omittedMessageIndices: JSON.parse(e.omitted_indices), staging: e.staging === 'not-staged' ? 'not-staged' : e.state, gap: e.gap, releaseReason: e.release_reason ?? null }));
-      return { episode: { id: row.id, revision: row.revision, namespace: { ...ns, projectId: ns.projectId || null },
-        sessionKey: row.session_key, client: row.client, firstReceivedAt: row.first_received_at,
-        lastReceivedAt: row.last_received_at, updatedAt: row.updated_at, ...record,
-        processing: { ...record.processing, observed: row.observed, attempted: row.attempted, covered: row.covered } },
+      return { episode: episodeMetadata(ns, row),
         sources, memoryLinks: memories, policies,
         keepActions: db.prepare(`SELECT * FROM episode_keep_actions WHERE episode_id=? AND keep_ordinal>?
           ORDER BY keep_ordinal LIMIT ?`).all(row.id, pages.keep.after ?? 0, pages.keep.limit + 1)
@@ -864,5 +943,5 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     });
   }
   return { draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
-    claimWriter, releaseWriter, claimDraft, failDraft, commitDraft, correct, releaseCorrection, forget, inspect };
+    closeNextStep, claimWriter, releaseWriter, claimDraft, failDraft, commitDraft, correct, releaseCorrection, forget, inspect };
 }

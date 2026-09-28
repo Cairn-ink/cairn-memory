@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — session episode reads
+
+- Add bounded UTC episode/memory range reads with exact scope/client filters,
+  signed stale-aware cursors and whole-response byte budgets.
+- Add local session-start context with untrusted framing, sourced procedures and
+  the newest open step, exact counting, group budgets and final freshness checks.
+- Add guarded explicit step closure/replay and source-anchored draft transitions.
+- Eagerly migrate stores to schema v17 with four read indexes and no table or
+  column changes. Older openers refuse the new version.
+
 ## Unreleased — opt-in episode capture
 
 - Add debounced episode interpretation through an injected port, bounded first,

@@ -302,7 +302,7 @@ event bound payload retention, not content-free replay metadata or total file
 size. Expired/discarded/forgotten fences remain; replay does not renew retention.
 SQLite journals, backups, local-file authority, best-effort redaction and opaque
 identifier limitations still apply. Stop older runtime connections before the
-v16 migration; an already-open old process is not retroactively fenced. See
+v17 migration; an already-open old process is not retroactively fenced. See
 [staged evidence](staged-capture-evidence.md) for the threat model and limits.
 
 ### Embedded proposed-rationale boundary
@@ -564,7 +564,7 @@ status commit in one transaction, including no-op placement. Later explicit
 classification never rewrites the initial journal. Journal identifiers and
 revision guards persist with the local SQLite file, are not encryption, and
 do not create a retention/pruning policy. Older open runtimes must stop before
-the v16 upgrade; it cannot retroactively fence an already-open process.
+the v17 upgrade; it cannot retroactively fence an already-open process.
 
 `classify_unfiled_memories`
 accepts only one to five unique memory ID/revision pairs. Its namespace is
@@ -669,10 +669,29 @@ SE-1 implements the model-free storage and management subset of the
 [session-episode plan](plans/session-episodes.md), including `getEpisode` before
 capture integration. See
 [storage API shapes](storage-contract.md#episode-management-and-procedural-tags-se-1)
-and [atomic v16 migration](local-store.md#episode-storage-foundation-se-1).
+and [atomic v17 migration](local-store.md#episode-storage-foundation-se-1).
 Debounced capture/interpretation and keep are implemented through an injected port;
 range/startup reads, provider schemas and MCP exposure remain separate work.
 No hosted defaults or telemetry change; automatic prompt changes require episode
-mode. Every open eagerly upgrades older committed formats to v16; hosts must
+mode. Every open eagerly upgrades older committed formats to v17; hosts must
 stop/drain older connections first. Explicit procedural tags are independent
 opt-in local mutations.
+
+### Local core episode reads and startup context
+
+The local core now exposes `listEpisodes`, `listMemoriesByTime`,
+`sessionStartContext` and `closeEpisodeNextStep`; see the exact inputs, orders,
+cursor and budget rules in [the storage contract](storage-contract.md#time-range-reads).
+`getEpisode` keeps independent source/lineage/policy/keep pages. These operations
+use the existing success/error envelope and one exact host-authorized namespace.
+No HTTP schema or MCP tool shape is added by this core change.
+
+Read paths never invoke capture, interpretation, selection or queue processing.
+Startup uses only the injected local exact counter and returns untrusted framing
+with complete sourced items; hosts reserve their own surrounding prompt budget.
+UTC event ranges do not substitute receipt clocks for unknown event times.
+Signed pagination fails `cursor_stale` after mutation; startup's final reread
+uses `index_revision_conflict` for changed epochs and `revision_conflict` for
+changed identities/evidence. Explicit step closure has exact step/revision/action
+replay guards and does not grant execution permission. Source deletion invalidates
+its descriptive evidence. Core episode generation remains opt-in.

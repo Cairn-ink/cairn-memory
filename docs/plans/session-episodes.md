@@ -773,3 +773,68 @@ Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
 additional unsupported clients, complete archives/backfill, cross-store identity
 synchronization, semantic certification or secure backup/provider erasure. Use an
 injected episode-interpretation port; any specific classifier is out of scope.
+
+### SE-3 verification
+
+maintainer-approved: schema v17 adds read indexes
+
+The eager v17 migration adds four indexes and changes no tables or columns.
+Every committed v14/v15/v16 open, including episode-off opens, upgrades in one
+transaction with foreign keys enabled and checked before the version is recorded.
+Committed SQL/JSON fixtures are generated offline; tests never access Git or
+regenerate fixtures. The frozen v16 opener refuses v17. Index creation failure
+rolls back all preceding migration work, rows and the version.
+
+Range reads use signed store/namespace/operation/filter/limit/order/last-key/epoch
+cursors, exact client equality and indexed keysets. Event order uses an expression
+index over the stored JSON event end; receipt order uses first receipt time.
+Memory receipt order scans the receipt-time index and uses `receipts.memory_id`
+for the final tie-breaker, equal to the joined memory ID without a SQLite sort.
+Revision and procedural order reuse `namespace_memories`. Source, lineage, policy
+and keep inspection reuse the existing SE-1/SE-2 page indexes. No source clock is
+inferred; unknown event intervals, partial coverage and incomplete shells retain
+explicit markers. The complete success envelope, including cursors, fits 64 KiB.
+
+Startup binds one exact namespace and returns its newest eligible open step;
+older open steps resurface when newer ones close. The six-step ceiling does not
+imply a scope union. Both groups are independently switchable and budgeted.
+Indexed probes read at most thirteen identities per group and materialize at most
+twelve candidates. Whole sourced items alternate step first; a non-fitting item
+stops only its group. The local counter observes the complete success envelope.
+The final atomic reread distinguishes changed epochs from changed identities,
+tags or complete evidence, with no callback afterwards. All recollection retains
+the contract's exact untrusted framing.
+
+Explicit step actions and replaced identities have content-free replay markers
+in the existing finished-attempt journal under distinct prefixes. They cannot
+acquire leases, schedule interpretation or consume draft allowances. Action IDs
+are HMAC-bound. Later draft storage transitions require the exact open-step ID
+and revision, newer source anchors and explicit completion/cancellation/replacement;
+silence and dropped prior context preserve an open step. Source invalidation
+clears descriptive closure evidence and never resurrects the old proposal.
+
+| SE-3 responsibility / touched gate | Tests (under `core/test/`) |
+| --- | --- |
+| Indexed event/receipt episode reads and receipt/revision memory reads; E9 | `episode-reads.test.mjs`: named production query plans without temporary sorting, exact-client variants, bounded large-history keysets, tied orders, DST caller boundaries, half-open edges, receipt multiplicity, labeled history |
+| Honest time/coverage, exact owner/project/client isolation and deletion; E1/E7/E9 | `episode-reads.test.mjs`: event/receipt disagreement, unknown/partial shells, two owners and two projects, foreign clients, forgotten content/digest exclusion |
+| Signed opaque cursor binding, tampering, restart, no-op replay and stale epochs; E9 | `episode-reads.test.mjs`: store/namespace/operation/filter/limit binding, tampered/oversized tokens, registration/admission replay, mutation yields `cursor_stale`; inherited `episode-storage.test.mjs` covers independent inspection pages |
+| Whole-envelope 64-KiB prefix budgets, strict inputs and bounds; E2/E9 | `episode-reads.test.mjs`: public multilingual whole-record pages, cursor/envelope overhead, oversized-first-item failure, UTC/range/state/field/limit rejection |
+| Startup groups, newest step, procedural order, limits and source completeness; E10 | `session-context.test.mjs`: exact indexed thirteen-row probes, twelve-candidate consideration, group switches, alternation, complete receipts, oversized group stopping, default/hard budgets, exact framing and namespace isolation |
+| No read generation, local counting and final freshness; E3/E5/E10 | `episode-reads.test.mjs` and `session-context.test.mjs`: throwing generation ports, absent/throwing/async/invalid counters, epoch/identity/tag/source mutation during counting, no callback after authoritative reread |
+| Open-step semantics, guarded transitions, closure replay and source loss; E2/E7/E10 | `session-context.test.mjs`: silent later episode, older-step resurfacing, inert explicit replay, foreign/stale guards, newer-source-only completion/cancellation/replacement, pinned steps, missing replacement and source correction invalidation |
+| Mode isolation and procedural eligibility in both modes; E10 | `session-context.test.mjs`: public facade in both modes; inherited `episode-mode-parity.test.mjs` and migration parity compare committed prompt/request/output/row/digest and diagnostic fixtures |
+| Eager atomic v17 upgrade and older-opener exclusion; E11 | `episode-migration.test.mjs`: committed v14/v15/v16 fixtures in both modes, preserved rows/FKs, frozen index layout, repeated open, failed-index rollback and frozen v16 refusal; existing schema-version assertions advance from 16 to 17 |
+| Shipped modules and synthetic demo; E11 | Artifact manifest includes `episode-reads.mjs` and `session-context.mjs`; existing artifact suite checks installed contents. `demo:session-context` is registered alongside every existing core demo on both CI runtimes |
+
+The rationale test's synthetic v11 downgrade additionally drops the new receipt
+index before reopening; episode indexes disappear with their existing table drop.
+Other inherited migration-test edits change only current-version assertions.
+No hosted schema, MCP tool, provider schema, paid call, real-data experiment or
+semantic-fidelity claim is introduced.
+
+
+The guarded draft storage seam is implemented and tested. The current episode-v1
+interpreter request still omits prior-step guards, and its prompt still requires
+null dispositions. Connecting model-selected transitions to this seam needs a
+separately authorized request/prompt change; those files are outside this retrieval
+assignment. No ordinary-capture closure integration is claimed by this appendix.
