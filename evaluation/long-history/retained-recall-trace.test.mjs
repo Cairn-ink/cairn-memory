@@ -453,3 +453,78 @@ test('hostile observations and late or repeated records cannot rebind a closed t
   assert.equal(trace.finish({ recall: fixture.response,
     packed: fixture.packed, after: before }).reason, 'already_finished');
 });
+
+test('one-source trace bounds calls, public reads, answer observation and report disclosure',
+  { skip: !supportsSqlite && 'node:sqlite requires Node >=22.16' }, async t => {
+  const { createRetainedRecallTrace } = await import('./recall-observation.mjs');
+  const { packMixedAnswer } = await import('../longmemeval/mixed-answer.mjs');
+  const fixture = await coldCase(t, 12);
+  const visible = await fixture.runFor(fixture.firstReceipt, { selectionMode: null });
+  assert.equal(visible.response.ok, true);
+  assert.equal(visible.frames.select.length, 1);
+  assert.equal(visible.frames.rank.length, 1);
+  const receipt = fixture.firstReceipt;
+  const probe = { namespace, memoryId: fixture.target.id, client: 'synthetic',
+    sessionId: 'cold-case', eventId: receipt.eventId, role: receipt.role,
+    excerpt: receipt.excerpt, routingCue: visible.marker };
+  const read = receiptLimit => fixture.core.get({ namespace, memoryId: fixture.target.id,
+    receiptLimit });
+  const before = read(100);
+  const newTrace = initial => createRetainedRecallTrace({ sourceProbe: probe,
+    before: initial, readSet: [namespace] });
+  const select = visible.frames.gate.find(frame => frame.method === 'select');
+  const rank = visible.frames.gate.find(frame => frame.method === 'rank');
+  assert.ok(select && rank);
+  const finish = (trace, packed = visible.packed) => trace.finish({ recall: visible.response,
+    packed, after: read(100) });
+
+  const tooManySelects = newTrace(before);
+  for (let index = 0; index < 3; index++) {
+    tooManySelects.recordSelect({ input: select.input }, select.output);
+  }
+  const selectOverflow = finish(tooManySelects);
+  assert.equal(selectOverflow.status, 'unavailable');
+  assert.equal(selectOverflow.reason, 'truncated');
+
+  const tooManyRanks = newTrace(before);
+  for (let index = 0; index < 2; index++) {
+    tooManyRanks.recordRank({ input: rank.input }, rank.output);
+  }
+  const rankOverflow = finish(tooManyRanks);
+  assert.equal(rankOverflow.status, 'unavailable');
+  assert.equal(rankOverflow.reason, 'truncated');
+
+  const incomplete = read(1);
+  assert.equal(incomplete.ok, true);
+  assert.equal(incomplete.value.exhausted, false);
+  assert.equal(incomplete.value.receipts.length, 1);
+  const incompleteReport = finish(newTrace(incomplete));
+  assert.equal(incompleteReport.status, 'unavailable');
+  assert.equal(incompleteReport.firstObservedGap, 'unavailable');
+
+  const largePack = packMixedAnswer({ question: { text: 'Synthetic bound check',
+    date: '2026-09-29' }, units: [{ text: `${receipt.excerpt}\n${'z'.repeat(70 * 1024)}` }],
+  countTokens: () => 1 });
+  assert.ok(Buffer.byteLength(largePack.request.messages[1].content, 'utf8') > 64 * 1024);
+  const bounded = newTrace(before);
+  bounded.recordSelect({ input: select.input }, select.output);
+  bounded.recordRank({ input: rank.input }, rank.output);
+  const boundedReport = finish(bounded, largePack);
+  assert.equal(boundedReport.status, 'observed');
+  assert.equal(boundedReport.answer.status, 'unavailable');
+  assert.equal(boundedReport.answer.textPresent, 'unavailable');
+  assert.equal(boundedReport.firstObservedGap, 'unavailable',
+    'a diagnostic answer-size bound is not a core retrieval loss');
+
+  const observed = newTrace(before);
+  observed.recordSelect({ input: select.input }, select.output);
+  observed.recordRank({ input: rank.input }, rank.output);
+  const report = finish(observed);
+  assert.equal(report.status, 'observed');
+  const serialized = JSON.stringify(report);
+  assert.ok(Buffer.byteLength(serialized, 'utf8') <= 32 * 1024);
+  for (const secret of [namespace.ownerId, fixture.target.id, receipt.id,
+    probe.client, probe.sessionId, probe.eventId, probe.excerpt, visible.marker]) {
+    assert.equal(serialized.includes(secret), false, `report disclosed ${secret}`);
+  }
+});
