@@ -52,18 +52,22 @@ service must use the same public core, not separate engines.
   path, not a tested paid multi-carrier family. The binary judge did not flag
   two Mem0 answer-detail issues; the old official-six failure remains unchanged.
   No retrieval or prompt change is justified by these three cases. The next
-  [blind official-six gate](docs/plans/official-six-post-localization.md) uses
-  the unchanged indexed-evidence route. It sealed six new cases and all 154
-  future exclusions before content/cost inspection. Source-only preparation
-  found all six ready with 293 batches per arm; its 14,749,619-microUSD
-  conservative whole-vector bound fits the US$30 packet cap. This is not paid
-  completion or a score. Operator/offline acceptance, dual review and exact-head
-  CI remain before dispatch. Both arms must complete and resolve 6/6 before
-  any fixed-30 expansion; feasibility does not require 100% accuracy.
-  The offline checks and authored real-model diagnostic do not establish
-  semantic completeness or repair earlier paid-case results. Installed
-  host acceptance, semantic/current-state quality, and a fresh paired paid
-  comparison remain separate gates.
+  [blind official-six gate](docs/evidence/official-six-post-localization.md)
+  used the unchanged indexed-evidence route after six new cases and all 154
+  future exclusions were sealed. Both arms completed and answered 5/6; common
+  resolved N was 4/6. Fixed-six judgments were Cairn 1 correct / 4 incorrect /
+  1 unresolved and Mem0 2 / 3 / 1. A native Mem0 `invalid_payload` failure and
+  a Cairn capture deadline remain unresolved. Its 6/6 paired feasibility gate
+  failed despite a completed coordinator and settled ledger. Independent
+  outcome audit confirmed fixed slots and published scores, and independent
+  frozen accounting audit matched the full ledger prefix and guarded tail.
+  Fixed-30 expansion is blocked. Next is bounded offline failure reproduction
+  and stored-versus-retrieved
+  evidence audit before a separately reviewed new experiment.
+  The offline checks, authored diagnostic and this six-case score do not
+  establish semantic completeness or repair earlier paid-case results.
+  Installed host acceptance and semantic/current-state quality remain
+  separate gates.
 
 - The [test workspace lifecycle gate](docs/plans/test-workspace-lifecycle.md)
   checks fresh invocation-owned scratch through real offline fixtures and
