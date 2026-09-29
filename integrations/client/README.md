@@ -62,3 +62,24 @@ With stopped hosts and consent, the setup lock covers a flushed no-clobber copy;
 source state remains untouched. A different existing destination key is an error.
 Both configurations must still be completed before activation. This API does not
 perform a real-user migration on its own or copy conversation/cursor history.
+
+Normal hooks only read coordination metadata. A fresh registration takes a bounded
+setup lock and rechecks; an established binding is not rewritten. Standalone Claude
+keeps 0.1.1 root/key handling even when safe registration is unavailable, reporting
+`standalone_unregistered`. An existing plugin-data key takes precedence over old
+default-root cursor evidence. Empty `pairing_record` is unset.
+
+Pairing validates Cairn-owned roots/files, canonicalizes host-owned ancestors and
+skips uid checks where unavailable. Linux setup locks verify boot/PID namespace;
+macOS uses one PID space and a system-uptime boot estimate with two-second tolerance.
+Old-boot locks are stale; durable pairing records contain neither boot nor PID
+namespace. Windows pairing is unsupported; standalone is unaffected. Real macOS
+host verification remains with CX-7/A6.
+
+All offline root npm suites use the committed home-guard runner, including Node
+children that strip their environment. Swallowed violations still fail the suite.
+Run `npm run test:pairing:golden` to reproduce the fixture from actual base sources.
+The 28 hook/launcher variants include host 0755 roots, ancestor symlinks, absent
+`getuid`, empty option, existing plugin-data plus old cursor, and 12 concurrent
+hooks per simulated platform. Parallel request lines are sorted for comparison;
+request bodies, IDs and exits remain exact (apart from the VERSION token).

@@ -33,8 +33,9 @@ already started before pause may still finish.
 Capture is handed to a detached worker so it survives both interactive sessions
 and `claude -p` teardown without delaying Claude's response. The launcher pipes
 only session id, transcript path, working directory, and a content-free control
-generation directly to the worker; it does not use a queue file or enlarge the
-worker environment. See the repository security policy before reporting a
+generation directly to the worker, without a queue file. The worker environment
+adds the validated `CAIRN_MEMORY_STATE_DIR` and, when supplied by the launcher,
+the pairing-record option; it does not carry conversation text. See the repository security policy before reporting a
 possible privacy issue.
 
 

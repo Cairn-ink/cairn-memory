@@ -13,7 +13,7 @@ test('frozen golden pins main 0.1.1 and its complete runtime source inventory', 
   for (const file of ['lib/identity.mjs', 'lib/version.mjs', 'scripts/hook.mjs', 'scripts/launch-capture.mjs']) {
     assert.match(golden.hashes[`plugins/cairn-memory/${file}`], /^[a-f0-9]{64}$/);
   }
-  assert.equal(golden.standalone.length, 3);
+  assert.equal(golden.standalone.length, 28);
 });
 test('isolated 0.1.2 plugin matches 0.1.1 bytes with only VERSION token changes', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'cx2-main-parity-' });

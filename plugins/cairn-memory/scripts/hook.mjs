@@ -81,7 +81,7 @@ async function recall(hookInput) {
   if (query === undefined) return;
   const control = await readControlState(dataDir);
   if (control.paused) return;
-  const projectId = await clientProjectId(clientOptions, hookInput.cwd);
+  const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   const started = await startIfActive(dataDir, control.generation, () =>
     post(
       "/api/memory/recall",
@@ -243,7 +243,7 @@ async function captureLocked(hookInput, statePath, generation) {
     });
   }
 
-  const projectId = await clientProjectId(clientOptions, hookInput.cwd);
+  const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   for (let index = 0; index < window.length; index += 24) {
     const batch = window.slice(index, index + 24);
     const messages = batch
@@ -292,7 +292,8 @@ async function control() {
   }
   const state = await readControlState(dataDir);
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${binding.status === "pairing_needed" ? "; pairing_needed (existing client active)" : ""}; telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; credential: ${token ? "configured" : "missing"}.\n`,
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${binding.status === "pairing_needed" ? "; pairing_needed (existing client active)"
+      : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : ""}; telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; credential: ${token ? "configured" : "missing"}.\n`,
   );
 }
 
@@ -301,7 +302,10 @@ try {
   clientOptions = { client: "claude", pairingRecord };
   binding = await resolveClient(clientOptions);
   if (!binding.enabled) {
-    if (["status", "pause", "resume"].includes(action)) process.stdout.write(`Cairn automatic memory: ${binding.status}.\n`);
+    if (["status", "pause", "resume"].includes(action)) {
+      process.stdout.write(`Cairn automatic memory: ${binding.status}.\n`);
+      if (action !== "status") process.exitCode = 1;
+    }
   } else {
     dataDir = binding.root;
     if (["status", "pause", "resume"].includes(action)) {

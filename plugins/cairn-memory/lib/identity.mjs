@@ -63,6 +63,8 @@ export async function projectKey(dataDir, { create = true, checkpoint } = {}) {
 
 export async function opaqueProjectId(dataDir, cwd, options) {
   if (!cwd) return undefined;
-  const key = await projectKey(dataDir, options);
+  const key = options?.strict
+    ? await projectKey(dataDir, options)
+    : await randomIdFile(dataDir, "project-key");
   return createHmac("sha256", key).update(String(cwd)).digest("hex");
 }

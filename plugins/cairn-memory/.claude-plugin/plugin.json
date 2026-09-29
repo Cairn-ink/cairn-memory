@@ -10,12 +10,7 @@
   "homepage": "https://github.com/Cairn-ink/cairn-memory",
   "repository": "https://github.com/Cairn-ink/cairn-memory",
   "license": "Apache-2.0",
-  "keywords": [
-    "memory",
-    "mcp",
-    "provenance",
-    "claude-code"
-  ],
+  "keywords": ["memory", "mcp", "provenance", "claude-code"],
   "userConfig": {
     "api_endpoint": {
       "type": "string",

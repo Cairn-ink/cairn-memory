@@ -264,13 +264,18 @@ CX-2 creates these proposed coordination files, separate from the selected key r
 
 These paths stay unchanged when `CLAUDE_PLUGIN_DATA` is set; only Claude's key root
 uses that variable. The coordination directory is 0700, its files 0600, with owner/
-symlink validation. With falsy `homedir()`, all three locations use `tmpdir()`;
+symlink validation of Cairn-owned directories and files. Host-owned ancestors are
+resolved with `realpath`, including symlinked HOME, `~/.claude` and macOS `/var`.
+Owner checks are skipped where `process.getuid` is unavailable. With falsy `homedir()`, all three locations use `tmpdir()`;
 legacy standalone single-client operation remains supported. The setup command
 refuses an undetermined/non-absolute home before any writes or host execution;
 its paths never use this fallback. Pairing requires the same durable home.
 Both hosts resolve the same coordination location; no per-host alternate registry.
-After read-only detection, take the setup lock and recheck before registering or
-creating a key. One fresh joint setup elects one initializer for both consenting
+Normal hooks perform read-only detection. Take the setup lock and recheck only
+for fresh registration, joint initialization, adoption or reset. Established hooks
+never rewrite/fsync `install.json`. Registration waits at most 100 ms by default;
+standalone Claude continues with its legacy root/key as `standalone_unregistered`
+if safe coordination is unavailable, including lock contention. One fresh joint setup elects one initializer for both consenting
 clients and writes their shared binding before activating either. Concurrent
 separate installs elect one initializer; the other needs adoption. A partial
 joint setup must not let either host independently initialize another root/key.
@@ -314,7 +319,8 @@ remain different scopes. The key stays local and separate from telemetry identit
 
 ### Key publication and lost-key repair
 
-For unpaired single-client use on a private local filesystem, or paired reads:
+For new shared-client initialization and paired reads (the released standalone
+Claude exception follows below):
 
 1. Validate/create the bound root (0700), reject symlinks, wrong owners or
    unsafe permissions. Adopt/read only a valid regular 0600 `project-key`.
@@ -333,6 +339,13 @@ For unpaired single-client use on a private local filesystem, or paired reads:
 4. A loser derives from the published winner, never a tentative key. Unsupported
    atomic publication means memory unavailable, host fail-open. Paired state must
    be durable; legacy unpaired Claude retains its documented temporary fallback.
+
+Unpaired Claude without Codex or a delivered record retains 0.1.1 key handling,
+including host-created 0755 roots, symlinked ancestors and platforms without
+`getuid`. Coordination checks cannot disable that standalone path. Legacy key
+publication remains unchanged; stricter root validation and durable publication
+apply to new shared initialization and pairing. An invalid legacy key retains
+its original failure behavior.
 
 Paired key loss reports `paired_key_missing` to both clients and disables their
 memory operations without blocking either host. Repair requires the person to
@@ -1173,18 +1186,35 @@ Resolved with the coordinator during CX-2:
   this Cairn directory, without recursion or transcript reads. No evidence within
   that bound means newcomer/confirmation required; merely having `sessions/`
   does not suffice. Shared key, telemetry and control files never count.
-  With evidence, preserve the default root even if the upgraded host newly exports
-  `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
-  evidence the new Claude client sends nothing until explicit adoption.
+  With evidence and no key in the exported plugin-data root, preserve the default
+  root if the upgraded host newly exports `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
+  evidence, when Codex is registered, the new Claude client sends nothing until
+  explicit adoption. A plugin-data root that already holds a key always wins,
+  even when an old default root contains a Claude cursor.
 - The internal client names are `claude` and `codex`. Version-1 `install.json`
   contains `clients` (root/state/initialized), optional `shared` initialization and
   readiness, and retained invalidated bindings after an explicit identity reset.
-  `pairing.json` binds a random record ID, root, both participants, policy and
-  machine/boot/PID namespace. No key or conversation is recorded there.
-- Linux lock liveness uses boot ID plus `/proc/self/ns/pid`. A foreign or unknown
-  namespace is never reaped. Other platforms can continue uncontended standalone
-  use, but pairing refuses an unverified namespace; platform support remains a
-  verification gate. The test seam supplies namespace and synchronous liveness.
+  `pairing.json` binds a random record ID, root, both participants and policy. Boot and PID namespace identity belongs
+  only to `setup.lock` ownership, never record validity; pairs survive reboot. No key or conversation is recorded there.
+- Linux setup-lock liveness uses boot ID plus `/proc/self/ns/pid`. Within the
+  same boot, a foreign or unknown namespace is never reaped. A different boot
+  makes the owner stale before probing a possibly reused PID. macOS has one PID
+  space; use `kill(pid, 0)` and `Date.now() - os.uptime()*1000` as a boot estimate,
+  with 2,000 ms tolerance for sampling/rounding. Windows pairing is unsupported;
+  standalone remains unaffected. The test seam supplies boot, namespace and
+  synchronous liveness. Real macOS host behavior remains a CX-7/A6 verification
+  gate, including the F0 finding that Codex hooks run outside the tool sandbox.
+- An empty Claude `pairing_record` option is unset. Explicit pause/resume on a
+  disabled client reports its status and exits nonzero; automatic hooks still
+  exit successfully without sending memory requests.
+- The committed `integrations/client/testing/run.mjs` entry isolates HOME and
+  preloads the home guard for all offline npm suites and their Node children.
+  A violation log fails the suite even when application code catches the error.
+  Golden cases run both hook and launcher against actual base Git sources:
+  0755 plugin roots with/without keys, symlinked HOME/`.claude`/`/var` ancestors,
+  no `getuid`, empty record option, existing plugin-data plus legacy cursor, and
+  12 concurrent calls per simulated linux/darwin/win32 platform. Concurrent
+  request lines are compared as a sorted multiset; each body remains exact bytes.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
   writes pending bindings before publishing a key and returns `binding_pending`.
@@ -1221,16 +1251,19 @@ an existing different destination key, preserve the source, and leave both
 clients pending until configuration completes. This is an API tested with
 synthetic paths, not an executed real-user migration.
 
-CX-2 synthetic verification on Linux, local Node **v22.16.0**: `npm test`
-(160 tests), `npm run validate`, `npm run test:core` (1,105 tests),
-`npm run test:artifact` (86 tests), `npm run test:pairing` (29 tests),
-`demo:capture`, `demo:recall`, explicit main-golden reproduction, and
-`git diff --check` all exited 0. The artifact suite initially failed because this
-isolated worktree lacked adapter dependencies; after installing the pinned
-adapters from exact locally cached public-package entries with `--offline`, its
-retry passed. No registry/network, model, Claude CLI or Codex CLI call was made
-(synthetic loopback HTTP is used by fixtures). All suites ran sequentially with
-worktree temporary/cache directories and a temporary home; a preload guard rejects
-real-home resolution and access to real client-state paths. No Node 20 or 24 run
-is claimed here; CI owns those matrix runs. CONTRIBUTING has no dedicated
-identity/pause demo; capture and recall demos were run with scripted models.
+Round-1 verification was superseded by the round-2 standalone regressions above.
+Round-2 runtime results are recorded with the implementation handoff; synthetic
+platform simulation is not a native macOS/Windows or pinned-host acceptance run.
+
+Round-2 synthetic verification on Linux, local Node **v22.16.0** and **v24.15.0**:
+`npm test` (167 tests), `npm run validate`, `npm run test:core` (1,105 tests),
+`npm run test:artifact` (86 tests), `npm run test:pairing` (36 tests),
+`npm run test:pairing:golden` (actual-base reproduction), `demo:capture`,
+`demo:recall`, `test:workspace-lifecycle` (25 tests), and `git diff --check`
+exited 0 on each runtime. The first Node 22 plugin run with parallel test files
+observed 11 of 12 concurrent requests; plugin/pairing test files now run serially
+while their 12–20 hook processes remain concurrent. The full plugin retry passed;
+the inherited production pause-lock deadline was not changed. All suites ran
+sequentially with temporary homes and worktree TMPDIR/cache; exact cached public
+package entries supplied the offline artifact checks. No model or host CLI calls,
+real-user state access, installer or native macOS/Windows acceptance is implied.

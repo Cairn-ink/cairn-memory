@@ -142,7 +142,7 @@ export async function observeHosted(pluginRoot) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    await mkdir(dataDir, { mode: 0o700 });
+    await mkdir(dataDir);
     await writeFile(join(dataDir, 'project-key'), `${key}\n`, { mode: 0o600 });
     const record = (content, index) => JSON.stringify({ type: index % 2 ? 'assistant' : 'user',
       ...(index % 3 ? { uuid: `synthetic-${index}` } : {}), message: { content } }) + '\n';

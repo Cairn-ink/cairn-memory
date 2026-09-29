@@ -1,15 +1,5 @@
 # Changelog
 
-## 0.1.2 — explicit client pairing
-
-- Add the optional Claude `pairing_record` setting and validated worker root
-  delivery. Explicit adoption shares project identity and pause barriers; new
-  clients remain disabled until binding completes.
-- Add private coordination records, serialized joint-initialization APIs for
-  future setup, durable no-clobber key publication, and paired lost-key handling.
-- Preserve standalone Claude 0.1.1 behavior, with only the release version token
-  changed in telemetry. Codex installation and real-host setup remain future work.
-
 ## Unreleased — opt-in background context
 
 - `sessionStartContext({groups: {background: true}})` includes current facts and
@@ -56,6 +46,19 @@
   forget uses `forgotten`. Hidden hint inserts preserve ordinary cursors, while
   re-arming a prior outcome advances the epoch. Supersession upserts re-arm only
   dropped rows.
+
+## 0.1.2 — explicit client pairing
+
+- Add the optional Claude `pairing_record` setting and validated worker root
+  delivery. Explicit adoption shares project identity and pause barriers; new
+  clients remain disabled until binding completes.
+- Add private coordination records, serialized joint-initialization APIs for
+  future setup, durable no-clobber key publication, and paired lost-key handling.
+- Keep standalone Claude on its released key/path behavior, including host-created
+  directories, symlinked ancestors and platforms without POSIX owner APIs.
+  Coordination failures report unregistered status without disabling memory.
+  Golden fixtures compare memory traffic against 0.1.1, allowing only VERSION
+  changes in telemetry. Codex installation and real-host setup remain future work.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

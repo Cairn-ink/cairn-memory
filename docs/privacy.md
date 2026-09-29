@@ -45,15 +45,19 @@ Version 0.1.2 also stores coordination metadata under
 - `install.json`: version, established/pending client/root bindings, initialization
   and configuration progress; explicit resets retain invalidated binding metadata;
 - `pairing.json`: version, absolute shared root, participating clients, record ID,
-  initialize/adopt policy and machine/boot/PID namespace;
+  initialize/adopt policy;
 - `setup.lock` and token-specific owner/recovery files: process ownership for
-  registration, key eligibility and pairing.
+  registration, key eligibility and pairing, including boot/PID-namespace identity.
 
 The coordination directory is 0700 and its files are 0600. Owners, permissions
-and symlinks are validated. Metadata contains local paths but no keys, tokens or
+and symlinks of Cairn-owned components are validated; host-owned ancestors use
+`realpath`, and owner checks are skipped without `getuid`. Metadata contains local paths but no project keys, credentials or
 conversation text, and is never included in telemetry. Standalone use retains the
 falsy-home temporary fallback for these paths; setup and pairing require a
-specified absolute durable home. Crash recovery may leave private temporary or
+specified absolute durable home. Standalone Claude preserves released key/root
+handling when coordination is unavailable and reports `standalone_unregistered`.
+Pairing supports Linux within one PID namespace and macOS; Windows pairing is
+unsupported. Boot identity affects stale setup locks, never durable pair validity. Crash recovery may leave private temporary or
 lock-recovery files; only a process's own temporary file is cleaned automatically.
 
 Pairing requires consent and stopped hosts/workers. Newcomers remain disabled with

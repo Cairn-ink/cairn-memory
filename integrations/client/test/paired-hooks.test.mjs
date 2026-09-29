@@ -105,6 +105,11 @@ test('launcher CLI record reaches worker; mismatches and lost keys produce no re
   }
   await unlink(join(f.pending.root, 'project-key'));
   assert.match((await f.run('status')).stdout, /paired_key_missing/);
+  for (const action of ['pause', 'resume']) {
+    const result = await f.run(action);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr + result.stdout, /paired_key_missing/);
+  }
   assert.equal((await f.run('recall', { cwd: '/synthetic/project', prompt: 'blocked' })).code, 0);
   assert.equal(f.requests.length, before);
 });

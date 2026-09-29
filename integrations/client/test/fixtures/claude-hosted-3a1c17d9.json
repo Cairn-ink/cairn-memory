@@ -18,6 +18,50 @@
   "standalone": [
     {
       "mode": "plugin-data",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-data",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "home",
+      "entry": "hook",
       "key": "11111111-1111-4111-8111-111111111111\n",
       "identity": "11111111-1111-4111-8111-111111111111\n",
       "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
@@ -46,6 +90,21 @@
     },
     {
       "mode": "home",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "falsy-home",
+      "entry": "hook",
       "key": "11111111-1111-4111-8111-111111111111\n",
       "identity": "11111111-1111-4111-8111-111111111111\n",
       "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
@@ -74,10 +133,754 @@
     },
     {
       "mode": "falsy-home",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "host-0755-new",
+      "entry": "hook",
       "key": "11111111-1111-4111-8111-111111111111\n",
       "identity": "11111111-1111-4111-8111-111111111111\n",
       "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
       "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "host-0755-new",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "host-0755-key",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "host-0755-key",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "symlink-home",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "symlink-home",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "symlink-claude",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "symlink-claude",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "symlink-var",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "symlink-var",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "no-getuid",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "no-getuid",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "empty-option",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "empty-option",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "existing-plugin-and-legacy",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "existing-plugin-and-legacy",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-linux",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-linux",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"05219aba067bc9198200edba8ed976c879e91bb6a464fce2ae43b0c263e0aabb\\\",\\\"session_id\\\":\\\"synthetic-session-8\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"139998585b47b8e20f07895efd08b2660910d25f1e1180ac6ec32b6cec9ec461\\\",\\\"session_id\\\":\\\"synthetic-session-3\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"1fb2d1e76a7503f3f637d8b0769717d4c1ebfec709d77b09768911b08a078a83\\\",\\\"session_id\\\":\\\"synthetic-session-7\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"37856c1c4ced7fbe5c11473181fdd888bbbe3f3eec48d0d25fe0cc7eebbae62e\\\",\\\"session_id\\\":\\\"synthetic-session-6\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"38503519380531522be3ec9338f83983fd8a32449a812626e92dcccde7897f4c\\\",\\\"session_id\\\":\\\"synthetic-session-9\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6df67c9412761b26b4256241e5a4e36e5b9cf1ad09c23f8542ef9c9ff053877a\\\",\\\"session_id\\\":\\\"synthetic-session-1\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"76737a61bfbe588c77065b0b8121e635e5a4249160c91c4f1aba4a885190530b\\\",\\\"session_id\\\":\\\"synthetic-session-10\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"854bbe4346f144b2a5fb6cfdd292da32cd849bcc949c31f3dfc52eb35119aa73\\\",\\\"session_id\\\":\\\"synthetic-session-2\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"c14b31fc133e53387fa905cced3a64ec976e41d0d00fb059f3bb6ce5debf1f9c\\\",\\\"session_id\\\":\\\"synthetic-session-5\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"c48c1f7ef10f7367fff8b29c9d01cf321a5d5d83883a1cf3961369cec6139ef7\\\",\\\"session_id\\\":\\\"synthetic-session-4\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"f94be76e64adc6e102a54fc1a168aef296e94de8dd83c4f11cce89817c32304a\\\",\\\"session_id\\\":\\\"synthetic-session-11\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"fd06181102efd22f52419b151994b9e470809b37bc764555bff5b34412fe94b2\\\",\\\"session_id\\\":\\\"synthetic-session-0\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-darwin",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-darwin",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"05219aba067bc9198200edba8ed976c879e91bb6a464fce2ae43b0c263e0aabb\\\",\\\"session_id\\\":\\\"synthetic-session-8\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"139998585b47b8e20f07895efd08b2660910d25f1e1180ac6ec32b6cec9ec461\\\",\\\"session_id\\\":\\\"synthetic-session-3\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"1fb2d1e76a7503f3f637d8b0769717d4c1ebfec709d77b09768911b08a078a83\\\",\\\"session_id\\\":\\\"synthetic-session-7\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"37856c1c4ced7fbe5c11473181fdd888bbbe3f3eec48d0d25fe0cc7eebbae62e\\\",\\\"session_id\\\":\\\"synthetic-session-6\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"38503519380531522be3ec9338f83983fd8a32449a812626e92dcccde7897f4c\\\",\\\"session_id\\\":\\\"synthetic-session-9\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6df67c9412761b26b4256241e5a4e36e5b9cf1ad09c23f8542ef9c9ff053877a\\\",\\\"session_id\\\":\\\"synthetic-session-1\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"76737a61bfbe588c77065b0b8121e635e5a4249160c91c4f1aba4a885190530b\\\",\\\"session_id\\\":\\\"synthetic-session-10\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"854bbe4346f144b2a5fb6cfdd292da32cd849bcc949c31f3dfc52eb35119aa73\\\",\\\"session_id\\\":\\\"synthetic-session-2\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"c14b31fc133e53387fa905cced3a64ec976e41d0d00fb059f3bb6ce5debf1f9c\\\",\\\"session_id\\\":\\\"synthetic-session-5\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"c48c1f7ef10f7367fff8b29c9d01cf321a5d5d83883a1cf3961369cec6139ef7\\\",\\\"session_id\\\":\\\"synthetic-session-4\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"f94be76e64adc6e102a54fc1a168aef296e94de8dd83c4f11cce89817c32304a\\\",\\\"session_id\\\":\\\"synthetic-session-11\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"fd06181102efd22f52419b151994b9e470809b37bc764555bff5b34412fe94b2\\\",\\\"session_id\\\":\\\"synthetic-session-0\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-win32",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-win32",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"05219aba067bc9198200edba8ed976c879e91bb6a464fce2ae43b0c263e0aabb\\\",\\\"session_id\\\":\\\"synthetic-session-8\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"139998585b47b8e20f07895efd08b2660910d25f1e1180ac6ec32b6cec9ec461\\\",\\\"session_id\\\":\\\"synthetic-session-3\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"1fb2d1e76a7503f3f637d8b0769717d4c1ebfec709d77b09768911b08a078a83\\\",\\\"session_id\\\":\\\"synthetic-session-7\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"37856c1c4ced7fbe5c11473181fdd888bbbe3f3eec48d0d25fe0cc7eebbae62e\\\",\\\"session_id\\\":\\\"synthetic-session-6\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"38503519380531522be3ec9338f83983fd8a32449a812626e92dcccde7897f4c\\\",\\\"session_id\\\":\\\"synthetic-session-9\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6df67c9412761b26b4256241e5a4e36e5b9cf1ad09c23f8542ef9c9ff053877a\\\",\\\"session_id\\\":\\\"synthetic-session-1\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"76737a61bfbe588c77065b0b8121e635e5a4249160c91c4f1aba4a885190530b\\\",\\\"session_id\\\":\\\"synthetic-session-10\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"854bbe4346f144b2a5fb6cfdd292da32cd849bcc949c31f3dfc52eb35119aa73\\\",\\\"session_id\\\":\\\"synthetic-session-2\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"c14b31fc133e53387fa905cced3a64ec976e41d0d00fb059f3bb6ce5debf1f9c\\\",\\\"session_id\\\":\\\"synthetic-session-5\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"c48c1f7ef10f7367fff8b29c9d01cf321a5d5d83883a1cf3961369cec6139ef7\\\",\\\"session_id\\\":\\\"synthetic-session-4\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"f94be76e64adc6e102a54fc1a168aef296e94de8dd83c4f11cce89817c32304a\\\",\\\"session_id\\\":\\\"synthetic-session-11\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"fd06181102efd22f52419b151994b9e470809b37bc764555bff5b34412fe94b2\\\",\\\"session_id\\\":\\\"synthetic-session-0\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
         {
           "code": 0,
           "stdout": "",

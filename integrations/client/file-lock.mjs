@@ -18,9 +18,9 @@ function processIsAlive(pid) {
   }
 }
 
-async function readOwner(path) {
+async function readOwner(path, read = readFile) {
   try {
-    const owner = JSON.parse(await readFile(path, "utf8"));
+    const owner = JSON.parse(await read(path, "utf8"));
     if (
       !Number.isSafeInteger(owner?.pid) ||
       owner.pid <= 0 ||
@@ -35,8 +35,8 @@ async function readOwner(path) {
   }
 }
 
-async function reapDeadOwner(path, owner, processIsAlive, context) {
-  if (processIsAlive(owner.pid) !== false) return;
+async function reapDeadOwner(path, owner, processIsAlive, context, read) {
+  if (processIsAlive(owner.pid, owner) !== false) return;
 
   // A token-specific marker elects exactly one reaper. It prevents a
   // delayed contender from unlinking a successor after another contender has
@@ -59,11 +59,11 @@ async function reapDeadOwner(path, owner, processIsAlive, context) {
     await unlink(reaperOwnerPath).catch(() => {});
     throw error;
   }
-  const current = await readOwner(path);
+  const current = await readOwner(path, read);
   if (
     current?.pid === owner.pid &&
     current.token === owner.token &&
-    processIsAlive(current.pid) === false
+    processIsAlive(current.pid, current) === false
   ) {
     await unlink(path).catch(() => {});
     await unlink(`${path}.owner-${owner.pid}-${owner.token}`).catch(() => {});
@@ -85,7 +85,7 @@ export async function withFileLock(
   path,
   work,
   { timeoutMs = 30_000, pollMs = 100, context, validateOwner = async () => {},
-    isAlive = processIsAlive, validatePath = async () => {} } = {},
+    isAlive = processIsAlive, validatePath = async () => {}, read = readFile } = {},
 ) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const token = randomUUID();
@@ -106,9 +106,9 @@ export async function withFileLock(
       } catch (error) {
         if (error?.code !== "EEXIST") throw error;
         await validatePath(path);
-        const existing = await readOwner(path);
+        const existing = await readOwner(path, read);
         if (existing) await validateOwner(existing);
-        if (existing) await reapDeadOwner(path, existing, isAlive, context);
+        if (existing) await reapDeadOwner(path, existing, isAlive, context, read);
         if (!acquired) await wait(pollMs);
       }
     }
@@ -117,7 +117,7 @@ export async function withFileLock(
     return true;
   } finally {
     if (acquired) {
-      const current = await readOwner(path);
+      const current = await readOwner(path, read);
       if (current?.pid === owner.pid && current.token === token) {
         await unlink(path).catch(() => {});
       }
