@@ -1043,6 +1043,17 @@ localizes an evidence-sufficiency miss without proving the fact was never
 stored or identifying a model root cause. The frozen 6/6 completion and
 common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
 
+The [M1a optional adapter phase observer](plans/capture-write-phase-observability.md)
+can distinguish future adapter preparation, provider count transport/body,
+generation transport/body and output validation in an isolated invocation. It
+cannot reconstruct the historical N7 phase from these aggregate results,
+measure earlier core planning or later SQLite commit, prove provider
+cancellation/billing, or make a multistage capture reliable. Extraction timeout
+prevents a new memory commit in its synthetic control, while a classification
+timeout after successful extraction leaves an admitted source-backed memory
+with failed initial placement. No timeout, model/context budget, or indexed
+map limit was changed, and the fixed-30 evaluation remains blocked.
+
 Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
 conservative reservation. Known usage estimates were 2,452,595 microUSD for
 1,417 rows; 518 costs remain unknown, and none of the requests is pending.

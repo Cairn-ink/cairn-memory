@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — optional OpenAI invocation phase timing
+
+- The source adapter accepts a trusted `onPhaseTiming` callback for finite,
+  content-free local preparation, count, generation and output-validation
+  durations. It is off by default; `onDiagnostic` v1, request bodies, core
+  deadlines, limits and outputs are unchanged. This does not explain or fix a
+  historical timeout. See the [M1a contract](docs/plans/capture-write-phase-observability.md).
+
 ## Unreleased — model calls fit their budgets
 
 - Recall no longer fails with `context_budget_exceeded` because a person has
