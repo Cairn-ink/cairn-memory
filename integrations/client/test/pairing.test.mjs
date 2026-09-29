@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import {
   mkdir,
@@ -391,12 +390,20 @@ test("permissions, owner seam, malformed state and symlinks fail closed", async 
         JSON.stringify({ pid: process.pid, token: "11111111-1111-4111-8111-111111111111" }),
       );
     await chmod(path, target === "root" || target === "coordination" ? 0o755 : 0o644);
-    await assert.rejects(
-      target === "lock"
-        ? completePairing({ ...options, configured: options.consent })
-        : resolveClient(options),
-      /state_permissions/,
-    );
+    if (["coordination", "install", "pairing"].includes(target)) {
+      assert.deepEqual(await resolveClient(options), {
+        enabled: false,
+        status: "pairing_needed",
+        detail: "coordination unreadable",
+      });
+    } else {
+      await assert.rejects(
+        target === "lock"
+          ? completePairing({ ...options, configured: options.consent })
+          : resolveClient(options),
+        /state_permissions/,
+      );
+    }
     await assert.rejects(
       completePairing({ ...options, configured: options.consent }),
       /state_permissions/,
@@ -531,21 +538,27 @@ test("explicit reset retains old root, changes scope, starts paused and requires
   );
 });
 
-test("wrong owner and unreadable/corrupt coordination metadata are errors, never freshness", async (t) => {
+test("wrong owner and unreadable/corrupt coordination disable pairs, never freshness", async (t) => {
   const options = await paired(t);
+  const assertDisabled = async () =>
+    assert.deepEqual(await resolveClient(options), {
+      enabled: false,
+      status: "pairing_needed",
+      detail: "coordination unreadable",
+    });
   const getuid = process.getuid;
   try {
     process.getuid = () => getuid() + 1;
-    await assert.rejects(resolveClient(options), /state_owner/);
+    await assertDisabled();
   } finally {
     process.getuid = getuid;
   }
   const path = stateLocations(options).install;
   await chmod(path, 0o000);
-  await assert.rejects(resolveClient(options), /state_permissions/);
+  await assertDisabled();
   await chmod(path, 0o600);
   await writeFile(path, "{");
-  await assert.rejects(resolveClient(options), /invalid_pairing_metadata/);
+  await assertDisabled();
 });
 
 test("unknown liveness never reaps a same-namespace owner", async (t) => {
@@ -627,7 +640,7 @@ test("unsupported hard-link publication never returns a tentative project ID", a
   assert.deepEqual(await readdir(root), []);
 });
 
-test("standalone registration contention and unsafe coordination never drop memory", async (t) => {
+test("contention permits fresh standalone; degraded coordination requires an existing key", async (t) => {
   for (const kind of ["busy", "permissions", "symlink"]) {
     const options = await fixture(t);
     const paths = stateLocations(options);
@@ -650,8 +663,21 @@ test("standalone registration contention and unsafe coordination never drop memo
       await symlink(target, paths.coordination);
     }
     const binding = await resolveClient({ ...options, timeoutMs: 20 });
-    assert.equal(binding.status, "standalone_unregistered");
-    assert.ok(await clientProjectId(options, "/synthetic/project", binding));
+    if (kind === "busy") {
+      assert.equal(binding.status, "standalone_unregistered");
+      assert.equal(binding.detail, undefined, "contention is not unreadable coordination");
+      assert.ok(await clientProjectId(options, "/synthetic/project", binding));
+    } else {
+      assert.equal(binding.status, "pairing_needed");
+      assert.equal(binding.enabled, false);
+      assert.equal(binding.detail, "coordination unreadable");
+      await assert.rejects(readFile(join(paths.defaultRoot, "project-key")), { code: "ENOENT" });
+      await seed(paths.defaultRoot);
+      const existing = await resolveClient(options);
+      assert.equal(existing.status, "standalone_unregistered");
+      assert.equal(existing.createKey, false);
+      assert.ok(await clientProjectId(options, "/synthetic/project", existing));
+    }
     await assert.rejects(stat(paths.install), { code: "ENOENT" });
   }
 });
@@ -998,26 +1024,16 @@ test("setup rejects active and retired profile conflicts before and inside the l
         ...options,
         root,
         adopt: true,
-        liveness: {
-          ...liveness,
-          get namespace() {
-            // This liveness check occurs after detection, before lock acquisition.
-            if (!rechecked) {
-              const changed = JSON.parse(before);
-              const binding = retired ? changed.retired.at(-1).claude : changed.clients.claude;
-              binding.profileRoot = profile;
-              writeFileSync(path, JSON.stringify(changed));
-              rechecked = true;
-            }
-            return liveness.namespace;
-          },
+        liveness,
+        beforeSetupLock: async () => {
+          const changed = JSON.parse(before);
+          const binding = retired ? changed.retired.at(-1).claude : changed.clients.claude;
+          binding.profileRoot = profile;
+          await privateWrite(path, JSON.stringify(changed));
+          rechecked = true;
         },
       };
-      await assert.rejects(initializePairing(input), (error) => {
-        assert.equal(error.message, "claude_profile_mismatch");
-        assert.match(error.stack, /withFileLock/, "failure comes from the locked recheck");
-        return true;
-      });
+      await assert.rejects(initializePairing(input), { message: "claude_profile_mismatch" });
       assert.equal(rechecked, true, "conflict introduced at lock boundary");
       const after = JSON.parse(await readFile(path, "utf8"));
       assert.equal(
@@ -1030,7 +1046,7 @@ test("setup rejects active and retired profile conflicts before and inside the l
 });
 
 test("retired markers remain private and fail closed after metadata loss", async (t) => {
-  for (const damage of ["intact", "permissions", "corruption", "symlink"]) {
+  for (const damage of ["intact", "permissions", "corruption", "symlink", "directory"]) {
     await t.test(damage, async (t) => {
       const options = await paired(t);
       const paths = stateLocations(options);
@@ -1050,10 +1066,171 @@ test("retired markers remain private and fail closed after metadata loss", async
         await unlink(marker);
         await symlink(target, marker);
       }
+      if (damage === "directory") {
+        await unlink(marker);
+        await mkdir(marker);
+      }
       await unlink(paths.install);
       const binding = await resolveClient({ ...options, pairingRecord: undefined });
       assert.equal(binding.enabled, false);
-      assert.match(binding.status, /coordination_unreadable/);
+      assert.equal(binding.status, "pairing_needed");
+      assert.equal(binding.detail, "retired root");
     });
   }
+});
+
+test("setup refuses retired roots before and after lock acquisition", async (t) => {
+  const options = await paired(t);
+  const paths = stateLocations(options);
+  await resetIdentity({
+    ...options,
+    root: join(options.home, "reset"),
+    primaryClient: "codex",
+    confirmIdentityReset: true,
+  });
+  const before = await readFile(paths.install, "utf8");
+  for (const root of [undefined, paths.defaultRoot]) {
+    const result = await initializePairing({ ...options, root, adopt: true });
+    assert.equal(result.status, "retired_root");
+    assert.equal(result.enabled, false);
+    assert.equal(await readFile(paths.install, "utf8"), before);
+  }
+  const root = join(options.home, "reset");
+  assert.equal(
+    (
+      await initializePairing({
+        ...options,
+        root,
+        adopt: true,
+        adoptFrom: paths.defaultRoot,
+      })
+    ).status,
+    "retired_root",
+  );
+  assert.equal(await readFile(paths.install, "utf8"), before);
+  const result = await initializePairing({
+    ...options,
+    root,
+    adopt: true,
+    beforeSetupLock: () =>
+      privateWrite(join(root, "retired"), JSON.stringify({ version: 1, retired: true })),
+  });
+  assert.equal(result.status, "retired_root");
+  assert.equal(await readFile(paths.install, "utf8"), before);
+});
+
+test("degraded identity reads cannot replace a key lost after resolution", async (t) => {
+  const options = await paired(t);
+  const paths = stateLocations(options);
+  const root = join(options.home, "separate-profile");
+  await projectKey(root);
+  await chmod(paths.coordination, 0o755);
+  const input = {
+    ...options,
+    pairingRecord: undefined,
+    env: { ...options.env, CLAUDE_PLUGIN_DATA: root },
+  };
+  const binding = await resolveClient(input);
+  assert.equal(binding.enabled, true);
+  assert.equal(binding.createKey, false);
+  assert.equal(binding.detail, "coordination unreadable");
+  await unlink(join(root, "project-key"));
+  await assert.rejects(clientProjectId(input, "/p", binding), /paired_key_missing/);
+  await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
+});
+
+test("retirement needs a present entry in an owned selected directory", async (t) => {
+  for (const kind of ["absent", "file", "unreadable", "foreign-owner"]) {
+    await t.test(kind, async (t) => {
+      const options = await fixture(t);
+      const paths = stateLocations(options);
+      if (kind === "file") await writeFile(paths.defaultRoot, "not a root");
+      if (kind === "unreadable") await mkdir(paths.defaultRoot, { mode: 0 });
+      if (kind === "foreign-owner") {
+        await seed(paths.defaultRoot);
+        await mkdir(join(paths.defaultRoot, "retired"));
+      }
+      const getuid = process.getuid;
+      try {
+        if (kind === "foreign-owner") process.getuid = () => getuid() + 1;
+        const binding = await resolveClient(options);
+        assert.equal(binding.enabled, true, kind);
+        if (kind !== "foreign-owner")
+          assert.equal(binding.detail, undefined, "absent coordination is not degraded");
+      } finally {
+        process.getuid = getuid;
+        if (kind === "unreadable") await chmod(paths.defaultRoot, 0o700);
+      }
+    });
+  }
+});
+
+test("completion cannot activate a root marked after initialization", async (t) => {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  await initializePairing(options);
+  const paths = stateLocations(options);
+  const before = await readFile(paths.install, "utf8");
+  await privateWrite(
+    join(paths.defaultRoot, "retired"),
+    JSON.stringify({
+      version: 1,
+      retired: true,
+    }),
+  );
+  assert.equal(
+    (
+      await completePairing({
+        ...options,
+        configured: options.consent,
+      })
+    ).status,
+    "retired_root",
+  );
+  assert.equal(await readFile(paths.install, "utf8"), before);
+  assert.equal(JSON.parse(before).shared.ready, false);
+});
+
+test("registration recheck cannot replace a concurrent retired profile owner", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  const owner = {
+    root: join(options.home, "former-pair"),
+    profileRoot: join(options.home, "other-profile"),
+    state: "established",
+  };
+  const binding = await resolveClient({
+    ...options,
+    beforeSetupLock: () =>
+      privateWrite(
+        paths.install,
+        JSON.stringify({
+          version: 1,
+          clients: {},
+          retired: [{ claude: owner }],
+        }),
+      ),
+  });
+  assert.equal(binding.enabled, true);
+  assert.equal(binding.status, "standalone_unregistered");
+  const install = JSON.parse(await readFile(paths.install, "utf8"));
+  assert.equal(install.clients.claude, undefined);
+  assert.deepEqual(install.retired[0].claude, owner);
+});
+
+test("unsupported registration leaves coordination absent and standalone can create its key", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  const binding = await resolveClient({
+    ...options,
+    liveness: { platform: "win32", namespace: undefined, boot: undefined },
+  });
+  assert.equal(binding.enabled, true);
+  assert.equal(binding.status, "standalone_unregistered");
+  assert.equal(binding.detail, undefined);
+  await assert.rejects(stat(paths.coordination), { code: "ENOENT" });
+  assert.ok(await clientProjectId(options, "/p", binding));
+  assert.ok(await readFile(join(paths.defaultRoot, "project-key")));
 });

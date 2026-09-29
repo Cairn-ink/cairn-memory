@@ -60,6 +60,9 @@ export async function observeStandalone(plugin) {
       "empty-option",
       "inherited-state-dir",
       "existing-plugin-and-legacy",
+      "default-file",
+      "default-unreadable",
+      "default-retired-directory",
       "concurrent-linux",
       "concurrent-darwin",
       "concurrent-win32",
@@ -113,6 +116,15 @@ export async function observeStandalone(plugin) {
             mode: 0o600,
           });
         }
+        const legacy = join(home, ".cairn-memory");
+        if (mode === "default-file") await writeFile(legacy, "unrelated");
+        if (mode === "default-unreadable") {
+          await mkdir(legacy);
+          workspace.defer(() => chmod(legacy, 0o700));
+          await chmod(legacy, 0);
+        }
+        if (mode === "default-retired-directory")
+          await mkdir(join(legacy, "retired"), { recursive: true });
         const requestsFile = join(directory, "requests.jsonl");
         const completions = join(directory, "completions");
         await writeFile(requestsFile, "");
@@ -203,6 +215,7 @@ export async function observeStandalone(plugin) {
           if (count !== 12) throw new Error(`golden_dropped_hooks:${mode}:${count}`);
         }
         variants.push({ mode, entry, key, identity, requestBytes, outcomes });
+        if (mode === "default-unreadable") await chmod(legacy, 0o700);
       }
     }
     return variants;

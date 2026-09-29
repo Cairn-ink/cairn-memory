@@ -63,10 +63,9 @@ See [privacy](../../docs/privacy.md) and the
 
 Distinct Claude plugin-data roots keep separate keys and pause state. With
 `CLAUDE_PLUGIN_DATA` unset, Claude uses the default root as 0.1.1 did and can
-share its key and pause. A different
-profile from the registered one runs as `standalone_unregistered`; it does not
-adopt that registration. Only when no active or retired Claude registration exists
-may a keyless profile use evidence of pre-0.1.2 Claude use in the legacy default root.
+share its key and pause. A different profile from the registered one runs as
+`standalone_unregistered`; it does not adopt that registration. Only when no active
+or retired Claude registration exists may a keyless profile use evidence of pre-0.1.2 Claude use in the legacy default root.
 
 macOS setup-lock boot estimates tolerate two seconds of sampling drift. A wall
 clock step larger than two seconds while a lock is held can make a live owner
@@ -76,16 +75,25 @@ An explicitly delivered record for another profile fails with
 `pairing_record_mismatch`. Hooks still exit successfully without memory requests;
 status and explicit controls report the mismatch.
 
-Reset retains Claude's profile ownership even when Codex is primary. That Claude
-remains disabled with `pairing_needed` until explicit re-adoption; a stale delivered
-record reports `pairing_record_missing`. Setup profile conflicts report
-`claude_profile_mismatch`, distinct from wrong-record delivery.
+Reset retains Claude's profile ownership even when Codex is primary. With Codex
+as primary, that Claude remains disabled with `pairing_needed` until explicit
+re-adoption; a stale delivered record reports `pairing_record_missing`. Setup
+profile conflicts report `claude_profile_mismatch`, distinct from wrong-record delivery.
 
-If coordination cannot be trusted, a genuine legacy-gap root without a retirement
-marker retains its existing identity and reports `standalone_unregistered`.
+Absent coordination is the normal 0.1.1 standalone environment. Degraded mode
+means coordination exists but cannot be read or trusted: it never creates a
+project key. It uses an existing profile key first, or an existing default-root
+key with Claude-only cursor evidence for the legacy gap. Without either, memory
+is disabled with `pairing_needed` and detail `coordination unreadable`. An
+eligible unmarked root remains active as `standalone_unregistered` with the
+same detail; later metadata loss cannot cement a replacement identity.
+
 Reset pauses the old shared root, rotates its generation, and writes a private
-`retired` marker. In degraded mode a marker at the known plugin-data or default
-root (including an invalid marker) disables memory with
-`coordination_unreadable: pairing_needed`. Hooks exit successfully without requests;
-status reports the problem and pause/resume fail visibly. Independent profiles may
-also be disabled until coordination is repaired; their keys are not changed.
+`retired` marker there. Retirement is checked only at the selected root. A present `retired` entry,
+valid or invalid, disables that root with `pairing_needed`; resume refuses to
+unpause it. Missing or inaccessible entries, non-directory roots and roots owned
+by another user are not retirement evidence. An unrelated default root cannot
+disable an unpaired plugin-data profile. Setup refuses a marked destination with
+`retired_root`, including an implicit default destination, and requires another
+unmarked root. Status remains a single token; explanations are separate details.
+Disabled hooks exit 0 without requests, while explicit controls fail visibly.

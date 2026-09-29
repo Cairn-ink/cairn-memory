@@ -44,8 +44,7 @@ Version 0.1.2 also stores coordination metadata under
 
 - `install.json`: version, established/pending client/root bindings and the
   registered Claude profile root, initialization and configuration progress;
-  explicit resets retain invalidated binding metadata
-  and Claude profile ownership;
+  explicit resets retain invalidated binding metadata and Claude profile ownership;
 - `pairing.json`: version, absolute shared root, participating clients, record ID,
   initialize/adopt policy;
 - `setup.lock` and token-specific owner/recovery files: process ownership for
@@ -55,16 +54,26 @@ The coordination directory is 0700 and its files are 0600. Owners, permissions
 and symlinks of Cairn-owned components are validated; host-owned ancestors use
 `realpath`, and owner checks are skipped without `getuid`. Metadata contains
 local paths but no project keys, credentials or conversation text, and is never
-included in telemetry. Standalone use retains the
-falsy-home temporary fallback for these paths; setup and pairing require a
-specified absolute durable home. Standalone Claude preserves released key/root
-handling when coordination is unavailable and reports `standalone_unregistered`
-for an evidenced legacy-gap root without a retirement marker. If either known
-plugin-data/default root has a retirement marker (or an invalid marker), degraded
-mode fails closed with `coordination_unreadable: pairing_needed`. Hooks exit 0
-and send nothing; status explains the failure and explicit controls fail visibly.
-This can temporarily disable independent profiles, preserving their identities
-until coordination is repaired. Metadata loss does not invalidate the marker.
+included in telemetry. Standalone use retains the falsy-home temporary fallback
+for these paths; setup and pairing require a specified absolute durable home.
+
+Absent coordination is the normal 0.1.1 standalone environment. Degraded mode
+means coordination exists but cannot be read or trusted: it never creates a
+project key. It uses an existing profile key first, or an existing default-root
+key with Claude-only cursor evidence for the legacy gap. Without either, memory
+is disabled with `pairing_needed` and detail `coordination unreadable`. An
+eligible unmarked root remains active as `standalone_unregistered` with the
+same detail; later metadata loss cannot cement a replacement identity.
+
+Retirement is checked only at the selected root. A present `retired` entry,
+valid or invalid, disables that root with `pairing_needed`; resume refuses to
+unpause it. Missing or inaccessible entries, non-directory roots and roots owned
+by another user are not retirement evidence. An unrelated default root cannot
+disable an unpaired plugin-data profile. Setup refuses a marked destination with
+`retired_root`, including an implicit default destination, and requires another
+unmarked root. Status remains a single token; explanations are separate details.
+Disabled hooks exit 0 without requests, while explicit controls fail visibly.
+
 Pairing supports Linux within one PID namespace and macOS; Windows pairing is
 unsupported. Boot identity affects stale setup locks, never durable pair validity.
 On macOS, a wall-clock step over two seconds during a lock hold can make a live
@@ -82,8 +91,7 @@ A delivered pairing record selects the shared root and pause generation;
 `CAIRN_MEMORY_STATE_DIR` is validated for paired worker handoffs, never an
 override; standalone hooks ignore inherited values, as 0.1.1 did. With readable
 coordination, a different Claude plugin-data profile remains unregistered with
-its own key and pause;
-pairing applies only to the registered profile.
+its own key and pause; pairing applies only to the registered profile.
 Paired key loss disables memory with `paired_key_missing`, while hooks still exit
 successfully. Restore the original backup key with stopped workers to retain IDs.
 An explicit identity reset retains old state, changes addressable project scope,

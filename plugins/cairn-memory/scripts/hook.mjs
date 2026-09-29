@@ -295,7 +295,8 @@ async function control() {
     ? "; pairing_needed (existing client active)"
     : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}; ` +
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}` +
+    `${binding.detail ? "; " + binding.detail : ""}; ` +
     `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
     `credential: ${token ? "configured" : "missing"}.\n`,
   );
@@ -307,7 +308,10 @@ try {
   binding = await resolveClient(clientOptions);
   if (!binding.enabled) {
     if (["status", "pause", "resume"].includes(action)) {
-      process.stdout.write(`Cairn automatic memory: ${binding.status}.\n`);
+      process.stdout.write(
+        `Cairn automatic memory: ${binding.status}` +
+        `${binding.detail ? "; " + binding.detail : ""}.\n`,
+      );
       if (action !== "status") process.exitCode = 1;
     }
   } else {

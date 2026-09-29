@@ -21,7 +21,7 @@ const hook = fileURLToPath(
 const launcher = fileURLToPath(
   new URL("../../../plugins/cairn-memory/scripts/launch-capture.mjs", import.meta.url),
 );
-async function setup(t, paired = true) {
+async function setup(t, paired = true, customRoot = false) {
   const workspace = createTestWorkspace(t, { prefix: "cx2-hook-" });
   const home = join(workspace.path, "home");
   await mkdir(home, { mode: 0o700 });
@@ -32,6 +32,7 @@ async function setup(t, paired = true) {
     hostsStopped: true,
     consent: { claude: true, codex: true },
     standardClaudeOrigin: true,
+    ...(customRoot ? { root: join(home, "shared") } : {}),
   };
   const pending = paired ? await initializePairing(options) : {};
   if (paired) await completePairing({ ...options, configured: options.consent });
@@ -412,7 +413,10 @@ test("unreadable coordination cannot revive either reset primary's retired root"
         assert.equal((await f.run("capture", event, overrides)).code, 0);
         assert.equal((await f.run("", event, overrides, launcher)).code, 0);
         assert.equal(f.requests.length, count, "retired identity sends nothing");
-        assert.match((await f.run("status", {}, overrides)).stdout, /coordination_unreadable/);
+        assert.match(
+          (await f.run("status", {}, overrides)).stdout,
+          /pairing_needed; coordination unreadable/,
+        );
         assert.notEqual((await f.run("resume", {}, overrides)).code, 0);
       }
       await assert.rejects(readFile(join(b.CLAUDE_PLUGIN_DATA, "project-key")), { code: "ENOENT" });
@@ -423,12 +427,74 @@ test("unreadable coordination cannot revive either reset primary's retired root"
       assert.notEqual(bId, oldId);
       await chmod(directory, 0o755);
       await f.run("recall", { ...event, prompt: "synthetic" }, b);
-      assert.equal(f.requests.length, 2, "B stays disabled during degradation");
+      assert.equal(f.requests.length, 3, "B uses its existing standalone key during degradation");
+      assert.equal(f.requests.at(-1).body.project_id, bId);
       await chmod(directory, 0o700);
       await f.run("recall", { ...event, prompt: "synthetic" }, b);
-      assert.equal(f.requests.length, 3, "B sends after second repair");
+      assert.equal(f.requests.length, 4, "B sends after second repair");
       assert.equal(f.requests.at(-1).body.project_id, bId);
       assert.equal((await readControlState(retired)).paused, true);
     });
   }
+});
+
+test("custom-root resets never mint keys under degraded coordination", async (t) => {
+  for (const primaryClient of ["claude", "codex"]) {
+    await t.test(primaryClient, async (t) => {
+      const f = await setup(t, true, true);
+      const transcript = join(f.workspace.path, "custom.jsonl");
+      const event = { session_id: "custom", cwd: "/p", transcript_path: transcript };
+      await writeFile(transcript, row("before"));
+      await f.run("capture", event);
+      await appendFile(transcript, row("after"));
+      await f.run("capture", event);
+      assert.equal(f.requests.length, 1, "paired capture sent");
+      await resetIdentity({
+        ...f.options,
+        root: join(f.options.home, "reset"),
+        primaryClient,
+        confirmIdentityReset: true,
+      });
+      await chmod(join(f.options.home, ".cairn-memory-clients"), 0o755);
+      const profiles = [
+        {},
+        { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: "" },
+        { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined },
+        {
+          CLAUDE_PLUGIN_DATA: join(f.options.home, "fresh-b"),
+          CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined,
+        },
+      ];
+      for (const overrides of profiles) {
+        assert.equal((await f.run("recall", { ...event, prompt: "synthetic" }, overrides)).code, 0);
+        assert.equal(f.requests.length, 1, "no requests under any identity");
+        const root = overrides.CLAUDE_PLUGIN_DATA ?? f.env.CLAUDE_PLUGIN_DATA;
+        await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
+        assert.match(
+          (await f.run("status", {}, overrides)).stdout,
+          /pairing_needed; coordination unreadable/,
+        );
+      }
+    });
+  }
+});
+
+test("an unset plugin-data profile cannot resume or use a retired default root", async (t) => {
+  const f = await setup(t);
+  const root = join(f.options.home, ".cairn-memory");
+  await resetIdentity({
+    ...f.options,
+    root: join(f.options.home, "reset"),
+    primaryClient: "codex",
+    confirmIdentityReset: true,
+  });
+  const overrides = {
+    CLAUDE_PLUGIN_DATA: undefined,
+    CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined,
+  };
+  assert.equal((await f.run("resume", {}, overrides)).code, 1);
+  assert.match((await f.run("status", {}, overrides)).stdout, /pairing_needed; retired root/);
+  assert.equal((await f.run("recall", { cwd: "/p", prompt: "synthetic" }, overrides)).code, 0);
+  assert.equal(f.requests.length, 0);
+  assert.equal((await readControlState(root)).paused, true);
 });

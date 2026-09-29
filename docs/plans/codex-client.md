@@ -1191,24 +1191,23 @@ Resolved with the coordinator during CX-2:
   exported plugin-data root, preserve the default root if the upgraded host
   newly exports `CLAUDE_PLUGIN_DATA`; both established clients show
   `pairing_needed`. Without evidence, when Codex is registered, the new Claude
-  client sends nothing until
-  explicit adoption. A plugin-data root that already holds a key always wins,
-  even when an old default root contains a Claude cursor.
+  client sends nothing until explicit adoption. A plugin-data root that already
+  holds a key always wins, even when an old default root contains a Claude cursor.
 - The internal client names are `claude` and `codex`. Version-1 `install.json`
   contains `clients` (root/state/initialized and required Claude `profileRoot`),
-  optional `shared` initialization and
-  readiness, and retained invalidated bindings after an explicit identity reset.
-  `pairing.json` binds a random record ID, root, both participants and policy. Boot and PID namespace identity belongs
-  only to `setup.lock` ownership, never record validity; pairs survive reboot. No key or conversation is recorded there.
+  optional `shared` initialization and readiness, and retained invalidated
+  bindings after an explicit identity reset. `pairing.json` binds a random record
+  ID, root, both participants and policy. Boot and PID namespace identity belongs
+  only to `setup.lock` ownership, never record validity; pairs survive reboot.
+  No key or conversation is recorded there.
 - Linux setup-lock liveness uses boot ID plus `/proc/self/ns/pid`. Within the
   same boot, a foreign or unknown namespace is never reaped. A different boot
   makes the owner stale before probing a possibly reused PID. macOS has one PID
   space; use `kill(pid, 0)` and `Date.now() - os.uptime()*1000` as a boot estimate,
   with 2,000 ms tolerance for sampling/rounding. A wall-clock step larger than
   this during a lock hold can reap a live owner; holds are short. Windows pairing
-  is unsupported;
-  standalone remains unaffected. The test seam supplies boot, namespace and
-  synchronous liveness. Real macOS host behavior remains a CX-7/A6 verification
+  is unsupported; standalone remains unaffected. The test seam supplies boot,
+  namespace and synchronous liveness. Real macOS host behavior remains a CX-7/A6 verification
   gate, including the F0 finding that Codex hooks run outside the tool sandbox.
 - An empty Claude `pairing_record` option is unset. Explicit pause/resume on a
   disabled client reports its status and exits nonzero; automatic hooks still
@@ -1222,18 +1221,19 @@ Resolved with the coordinator during CX-2:
 - The golden concurrency check extends control-lock waits to 30 seconds in both
   isolated copies only. Production retains 250 ms; test-file serialization is
   removed. Exact deliveries are required, with parallel request lines compared
-  as a sorted multiset and individual bodies preserved byte for byte. Thirty
-  hook/launcher variants include inherited state-dir values. One-HOME profile
-  fixtures compare separate keys, IDs and pause against actual base; only the
+  as a sorted multiset and individual bodies preserved byte for byte. Thirty-six
+  hook/launcher variants include inherited state-dir values and unrelated default
+  roots that are files, unreadable, or contain a directory named `retired`.
+  One-HOME profile fixtures compare separate keys, IDs and pause against actual
+  base; only the
   new unregistered status note is normalized for those status outputs.
 - Profile ownership: every Claude binding requires
   `profileRoot`, the host plugin-data root or the default when the variable is
   unset. Registration, joint initialization, adoption, completion and reset all
   retain it. With trusted coordination, a different profile follows standalone
   root selection and remains unregistered. Cursor evidence can select the legacy
-  default only with **no
-  active or retired Claude registration**, never after registered standalone
-  or paired capture.
+  default only with **no active or retired Claude registration**, never after
+  registered standalone or paired capture.
   Explicit record delivery to a different profile fails `pairing_record_mismatch`;
   hooks still exit successfully, while status and controls report the error.
   CX-7 supplies `claudeProfileRoot` explicitly. Existing registration or the setup
@@ -1246,12 +1246,10 @@ Resolved with the coordinator during CX-2:
   primary. A Codex-primary reset leaves that Claude disabled pending adoption;
   fresh profiles cannot replace it. Setup profile conflicts use
   `claude_profile_mismatch`; delivered-record conflicts retain their record status.
-  When metadata is unreadable/untrusted, standalone fallback preserves an
-  evidenced existing default-root key without a retirement marker rather than
-  minting a key in an empty
-  plugin-data root, with `standalone_unregistered`. Later metadata loss must not
-  make an accidental identity change permanent. This conservative fallback is
-  distinct from adoption based on trusted active/retired metadata.
+  Degraded coordination never mints a project key. Only an existing profile key
+  or an evidenced, unmarked legacy-gap key is eligible; absent coordination
+  remains the normal standalone environment. The retirement and degraded-mode
+  rules below apply independently of registration.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
   writes pending bindings before publishing a key and returns `binding_pending`.
@@ -1262,9 +1260,9 @@ Resolved with the coordinator during CX-2:
 - `detectClients` is read-only and uses exact known files. A setup caller with
   unconfirmed origin receives `claude_confirmation_needed` before any writes
   once its profile is known; an unknown profile first requires
-  `claude_profile_root_required`;
-  `usesClaude: true` requires adoption. `standardClaudeOrigin: true` is evidence
-  supplied by setup, never inferred from a missing file. Setup must also treat
+  `claude_profile_root_required`; `usesClaude: true` requires adoption.
+  `standardClaudeOrigin: true` is evidence supplied by setup, never inferred from
+  a missing file. Setup must also treat
   relocated/nonstandard origins as unconfirmed. The standalone Claude path keeps
   its released first-use behavior; a new standalone Codex caller must supply
   origin evidence or the person's negative answer.
@@ -1302,16 +1300,22 @@ The marker is private JSON `{"version":1,"retired":true}`, mode 0600 in the priv
 root, with the same owner/symlink/inode checks as other private state. Reset
 retries keep the old root paused; the marker is never automatically removed.
 
-When coordination is unreadable or untrusted, Claude checks the exact known
-plugin-data and default roots for retirement markers. A present or invalid marker
-fails closed with `coordination_unreadable: pairing_needed`: hooks exit 0 and send
-nothing; status explains the problem and pause/resume fail visibly. A marker also
-prevents re-adoption from cursors after install metadata is lost. This may disable
-an independent profile during degradation rather than risk a retired identity.
-Readable coordination restores its existing independent key and ID. Without a
-retirement marker, the genuine legacy-gap fallback preserves its existing key
-and reports `standalone_unregistered`; an existing plugin-data key retains its
-normal precedence. No untrusted metadata may unpause a retired root.
+Absent coordination is the normal 0.1.1 standalone environment. Degraded mode
+means coordination exists but cannot be read or trusted: it never creates a
+project key. It uses an existing profile key first, or an existing default-root
+key with Claude-only cursor evidence for the legacy gap. Without either, memory
+is disabled with `pairing_needed` and detail `coordination unreadable`. An
+eligible unmarked root remains active as `standalone_unregistered` with the
+same detail; later metadata loss cannot cement a replacement identity.
+
+Retirement is checked only at the selected root. A present `retired` entry,
+valid or invalid, disables that root with `pairing_needed`; resume refuses to
+unpause it. Missing or inaccessible entries, non-directory roots and roots owned
+by another user are not retirement evidence. An unrelated default root cannot
+disable an unpaired plugin-data profile. Setup refuses a marked destination with
+`retired_root`, including an implicit default destination, and requires another
+unmarked root. Status remains a single token; explanations are separate details.
+Disabled hooks exit 0 without requests, while explicit controls fail visibly.
 
 Active and retired Claude ownership is permanent in this API. CX-7 must provide
 an explicit recovery path to move a HOME to a different Claude profile, with

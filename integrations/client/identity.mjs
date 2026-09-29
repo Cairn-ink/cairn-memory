@@ -3,7 +3,7 @@ import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { privateDirectory, privateRead, privateWrite } from "./private-state.mjs";
 
-async function randomIdFile(dataDir, filename) {
+async function randomIdFile(dataDir, filename, { create = true } = {}) {
   const path = join(dataDir, filename);
   async function readIdentity() {
     const value = (await readFile(path, "utf8")).trim();
@@ -17,6 +17,7 @@ async function randomIdFile(dataDir, filename) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
+  if (!create) throw new Error("paired_key_missing");
   await mkdir(dataDir, { recursive: true, mode: 0o700 });
   const value = randomUUID();
   const temporaryPath = join(dataDir, `.${filename}.${randomUUID()}.tmp`);
@@ -64,6 +65,6 @@ export async function opaqueProjectId(dataDir, cwd, options) {
   if (!cwd) return undefined;
   const key = options?.strict
     ? await projectKey(dataDir, options)
-    : await randomIdFile(dataDir, "project-key");
+    : await randomIdFile(dataDir, "project-key", options);
   return createHmac("sha256", key).update(String(cwd)).digest("hex");
 }

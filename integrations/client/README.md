@@ -52,7 +52,8 @@ root. Claude alone owns `sessions/`; Codex must use another cursor/worker locati
 Never infer Claude use from shared control, telemetry or key files.
 
 Run `npm run test:pairing` with a synthetic HOME, worktree TMPDIR and npm cache.
-The fixture `claude-hosted-3a1c17d9.json` pins main's 0.1.1 behavior; tests allow only the 0.1.2 VERSION substitution. The maintenance
+The fixture `claude-hosted-3a1c17d9.json` pins main's 0.1.1 behavior; tests allow
+only the 0.1.2 VERSION substitution. The maintenance
 `verifyMainGolden(fixturePath)` export in `testing/main-golden.mjs` reconstructs
 the pinned Git source and checks fixture reproducibility when that object is
 available; ordinary parity tests also work in shallow clones. The earlier CX-1
@@ -66,17 +67,19 @@ Both configurations must still be completed before activation. This API does not
 perform a real-user migration on its own or copy conversation/cursor history.
 
 Normal hooks only read coordination metadata. A fresh registration takes a bounded
-setup lock and rechecks; an established binding is not rewritten. Standalone Claude
-keeps 0.1.1 root/key handling even when safe registration is unavailable, reporting
-`standalone_unregistered`. An existing plugin-data key takes precedence over old
+setup lock and rechecks; an established binding is not rewritten. Lock contention
+permits unregistered standalone use. Unreadable existing coordination follows
+the existing-key-only degraded rules below. An existing plugin-data key takes precedence over old
 default-root cursor evidence. Empty `pairing_record` is unset.
 
 Pairing validates Cairn-owned roots/files, canonicalizes host-owned ancestors and
 skips uid checks where unavailable. Linux setup locks verify boot/PID namespace;
 macOS uses one PID space and a system-uptime boot estimate with two-second tolerance.
 Old-boot locks are stale; durable pairing records contain neither boot nor PID
-namespace. Windows pairing is unsupported; standalone is unaffected. Real macOS
-host verification remains with CX-7/A6.
+namespace. Unsupported lock ownership refuses registration before creating any
+coordination directory, preserving fresh standalone use. Windows pairing is
+unsupported; standalone is unaffected. Real macOS host verification remains
+with CX-7/A6.
 
 Only `npm test`, `test:pairing` and `test:pairing:golden` add the home guard through
 an environment-only shim before invoking the unchanged `tools/testing/run.mjs`.
@@ -88,8 +91,9 @@ Run with synthetic HOME and worktree TMPDIR/cache, as with the other tests.
 Run `npm run test:pairing:golden` to reproduce the actual-base fixture and compare
 the candidate. Both isolated copies get a 30-second control-lock timeout solely
 for golden concurrency checks; production keeps its original 250 ms. Test files
-need no serialization. Thirty hook/launcher variants include inherited state-dir
-values and 12 concurrent hooks per simulated platform. Exact delivery is required.
+need no serialization. Thirty-six hook/launcher variants include inherited
+state-dir values, unrelated default-root damage and 12 concurrent hooks per
+simulated platform. Exact delivery is required.
 A separate one-HOME, two-profile golden checks distinct keys/IDs and pause isolation;
 only the new unregistered status note is normalized for that status comparison.
 
@@ -104,8 +108,8 @@ to `knownClaudeRoot` only with `standardClaudeOrigin:true`. Otherwise it returns
 fail with `claude_profile_mismatch`. No setup process guesses the legacy default.
 
 With readable coordination, other profiles remain unregistered at their own
-standalone roots. Cursor evidence
-can select the legacy default only when there is no active or retired Claude registration.
+standalone roots. Cursor evidence can select the legacy default only when there
+is no active or retired Claude registration.
 An explicitly delivered record for a different profile fails visibly with
 `pairing_record_mismatch`; hooks exit successfully without requests, while status
 and controls report the error. A matching profile follows its binding through an
@@ -122,20 +126,25 @@ with the stale delivered option). Another profile stays unregistered at its own
 root; it cannot overwrite that ownership. Re-initialization preserves the retired
 profile when no explicit profile argument is supplied.
 
-If coordination is unreadable or untrusted, standalone fallback prefers an
-existing default-root key with Claude cursor evidence and no retirement marker
-over creating a key in an
-empty plugin-data root, reporting `standalone_unregistered`. Losing metadata later
-therefore cannot cement a newly minted identity. Trusted active/retired metadata
-still prevents cursor-based adoption by another profile. A plugin-data key that
-already exists retains precedence. With plugin data unset, standalone uses the
-default root, including its key and pause if shared by another client.
+Absent coordination is the normal 0.1.1 standalone environment. Degraded mode
+means coordination exists but cannot be read or trusted: it never creates a
+project key. It uses an existing profile key first, or an existing default-root
+key with Claude-only cursor evidence for the legacy gap. Without either, memory
+is disabled with `pairing_needed` and detail `coordination unreadable`. An
+eligible unmarked root remains active as `standalone_unregistered` with the
+same detail; later metadata loss cannot cement a replacement identity.
+
+Retirement is checked only at the selected root. A present `retired` entry,
+valid or invalid, disables that root with `pairing_needed`; resume refuses to
+unpause it. Missing or inaccessible entries, non-directory roots and roots owned
+by another user are not retirement evidence. An unrelated default root cannot
+disable an unpaired plugin-data profile. Setup refuses a marked destination with
+`retired_root`, including an implicit default destination, and requires another
+unmarked root. Adoption also refuses a marked `adoptFrom` source; completion
+rechecks the destination before activation. Status remains a single token; explanations are separate details.
+Disabled hooks exit 0 without requests, while explicit controls fail visibly.
 
 Before publishing a reset identity, reset pauses the old shared root, rotates its
 generation, and writes `retired` there using the private-state writer. The marker
 is `{"version":1,"retired":true}` and remains after retries and metadata loss.
-Degraded resolution checks only the known plugin-data/default root markers;
-present or invalid markers return disabled `coordination_unreadable: pairing_needed`.
-This check takes precedence over legacy-gap preservation and can disable an
-independent profile until metadata is repaired. Its existing key stays unchanged.
 Ownership never expires; CX-7 must supply explicit profile-move recovery.
