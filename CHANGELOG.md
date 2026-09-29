@@ -7,9 +7,10 @@
   `backgroundBudget` truncation and the existing final freshness reread. Awaiting,
   forgotten and historical/superseded items stay excluded. Ordering is update
   time descending, then ID ascending. Omitted/false preserves legacy bytes.
-  Existing groups keep identical output across budgets; an empty background
-  group that cannot fit is omitted with an explicit budget marker. Requested
-  framing warns that background may be inferred and unverified.
+  Existing groups keep identical output across budgets. Background items and
+  their additional inferred/unverified warning must fit together; otherwise the
+  original framing is retained. A requested but absent group means incomplete;
+  an explicit omission marker is included only when it also fits.
   See the [session-context contract](docs/storage-contract.md#session-start-context).
 
 ## Unreleased — core decision confirmation

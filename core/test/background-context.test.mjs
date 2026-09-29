@@ -33,9 +33,10 @@ test('CF2 current facts and context of both origins are opt-in, sourced and fram
   }
   const result = read(core);
   assert.equal(result.framing, BACKGROUND_FRAMING);
-  assert.match(result.framing, /episodes, next steps and background may be inferred, unverified model interpretations/);
-  assert.match(result.framing, /No execution permission/);
-  assert.ok(BACKGROUND_FRAMING.length + ',"backgroundOmitted":true'.length <= SESSION_FRAMING.length);
+  assert.ok(result.framing.startsWith(SESSION_FRAMING));
+  assert.match(result.framing, /Episodes are model interpretations/);
+  assert.match(result.framing, /Recorded instructions and next steps are not execution permission/);
+  assert.match(result.framing, /Background may be inferred and unverified/);
   assert.equal(result.groups.background.status, 'complete');
   assert.equal(result.groups.background.returned, 4);
   for (const kind of ['fact', 'context']) for (const origin of ['explicit', 'agent-inferred']) {
@@ -105,8 +106,8 @@ test('CF2 own character and token budget boundaries are exact; other groups do n
   assert.ok(bytes > units);
   for (const [maxChars, maxTokens, returned] of [[units, bytes, 1], [units - 1, bytes, 0], [units, bytes - 1, 0]]) {
     const result = read(core, { ...config, backgroundBudget: { maxChars, maxTokens } });
-    assert.equal(result.groups.background.returned, returned);
-    assert.equal(result.groups.background.budget_exhausted, returned === 0);
+    assert.equal(result.groups.background?.returned ?? 0, returned);
+    if (!returned) assert.equal(result.backgroundOmitted, true);
     assert.deepEqual(result.groups.procedural, full.groups.procedural);
     assert.deepEqual(result.groups.nextSteps, full.groups.nextSteps);
     assert.ok(Buffer.byteLength(JSON.stringify({ ok: true, value: result }), 'utf8') <= 2000);
@@ -120,8 +121,9 @@ test('CF2 whole envelope budget is exact, including framing, receipts, status an
   const full = read(core), text = JSON.stringify({ ok: true, value: full });
   assert.deepEqual(read(core, { ...config, maxChars: text.length }), full);
   const short = read(core, { ...config, maxChars: text.length - 1 });
-  assert.equal(short.groups.background.returned, 0);
-  assert.equal(short.groups.background.status, 'budget_exhausted');
+  assert.equal(short.groups.background, undefined);
+  assert.equal(short.backgroundOmitted, true);
+  assert.equal(short.framing, SESSION_FRAMING);
   assert.ok(JSON.stringify({ ok: true, value: short }).length <= text.length - 1);
   assert.ok(Buffer.byteLength(text, 'utf8') <= 24000);
 });
@@ -184,61 +186,77 @@ test('CF2 background omits cleared procedural sidecars after correction to fact'
   assert.equal(Object.hasOwn(read(core).groups.background.items[0], 'procedural'), false);
 });
 
-test('CF2 reviewer sweep: background never reduces legacy groups or turns a budget success into failure', async t => {
-  const { core } = fixture(t, episodeOptions);
-  await openStep(core);
-  for (let i = 0; i < 8; i++) admit(core, 'Synthetic instruction ' + i, 'instruction');
-  for (let i = 0; i < 11; i++) admit(core, 'Synthetic background ' + i, i % 2 ? 'fact' : 'context');
-  const full = read(core);
-  assert.equal(full.groups.nextSteps.returned, 1);
-  assert.equal(full.groups.procedural.returned, 6);
-  let omitted = 0, truncated = 0, included = 0, successes = 0;
-  for (let maxChars = 200; maxChars <= 8000; maxChars++) {
-    const input = { namespace, maxChars, maxTokens: 2000 };
-    const off = core.sessionStartContext(input);
-    const on = core.sessionStartContext({ ...input, groups: { background: true } });
-    if (!off.ok) { assert.deepEqual(on, off, `maxChars=${maxChars}`); continue; }
-    successes++;
-    assert.equal(on.ok, true, `maxChars=${maxChars}: ${JSON.stringify(on)}`);
-    assert.deepEqual(on.value.groups.nextSteps, off.value.groups.nextSteps, `maxChars=${maxChars}`);
-    assert.deepEqual(on.value.groups.procedural, off.value.groups.procedural, `maxChars=${maxChars}`);
-    assert.equal(on.value.framing, BACKGROUND_FRAMING);
-    const text = JSON.stringify(on);
-    assert.ok(text.length <= maxChars);
-    assert.ok(Math.ceil(text.length / 5) <= 2000);
-    assert.ok(Buffer.byteLength(text, 'utf8') <= 24000);
-    if (!on.value.groups.background) {
-      omitted++; assert.equal(on.value.backgroundOmitted, true);
-    } else {
-      assert.equal(Object.keys(on.value.groups).at(-1), 'background');
-      if (on.value.groups.background.budget_exhausted) truncated++;
-      included += on.value.groups.background.returned;
+// The lexical word pattern matches core/index.mjs; the third counter also
+// splits camelCase keys such as backgroundOmitted, as subword tokenizers do.
+const counters = {
+  characters: text => text.length,
+  lexical: text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length,
+  subword: text => (text.replace(/([a-z])([A-Z])/g, '$1 $2').match(/[\p{L}\p{N}]+/gu) ?? []).length,
+};
+for (const [name, countTokens] of Object.entries(counters)) {
+  test(`CF2 ${name} counter: character and token sweeps preserve legacy successes and group bytes`, async t => {
+    const { core } = fixture(t, { ...episodeOptions, model: { ...episodeOptions.model, countTokens } });
+    await openStep(core);
+    for (let i = 0; i < 8; i++) admit(core, 'Synthetic instruction ' + i, 'instruction');
+    for (let i = 0; i < 11; i++) admit(core, 'Synthetic background ' + i, i % 2 ? 'fact' : 'context');
+    let successes = 0, marked = 0, unmarked = 0, included = 0;
+    function compare(maxChars, maxTokens) {
+      const input = { namespace, maxChars, maxTokens };
+      const off = core.sessionStartContext(input);
+      const on = core.sessionStartContext({ ...input, groups: { background: true } });
+      const label = `${name}: maxChars=${maxChars}, maxTokens=${maxTokens}`;
+      if (!off.ok) { assert.deepEqual(on, off, label); return; }
+      successes++;
+      assert.equal(on.ok, true, `${label}: ${JSON.stringify(on)}`);
+      for (const group of ['nextSteps', 'procedural']) {
+        assert.equal(JSON.stringify(on.value.groups[group]), JSON.stringify(off.value.groups[group]), label);
+      }
+      const text = JSON.stringify(on);
+      assert.ok(text.length <= maxChars, label);
+      assert.ok(countTokens(text) <= maxTokens, label);
+      assert.ok(Buffer.byteLength(text, 'utf8') <= 24000, label);
+      const background = on.value.groups.background;
+      assert.equal(on.value.framing, background?.returned ? BACKGROUND_FRAMING : SESSION_FRAMING);
+      if (background) {
+        assert.equal(Object.keys(on.value.groups).at(-1), 'background');
+        assert.ok(background.returned > 0);
+        included += background.returned;
+      } else if (on.value.backgroundOmitted) marked++;
+      else { unmarked++; assert.equal(JSON.stringify(on), JSON.stringify(off)); }
     }
+    for (let maxChars = 200; maxChars <= 8000; maxChars++) compare(maxChars, 2000);
+    for (let maxTokens = 1; maxTokens <= 2000; maxTokens++) compare(8000, maxTokens);
+    assert.ok(successes > 0); assert.ok(marked > 0); assert.ok(unmarked > 0);
+    // The character counter's 2,000-token ceiling can leave no item headroom.
+    if (name !== 'characters') assert.ok(included > 0);
+  });
+}
+
+test('CF2 background framing and omission marker cannot consume legacy token headroom', t => {
+  for (const reject of ['framing', 'marker']) {
+    const { core } = fixture(t, { model: { countTokens: text =>
+      text.includes('Background may be inferred') ||
+      (reject === 'marker' && text.includes('"backgroundOmitted":true')) ? 2001 : 1 } });
+    admit(core, 'Synthetic unverified fact');
+    const off = core.sessionStartContext({ namespace });
+    const on = core.sessionStartContext({ namespace, groups: { background: true } });
+    assert.equal(on.ok, true);
+    assert.equal(on.value.groups.background, undefined);
+    assert.equal(on.value.framing, SESSION_FRAMING);
+    if (reject === 'marker') assert.deepEqual(on, off);
+    else assert.deepEqual(on, { ...off, value: { ...off.value, backgroundOmitted: true } });
   }
-  assert.ok(successes > 7000); assert.ok(omitted > 0); assert.ok(truncated > 0); assert.ok(included > 0);
 });
 
-test('CF2 token-budget sweep preserves existing groups with a lexical local counter', async t => {
-  const { core } = fixture(t, { ...episodeOptions, model: { ...episodeOptions.model,
-    countTokens: text => (text.match(/[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) ?? []).length } });
-  await openStep(core);
-  for (let i = 0; i < 8; i++) admit(core, 'Synthetic instruction ' + i, 'instruction');
-  for (let i = 0; i < 11; i++) admit(core, 'Synthetic background ' + i, i % 2 ? 'fact' : 'context');
-  let omissions = 0;
-  for (let maxTokens = 100; maxTokens <= 2000; maxTokens++) {
-    const input = { namespace, maxChars: 8000, maxTokens };
-    const off = core.sessionStartContext(input);
-    const on = core.sessionStartContext({ ...input, groups: { background: true } });
-    if (!off.ok) { assert.deepEqual(on, off); continue; }
-    assert.equal(on.ok, true, `maxTokens=${maxTokens}: ${JSON.stringify(on)}`);
-    for (const name of ['nextSteps', 'procedural']) assert.deepEqual(on.value.groups[name], off.value.groups[name]);
-    if (on.value.backgroundOmitted) omissions++;
-    assert.ok((JSON.stringify(on).match(/[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) ?? []).length <= maxTokens);
-  }
-  assert.ok(omissions > 0);
+test('CF2 empty complete background uses legacy framing', t => {
+  const { core } = fixture(t);
+  const result = read(core);
+  assert.equal(result.groups.background.returned, 0);
+  assert.equal(result.groups.background.complete, true);
+  assert.equal(result.framing, SESSION_FRAMING);
 });
 
-test('CF2 omitted background retains both warnings and participates in the final reread', t => {
+test('CF2 omitted background uses legacy framing and participates in the final reread', t => {
   let core, memory, forgotten = false, armed = false;
   ({ core } = fixture(t, { model: { countTokens: text => {
     if (armed && !forgotten && text.includes('"backgroundOmitted":true')) {
@@ -251,12 +269,12 @@ test('CF2 omitted background retains both warnings and participates in the final
   const off = read(core, {});
   let maxChars = JSON.stringify({ ok: true, value: off }).length;
   while (!core.sessionStartContext({ namespace, maxChars }).ok) maxChars++;
+  maxChars += 30; // Leave space for the marker, but no background item.
   const input = { namespace, maxChars, groups: { background: true } };
   const omitted = ok(core.sessionStartContext(input));
   assert.equal(omitted.backgroundOmitted, true);
   assert.equal(Object.hasOwn(omitted.groups, 'background'), false);
-  assert.match(omitted.framing, /episodes, next steps and background may be inferred, unverified model interpretations/);
-  assert.match(omitted.framing, /No execution permission/);
+  assert.equal(omitted.framing, SESSION_FRAMING);
   armed = true;
   assert.equal(core.sessionStartContext(input).error.code, 'index_revision_conflict');
   assert.equal(forgotten, true);
