@@ -87,8 +87,12 @@ test('SE4 complete source set fits exact budget or rejects without receipt pagin
   const full = fetch(f.core, memory); ok(full); const budget = JSON.stringify(full).length;
   assert.deepEqual(fetch(f.core, memory, { tokenBudget: budget }), full);
   error(fetch(f.core, memory, { tokenBudget: budget - 1 }), 'context_item_too_large');
+  // A complete source set is atomic: it is omitted whole and reported, never cut.
   f.model.countTokens = text => text.includes('"candidates"') && text.includes('interpretationStatus') ? 6001 : 1;
-  error(await recall(f.core), 'context_budget_exceeded'); assert.equal(f.calls.filter(call => call.method === 'rank').length, 0);
+  const omitted = ok(await recall(f.core));
+  assert.deepEqual(omitted.memories, []); assert.equal(omitted.coverage, 'budget_exhausted');
+  assert.deepEqual(omitted.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0, receiptListsCapped: 0 });
+  assert.equal(f.calls.filter(call => call.method === 'rank').length, 0);
 });
 
 test('SE4 100 complete receipts allowed; 101 rejected rather than dropping sources', t => {

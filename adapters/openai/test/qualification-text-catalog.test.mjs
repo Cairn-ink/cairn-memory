@@ -283,17 +283,26 @@ test('B3 real capture with actual adapter fake HTTP rejects second group before 
   assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n, 0);
 });
 
-test('B2 any unfit final singleton denies every HTTP call before planning ends', async () => {
-  const source = items(); const calls = [];
+test('B2 an unfit final singleton stays unqualified alone, and planning ends before any HTTP call', async () => {
+  const source = items(); let fitChecks = 0; let checksAtFirstCall;
   const actual = createOpenAIModel({ apiKey: 'synthetic', qualificationInputMode: 'adaptive-text-catalog-v1',
-    fetchImpl: () => { calls.push(1); assert.fail('no HTTP'); } });
+    fetchImpl: async (url, options) => {
+      checksAtFirstCall ??= fitChecks;
+      const body = JSON.parse(options.body);
+      return Response.json(url.endsWith('/input_tokens') ? { object: 'response.input_tokens', input_tokens: 120 }
+        : envelope(body.model, wire(JSON.parse(body.input[0].content[0].text))));
+    } });
   const model = Object.freeze({ ...actual, fitsQualificationRequest(value) {
+    fitChecks++;
     if (value.input.items.length === 5) return false;
     if (value.input.items[0].content === 'Synthetic claim 4') return false;
     return actual.fitsQualificationRequest(value);
   } });
-  await assert.rejects(qualifyCandidateItems(model, source), { code: 'context_budget_exceeded' });
-  assert.equal(calls.length, 0);
+  const report = {};
+  const qualified = await qualifyCandidateItems(model, source, undefined, undefined, false, report);
+  assert.equal(checksAtFirstCall, fitChecks, 'every group is planned before the first HTTP call');
+  assert.deepEqual(report, { itemsShortened: 0, itemsUnqualified: 1 });
+  assert.deepEqual(qualified.map((entry) => Object.hasOwn(entry, 'qualification')), [true, true, true, true, false]);
 });
 
 test('zero field citations reject after generation', async () => {

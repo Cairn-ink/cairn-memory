@@ -111,11 +111,18 @@ test('CV2 unchanged v1 still rejects observed malformed offset and missing value
 test('CV2 missing method, output/input budget overflow and cancellation never admit partially', async (t) => {
   for (const [overrides, code] of [[{ qualifyCandidates: undefined }, 'model_not_configured'],
     [{ qualifyCandidates: () => { throw Object.assign(new Error(), { name: 'AbortError' }); } }, 'model_cancelled'],
-    [{ countTokens: (text) => text.includes('"qualifications"') ? 1025 : 1 }, 'invalid_model_output'],
-    [{ countTokens: (text) => text.includes('"candidateIndex"') && text.includes('maxOutputTokens') ? 6001 : 1 }, 'context_budget_exceeded']]) {
+    [{ countTokens: (text) => text.includes('"qualifications"') ? 1025 : 1 }, 'invalid_model_output']]) {
     const f = fixture(t, overrides); const before = material(f.db);
     error(await f.core.capture(input()), code); assert.deepEqual(material(f.db), before);
   }
+});
+
+test('CV2 a qualification request that cannot fit leaves only that item unqualified and admits the capture', async (t) => {
+  const f = fixture(t, { countTokens: (text) => text.includes('"candidateIndex"') && text.includes('maxOutputTokens') ? 6001 : 1 });
+  const result = ok(await f.core.capture(input()));
+  assert.deepEqual(result.qualificationTruncated, { itemsShortened: 0, itemsUnqualified: 1, reason: 'context_budget' });
+  assert.equal(f.calls.filter((call) => call.method === 'qualifyCandidates').length, 0);
+  assert.equal(detail(f.core, result.admission.memories[0].id).qualification, null);
 });
 
 test('CV2 actual 30-second synthetic-clock timeout aborts and diagnostics identify new stage', async (t) => {
@@ -201,14 +208,16 @@ test('CV2 adaptive catalog preserves distinct repeated receipts through warm/col
   assert.deepEqual(fitModes, ['inline', 'text-catalog-v1']);
 });
 
-test('CV2 neither-fitting qualifier refuses the whole capture before admission', async (t) => {
+test('CV2 neither-fitting qualifier leaves the item unqualified without a model call and admits the capture', async (t) => {
   let fitCalls = 0; let modelCalls = 0;
   const f = fixture(t, { fitsQualificationRequest() { fitCalls++; return false; },
     qualifyCandidates() { modelCalls++; return { qualifications: [] }; } });
-  const before = material(f.db);
-  error(await f.core.capture(input({ eventId: 'no-fit' })), 'context_budget_exceeded');
-  assert.equal(fitCalls, 4); assert.equal(modelCalls, 0);
-  assert.deepEqual(material(f.db), before);
+  const result = ok(await f.core.capture(input({ eventId: 'no-fit' })));
+  // Whole, catalog, singleton, singleton catalog, then the shortened floor.
+  assert.equal(fitCalls, 5); assert.equal(modelCalls, 0);
+  assert.deepEqual(result.qualificationTruncated, { itemsShortened: 0, itemsUnqualified: 1, reason: 'context_budget' });
+  assert.equal(detail(f.core, result.admission.memories[0].id).qualification, null);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM memory_qualifications').get().n, 0);
 });
 
 test('B3 partitioned capture compiles five sources atomically and cold-inspects exact anchors', async (t) => {

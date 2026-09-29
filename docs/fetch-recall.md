@@ -165,14 +165,92 @@ There are at most three model calls, 36 unique candidates and 72 fetch operation
 (two receipt pages per candidate). Each call needs a
 context window of at least 8192, input at most 6000 counted tokens, output at most
 1024 tokens and 1024 reserved for adapter framing. The shared classification/
-recall call helper enforces a 30-second AbortSignal deadline. Counter absence,
-overrun and model failure return explicit errors; no fallback engine runs.
+recall call helper enforces a 30-second AbortSignal deadline. Counter absence
+and model failure return explicit errors; no fallback engine runs. How much a
+person has remembered never makes recall fail; see the next section.
 Adapters must honor output/abort limits and account for provider framing, as in
 the [model port contract](moc-placement.md#model-and-token-counting-port).
 
+### Fitting the model budget
+
+Recall packs its `select` and `rank` requests to fit the 6,000-token input limit
+rather than failing with `context_budget_exceeded` once a person has many or
+long memories. Packing measures the complete request (system prompt, input and
+JSON framing) with the adapter's own `countTokens`. It is deterministic, and a
+request that already fits is sent unchanged, byte for byte.
+
+- **select**: map items are interleaved across the read set's namespaces, each
+  page keeping its own order, and the largest prefix that fits is sent. A page
+  that lost items is shown with `exhausted:false`. The selector may choose only
+  refs it was actually shown; any other ref is `invalid_model_output`.
+- **rank**: candidates keep the selector's order. Each is admitted while it
+  still fits in its smallest form: 120 code points of text (the navigation label
+  width) and one receipt identity. Only a candidate that cannot fit even that
+  way is left out whole and counted as omitted. Admitted candidates then share
+  the largest common receipt-list cap that fits, and after that the largest
+  common text allowance. Anything under a cap stays whole.
+  - A candidate carries every receipt that recall returns with it, with ID,
+    client, session, event, role and time whole. Normally that is its fetched
+    receipt prefix, in stored order.
+  - When that whole list cannot fit, the list is capped to its most recent
+    receipts (by `createdAt`, newest first, ties broken by ascending ID). The
+    request shows `receiptsOmitted`, and the returned memory carries the same
+    capped list, in the same order, with the same `receiptsOmitted`
+    (`receiptCount` minus the receipts returned). Request and result never
+    disagree about which receipts a memory has.
+  - Text is spent on content first, then on the listed excerpts in order, each
+    cut to a query-aware window (the same literal policy as the navigation
+    labels). A candidate whose text was cut is marked `textShortened: true`; an
+    excerpt cut, possibly to empty, is marked `excerptShortened: true`.
+  - The memory ID, revision, metadata, `receiptCount` and any `qualification`
+    stay whole. A qualified candidate that cannot fit is left out whole. In
+    `source-evidence` and `rationale-evidence` modes each complete source set is
+    atomic: it is sent whole or left out, never trimmed or capped.
+  - The ranker returns only `{namespaceIndex, memoryId, revision}` refs, and any
+    other key is rejected, so it cannot cite a receipt by index or ID.
+- **fetch**: a selected memory that cannot fit one 4,000-token fetch envelope
+  (body plus first receipt; or, in source modes, its complete source set or more
+  than 100 receipts) is left out of ranking instead of failing the recall. A
+  second receipt page that cannot fit keeps the first page and leaves
+  `fetchExhausted:false`. Direct `core.fetch` still refuses such items with
+  `context_item_too_large`.
+
+Only the model's view of text is shortened. Returned memories always carry
+their full content, reread in the final transaction, with the receipts the
+ranker saw: every fetched receipt, or a capped most-recent list marked
+`receiptsOmitted`. The model can rank only candidates it saw. When packing left
+anything out, shortened anything or capped a receipt list, the result gains an
+optional field, and `coverage` is `budget_exhausted`:
+
+```js
+{ recallTruncated: { navigationItemsOmitted: 3, candidatesOmitted: 1,
+  candidatesShortened: 5, receiptListsCapped: 1 } }
+```
+
+`navigationItemsOmitted` counts map items left out of `select` requests across
+both rounds. `candidatesOmitted` counts selected memories that were left out of
+the `rank` request, including unfetchable ones. `candidatesShortened` counts
+candidates ranked from shortened text. `receiptListsCapped` counts candidate
+receipt lists that were capped in the `rank` request; a capped memory that is
+returned carries that same list. It is a count of lists, not of receipts: each
+returned capped memory's own `receiptsOmitted` counts the receipts left off it.
+A memory with 200 receipts returned with its 66 most recent shows
+`receiptsOmitted: 134`, while the recall reports `receiptListsCapped: 1`.
+The field is absent when nothing was
+packed, and so is `receiptsOmitted` on a memory whose list was not capped, so
+the response shape is unchanged for callers that do not read them.
+A query that cannot fit even with no candidates still refuses with
+`context_budget_exceeded`. See [model input budgets](model-input-budgets.md) for
+every core call.
+
+`recallTruncated` is part of this local core response only. The hosted recall
+contract, `schemas/recall-response.schema.json`, is separate and owned by CX-4;
+hosted responses do not carry `recallTruncated` until CX-4 publishes it there.
+
 After ranking and output counting, the core validates every fetched candidate
-and rereads the selected memories and their receipt prefixes in one SQLite
-transaction. A deleted or changed candidate fails the whole recall with
+and rereads the selected memories and their receipt prefixes (or capped
+most-recent lists) in one SQLite transaction. Adding a receipt changes a
+memory's revision, so the reread list is the one the ranker saw. A deleted or changed candidate fails the whole recall with
 `revision_conflict`, including when the ranker returned empty. Cached fetched
 content is never the final response. No adapter runs inside or after this final
 snapshot. A later mutation affects subsequent reads, not an already returned
@@ -189,8 +267,9 @@ or false retains the legacy response shape. Only booleans are accepted; enabled
 fetch cursors cannot be reused with disabled reads or vice versa.
 
 Qualification, including every anchor, counts inside the 4,000-token fetch
-envelope and the 6,000-token ranking input. It is never removed to fit a budget;
-oversized items fail explicitly. Ranking receives source descriptions, and the
+envelope and the 6,000-token ranking input. It is never cut or removed to fit a
+budget: a qualified candidate that cannot fit is left out of ranking whole and
+counted in `recallTruncated`. Ranking receives source descriptions, and the
 final transaction rereads validated qualification with current memory and receipt
 prefixes. No model/counter runs after that read. MOC navigation is unchanged.
 
@@ -215,7 +294,8 @@ finished namespaces are skipped without renumbering them. `namespaces` reports
 `mapExhausted` and `fetchExhausted`; any truncated
 input yields `coverage:'budget_exhausted'`, including empty results. `complete`
 means these bounded inputs were fully examined, not proof of relevance or perfect
-recall. Large candidate bodies can exceed model input limits and fail explicitly.
+recall. Large candidate bodies are shortened or left out of the model's view and
+reported, as described in [fitting the model budget](#fitting-the-model-budget).
 Adaptive hierarchy traversal and paging beyond these ceilings are not implemented.
 Reaching the current-row scan ceiling also keeps coverage incomplete, even when
 a matching memory was returned or all eligible rows in the scanned range fit in

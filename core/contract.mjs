@@ -14,7 +14,9 @@ import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
 import { captureEpisodeMessages, endEpisode, keepEpisodeCapture } from './episode-capture.mjs';
-import { captureMessages } from './capture.mjs';
+import { captureMessages, extractionRequest } from './capture.mjs';
+import { captureSnapshot } from './capture-input.mjs';
+import { requestFits } from './model-packing.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
@@ -774,9 +776,11 @@ export function openMemoryCore(input) {
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
+        recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
-          revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
+          revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
+          ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
@@ -905,6 +909,52 @@ export function openMemoryCore(input) {
               invoke(() => runtime.finishOrdered(ns, snapshot, token, order, prepared, judged, deadline)),
           } } }));
     } catch (error) { return failure(error); }
+  }
+
+  // Split messages into capture batches by whole messages, in order, so each
+  // batch's extraction request fits exactly as capture measures it and meets
+  // capture's own message, length and window limits. A message that cannot fit
+  // alone is listed, never split. Planning makes no model call and no write.
+  function planCaptureBatches(input) {
+    return invoke(() => {
+      runtime.ready();
+      object(input, ['messages']);
+      const episode = Boolean(sessionEpisodes);
+      const messages = denseArray(input.messages, 1, 240).map((message) => {
+        object(message, ['id', 'role', 'content', ...(episode ? ['occurredAt'] : [])]);
+        return { id: message.id, role: message.role, content: message.content };
+      });
+      // Only message text enters an extraction request; identity is a placeholder.
+      const snapshot = (batch) => captureSnapshot({ namespace: { ownerId: 'plan', scope: 'personal', projectId: null },
+        client: 'plan', eventId: 'plan', sessionId: 'plan', messages: batch },
+      episode ? 'source-bound-v2' : captureQualification, episode ? undefined : captureSourcePolicy);
+      for (const message of messages) snapshot([message]);
+      if (new Set(messages.map((message) => message.id)).size !== messages.length) throw new MemoryStoreError('invalid_input');
+      countTokens(model, '');
+      const fitsRequest = requestFits(model, 'extract');
+      const fits = (indices) => {
+        let request;
+        try {
+          request = extractionRequest(snapshot(indices.map((index) => messages[index])),
+            { captureQualification, captureSourcePolicy, episode });
+        } catch (error) {
+          if (error instanceof MemoryStoreError && ['invalid_input', 'invalid_text'].includes(error.code)) return false;
+          throw error;
+        }
+        return fitsRequest(request.system, request.input);
+      };
+      const batches = [];
+      const oversizedMessageIndices = [];
+      let batch = [];
+      for (const index of messages.keys()) {
+        if (batch.length && fits([...batch, index])) { batch.push(index); continue; }
+        if (batch.length) batches.push(batch);
+        batch = [];
+        if (fits([index])) batch = [index]; else oversizedMessageIndices.push(index);
+      }
+      if (batch.length) batches.push(batch);
+      return { batches, oversizedMessageIndices };
+    });
   }
 
   async function endEpisodeSession(input) {
@@ -1051,7 +1101,7 @@ export function openMemoryCore(input) {
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,
-    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture: input => capture(input), keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
+    applyPlacement, linkMocs, map, fetch, recall, sourceSnapshot, capture: input => capture(input), planCaptureBatches, keepEpisode, endEpisodeSession, classifyPlacement, rebuildIndex,
     reviewRationale, getRationale, reviewDecisionBasis,
     close() {
       runtime.close();

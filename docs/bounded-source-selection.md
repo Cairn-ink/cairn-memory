@@ -37,8 +37,9 @@ important evidence, and stored rationale links remain model proposals.
 This mode can forward more retained source text to the configured model,
 including irrelevant text within the authorized read set. It may reduce one
 selection call but increase rank input and latency. Existing 4000-token map and
-fetch limits, 6000-token rank input, output limits and freshness checks remain;
-an oversized request fails explicitly rather than silently dropping evidence.
+fetch limits, 6000-token rank input, output limits and freshness checks remain.
+An oversized rank request leaves whole source sets out, never trims one, and
+reports the omission in `recallTruncated`.
 The response limit is not an input privacy bound. Do not enable it expecting
 only the eventual answer's sources to leave the local store.
 

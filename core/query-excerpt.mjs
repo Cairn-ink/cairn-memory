@@ -12,13 +12,21 @@ const WORDS = /[\p{L}\p{N}]+/gu;
 // Earliest start wins ties; no overlap or a short body preserves the prefix.
 // Tokenization and sliding pointers are linear in the bounded input lengths.
 export function createQueryExcerpt(query) {
+  const window = createQueryWindow(query);
+  return (content) => window(content, WIDTH);
+}
+
+// The same literal policy at a caller-chosen width, used by recall packing to
+// shorten model-facing text. A width at or above the text's length keeps it whole.
+export function createQueryWindow(query) {
   if (typeof query !== 'string' || query.length > 4000) fail('invalid_input');
   const wanted = new Set(Array.from(query.matchAll(WORDS), (match) => match[0].toLowerCase()));
-  return (content) => {
+  return (content, width) => {
     if (typeof content !== 'string' || content.length > 4000) fail('invalid_input');
+    if (!Number.isSafeInteger(width) || width < 0) fail('invalid_input');
     const points = [...content];
-    const prefix = points.slice(0, WIDTH).join('');
-    if (points.length <= WIDTH || wanted.size === 0) return prefix;
+    const prefix = points.slice(0, width).join('');
+    if (points.length <= width || wanted.size === 0) return prefix;
 
     // Regex offsets are UTF-16; window bounds are original Unicode code points.
     const pointOffsets = new Uint32Array(content.length + 1);
@@ -33,7 +41,7 @@ export function createQueryExcerpt(query) {
       const word = match[0].toLowerCase();
       const start = pointOffsets[match.index];
       const end = pointOffsets[match.index + match[0].length];
-      if (wanted.has(word) && end - start <= WIDTH) matches.push({ word, start, end });
+      if (wanted.has(word) && end - start <= width) matches.push({ word, start, end });
     }
     if (matches.length === 0) return prefix;
 
@@ -42,8 +50,8 @@ export function createQueryExcerpt(query) {
     let removed = 0;
     let bestStart = 0;
     let bestScore = 0;
-    for (let start = 0; start <= points.length - WIDTH; start++) {
-      while (added < matches.length && matches[added].end <= start + WIDTH) {
+    for (let start = 0; start <= points.length - width; start++) {
+      while (added < matches.length && matches[added].end <= start + width) {
         const { word } = matches[added++];
         counts.set(word, (counts.get(word) ?? 0) + 1);
       }
@@ -58,6 +66,6 @@ export function createQueryExcerpt(query) {
         bestStart = start;
       }
     }
-    return points.slice(bestStart, bestStart + WIDTH).join('');
+    return points.slice(bestStart, bestStart + width).join('');
   };
 }

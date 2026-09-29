@@ -119,15 +119,17 @@ fake HTTP and compile exact anchors, and adds finite source-free compiler
 failure categories. It does not identify the old compiler subreasons, prove
 real-provider strict-schema behavior, or resolve any benchmark case. The
 maximum-size unique-source synthetic fixture (five items × four 800-unit
-excerpts) still exceeds the unchanged local budget and refuses without
-truncation or fallback.
+excerpts) still exceeds the unchanged local budget as one request. Qualification
+is now planned per item, using the adapter's own wire fit, so that fixture
+reaches one request per item instead of refusing
+([model input budgets](model-input-budgets.md)).
 
 An [optional adaptive text catalog](qualification-evidence-pool.md) shares only
 identical candidate text bytes in a local qualification request while retaining
 every candidate ID, role and receipt mapping. The repeated-source five-item ×
 four-receipt × 800-unit synthetic fake-HTTP fixture fits and compiles original
-anchors; an all-unique fixture remains too large. Additional local fit work is
-possible, but the physical qualifier schedule and token ceilings are unchanged.
+anchors; an all-unique fixture remains too large for one request and is now
+planned per item. Token ceilings are unchanged.
 Existing v1 guards deny this named mode, and no paid cohort, real-provider response,
 semantic quality or source-selection improvement has been demonstrated.
 
@@ -1176,8 +1178,96 @@ camelCase-splitting counters, comparing existing group bytes with background
 on/off. Synthetic counters test budgeting, not provider tokenizer fidelity.
 See the [session-start contract](storage-contract.md#session-start-context).
 
+## Model input budgets
+
+Recall, classification and qualification now fit their model input by packing
+or planning, and capture batches are planned. See
+[fitting the model budget](fetch-recall.md#fitting-the-model-budget),
+[planning capture batches](capture.md#planning-capture-batches) and the
+[per-call audit](model-input-budgets.md). What remains:
+
+- **Dense scripts can make one capture message too large.** In plain,
+  `source-bound-v1` and indexed-evidence capture, a message may hold 4,000
+  UTF-16 units. For ordinary Chinese, Japanese, Korean and English text that is
+  at most about 4,600 tokens under o200k × 1.15. For dense scripts such as CJK
+  Extension A or Yi, or for control characters, it can reach about 14,000. The
+  planner reports such a message in `oversizedMessageIndices` instead of
+  splitting it inside the message, and capture refuses it with
+  `context_budget_exceeded` before any write. **The caller must split such a
+  message itself, with its own windowing,** as cairn-wiki's hosted H4a already
+  does. Local automatic capture (LAC) must do the same. This is an accepted,
+  documented boundary (chichi, 2026-09-29). Retained (`source-bound-v2`) and
+  episode capture, which extract from 800-unit views, are not affected.
+- **Capture batches must be planned.** Capture refuses a batch whose single
+  extraction request cannot fit, before any claim, staging, write or provider
+  call, and retrying the same batch refuses again. Hosts plan batches with
+  `core.planCaptureBatches`, which splits only between whole messages. Hosted
+  and MCP capture tools do not call it for you yet.
+- **Episode targets degrade differently.** When an episode's own new messages
+  cannot fit one interpretation request, the attempt records gap code
+  `context_budget_exceeded` and the same batch is still admitted as memories.
+  That batch does not need to be split or retried; only its episode draft is
+  missing.
+- **Ranking may see less than it returns.** A shortened rank candidate shows a
+  query-aware window of its content and then its earliest excerpts; later
+  excerpts can be empty. Evidence outside that window cannot influence ranking.
+  Returned memories are never shortened. Ranking quality over shortened text
+  has not been measured on a real model.
+- **Heavily re-captured memories return fewer receipts.** Every receipt a
+  ranked memory returns was sent to the ranker with its identity. Identity
+  fields cost about 86 tokens each under o200k × 1.15 (55 under the test
+  counter). When a memory's whole receipt list cannot fit, recall caps the list
+  to its most recent receipts, newest first with ties broken by ID. It sends
+  and returns that same list. Two separate counts report it. Each capped
+  memory's `receiptsOmitted` counts the receipts left off that memory's list.
+  `recallTruncated.receiptListsCapped` counts how many candidate lists were
+  capped in the recall. For example, a memory recaptured from 200 short English
+  turns returns its 66 most recent receipts under o200k × 1.15. That memory
+  shows `receiptsOmitted: 134`, and the recall reports `receiptListsCapped: 1`.
+  Older receipts stay readable through `get`. The memory itself is left out
+  only when its content floor and one receipt identity cannot fit.
+- **Shares are equal in characters, not tokens.** Every shortened rank
+  candidate gets the same code-point allowance, so a CJK candidate spends about
+  four times the tokens of an English one of the same length.
+- **Atomic evidence can crowd itself out.** A qualification, a complete
+  `source-evidence` set or a `rationale-evidence` graph is never cut. When one is
+  too large, that candidate is left out whole.
+- **An unfetchable memory is not recallable.** A memory whose body plus first
+  receipt exceeds one 4,000-token fetch envelope, or whose complete source set
+  cannot be fetched in a source mode, is left out of recall and counted. It
+  remains readable through `get` and `list`.
+- **Qualification may describe a prefix, or nothing.** An item that cannot fit
+  alone is qualified from its excerpts' first units only (never fewer than 120).
+  If even that cannot fit, the item is admitted unqualified and reported. In the
+  measured scripts this never happened at the maximum item size.
+- **Keep may extract from a prefix.** When an episode's kept sources no longer
+  fit one extraction request, each is shown only up to a common prefix, reported
+  as `extractionTruncated`.
+- **The recall query itself is not shortened.** A query that cannot fit even
+  with no map items or candidates still refuses with `context_budget_exceeded`.
+- **Rationale and decision-basis review still refuse.** `relate` and
+  `reviewBasis` send complete retained receipt sets and refuse with
+  `context_budget_exceeded` rather than packing, because their proposals cite
+  complete receipts and `relate` persists them. Automatic rationale reports
+  `rationale.status: 'failed'`; the capture itself is unaffected.
+- **Classification may file from a prefix.** A packed classification sees only
+  a prefix of each long memory, never below 120 code points. If the catalog
+  itself had to be cut, no new topic can be proposed for that batch.
+- **Hosted responses lack these fields.** `recallTruncated` and the other
+  truncation fields belong to the local core response. The hosted
+  `schemas/recall-response.schema.json` is owned by CX-4 and does not carry them
+  until CX-4 publishes them.
+
+Evidence: `core/test/recall-budget.test.mjs`, `core/test/capture-budget.test.mjs`
+and `core/test/classification-budget.test.mjs` use the test counter.
+`adapters/openai/test/recall-budget.test.mjs` and
+`adapters/openai/test/capture-budget.test.mjs` use exact o200k × 1.15. The test
+counter is shaped like a padded o200k count but is not a provider tokenizer. The
+small-recall parity fixture was frozen from main `3a1c17d`.
+
 ## Where the evidence lives
 
+- [Model input budgets and packing](model-input-budgets.md)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)

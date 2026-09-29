@@ -3,21 +3,25 @@ import { callModel } from './model-call.mjs';
 import { placementProposal } from './placement-input.mjs';
 import { fail } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
+import { packClassification } from './model-packing.mjs';
 
 const system = readFileSync(new URL('./prompts/classify-placement.md', import.meta.url), 'utf8');
 
 export async function classify({ model, snapshot, map, validateFresh, deadline }) {
-  const input = { memories: snapshot.memories, map: map.items, mapExhausted: map.exhausted };
+  // A request that does not fit is packed; placement may use only the topics it shows.
+  const packed = packClassification(model, system,
+    { memories: snapshot.memories, map: map.items, mapExhausted: map.exhausted }, deadline);
+  const { input } = packed;
   const output = await callModel(model, 'classify', system, input,
     { validateFresh, failureCode: 'classification_failed', deadline });
   let proposal;
   try {
     proposal = placementProposal(output, snapshot.memories.map((memory) => memory.id));
-    const visibleGroups = new Map(map.items.filter((item) => item.type === 'moc')
+    const visibleGroups = new Map(input.map.filter((item) => item.type === 'moc')
       .map((item) => [item.moc.id, item.moc.level]));
     for (const item of proposal.items) {
       if (item.parentIds.some((id) => visibleGroups.get(id) !== 'L1')) fail('invalid_model_output');
-      if (item.newL1 && (!map.exhausted || item.newL1.parentL2Ids.some((id) => visibleGroups.get(id) !== 'L2'))) {
+      if (item.newL1 && (!input.mapExhausted || item.newL1.parentL2Ids.some((id) => visibleGroups.get(id) !== 'L2'))) {
         fail('invalid_model_output');
       }
     }
@@ -29,7 +33,10 @@ export async function classify({ model, snapshot, map, validateFresh, deadline }
   }
   validateFresh();
   deadline?.check();
+  const { memoriesShortened, catalogItemsOmitted } = packed;
   return { proposal, basedOn: { memoryRevisions: snapshot.memories.map((m) =>
     ({ memoryId: m.id, revision: m.revision })), indexRevision: snapshot.indexRevision,
-  mapExhausted: map.exhausted } };
+  mapExhausted: input.mapExhausted },
+  ...(memoriesShortened || catalogItemsOmitted
+    ? { classificationTruncated: { memoriesShortened, catalogItemsOmitted } } : {}) };
 }
