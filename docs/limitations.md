@@ -1164,6 +1164,18 @@ The tests use real capture/recall plus scripted or fake-HTTP models; these are
 engineering controls, not measured semantic relevance. Acceptance and delivery
 status are recorded in the plan and its PR, not inferred from this description.
 
+The next [selection-path experiment](plans/selection-localization.md) freezes
+three new authored histories, each with sixteen weekly sessions and 32 short
+messages. This creates more independent capture batches than N4, not a larger
+long-document workload. Each question explicitly asks for the original reason
+and later decision/proposal status; its one source probe follows that original
+reason. More sessions do not guarantee more current cards or actual model
+selection. A complete public active-card read and observed selection callback
+are required to label that diagnostic precondition met. Unmet or unavailable
+preconditions remain in the fixed three-case denominator without reruns.
+Fixture/preparation tests are offline only; they do not establish a new score,
+long-history completion, default MOC performance or installed-host reliability.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the

@@ -44,6 +44,11 @@ service must use the same public core, not separate engines.
   complete bounded before/after reads and per-card paths. It preserves the
   v1 protocol and does not repair the failed answer, replace the official-six
   gate or establish superiority. Premise/context coverage remains separate.
+  The prospective [selection-path packet](docs/plans/selection-localization.md)
+  freezes three new sixteen-session histories and original-reason probes;
+  actual current-card count and selection must be observed, not assumed from
+  source size. It is a bounded diagnostic before a justified correction or
+  fresh official paired score, not a replacement for those gates.
   The offline checks and authored real-model diagnostic do not establish
   semantic completeness or repair earlier paid-case results. Installed
   host acceptance, semantic/current-state quality, and a fresh paired paid
