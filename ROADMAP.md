@@ -52,9 +52,14 @@ service must use the same public core, not separate engines.
   path, not a tested paid multi-carrier family. The binary judge did not flag
   two Mem0 answer-detail issues; the old official-six failure remains unchanged.
   No retrieval or prompt change is justified by these three cases. The next
-  gate is a newly frozen blind official six with the same indexed-evidence
-  route, a fresh resource check and 6/6 paired-completion requirement before
-  any fixed-30 expansion.
+  [blind official-six gate](docs/plans/official-six-post-localization.md) uses
+  the unchanged indexed-evidence route. It sealed six new cases and all 154
+  future exclusions before content/cost inspection. Source-only preparation
+  found all six ready with 293 batches per arm; its 14,749,619-microUSD
+  conservative whole-vector bound fits the US$30 packet cap. This is not paid
+  completion or a score. Operator/offline acceptance, dual review and exact-head
+  CI remain before dispatch. Both arms must complete and resolve 6/6 before
+  any fixed-30 expansion; feasibility does not require 100% accuracy.
   The offline checks and authored real-model diagnostic do not establish
   semantic completeness or repair earlier paid-case results. Installed
   host acceptance, semantic/current-state quality, and a fresh paired paid
