@@ -184,21 +184,30 @@ request that already fits is sent unchanged, byte for byte.
   that lost items is shown with `exhausted:false`. The selector may choose only
   refs it was actually shown; any other ref is `invalid_model_output`.
 - **rank**: candidates keep the selector's order. Each is admitted while it
-  still fits with at least 120 code points of text, the navigation label width.
-  Every admitted candidate then gets the largest common text allowance that
-  fits: candidates under it stay whole, and longer ones are shortened and marked
-  `textShortened: true`. Only text is shortened. A shortened candidate carries
-  every receipt that recall returns with it, in stored order, with ID, client,
-  session, event, role and time whole. Text is spent on content first, then on
-  receipt excerpts in order, each cut to a query-aware window (the same literal
-  policy as the navigation labels). An excerpt that was cut, possibly to empty,
-  is marked `excerptShortened: true`. The memory ID, revision, metadata,
-  `receiptCount` and any `qualification` stay whole. A candidate whose receipt
-  identities alone cannot fit is left out whole and counted as omitted; a
-  partial receipt list is never sent. A qualification is never cut either: a
-  qualified candidate that cannot fit is left out whole. In `source-evidence`
-  and `rationale-evidence` modes each complete source set is atomic: it is sent
-  whole or left out, never trimmed.
+  still fits in its smallest form: 120 code points of text (the navigation label
+  width) and one receipt identity. Only a candidate that cannot fit even that
+  way is left out whole and counted as omitted. Admitted candidates then share
+  the largest common receipt-list cap that fits, and after that the largest
+  common text allowance. Anything under a cap stays whole.
+  - A candidate carries every receipt that recall returns with it, with ID,
+    client, session, event, role and time whole. Normally that is its fetched
+    receipt prefix, in stored order.
+  - When that whole list cannot fit, the list is capped to its most recent
+    receipts (by `createdAt`, newest first, ties broken by ascending ID). The
+    request shows `receiptsOmitted`, and the returned memory carries the same
+    capped list, in the same order, with the same `receiptsOmitted`
+    (`receiptCount` minus the receipts returned). Request and result never
+    disagree about which receipts a memory has.
+  - Text is spent on content first, then on the listed excerpts in order, each
+    cut to a query-aware window (the same literal policy as the navigation
+    labels). A candidate whose text was cut is marked `textShortened: true`; an
+    excerpt cut, possibly to empty, is marked `excerptShortened: true`.
+  - The memory ID, revision, metadata, `receiptCount` and any `qualification`
+    stay whole. A qualified candidate that cannot fit is left out whole. In
+    `source-evidence` and `rationale-evidence` modes each complete source set is
+    atomic: it is sent whole or left out, never trimmed or capped.
+  - The ranker returns only `{namespaceIndex, memoryId, revision}` refs, and any
+    other key is rejected, so it cannot cite a receipt by index or ID.
 - **fetch**: a selected memory that cannot fit one 4,000-token fetch envelope
   (body plus first receipt; or, in source modes, its complete source set or more
   than 100 receipts) is left out of ranking instead of failing the recall. A
@@ -206,21 +215,25 @@ request that already fits is sent unchanged, byte for byte.
   `fetchExhausted:false`. Direct `core.fetch` still refuses such items with
   `context_item_too_large`.
 
-Only the model's view is shortened. Returned memories always carry their full
-content and every fetched receipt, reread in the final transaction. The model
-can rank only candidates it saw. When packing left anything out or shortened
-anything, the result gains an optional field, and `coverage` is
-`budget_exhausted`:
+Only the model's view of text is shortened. Returned memories always carry
+their full content, reread in the final transaction, with the receipts the
+ranker saw: every fetched receipt, or a capped most-recent list marked
+`receiptsOmitted`. The model can rank only candidates it saw. When packing left
+anything out, shortened anything or capped a receipt list, the result gains an
+optional field, and `coverage` is `budget_exhausted`:
 
 ```js
-{ recallTruncated: { navigationItemsOmitted: 3, candidatesOmitted: 1, candidatesShortened: 5 } }
+{ recallTruncated: { navigationItemsOmitted: 3, candidatesOmitted: 1,
+  candidatesShortened: 5, receiptListsCapped: 1 } }
 ```
 
 `navigationItemsOmitted` counts map items left out of `select` requests across
 both rounds. `candidatesOmitted` counts selected memories that were left out of
 the `rank` request, including unfetchable ones. `candidatesShortened` counts
-candidates ranked from shortened text. The field is absent when nothing was
-packed, so the response shape is unchanged for callers that do not read it.
+candidates ranked from shortened text. `receiptListsCapped` counts memories sent
+and returned with a capped receipt list. The field is absent when nothing was
+packed, and so is `receiptsOmitted` on a memory whose list was not capped, so
+the response shape is unchanged for callers that do not read them.
 A query that cannot fit even with no candidates still refuses with
 `context_budget_exceeded`. See [model input budgets](model-input-budgets.md) for
 every core call.
@@ -230,8 +243,9 @@ contract, `schemas/recall-response.schema.json`, is separate and owned by CX-4;
 hosted responses do not carry `recallTruncated` until CX-4 publishes it there.
 
 After ranking and output counting, the core validates every fetched candidate
-and rereads the selected memories and their receipt prefixes in one SQLite
-transaction. A deleted or changed candidate fails the whole recall with
+and rereads the selected memories and their receipt prefixes (or capped
+most-recent lists) in one SQLite transaction. Adding a receipt changes a
+memory's revision, so the reread list is the one the ranker saw. A deleted or changed candidate fails the whole recall with
 `revision_conflict`, including when the ranker returned empty. Cached fetched
 content is never the final response. No adapter runs inside or after this final
 snapshot. A later mutation affects subsequent reads, not an already returned

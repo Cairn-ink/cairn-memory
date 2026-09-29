@@ -776,9 +776,11 @@ export function openMemoryCore(input) {
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
+        recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
-          revision: candidate.revision, receiptLimit: candidate.item.receipts.length,
+          revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
+          ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
           indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),

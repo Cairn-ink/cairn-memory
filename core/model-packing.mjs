@@ -85,14 +85,16 @@ export function packSelect(model, system, input) {
 /**
  * Fit rank's candidates into the model input limit. A request that already
  * fits is returned as the same object. Otherwise candidates are admitted in
- * their existing order while each still fits at the floor, then every admitted
- * candidate gets the largest common text cap that fits: candidates under the
- * cap stay whole and longer ones are shortened to it. `textOf(candidate)`
- * returns null for a candidate that may only be sent whole, or `{ points, view }`:
- * its text length in code points and `view(n)`, the candidate with n of them.
- * Identity fields are never shortened. Only whole requests are measured, so
- * the returned request fits whatever the counter's behavior on fragments.
- * `included` lists the original indices sent, in order.
+ * their existing order while each still fits in its smallest form: text at the
+ * floor and one receipt identity. Admitted candidates then share the largest
+ * common receipt-list cap that fits, and after that the largest common text
+ * cap: anything under a cap stays whole. `textOf(candidate)` returns null for a
+ * candidate that may only be sent whole, or `{ points, receipts, view }`: its
+ * text length in code points, its receipt count (0 if its list cannot be
+ * capped) and `view(n, r)`, the candidate with n code points of text and at
+ * most r receipts. Identity fields are never shortened. Only whole requests are
+ * measured, so the returned request fits whatever the counter's behavior on
+ * fragments. `included` lists the original indices sent, in order.
  */
 export function packRank(model, system, input, textOf) {
   const count = counter(model, 'rank');
@@ -102,21 +104,26 @@ export function packRank(model, system, input, textOf) {
     return { input, included: all, omitted: 0, shortened: 0, overflow: false };
   }
   const texts = input.candidates.map(textOf);
-  const at = (index, cap) => texts[index] && texts[index].points > cap
-    ? texts[index].view(cap) : input.candidates[index];
-  const views = (indices, cap) => indices.map((index) => at(index, cap));
+  const at = (index, cap, receiptCap) => {
+    const text = texts[index];
+    return text && (text.points > cap || (text.receipts ?? 0) > receiptCap)
+      ? text.view(cap, receiptCap) : input.candidates[index];
+  };
+  const views = (indices, cap, receiptCap) => indices.map((index) => at(index, cap, receiptCap));
   let included = all;
-  if (!fits(views(all, TEXT_FLOOR))) {
+  if (!fits(views(all, TEXT_FLOOR, 1))) {
     if (!fits([])) {
       return { input: { ...input, candidates: [] }, included: [], omitted: all.length, shortened: 0, overflow: true };
     }
     included = [];
-    for (const index of all) if (fits(views([...included, index], TEXT_FLOOR))) included.push(index);
+    for (const index of all) if (fits(views([...included, index], TEXT_FLOOR, 1))) included.push(index);
   }
-  // The floor is known to fit; find the largest common cap that still does.
+  // The smallest forms are known to fit; widen receipt lists first, then text.
+  const receiptCap = largest(1, Math.max(1, ...included.map((index) => texts[index]?.receipts ?? 0)),
+    (receipts) => fits(views(included, TEXT_FLOOR, receipts)));
   const cap = largest(TEXT_FLOOR, Math.max(TEXT_FLOOR, ...included.map((index) => texts[index]?.points ?? 0)),
-    (points) => fits(views(included, points)));
-  const candidates = views(included, cap);
+    (points) => fits(views(included, points, receiptCap)));
+  const candidates = views(included, cap, receiptCap);
   return { input: { ...input, candidates }, included, omitted: all.length - included.length,
     shortened: candidates.filter((candidate, position) => candidate !== input.candidates[included[position]]).length,
     overflow: false };

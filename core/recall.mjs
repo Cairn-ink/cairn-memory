@@ -18,28 +18,38 @@ const mapRef = (item) => item.type === 'unfiled' ? item.ref :
     { memoryId: item.ref.childId, revision: item.ref.childRevision } : null;
 const oversized = (result) => !result.ok && result.error.code === 'context_item_too_large';
 
-// Content first, then receipts in stored order, each cut to a query-aware window.
-// Every receipt stays in the list with its identity; only excerpt text is cut,
-// possibly to empty. Metadata and qualification stay whole; source-context
-// sets are atomic. A candidate whose receipt identities alone cannot fit is
-// left out whole by the packer, never sent with a partial receipt list.
-function rankText(window) {
+// Content first, then receipts in list order, each cut to a query-aware window.
+// Every listed receipt keeps its identity; only excerpt text is cut, possibly
+// to empty. When the whole fetched list cannot fit, the list is capped to the
+// most recent receipts (ties by ID), and the final read returns that same list.
+// Metadata and qualification stay whole; source-context sets are atomic.
+function rankText(window, recent) {
+  const length = (text) => [...text].length;
   return (candidate) => {
-    const lengths = [candidate.memory.content, ...candidate.receipts.map((receipt) => receipt.excerpt)]
-      .map((text) => [...text].length);
-    const [contentPoints, ...receiptPoints] = lengths;
-    return { points: lengths.reduce((sum, length) => sum + length, 0), view: (limit) => {
-      const content = limit < contentPoints ? window(candidate.memory.content, limit) : candidate.memory.content;
-      let left = Math.max(0, limit - contentPoints);
-      const receipts = candidate.receipts.map((receipt, index) => {
-        const shown = Math.min(left, receiptPoints[index]);
-        left -= shown;
-        return shown === receiptPoints[index] ? receipt
-          : { ...receipt, excerpt: window(receipt.excerpt, shown), excerptShortened: true };
-      });
-      return { ...candidate, ...(content === candidate.memory.content ? {}
-        : { memory: { ...candidate.memory, content } }), receipts, textShortened: true };
-    } };
+    const fetched = candidate.receipts;
+    const contentPoints = length(candidate.memory.content);
+    let pool;
+    const list = (receiptCap) => receiptCap >= fetched.length ? fetched
+      : (pool ??= recent(candidate, fetched.length - 1)).slice(0, receiptCap);
+    return { points: contentPoints + fetched.reduce((sum, receipt) => sum + length(receipt.excerpt), 0),
+      receipts: recent ? fetched.length : 0, view: (limit, receiptCap = Infinity) => {
+        const chosen = list(receiptCap);
+        const content = limit < contentPoints ? window(candidate.memory.content, limit) : candidate.memory.content;
+        let cut = content !== candidate.memory.content;
+        let left = Math.max(0, limit - contentPoints);
+        const receipts = chosen.map((receipt) => {
+          const points = length(receipt.excerpt);
+          const shown = Math.min(left, points);
+          left -= shown;
+          if (shown === points) return receipt;
+          cut = true;
+          return { ...receipt, excerpt: window(receipt.excerpt, shown), excerptShortened: true };
+        });
+        return { ...candidate, ...(content === candidate.memory.content ? {}
+          : { memory: { ...candidate.memory, content } }), receipts,
+        ...(cut ? { textShortened: true } : {}),
+        ...(chosen === fetched ? {} : { receiptsOmitted: candidate.receiptCount - chosen.length }) };
+      } };
   };
 }
 
@@ -62,7 +72,7 @@ function selection(output, allowed, maximum, model, stage) {
   } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
-export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize,
+export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts,
   validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
@@ -70,7 +80,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   }
   const maps = [];
   const chosen = new Map();
-  const truncation = { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 0 };
+  const truncation = { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 0, receiptListsCapped: 0 };
   let strategy = 'model-selected';
   for (let round = 0; round < 2; round++) {
     const visible = [];
@@ -161,11 +171,19 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   if (candidates.length) {
     const prompt = contextMode === 'rationale-evidence' ? rationaleRankPrompt
       : contextMode === 'source-evidence' ? sourceRankPrompt : includeQualification ? qualifiedRankPrompt : rankPrompt;
+    const recent = recentReceipts && ((candidate, count) => recentReceipts({ namespaceIndex: candidate.namespaceIndex,
+      memoryId: candidate.memory.id, revision: candidate.memory.revision }, count));
     const packed = packRank(model, prompt, { query, limit,
       candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },
-    isSourceContext(contextMode) ? () => null : rankText(createQueryWindow(query)));
+    isSourceContext(contextMode) ? () => null : rankText(createQueryWindow(query), recent));
     truncation.candidatesOmitted += packed.omitted;
-    truncation.candidatesShortened += packed.shortened;
+    packed.input.candidates.forEach((sent, position) => {
+      if (sent.textShortened === true) truncation.candidatesShortened++;
+      if (sent.receiptsOmitted === undefined) return;
+      // The final read returns exactly this capped, most-recent-first list.
+      truncation.receiptListsCapped++;
+      candidates[packed.included[position]].receiptCap = sent.receipts.length;
+    });
     const shown = packed.included.map((index) => candidates[index]);
     if (shown.length || packed.overflow) {
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,

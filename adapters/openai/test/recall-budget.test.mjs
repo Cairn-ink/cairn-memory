@@ -72,27 +72,27 @@ test('CR1 o200k probe 1: re-extracting one memory from long Chinese turns stays 
   }
 });
 
-test('CR1 o200k: every returned receipt identity is ranked, or the whole candidate is left out', async (t) => {
+test('CR1 o200k: a memory recaptured 200 times is returned with the capped receipt list its ranker saw', async (t) => {
   // Short English turns re-extracting one memory: identities cost about 86 tokens each.
-  for (const [count, ranked] of [[64, true], [68, false]]) {
-    const f = fixture(t, 24);
-    for (let i = 0; i < count; i++) ok(f.core.admit({ namespace: personal,
-      memory: { content: 'Run the deploy checklist before every release.', kind: 'fact' },
-      receipts: [{ client: 'wiki', sessionId: 's', eventId: `turn-${i}`, role: 'user',
-        excerpt: 'I always want the deploy checklist run before every release, so please remind me next time.' }] }));
-    const result = ok(await f.core.recall({ readSet: [personal], query: 'deploy checklist' }));
-    assert.ok(f.calls.every((call) => call.tokens <= 6000));
-    const rank = f.calls.find((call) => call.method === 'rank');
-    if (ranked) {
-      assert.deepEqual(rank.input.candidates[0].receipts.map((receipt) => receipt.id),
-        result.memories[0].receipts.map((receipt) => receipt.id));
-      assert.equal(result.memories[0].receipts.length, count);
-    } else {
-      assert.equal(rank, undefined);
-      assert.deepEqual(result.memories, []);
-      assert.equal(result.recallTruncated.candidatesOmitted, 1);
-    }
-  }
+  const f = fixture(t, 24);
+  for (let i = 0; i < 200; i++) ok(f.core.admit({ namespace: personal,
+    memory: { content: 'Run the deploy checklist before every release.', kind: 'fact' },
+    receipts: [{ client: 'wiki', sessionId: 's', eventId: `turn-${i}`, role: 'user',
+      excerpt: 'I always want the deploy checklist run before every release, so please remind me next time.' }] }));
+  const result = ok(await f.core.recall({ readSet: [personal], query: 'deploy checklist' }));
+  assert.ok(f.calls.every((call) => call.tokens <= 6000), JSON.stringify(f.calls.map((call) => call.tokens)));
+  const [sent] = f.calls.find((call) => call.method === 'rank').input.candidates;
+  const [returned] = result.memories;
+  assert.equal(returned.receiptCount, 200);
+  assert.ok(returned.receipts.length >= 1 && returned.receipts.length < 200);
+  assert.deepEqual(returned.receipts.map((receipt) => receipt.id), sent.receipts.map((receipt) => receipt.id));
+  assert.deepEqual([sent.receiptsOmitted, returned.receiptsOmitted], Array(2).fill(200 - returned.receipts.length));
+  const times = returned.receipts.map((receipt) => receipt.createdAt);
+  assert.deepEqual(times, [...times].sort().reverse(), 'most recent first');
+  assert.ok(returned.receipts.some((receipt) => receipt.eventId === 'turn-199'), 'the newest receipt is kept');
+  t.diagnostic(`o200k capped list: ${returned.receipts.length} of 200 receipts`);
+  assert.equal(result.recallTruncated.receiptListsCapped, 1);
+  assert.equal(result.recallTruncated.candidatesOmitted, 0);
 });
 
 test('CR1 o200k probe 2: distinct Chinese memories with twelve or six selected refs', async (t) => {

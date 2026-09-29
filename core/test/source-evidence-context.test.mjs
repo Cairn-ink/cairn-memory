@@ -91,7 +91,7 @@ test('SE4 complete source set fits exact budget or rejects without receipt pagin
   f.model.countTokens = text => text.includes('"candidates"') && text.includes('interpretationStatus') ? 6001 : 1;
   const omitted = ok(await recall(f.core));
   assert.deepEqual(omitted.memories, []); assert.equal(omitted.coverage, 'budget_exhausted');
-  assert.deepEqual(omitted.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
+  assert.deepEqual(omitted.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0, receiptListsCapped: 0 });
   assert.equal(f.calls.filter(call => call.method === 'rank').length, 0);
 });
 

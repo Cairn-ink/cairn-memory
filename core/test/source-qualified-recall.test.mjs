@@ -126,7 +126,7 @@ test('QR3 ranking budget omits a whole qualified candidate instead of silently r
   admit(f.core);
   const omitted = ok(await recall(f.core, { includeQualification: true }));
   assert.deepEqual(omitted.memories, []); assert.equal(omitted.coverage, 'budget_exhausted');
-  assert.deepEqual(omitted.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
+  assert.deepEqual(omitted.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0, receiptListsCapped: 0 });
   assert.equal(f.calls.filter((call) => call.method === 'rank').length, 0);
   assert.equal(ok(await recall(f.core, { includeQualification: false })).memories.length, 1);
 });

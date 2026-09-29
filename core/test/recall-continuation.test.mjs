@@ -128,7 +128,7 @@ test('T04: public recall returns exact contiguous two-page evidence prefix, incl
   }
 });
 
-test('T05: accumulated ranking overflow omits the whole candidate, never a partial receipt list', async (t) => {
+test('T05: accumulated ranking overflow caps the receipt list and returns exactly that list', async (t) => {
   const { core, model } = fixture(t, { countTokens: (text) => {
     let parsed = null;
     try { parsed = JSON.parse(text); } catch { /* Not a request. */ }
@@ -137,11 +137,18 @@ test('T05: accumulated ranking overflow omits the whole candidate, never a parti
   } });
   admit(core, 'Accumulated evidence', personal, 101);
   const result = ok(await recall(core));
-  // All 101 receipt identities must travel together; they cannot fit, so the
-  // candidate is left out whole and no rank request is sent.
-  assert.deepEqual(model.calls.map((call) => call.method), ['select']);
-  assert.deepEqual(result.memories, []);
-  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
+  // All 101 identities cannot travel; the 100 most recent do, and the final
+  // read returns that same list rather than the stored-order prefix.
+  assert.deepEqual(model.calls.map((call) => call.method), ['select', 'rank']);
+  const sent = model.calls[1].input.candidates[0];
+  const [returned] = result.memories;
+  assert.equal(sent.receipts.length, 100);
+  assert.deepEqual(returned.receipts.map((receipt) => receipt.id), sent.receipts.map((receipt) => receipt.id));
+  assert.deepEqual([sent.receiptsOmitted, returned.receiptsOmitted, returned.receiptCount], [1, 1, 101]);
+  const times = returned.receipts.map((receipt) => receipt.createdAt);
+  assert.deepEqual(times, [...times].sort().reverse(), 'most recent first');
+  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0,
+    candidatesShortened: 0, receiptListsCapped: 1 });
   assert.equal(result.coverage, 'budget_exhausted');
 });
 

@@ -47,7 +47,8 @@ packing awaits provider-backed resource evaluation.
 
 After all model and tokenizer callbacks, the same authoritative final read checks
 every fetched candidate, including candidates not ranked for output, and rereads
-selected contents and accumulated receipt prefixes. Correction/forget committed
+selected contents and accumulated receipt prefixes, or the capped most-recent
+receipt list a candidate was ranked with. Correction/forget committed
 before this read cannot escape as cached evidence. Intermediate stale cursors
 fail explicitly. Namespace epochs and index availability are also checked around
 model callbacks and in the final transaction, even for empty selections; mutations

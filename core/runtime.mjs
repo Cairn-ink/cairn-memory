@@ -402,6 +402,24 @@ export function createMemoryRuntime(input) {
       .map((row) => ({ ...row }));
   }
 
+  // A capped recall receipt list: most recent first, ties broken by ID.
+  function receiptRecent(id, count) {
+    return db.prepare(`SELECT id, client, session_id AS sessionId, event_id AS eventId,
+      role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?
+      ORDER BY created_at DESC, id LIMIT ?`).all(id, count)
+      .map((row) => ({ ...row }));
+  }
+
+  // Read before ranking only; the final recall snapshot rereads the same list.
+  function recentReceipts(ns, ref, count) {
+    ready();
+    return transaction(db, () => {
+      const row = currentRow(ns, ref.memoryId);
+      if (!row || row.revision !== ref.revision) fail('revision_conflict');
+      return receiptRecent(row.id, count);
+    });
+  }
+
   function readSourceEvidence(row) {
     const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const count = detailDto(row).receiptCount;
@@ -487,8 +505,11 @@ export function createMemoryRuntime(input) {
       const qualifications = includeQualification ? rows.map(row => qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
-        return { memory, receipts: receiptPrefix(memory.id, 0, candidates[index].receiptLimit),
-          receiptCount: memory.receiptCount,
+        const capped = candidates[index].receiptOrder === 'recent';
+        const receipts = capped ? receiptRecent(memory.id, candidates[index].receiptLimit)
+          : receiptPrefix(memory.id, 0, candidates[index].receiptLimit);
+        return { memory, receipts, receiptCount: memory.receiptCount,
+          ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
     });
@@ -589,7 +610,7 @@ export function createMemoryRuntime(input) {
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
-    listPage, getPage, fetchPage, recallSnapshot, sourceSnapshot,
+    listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
     rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
     commitRationale(ns, refs, snapshot, proposals, deadline) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);

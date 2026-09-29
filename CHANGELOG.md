@@ -9,16 +9,21 @@
   that lost items is shown as not exhausted. Rank candidates keep the
   selector's order, each gets at least 120 code points of text, and the rest is
   shared as a common allowance (`textShortened: true`).
-- Only text is shortened in ranking. Every sent candidate carries all the
-  receipts recall returns with it, with identity whole; excerpts may be cut to
-  empty (`excerptShortened: true`). A candidate whose receipt identities alone
-  cannot fit is left out whole, and qualifications are never cut.
-  Source-evidence and rationale-evidence candidates are sent whole or left out.
+- Ranking sends exactly the receipts recall returns with each memory, with
+  identity whole. Excerpts may be cut to empty (`excerptShortened: true`).
+  When a memory's whole receipt list cannot fit, it is capped to its most
+  recent receipts (ties by ID), and that same list is returned. The memory then
+  carries `receiptsOmitted`, and recall reports `receiptListsCapped`. A memory
+  is left out only when its text floor and one receipt identity cannot fit, so
+  heavily recaptured memories stay recallable. Qualifications are never cut;
+  source-evidence and rationale-evidence candidates are sent whole or left out.
+  The ranker's refs cannot cite receipts.
 - A selected memory too large for one 4,000-token fetch envelope is left out of
   ranking instead of failing the recall; direct `fetch` still refuses it.
 - Returned memories and receipts are never shortened. When packing changed
   anything, the result carries `recallTruncated: {navigationItemsOmitted,
-  candidatesOmitted, candidatesShortened}` and `coverage: 'budget_exhausted'`.
+  candidatesOmitted, candidatesShortened, receiptListsCapped}` and
+  `coverage: 'budget_exhausted'`.
   Otherwise the field is absent, and requests and results are byte-identical to
   main `3a1c17d` (frozen fixture). Hosted responses do not carry
   `recallTruncated` until CX-4 publishes it in the hosted recall schema.
@@ -28,12 +33,18 @@
   least 120 units, with receipt identity and exact anchors kept. If even that
   cannot fit, that item alone is admitted unqualified. The capture reports
   `qualificationTruncated: {itemsShortened, itemsUnqualified, reason}`.
+- The OpenAI adapter's qualification fit check changed: `fitsQualificationRequest`
+  is now exposed in every qualification input mode, not only
+  `adaptive-text-catalog-v1`, so core plans around the adapter's larger pool
+  wire. Without catalog mode it reports false for a catalog-form request.
+  Requests that already fit are unchanged.
 - New `core.planCaptureBatches({messages})` splits messages into capture
   batches between whole messages, with capture's own measurement and limits.
   Capture now refuses a batch whose extraction request cannot fit before any
   claim, staging, write or provider call. A message that cannot fit even alone
   is listed as oversized, never split. This only happens for dense scripts in
-  4,000-unit modes; see limitations.
+  4,000-unit modes. Callers must split such a message with their own windowing,
+  as cairn-wiki's hosted H4a does, and LAC must do the same; see limitations.
 - Keeping an episode shortens its sources in the extraction request when they
   no longer fit, reported as `extractionTruncated`.
 - Classification packs too: memory bodies are shortened first, then the catalog

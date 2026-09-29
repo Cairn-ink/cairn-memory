@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
 import { packRank, packSelect, TEXT_FLOOR } from '../model-packing.mjs';
@@ -53,13 +54,14 @@ function fixture(t, { select = selectUpTo(24), rank = rankAll, extract, counter 
   };
   const model = { contextWindow: 8192, countTokens: counter, select: record('select', select),
     rank: record('rank', rank), ...(extract ? { extract, classify: fileAll } : {}) };
-  const core = openMemoryCore({ path: join(ws.path, 'memory.sqlite'), model });
+  const path = join(ws.path, 'memory.sqlite');
+  const core = openMemoryCore({ path, model });
   ws.defer(() => core.close());
   let events = 0;
   const admit = (content, excerpt = content, namespace = personal, eventId = `event-${events++}`) =>
     ok(core.admit({ namespace, memory: { content, kind: 'fact' },
       receipts: [{ client: 'wiki', sessionId: 's', eventId, role: 'user', excerpt }] })).memory;
-  return { core, model, calls, admit };
+  return { core, model, calls, admit, path };
 }
 
 function withinBudget(calls) {
@@ -114,7 +116,7 @@ test('CR1 probe 1: one memory re-extracted from many ~300-character Chinese turn
       'returned receipts are the complete fetched prefix, never shortened');
     sameReceiptIdentities(sent.receipts, result.memories[0].receipts);
     assert.equal(result.memories[0].memory.content, content);
-    assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 1 });
+    assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 1, receiptListsCapped: 0 });
     assert.equal(result.coverage, 'budget_exhausted');
   }
   assert.equal(memory.receiptCount, 40);
@@ -138,18 +140,55 @@ test('CR1 probe 1: short English turns re-extracting one memory stay recallable 
   assert.equal(result.recallTruncated.candidatesShortened, 1);
 });
 
-test('CR1 a candidate whose receipt identities alone cannot fit is left out whole, never partially', async (t) => {
-  const f = fixture(t);
+// Tiny excerpts let two fetch pages carry about 160 receipts, whose identity
+// fields alone exceed the rank budget.
+function crowd(f) {
   const kept = f.admit('Deploy checklist owner is Lin.', 'Deploy checklist owner is Lin.');
-  // Tiny excerpts let two fetch pages carry about 160 receipts, whose identity
-  // fields alone exceed the rank budget.
-  for (let i = 0; i < 200; i++) f.admit('Deploy checklist reminder', `r${i}`, personal, `crowded-${i}`);
+  let crowded;
+  for (let i = 0; i < 200; i++) crowded = f.admit('Deploy checklist reminder', `r${i}`, personal, `crowded-${i}`);
+  return { kept, crowded };
+}
+
+test('CR1 a memory recaptured 200 times is returned with the capped receipt list its ranker saw', async (t) => {
+  const f = fixture(t);
+  const { kept, crowded } = crowd(f);
   const result = ok(await f.core.recall({ readSet: [personal], query: 'deploy checklist' }));
   withinBudget(f.calls);
-  const rank = f.calls.find((call) => call.method === 'rank');
-  assert.deepEqual(rank.input.candidates.map((candidate) => candidate.memory.id), [kept.id]);
-  assert.deepEqual(result.memories.map((item) => item.memory.id), [kept.id]);
-  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
+  const sent = f.calls.find((call) => call.method === 'rank').input.candidates
+    .find((candidate) => candidate.memory.id === crowded.id);
+  const returned = result.memories.find((item) => item.memory.id === crowded.id);
+  assert.ok(returned, 'the memory is still returned');
+  assert.ok(result.memories.some((item) => item.memory.id === kept.id));
+  assert.equal(returned.receiptCount, 200);
+  assert.ok(returned.receipts.length >= 1 && returned.receipts.length < 200);
+  assert.equal(returned.receiptsOmitted, 200 - returned.receipts.length);
+  assert.equal(sent.receiptsOmitted, returned.receiptsOmitted);
+  sameReceiptIdentities(sent.receipts, returned.receipts);
+  // Exactly the newest receipts, most recent first, ties broken by ID.
+  const db = new DatabaseSync(f.path, { readOnly: true });
+  t.after(() => db.close());
+  const newest = db.prepare('SELECT id, created_at FROM receipts WHERE memory_id = ?').all(crowded.id)
+    .sort((a, b) => a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.id < b.id ? -1 : 1)
+    .slice(0, returned.receipts.length).map((row) => row.id);
+  assert.deepEqual(returned.receipts.map((receipt) => receipt.id), newest);
+  assert.equal(result.recallTruncated.candidatesOmitted, 0);
+  assert.equal(result.recallTruncated.receiptListsCapped, 1);
+  assert.equal(result.coverage, 'budget_exhausted');
+  // The same inputs give the same capped list.
+  assert.deepEqual(ok(await f.core.recall({ readSet: [personal], query: 'deploy checklist' })), result);
+});
+
+test('CR1 rank output names memories only, so it cannot cite a receipt by index or ID', async (t) => {
+  // The ranker returns {namespaceIndex, memoryId, revision} refs; selection()
+  // rejects any other key, so no receipt index can refer to an uncapped list.
+  for (const citation of [{ receiptIndex: 0 }, { receiptId: 'any' }, { receipts: [0] }]) {
+    const f = fixture(t, { rank: ({ input }) => ({ refs: [{ ...rankAll({ input }).refs[0], ...citation }] }) });
+    crowd(f);
+    assert.deepEqual(await f.core.recall({ readSet: [personal], query: 'deploy checklist' }),
+      { ok: false, error: { code: 'invalid_model_output', retryable: false } });
+    assert.ok(f.calls.find((call) => call.method === 'rank').input.candidates
+      .some((candidate) => candidate.receiptsOmitted > 0), 'the request carried a capped list');
+  }
 });
 
 test('CR1 probe 2: ten distinct Chinese memories with a selector returning twelve refs', async (t) => {
@@ -169,7 +208,7 @@ test('CR1 probe 2: ten distinct Chinese memories with a selector returning twelv
     assert.equal(item.memory.content, stored.memory.content);
     assert.deepEqual(item.receipts, stored.receipts);
   }
-  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 10 });
+  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 10, receiptListsCapped: 0 });
 });
 
 test('CR1 probe 2: fifty-nine Chinese memories over personal and project with a selector returning six', async (t) => {
