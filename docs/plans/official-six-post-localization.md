@@ -331,3 +331,40 @@ Worker elapsed time and token cost are unavailable. No operational binding,
 launch or paid request has occurred. Separate final Standards/Spec review and
 exact-head CI remain mandatory before dispatch; record their results on the
 PR without rewriting the reviewed candidate.
+
+## Final review correction
+
+Standards passed candidate `7a9f20a59cec6925a54b8076e2a2c93b670cfd4c`
+with a nonblocking duplicated-file-reader heuristic. Spec blocked it on P5/P7:
+a global generation halt retained generation and accounting but no persisted
+twelve-slot judgment outcome artifact. It correctly avoided evaluator access
+and judge calls, but its fixed-denominator record was incomplete.
+
+The bounded implementation correction is restricted to coordinator and its
+synthetic test. When no scoring report exists, persist a separately named
+fallback judgment record with all six cases and both arms, unresolved and
+bound to the terminal reason. Before the scoring phase, attempted is false;
+if scoring throws without a report, attempted must remain unknown, not be
+invented as false. This is not a public scoring report or a substitute score.
+Do not read evaluator data, render references or call any judge after a global
+generation halt. Completed scoring remains authoritative. Exercise halt,
+transport failure, generation-persistence failure and scoring-throw paths;
+rerun both Node gates and independent review on the final new candidate.
+
+The correction is implemented as `unreported-judgments.json`, written only
+when no scoring report was durably persisted. Primary inspected the change
+and reran the source suite **8/8** and expanded operator suite **18/18** on
+both Node versions, zero skips. In addition to a scoring exception, the new
+regression forces `scoring.json` fsync failure: even if the file exists, all
+twelve fallback slots remain durable with attempt state unknown and without
+another evaluator/scorer/transport call. A completed scoring report produces
+no fallback. This correction adds no public runtime or protocol change.
+
+The final corrected private hashes supersede only two rows of the previous
+operator table: `coordinator.mjs` is
+`d698fa91ee2a38cde4101d84d6d671824c2ac6bd4b6dcb67b0850a606c103c82`;
+`operator.synthetic.test.mjs` is
+`67080837d6d73e9414ae755c2d9fb12f2cec6ccd752f1e5eb365e66a54394cb3`.
+The other three operator hashes and all five preparation hashes are unchanged.
+The first review did not pass Spec; only a fresh pass of both axes against
+this corrected candidate, followed by exact-head CI, can clear launch.
