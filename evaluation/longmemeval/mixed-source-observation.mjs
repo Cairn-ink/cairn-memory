@@ -92,6 +92,140 @@ export function locateMixedSource({ core, namespace, plan, ingested, probe }) {
   } catch { return { trace: null, report: unavailableSourceTrace('lookup_unavailable') }; }
 }
 
+const FAMILY_SCOPE = 'one-current-source-family/one-recall';
+const FAMILY_REPORT_BYTES = 32 * 1024;
+
+export function unavailableSharedSourceTrace(reason, { batchMembers = null,
+  beforeReads = 0, afterReads = 0, carrierOrdinals = null } = {}) {
+  return Object.freeze({ version: 2, scope: FAMILY_SCOPE, status: 'unavailable', reason,
+    counts: { batchMembers, carriers: carrierOrdinals?.length ?? null, observed: 0,
+      unavailable: carrierOrdinals?.length ?? null, beforeReads, afterReads },
+    carriers: (carrierOrdinals ?? []).map(localOrdinal => ({ localOrdinal,
+      trace: unavailableSourceTrace('family_unavailable') })),
+    anyCompleteCarrierPath: 'unavailable' });
+}
+
+function memberSnapshot(result, namespace, memoryId, expected) {
+  const receipts = validatedMember(result, namespace, memoryId);
+  const revision = own(own(own(result, 'value'), 'memory'), 'revision');
+  const bindings = [];
+  let receiptId = null;
+  for (let index = 0; index < receipts.length; index++) {
+    const receipt = own(receipts, String(index));
+    const binding = ['id', 'client', 'sessionId', 'eventId', 'role', 'excerpt']
+      .map(key => own(receipt, key));
+    bindings.push(binding);
+    if (binding[1] === expected.client && binding[2] === expected.sessionId
+      && binding[3] === expected.eventId && binding[4] === expected.role
+      && binding[5] === expected.excerpt) {
+      if (receiptId !== null) throw new Error('duplicate_source_receipt');
+      receiptId = binding[0];
+    }
+  }
+  return { revision, bindings: JSON.stringify(bindings), receiptId, result };
+}
+
+function readFamily(core, namespace, members, expected) {
+  let reads = 0, unavailable = false;
+  const snapshots = members.map(({ memoryId }) => {
+    reads++;
+    try { return memberSnapshot(core.get({ namespace, memoryId, receiptLimit: 100 }),
+      namespace, memoryId, expected); }
+    catch { unavailable = true; return null; }
+  });
+  return { reads, unavailable, snapshots };
+}
+
+/** One completed batch, all admitted members, one actual recall and answer pack. */
+export function locateMixedSourceFamily({ core, namespace, plan, ingested, probe }) {
+  let members, expected;
+  try {
+    const batch = own(plan, 'cairnPlan').batches[probe.batchIndex];
+    const window = batch.indexedWindows[probe.windowIndex];
+    const outcome = own(ingested, 'outcomes')[probe.batchIndex];
+    if (!outcome || own(outcome, 'batchIndex') !== probe.batchIndex
+      || own(outcome, 'status') !== 'completed') return { trace: null,
+      report: unavailableSharedSourceTrace('capture_unavailable') };
+    const admitted = own(own(own(outcome, 'result'), 'admission'), 'memories');
+    if (types.isProxy(admitted) || !Array.isArray(admitted) || admitted.length > 5
+      || Object.keys(admitted).length !== admitted.length) throw new Error('capture_shape');
+    expected = { namespace, client: batch.captureInput.client,
+      sessionId: batch.captureInput.sessionId, eventId: window.id,
+      role: window.role, excerpt: window.content, routingCue: probe.routingCue };
+    const seen = new Set();
+    members = [];
+    for (let localOrdinal = 0; localOrdinal < admitted.length; localOrdinal++) {
+      const ref = own(admitted, String(localOrdinal));
+      const memoryId = own(ref, 'id');
+      const revision = own(ref, 'revision');
+      if (!bounded(memoryId, 200) || !Number.isSafeInteger(revision)
+        || revision < 1 || seen.has(memoryId)) throw new Error('capture_shape');
+      seen.add(memoryId);
+      members.push({ memoryId, localOrdinal });
+    }
+  } catch { return { trace: null, report: unavailableSharedSourceTrace('lookup_unavailable') }; }
+  const before = readFamily(core, namespace, members, expected);
+  const carriers = before.unavailable ? [] : members.flatMap((member, index) => {
+    const snapshot = before.snapshots[index];
+    return snapshot.receiptId === null ? [] : [{ ...member, before: snapshot,
+      trace: createRetainedRecallTrace({ sourceProbe: { ...expected,
+        memoryId: member.memoryId }, before: snapshot.result, readSet: [namespace] }) }];
+  });
+  let closed = false;
+  const trace = before.unavailable || !carriers.length ? null : Object.freeze({
+    beginSelect(request) {
+      const settle = carriers.map(carrier => carrier.trace.beginSelect(request));
+      return output => { for (const callback of settle) callback(output); };
+    },
+    beginRank(request) {
+      const settle = carriers.map(carrier => carrier.trace.beginRank(request));
+      return output => { for (const callback of settle) callback(output); };
+    },
+  });
+  return { trace, report: null, finish({ recall, packed }) {
+    const carrierOrdinals = carriers.map(carrier => carrier.localOrdinal);
+    if (closed) return unavailableSharedSourceTrace('already_finished', {
+      batchMembers: members.length, beforeReads: before.reads, carrierOrdinals });
+    closed = true;
+    const after = readFamily(core, namespace, members, expected);
+    if (before.unavailable) return unavailableSharedSourceTrace('lookup_unavailable', {
+      batchMembers: members.length, beforeReads: before.reads, afterReads: after.reads });
+    const current = !after.unavailable && after.snapshots.every((snapshot, index) =>
+      snapshot.revision === before.snapshots[index].revision
+      && snapshot.bindings === before.snapshots[index].bindings
+      && snapshot.receiptId === before.snapshots[index].receiptId);
+    if (!current) {
+      for (const carrier of carriers) carrier.trace.finish({ recall, packed, after: null });
+      return unavailableSharedSourceTrace('family_changed_or_unavailable', {
+        batchMembers: members.length, beforeReads: before.reads,
+        afterReads: after.reads, carrierOrdinals });
+    }
+    if (!carriers.length) return unavailableSharedSourceTrace('not_observed_in_batch', {
+      batchMembers: members.length, beforeReads: before.reads, afterReads: after.reads,
+      carrierOrdinals: [] });
+    const reports = carriers.map(carrier => ({ localOrdinal: carrier.localOrdinal,
+      trace: carrier.trace.finish({ recall, packed,
+        after: after.snapshots[carrier.localOrdinal].result }) }));
+    const observed = reports.filter(row => row.trace.status === 'observed').length;
+    const gaps = reports.map(row => row.trace.firstObservedGap);
+    const anyCompleteCarrierPath = observed !== reports.length ? 'unavailable'
+      : gaps.includes(null) ? 'yes'
+        : gaps.every(gap => gap !== 'unavailable') ? 'no' : 'unavailable';
+    const report = { version: 2, scope: FAMILY_SCOPE,
+      status: observed === reports.length ? 'observed' : 'unavailable',
+      ...(observed === reports.length ? {} : { reason: 'carrier_unavailable' }),
+      counts: { batchMembers: members.length, carriers: carriers.length,
+        observed, unavailable: carriers.length - observed,
+        beforeReads: before.reads, afterReads: after.reads },
+      carriers: reports, anyCompleteCarrierPath };
+    if (Buffer.byteLength(JSON.stringify(report), 'utf8') > FAMILY_REPORT_BYTES) {
+      return unavailableSharedSourceTrace('report_limit', { batchMembers: members.length,
+        beforeReads: before.reads, afterReads: after.reads, carrierOrdinals });
+    }
+    return Object.freeze(report);
+  } };
+}
+
 /** A per-case trusted-adapter facade; only native Promise settlements are observed. */
 export function observedMixedCairnModel(original) {
   const scope = new AsyncLocalStorage();

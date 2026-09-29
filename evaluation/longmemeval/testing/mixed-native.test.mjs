@@ -116,6 +116,112 @@ test('N3 actual mixed runner keeps fake-HTTP/accounting/scorer behavior with one
   } finally { failedFixture.guard.close(); }
 });
 
+test('S4/S5 actual mixed and native runner carries shared-source v2 without new requests', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const runs = [];
+  for (const enabled of [false, true]) {
+    const fake = fakeMixedHttp((url, body) => {
+      if (!url.endsWith('/responses')) return undefined;
+      const method = body.text?.format?.name;
+      if (method === 'cairn_extract') return indexedResponse(body, { items: [
+        { content: 'Distinct interpretation A', kind: 'context',
+          confidence: 0.8, sourceIndices: [0] },
+        { content: 'Distinct interpretation B', kind: 'context',
+          confidence: 0.8, sourceIndices: [0] },
+      ] });
+      if (method === 'cairn_rank') {
+        const input = JSON.parse(body.input[0].content[0].text);
+        return indexedResponse(body, { refs: input.candidates.slice(0, 1).map(candidate => ({
+          namespaceIndex: candidate.namespaceIndex, memoryId: candidate.memory.id,
+          revision: candidate.memory.revision })) });
+      }
+      return undefined;
+    }, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact, configuration,
+      sourceCases: [sourceRow('shared-source-native')], armOrders: [['cairn', 'mem0']],
+      comparisonProfile: 'indexed-evidence-v1', fetchImpl: fake.fetchImpl,
+      ...(enabled ? { sourceProbes: [{ batchIndex: 0, windowIndex: 0,
+        routingCue: 'Synthetic memory fact.' }],
+      sourceObservationMode: 'shared-source-v2' } : {}) });
+    try {
+      const generation = await runMixedGeneration({ prepared: fixture.prepared,
+        guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      const scored = await scoreMixedGeneration({ generationReport: generation,
+        evaluatorRows: [evaluatorRow('shared-source-native')], referenceRenderings: undefined,
+        guard: fixture.guard, apiKey: 'synthetic-only' });
+      const cairn = generation.cases[0].arms[0];
+      assert.equal(generation.halted, false);
+      assert.equal(cairn.status, 'completed', JSON.stringify(cairn));
+      assert.equal(generation.cases[0].arms[1].status, 'completed');
+      if (enabled) {
+        const report = cairn.diagnostics.recallTrace;
+        assert.equal(report.version, 2);
+        assert.equal(report.status, 'observed');
+        assert.deepEqual({ ...report.counts }, { batchMembers: 2, carriers: 2,
+          observed: 2, unavailable: 0, beforeReads: 2, afterReads: 2 });
+        assert.deepEqual(report.carriers.map(item => item.trace.final.ref).sort(), ['no', 'yes']);
+        assert.equal(report.anyCompleteCarrierPath, 'yes');
+        assert.ok(Buffer.byteLength(JSON.stringify(report)) <= 32 * 1024);
+        assert.equal(JSON.stringify(report).includes('Synthetic memory fact.'), false);
+      } else assert.equal(Object.hasOwn(cairn.diagnostics, 'recallTrace'), false);
+      runs.push({ calls: fake.calls.map(call =>
+        [call.route, call.body.text?.format?.name ?? call.body.model]),
+      attempts: generation.cases[0].arms.map(item => item.diagnostics.attempts),
+      answers: generation.cases[0].arms.map(item =>
+        [item.status, item.reason, item.answer]), score: scored.summary });
+    } finally { fixture.guard.close(); }
+  }
+  assert.deepEqual(runs[1], runs[0]);
+
+  for (const failure of ['capture', 'recall']) {
+    const fake = fakeMixedHttp((url, body) => {
+      if (!url.endsWith('/responses')) return undefined;
+      const method = body.text?.format?.name;
+      if (method === 'cairn_extract') return indexedResponse(body, { items: [
+        { content: 'Distinct failed-path card A', kind: 'context', confidence: 0.8,
+          sourceIndices: [failure === 'capture' ? 999 : 0] },
+        { content: 'Distinct failed-path card B', kind: 'context', confidence: 0.8,
+          sourceIndices: [0] },
+      ] });
+      if (failure === 'recall' && method === 'cairn_rank') {
+        return indexedResponse(body, { refs: [
+          { namespaceIndex: 0, memoryId: 'forged', revision: 1 },
+        ] });
+      }
+      return undefined;
+    }, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact, configuration,
+      sourceCases: [sourceRow(`shared-${failure}`)], armOrders: [['cairn', 'mem0']],
+      comparisonProfile: 'indexed-evidence-v1', fetchImpl: fake.fetchImpl,
+      sourceProbes: [{ batchIndex: 0, windowIndex: 0,
+        routingCue: 'Synthetic memory fact.' }],
+      sourceObservationMode: 'shared-source-v2' });
+    try {
+      const generation = await runMixedGeneration({ prepared: fixture.prepared,
+        guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
+      const cairn = generation.cases[0].arms[0];
+      assert.equal(cairn.status, 'failed', failure);
+      const report = cairn.diagnostics.recallTrace;
+      assert.equal(report.version, 2, failure);
+      assert.equal(report.anyCompleteCarrierPath, 'unavailable', failure);
+      if (failure === 'capture') {
+        assert.equal(cairn.reason, 'ingestion_incomplete');
+        assert.equal(report.status, 'unavailable');
+        assert.equal(report.reason, 'ingestion_incomplete');
+      } else {
+        assert.equal(cairn.reason, 'recall_failed');
+        assert.equal(report.counts.beforeReads, 2);
+        assert.equal(report.counts.afterReads, 2);
+        assert.deepEqual(report.carriers.map(item => item.trace.final.status),
+          ['failed', 'failed']);
+      }
+    } finally { fixture.guard.close(); }
+  }
+});
+
 test('N3 actual runner distinguishes visible omission, rank omission and model failure', async t => {
   const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
     pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });

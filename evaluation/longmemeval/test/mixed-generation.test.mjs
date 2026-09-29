@@ -206,6 +206,43 @@ test('P1 indexed source probe binds protocol without changing disabled preparati
   { code: 'invalid_source_probes' });
 });
 
+test('S1 explicit shared-source mode binds a new context and rejects incompatible inputs', () => {
+  const base = { sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']],
+    comparisonProfile: 'indexed-evidence-v1', ...descriptors() };
+  const sourceProbes = [{ batchIndex: 0, windowIndex: 0,
+    routingCue: 'Synthetic memory fact.' }];
+  const v1 = prepareMixedComparison({ ...base, sourceProbes });
+  const v2 = prepareMixedComparison({ ...base, sourceProbes,
+    sourceObservationMode: 'shared-source-v2' });
+  assert.equal(v2.schemaVersion, v1.schemaVersion);
+  assert.notEqual(v2.manifest.contextProtocolSha256, v1.manifest.contextProtocolSha256);
+  assert.notEqual(v2.roster[0].protocolDigest, v1.roster[0].protocolDigest);
+  assert.deepEqual(prepareMixedComparison({ ...base, sourceProbes: [null] }),
+    prepareMixedComparison(base));
+  for (const invalid of [null, false, 'shared-source-v1', 'one-current-source-trace-v1']) {
+    assert.throws(() => prepareMixedComparison({ ...base, sourceProbes,
+      sourceObservationMode: invalid }), { code: 'invalid_source_observation_mode' });
+  }
+  for (const invalid of [undefined, [null]]) {
+    assert.throws(() => prepareMixedComparison({ ...base,
+      ...(invalid === undefined ? {} : { sourceProbes: invalid }),
+      sourceObservationMode: 'shared-source-v2' }),
+    { code: 'invalid_source_observation_mode' });
+  }
+  assert.throws(() => prepareMixedComparison({ ...descriptors(), sourceCases: [sourceRow()],
+    armOrders: [['cairn', 'mem0']], sourceObservationMode: 'shared-source-v2',
+    sourceProbes }), { code: 'invalid_source_probes' });
+  const getter = { ...base, sourceProbes };
+  Object.defineProperty(getter, 'sourceObservationMode', { enumerable: true,
+    get() { assert.fail('mode getter must not run'); } });
+  assert.throws(() => prepareMixedComparison(getter), { code: 'invalid_mixed_preparation' });
+  const proxy = new Proxy({ ...base, sourceProbes,
+    sourceObservationMode: 'shared-source-v2' }, {
+    getOwnPropertyDescriptor() { assert.fail('mode proxy trap must not run'); },
+  });
+  assert.throws(() => prepareMixedComparison(proxy), { code: 'invalid_mixed_preparation' });
+});
+
 test('M3 fixed protocol and scope golden is accepted by actual X authority', t => {
   // SHA256(JSON.stringify([domain, canonical-sorted value])); fixed sourceRow(),
   // 1/2/3/5 descriptors, and Cairn-first schedule. These are literal goldens,

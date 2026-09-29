@@ -7,7 +7,8 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { packMixedAnswer } from '../mixed-answer.mjs';
 import { ingestIndexedEvidenceLongMemEvalCase } from '../ingestion.mjs';
 import { prepareMixedSourceCase } from '../mixed-source.mjs';
-import { locateMixedSource, observedMixedCairnModel } from '../mixed-source-observation.mjs';
+import { locateMixedSource, locateMixedSourceFamily,
+  observedMixedCairnModel } from '../mixed-source-observation.mjs';
 import { trackedTransport } from '../mixed-transport.mjs';
 import { fakeMixedHttp, sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
 
@@ -278,4 +279,455 @@ test('P4 trusted adapter facade forwards identity and avoids arbitrary thenable 
   assert.equal(trapCalls, 0);
   assert.deepEqual(receivers, [original, original, original, original, original]);
   for (const input of args) assert.strictEqual(input[0], request);
+});
+
+test('S5 actual capture retains one indexed window on two distinct cards; v1 is ambiguous',
+  { skip: !supportsSqlite && 'node:sqlite requires Node >=22.16' }, async t => {
+  const { openMemoryCore } = await import('../../../core/contract.mjs');
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-shared-source-' });
+  const row = sourceRow('shared-source-real-capture');
+  const plan = prepareMixedSourceCase(row, 'indexed-evidence-v1');
+  let actualRankRequest;
+  const original = { contextWindow: 8192, countTokens: () => 1,
+    extract: () => ({ items: [
+      { content: 'First distinct interpretation', kind: 'context',
+        confidence: 0.8, sourceIndices: [0] },
+      { content: 'Second distinct interpretation', kind: 'context',
+        confidence: 0.8, sourceIndices: [0] },
+    ] }),
+    classify: ({ input }) => ({ items: input.memories.map(memory =>
+      ({ memoryId: memory.id, parentIds: [] })) }),
+    select: async () => ({ refs: [] }),
+    rank: async (request) => { actualRankRequest = request; return { refs:
+      request.input.candidates.slice(0, 1).map(candidate => ({
+      namespaceIndex: candidate.namespaceIndex, memoryId: candidate.memory.id,
+      revision: candidate.memory.revision })) }; } };
+  const observed = observedMixedCairnModel(original);
+  const core = openMemoryCore({ path: join(workspace.path, 'store.sqlite'), model: observed.model,
+    captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1' });
+  workspace.defer(() => core.close());
+  const ingested = await ingestIndexedEvidenceLongMemEvalCase({ history: plan.renderedHistory,
+    namespace: row.namespace, capture: input => core.capture(input) });
+  const admitted = ingested.outcomes[0].result.admission.memories;
+  assert.equal(ingested.outcomes[0].status, 'completed');
+  assert.equal(admitted.length, 2);
+  assert.equal(new Set(admitted.map(item => item.id)).size, 2);
+  const window = plan.cairnPlan.batches[0].indexedWindows[0];
+  for (const member of admitted) {
+    const read = core.get({ namespace: row.namespace, memoryId: member.id, receiptLimit: 100 });
+    assert.equal(read.ok, true);
+    assert.ok(read.value.receipts.some(receipt => receipt.eventId === window.id
+      && receipt.excerpt === window.content));
+  }
+  const located = locateMixedSource({ core, namespace: row.namespace, plan, ingested,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.equal(located.report.reason, 'ambiguous_source');
+  let reads = 0;
+  const reader = { get(input) { reads++; assert.equal(input.receiptLimit, 100);
+    assert.equal(Object.hasOwn(input, 'receiptCursor'), false); return core.get(input); } };
+  const family = locateMixedSourceFamily({ core: reader, namespace: row.namespace, plan, ingested,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.ok(family.trace);
+  assert.equal(reads, 2);
+  const recalled = await observed.recall(family.trace, core, { readSet: [row.namespace],
+    query: 'Synthetic memory fact.', limit: 6, contextMode: 'source-evidence',
+    selectionMode: 'bounded-source-scan' });
+  assert.equal(recalled.ok, true, recalled.error?.code);
+  const packed = packMixedAnswer({ question: { text: row.question.text,
+    date: plan.canonicalQuestionDate }, units: recalled.value.memories.map(item =>
+    ({ text: item.receipts.map(receipt => receipt.excerpt).join('\n') })),
+  countTokens: () => 1 });
+  const report = family.finish({ recall: recalled, packed });
+  assert.equal(reads, 4);
+  assert.equal(report.status, 'observed');
+  assert.deepEqual(report.counts, { batchMembers: 2, carriers: 2,
+    observed: 2, unavailable: 0, beforeReads: 2, afterReads: 2 });
+  assert.deepEqual(report.carriers.map(item => item.localOrdinal), [0, 1]);
+  assert.deepEqual(report.carriers.map(item => item.trace.final.ref).sort(), ['no', 'yes']);
+  assert.equal(report.anyCompleteCarrierPath, 'yes');
+  const publicText = JSON.stringify(report);
+  assert.ok(Buffer.byteLength(publicText) <= 32 * 1024);
+  for (const member of admitted) assert.equal(publicText.includes(member.id), false);
+  assert.equal(publicText.includes(window.content), false);
+  assert.ok(actualRankRequest?.signal instanceof AbortSignal);
+
+  const guarded = [];
+  for (const enabled of [false, true]) {
+    const wire = [];
+    const fake = fakeMixedHttp((url, _body, options) => {
+      wire.push({ path: new URL(url).pathname, method: options.method,
+        body: options.body });
+      return undefined;
+    }, { cairnMemory: true });
+    const fixture = syntheticMixedFixture(t, { artifact: { sourceTreeSha256: '1'.repeat(64),
+      dependencyLockSha256: '2'.repeat(64) },
+    configuration: { configurationSha256: '3'.repeat(64), configuration: {} },
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']],
+    comparisonProfile: 'indexed-evidence-v1', fetchImpl: fake.fetchImpl });
+    try {
+      const identity = { phase: 'generation', caseId: fixture.prepared.roster[0].arms
+        .find(arm => arm.name === 'cairn').scopeId };
+      const result = await fixture.guard.withCaseScope(identity, async () => {
+        const transport = trackedTransport();
+        try {
+          const adapter = createOpenAIModel({ apiKey: 'synthetic-only',
+            fetchImpl: transport.track(fixture.guard.cairnFetch) });
+          if (!enabled) return adapter.rank(actualRankRequest);
+          const parityFamily = locateMixedSourceFamily({ core, namespace: row.namespace,
+            plan, ingested, probe: { batchIndex: 0, windowIndex: 0,
+              routingCue: 'Synthetic memory fact.' } });
+          assert.ok(parityFamily.trace);
+          const observer = observedMixedCairnModel(adapter);
+          const output = await observer.recall(parityFamily.trace, { recall: () =>
+            observer.model.rank(actualRankRequest) });
+          const traceReport = parityFamily.finish({ recall: recalled, packed });
+          assert.equal(traceReport.status, 'observed');
+          assert.deepEqual(traceReport.carriers.map(item => item.trace.counts.rankCalls), [1, 1]);
+          return output;
+        } finally { await transport.drain(); }
+      });
+      assert.equal(result.status, 'completed');
+      guarded.push({ wire, output: result.value, attempts: fixture.guard.attempts().map(item =>
+        [item.stage, item.outcome, item.reservedMicroUsd, item.actualMicroUsd]) });
+    } finally { fixture.guard.close(); }
+  }
+  assert.deepEqual(guarded[1], guarded[0],
+    'v2 must preserve exact guarded provider bytes, result and accounting');
+
+  const repeated = locateMixedSourceFamily({ core, namespace: row.namespace, plan, ingested,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  const repeatedSettle = repeated.trace.beginRank(actualRankRequest);
+  const rankOutput = { refs: actualRankRequest.input.candidates.slice(0, 1)
+    .map(candidate => ({ namespaceIndex: candidate.namespaceIndex,
+      memoryId: candidate.memory.id, revision: candidate.memory.revision })) };
+  repeatedSettle(rankOutput);
+  repeatedSettle(rankOutput);
+  const repeatedReport = repeated.finish({ recall: recalled, packed });
+  assert.equal(repeatedReport.status, 'unavailable');
+  assert.equal(repeatedReport.anyCompleteCarrierPath, 'unavailable');
+  const lateSettle = repeated.trace.beginRank(actualRankRequest);
+  lateSettle(rankOutput);
+  assert.equal(repeated.finish({ recall: recalled, packed }).reason, 'already_finished');
+
+  const three = structuredClone(ingested);
+  const thirdId = 'synthetic-unrelated-admission';
+  three.outcomes[0].result.admission.memories.push({ id: thirdId, revision: 1 });
+  for (const change of ['none', 'nonmatch-incomplete-after', 'foreign-before',
+    'receipt-drift-after', 'revision-drift-after', 'over-limit-before']) {
+    let memberReads = 0;
+    const withNonmatch = locateMixedSourceFamily({ core: { get(input) {
+      memberReads++;
+      const result = structuredClone(core.get({ namespace: row.namespace,
+        memoryId: input.memoryId === thirdId ? admitted[0].id : input.memoryId,
+        receiptLimit: 100 }));
+      if (input.memoryId === thirdId) {
+        result.value.memory.id = thirdId;
+        for (const receipt of result.value.receipts) {
+          receipt.id += '-unrelated';
+          receipt.excerpt = 'Unrelated complete synthetic receipt';
+        }
+      }
+      if (change === 'nonmatch-incomplete-after' && memberReads === 6) {
+        result.value.exhausted = false;
+      }
+      if (change === 'foreign-before' && memberReads === 3) {
+        result.value.memory.namespace.ownerId = 'foreign-owner';
+      }
+      if (change === 'receipt-drift-after' && memberReads === 6) {
+        result.value.receipts[0].excerpt = 'Changed unrelated receipt';
+      }
+      if (change === 'revision-drift-after' && memberReads === 6) {
+        result.value.memory.revision++;
+      }
+      if (change === 'over-limit-before' && memberReads === 3) {
+        result.value.memory.receiptCount = 101;
+      }
+      return result;
+    } }, namespace: row.namespace, plan, ingested: three,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+    assert.equal(memberReads, 3, change);
+    const withNonmatchReport = withNonmatch.finish({ recall: recalled, packed });
+    assert.equal(memberReads, 6, change);
+    assert.equal(withNonmatchReport.counts.batchMembers, 3);
+    assert.equal(withNonmatchReport.counts.beforeReads, 3);
+    assert.equal(withNonmatchReport.counts.afterReads, 3);
+    if (change === 'none') {
+      assert.equal(withNonmatchReport.status, 'observed');
+      assert.equal(withNonmatchReport.counts.carriers, 2);
+      assert.equal(withNonmatchReport.anyCompleteCarrierPath, 'unavailable',
+        'missing callbacks remain unknown even when final evidence includes one carrier');
+    } else {
+      assert.equal(withNonmatchReport.status, 'unavailable', change);
+      assert.equal(withNonmatchReport.anyCompleteCarrierPath, 'unavailable', change);
+    }
+  }
+
+  const six = structuredClone(three);
+  six.outcomes[0].result.admission.memories.push(...[3, 4, 5].map(index =>
+    ({ id: `extra-member-${index}`, revision: 1 })));
+  let overReads = 0;
+  const oversized = locateMixedSourceFamily({ core: { get() { overReads++;
+    assert.fail('oversized admission must not read'); } }, namespace: row.namespace,
+  plan, ingested: six,
+  probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.equal(overReads, 0);
+  assert.equal(oversized.report.status, 'unavailable');
+  const five = structuredClone(six);
+  five.outcomes[0].result.admission.memories.pop();
+  let fiveReads = 0;
+  const boundedFive = locateMixedSourceFamily({ core: { get(input) {
+    fiveReads++;
+    assert.equal(input.receiptLimit, 100);
+    assert.equal(Object.hasOwn(input, 'receiptCursor'), false);
+    const result = structuredClone(core.get({ namespace: row.namespace,
+      memoryId: admitted.some(item => item.id === input.memoryId)
+        ? input.memoryId : admitted[0].id, receiptLimit: 100 }));
+    if (!admitted.some(item => item.id === input.memoryId)) {
+      result.value.memory.id = input.memoryId;
+      for (const receipt of result.value.receipts) {
+        receipt.id += `-${input.memoryId}`;
+        receipt.excerpt = 'Unrelated bounded member';
+      }
+    }
+    return result;
+  } }, namespace: row.namespace, plan, ingested: five,
+  probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.equal(fiveReads, 5);
+  const fiveReport = boundedFive.finish({ recall: recalled, packed });
+  assert.equal(fiveReads, 10);
+  assert.equal(fiveReport.counts.batchMembers, 5);
+  assert.equal(fiveReport.counts.carriers, 2);
+  const allFive = locateMixedSourceFamily({ core: { get(input) {
+    const result = structuredClone(core.get({ namespace: row.namespace,
+      memoryId: admitted.some(item => item.id === input.memoryId)
+        ? input.memoryId : admitted[0].id, receiptLimit: 100 }));
+    if (!admitted.some(item => item.id === input.memoryId)) {
+      result.value.memory.id = input.memoryId;
+      for (const receipt of result.value.receipts) receipt.id += `-${input.memoryId}`;
+    }
+    return result;
+  } }, namespace: row.namespace, plan, ingested: five,
+  probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  const allFiveReport = allFive.finish({ recall: recalled, packed });
+  assert.equal(allFiveReport.counts.carriers, 5);
+  assert.deepEqual(allFiveReport.carriers.map(item => item.localOrdinal), [0, 1, 2, 3, 4]);
+  assert.ok(Buffer.byteLength(JSON.stringify(allFiveReport)) <= 32 * 1024);
+
+  const hostile = structuredClone(ingested);
+  const hostileMembers = hostile.outcomes[0].result.admission.memories;
+  let traps = 0;
+  Object.defineProperty(hostileMembers, 'map', { get() { traps++; throw new Error('map trap'); } });
+  Object.defineProperty(hostileMembers, Symbol.iterator, {
+    get() { traps++; throw new Error('iterator trap'); } });
+  const safe = locateMixedSourceFamily({ core: reader, namespace: row.namespace,
+    plan, ingested: hostile,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.ok(safe.trace);
+  assert.equal(traps, 0);
+  safe.finish({ recall: recalled, packed });
+  Object.defineProperty(hostileMembers, '0', { get() {
+    traps++; throw new Error('index trap');
+  }, configurable: true, enumerable: true });
+  const denied = locateMixedSourceFamily({ core: reader, namespace: row.namespace,
+    plan, ingested: hostile,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.equal(denied.report.status, 'unavailable');
+  assert.equal(traps, 0);
+
+  let mixedReads = 0;
+  const mixed = locateMixedSourceFamily({ core: { get(input) {
+    mixedReads++;
+    const result = structuredClone(core.get(input));
+    if (input.memoryId === admitted[1].id) result.value.exhausted = false;
+    return result;
+  } }, namespace: row.namespace, plan, ingested,
+  probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.equal(mixedReads, 2, 'a bad second member does not stop finite family reads');
+  assert.equal(mixed.trace, null);
+  assert.equal(mixed.report, null);
+  const mixedReport = mixed.finish({ recall: recalled, packed });
+  assert.equal(mixedReads, 4);
+  assert.equal(mixedReport.status, 'unavailable');
+  assert.equal(mixedReport.counts.carriers, null,
+    'an invalid member must not prove that only zero carriers exist');
+  assert.equal(mixedReport.anyCompleteCarrierPath, 'unavailable');
+
+  const duplicate = locateMixedSourceFamily({ core: { get(input) {
+    const result = structuredClone(core.get(input));
+    if (input.memoryId === admitted[0].id) {
+      result.value.receipts.push({ ...result.value.receipts[0], id: 'distinct-receipt-id' });
+      result.value.memory.receiptCount++;
+    }
+    return result;
+  } }, namespace: row.namespace, plan, ingested,
+  probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  assert.equal(duplicate.finish({ recall: recalled, packed }).status, 'unavailable');
+
+  const wrongIdentity = locateMixedSourceFamily({ core: { get(input) {
+    const result = structuredClone(core.get(input));
+    for (const receipt of result.value.receipts) receipt.eventId = 'different-event';
+    return result;
+  } }, namespace: row.namespace, plan, ingested,
+  probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  const wrongReport = wrongIdentity.finish({ recall: recalled, packed });
+  assert.equal(wrongReport.reason, 'not_observed_in_batch',
+    'same excerpt with a different event is no carrier');
+  assert.equal(wrongReport.counts.carriers, 0,
+    'complete family with no exact binding establishes zero carriers');
+});
+
+test('S5 shared-source traces use actual model-selected callbacks without joining carriers',
+  { skip: !supportsSqlite && 'node:sqlite requires Node >=22.16' }, async t => {
+  const { openMemoryCore } = await import('../../../core/contract.mjs');
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-shared-select-' });
+  const row = sourceRow('shared-source-model-selected');
+  for (let index = 1; index <= 13; index++) row.history.sessions.push({
+    session_index: index, session_id: `lme-session-${String(index).padStart(64, 'd')}`,
+    date: `2024/01/01 (Mon) 09:${String(index).padStart(2, '0')}`,
+    turns: [{ turn_id: `lme-turn-${String(index).padStart(64, 'e')}`,
+      role: 'user', content: `Distractor source ${index}.` }],
+  });
+  const plan = prepareMixedSourceCase(row, 'indexed-evidence-v1');
+  let extracts = 0, selectCalls = 0, selectedFromVisible = null, selectLimit = 1;
+  const original = { contextWindow: 8192, countTokens: () => 1,
+    extract: () => ({ items: (extracts++ === 0
+      ? ['Shared card A', 'Shared card B'] : ['Unrelated card']).map((content, index) => ({
+        content: `${content} ${extracts} ${index}`, kind: 'context',
+        confidence: 0.8, sourceIndices: [0] })) }),
+    classify: ({ input }) => ({ items: input.memories.map(memory =>
+      ({ memoryId: memory.id, parentIds: [] })) }),
+    select: async ({ input }) => { selectCalls++;
+      const visible = input.maps.flatMap(map => map.items.flatMap(item => {
+        const ref = item.type === 'unfiled' ? item.ref : item.type === 'ref'
+          && item.ref.childType === 'memory' ? { memoryId: item.ref.childId,
+            revision: item.ref.childRevision } : null;
+        return ref && item.label.includes('Synthetic memory fact.')
+          ? [{ namespaceIndex: map.namespaceIndex,
+          ...ref }] : [];
+      })).slice(0, selectLimit);
+      if (visible.length) selectedFromVisible = visible[0].memoryId;
+      return { refs: visible }; },
+    rank: async ({ input }) => ({ refs: input.candidates.map(candidate => ({
+      namespaceIndex: candidate.namespaceIndex, memoryId: candidate.memory.id,
+      revision: candidate.memory.revision })) }) };
+  const observed = observedMixedCairnModel(original);
+  const core = openMemoryCore({ path: join(workspace.path, 'store.sqlite'), model: observed.model,
+    captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1' });
+  workspace.defer(() => core.close());
+  const ingested = await ingestIndexedEvidenceLongMemEvalCase({ history: plan.renderedHistory,
+    namespace: row.namespace, capture: input => core.capture(input) });
+  assert.ok(ingested.outcomes.every(outcome => outcome.status === 'completed'));
+  assert.equal(ingested.outcomes[0].result.admission.memories.length, 2);
+  assert.ok(ingested.outcomes.reduce((sum, outcome) => sum
+    + outcome.result.admission.memories.length, 0) > 12);
+  const family = locateMixedSourceFamily({ core, namespace: row.namespace, plan, ingested,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  const recalled = await observed.recall(family.trace, core, { readSet: [row.namespace],
+    query: 'Synthetic memory fact.', limit: 6, contextMode: 'source-evidence',
+    selectionMode: 'bounded-source-scan' });
+  assert.equal(recalled.ok, true, recalled.error?.code);
+  const packed = packMixedAnswer({ question: { text: row.question.text,
+    date: plan.canonicalQuestionDate }, units: recalled.value.memories.map(item =>
+    ({ text: item.receipts.map(receipt => receipt.excerpt).join('\n') })),
+  countTokens: () => 1 });
+  const report = family.finish({ recall: recalled, packed });
+  assert.ok(selectCalls > 0);
+  assert.ok(ingested.outcomes[0].result.admission.memories.some(item =>
+    item.id === selectedFromVisible));
+  assert.equal(recalled.value.selection.strategy, 'model-selected');
+  const selectedOrdinal = ingested.outcomes[0].result.admission.memories.findIndex(item =>
+    item.id === selectedFromVisible);
+  assert.deepEqual(report.carriers.map(item => item.trace.selection.accepted),
+    [0, 1].map(index => index === selectedOrdinal ? 'yes' : 'no'));
+  assert.deepEqual(report.carriers.map(item => item.trace.final.ref),
+    [0, 1].map(index => index === selectedOrdinal ? 'yes' : 'no'));
+  assert.equal(report.anyCompleteCarrierPath, 'yes');
+  for (const [count, expected] of [[2, 'yes'], [0, 'no']]) {
+    selectLimit = count;
+    const next = locateMixedSourceFamily({ core, namespace: row.namespace, plan, ingested,
+      probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+    const nextRecall = await observed.recall(next.trace, core, { readSet: [row.namespace],
+      query: 'Synthetic memory fact.', limit: 6, contextMode: 'source-evidence',
+      selectionMode: 'bounded-source-scan' });
+    assert.equal(nextRecall.ok, true, nextRecall.error?.code);
+    const nextPack = packMixedAnswer({ question: { text: row.question.text,
+      date: plan.canonicalQuestionDate }, units: nextRecall.value.memories.map(item =>
+      ({ text: item.receipts.map(receipt => receipt.excerpt).join('\n') })),
+    countTokens: () => 1 });
+    const nextReport = next.finish({ recall: nextRecall, packed: nextPack });
+    assert.equal(nextRecall.value.selection.strategy, 'model-selected');
+    assert.deepEqual(nextReport.carriers.map(item => item.trace.final.ref).sort(),
+      [count ? 'yes' : 'no', count === 2 ? 'yes' : 'no'].sort());
+    assert.equal(nextReport.anyCompleteCarrierPath, expected);
+  }
+  selectLimit = 1;
+  const unknown = locateMixedSourceFamily({ core, namespace: row.namespace, plan, ingested,
+    probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+  const unknownRecall = await observed.recall(unknown.trace, core, { readSet: [row.namespace],
+    query: 'Synthetic memory fact.', limit: 6, contextMode: 'source-evidence',
+    selectionMode: 'bounded-source-scan' });
+  assert.equal(unknownRecall.ok, true);
+  const unknownReport = unknown.finish({ recall: unknownRecall, packed: null });
+  assert.equal(unknownReport.status, 'observed');
+  assert.deepEqual(unknownReport.carriers.map(item => item.trace.firstObservedGap).sort(),
+    ['selected', 'unavailable']);
+  assert.equal(unknownReport.anyCompleteCarrierPath, 'unavailable',
+    'one concrete gap and one missing answer pack do not establish no complete path');
+});
+
+test('S2 current public revisions distinguish correction, historical retirement and forgetting',
+  { skip: !supportsSqlite && 'node:sqlite requires Node >=22.16' }, async t => {
+  const { openMemoryCore } = await import('../../../core/contract.mjs');
+  for (const action of ['correct', 'historical', 'forget']) {
+    const workspace = createTestWorkspace(t, { prefix: `cairn-shared-${action}-` });
+    const row = sourceRow(`shared-${action}`);
+    const plan = prepareMixedSourceCase(row, 'indexed-evidence-v1');
+    const model = { contextWindow: 8192, countTokens: () => 1,
+      extract: () => ({ items: ['First card', 'Second card'].map(content => ({
+        content, kind: 'context', confidence: 0.8, sourceIndices: [0] })) }),
+      classify: ({ input }) => ({ items: input.memories.map(memory =>
+        ({ memoryId: memory.id, parentIds: [] })) }),
+      select: async () => ({ refs: [] }), rank: async () => ({ refs: [] }) };
+    const core = openMemoryCore({ path: join(workspace.path, 'store.sqlite'), model,
+      captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1' });
+    workspace.defer(() => core.close());
+    const ingested = await ingestIndexedEvidenceLongMemEvalCase({ history: plan.renderedHistory,
+      namespace: row.namespace, capture: input => core.capture(input) });
+    const member = ingested.outcomes[0].result.admission.memories[0];
+    const before = core.get({ namespace: row.namespace, memoryId: member.id,
+      receiptLimit: 100 });
+    assert.equal(before.ok, true);
+    assert.equal(before.value.memory.state, 'active');
+    const family = locateMixedSourceFamily({ core, namespace: row.namespace, plan, ingested,
+      probe: { batchIndex: 0, windowIndex: 0, routingCue: 'Synthetic memory fact.' } });
+    assert.ok(family.trace);
+    const operation = { namespace: row.namespace, memoryId: member.id,
+      expectedRevision: before.value.memory.revision };
+    const receipt = { client: 'synthetic', sessionId: 'synthetic-session',
+      eventId: `event-${action}`, role: 'user', excerpt: `Evidence ${action}` };
+    const changed = action === 'correct'
+      ? core.correct({ ...operation, content: 'Corrected card', kind: 'fact', receipt })
+      : action === 'historical'
+        ? core.supersede({ ...operation, replacement: { content: 'Replacement card',
+          kind: 'fact' }, receipts: [receipt] })
+        : core.forget(operation);
+    assert.equal(changed.ok, true, JSON.stringify(changed));
+    const later = core.get({ namespace: row.namespace, memoryId: member.id,
+      receiptLimit: 100 });
+    if (action === 'historical') {
+      assert.equal(later.ok, true);
+      assert.equal(later.value.memory.state, 'historical');
+    } else if (action === 'forget') {
+      assert.equal(later.ok, false);
+      assert.equal(later.error.code, 'memory_not_found');
+    } else {
+      assert.equal(later.ok, true);
+      assert.ok(later.value.memory.revision > before.value.memory.revision);
+    }
+    const report = family.finish({ recall: null, packed: null });
+    assert.equal(report.status, 'unavailable', action);
+    assert.equal(report.anyCompleteCarrierPath, 'unavailable', action);
+    assert.equal(report.counts.beforeReads, 2, action);
+    assert.equal(report.counts.afterReads, 2, action);
+  }
 });
