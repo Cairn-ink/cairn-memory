@@ -48,6 +48,20 @@ service must use the same public core, not separate engines.
   multi-session retrieval and temporal evidence path offline, then separately
   review any new proposal. Default MOC and product semantic gates remain open.
 
+- The [one-shot installed long-write diagnostic](docs/evidence/installed-phase-long-write.md)
+  used two new synthetic 32-batch histories. Cairn answered one of two;
+  Mem0 answered both; automatic correct/incorrect/unresolved were Cairn 1/0/1
+  and Mem0 1/1/0 at common-resolved N=1. One Cairn classification failed after
+  partial sixth-batch admission. Both second-case answers received automatic
+  positive grades, but agent review found Cairn denied an adopted prior
+  decision and flagged possible causal inversion in Mem0. The primary found
+  the earlier adoption passage stored but absent from selected receipts;
+  the stage causing that selection loss remains unproven. Full completion was
+  not achieved, and semantic acceptance remains open. Diagnose classification
+  after the observed output-validation boundary and
+  evidence/adoption preservation separately. No consumed-case replay,
+  fixed-30 expansion, raw-retention increase or installed MCP/Hermes claim.
+
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
   completed, five failed and six blocked outcomes. Mechanical completion and

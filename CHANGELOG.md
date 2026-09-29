@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — bounded mixed-runner phase diagnostics
+
+- The source Cairn/Mem0 paired runner accepts `phaseTiming: 'bounded-tail-v1'`
+  for 1–30 frozen cases. Each entered Cairn arm retains its last 64 content-free
+  adapter events and exact admitted/omitted counts, including late failures.
+  Omission preserves existing reports and the 250-case limit. This adds no
+  timeout, retry, spending authority or installed-runtime claim. See the
+  [M1b contract](docs/plans/mixed-phase-tail-diagnostics.md).
+
+## Unreleased — optional OpenAI invocation phase timing
+
+- The source adapter accepts a trusted `onPhaseTiming` callback for finite,
+  content-free local preparation, count, generation and output-validation
+  durations. It is off by default; `onDiagnostic` v1, request bodies, core
+  deadlines, limits and outputs are unchanged. This does not explain or fix a
+  historical timeout. See the [M1a contract](docs/plans/capture-write-phase-observability.md).
+
 ## Unreleased — model calls fit their budgets
 
 - Recall no longer fails with `context_budget_exceeded` because a person has

@@ -82,6 +82,31 @@ model methods and the hosted plugin wire are unchanged. `store:false` and
 ephemeral local maps do not guarantee provider-side zero retention; the provider
 still receives the aliased request's personal text and ordinary network metadata.
 
+### Optional OpenAI phase timing observer
+
+The source adapter's opt-in `onPhaseTiming` callback receives only a closed
+stage, phase, outcome and bounded elapsed duration, with no source text, key,
+request, response, error or identity. There is no default persistence, export
+or network transmission. A trusted host can still reveal patterns of user
+activity if it stores or combines timings with other records; it owns any
+bounded retention and access control. The callback itself retains authority
+from its host closure and can block the event loop. Aborted timing does not
+prove provider cancellation or billing outcome, and this observer grants no
+new consent for capture or provider transmission.
+
+The source mixed Cairn/Mem0 runner can explicitly retain these observations
+in `diagnostics.adapterPhaseTiming` with `phaseTiming: 'bounded-tail-v1'`.
+This evaluation-only mode admits at most 30 cases and retains only the last
+64 events per entered Cairn arm (1920 per report), copied through the closed
+adapter vocabulary. Additional fields and getters are rejected; no identifiers,
+source, exceptions, usage, absolute timestamps or request/response data enter
+this observation. It writes no per-event files and holds no hidden full history.
+Its snapshot closes after owned work/transport settlement; later callbacks are
+ignored. Counts include admitted events that were evicted and stop exactly at
+`Number.MAX_SAFE_INTEGER`, when the collector closes. Report retention remains
+the maintainer's existing responsibility; opt-in does not authorize additional
+conversation capture, provider calls or broader source retention.
+
 ## Disable automatic behavior
 
 Run `/cairn-memory:pause` to pause both automatic capture and recall, and `/cairn-memory:resume` to restore them. Disable telemetry independently in plugin configuration. Uninstalling the plugin stops future local processing; use `forget_memory` or the hosted memory UI when available to remove already stored Memories.
