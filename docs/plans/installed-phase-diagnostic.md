@@ -1,7 +1,11 @@
 # M1c: fresh installed-runtime long-write diagnostic
 
-Status: prospective contract; no paid call yet. Fixed runtime dependency
-`506eed015b70135323b373f7ec8c4cec6dc007f6` (PR #298, itself depending on #297).
+Status: one-shot paid diagnostic completed on 2026-09-30; frozen prospective
+contract below retained as historical prelaunch text. The
+[public result](../evidence/installed-phase-long-write.md) records incomplete
+execution, automatic grades, source-backed concern and resource limits.
+Fixed runtime dependency `506eed015b70135323b373f7ec8c4cec6dc007f6`
+(PR #298, itself depending on #297).
 Branch/worktree: `test/installed-phase-diagnostic` / `installed-phase-diagnostic`.
 The goal remains a lightweight reliable memory layer with meaningful matched
 comparison. This packet does not expand raw-source retention, change the MOC,
@@ -399,3 +403,53 @@ It does not relax runtime verification, provenance or product limits. Earlier
 unlocalized failures must remain separately labelled, not retroactively
 attributed to either demonstrated cause. Final frozen private-suite results
 and nonauthor review are separate gates, not implied by this diagnosis.
+
+## One-shot M1c outcome
+
+After final fixed-candidate review and 21 successful exact-head CI/CodeQL
+checks, the primary launched the reviewed installed-core/native-Mem0 packet
+once. The [result report](../evidence/installed-phase-long-write.md) is the
+public source-free aggregate for I09. Cairn completed one of two ingestions
+and answers; Mem0 completed both. The automatic scorer's fixed N is two per
+arm, common-resolved N is one, and correct/incorrect/unresolved are Cairn
+1/0/1 and Mem0 1/1/0. The first Cairn case retained a nonretryable partial
+classification at batch index 5; no partial answer was generated. The second
+Cairn case completed all 32 batches, but its automatically correct answer
+contradicts the frozen source about prior adoption. The second Mem0 answer is
+also automatically correct, while the primary and documentation worker see a
+possible causal inversion. Those are agent source assessments, not an
+independent human adjudication. The primary's exact-window audit found the
+earlier adoption passage stored but absent from selected receipts; it does not
+identify the candidate visibility, selection or ranking cause. Full completion
+was not achieved, and broader semantic acceptance remains open.
+
+The primary reports 358 new guarded requests, 2,019,151 microUSD reserved,
+392,454 microUSD in known estimates, 79 unknown actual costs and zero pending.
+Its cumulative checkpoint is 24,227 requests / 151,787,556 microUSD reserved.
+The primary's fresh read-only audit authenticated the parent, verified the
+unchanged 23,869-request / 149,768,405-microUSD prefix and matched every 358
+new SQLite rows to a guarded attempt and accounting result. The current history
+digest is `a94be7c73fbf435bcd38bac727ca67bab5e81a48802a24f85414d394b9d18d92`.
+This primary audit is not independent review and does not replace the
+unchanged historical prelaunch checkpoint in I06. Next work is a separately
+reviewed, narrow diagnosis of the classification refusal after the observed
+output-validation boundary and evidence coverage/adoption preservation. There
+is no authority here for consumed-case replay, rubric repair, fixed-30
+expansion, raw-retention growth or MCP/Hermes claims.
+
+### Post-run documentation routing and verification
+
+The bounded result-document worker ran as GPT-6 Sol/high against public base
+`9f3fcc8825adf6588196685ff9e13a49cc5d9d85` and changed only
+`docs/evidence/installed-phase-long-write.md`, `docs/limitations.md`,
+`ROADMAP.md` and this plan. Two wording correction rounds separated the
+evaluator rows from the agent-only rubric and localized the exact-window
+finding and classification failure to the observed boundary. The primary
+audited the ledger and source-window coverage directly, then independently
+reran `npm test` (131/131), `npm run validate` and
+`npm run test:installed-phase-live:offline` (4/4) on both Node 22.16.0 and
+24.15.0 for the current documentation candidate. `git diff --check` passed.
+Pinned Claude 2.1.260 with Node 22.16.0 passed both marketplace and plugin
+`--strict` validation. A committed fixed-head independent review and CI for
+this documentation candidate remain pending. No worker commit, push, merge,
+release or deployment occurred.
