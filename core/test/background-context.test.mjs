@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
-import { admit, receipt, namespace, parity } from '../testing/background-parity.mjs';
-import { contextInput, contextQuery, SESSION_FRAMING } from '../session-context.mjs';
+import { admit, receipt, namespace, parity, episodeOptions, openStep } from '../testing/background-parity.mjs';
+import { contextInput, contextQuery, SESSION_FRAMING, BACKGROUND_FRAMING } from '../session-context.mjs';
 
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
 const config = { groups: { background: true }, maxChars: 8000, maxTokens: 2000,
@@ -32,7 +32,7 @@ test('CF2 current facts and context of both origins are opt-in, sourced and fram
     inferred(core, 'Inferred synthetic ' + kind, kind);
   }
   const result = read(core);
-  assert.equal(result.framing, SESSION_FRAMING);
+  assert.equal(result.framing, BACKGROUND_FRAMING);
   assert.equal(result.groups.background.status, 'complete');
   assert.equal(result.groups.background.returned, 4);
   for (const kind of ['fact', 'context']) for (const origin of ['explicit', 'agent-inferred']) {
@@ -43,6 +43,7 @@ test('CF2 current facts and context of both origins are opt-in, sourced and fram
   }
   for (const input of [{}, { groups: { background: false } }]) {
     const off = read(core, input);
+    assert.equal(off.framing, SESSION_FRAMING);
     assert.equal(Object.hasOwn(off.groups, 'background'), false);
     assert.doesNotMatch(JSON.stringify(off), /Explicit synthetic|Inferred synthetic/);
   }
@@ -154,16 +155,82 @@ test('CF2 final reread validates receipt bytes even without an epoch change', t 
 
 test('CF2 strict input and defaults', () => {
   assert.deepEqual(contextInput({ groups: { background: true } }).backgroundBudget, { maxTokens: 500, maxChars: 2000 });
-  for (const input of [{ groups: { background: 1 } }, { backgroundBudget: null }, { backgroundBudget: { unknown: 1 } },
-    ...[0, -1, 1.5, null, 2001].map(maxTokens => ({ backgroundBudget: { maxTokens } })),
-    ...[0, null, 8001].map(maxChars => ({ backgroundBudget: { maxChars } }))]) {
+  for (const input of [{ groups: { background: 1 } }, { backgroundBudget: {} }, { groups: { background: false }, backgroundBudget: {} },
+    { groups: { background: true }, backgroundBudget: null },
+    { groups: { background: true }, backgroundBudget: { unknown: 1 } },
+    ...[0, -1, 1.5, null, 2001].map(maxTokens => ({ groups: { background: true }, backgroundBudget: { maxTokens } })),
+    ...[0, null, 8001].map(maxChars => ({ groups: { background: true }, backgroundBudget: { maxChars } }))]) {
     assert.throws(() => contextInput(input), { code: 'invalid_input' });
   }
 });
 
-test('CF2 option-off success envelope bytes match frozen main fcd93ae4', t => {
+test('CF2 option-off success envelope bytes match frozen main fcd93ae4', async t => {
   const ws = createTestWorkspace(t, { prefix: 'cf2-parity-' });
   const fixture = JSON.parse(readFileSync(new URL('../testing/background-main-fixture.json', import.meta.url), 'utf8'));
   assert.equal(fixture.base, 'fcd93ae45b1b7c0c49c7beb0a0dd5d8e8868885c');
-  assert.deepEqual(parity(openMemoryCore, ws.path + '/memory.sqlite'), fixture.cases);
+  assert.deepEqual(await parity(openMemoryCore, ws.path + '/memory.sqlite'), fixture.cases);
+});
+
+test('CF2 background omits cleared procedural sidecars after correction to fact', t => {
+  const { core } = fixture(t);
+  const content = 'Synthetic habit';
+  const memory = ok(core.admit({ namespace, memory: { content, kind: 'preference' },
+    receipts: [receipt(content)], procedural: { anchors: [{ receiptIndex: 0, start: 0, end: content.length }] } })).memory;
+  ok(core.correct({ namespace, memoryId: memory.id, expectedRevision: memory.revision,
+    content: 'Synthetic fact', kind: 'fact', receipt: receipt('Synthetic fact') }));
+  assert.equal(Object.hasOwn(read(core).groups.background.items[0], 'procedural'), false);
+});
+
+test('CF2 reviewer sweep: background never reduces legacy groups or turns a budget success into failure', async t => {
+  const { core } = fixture(t, episodeOptions);
+  await openStep(core);
+  for (let i = 0; i < 8; i++) admit(core, 'Synthetic instruction ' + i, 'instruction');
+  for (let i = 0; i < 11; i++) admit(core, 'Synthetic background ' + i, i % 2 ? 'fact' : 'context');
+  const full = read(core);
+  assert.equal(full.groups.nextSteps.returned, 1);
+  assert.equal(full.groups.procedural.returned, 6);
+  let omitted = 0, truncated = 0, included = 0, successes = 0;
+  for (let maxChars = 200; maxChars <= 8000; maxChars++) {
+    const input = { namespace, maxChars, maxTokens: 2000 };
+    const off = core.sessionStartContext(input);
+    const on = core.sessionStartContext({ ...input, groups: { background: true } });
+    if (!off.ok) { assert.deepEqual(on, off, `maxChars=${maxChars}`); continue; }
+    successes++;
+    assert.equal(on.ok, true, `maxChars=${maxChars}: ${JSON.stringify(on)}`);
+    assert.deepEqual(on.value.groups.nextSteps, off.value.groups.nextSteps, `maxChars=${maxChars}`);
+    assert.deepEqual(on.value.groups.procedural, off.value.groups.procedural, `maxChars=${maxChars}`);
+    assert.equal(on.value.framing, BACKGROUND_FRAMING);
+    const text = JSON.stringify(on);
+    assert.ok(text.length <= maxChars);
+    assert.ok(Math.ceil(text.length / 5) <= 2000);
+    assert.ok(Buffer.byteLength(text, 'utf8') <= 24000);
+    if (!on.value.groups.background) {
+      omitted++; assert.equal(on.value.backgroundOmitted, true);
+    } else {
+      assert.equal(Object.keys(on.value.groups).at(-1), 'background');
+      if (on.value.groups.background.budget_exhausted) truncated++;
+      included += on.value.groups.background.returned;
+    }
+  }
+  assert.ok(successes > 7000); assert.ok(omitted > 0); assert.ok(truncated > 0); assert.ok(included > 0);
+});
+
+test('CF2 token-budget sweep preserves existing groups with a lexical local counter', async t => {
+  const { core } = fixture(t, { ...episodeOptions, model: { ...episodeOptions.model,
+    countTokens: text => (text.match(/[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) ?? []).length } });
+  await openStep(core);
+  for (let i = 0; i < 8; i++) admit(core, 'Synthetic instruction ' + i, 'instruction');
+  for (let i = 0; i < 11; i++) admit(core, 'Synthetic background ' + i, i % 2 ? 'fact' : 'context');
+  let omissions = 0;
+  for (let maxTokens = 100; maxTokens <= 2000; maxTokens++) {
+    const input = { namespace, maxChars: 8000, maxTokens };
+    const off = core.sessionStartContext(input);
+    const on = core.sessionStartContext({ ...input, groups: { background: true } });
+    if (!off.ok) { assert.deepEqual(on, off); continue; }
+    assert.equal(on.ok, true, `maxTokens=${maxTokens}: ${JSON.stringify(on)}`);
+    for (const name of ['nextSteps', 'procedural']) assert.deepEqual(on.value.groups[name], off.value.groups[name]);
+    if (on.value.backgroundOmitted) omissions++;
+    assert.ok((JSON.stringify(on).match(/[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) ?? []).length <= maxTokens);
+  }
+  assert.ok(omissions > 0);
 });

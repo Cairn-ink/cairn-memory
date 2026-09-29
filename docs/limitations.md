@@ -1147,6 +1147,27 @@ that confirmation resolves every contradiction.
 
 Evidence: `core/test/confirmation-state.test.mjs` tests both confirmation orders.
 
+## Background context is recent, not relevant or reviewed
+
+Opt-in session-start `background` returns at most six current facts/context
+items, newest-updated first, with ties broken by ID. This is recency ordering,
+not relevance ranking. Its independent budget and the whole-response limits may
+return fewer items; the existing next-step and procedural groups fill first.
+If even empty background metadata cannot fit, the group is omitted and
+`backgroundOmitted: true` reports that omission. Per-group
+completeness reports truncation when the group is present.
+
+Background includes **agent-inferred facts no one has reviewed**, as well as
+explicit facts and context. Excluding awaiting decisions does not make other
+inferences verified. Receipts retain provenance, not truth or human approval.
+Requested framing explicitly warns that background may be inferred and unverified.
+A concurrent forget fails the final reread with a conflict; a fresh retry drops
+the forgotten item, consistent with SE-3.
+
+Evidence: `core/test/background-context.test.mjs`, including the 200–8000
+character-budget sweep comparing both existing groups with background on/off.
+See the [session-start contract](storage-contract.md#session-start-context).
+
 ## Where the evidence lives
 
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)

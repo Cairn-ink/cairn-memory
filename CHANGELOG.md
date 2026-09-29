@@ -1,13 +1,18 @@
 # Changelog
 
-## Unreleased — core decision confirmation and opt-in background context
+## Unreleased — opt-in background context
 
 - `sessionStartContext({groups: {background: true}})` includes current facts and
   context of either origin, with full receipts, untrusted framing, independent
   `backgroundBudget` truncation and the existing final freshness reread. Awaiting,
   forgotten and historical/superseded items stay excluded. Ordering is update
   time descending, then ID ascending. Omitted/false preserves legacy bytes.
+  Existing groups keep identical output across budgets; an empty background
+  group that cannot fit is omitted with an explicit budget marker. Requested
+  framing warns that background may be inferred and unverified.
   See the [session-context contract](docs/storage-contract.md#session-start-context).
+
+## Unreleased — core decision confirmation
 
 - Opt-in `decisionReview: 'required-v1'` holds automatically admitted inferred
   decisions for person-facing review. Ordinary readers, including option-off
