@@ -1,6 +1,16 @@
 import { homedir, tmpdir, uptime } from "node:os";
 import { isAbsolute, join, resolve, relative } from "node:path";
-import { opendir, readFile, readlink, unlink, lstat, stat } from "node:fs/promises";
+import {
+  opendir,
+  readFile,
+  readlink,
+  unlink,
+  lstat,
+  stat,
+  access,
+  realpath,
+} from "node:fs/promises";
+import { constants } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { privateDirectory, privateRead, privateWrite, checkedPath } from "./private-state.mjs";
 import { withFileLock } from "./file-lock.mjs";
@@ -117,6 +127,24 @@ function durable(root, locations) {
   )
     fail("temporary_pairing_root");
 }
+async function requireTemporarySource(root, locations) {
+  if (!absolute(root)) fail("adopt_from_requires_temporary_root");
+  const inside = (parent, child) =>
+    child === parent ||
+    (!relative(parent, child).startsWith("..") && !isAbsolute(relative(parent, child)));
+  const source = await realpath(root);
+  const home = await realpath(locations.home);
+  const temporaryRoots = (
+    await Promise.all(
+      [locations.temporary, "/tmp", "/var/tmp"].map((path) =>
+        probe(() => realpath(path), undefined),
+      ),
+    )
+  ).filter(Boolean);
+  if (inside(home, source) || !temporaryRoots.some((parent) => inside(parent, source)))
+    fail("adopt_from_requires_temporary_root");
+}
+
 async function keyPresent(root, { strict = false } = {}) {
   if (strict && !absolute(root)) fail("invalid_state_path");
   let bytes;
@@ -221,7 +249,8 @@ function ownerAlive(owner, liveness) {
 }
 
 async function locked(options, work) {
-  await detectClients(options);
+  const inspect = options.claudeFacts ? probeClaudeFacts : detectClients;
+  await inspect(options);
   const locations = stateLocations(options);
   const liveness = options.liveness ?? (await localLiveness());
   // Unsupported lock ownership must not create coordination and turn an
@@ -234,7 +263,7 @@ async function locked(options, work) {
   const acquired = await withFileLock(
     locations.lock,
     async () => {
-      result = await work(await detectClients(options), liveness);
+      result = await work(await inspect(options), liveness);
     },
     {
       timeoutMs: options.timeoutMs ?? 2000,
@@ -287,31 +316,16 @@ async function activeBinding(root, env, status = "single", paired = false) {
   };
 }
 
-async function selectBinding(options, snapshot, delivered) {
+async function selectCodexBinding(options, snapshot, delivered) {
   const { client = "claude", env = process.env } = options;
   const { locations, install, record, keys } = snapshot;
   const binding = install.clients[client];
-  const registration = claudeRegistration(install);
-  const legacyClaude =
-    client === "claude" &&
-    !registration &&
-    (locations.claudeRoot === locations.defaultRoot || !keys.includes(locations.claudeRoot)) &&
-    keys.includes(locations.defaultRoot) &&
-    (await hasClaudeEvidence(locations.defaultRoot));
-  const claudeRoot = legacyClaude ? locations.defaultRoot : locations.claudeRoot;
-  const profileRoot = registration?.profileRoot;
   if (delivered !== undefined) {
     if (!absolute(delivered) || delivered !== locations.pairing) {
       fail("pairing_record_mismatch");
     }
     if (!record) fail("pairing_record_missing");
   }
-  // A registry entry belongs to one profile, not every Claude sharing this HOME.
-  if (client === "claude" && registration && locations.claudeRoot !== profileRoot) {
-    if (delivered !== undefined) fail("pairing_record_mismatch");
-    return activeBinding(claudeRoot, env, "standalone_unregistered");
-  }
-  if (client === "claude" && registration && !binding) return disabled();
   if (install.resetPending) return disabled();
   if (record || install.shared || binding?.state === "pending") {
     if (!record || !delivered || !install.shared?.ready) return disabled();
@@ -334,13 +348,9 @@ async function selectBinding(options, snapshot, delivered) {
     return activeBinding(record.root, env, "paired", true);
   }
   const other = install.clients[CLIENTS.find((name) => name !== client)];
-  const root =
-    binding?.root ?? (client === "claude" ? claudeRoot : (options.root ?? locations.defaultRoot));
+  const root = binding?.root ?? options.root ?? locations.defaultRoot;
   if (!absolute(root)) fail("invalid_state_path");
   let established = binding?.state === "established" && binding.root === root;
-  if (!established && client === "claude" && keys.includes(root)) {
-    established = !other || other.root !== root || legacyClaude;
-  }
   const conflict =
     !!other ||
     (client === "codex" &&
@@ -373,120 +383,291 @@ async function retiredRoot(root) {
     if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code)) return false;
     throw error;
   }
-  // A present but invalid marker also disables the root.
-  try {
-    await checkedPath(root, { directory: true });
-    const marker = await jsonFile(join(root, "retired"));
-    if (marker?.version !== 1 || marker.retired !== true) fail("invalid_retired_marker");
-  } catch {
-    return true;
-  }
+
   return true;
 }
 
-async function coordinationDegraded(locations) {
+const profileMarkerPath = (root) => join(root, ".cairn-memory-profile", "legacy.json");
+const owned = (info) => typeof process.getuid !== "function" || info.uid === process.getuid();
+const probe = async (read, missing) => {
   try {
-    await lstat(locations.coordination);
-  } catch (error) {
-    if (error.code === "ENOENT") return false;
-    return true;
-  }
-  try {
-    await checkedPath(locations.coordination, { directory: true });
-    validateInstall(await jsonFile(locations.install));
-    const record = await jsonFile(locations.pairing);
-    if (record) validateRecord(record, locations);
-    return false;
+    return await read();
   } catch {
-    return true;
+    return missing;
   }
-}
+};
 
-async function fallbackStandalone(options, delivered, snapshot) {
-  const locations = stateLocations(options);
-  const degraded = await coordinationDegraded(locations);
-  const detail = degraded ? "coordination unreadable" : undefined;
-  if (delivered !== undefined || (options.client ?? "claude") !== "claude") {
-    return degraded ? disabled("pairing_needed", detail) : undefined;
-  }
-  if (
-    snapshot?.record ||
-    snapshot?.install.shared ||
-    snapshot?.install.resetPending ||
-    snapshot?.install.clients.codex
-  )
-    return undefined;
-  // A surviving record prevents an unregistered standalone fallback.
-  if (!degraded && (await jsonFile(locations.pairing))) return undefined;
-  const env = options.env ?? process.env;
-  const registration = snapshot && claudeRegistration(snapshot.install);
-  let root = locations.claudeRoot;
-  let existing = false;
-  try {
-    existing = await keyPresent(root);
-  } catch {
-    // The ordinary identity reader retains the original path/error behavior.
-  }
-  if (!existing && !registration) {
+async function rootFacts(root, { strict = false, evidence = false } = {}) {
+  const info = await probe(() => stat(root), undefined);
+  const usable = !!info?.isDirectory();
+  const retired =
+    usable && owned(info) && !!(await probe(() => lstat(join(root, "retired")), undefined));
+  // A present key is not freshness, even if its bytes are invalid. The ordinary
+  // identity reader preserves released standalone errors without replacing it.
+  const key = !!(await probe(() => lstat(join(root, "project-key")), undefined));
+  let error;
+  if (strict && !retired) {
     try {
-      if (
-        (await keyPresent(locations.defaultRoot)) &&
-        (await hasClaudeEvidence(locations.defaultRoot))
-      ) {
-        root = locations.defaultRoot;
-        existing = true;
-      }
-    } catch {
-      // Optional legacy evidence cannot disable an unrelated standalone root.
+      if (!(await keyPresent(root, { strict: true }))) error = "paired_key_missing";
+    } catch (failure) {
+      error = failure.code ?? failure.message.split(":")[0];
     }
   }
-  if (degraded && !existing) return disabled("pairing_needed", detail);
-  const binding = await activeBinding(root, env, "standalone_unregistered");
-  return { ...binding, ...(degraded ? { createKey: false, detail } : {}) };
+  return {
+    root,
+    usable,
+    key,
+    retired,
+    error,
+    evidence: evidence && key && (await probe(() => hasClaudeEvidence(root), false)),
+  };
 }
 
-/** Normal hooks only read. Registration alone needs the setup lock. */
-export async function resolveClient(options = {}) {
-  const { client = "claude", env = process.env } = options;
-  if (!CLIENTS.includes(client)) fail("invalid_client");
-  const option =
-    client === "claude" ? env.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD || undefined : undefined;
-  const argument = options.pairingRecord || undefined;
-  if (argument !== undefined && option !== undefined && argument !== option) {
-    fail("pairing_record_mismatch");
+/** Every filesystem failure becomes a fact, never another selection path. */
+export async function probeClaudeFacts(options = {}) {
+  const env = options.env ?? process.env;
+  const locations = stateLocations(options);
+  const base = locations.home || locations.temporary;
+  const homeInfo = await probe(() => stat(base), undefined);
+  const homeUsable =
+    !!homeInfo?.isDirectory() &&
+    (await probe(async () => {
+      await access(base, constants.X_OK);
+      return true;
+    }, false));
+  const facts = {
+    locations,
+    homeUsable,
+    coordination: "absent",
+    registration: "none",
+    install: { version: 1, clients: {} },
+    record: undefined,
+    canRegister: false,
+    platform: options.liveness?.platform ?? process.platform,
+    attempt: options.registrationAttempt,
+  };
+  if (homeUsable) {
+    const entry = await probe(() => lstat(locations.coordination), undefined);
+    const directory = entry?.isSymbolicLink()
+      ? await probe(() => stat(locations.coordination), undefined)
+      : entry;
+    if (!entry) {
+      facts.canRegister = await probe(async () => {
+        await access(base, constants.W_OK | constants.X_OK);
+        return true;
+      }, false);
+    } else if (directory?.isDirectory() && owned(directory)) {
+      const records = await Promise.all(
+        [locations.install, locations.pairing].map((path) =>
+          probe(async () => !!(await lstat(path)), "unknown"),
+        ),
+      );
+      try {
+        await checkedPath(locations.coordination, { directory: true });
+        facts.install = validateInstall(await jsonFile(locations.install));
+        facts.record = await jsonFile(locations.pairing);
+        if (facts.record) validateRecord(facts.record, locations);
+        facts.coordination = "readable";
+        facts.canRegister = true;
+      } catch {
+        if (records.some((value) => value === true || value === "unknown")) {
+          // ENOENT is absence, not unreadability of an existing record.
+          const knownAbsent = await Promise.all(
+            [locations.install, locations.pairing].map(async (path) => {
+              try {
+                await lstat(path);
+                return false;
+              } catch (error) {
+                return ["ENOENT", "ENOTDIR"].includes(error.code);
+              }
+            }),
+          );
+          if (!knownAbsent.every(Boolean)) facts.coordination = "degraded";
+        }
+        facts.install = { version: 1, clients: {} };
+        facts.record = undefined;
+      }
+    }
   }
-  const delivered = argument ?? option;
-  let snapshot;
-  let binding;
-  try {
-    snapshot = await detectClients(options);
-    binding = await selectBinding(options, snapshot, delivered);
-  } catch (error) {
-    binding = await fallbackStandalone(options, delivered, snapshot);
-    if (!binding) throw error;
+  const registration = claudeRegistration(facts.install);
+  if (registration) {
+    facts.registration =
+      registration.profileRoot !== locations.claudeRoot
+        ? "other"
+        : facts.install.clients.claude
+          ? "self-active"
+          : "self-retired";
   }
-  if (!binding.enabled) return binding;
+  facts.profile = await rootFacts(locations.claudeRoot);
+  facts.localMarker = "absent";
+  const markerPath = profileMarkerPath(locations.claudeRoot);
+  const markerDirectory = join(locations.claudeRoot, ".cairn-memory-profile");
+  const markerParent = await probe(() => lstat(markerDirectory), undefined);
+  let markerEntry;
+  if (markerParent) {
+    try {
+      markerEntry = await lstat(markerPath);
+    } catch (error) {
+      if (!["ENOENT", "ENOTDIR"].includes(error.code)) facts.localMarker = "invalid";
+    }
+  }
+  if (markerEntry) {
+    facts.localMarker = "invalid";
+    const marker = await probe(async () => {
+      await checkedPath(join(locations.claudeRoot, ".cairn-memory-profile"), { directory: true });
+      return jsonFile(markerPath);
+    }, undefined);
+    if (
+      marker?.version === 1 &&
+      marker.profileRoot === locations.claudeRoot &&
+      marker.root === locations.defaultRoot
+    )
+      facts.localMarker = "valid";
+  }
+  // Only an own active binding can authorize probing a non-default shared root.
+  if (facts.registration === "self-active") {
+    facts.bound = await rootFacts(facts.install.clients.claude.root, {
+      strict: !!facts.record && !!facts.install.shared?.ready,
+    });
+  }
   if (
-    snapshot &&
-    !binding.paired &&
-    binding.status !== "standalone_unregistered" &&
-    !snapshot.install.clients[client]
+    facts.registration === "none" &&
+    (!facts.profile.key || locations.claudeRoot === locations.defaultRoot)
   ) {
+    facts.default = await rootFacts(locations.defaultRoot, {
+      evidence: facts.coordination !== "degraded",
+    });
+  }
+  const option = env.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD || undefined;
+  const argument = options.pairingRecord || undefined;
+  const delivered = argument ?? option;
+  facts.delivery =
+    delivered === undefined
+      ? "none"
+      : (argument && option && argument !== option) ||
+          !absolute(delivered) ||
+          delivered !== locations.pairing
+        ? "wrong"
+        : "delivered";
+  facts.stateDir = env.CAIRN_MEMORY_STATE_DIR;
+  return facts;
+}
+
+/** The only Claude root/eligibility decision. No I/O, clock, environment or throws. */
+export function resolveClaudeBinding(facts) {
+  const stop = (status = "pairing_needed", detail) => ({
+    enabled: false,
+    root: undefined,
+    createKey: false,
+    status,
+    ...(detail ? { detail } : {}),
+  });
+  const select = (root, createKey, status = "single", detail, paired = false) => {
+    if (root.retired) return stop("pairing_needed", "retired root");
+    if (paired && root.error) return stop(root.error);
+    if (!createKey && !root.key)
+      return stop(paired ? "paired_key_missing" : "standalone_key_missing", detail);
+    if (paired && facts.stateDir !== undefined && facts.stateDir !== root.root)
+      return stop("state_dir_mismatch");
+    return {
+      enabled: true,
+      root: root.root,
+      createKey,
+      status,
+      paired,
+      ...(detail ? { detail } : {}),
+      register:
+        !paired &&
+        facts.registration === "none" &&
+        facts.coordination !== "degraded" &&
+        facts.canRegister &&
+        facts.platform !== "win32" &&
+        !facts.attempt,
+    };
+  };
+  if (facts.delivery === "wrong") return stop("pairing_record_mismatch");
+  if (facts.coordination === "degraded") {
+    if (facts.delivery !== "none") return stop("pairing_needed", "coordination unreadable");
+    if (facts.profile.key)
+      return select(facts.profile, false, "standalone_unregistered", "coordination unreadable");
+    if (facts.localMarker === "valid")
+      return select(facts.default, false, "standalone_unregistered", "coordination unreadable");
+    return stop("pairing_needed", "coordination unreadable");
+  }
+  if (facts.delivery !== "none" && !facts.record) return stop("pairing_record_missing");
+  if (facts.registration === "other") {
+    if (facts.delivery !== "none") return stop("pairing_record_mismatch");
+    return select(facts.profile, true, "standalone_unregistered");
+  }
+  if (facts.registration === "self-retired" || facts.install.resetPending) return stop();
+  const binding = facts.install.clients.claude;
+  if (facts.record || facts.install.shared || binding?.state === "pending") {
+    const shared = facts.install.shared;
+    if (!facts.record || facts.delivery === "none" || !shared?.ready) return stop();
+    if (facts.platform === "win32") return stop("pairing_platform_unsupported");
+    if (
+      !binding ||
+      binding.state !== "established" ||
+      binding.root !== facts.record.root ||
+      !shared.initialized ||
+      shared.id !== facts.record.id ||
+      shared.root !== facts.record.root ||
+      shared.policy !== facts.record.policy
+    )
+      return stop("pairing_record_mismatch");
+    return select(facts.bound, false, "paired", undefined, true);
+  }
+  if (facts.registration === "self-active") {
+    if (facts.install.clients.codex && !facts.bound.key) return stop();
+    return select(facts.bound, true, facts.install.clients.codex ? "pairing_needed" : "single");
+  }
+  const codex = facts.install.clients.codex;
+  let root = facts.profile;
+  let createKey = true;
+  if (!root.key && facts.localMarker === "invalid")
+    return stop("pairing_needed", "profile marker unreadable");
+  if (!root.key && facts.localMarker === "valid") {
+    root = facts.default;
+    createKey = false;
+  } else if (!root.key && facts.default?.key && facts.default.evidence) {
+    root = facts.default;
+  }
+  const legacy = root === facts.default && (root.evidence || facts.localMarker === "valid");
+  if (codex && (!root.key || (codex.root === root.root && !legacy))) return stop();
+  return select(
+    root,
+    createKey,
+    codex ? "pairing_needed" : facts.attempt === "busy" ? "standalone_unregistered" : "single",
+  );
+}
+
+async function resolveClaudeClient(options) {
+  let facts = await probeClaudeFacts(options);
+  let binding = resolveClaudeBinding(facts);
+  if (binding.register) {
     try {
       binding = await locked(
-        { ...options, timeoutMs: options.timeoutMs ?? 100 },
+        { ...options, claudeFacts: true, timeoutMs: options.timeoutMs ?? 100 },
         async (current) => {
-          const selected = await selectBinding(options, current, delivered);
-          if (
-            selected.enabled &&
-            !selected.paired &&
-            selected.status !== "standalone_unregistered" &&
-            !current.install.clients[client]
-          ) {
-            current.install.clients[client] = {
+          const selected = resolveClaudeBinding(current);
+          if (selected.register) {
+            if (
+              selected.root === current.locations.defaultRoot &&
+              selected.root !== current.locations.claudeRoot
+            ) {
+              await privateWrite(
+                profileMarkerPath(current.locations.claudeRoot),
+                JSON.stringify({
+                  version: 1,
+                  profileRoot: current.locations.claudeRoot,
+                  root: selected.root,
+                }),
+              );
+            }
+            current.install.clients.claude = {
               root: selected.root,
+              profileRoot: current.locations.claudeRoot,
               state: "established",
-              ...(client === "claude" ? { profileRoot: current.locations.claudeRoot } : {}),
             };
             await saveInstall(current.locations, current.install);
           }
@@ -494,19 +675,40 @@ export async function resolveClient(options = {}) {
         },
       );
     } catch (error) {
-      // A contender may have registered a different client while we waited.
-      // Re-read before using the standalone fallback; never bypass its binding.
-      try {
-        snapshot = await detectClients(options);
-        binding = await selectBinding(options, snapshot, delivered);
-        if (binding.enabled && !snapshot.install.clients[client]) {
-          binding = await fallbackStandalone(options, delivered, snapshot);
-        }
-      } catch {
-        binding = await fallbackStandalone(options, delivered, snapshot);
-      }
-      if (!binding) throw error;
+      facts = await probeClaudeFacts({
+        ...options,
+        registrationAttempt: error.message === "setup_busy" ? "busy" : "skipped",
+      });
+      binding = resolveClaudeBinding(facts);
     }
+  }
+  if (binding.enabled) {
+    binding.workerEnv = { ...(options.env ?? process.env), CAIRN_MEMORY_STATE_DIR: binding.root };
+    if (options.initialize) await identityForBinding(binding, "claude");
+  }
+  return binding;
+}
+
+/** Claude decisions never share the setup/Codex detector's exception path. */
+export async function resolveClient(options = {}) {
+  const client = options.client ?? "claude";
+  if (!CLIENTS.includes(client)) fail("invalid_client");
+  if (client === "claude") return resolveClaudeClient(options);
+  const snapshot = await detectClients(options);
+  let binding = await selectCodexBinding(options, snapshot, options.pairingRecord || undefined);
+  if (binding.enabled && !binding.paired && !snapshot.install.clients.codex) {
+    binding = await locked(options, async (current) => {
+      const selected = await selectCodexBinding(
+        options,
+        current,
+        options.pairingRecord || undefined,
+      );
+      if (selected.enabled && !selected.paired && !current.install.clients.codex) {
+        current.install.clients.codex = { root: selected.root, state: "established" };
+        await saveInstall(current.locations, current.install);
+      }
+      return selected;
+    });
   }
   if (binding.enabled && options.initialize) await identityForBinding(binding, client);
   return binding;
@@ -544,6 +746,7 @@ export async function initializePairing(options = {}) {
   durable(root, locations);
   if ((await retiredRoot(root)) || (await retiredRoot(options.adoptFrom)))
     return disabled("retired_root");
+  if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
   const initial = await detectClients(setupOptions);
   if (initial.record && !initial.install.shared) fail("pairing_record_mismatch");
   const profileRoot =
@@ -569,6 +772,7 @@ export async function initializePairing(options = {}) {
   return locked(setupOptions, async ({ install, keys, record: existingRecord }) => {
     if ((await retiredRoot(root)) || (await retiredRoot(options.adoptFrom)))
       return disabled("retired_root");
+    if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
     const registration = claudeRegistration(install);
     if (registration && registration.profileRoot !== profileRoot) fail("claude_profile_mismatch");
     if (existingRecord && (!install.shared || !install.shared.initialized))
@@ -699,6 +903,7 @@ export async function resetIdentity(options = {}) {
   const locations = stateLocations({ ...options, setup: true });
   durable(options.root, locations);
   return locked({ ...options, setup: true }, async ({ install, record, keys }) => {
+    if (await retiredRoot(options.root)) return disabled("retired_root");
     if (
       !install.shared ||
       (!record && !install.resetPending) ||

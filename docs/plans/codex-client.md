@@ -271,12 +271,19 @@ legacy standalone single-client operation remains supported. The setup command
 refuses an undetermined/non-absolute home before any writes or host execution;
 its paths never use this fallback. Pairing requires the same durable home.
 Both hosts resolve the same coordination location; no per-host alternate registry.
+A separate profile-local record, `<profileRoot>/.cairn-memory-profile/legacy.json`,
+is published when registration adopts the legacy default. It is 0600 in a 0700
+Cairn-owned subdirectory and stores only version, profile root and adopted root.
+It preserves that profile's adoption when coordination cannot be trusted, without
+allowing cursor evidence to bind a fresh profile in degraded mode.
 Normal hooks perform read-only detection. Take the setup lock and recheck only
 for fresh registration, joint initialization, adoption or reset. Established hooks
 never rewrite/fsync `install.json`. Registration waits at most 100 ms by default;
-standalone Claude continues with its legacy root/key as `standalone_unregistered`
-if safe coordination is unavailable, including lock contention. One fresh joint setup elects one initializer for both consenting
-clients and writes their shared binding before activating either. Concurrent
+lock contention permits unregistered standalone use. Unsupported registration
+adds no status note. Absent coordination retains 0.1.1 first use; degraded
+coordination uses only existing keys, with profile-local proof for legacy adoption,
+as specified in the decision table below. One fresh joint setup elects one
+initializer for both consenting clients and writes their shared binding before activating either. Concurrent
 separate installs elect one initializer; the other needs adoption. A partial
 joint setup must not let either host independently initialize another root/key.
 Released Claude cannot honor this lock: setup must require
@@ -1207,8 +1214,8 @@ Resolved with the coordinator during CX-2:
   with 2,000 ms tolerance for sampling/rounding. A wall-clock step larger than
   this during a lock hold can reap a live owner; holds are short. Windows pairing
   is unsupported; standalone remains unaffected. The test seam supplies boot,
-  namespace and synchronous liveness. Real macOS host behavior remains a CX-7/A6 verification
-  gate, including the F0 finding that Codex hooks run outside the tool sandbox.
+  namespace and synchronous liveness. Real macOS host behavior remains a
+  CX-7/A6 verification gate, including the F0 finding that Codex hooks run outside the tool sandbox.
 - An empty Claude `pairing_record` option is unset. Explicit pause/resume on a
   disabled client reports its status and exits nonzero; automatic hooks still
   exit successfully without sending memory requests.
@@ -1224,9 +1231,10 @@ Resolved with the coordinator during CX-2:
   as a sorted multiset and individual bodies preserved byte for byte. Thirty-six
   hook/launcher variants include inherited state-dir values and unrelated default
   roots that are files, unreadable, or contain a directory named `retired`.
+  Eight more variants cover unusable HOME and non-directory coordination,
+  for 44 total; every variant also compares status output.
   One-HOME profile fixtures compare separate keys, IDs and pause against actual
-  base; only the
-  new unregistered status note is normalized for those status outputs.
+  base; only the new unregistered status note is normalized for those status outputs.
 - Profile ownership: every Claude binding requires
   `profileRoot`, the host plugin-data root or the default when the variable is
   unset. Registration, joint initialization, adoption, completion and reset all
@@ -1247,8 +1255,9 @@ Resolved with the coordinator during CX-2:
   fresh profiles cannot replace it. Setup profile conflicts use
   `claude_profile_mismatch`; delivered-record conflicts retain their record status.
   Degraded coordination never mints a project key. Only an existing profile key
-  or an evidenced, unmarked legacy-gap key is eligible; absent coordination
-  remains the normal standalone environment. The retirement and degraded-mode
+  or a validated profile-local adoption record with an existing, unmarked key
+  is eligible; cursor evidence alone cannot authorize degraded adoption. Absent
+  coordination remains the normal standalone environment. The retirement and degraded-mode
   rules below apply independently of registration.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
@@ -1285,7 +1294,9 @@ The optional `adoptFrom` API parameter covers an explicitly selected temporary
 legacy key: with both hosts stopped, copy that key under the setup lock to the
 chosen durable `root` using exclusive temporary publication/hard linking. Reject
 an existing different destination key, preserve the source, and leave both
-clients pending until configuration completes. This is an API tested with
+clients pending until configuration completes. Canonical sources under durable
+HOME, or outside known temporary storage, return `adopt_from_requires_temporary_root`;
+durable roots are adopted in place. This is an API tested with
 synthetic paths, not an executed real-user migration.
 
 The golden harness raises the control-lock timeout only in isolated base and
@@ -1300,13 +1311,27 @@ The marker is private JSON `{"version":1,"retired":true}`, mode 0600 in the priv
 root, with the same owner/symlink/inode checks as other private state. Reset
 retries keep the old root paused; the marker is never automatically removed.
 
-Absent coordination is the normal 0.1.1 standalone environment. Degraded mode
-means coordination exists but cannot be read or trusted: it never creates a
-project key. It uses an existing profile key first, or an existing default-root
-key with Claude-only cursor evidence for the legacy gap. Without either, memory
-is disabled with `pairing_needed` and detail `coordination unreadable`. An
-eligible unmarked root remains active as `standalone_unregistered` with the
-same detail; later metadata loss cannot cement a replacement identity.
+Absent coordination preserves normal 0.1.1 first use, including an unusable
+HOME, a missing path, ENOTDIR, or a non-directory/foreign coordination entry.
+Degraded means an owned coordination directory has existing records that cannot
+be read or trusted. It never creates a project key or infers adoption from
+Claude cursors. Without a delivered record, it uses an existing profile key, or
+a validated profile-local adoption record naming an existing default-root key.
+An eligible unretired root remains active as `standalone_unregistered`, with
+separate detail `coordination unreadable`. Otherwise memory is disabled with
+`pairing_needed`; a lost locally recorded standalone key reports
+`standalone_key_missing`, never `paired_key_missing`.
+
+Registration of a genuine legacy-gap adoption first writes
+`<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned
+subdirectory). It records version, profile root and adopted default root, with
+no key or conversation content, and is never transmitted. This validated local
+history preserves that adoption through coordination damage or loss; a fresh
+keyless profile cannot join a pair merely because its root has Claude cursors.
+An existing profile key takes precedence. With readable coordination, only the
+registered profile follows its binding; another profile stays standalone.
+Registration unsupported on Windows, or skipped because an unrelated default
+root is damaged, adds no unregistered status note.
 
 Retirement is checked only at the selected root. A present `retired` entry,
 valid or invalid, disables that root with `pairing_needed`; resume refuses to
@@ -1321,3 +1346,125 @@ Active and retired Claude ownership is permanent in this API. CX-7 must provide
 an explicit recovery path to move a HOME to a different Claude profile, with
 stopped hosts/workers, consent and identity implications made clear. CX-2 does
 not implement that recovery UI or silently replace recorded ownership.
+
+### Claude resolution decision table (CX-2 round 8)
+
+This table is the executable fixture source: tests parse its defaults and Markdown
+rows below, overlay each row's facts on the defaults, create only synthetic
+filesystem state, and
+check the pure decision, requests, key creation, status, pause and resume.
+The parity column marks released-0.1.1 rows. Other rows exercise explicit pairing,
+profile history or the authorized legacy gap. No exception chooses a fallback.
+
+Probes normalize HOME, coordination, registration, delivery, keys and markers.
+ENOENT, ENOTDIR, non-directory/foreign coordination and unusable HOME mean
+absent coordination. Only an owned directory with existing untrusted records is
+degraded. No unrelated root probe can change a trusted binding. A retirement
+entry needs positive existence in an owned directory; its contents are irrelevant.
+
+The profile-local adoption record is
+`<profileRoot>/.cairn-memory-profile/legacy.json`, a 0600 private file in a
+0700 Cairn-owned subdirectory. It records version, profileRoot and the adopted
+default root. Registration publishes it before recording a legacy-gap binding.
+Degraded resolution never infers adoption from cursors: a keyless profile needs
+this validated record and its existing, unretired key. Invalid local history or
+a lost adopted key fails closed. Ordinary existing profile keys keep precedence.
+
+Enabled rows pause successfully, suppress requests while paused, resume
+successfully and send again. Disabled rows send nothing, mint nothing, keep
+hooks successful, and reject explicit pause/resume. Setup rejects marked
+destinations (including reset) and marked sources. `adoptFrom` accepts only
+temporary storage outside durable HOME; durable roots are adopted in place.
+
+<!-- claude-resolution-table:start -->
+
+Defaults (each row overrides only the listed facts):
+
+```json
+{
+  "home": "usable",
+  "coord": "absent",
+  "registration": "none",
+  "shared": "none",
+  "delivery": "none",
+  "profileKey": false,
+  "profileRetired": false,
+  "default": "empty",
+  "localMarker": "absent",
+  "bound": "shared",
+  "boundKey": true,
+  "boundRetired": false,
+  "codex": false,
+  "codexSame": false,
+  "paused": false,
+  "platform": "linux"
+}
+```
+
+| Row | 0.1.1 parity | Rule | Fact overrides | Expected outcome and effects |
+|---|---|---|---|---|
+| S01 | yes | standalone first use | `{}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| S02 | yes | existing profile key | `{"profileKey":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| S03 | yes | unrelated default cannot affect standalone | `{"default":"file"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| S04 | yes | unrelated default cannot affect standalone | `{"default":"unreadable"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| S05 | yes | unrelated default cannot affect standalone | `{"default":"marker-directory"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| S06 | yes | unrelated default cannot affect standalone | `{"default":"missing-parent"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| H01 | yes | unusable HOME is absent coordination | `{"home":"dev-null"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| H02 | yes | unusable HOME is absent coordination | `{"home":"file"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| H03 | yes | unusable HOME is absent coordination | `{"home":"unsearchable"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| C01 | yes | non-Cairn coordination is absent | `{"coord":"file"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| C02 | yes | non-Cairn coordination is absent | `{"coord":"missing-parent"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| C03 | yes | non-Cairn coordination is absent | `{"coord":"foreign"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| S07 | yes | unsupported registration is silent | `{"platform":"win32"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| S08 | yes | own key wins over legacy evidence | `{"profileKey":true,"default":"legacy"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| S09 | yes | paused standalone preserves pause | `{"profileKey":true,"paused":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":0,"mint":false}` |
+| L01 | no | authorized legacy gap | `{"default":"legacy"}` | `{"root":"default","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| L02 | no | local adoption survives absent coordination | `{"localMarker":"valid","default":"key"}` | `{"root":"default","status":"single","createKey":false,"enabled":true,"requests":1,"mint":false}` |
+| L03 | no | local adoption never regenerates | `{"localMarker":"valid"}` | `{"root":null,"status":"standalone_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| L04 | no | untrusted local history fails closed | `{"localMarker":"invalid"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"profile marker unreadable"}` |
+| R01 | no | present own retirement wins | `{"profileKey":true,"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| R02 | no | retired legacy destination wins | `{"default":"retired"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| D01 | no | degraded fresh profile cannot mint | `{"coord":"degraded"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"coordination unreadable"}` |
+| D02 | no | cursor evidence cannot join a degraded pair | `{"coord":"degraded","default":"legacy","paused":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"coordination unreadable"}` |
+| D03 | no | degraded existing profile key | `{"coord":"degraded","profileKey":true}` | `{"root":"profile","status":"standalone_unregistered","createKey":false,"enabled":true,"requests":1,"mint":false,"detail":"coordination unreadable"}` |
+| D04 | no | degraded registered legacy marker | `{"coord":"degraded","localMarker":"valid","default":"legacy"}` | `{"root":"default","status":"standalone_unregistered","createKey":false,"enabled":true,"requests":1,"mint":false,"detail":"coordination unreadable"}` |
+| D05 | no | retirement wins over local adoption | `{"coord":"degraded","localMarker":"valid","default":"retired"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| D06 | no | degraded invalid local marker cannot authorize | `{"coord":"degraded","localMarker":"invalid","default":"legacy"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"coordination unreadable"}` |
+| D07 | no | degraded delivered record cannot authorize | `{"coord":"degraded","delivery":"match","profileKey":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"coordination unreadable"}` |
+| A01 | no | active own binding ignores default damage | `{"coord":"readable","registration":"self-active","default":"file"}` | `{"root":"bound","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| A02 | no | Claude-primary reset remains on paused new root | `{"coord":"readable","registration":"self-active","default":"unreadable","bound":"reset","paused":true}` | `{"root":"bound","status":"single","createKey":true,"enabled":true,"requests":0,"mint":false}` |
+| A03 | no | Codex-primary retirement remains disabled | `{"coord":"readable","registration":"self-retired","default":"file"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| A04 | no | another profile cannot adopt active binding | `{"coord":"readable","registration":"other","default":"legacy"}` | `{"root":"profile","status":"standalone_unregistered","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| A05 | no | another profile cannot adopt retired binding | `{"coord":"readable","registration":"other-retired","default":"legacy"}` | `{"root":"profile","status":"standalone_unregistered","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| A06 | no | bound retirement wins | `{"coord":"readable","registration":"self-active","boundRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| A07 | no | pending reset is disabled | `{"coord":"readable","registration":"self-active","resetPending":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P01 | no | delivered ready pair ignores unrelated default damage | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","default":"file"}` | `{"root":"bound","status":"paired","createKey":false,"enabled":true,"requests":1,"mint":false}` |
+| P02 | no | pair requires explicit delivery | `{"coord":"readable","registration":"self-active","shared":"ready"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P03 | no | pending binding never activates | `{"coord":"readable","registration":"self-active","shared":"pending","delivery":"match"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P04 | no | paired key loss never regenerates | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundKey":false}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P05 | no | paired retirement wins | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| P06 | no | wrong-profile explicit delivery fails visibly | `{"coord":"readable","registration":"other","shared":"ready","delivery":"match"}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P07 | no | wrong explicit record path fails visibly | `{"delivery":"wrong"}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P08 | no | missing delivered record fails visibly | `{"delivery":"match"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P09 | no | paired worker root mismatch | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","stateMismatch":true}` | `{"root":null,"status":"state_dir_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| N01 | no | Codex newcomer gate survives unrelated damage | `{"coord":"readable","codex":true,"default":"file"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| N02 | no | established distinct profile retains own key | `{"coord":"readable","codex":true,"profileKey":true}` | `{"root":"profile","status":"pairing_needed","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| N03 | no | legacy evidence establishes old Claude beside Codex | `{"coord":"readable","codex":true,"default":"legacy"}` | `{"root":"default","status":"pairing_needed","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| N04 | no | shared key alone is not Claude evidence | `{"coord":"readable","codex":true,"codexSame":true,"profileKey":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| C04 | yes | empty unsafe directory has no coordination records | `{"coord":"empty-unsafe"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| L05 | no | unreadable profile history is not freshness | `{"localMarker":"permissions"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"profile marker unreadable"}` |
+| L06 | no | legacy registration accepts a host-created profile directory | `{"default":"legacy","profileMode":755}` | `{"root":"default","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` |
+| R03 | no | marker without a key still wins | `{"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| R04 | no | unset plugin data cannot resume a marked default | `{"profile":"default","profileKey":true,"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| D08 | no | lost locally recorded key cannot regenerate | `{"coord":"degraded","localMarker":"valid"}` | `{"root":null,"status":"standalone_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"coordination unreadable"}` |
+| D09 | no | existing own key precedes a local legacy marker | `{"coord":"degraded","profileKey":true,"localMarker":"valid","default":"retired"}` | `{"root":"profile","status":"standalone_unregistered","createKey":false,"enabled":true,"requests":1,"mint":false,"detail":"coordination unreadable"}` |
+| D10 | no | degraded own retirement wins | `{"coord":"degraded","profileKey":true,"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` |
+| A08 | no | ordinary unpaired key loss retains released creation behavior | `{"coord":"readable","registration":"self-active","boundKey":false}` | `{"root":"bound","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` |
+| P10 | no | paired private-root validation becomes a disabled fact | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundPermissions":true}` | `{"root":null,"status":"state_permissions","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P11 | no | invalid paired key never regenerates | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundInvalid":true}` | `{"root":null,"status":"invalid_identity","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P12 | no | inconsistent record cannot bind | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","recordMismatch":true}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P13 | no | Windows pairing remains unsupported | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","platform":"win32"}` | `{"root":null,"status":"pairing_platform_unsupported","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P14 | no | argument and option disagreement fails visibly | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","argumentConflict":true}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` |
+| P15 | no | a paused pair shares controls | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","paused":true}` | `{"root":"bound","status":"paired","createKey":false,"enabled":true,"requests":0,"mint":false}` |
+| N05 | no | local adoption history survives missing registration beside Codex | `{"coord":"readable","localMarker":"valid","default":"key","codex":true,"codexDefault":true}` | `{"root":"default","status":"pairing_needed","createKey":false,"enabled":true,"requests":1,"mint":false}` |
+<!-- claude-resolution-table:end -->

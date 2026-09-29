@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile, readFile, appendFile, unlink, chmod } from "node:fs/promises";
+import { mkdir, writeFile, readFile, appendFile, unlink, chmod, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
@@ -496,5 +496,112 @@ test("an unset plugin-data profile cannot resume or use a retired default root",
   assert.match((await f.run("status", {}, overrides)).stdout, /pairing_needed; retired root/);
   assert.equal((await f.run("recall", { cwd: "/p", prompt: "synthetic" }, overrides)).code, 0);
   assert.equal(f.requests.length, 0);
+  assert.equal((await readControlState(root)).paused, true);
+});
+
+test("custom-root bindings survive unrelated default-root damage before and after reset", async (t) => {
+  for (const primaryClient of ["claude", "codex"]) {
+    for (const damage of ["file", "unreadable"]) {
+      await t.test(primaryClient + " / " + damage, async (t) => {
+        const f = await setup(t, true, true);
+        const legacy = join(f.options.home, ".cairn-memory");
+        f.workspace.defer(() =>
+          chmod(legacy, 0o700).catch((error) => {
+            if (error.code !== "ENOENT") throw error;
+          }),
+        );
+        const damageDefault = async () => {
+          if (damage === "file") await writeFile(legacy, "unrelated");
+          else {
+            await mkdir(legacy);
+            await chmod(legacy, 0);
+          }
+        };
+        const transcript = join(f.workspace.path, "custom-damage.jsonl");
+        const event = {
+          cwd: "/p",
+          session_id: "custom-damage",
+          transcript_path: transcript,
+          prompt: "synthetic",
+        };
+        await writeFile(transcript, row("before"));
+        await f.run("capture", event);
+        await appendFile(transcript, row("after"));
+        await f.run("capture", event);
+        assert.equal(f.requests.length, 1);
+        const pairedId = f.requests[0].body.project_id;
+        await damageDefault();
+        await f.run("recall", event);
+        assert.equal(f.requests.length, 2, "paired delivery ignores the unrelated damaged root");
+        assert.equal(f.requests.at(-1).body.project_id, pairedId);
+        await chmod(legacy, 0o700);
+        await rm(legacy, { recursive: true });
+        await resetIdentity({
+          ...f.options,
+          root: join(f.options.home, "reset"),
+          primaryClient,
+          confirmIdentityReset: true,
+        });
+        await damageDefault();
+        for (const option of ["", undefined]) {
+          const overrides = { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: option };
+          assert.equal((await f.run("recall", event, overrides)).code, 0);
+          assert.equal(f.requests.length, 2, "reset gate is never bypassed");
+          assert.match(
+            (await f.run("status", {}, overrides)).stdout,
+            primaryClient === "claude" ? /paused/ : /pairing_needed/,
+          );
+          await assert.rejects(readFile(join(f.env.CLAUDE_PLUGIN_DATA, "project-key")), {
+            code: "ENOENT",
+          });
+        }
+        const overrides = { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined };
+        assert.equal(
+          (await f.run("resume", {}, overrides)).code,
+          primaryClient === "claude" ? 0 : 1,
+        );
+        await f.run("recall", event, overrides);
+        assert.equal(f.requests.length, primaryClient === "claude" ? 3 : 2);
+        if (primaryClient === "claude")
+          assert.notEqual(f.requests.at(-1).body.project_id, pairedId);
+      });
+    }
+  }
+});
+
+test("fresh B cannot join or resume a degraded default-root pair", async (t) => {
+  const f = await setup(t);
+  const root = join(f.options.home, ".cairn-memory");
+  const transcript = join(f.workspace.path, "degraded-pair.jsonl");
+  const event = {
+    cwd: "/p",
+    session_id: "degraded-pair",
+    transcript_path: transcript,
+    prompt: "synthetic",
+  };
+  await writeFile(transcript, row("before"));
+  await f.run("capture", event);
+  await appendFile(transcript, row("after"));
+  await f.run("capture", event);
+  assert.equal(f.requests.length, 1);
+  const pairedId = f.requests[0].body.project_id;
+  await setPaused(root, true);
+  const coordination = join(f.options.home, ".cairn-memory-clients");
+  await chmod(coordination, 0o755);
+  const overrides = {
+    CLAUDE_PLUGIN_DATA: join(f.options.home, "profile-b"),
+    CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined,
+  };
+  assert.equal((await f.run("recall", event, overrides)).code, 0);
+  assert.equal(f.requests.length, 1);
+  assert.equal((await f.run("resume", {}, overrides)).code, 1);
+  assert.equal((await readControlState(root)).paused, true);
+  await assert.rejects(readFile(join(overrides.CLAUDE_PLUGIN_DATA, "project-key")), {
+    code: "ENOENT",
+  });
+  await chmod(coordination, 0o700);
+  await f.run("recall", event, overrides);
+  assert.equal(f.requests.length, 2);
+  assert.notEqual(f.requests.at(-1).body.project_id, pairedId);
   assert.equal((await readControlState(root)).paused, true);
 });

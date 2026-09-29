@@ -1,3 +1,4 @@
+import '../../../integrations/client/test/claude-decisions.test.mjs';
 import '../../../integrations/client/test/pairing.test.mjs';
 import '../../../integrations/client/test/pairing-guards.test.mjs';
 import '../../../integrations/client/test/main-golden.test.mjs';

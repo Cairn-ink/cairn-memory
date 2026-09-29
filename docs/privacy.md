@@ -27,8 +27,9 @@ The service may retain durable Memory text and bounded redacted Source Receipts.
 
 ## Local state
 
-The unpaired plugin uses `CLAUDE_PLUGIN_DATA` when supplied, otherwise
+Ordinary standalone use selects `CLAUDE_PLUGIN_DATA` when supplied, otherwise
 `~/.cairn-memory/` (the released temporary fallback applies only to a falsy home).
+The legacy-gap adoption described below retains the already-used default root.
 An explicitly paired plugin uses the recorded durable shared root:
 
 - `install-id`: random id used only for anonymous lifecycle telemetry;
@@ -57,13 +58,27 @@ local paths but no project keys, credentials or conversation text, and is never
 included in telemetry. Standalone use retains the falsy-home temporary fallback
 for these paths; setup and pairing require a specified absolute durable home.
 
-Absent coordination is the normal 0.1.1 standalone environment. Degraded mode
-means coordination exists but cannot be read or trusted: it never creates a
-project key. It uses an existing profile key first, or an existing default-root
-key with Claude-only cursor evidence for the legacy gap. Without either, memory
-is disabled with `pairing_needed` and detail `coordination unreadable`. An
-eligible unmarked root remains active as `standalone_unregistered` with the
-same detail; later metadata loss cannot cement a replacement identity.
+Absent coordination preserves normal 0.1.1 first use, including an unusable
+HOME, a missing path, ENOTDIR, or a non-directory/foreign coordination entry.
+Degraded means an owned coordination directory has existing records that cannot
+be read or trusted. It never creates a project key or infers adoption from
+Claude cursors. Without a delivered record, it uses an existing profile key, or
+a validated profile-local adoption record naming an existing default-root key.
+An eligible unretired root remains active as `standalone_unregistered`, with
+separate detail `coordination unreadable`. Otherwise memory is disabled with
+`pairing_needed`; a lost locally recorded standalone key reports
+`standalone_key_missing`, never `paired_key_missing`.
+
+Registration of a genuine legacy-gap adoption first writes
+`<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned
+subdirectory). It records version, profile root and adopted default root, with
+no key or conversation content, and is never transmitted. This validated local
+history preserves that adoption through coordination damage or loss; a fresh
+keyless profile cannot join a pair merely because its root has Claude cursors.
+An existing profile key takes precedence. With readable coordination, only the
+registered profile follows its binding; another profile stays standalone.
+Registration unsupported on Windows, or skipped because an unrelated default
+root is damaged, adds no unregistered status note.
 
 Retirement is checked only at the selected root. A present `retired` entry,
 valid or invalid, disables that root with `pairing_needed`; resume refuses to
@@ -98,7 +113,8 @@ An explicit identity reset retains old state, changes addressable project scope,
 starts paused at a fresh EOF barrier and requires new adoption by the second client.
 The retired shared root is also paused with a rotated generation and stores a
 private 0600 `retired` marker (`{"version":1,"retired":true}`), validated for ownership,
-permissions and symlinks like other private state.
+permissions and symlinks on publication like other private state. Resolution
+uses positive entry presence, not JSON contents, to recognize retirement.
 There is no automatic key regeneration, history merge or paused backfill for a pair.
 
 Stop and PreCompact pipe only session id, transcript path, working directory,

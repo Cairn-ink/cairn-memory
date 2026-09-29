@@ -17,7 +17,7 @@ async function randomIdFile(dataDir, filename, { create = true } = {}) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  if (!create) throw new Error("paired_key_missing");
+  if (!create) throw new Error("standalone_key_missing");
   await mkdir(dataDir, { recursive: true, mode: 0o700 });
   const value = randomUUID();
   const temporaryPath = join(dataDir, `.${filename}.${randomUUID()}.tmp`);

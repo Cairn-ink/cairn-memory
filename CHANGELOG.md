@@ -62,10 +62,14 @@
 - Keep standalone Claude on its released key/path behavior, including host-created
   directories, symlinked ancestors and platforms without POSIX owner APIs.
   Absent coordination retains normal first-use behavior; unreadable existing
-  coordination never mints a key. It preserves eligible existing profile or
-  legacy-gap keys, and otherwise disables memory. Reset pauses and marks the
+  coordination never mints a key. It preserves existing profile keys or a
+  legacy adoption recorded privately in that profile; cursor evidence alone
+  cannot admit a fresh profile while coordination is degraded. Unusable HOME
+  and non-directory coordination retain absent-coordination behavior. One pure
+  decision function governs hooks, launchers and controls. Reset pauses and marks the
   retired root. A present marker disables only the selected root, blocks resume
-  and setup reuse, and retains successful hook exits with a clear status.
+  and setup/reset reuse, and retains successful hook exits with a clear status.
+  Temporary-source adoption rejects durable sources, which are adopted in place.
   Golden fixtures compare memory traffic against 0.1.1, allowing only VERSION
   changes in telemetry. Codex installation and real-host setup remain future work.
 

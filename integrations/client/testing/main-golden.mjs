@@ -63,6 +63,10 @@ export async function observeStandalone(plugin) {
       "default-file",
       "default-unreadable",
       "default-retired-directory",
+      "home-dev-null",
+      "home-file",
+      "home-unsearchable",
+      "coordination-file",
       "concurrent-linux",
       "concurrent-darwin",
       "concurrent-win32",
@@ -89,12 +93,25 @@ export async function observeStandalone(plugin) {
           await mkdir(join(directory, "claude-real"));
           await symlink(join(directory, "claude-real"), join(home, ".claude"));
         }
+        if (mode === "home-dev-null") home = "/dev/null";
+        if (mode === "home-file") {
+          home = join(directory, "home-file");
+          await writeFile(home, "synthetic");
+        }
+        if (mode === "home-unsearchable") {
+          workspace.defer(() => chmod(home, 0o700));
+          await chmod(home, 0);
+        }
+        if (mode === "coordination-file")
+          await writeFile(join(home, ".cairn-memory-clients"), "not a Cairn directory");
         const fallback = ["falsy-home", "symlink-var"].includes(mode);
         const pluginData = !["home", "falsy-home", "symlink-var"].includes(mode);
         const root = pluginData
           ? mode === "symlink-claude"
             ? join(home, ".claude/plugins/data/cairn-memory-cairn-memory")
-            : join(home, "plugin")
+            : mode.startsWith("home-")
+              ? join(directory, "plugin")
+              : join(home, "plugin")
           : join(fallback ? temporary : home, ".cairn-memory");
         const concurrent = mode.startsWith("concurrent-");
         const uuid = "11111111-1111-4111-8111-111111111111";
@@ -159,9 +176,9 @@ export async function observeStandalone(plugin) {
           CLAUDE_PLUGIN_OPTION_API_TOKEN: "synthetic-token",
           ...(concurrent ? { CLAUDE_PLUGIN_OPTION_TELEMETRY: "false" } : {}),
         };
-        async function run(action, index = 0) {
-          const args = [join(plugin, `scripts/${entry}.mjs`)];
-          if (entry === "hook") args.push(action);
+        async function run(action, index = 0, scriptEntry = entry) {
+          const args = [join(plugin, `scripts/${scriptEntry}.mjs`)];
+          if (scriptEntry === "hook") args.push(action);
           const proc = spawn(process.execPath, args, { env, stdio: ["pipe", "pipe", "pipe"] });
           let stdout = "",
             stderr = "";
@@ -204,6 +221,7 @@ export async function observeStandalone(plugin) {
             await new Promise((resolve) => setTimeout(resolve, 20));
           }
         }
+        outcomes.push(await run("status", 0, "hook"));
         const key = await readFile(join(root, "project-key"), "utf8");
         // No telemetry runs in concurrent cases, whose install ID was seeded.
         const identity = await readFile(join(root, "install-id"), "utf8");
