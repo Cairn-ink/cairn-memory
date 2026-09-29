@@ -38,9 +38,12 @@ service must use the same public core, not separate engines.
   completed all eight arms: Cairn 3/4 correct, Mem0 4/4, common resolved N=4.
   Two Cairn traces were observed; two were unavailable because one source
   window belonged to multiple cards. The failed premise-change answer and
-  that tracing limit are retained, not claimed repaired. The next bounded
-  checkpoint is offline shared-source tracing and premise/context coverage;
-  it does not replace the failed official-six gate or establish superiority.
+  that historical tracing limit are retained, not relabeled after the run.
+  The next [offline shared-source checkpoint](docs/plans/shared-source-trace.md)
+  separately follows every card retaining a designated source window, with
+  complete bounded before/after reads and per-card paths. It preserves the
+  v1 protocol and does not repair the failed answer, replace the official-six
+  gate or establish superiority. Premise/context coverage remains separate.
   The offline checks and authored real-model diagnostic do not establish
   semantic completeness or repair earlier paid-case results. Installed
   host acceptance, semantic/current-state quality, and a fresh paired paid

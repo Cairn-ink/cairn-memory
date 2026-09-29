@@ -19,8 +19,8 @@ import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
   MIXED_ANSWER_TIMEOUT_MS, packMixedAnswer } from './mixed-answer.mjs';
 import { prepareMixedSourceCase, mixedSourcePolicy } from './mixed-source.mjs';
-import { locateMixedSource, observedMixedCairnModel,
-  unavailableSourceTrace } from './mixed-source-observation.mjs';
+import { locateMixedSource, locateMixedSourceFamily, observedMixedCairnModel,
+  unavailableSharedSourceTrace, unavailableSourceTrace } from './mixed-source-observation.mjs';
 import { OFFICIAL_JUDGE_MODEL, OFFICIAL_QUESTION_TYPES,
   OFFICIAL_UPSTREAM_COMMIT } from './official-scoring.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from './public-comparison.mjs';
@@ -112,7 +112,7 @@ function staticNativeFit(input) {
 }
 
 function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256,
-  comparisonProfile, sourceObservationEnabled = false }) {
+  comparisonProfile, sourceObservationEnabled = false, sourceObservationMode = null }) {
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   if (typeof cairnRuntimeArtifactSha256 !== 'string' || !SHA256.test(cairnRuntimeArtifactSha256)) {
     fail('invalid_cairn_artifact_descriptor');
@@ -145,6 +145,13 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
       context.sourceObservation = { version: 'one-current-source-trace-v1',
         maxCases: 30, maxBatchMembers: 5, maxReceiptsPerMember: 100,
         maxAfterReads: 1, reportBytes: 32 * 1024 };
+      if (sourceObservationMode === 'shared-source-v2') {
+        context.version = 'mixed-indexed-evidence-context-v3';
+        context.sourceObservation = { version: 'shared-current-source-trace-v2',
+          maxCases: 30, maxBatchMembers: 5, maxReceiptsPerMember: 100,
+          maxBeforeReads: 5, maxAfterReads: 5, maxCarrierReports: 5,
+          reportBytes: 32 * 1024, aggregation: 'per-carrier-any-complete-v1' };
+      }
     }
   }
   const answer = { version: 'mixed-answer-v1', model: MIXED_ANSWER_MODEL,
@@ -184,11 +191,16 @@ export function prepareMixedComparison(options) {
   if (types.isProxy(options)) fail('invalid_mixed_preparation');
   const profileDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'comparisonProfile');
   const probesDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'sourceProbes');
+  const modeDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'sourceObservationMode');
   const raw = ownOptions(options, ['sourceCases', 'armOrders', 'nativeArtifact',
     'nativeConfiguration', 'cairnRuntimeArtifactSha256',
     ...(profileDescriptor ? ['comparisonProfile'] : []),
-    ...(probesDescriptor ? ['sourceProbes'] : [])], 'invalid_mixed_preparation');
+    ...(probesDescriptor ? ['sourceProbes'] : []),
+    ...(modeDescriptor ? ['sourceObservationMode'] : [])], 'invalid_mixed_preparation');
   if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
+  if (modeDescriptor && raw.sourceObservationMode !== 'shared-source-v2') {
+    fail('invalid_source_observation_mode');
+  }
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
   dense(source.armOrders, source.sourceCases.length, source.sourceCases.length,
@@ -234,6 +246,9 @@ export function prepareMixedComparison(options) {
   const sourceProbes = probesDescriptor
     ? freeze(sourceSnapshot({ sourceProbes: raw.sourceProbes }).sourceProbes) : null;
   const observationEnabled = sourceProbes?.some(probe => probe !== null) ?? false;
+  if (modeDescriptor && (!observationEnabled || raw.comparisonProfile !== 'indexed-evidence-v1')) {
+    fail('invalid_source_observation_mode');
+  }
   const manifest = protocolManifest({ ...raw, sourceObservationEnabled: observationEnabled });
   const preflight = [];
   const plans = [];
@@ -284,6 +299,7 @@ export function prepareMixedComparison(options) {
   PREPARED.set(projection, { sourceCases: source.sourceCases, armOrders: source.armOrders,
     plans, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
     sourceProbes: observationEnabled ? sourceProbes : null,
+    sourceObservationMode: modeDescriptor ? raw.sourceObservationMode : null,
     manifestDigest: hash(MANIFEST_DOMAIN, manifest), rosterDigest: hash(ROSTER_DOMAIN, roster) });
   return projection;
 }
@@ -337,7 +353,7 @@ function revokeSemanticOnly(handle, guard, allowedLocalOrdinals) {
 }
 
 async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, holdCore,
-  allowedLocalOrdinals, sourceProbe, holdSourceTrace }) {
+  allowedLocalOrdinals, sourceProbe, sourceObservationMode, holdSourceTrace }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
   const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
@@ -362,14 +378,19 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     if (ingestion.kind !== 'capture_outcome'
       || ingested.outcomes.some(item => item.status !== 'completed')) {
       revokeSemanticOnly(handle, guard, allowedLocalOrdinals);
-      const recallTrace = sourceProbe ? unavailableSourceTrace('ingestion_incomplete') : null;
+      const recallTrace = sourceProbe ? sourceObservationMode === 'shared-source-v2'
+        ? unavailableSharedSourceTrace('ingestion_incomplete')
+        : unavailableSourceTrace('ingestion_incomplete') : null;
       if (recallTrace) holdSourceTrace(recallTrace);
       return { failed: 'ingestion_incomplete', diagnostics: { stage: 'ingestion',
         ingestion, modelDiagnostics: modelDiagnostics.snapshot(),
         ...(recallTrace ? { recallTrace } : {}) } };
     }
-    const located = sourceProbe ? locateMixedSource({ core, namespace: row.namespace,
-      plan, ingested, probe: sourceProbe }) : null;
+    const located = sourceProbe ? sourceObservationMode === 'shared-source-v2'
+      ? locateMixedSourceFamily({ core, namespace: row.namespace, plan, ingested,
+        probe: sourceProbe })
+      : locateMixedSource({ core, namespace: row.namespace,
+        plan, ingested, probe: sourceProbe }) : null;
     let recallTrace = located?.report ?? null;
     if (recallTrace) holdSourceTrace(recallTrace);
     let recalled = null, packed = null, evidence;
@@ -388,7 +409,10 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
       packed = packMixedAnswer({ question: { text: row.question.text,
         date: plan.canonicalQuestionDate }, units: evidence.units, countTokens: countOpenAITokens });
     } finally {
-      if (located?.trace) {
+      if (located?.finish) {
+        recallTrace = located.finish({ recall: recalled, packed });
+        holdSourceTrace(recallTrace);
+      } else if (located?.trace) {
         let after = null;
         try { after = core.get({ namespace: row.namespace, memoryId: located.memoryId,
           receiptLimit: 100 }); } catch { /* N2 reports unavailable. */ }
@@ -499,6 +523,7 @@ export async function runMixedGeneration(options) {
                 ? await cairnCase({ guard, apiKey, root, row, plan, handle, transport,
                   holdCore: core => { ownedCore = core; }, allowedLocalOrdinals,
                   sourceProbe: privateData.sourceProbes?.[index] ?? null,
+                  sourceObservationMode: privateData.sourceObservationMode,
                   holdSourceTrace: report => { sourceTrace = report; } })
                 : await nativeCase({ guard, apiKey, plan,
                   nativeArtifact: privateData.nativeArtifact,

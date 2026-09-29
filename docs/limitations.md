@@ -1144,6 +1144,26 @@ incorrect judgment is retained without rescoring. The report separates
 37 unknown-cost token-count requests. Neither four authored cases nor a clean
 mechanical run resolves the official benchmark or installed-host gates.
 
+The subsequent [shared-source diagnostic](plans/shared-source-trace.md) adds an
+explicit evaluation-only `sourceObservationMode: 'shared-source-v2'` for fresh
+indexed-evidence comparisons. It follows all matching cards in the designated
+capture batch, not the whole store, using at most five public reads before and
+five after recall, with at most 100 receipts per member and no pagination.
+Nonmatching batch members must also remain complete and unchanged. Invalid,
+foreign, historical, deleted, incomplete or changed members make the family
+unavailable; such a result does not prove global source absence.
+
+The report preserves individual carrier paths. A successful stage on one card
+cannot fill a gap on another. An `anyCompleteCarrierPath` result is a bounded
+delivery observation, not evidence that the answer used the text or that its
+interpretation is correct. Flattened answer text cannot identify which copy
+caused an answer. Shared-source mode is opt-in and version-bound before guard
+creation; absent mode retains the previous protocol and results. No new paid
+score, core behavior, model prompt or installed-host guarantee is introduced.
+The tests use real capture/recall plus scripted or fake-HTTP models; these are
+engineering controls, not measured semantic relevance. Acceptance and delivery
+status are recorded in the plan and its PR, not inferred from this description.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the
