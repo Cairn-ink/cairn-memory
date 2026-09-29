@@ -13,6 +13,7 @@ import { experimentPolicy } from '../live/session.mjs';
 import { ingestIndexedWindowLongMemEvalCase, ingestIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 import { createMixedModelDiagnosticObserver,
   summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
+import { createMixedPhaseTimingObserver } from './mixed-phase-timing.mjs';
 import { verifiedEvidence } from './mixed-evidence.mjs';
 import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
@@ -276,14 +277,15 @@ function revokeSemanticOnly(handle, guard, allowedLocalOrdinals) {
 }
 
 async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, holdCore,
-  allowedLocalOrdinals }) {
+  allowedLocalOrdinals, phaseObserver }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
   const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   const model = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
     ...(evidenceOnly ? {} : { qualificationInputMode: 'adaptive-text-catalog-v1' }),
-    onDiagnostic: modelDiagnostics.onDiagnostic });
+    onDiagnostic: modelDiagnostics.onDiagnostic,
+    ...(phaseObserver ? { onPhaseTiming: phaseObserver.onPhaseTiming } : {}) });
   const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
     ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
       : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
@@ -371,10 +373,16 @@ async function nativeCase({ guard, apiKey, plan, nativeArtifact, nativeConfigura
 }
 
 export async function runMixedGeneration(options) {
-  const { prepared, guard, apiKey, cairnStoreRoot } = ownOptions(options,
-    ['prepared', 'guard', 'apiKey', 'cairnStoreRoot'], 'invalid_mixed_generation');
+  const phaseDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'phaseTiming');
+  const raw = ownOptions(options,
+    ['prepared', 'guard', 'apiKey', 'cairnStoreRoot',
+      ...(phaseDescriptor ? ['phaseTiming'] : [])], 'invalid_mixed_generation');
+  const { prepared, guard, apiKey, cairnStoreRoot } = raw;
+  const phaseTiming = phaseDescriptor ? raw.phaseTiming : undefined;
+  if (phaseDescriptor && phaseTiming !== 'bounded-tail-v1') fail('invalid_mixed_generation');
   const privateData = PREPARED.get(prepared);
   if (!privateData || USED.has(prepared)) fail('prepared_identity_required');
+  if (phaseTiming && prepared.counts.fixedN > 30) fail('invalid_mixed_generation');
   USED.add(prepared);
   if (!wellFormed(apiKey) || !apiKey.trim() || /[\r\n]/u.test(apiKey)) fail('invalid_api_key');
   assertGuard(prepared, privateData, guard);
@@ -402,15 +410,17 @@ export async function runMixedGeneration(options) {
       }
       const transport = trackedTransport();
       let outcome, local = null, entered = false, workSettled = false, ownedCore = null;
+      let phaseObserver = null;
       try {
         outcome = await guard.withCaseScope(identity, async handle => {
           entered = true;
           try {
             if (!plan) { handle.revoke(); return null; }
+            if (phaseTiming && name === 'cairn') phaseObserver = createMixedPhaseTimingObserver();
             try {
               local = name === 'cairn'
                 ? await cairnCase({ guard, apiKey, root, row, plan, handle, transport,
-                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals })
+                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals, phaseObserver })
                 : await nativeCase({ guard, apiKey, plan,
                   nativeArtifact: privateData.nativeArtifact,
                   nativeConfiguration: privateData.nativeConfiguration, handle, transport,
@@ -429,10 +439,12 @@ export async function runMixedGeneration(options) {
       if (ownedCore) {
         try { ownedCore.close(); } catch { haltReason ??= 'core_cleanup_failed'; }
       }
+      phaseObserver?.close();
       const observed = scopeOf(guard);
       if (entered) {
         resultArm.scope = observed;
         resultArm.diagnostics = { ...local?.diagnostics,
+          ...(phaseObserver ? { adapterPhaseTiming: phaseObserver.snapshot() } : {}),
           attempts: attemptDiagnostics(guard, observed?.ordinal) };
       }
       if (guard.isHalted()) haltReason ??= 'global_halt';

@@ -1043,6 +1043,17 @@ localizes an evidence-sufficiency miss without proving the fact was never
 stored or identifying a model root cause. The frozen 6/6 completion and
 common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
 
+The [M1a optional adapter phase observer](plans/capture-write-phase-observability.md)
+can distinguish future adapter preparation, provider count transport/body,
+generation transport/body and output validation in an isolated invocation. It
+cannot reconstruct the historical N7 phase from these aggregate results,
+measure earlier core planning or later SQLite commit, prove provider
+cancellation/billing, or make a multistage capture reliable. Extraction timeout
+prevents a new memory commit in its synthetic control, while a classification
+timeout after successful extraction leaves an admitted source-backed memory
+with failed initial placement. No timeout, model/context budget, or indexed
+map limit was changed, and the fixed-30 evaluation remains blocked.
+
 Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
 conservative reservation. Known usage estimates were 2,452,595 microUSD for
 1,417 rows; 518 costs remain unknown, and none of the requests is pending.
@@ -1064,6 +1075,29 @@ qualification, default MOC navigation,
 source fidelity or installed MCP/Hermes reliability. A larger cohort requires
 a new frozen selection and resource check after the failed feasibility gate,
 not reuse of these six.
+
+## Mixed-runner phase tails are bounded observations
+
+The [M1b source-runner diagnostic](plans/mixed-phase-tail-diagnostics.md) is
+opt-in for 1–30 frozen cases. It keeps the last 64 adapter events per entered
+Cairn arm, plus counts of admitted and omitted events. The tail may begin in
+the middle of an invocation and supplies no invocation correlation or complete
+concurrent timeline. Default reports and existing model/attempt samples are
+unchanged. No extra Mem0 timing is inferred from this Cairn-only field.
+
+The observer excludes earlier core planning, local map work and SQLite commit.
+An aborted phase is not proof of provider cancellation or billing; missing
+events do not mean zero elapsed work. The unchanged 500,000-node / 32 MiB
+report envelope passes a complete 30-case high-diagnostic synthetic control,
+not every possible combination of historical provenance maxima. Diagnostic
+mode rejects larger rosters before consumption; omitted mode retains its old
+250-case preparation limit and report behavior.
+
+The runner imports checkout Cairn modules. Native-local fake-HTTP tests exercise
+installed Mem0, but do not establish installed Cairn behavior, semantic quality,
+long-write reliability or historical N7's cause. Any later paid paired run needs
+a separately reviewed installed coordinator, a frozen observation mode and the
+existing cumulative budget authority. Previous failures and costs are unchanged.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
