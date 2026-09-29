@@ -190,6 +190,37 @@ zero-retention guarantee. Counting also transmits input externally. Hosts need
 appropriate consent and provider data-policy review before using conversations.
 Local redaction does not guarantee removal of all sensitive content.
 
+### Optional in-process invocation timing
+
+Trusted source hosts can pass `onPhaseTiming(event)` to `createOpenAIModel` for
+one invocation's bounded, content-free phase timings. The default emits nothing
+and does not write a log. This callback is separate from unchanged
+`onDiagnostic` v1. A phase event is a frozen object with exactly `version:1`,
+`stage`, `phase`, `outcome` and finite `elapsedMs` (0–2,147,483,647). Stages are
+the adapter model ports, including `selectChecklist`; phases are `prepare`,
+`count_transport`, `count_body`, `count_validation`, `generation_transport`,
+`generation_body`, `output_validation`. Outcomes are `completed`, `failed`,
+`aborted`. At most seven events can be emitted per invocation. No payload,
+source, ID, URL, response, error, key or provider usage is passed. The host must
+bound any collection it explicitly chooses to keep; concurrent calls have no
+correlation ID in these events. A callback is not awaited, and thrown or
+rejected observer results cannot replace the model result. It remains trusted
+host code and can itself block the event loop or use authority in its closure.
+
+The preparation clock starts inside the adapter, not at the beginning of core
+capture. On success its event is delivered only after both HTTP bodies are
+serialized, so an observer cannot change the current request's caller input
+before snapshot; on preparation failure no HTTP request is dispatched.
+Transport ends when the HTTP response/status is available; body timing covers
+bounded stream reading and JSON decode. An `aborted` event records the shared
+signal firing during an open phase, even if a fake transport ignores it; it
+does not prove the provider stopped or that a request was unbilled. If the
+local clock is unavailable, that phase event is omitted. These measurements
+exclude earlier core map/tokenization, capture orchestration and SQLite
+commit. The unchanged 30-second deadline applies to one core model call, not
+an entire multistage capture. This is diagnostic visibility, not a timeout fix
+or a causal explanation of the historical N7 failure; see [M1a](plans/capture-write-phase-observability.md).
+
 ## Counting and output
 
 The synchronous `o200k_base` counter measures exact serialized text, treating

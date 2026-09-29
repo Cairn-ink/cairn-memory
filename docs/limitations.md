@@ -1043,6 +1043,17 @@ localizes an evidence-sufficiency miss without proving the fact was never
 stored or identifying a model root cause. The frozen 6/6 completion and
 common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
 
+The [M1a optional adapter phase observer](plans/capture-write-phase-observability.md)
+can distinguish future adapter preparation, provider count transport/body,
+generation transport/body and output validation in an isolated invocation. It
+cannot reconstruct the historical N7 phase from these aggregate results,
+measure earlier core planning or later SQLite commit, prove provider
+cancellation/billing, or make a multistage capture reliable. Extraction timeout
+prevents a new memory commit in its synthetic control, while a classification
+timeout after successful extraction leaves an admitted source-backed memory
+with failed initial placement. No timeout, model/context budget, or indexed
+map limit was changed, and the fixed-30 evaluation remains blocked.
+
 Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
 conservative reservation. Known usage estimates were 2,452,595 microUSD for
 1,417 rows; 518 costs remain unknown, and none of the requests is pending.
@@ -1064,6 +1075,71 @@ qualification, default MOC navigation,
 source fidelity or installed MCP/Hermes reliability. A larger cohort requires
 a new frozen selection and resource check after the failed feasibility gate,
 not reuse of these six.
+
+## Mixed-runner phase tails are bounded observations
+
+The [M1b source-runner diagnostic](plans/mixed-phase-tail-diagnostics.md) is
+opt-in for 1–30 frozen cases. It keeps the last 64 adapter events per entered
+Cairn arm, plus counts of admitted and omitted events. The tail may begin in
+the middle of an invocation and supplies no invocation correlation or complete
+concurrent timeline. Default reports and existing model/attempt samples are
+unchanged. No extra Mem0 timing is inferred from this Cairn-only field.
+
+The observer excludes earlier core planning, local map work and SQLite commit.
+An aborted phase is not proof of provider cancellation or billing; missing
+events do not mean zero elapsed work. The unchanged 500,000-node / 32 MiB
+report envelope passes a complete 30-case high-diagnostic synthetic control,
+not every possible combination of historical provenance maxima. Diagnostic
+mode rejects larger rosters before consumption; omitted mode retains its old
+250-case preparation limit and report behavior.
+
+The runner imports checkout Cairn modules. Native-local fake-HTTP tests exercise
+installed Mem0, but do not establish installed Cairn behavior, semantic quality,
+long-write reliability or historical N7's cause. Any later paid paired run needs
+a separately reviewed installed coordinator, a frozen observation mode and the
+existing cumulative budget authority. Previous failures and costs are unchanged.
+
+## Installed long-write diagnostic did not clear completion or semantic gates
+
+The [one-shot M1c result](evidence/installed-phase-long-write.md) used installed
+Cairn core/adapter and contained native Mem0 on two new synthetic 32-batch
+histories. Cairn completed and answered only one case: its first case stopped
+after five complete batches and a partial sixth with nonretryable
+`classification_failed`; 26 batches were not run and no partial-memory answer
+was produced. Mem0 completed both. At fixed N=2 per arm and common-resolved
+N=1, the unmodified automatic judgments were Cairn 1/0/1 and Mem0 1/1/0
+correct/incorrect/unresolved. The unresolved Cairn arm is not a wrong answer.
+
+Both second-case answers were automatically marked correct. Against the frozen
+source, the Cairn answer falsely denies the earlier adopted decision; the Mem0
+answer may reverse why changed transport calls for reconfirmation. These are
+primary/worker agent assessments, not independent human adjudication. Positive
+automatic grades therefore cannot establish a broad semantic pass. The
+primary's exact-window audit found the earlier adoption passage stored but
+absent from the two selected and packed receipts; the candidate visibility,
+selection or ranking cause remains unproven. The first Cairn tail contains
+completed classification transport and output-validation phases, with no
+observed timeout, but does not prove the remaining adapter, core or application
+reason for failure or the historical N7 cause. The primary reports 358 new requests,
+2,019,151 microUSD reserved, 392,454 microUSD in known estimates and 79
+unknown actual costs, with zero pending. Reservation is not an invoice and
+known estimates are not total spend. The primary's fresh read-only audit
+authenticated the parent, verified the unchanged original prefix and matched
+all 358 new ledger rows to guarded attempts; it was not independent review and
+made no ledger writes. Diagnose the classification refusal after the observed
+output-validation boundary and
+evidence/adoption preservation in a separately frozen packet; consumed-case
+replay, fixed-30 expansion, raw-retention growth and MCP/Hermes conclusions
+do not follow.
+
+The [M1d classification-boundary diagnosis](plans/classification-application-boundary.md)
+found that LongMemEval reporting previously converted the trusted core code
+`moc_title_conflict` to generic `classification_failed`. Reporting now retains
+that specific code. A synthetic repeated-topic proposal reproduces the M1c
+report's partial-capture, completed-adapter and empty-diagnostic fingerprint,
+but the missing paid classification plan prevents attributing M1c to that
+collision. This reporting fix does not repair MOC classification, retry the
+failed batch or reclassify or rescore the frozen result.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
