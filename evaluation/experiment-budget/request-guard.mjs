@@ -3787,6 +3787,9 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
         } catch {
           settle('unknown', null); halted = true; fail('invalid_response');
         }
+        if (inspected.failureCode === 'invalid_payload') {
+          record.payloadFailureReason = inspected.payloadFailureReason;
+        }
         settle(inspected.usageWithinBounds && inspected.payloadValid ? 'succeeded' : 'failed',
           inspected.actualMicroUsd, inspected.inputTokens, inspected.outputTokens);
         if (halted || !inspected.usageWithinBounds) {

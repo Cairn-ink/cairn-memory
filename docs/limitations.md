@@ -1214,6 +1214,12 @@ evidence audit precede any new paid experiment. The earlier official-six
 3/2/1 versus 3/3/0 result and default-MOC and installed Hermes/MCP quality
 limits remain unchanged.
 
+The prospective Mem0 payload diagnostic distinguishes only which local
+validation category rejected a future parsed, priced response. Its closed
+reason is absent from the N7 artifact, so the first Mem0 failure's payload
+branch and originating actor remain unknown. The diagnostic does not change
+acceptance, repair an output, authorize a retry or establish semantic quality.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the

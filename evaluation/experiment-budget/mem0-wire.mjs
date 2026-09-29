@@ -158,43 +158,50 @@ export function inspectMem0WireRequest(route, bodyText) {
   return record;
 }
 
-function embeddingPayload(body, itemCount) {
-  if (body.object !== 'list' || !Array.isArray(body.data) || body.data.length !== itemCount) return false;
+function embeddingPayloadFailureReason(body, itemCount) {
+  if (body.object !== 'list' || !Array.isArray(body.data) || body.data.length !== itemCount) {
+    return 'embedding_payload';
+  }
   const seen = new Set();
   for (const entry of body.data) {
     if (!plain(entry) || entry.object !== 'embedding'
       || !Number.isSafeInteger(entry.index) || entry.index < 0 || entry.index >= itemCount
       || seen.has(entry.index) || !Array.isArray(entry.embedding)
       || entry.embedding.length !== PROFILE.embedding.dimensions
-      || entry.embedding.some(value => typeof value !== 'number' || !Number.isFinite(value))) return false;
+      || entry.embedding.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
+      return 'embedding_payload';
+    }
     seen.add(entry.index);
   }
-  return seen.size === itemCount;
+  return seen.size === itemCount ? null : 'embedding_payload';
 }
 
-function chatPayload(body) {
-  if (body.object !== 'chat.completion' || !Array.isArray(body.choices)
-    || body.choices.length !== 1) return false;
+function chatPayloadFailureReason(body) {
+  if (body.object !== 'chat.completion' || !Array.isArray(body.choices)) {
+    return 'chat_envelope';
+  }
+  if (body.choices.length !== 1) return 'chat_choice';
   const choice = body.choices[0];
   if (!plain(choice) || choice.index !== 0 || choice.finish_reason !== 'stop'
     || !plain(choice.message) || choice.message.role !== 'assistant'
-    || typeof choice.message.content !== 'string') return false;
+    || typeof choice.message.content !== 'string') return 'chat_choice';
   let content;
-  try { content = JSON.parse(choice.message.content); } catch { return false; }
-  if (!plain(content) || !safeGraph(content)) return false;
+  try { content = JSON.parse(choice.message.content); } catch { return 'chat_content_json'; }
+  if (!plain(content) || !safeGraph(content)) return 'chat_content_shape';
   const memory = content.memory;
-  if (!memory) return true;
-  if (!Array.isArray(memory) || memory.length > PROFILE.chat.maxFacts) return false;
+  if (!memory) return null;
+  if (!Array.isArray(memory)) return 'chat_memory_shape';
+  if (memory.length > PROFILE.chat.maxFacts) return 'chat_memory_count';
   for (const fact of memory) {
-    if (!plain(fact)) return false;
+    if (!plain(fact)) return 'chat_fact_shape';
     if (Object.hasOwn(fact, 'text')) {
-      if (typeof fact.text !== 'string') return false;
+      if (typeof fact.text !== 'string') return 'chat_fact_text';
       if (fact.text.length && count(embeddingEncoder, fact.text) > PROFILE.chat.maxFactTokens) {
-        return false;
+        return 'chat_fact_token_bound';
       }
     }
   }
-  return true;
+  return null;
 }
 
 export function inspectMem0WireResponse(requestRecord, bodyText) {
@@ -226,14 +233,21 @@ export function inspectMem0WireResponse(requestRecord, bodyText) {
   }
   const usageWithinBounds = usage.prompt_tokens <= context.inputTokenUpperBound
     && outputTokens <= context.requestedOutputTokens;
-  let payloadValid = safeGraph(body) && (context.route === 'chat'
-    ? chatPayload(body) : embeddingPayload(body, context.itemCount));
+  let payloadFailureReason = !safeGraph(body) ? 'unsafe_response_graph'
+    : context.route === 'chat' ? chatPayloadFailureReason(body)
+      : embeddingPayloadFailureReason(body, context.itemCount);
+  let payloadValid = payloadFailureReason === null;
   const normalized = payloadValid ? canonical(body) : null;
-  if (normalized !== null && bytes(normalized) > profile.maxResponseBytes) payloadValid = false;
+  if (normalized !== null && bytes(normalized) > profile.maxResponseBytes) {
+    payloadValid = false;
+    payloadFailureReason = 'normalized_response_size';
+  }
   const accepted = usageWithinBounds && payloadValid;
+  const failureCode = !usageWithinBounds ? 'usage_bound_exceeded'
+    : !accepted ? 'invalid_payload' : null;
   return Object.freeze({ profileVersion: VERSION, route: context.route,
     inputTokens: usage.prompt_tokens, outputTokens, actualMicroUsd, usageWithinBounds,
-    payloadValid, failureCode: !usageWithinBounds
-      ? 'usage_bound_exceeded' : !accepted ? 'invalid_payload' : null,
+    payloadValid, failureCode,
+    ...(failureCode === 'invalid_payload' ? { payloadFailureReason } : {}),
     bodyText: accepted ? normalized : null });
 }

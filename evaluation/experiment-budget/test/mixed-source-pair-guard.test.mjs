@@ -24,6 +24,7 @@ import { createQualificationTextCatalog } from '../../../core/qualification-text
 import { callModel } from '../../../core/model-call.mjs';
 import { benchmarkStagePolicy } from '../../live/public-pilot.mjs';
 import { experimentPolicy } from '../../live/session.mjs';
+import { nativeFixture } from './mem0-native-fixture.mjs';
 
 const rejected = code => error => error?.code === code && error.message === code;
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -997,4 +998,148 @@ test('X9 concurrency, closure and bounded source-free snapshots', async t => {
   guard.close();
   await assert.rejects(guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
     request(embedding(['a']))), rejected('guard_closed'));
+});
+
+const diagnosticMarker = 'private synthetic response marker';
+const diagnosticProfile = mem0WireProfile().chat;
+const diagnosticBody = JSON.stringify({ model: diagnosticProfile.model, messages: [
+  { role: 'system', content: 'Synthetic system.' },
+  { role: 'user', content: 'Synthetic user.' }],
+max_tokens: diagnosticProfile.maxOutputTokens, temperature: 0.1, top_p: 0.1,
+response_format: { type: 'json_object' }, store: false });
+const diagnosticResponse = (content, usage = { prompt_tokens: 1, completion_tokens: 1,
+  total_tokens: 2 }) => ({ object: 'chat.completion', model: diagnosticProfile.model,
+  usage, choices: [{ index: 0, finish_reason: 'stop',
+    message: { role: 'assistant', content } }] });
+const diagnosticFixture = (t, body, onFetch = () => {}) => nativeFixture(t, {
+  artifact: { sourceTreeSha256: '7'.repeat(64), dependencyLockSha256: '8'.repeat(64) },
+  configuration: { configurationSha256: '9'.repeat(64) },
+  httpTimeoutMs: 1_000,
+  fetchImpl: async () => { onFetch(); return Response.json(body); },
+});
+const diagnosticSend = f => f.guard.withCaseScope(f.capability.schedule[0],
+  () => f.guard.mem0ChatFetch(diagnosticProfile.endpoint, { body: diagnosticBody,
+    headers: { authorization: 'Bearer synthetic-only', 'content-type': 'application/json' },
+    method: 'POST', redirect: 'error', signal: new AbortController().signal }));
+
+test('D3/D4 valid and distinct invalid Mem0 chats retain only closed attempt reasons', async t => {
+  for (const spec of [
+    { name: 'valid', content: '{"memory":[]}', reason: null },
+    { name: 'content JSON', content: `~~~${diagnosticMarker}`, reason: 'chat_content_json' },
+    { name: 'memory shape', content: JSON.stringify({ memory: diagnosticMarker }),
+      reason: 'chat_memory_shape' },
+  ]) {
+    let calls = 0;
+    const f = diagnosticFixture(t, diagnosticResponse(spec.content), () => { calls += 1; });
+    try {
+      const result = await diagnosticSend(f);
+      const attempt = f.guard.attempts()[0];
+      assert.equal(calls, 1, spec.name);
+      assert.equal(result.status, spec.reason === null ? 'completed' : 'failed', spec.name);
+      assert.equal(result.reason, spec.reason === null ? null : 'invalid_payload', spec.name);
+      assert.equal(attempt.outcome, spec.reason === null ? 'succeeded' : 'failed', spec.name);
+      assert.equal(attempt.actualMicroUsd, 3, spec.name);
+      assert.equal(attempt.reservedMicroUsd, 16_308, spec.name);
+      assert.equal(Object.hasOwn(attempt, 'payloadFailureReason'), spec.reason !== null, spec.name);
+      if (spec.reason !== null) assert.equal(attempt.payloadFailureReason, spec.reason);
+      assert.equal(JSON.stringify(attempt).includes(diagnosticMarker), false, spec.name);
+      assert.equal(Object.hasOwn(f.guard.getState().attempts.at(-1),
+        'payloadFailureReason'), false, spec.name);
+      assert.equal(Object.isFrozen(attempt), true);
+      assert.deepEqual(f.guard.attempts()[0], attempt);
+      assert.notStrictEqual(f.guard.attempts()[0], attempt);
+      assert.equal(f.guard.isHalted(), false, spec.name);
+      if (spec.reason !== null) {
+        const next = await f.guard.withCaseScope(f.capability.schedule[1],
+          async () => 'next synthetic arm');
+        assert.equal(next.status, 'completed');
+      }
+    } finally { f.guard.close(); }
+  }
+});
+
+test('D1/D2 simultaneous usage and payload rejection retains usage precedence and old shape',
+  async t => {
+    const usage = { prompt_tokens: 32_769, completion_tokens: 1, total_tokens: 32_770 };
+    const f = diagnosticFixture(t, diagnosticResponse(`~~~${diagnosticMarker}`, usage));
+    try {
+      await assert.rejects(diagnosticSend(f), { code: 'callback_failed' });
+      const attempt = f.guard.attempts()[0];
+      assert.equal(attempt.outcome, 'failed');
+      assert.equal(attempt.inputTokens, 32_769);
+      assert.equal(attempt.outputTokens, 1);
+      assert.equal(attempt.actualMicroUsd, 13_110);
+      assert.equal(Object.hasOwn(attempt, 'payloadFailureReason'), false);
+      assert.equal(f.guard.isHalted(), true);
+    } finally { f.guard.close(); }
+  });
+
+test('D2/D3 embedding rejection and unknown chat usage expose only eligible reasons', async t => {
+  const embeddingProfile = mem0WireProfile().embedding;
+  const invalidEmbedding = { object: 'list', model: embeddingProfile.model,
+    usage: { prompt_tokens: 1, total_tokens: 1 },
+    data: [{ object: 'embedding', index: 0, embedding: Array(1535).fill(0) }] };
+  const embedded = diagnosticFixture(t, invalidEmbedding);
+  try {
+    const result = await embedded.guard.withCaseScope(embedded.capability.schedule[0],
+      () => embedded.guard.mem0EmbeddingFetch(embeddingProfile.endpoint, {
+        body: JSON.stringify({ model: embeddingProfile.model, input: ['Synthetic'],
+          dimensions: 1536, encoding_format: 'float' }),
+        headers: { authorization: 'Bearer synthetic-only',
+          'content-type': 'application/json' }, method: 'POST', redirect: 'error',
+        signal: new AbortController().signal }));
+    assert.equal(result.status, 'failed');
+    assert.equal(result.reason, 'invalid_payload');
+    const attempt = embedded.guard.attempts()[0];
+    assert.equal(attempt.stage, 'mem0-embedding');
+    assert.equal(attempt.payloadFailureReason, 'embedding_payload');
+    assert.equal(attempt.outcome, 'failed');
+    assert.equal(attempt.actualMicroUsd, 1);
+    assert.equal(attempt.reservedMicroUsd, 1);
+  } finally { embedded.guard.close(); }
+
+  const unknown = diagnosticFixture(t, diagnosticResponse(`~~~${diagnosticMarker}`, null));
+  try {
+    await assert.rejects(diagnosticSend(unknown), { code: 'callback_failed' });
+    const attempt = unknown.guard.attempts()[0];
+    assert.equal(attempt.outcome, 'unknown');
+    assert.equal(attempt.actualMicroUsd, null);
+    assert.equal(Object.hasOwn(attempt, 'payloadFailureReason'), false);
+    assert.equal(unknown.guard.isHalted(), true);
+  } finally { unknown.guard.close(); }
+});
+
+test('D3 failed settlement keeps a closed observation without claiming durable outcome', async t => {
+  let settling = false;
+  const f = diagnosticFixture(t, diagnosticResponse(`~~~${diagnosticMarker}`),
+    () => { settling = true; });
+  const originalExec = DatabaseSync.prototype.exec;
+  try {
+    DatabaseSync.prototype.exec = function(sql) {
+      if (settling && sql === 'COMMIT') {
+        settling = false;
+        throw Object.assign(new Error('private synthetic settlement marker'),
+          { code: 'synthetic_ledger_failure' });
+      }
+      return originalExec.call(this, sql);
+    };
+    await assert.rejects(diagnosticSend(f), { code: 'callback_failed' });
+    const attempt = f.guard.attempts()[0];
+    assert.equal(attempt.payloadFailureReason, 'chat_content_json');
+    assert.equal(attempt.observedActualMicroUsd, 3);
+    assert.equal(attempt.actualMicroUsd, null);
+    assert.equal(attempt.outcome, null);
+    assert.deepEqual(attempt.settlementFailure,
+      { operation: 'record_outcome', category: 'ledger_failed' });
+    assert.equal(JSON.stringify(attempt).includes('private synthetic'), false);
+    const db = new DatabaseSync(join(f.ledger.directory, 'experiment-budget.sqlite'));
+    try {
+      assert.equal(db.prepare('SELECT outcome FROM attempts WHERE attempt_id = ?')
+        .get(attempt.attemptId).outcome, null);
+    } finally { db.close(); }
+    assert.equal(f.guard.isHalted(), true);
+  } finally {
+    DatabaseSync.prototype.exec = originalExec;
+    f.guard.close();
+  }
 });
