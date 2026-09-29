@@ -368,3 +368,53 @@ operator table: `coordinator.mjs` is
 The other three operator hashes and all five preparation hashes are unchanged.
 The first review did not pass Spec; only a fresh pass of both axes against
 this corrected candidate, followed by exact-head CI, can clear launch.
+
+## N7 terminal results and documentation checkpoint
+
+The final corrected operator passed independent Standards and Spec review;
+PR #292 passed all 17 applicable CI checks at
+`b6a1de125e52d9cec6ce299e6ae15db8002d49ad` before one-shot dispatch.
+The public runtime remained `59c74540bdbd4984896afa80452f4928f7c1bfdf`,
+with the same probe-free indexed-evidence comparison. The fixed cohort's
+[terminal report](../evidence/official-six-post-localization.md) records 5/6
+completed ingestions and nonempty answers in each arm, ten judgments, Cairn
+1/4/1 and Mem0 2/3/1 correct/incorrect/unresolved, and common resolved N=4/6.
+P7's fixed six denominator is retained; P8's 6/6 feasibility gate failed.
+No fixed-30 expansion or consumed-case replay follows. The first Mem0
+generation failed at native `invalid_payload`; the final Cairn generation
+stopped at a local capture deadline. Their underlying causes remain unproven.
+The authenticated terminal ledger is open, settled, and unchanged in lineage:
+2,007 new requests / 10,928,769 microUSD new reservation; cumulative 23,869
+requests / 149,768,405 microUSD reserved, zero pending. An independent
+read-only outcome audit confirmed the retained artifact hashes, roster,
+24 scopes, 12 generation and 12 judgment slots, raw-to-public aggregates and
+type mapping, cold-store counts, source-origin matches for all 14 observed
+receipts and numeric-reference rendering. It did not independently verify
+blind ranking, full source-freeze timing, raw judge responses, word-by-word
+semantics or product gates. A separate independent frozen accounting audit
+matched the exact ordered 21,862-attempt prefix and all 2,007 new guard rows
+on five fields, with 23,869 unique IDs and zero differences. The primary
+separately authenticated the live ledger.
+
+Documentation implementation was assigned to GPT-6 Sol/high on fixed base
+`b6a1de125e52d9cec6ce299e6ae15db8002d49ad`, limited to this plan,
+`ROADMAP.md`, `docs/limitations.md` and the new terminal report. Primary owns
+final diff inspection, verification, independent review and delivery. Worker
+ran `npm test` (143/143 passed) and `npm run validate` (passed) on Node 22.16.0
+in the documentation worktree; these offline gates did not access the corpus,
+ledger or a provider. `git diff --check` passed. Primary acceptance remains
+separate from this worker verification. Worker elapsed time, token usage and
+model cost are unavailable; no result is inferred from the model label. The
+next bounded task is offline reproduction of both
+failures and stored-versus-retrieved evidence audit before any new paid design
+decision.
+
+Primary inspected all four final documentation files and personally reran
+`npm test` (143/143 each, zero skips), `npm run validate` and pinned strict
+`npm run validate --prefix tools/plugin-validation` on Node 22.16.0 and
+24.15.0; all passed. Primary also reran the separate synthetic Mem0 transport
+probe on both versions: the deliberately red malformed-memory assertion
+failed, its valid control passed, and six distinct invalid-payload variants
+retained the expected failure/accounting behavior. These probes use fake HTTP,
+not the unavailable historical response; they do not establish its exact cause.
+Independent final documentation review and remote CI remain delivery gates.

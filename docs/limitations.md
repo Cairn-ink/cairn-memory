@@ -1182,25 +1182,37 @@ the changed 19:00 end time. No answer was repaired or rescored. The earlier
 official-six 3/2/1 Cairn versus 3/3/0 Mem0 checkpoint and its failed 6/6
 completion gate remain unchanged. Three small authored cases do not show
 general accuracy, default MOC behavior or installed MCP/Hermes reliability.
-No retrieval/prompt/graph change is justified; the next gate is a new blind
-official six with prospective exclusions and resources, not more diagnostic
-expansion or automatic fixed-30 promotion.
+No retrieval/prompt/graph change is justified by N6. Its next gate was a new
+blind official six with prospective exclusions and resources, reported below;
+N6 did not authorize diagnostic expansion or automatic fixed-30 promotion.
 
-The [post-localization official-six plan](plans/official-six-post-localization.md)
-now records a blind fixed selection: the prior 148 consumed/reserved IDs plus
-six new cases were sealed as 154 future exclusions before selected content or
-cost inspection. Source-only preparation marked all six ready, with actual
-batch vector `[50,53,49,47,47,47]` (293 per arm). Its conservative
-whole-vector reservation bound is 14,749,619 microUSD, under the US$30 packet
-ceiling and within the unchanged US$200 ledger with US$10 protected;
-77,711 worst-case requests are a projection, not actual calls. No provider
-call or evaluator-byte read occurred during this source-only stage. Readiness
-is not model-backed ingestion, answer completion or a new score.
-Operator/offline gates, independent reviews and exact-head CI remain before
-paid dispatch. The prospective feasibility gate requires both arms to complete
-and resolve 6/6 before a separately frozen fixed 30, not 100% correctness;
-the earlier official-six 3/2/1 versus 3/3/0 result and all default-MOC and
-installed Hermes/MCP quality limits remain unchanged.
+The [post-localization official-six result](evidence/official-six-post-localization.md)
+used six new blind selected cases on the same opt-in, probe-free indexed-evidence
+route. Source-only readiness covered all six, yet each arm completed ingestion
+and nonempty answers in only 5/6. Ten judgments ran: Cairn had 1 correct,
+4 incorrect and 1 unresolved; Mem0 had 2, 3 and 1. Common resolved N was 4/6.
+The first Mem0 generation failed with `invalid_payload` at the native stage;
+the final Cairn generation stopped at its 29th capture batch after a local
+deadline. The raw Mem0 causal payload was not retained, and the timeout's
+underlying cause is unproven. The only correct Cairn case recalled zero cards,
+so it is not evidence that useful recalled memory produced that answer.
+
+The coordinator completed and the ledger settled open with zero pending, but
+P8's 6/6 paired completion and resolution gate failed. The cohort added 2,007
+requests and 10,928,769 microUSD in conservative reservations; 563 unknown-cost
+rows retain 2,815,000 microUSD of that reservation. Known-cost estimates are
+not a final bill. Independent outcome audit confirmed fixed slots, score
+aggregates, cold-store counts and source-origin matches. A separate independent
+accounting audit matched the prior prefix and all guarded tail rows. In cases
+3 and 5, three annotated answer-bearing turns across the two cases had no
+retained receipt from those turns. Case 5 had another unselected filed receipt
+from an answer session with a short reference term; its relevance and
+currentness are undetermined. Full information loss is not established.
+No replay, rescore, fixed-30 expansion or full-500 accuracy and superiority
+claim follows. Bounded offline failure reproduction and stored-versus-retrieved
+evidence audit precede any new paid experiment. The earlier official-six
+3/2/1 versus 3/3/0 result and default-MOC and installed Hermes/MCP quality
+limits remain unchanged.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
