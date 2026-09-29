@@ -1,5 +1,20 @@
 # Known limitations
 
+## MCP episode access is inspection, not recovery of omitted source
+
+Explicit local MCP `sessionEpisodesAccess: 'episode-v1'` can list and inspect
+episodes the core already retained, even when capture admitted zero memories.
+Synthetic normal-capture and installed-CLI tests verify cold access and
+revision-guarded deletion. This does not generate episodes, add a retention
+policy, search episode sources through `recall_memory`, recover text never
+captured in the historical N7 indexed-evidence run, or measure answer quality.
+Event-time discovery excludes unknown intervals; receipt-time search must be
+chosen explicitly. Pages and source coverage can remain incomplete. Deleting
+one conversation also suppresses its derived memories, including deduplicated
+multi-source memories, and invalidates copied-source consumers. Logical
+deletion does not erase journals, backups or prior caller/provider copies.
+Native Hermes does not expose these tools.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
