@@ -1360,3 +1360,12 @@ small-recall parity fixture was frozen from main `3a1c17d`.
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
+
+The [offline MOC title boundary matrix](plans/moc-title-boundary-matrix.md)
+has passing fake-HTTP adapter/core fixtures on Node 22.16.0 and 24.15.0 for
+visible and canonical duplicate titles, hidden retained title reservations,
+L2 collisions and unchanged namespace/revision/reference guards. Its ancestry
+counterexample distinguishes a rejected parent-free new-topic proposal from
+explicit reuse of an existing L1 with an unseen L2 parent.
+This packet changes no classification behavior and does not identify a historical
+paid-run cause, establish semantic equivalence or authorize automatic title reuse.
