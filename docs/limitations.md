@@ -1176,8 +1176,58 @@ camelCase-splitting counters, comparing existing group bytes with background
 on/off. Synthetic counters test budgeting, not provider tokenizer fidelity.
 See the [session-start contract](storage-contract.md#session-start-context).
 
+## Model input budgets
+
+Recall and classification now pack requests to fit the 6,000-token model input
+instead of failing as memory grows. See
+[fitting the model budget](fetch-recall.md#fitting-the-model-budget) and the
+[per-call audit](model-input-budgets.md). What remains:
+
+- **Ranking may see less than it returns.** A shortened rank candidate shows a
+  query-aware window of its content and then its earliest receipts. Evidence
+  outside that window, and candidates left out of the request, cannot influence
+  ranking. Returned memories are never shortened. Ranking quality over shortened
+  text has not been measured on a real model.
+- **Shares are equal in characters, not tokens.** Every shortened candidate gets
+  the same code-point allowance, so a CJK candidate spends about four times the
+  tokens of an English one of the same length.
+- **Atomic evidence can crowd itself out.** A qualification, a complete
+  `source-evidence` set or a `rationale-evidence` graph is never cut. When one is
+  too large, that candidate is left out whole, even if it was the selector's
+  first choice.
+- **An unfetchable memory is not recallable.** A memory whose body plus first
+  receipt exceeds one 4,000-token fetch envelope (for example, 4,000 CJK
+  characters), or whose complete source set cannot be fetched in a source
+  mode, is left out of recall and counted in `recallTruncated.candidatesOmitted`.
+  It remains readable through `get` and `list`.
+- **The query itself is not shortened.** A query that cannot fit even with no
+  map items or candidates still refuses with `context_budget_exceeded`. The
+  4,000-unit query limit keeps this out of reach for ordinary text (a 4,000
+  character CJK query still recalls), but a tokenizer that spends two or more
+  tokens per character on some input can hit it.
+- **Rationale and decision-basis review still refuse.** `relate` and
+  `reviewBasis` send complete retained receipt sets. A memory re-captured many
+  times in CJK can exceed the budget, and they refuse with
+  `context_budget_exceeded` rather than packing: their proposals cite complete
+  receipts and `relate` persists them. Automatic rationale reports
+  `rationale.status: 'failed'`; the capture itself is unaffected.
+- **Capture inputs are the caller's to size.** `extract`, `qualify`,
+  `qualifyCandidates` and an episode's own target event refuse explicitly when
+  one submitted batch cannot fit, for example more than about 5,000 CJK
+  characters of messages. Nothing is written; split the batch.
+- **Classification may file from a prefix.** A packed classification sees only
+  a prefix of each long memory, never below 120 code points. If the catalog
+  itself had to be cut, no new topic can be proposed for that batch.
+
+Evidence: `core/test/recall-budget.test.mjs` and
+`core/test/classification-budget.test.mjs`. They use a synthetic counter of
+about one token per CJK character and a quarter per other character, scaled by
+1.15. That is shaped like a padded o200k count but is not a provider tokenizer.
+The small-recall parity fixture was frozen from main `3a1c17d`.
+
 ## Where the evidence lives
 
+- [Model input budgets and packing](model-input-budgets.md)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)

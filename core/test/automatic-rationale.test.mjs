@@ -139,8 +139,11 @@ test('A6 graph counts in fetch/rank budgets and modes cannot share cursors or qu
   error(await f.recall({ includeQualification: true }), 'invalid_input');
   f.model.countTokens = text => text.includes('"rationale"') ? 4001 : 1;
   error(f.core.fetch({ namespace, refs, contextMode: 'rationale-evidence' }), 'context_item_too_large');
+  // Rationale evidence is atomic per candidate: omitted whole and reported, never cut.
   f.model.countTokens = text => text.includes('"candidates"') && text.includes('"rationale"') ? 6001 : 1;
-  error(await f.recall(), 'context_budget_exceeded');
+  const omitted = ok(await f.recall());
+  assert.deepEqual(omitted.memories, []); assert.equal(omitted.coverage, 'budget_exhausted');
+  assert.ok(omitted.recallTruncated.candidatesOmitted >= 1); assert.equal(omitted.recallTruncated.candidatesShortened, 0);
 });
 
 test('A7 actual filing revision is used before rationale, while classification failure remains separately visible', async t => {

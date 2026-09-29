@@ -121,10 +121,12 @@ test('QR3 late bound anchor outside both returned receipt prefixes survives rank
   assert.deepEqual(ok(await recall(cold, { includeQualification: true })), warm);
 });
 
-test('QR3 ranking budget rejects complete support instead of silently omitting metadata', async (t) => {
+test('QR3 ranking budget omits a whole qualified candidate instead of silently removing its metadata', async (t) => {
   const f = fixture(t, { countTokens: (text) => text.includes('"candidates"') && text.includes('"qualification"') ? 6001 : 1 });
   admit(f.core);
-  error(await recall(f.core, { includeQualification: true }), 'context_budget_exceeded');
+  const omitted = ok(await recall(f.core, { includeQualification: true }));
+  assert.deepEqual(omitted.memories, []); assert.equal(omitted.coverage, 'budget_exhausted');
+  assert.deepEqual(omitted.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
   assert.equal(f.calls.filter((call) => call.method === 'rank').length, 0);
   assert.equal(ok(await recall(f.core, { includeQualification: false })).memories.length, 1);
 });

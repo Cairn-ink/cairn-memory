@@ -128,15 +128,21 @@ test('T04: public recall returns exact contiguous two-page evidence prefix, incl
   }
 });
 
-test('T05: accumulated ranking overflow cannot silently drop candidates or receipts', async (t) => {
+test('T05: accumulated ranking overflow shortens only the model view and reports it', async (t) => {
   const { core, model } = fixture(t, { countTokens: (text) => {
-    const parsed = text ? JSON.parse(text) : null;
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch { /* A candidate fragment, not a request. */ }
     if (parsed?.input?.candidates?.[0]?.receipts.length > 100) return 6001;
     return 1;
   } });
   admit(core, 'Accumulated evidence', personal, 101);
-  error(await recall(core), 'context_budget_exceeded');
-  assert.deepEqual(model.calls.map((call) => call.method), ['select']);
+  const result = ok(await recall(core));
+  assert.deepEqual(model.calls.map((call) => call.method), ['select', 'rank']);
+  const sent = model.calls[1].input.candidates[0];
+  assert.ok(sent.receipts.length <= 100 && sent.textShortened === true);
+  assert.equal(result.memories[0].receipts.length, 101, 'returned receipts are never shortened');
+  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 1 });
+  assert.equal(result.coverage, 'budget_exhausted');
 });
 
 test('T05: second selection request/output/counter/deadline failures keep explicit envelopes', async (t) => {

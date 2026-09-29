@@ -64,9 +64,12 @@ Fetch pagination can continue across requested memory references, not within
 their source sets. Cursors bind mode, references, view, budget and epoch.
 
 Rank receives only these source DTOs, within the existing 6000-token input and
-1024-output bounds. Full source sets may therefore cause an explicit budget
-failure where the old summary-based path fitted. No candidate or condition is
-dropped to force success. Final recall rereads every fetched candidate, even
+1024-output bounds. A complete source set is atomic in ranking: when the request
+cannot fit, whole candidates are left out in order and counted in
+`recallTruncated`, and no source set is ever trimmed. A memory whose complete
+set cannot be fetched is also left out of recall rather than failing it; see
+[fitting the model budget](fetch-recall.md#fitting-the-model-budget). Final
+recall rereads every fetched candidate, even
 unselected ones, under the existing namespace/revision/epoch transaction rules.
 Source correspondence and available qualification bindings are checked before
 return; no model or tokenizer runs after that authoritative read.

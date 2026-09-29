@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — recall fits its model budget
+
+- Recall no longer fails with `context_budget_exceeded` because a person has
+  many or long memories. `select` and `rank` requests are packed to the
+  6,000-token input limit, measured with the adapter's own `countTokens` over
+  the complete request. Map items are interleaved across namespaces, and a page
+  that lost items is shown as not exhausted. Rank candidates keep the
+  selector's order, each gets at least 120 code points of text, and the rest is
+  shared as a common allowance. Only text is shortened, to query-aware windows
+  (`textShortened: true`). IDs, receipt identity and qualifications stay whole.
+  Source-evidence and rationale-evidence candidates are sent whole or left out.
+- A selected memory too large for one 4,000-token fetch envelope is left out of
+  ranking instead of failing the recall; direct `fetch` still refuses it.
+- Returned memories and receipts are never shortened. When packing changed
+  anything, the result carries `recallTruncated: {navigationItemsOmitted,
+  candidatesOmitted, candidatesShortened}` and `coverage: 'budget_exhausted'`.
+  Otherwise the field is absent, and requests and results are byte-identical to
+  main `3a1c17d` (frozen fixture).
+- Classification packs the same way: memory bodies are shortened first, then
+  the catalog tail is left out, which forbids new topics. It reports
+  `classificationTruncated`, which capture copies into its `classification`
+  outcome.
+- A selector or classifier naming a ref or topic it was not shown is rejected
+  as `invalid_model_output`.
+- Audit of every core model call, with the limit that bounds each input:
+  [model input budgets](docs/model-input-budgets.md). Rationale, decision-basis
+  and capture-input calls still refuse explicitly; see
+  [limitations](docs/limitations.md#model-input-budgets).
+
 ## Unreleased — opt-in background context
 
 - `sessionStartContext({groups: {background: true}})` includes current facts and

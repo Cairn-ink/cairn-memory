@@ -52,7 +52,8 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
       expectedMemoryRevisions: classified.basedOn.memoryRevisions,
       expectedIndexRevision: classified.basedOn.indexRevision }));
     return { status: 'applied', memoryRevisions: placed.memories.map((memory) =>
-      ({ memoryId: memory.id, revision: memory.revision })), indexRevision: placed.indexRevision };
+      ({ memoryId: memory.id, revision: memory.revision })), indexRevision: placed.indexRevision,
+    ...(classified.classificationTruncated ? { classificationTruncated: classified.classificationTruncated } : {}) };
   } catch (error) {
     if (attemptToken) {
       try { unwrap(operations.failInitialClassification({ ...key, token: attemptToken })); }

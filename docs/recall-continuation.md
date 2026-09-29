@@ -36,11 +36,14 @@ does not reclassify frozen v1 evidence as a v2 quality result.
 
 Each map/fetch response retains its 4,000 counted-token ceiling. Every model call
 still has the stricter 6,000 input / 1,024 output limits and existing deadline.
-Large combined maps or evidence can therefore return context_budget_exceeded;
-the engine does not silently discard evidence to make a ranking request fit.
+Large combined maps or evidence are packed to fit: map items and candidates are
+left out, and candidate text is shortened, only in the model's view. This is
+never silent: `recallTruncated` counts it and coverage is `budget_exhausted`.
+Returned evidence is not shortened. See
+[fitting the model budget](fetch-recall.md#fitting-the-model-budget).
 The worst-case aggregate storage-response ceiling is 304,000 counted tokens, not
-a target token cost or measured performance claim. Tighter packing awaits
-provider-backed resource evaluation.
+a target token cost or measured performance claim. Tighter storage-response
+packing awaits provider-backed resource evaluation.
 
 After all model and tokenizer callbacks, the same authoritative final read checks
 every fetched candidate, including candidates not ranked for output, and rereads
