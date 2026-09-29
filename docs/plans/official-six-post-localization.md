@@ -4,11 +4,12 @@ Prospective contract, 2026-09-29. Branch `test/official-six-post-localization`,
 worktree `official-six-post-localization`, fixed delivery base
 `f8af59d18cb91b7b550e8a498333c4db1a0b9eaf` (results PR #291). The initial
 planning base and unchanged runtime were
-`59c74540bdbd4984896afa80452f4928f7c1bfdf` (PR #290). No new official case
-has been selected and no history length, question or answer inspected for this
-cohort. Source-only helper implementation may proceed offline. Actual selection
-waits for independent preparation review; paid dispatch additionally requires
-final operator review, complete contributor gates and exact-head CI.
+`59c74540bdbd4984896afa80452f4928f7c1bfdf` (PR #290). At contract freeze,
+no new official case had been selected and no history length, question or
+answer inspected for this cohort. The checkpoint sections below record later
+progress. Selection required independent preparation review; paid dispatch
+additionally requires final operator review, complete contributor gates and
+exact-head CI.
 
 ## Decision and product goal
 
@@ -210,3 +211,123 @@ runtime and all five private hashes are unchanged. Both independent axes
 must review the new final candidate; the prior pass is not reused. Standards'
 low-severity repeated 142/148 exclusion-parser heuristic is retained as a
 bounded explicit validation pair rather than introducing another shared API.
+
+## Accepted source-only preparation
+
+Both independent review axes passed candidate
+`0cd6f89b444aa46e24453cf63b41f9814480284e` against the fixed results base;
+the low-severity parser-duplication heuristic remains disclosed. Primary then
+built and independently verified the immutable runtime inventory: 1,237 public
+files, 57 dependency files and two private helpers, 1,296 total, digest
+`ffdbd7b9e502d134aff1dde2ae4eb29331751c90aa63bbc1921c08eac81c44cb`.
+Frozen runtime-metadata SHA-256 is
+`7c2c3e15e3cdd3b0e1dd4fc5be5cec6d228535ae0a33ec3e9daa5966050134c7`.
+
+The one-shot source preparation sealed six new cases and all 154 future
+exclusions before selected-source preparation or cost projection. Primary
+then checked exact equality of the future set to the prior 148 plus these
+six, with one case per official type and first-arm order 3/3. No case was
+substituted. All six source preparations were ready; the actual batch vector
+in frozen corpus order is **[50,53,49,47,47,47]**, 293 batches total per arm.
+Whole-vector conservative reservation is **14,749,619 microUSD**, with
+**77,711** worst-case requests including native singleton fallback. Cairn's
+reservation bound is 6,407,320 microUSD and Mem0's is 8,342,299. This fits the
+prospective US$30 ceiling, original US$200 ledger and protected US$10; it is
+not actual cost or proof that model-backed ingestion will finish.
+
+| Source-only artifact | SHA-256 |
+| --- | --- |
+| Selection | `6fc51fb8af2e997b63ffc907096d45c492ac03edf06a76ba2cd464d5f2c19edf` |
+| Future 154 exclusions | `066a1d6fc55337e13aadc09f663aaac254c8b682afda79ddcfd9ad5f3c97f3a6` |
+| Readiness | `b7df0243a74db6aba1830c30241bb41287d3038344fff5befc610ff999b1bec8` |
+| Prepared manifest | `8d26e33b7c7e833c42ebc01657a2033e87a462768f5671dff52482d5d96f3cd2` |
+
+The source-only context-protocol digest is
+`c6a606d746eeeecab92f7ceed355e35f50d131a845406dc5cb5b4b71fe0bcc51`.
+The preparation roster digest is
+`63799b60b506a87558abc36eb0e64ff0550b3cb301241c060db20923125a987f`;
+this binds the preparation inventory, not the later launch inventory that
+also includes the operator. The assembler must verify the former using its
+frozen preparation digest and separately bind the final launch roster. No
+provider call or evaluator-byte read occurred during this source-only stage.
+
+## Next bounded operator packet
+
+The same GPT-6 Sol/high worker may now implement five new private files:
+source-only assembly, coordinator, bootstrap and two synthetic suites. The
+five accepted preparation files remain immutable. The worker receives only
+the public contract, accepted code and numeric/digest metadata; actual corpus,
+source artifacts, evaluator, ledger, keys, stores and provider output remain
+outside its read boundary. Adapt the previous accepted official-six code;
+do not execute or edit consumed helpers, add a retry or broaden the profile.
+
+Acceptance retains P2–P7, including all six fixed slots, original parent
+lineage and fresh settled checkpoint, source/evaluator separation, exact
+preparation-to-launch binding, preserved unknown cost, one-shot markers,
+local-timeout retention/global halt and no second dispatch. Independently
+test both ordinary-string and deferred Python-rendered nonstring references,
+protocol drift, prepared-roster drift, tampered 154-ID proof, occupied output,
+persistence failures and zero credential/provider access before acceptance.
+Primary must rerun the integrated gates and both review axes on final hashes;
+exact-head CI must pass before any paid launch. The source-only success above
+does not satisfy these remaining gates.
+
+## Source audit and integration acceptance
+
+A separate GPT-6 Sol/high read-only auditor independently recomputed the
+142/148/154 exclusion unions, unique six-type selection, 3/3 first-arm order,
+source/manifest/protocol pins and all resource-vector and singleton caps.
+These metadata checks passed. The auditor did not read corpus/evaluator
+contents, execute preparation, access the live ledger or make requests.
+Metadata alone does not independently establish blind ranking against the
+corpus, freeze timing, live completion or current runtime file integrity.
+
+Primary reran `npm run test:longmemeval` on the immutable runtime at
+`59c74540bdbd4984896afa80452f4928f7c1bfdf`: **200/200 passed** on both
+Node 22.16.0 and 24.15.0. `npm run demo:longmemeval-mixed` passed on both,
+with transport dispatch false. With the pinned native prerequisites,
+`npm run test:mixed-native-local` passed **29/29 on each**, zero skips,
+including actual-core/native-Mem0 fake-HTTP write/read/scoring, local deadline
+retention, global accounting halt and deferred nonstring reference handling.
+These are offline mechanics, not new semantic results or paid-run success.
+
+## Final operator candidate
+
+The resumed GPT-6 Sol/high implementation packet initially exposed stale
+fixtures and the previous coordinator checkpoint: source tests passed 5/8 and
+operator tests 2/12 on Node 22. These were corrected before any operational
+assembly. The final coordinator separately recomputes the preparation-bound
+protocol/roster and launch-bound roster, verifies the exact 148-plus-six
+exclusion proof and preserves the current authenticated checkpoint. The
+bootstrap's accepted lifecycle is unchanged; its new private location gives
+this cohort an independent inventory and execution boundary.
+
+Primary inspected all five files and personally reran, using
+`node tools/testing/run.mjs --script <private-test>`, the source-only suite
+**8/8** and operator suite **16/16** on both Node 22.16.0 and 24.15.0, zero
+skips. Tests use the unchanged runtime's public helpers, not the older pilot
+worktree, and do not clear `process.execArgv` to bypass its inventory guard.
+They include protocol/roster/exclusion drift, deferred Python references,
+occupied/consumed execution, local timeout and unknown cost retention, global
+halt and persistence failure. These synthetic operator tests do not replace
+the actual-core/native fake-HTTP integration gate above.
+
+| File | SHA-256 |
+| --- | --- |
+| `assemble-source-only.mjs` | `d8383aa2ddd73694d3114f91260317a9e637b8b01bb92d42af19f734f2c6a2fd` |
+| `coordinator.mjs` | `da84cd1531e5fe28e5ef4dd8a39e647cca6fa666875895a0f0136b8e68a83948` |
+| `bootstrap.mjs` | `8b9040750efdc330eab785f2952839d2d5ee92f569c1b4ddf329eac39362fbb3` |
+| `source-only.synthetic.test.mjs` | `a5e65e9f68bf5c490368e82cb959a37d5612460e9db623f24dcb4970f7e692e2` |
+| `operator.synthetic.test.mjs` | `e930a3eade5fd6f38ea8f9d0339c7b3665537ecd09a5b1bc9a0a8ae5a89a8500` |
+
+All five accepted preparation hashes remain unchanged. Primary also reran
+`npm run test:workspace-lifecycle`: **25/25 each**, including success/failure
+cleanup. The public planning candidate passed `npm test` **143/143 each**,
+`npm run validate` and pinned strict plugin/marketplace validation on both
+Node versions. The repository has no TypeScript/typecheck gate. Primary's
+interventions were acceptance inspection, the test-runtime binding correction
+and this evidence record; implementation stayed with the bounded worker.
+Worker elapsed time and token cost are unavailable. No operational binding,
+launch or paid request has occurred. Separate final Standards/Spec review and
+exact-head CI remain mandatory before dispatch; record their results on the
+PR without rewriting the reviewed candidate.
