@@ -1076,6 +1076,29 @@ source fidelity or installed MCP/Hermes reliability. A larger cohort requires
 a new frozen selection and resource check after the failed feasibility gate,
 not reuse of these six.
 
+## Mixed-runner phase tails are bounded observations
+
+The [M1b source-runner diagnostic](plans/mixed-phase-tail-diagnostics.md) is
+opt-in for 1–30 frozen cases. It keeps the last 64 adapter events per entered
+Cairn arm, plus counts of admitted and omitted events. The tail may begin in
+the middle of an invocation and supplies no invocation correlation or complete
+concurrent timeline. Default reports and existing model/attempt samples are
+unchanged. No extra Mem0 timing is inferred from this Cairn-only field.
+
+The observer excludes earlier core planning, local map work and SQLite commit.
+An aborted phase is not proof of provider cancellation or billing; missing
+events do not mean zero elapsed work. The unchanged 500,000-node / 32 MiB
+report envelope passes a complete 30-case high-diagnostic synthetic control,
+not every possible combination of historical provenance maxima. Diagnostic
+mode rejects larger rosters before consumption; omitted mode retains its old
+250-case preparation limit and report behavior.
+
+The runner imports checkout Cairn modules. Native-local fake-HTTP tests exercise
+installed Mem0, but do not establish installed Cairn behavior, semantic quality,
+long-write reliability or historical N7's cause. Any later paid paired run needs
+a separately reviewed installed coordinator, a frozen observation mode and the
+existing cumulative budget authority. Previous failures and costs are unchanged.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the

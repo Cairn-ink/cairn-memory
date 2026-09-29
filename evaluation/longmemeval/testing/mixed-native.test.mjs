@@ -26,6 +26,181 @@ import { evaluatorRow, fakeMixedHttp, sourceRow,
 const nativeRequire = createRequire(new URL('../../../adapters/openai/package.json', import.meta.url));
 const nativeEncoder = nativeRequire('tiktoken').get_encoding('cl100k_base');
 
+test('T01/T03/T05 bounded phase timing preserves paired success and late failure', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  for (const lateFailure of [false, true]) {
+    let baseline;
+    for (const enabled of [false, true]) {
+      const row = sourceRow();
+      if (lateFailure) row.history.sessions = Array.from({ length: 10 }, (_, index) => ({
+        ...row.history.sessions[0], session_index: index,
+        session_id: `lme-session-${String(index).padStart(64, '0')}`,
+        turns: [{ ...row.history.sessions[0].turns[0],
+          turn_id: `lme-turn-${String(index).padStart(64, '0')}` }],
+      }));
+      let extracts = 0;
+      const fake = fakeMixedHttp((url, body) => {
+        if (url.endsWith('/responses') && body.text.format.name === 'cairn_extract') {
+          extracts++;
+          if (lateFailure && extracts === 10) return indexedResponse(body, 'PRIVATE_SENTINEL');
+        }
+      });
+      const fixture = syntheticMixedFixture(t, { artifact, configuration, sourceCases: [row],
+        armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl,
+        ...(lateFailure ? { comparisonProfile: 'indexed-evidence-v1' } : {}) });
+      try {
+        const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+          apiKey: 'synthetic-only', cairnStoreRoot: fixture.root,
+          ...(enabled ? { phaseTiming: 'bounded-tail-v1' } : {}) });
+        assert.equal(generation.halted, false, JSON.stringify(generation.cases));
+        assert.equal(generation.manifest.cairn.comparisonProfile,
+          lateFailure ? 'indexed-evidence-v1' : undefined);
+        const [cairn, mem0] = generation.cases[0].arms;
+        assert.equal(cairn.status, lateFailure ? 'failed' : 'completed');
+        assert.equal(mem0.status, 'completed', JSON.stringify(mem0));
+        assert.equal(Object.hasOwn(mem0.diagnostics, 'adapterPhaseTiming'), false);
+        assert.equal(Object.hasOwn(cairn.diagnostics, 'adapterPhaseTiming'), enabled);
+        assert.equal(fake.calls.filter(call => call.body.messages?.[0]?.content === PUBLIC_ANSWER_INSTRUCTION)
+          .length, lateFailure ? 1 : 2, 'partial ingestion never receives an answer');
+        if (enabled) {
+          const timing = cairn.diagnostics.adapterPhaseTiming;
+          assert.equal(timing.totalEventCount, lateFailure ? 70 : 7);
+          assert.equal(timing.retainedEventCount, lateFailure ? 64 : 7);
+          assert.equal(timing.omittedEventCount, lateFailure ? 6 : 0);
+          assert.equal(timing.events.at(-1).phase, 'output_validation');
+          assert.equal(timing.events.at(-1).outcome, lateFailure ? 'failed' : 'completed');
+          assert.equal(JSON.stringify(timing).includes('PRIVATE_SENTINEL'), false);
+        }
+        const scored = await scoreMixedGeneration({ generationReport: generation,
+          evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+          guard: fixture.guard, apiKey: 'synthetic-only' });
+        assert.equal(scored.summary.fixedN, 1);
+        assert.equal(scored.summary.perArm.cairn.unresolved, lateFailure ? 1 : 0);
+        assert.equal(scored.summary.perArm.mem0.correct, 1);
+        const comparable = JSON.parse(JSON.stringify(generation));
+        delete comparable.cases[0].arms[0].diagnostics.adapterPhaseTiming;
+        const observed = { generation: comparable, summary: scored.summary,
+          calls: fake.calls, attempts: fixture.guard.attempts().map(item => ({
+            stage: item.stage, ordinal: item.ordinal, outcome: item.outcome,
+            reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd })) };
+        if (!enabled) baseline = observed;
+        else assert.deepEqual(observed, baseline, 'only the opt-in timing field differs');
+      } finally { fixture.guard.close(); }
+    }
+  }
+});
+
+test('T03 thrown Cairn execution boundary retains prior timings and native/scoring slots', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const fake = fakeMixedHttp();
+  const fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl,
+    comparisonProfile: 'indexed-evidence-v1' });
+  const originalPrepare = DatabaseSync.prototype.prepare;
+  let faulted = false;
+  DatabaseSync.prototype.prepare = function(sql) {
+    if (!faulted && fake.calls.some(call => call.route === '/v1/responses')
+      && /FROM memories/iu.test(sql)) {
+      faulted = true;
+      throw Error('PRIVATE_SQL_SENTINEL');
+    }
+    return originalPrepare.call(this, sql);
+  };
+  try {
+    const generation = await runMixedGeneration({ prepared: fixture.prepared,
+      guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root,
+      phaseTiming: 'bounded-tail-v1' });
+    assert.equal(faulted, true);
+    const [cairn, mem0] = generation.cases[0].arms;
+    assert.equal(cairn.status, 'failed');
+    assert.equal(cairn.diagnostics.stage, 'execution');
+    assert.equal(cairn.answer, null);
+    assert.equal(cairn.diagnostics.adapterPhaseTiming.totalEventCount, 7);
+    assert.equal(mem0.status, 'completed');
+    assert.equal(JSON.stringify(generation).includes('PRIVATE_SQL_SENTINEL'), false);
+    const scored = await scoreMixedGeneration({ generationReport: generation,
+      evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+      guard: fixture.guard, apiKey: 'synthetic-only' });
+    assert.equal(scored.summary.fixedN, 1);
+    assert.equal(scored.summary.perArm.cairn.unresolved, 1);
+  } finally {
+    DatabaseSync.prototype.prepare = originalPrepare;
+    fixture.guard.close();
+  }
+});
+
+test('T03/T06 aborted phase closes after settlement and ignores late physical completion', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  let signalEntered, release;
+  const entered = new Promise(resolve => { signalEntered = resolve; });
+  const fake = fakeMixedHttp(url => {
+    if (url.endsWith('/responses/input_tokens')) {
+      signalEntered();
+      return new Promise(resolve => { release = resolve; });
+    }
+  });
+  const fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [sourceRow()], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const running = runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+      apiKey: 'synthetic-only', cairnStoreRoot: fixture.root, phaseTiming: 'bounded-tail-v1' });
+    await entered;
+    t.mock.timers.tick(30_000);
+    const generation = await running;
+    const [cairn, mem0] = generation.cases[0].arms;
+    assert.equal(cairn.status, 'failed');
+    assert.equal(cairn.scope.reason, 'deadline');
+    assert.equal(mem0.status, 'completed');
+    const timing = cairn.diagnostics.adapterPhaseTiming;
+    assert.equal(timing.events.at(-1).phase, 'count_transport');
+    assert.equal(timing.events.at(-1).outcome, 'aborted');
+    assert.equal(timing.totalEventCount, 2);
+    assert.equal(cairn.diagnostics.attempts.unknownActualCount, 1);
+    const before = { report: JSON.stringify(generation), requests: fake.calls.length,
+      attempts: fixture.guard.attempts(), scopes: fixture.guard.caseOutcomes().scopes };
+    release(Response.json({ object: 'response.input_tokens', input_tokens: 100 }));
+    await setImmediate(); await setImmediate();
+    assert.equal(JSON.stringify(generation), before.report);
+    assert.equal(fake.calls.length, before.requests);
+    assert.deepEqual(fixture.guard.attempts(), before.attempts);
+    assert.deepEqual(fixture.guard.caseOutcomes().scopes, before.scopes);
+    const scored = await scoreMixedGeneration({ generationReport: generation,
+      evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+      guard: fixture.guard, apiKey: 'synthetic-only' });
+    assert.equal(scored.summary.perArm.cairn.unresolved, 1);
+  } finally { fixture.guard.close(); }
+});
+
+test('T01/T06 preflight-only arms never create a phase observer', async t => {
+  const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+    pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+  const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+    childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+  const row = sourceRow();
+  row.history.sessions[0].date = '2025/01/01 (Wed) 09:00';
+  const fake = fakeMixedHttp();
+  const fixture = syntheticMixedFixture(t, { artifact, configuration,
+    sourceCases: [row], armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl });
+  try {
+    const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+      apiKey: 'synthetic-only', cairnStoreRoot: fixture.root, phaseTiming: 'bounded-tail-v1' });
+    assert.equal(fake.calls.length, 0);
+    assert.ok(generation.cases[0].arms.every(arm => arm.status === 'failed'
+      && !Object.hasOwn(arm.diagnostics, 'adapterPhaseTiming')));
+    assert.equal(readdirSync(fixture.root).some(name => name.startsWith('mixed-cairn-')), false);
+  } finally { fixture.guard.close(); }
+});
+
 function indexedResponse(body, output) {
   return Response.json({ object: 'response', model: body.model, status: 'completed',
     error: null, incomplete_details: null, output: [{ type: 'message', role: 'assistant',
