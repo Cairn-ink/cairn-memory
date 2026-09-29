@@ -44,11 +44,17 @@ service must use the same public core, not separate engines.
   complete bounded before/after reads and per-card paths. It preserves the
   v1 protocol and does not repair the failed answer, replace the official-six
   gate or establish superiority. Premise/context coverage remains separate.
-  The prospective [selection-path packet](docs/plans/selection-localization.md)
-  freezes three new sixteen-session histories and original-reason probes;
-  actual current-card count and selection must be observed, not assumed from
-  source size. It is a bounded diagnostic before a justified correction or
-  fresh official paired score, not a replacement for those gates.
+  The [completed selection-path packet](docs/evidence/selection-localization-three.md)
+  ran three new sixteen-session histories with original-reason probes. Both
+  arms completed 3/3 and were judged 3/3 correct; complete fresh-store reads
+  found 32 distinct current cards per Cairn case and all three recalls actually
+  used model selection. Each original source had one observed complete carrier
+  path, not a tested paid multi-carrier family. The binary judge did not flag
+  two Mem0 answer-detail issues; the old official-six failure remains unchanged.
+  No retrieval or prompt change is justified by these three cases. The next
+  gate is a newly frozen blind official six with the same indexed-evidence
+  route, a fresh resource check and 6/6 paired-completion requirement before
+  any fixed-30 expansion.
   The offline checks and authored real-model diagnostic do not establish
   semantic completeness or repair earlier paid-case results. Installed
   host acceptance, semantic/current-state quality, and a fresh paired paid

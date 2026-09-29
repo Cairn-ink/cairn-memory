@@ -1164,17 +1164,27 @@ The tests use real capture/recall plus scripted or fake-HTTP models; these are
 engineering controls, not measured semantic relevance. Acceptance and delivery
 status are recorded in the plan and its PR, not inferred from this description.
 
-The next [selection-path experiment](plans/selection-localization.md) freezes
-three new authored histories, each with sixteen weekly sessions and 32 short
-messages. This creates more independent capture batches than N4, not a larger
-long-document workload. Each question explicitly asks for the original reason
-and later decision/proposal status; its one source probe follows that original
-reason. More sessions do not guarantee more current cards or actual model
-selection. A complete public active-card read and observed selection callback
-are required to label that diagnostic precondition met. Unmet or unavailable
-preconditions remain in the fixed three-case denominator without reruns.
-Fixture/preparation tests are offline only; they do not establish a new score,
-long-history completion, default MOC performance or installed-host reliability.
+The [completed selection-path experiment](evidence/selection-localization-three.md)
+used three new authored histories, each with sixteen weekly sessions and 32
+short messages. This creates more independent capture batches than N4, not a
+larger long-document workload. Each question explicitly requested the original
+reason and later decision/proposal status. The primary's complete public
+read of each fresh synthetic store found 32 distinct current active cards;
+all three recalls used actual model selection and an observed select callback.
+Each original-reason family had one current matching carrier with a complete
+observed source path. Thus this paid run does not test real-model multi-carrier
+behavior, and a packed text unit cannot be bound to a particular source card.
+All six generation arms and judgments resolved; Cairn and Mem0 were each
+judged 3/3 correct on the fixed authored denominator. Those coarse binary
+judgments did not validate every detail: the Mem0 pantry paper-backup wording
+did not match the paper-number-token source, and its shuttle answer omitted
+the changed 19:00 end time. No answer was repaired or rescored. The earlier
+official-six 3/2/1 Cairn versus 3/3/0 Mem0 checkpoint and its failed 6/6
+completion gate remain unchanged. Three small authored cases do not show
+general accuracy, default MOC behavior or installed MCP/Hermes reliability.
+No retrieval/prompt/graph change is justified; the next gate is a new blind
+official six with prospective exclusions and resources, not more diagnostic
+expansion or automatic fixed-30 promotion.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
