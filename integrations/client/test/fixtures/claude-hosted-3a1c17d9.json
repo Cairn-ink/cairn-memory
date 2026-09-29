@@ -1024,6 +1024,1066 @@
       ]
     },
     {
+      "mode": "default-missing-parent",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "default-missing-parent",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "coordination-missing-parent",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "coordination-missing-parent",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "coordination-foreign",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "coordination-foreign",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "coordination-empty-unsafe",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "coordination-empty-unsafe",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "standalone-win32",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"win32\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"win32\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "standalone-win32",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"win32\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paused-standalone",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paused-standalone",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-valid",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-valid",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-missing-key",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-missing-key",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-invalid",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-invalid",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-unreadable",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "local-marker-unreadable",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-trailing",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-trailing",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-relative",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-relative",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-relative-legacy",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-relative-legacy",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-empty-legacy",
+      "entry": "hook",
+      "key": null,
+      "identity": null,
+      "requestBytes": "",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-empty-legacy",
+      "entry": "launch-capture",
+      "key": null,
+      "identity": null,
+      "requestBytes": "",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-empty",
+      "entry": "hook",
+      "key": null,
+      "identity": null,
+      "requestBytes": "",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "plugin-empty",
+      "entry": "launch-capture",
+      "key": null,
+      "identity": null,
+      "requestBytes": "",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "legacy-key-garbage",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "legacy-key-garbage",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "legacy-key-directory",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "legacy-key-directory",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paired-marker-absent",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paired-marker-absent",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paired-marker-readable",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paired-marker-readable",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paired-marker-file",
+      "entry": "hook",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "paired-marker-file",
+      "entry": "launch-capture",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
       "mode": "concurrent-linux",
       "entry": "hook",
       "key": "11111111-1111-4111-8111-111111111111\n",
@@ -2011,5 +3071,247 @@
         "stderr": ""
       }
     ]
+  },
+  "profileForms": {
+    "trailing": {
+      "keys": [
+        "11111111-1111-4111-8111-111111111111\n",
+        "22222222-2222-4222-8222-222222222222\n",
+        "33333333-3333-4333-8333-333333333333\n"
+      ],
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"a19ca59a7929bd395283343f89c835532dd63dac6b4ab480742f8fcd09511381\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"a19ca59a7929bd395283343f89c835532dd63dac6b4ab480742f8fcd09511381\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is paused.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is active.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is paused.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is active.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    "relative": {
+      "keys": [
+        "11111111-1111-4111-8111-111111111111\n",
+        "22222222-2222-4222-8222-222222222222\n",
+        "33333333-3333-4333-8333-333333333333\n"
+      ],
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"a19ca59a7929bd395283343f89c835532dd63dac6b4ab480742f8fcd09511381\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"a19ca59a7929bd395283343f89c835532dd63dac6b4ab480742f8fcd09511381\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is paused.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is active.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is paused.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is active.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    "empty": {
+      "keys": [
+        null,
+        "22222222-2222-4222-8222-222222222222\n",
+        "33333333-3333-4333-8333-333333333333\n"
+      ],
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"a19ca59a7929bd395283343f89c835532dd63dac6b4ab480742f8fcd09511381\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"a19ca59a7929bd395283343f89c835532dd63dac6b4ab480742f8fcd09511381\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic\"},\"body\":\"{\\\"query\\\":\\\"profile isolation\\\",\\\"project_id\\\":\\\"8682f517eef727578bd82afc425bedba6e11e6587d0a24f545cd6835b68e8542\\\",\\\"limit\\\":6}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is paused.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: active; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is active.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is paused.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory: paused; telemetry: off; endpoint: https://synthetic.invalid; credential: configured.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "Cairn automatic memory is active.\n",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    }
   }
 }

@@ -23,7 +23,16 @@ const fail = (message) => {
   throw new Error(message);
 };
 const absolute = (value) =>
-  typeof value === "string" && isAbsolute(value) && resolve(value) === value;
+  typeof value === "string" &&
+  !value.includes("\0") &&
+  isAbsolute(value) &&
+  resolve(value) === value;
+
+const normalizeRoot = (root) =>
+  typeof root === "string" && isAbsolute(root) ? resolve(root) : root;
+const beneath = (parent, child) =>
+  child === parent ||
+  (!relative(parent, child).startsWith("..") && !isAbsolute(relative(parent, child)));
 
 export function stateLocations({
   home = homedir(),
@@ -43,7 +52,7 @@ export function stateLocations({
     pairing: join(coordination, "pairing.json"),
     lock: join(coordination, "setup.lock"),
     defaultRoot: join(base, ".cairn-memory"),
-    claudeRoot: env.CLAUDE_PLUGIN_DATA ?? join(base, ".cairn-memory"),
+    claudeRoot: normalizeRoot(env.CLAUDE_PLUGIN_DATA ?? join(base, ".cairn-memory")),
     knownClaudeRoot:
       env.CLAUDE_PLUGIN_DATA ?? join(base, ".claude/plugins/data/cairn-memory-cairn-memory"),
   };
@@ -119,9 +128,6 @@ function durable(root, locations) {
   if (!absolute(locations.home) || !absolute(root)) fail("pairing_requires_durable_home");
   // Test homes may be under TMPDIR; the durable logical boundary is the explicit home.
   // Outside it, reject the known temporary-storage trees.
-  const beneath = (parent, child) =>
-    child === parent ||
-    (!relative(parent, child).startsWith("..") && !isAbsolute(relative(parent, child)));
   if (
     !beneath(locations.home, root) &&
     [locations.temporary, "/tmp", "/var/tmp"].some((path) => beneath(path, root))
@@ -130,9 +136,6 @@ function durable(root, locations) {
 }
 async function requireTemporarySource(root, locations) {
   if (!absolute(root)) fail("adopt_from_requires_temporary_root");
-  const inside = (parent, child) =>
-    child === parent ||
-    (!relative(parent, child).startsWith("..") && !isAbsolute(relative(parent, child)));
   const source = await realpath(root);
   const home = await realpath(locations.home);
   const temporaryRoots = (
@@ -142,7 +145,7 @@ async function requireTemporarySource(root, locations) {
       ),
     )
   ).filter(Boolean);
-  if (inside(home, source) || !temporaryRoots.some((parent) => inside(parent, source)))
+  if (beneath(home, source) || !temporaryRoots.some((parent) => beneath(parent, source)))
     fail("adopt_from_requires_temporary_root");
 }
 
@@ -282,7 +285,7 @@ async function locked(options, work) {
   return result;
 }
 const saveInstall = (locations, install) =>
-  privateWrite(locations.install, JSON.stringify(install));
+  privateWrite(locations.install, JSON.stringify(validateInstall(install)));
 const disabled = (status = "pairing_needed", detail) => ({
   status,
   enabled: false,
@@ -368,25 +371,18 @@ async function selectCodexBinding(options, snapshot, delivered) {
   return activeBinding(root, env, conflict ? "pairing_needed" : "single");
 }
 
-async function retiredRoot(root) {
-  if (!absolute(root)) return false;
-  // Retirement requires positive evidence at the selected root. An unavailable
-  // or foreign root is not evidence, and must retain standalone's old behavior.
+async function rootMarker(root, name) {
+  // Only positive presence inside an owned directory establishes local history.
   try {
     const info = await stat(root);
-    if (
-      !info.isDirectory() ||
-      (typeof process.getuid === "function" && info.uid !== process.getuid())
-    )
-      return false;
-    await lstat(join(root, "retired"));
-  } catch (error) {
-    if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code)) return false;
-    throw error;
+    if (!info.isDirectory() || !owned(info)) return false;
+    await lstat(join(root, name));
+    return true;
+  } catch {
+    return false;
   }
-
-  return true;
 }
+const retiredRoot = (root) => absolute(root) && rootMarker(root, "retired");
 
 const profileMarkerPath = (root) => join(root, ".cairn-memory-profile", "legacy.json");
 const owned = (info) => typeof process.getuid !== "function" || info.uid === process.getuid();
@@ -401,8 +397,9 @@ const probe = async (read, missing) => {
 async function rootFacts(root, { strict = false, evidence = false } = {}) {
   const info = await probe(() => stat(root), undefined);
   const usable = !!info?.isDirectory();
-  const retired =
-    usable && owned(info) && !!(await probe(() => lstat(join(root, "retired")), undefined));
+  const retired = await rootMarker(root, "retired");
+  const sharedMarker = await rootMarker(root, "paired-root");
+  const validKey = evidence && (await probe(() => keyPresent(root), false));
   // A present key is not freshness, even if its bytes are invalid. The ordinary
   // identity reader preserves released standalone errors without replacing it.
   const key = !!(await probe(() => lstat(join(root, "project-key")), undefined));
@@ -419,8 +416,10 @@ async function rootFacts(root, { strict = false, evidence = false } = {}) {
     usable,
     key,
     retired,
+    sharedMarker,
+    validKey,
     error,
-    evidence: evidence && key && (await probe(() => hasClaudeEvidence(root), false)),
+    evidence: evidence && (await probe(() => hasClaudeEvidence(root), false)),
   };
 }
 
@@ -439,6 +438,7 @@ export async function probeClaudeFacts(options = {}) {
   const facts = {
     locations,
     homeUsable,
+    pluginRootAbsolute: absolute(locations.claudeRoot),
     coordination: "absent",
     registration: "none",
     install: { version: 1, clients: {} },
@@ -582,6 +582,7 @@ export function resolveClaudeBinding(facts) {
         facts.registration === "none" &&
         facts.coordination !== "degraded" &&
         facts.canRegister &&
+        facts.pluginRootAbsolute &&
         facts.platform !== "win32" &&
         !facts.attempt,
     };
@@ -624,16 +625,21 @@ export function resolveClaudeBinding(facts) {
   }
   const codex = facts.install.clients.codex;
   let root = facts.profile;
-  let createKey = true;
-  if (!root.key && facts.localMarker === "invalid")
-    return stop("pairing_needed", "profile marker unreadable");
-  if (!root.key && facts.localMarker === "valid") {
-    root = facts.default;
-    createKey = false;
-  } else if (!root.key && facts.default?.key && facts.default.evidence) {
+  const createKey = true;
+  if (
+    facts.pluginRootAbsolute &&
+    !root.key &&
+    facts.default?.validKey &&
+    !facts.default.sharedMarker &&
+    facts.default.evidence
+  ) {
     root = facts.default;
   }
-  const legacy = root === facts.default && (root.evidence || facts.localMarker === "valid");
+  const legacy =
+    root.root === facts.default?.root &&
+    facts.default.validKey &&
+    facts.default.evidence &&
+    !facts.default.sharedMarker;
   if (codex && (!root.key || (codex.root === root.root && !legacy))) return stop();
   return select(
     root,
@@ -750,11 +756,12 @@ export async function initializePairing(options = {}) {
   if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
   const initial = await detectClients(setupOptions);
   if (initial.record && !initial.install.shared) fail("pairing_record_mismatch");
-  const profileRoot =
+  const profileRoot = normalizeRoot(
     options.claudeProfileRoot ??
-    claudeRegistration(initial.install)?.profileRoot ??
-    (options.env ?? process.env).CLAUDE_PLUGIN_DATA ??
-    (options.standardClaudeOrigin === true ? locations.knownClaudeRoot : undefined);
+      claudeRegistration(initial.install)?.profileRoot ??
+      (options.env ?? process.env).CLAUDE_PLUGIN_DATA ??
+      (options.standardClaudeOrigin === true ? locations.knownClaudeRoot : undefined),
+  );
   if (profileRoot === undefined) return disabled("claude_profile_root_required");
   if (!absolute(profileRoot)) fail("invalid_claude_profile_root");
   const registeredProfile = claudeRegistration(initial.install)?.profileRoot;
@@ -837,6 +844,8 @@ export async function initializePairing(options = {}) {
       await saveInstall(locations, install);
       await options.checkpoint?.("initialized");
     } else if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
+    // Root-local history survives loss or replacement of the coordination directory.
+    await privateWrite(join(root, "paired-root"), JSON.stringify({ version: 1, paired: true }));
     const record = {
       version: 1,
       id: install.shared.id,

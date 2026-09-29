@@ -93,23 +93,34 @@ Claude remains disabled with `pairing_needed` until explicit re-adoption; a stal
 reports `pairing_record_missing`. Setup profile conflicts report `claude_profile_mismatch`, distinct
 from wrong-record delivery.
 
+Cursor-based legacy adoption requires a valid `project-key`, Claude-only cursor evidence, no active
+or retired Claude registration, and no `paired-root` entry. Garbage keys and directories named
+`project-key` do not qualify.
+
 Absent coordination preserves normal 0.1.1 first use, including an unusable HOME, a missing path,
 ENOTDIR, or a non-directory/foreign coordination entry. Degraded means an owned coordination
-directory has existing records that cannot be read or trusted. It never creates a project key or
-infers adoption from Claude cursors. Without a delivered record, it uses an existing profile key, or
-a validated profile-local adoption record naming an existing default-root key. An eligible unretired
-root remains active as `standalone_unregistered`, with separate detail `coordination unreadable`.
-Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone key reports
-`standalone_key_missing`, never `paired_key_missing`.
+directory cannot be listed, or its existing records cannot be read or trusted. It never creates a
+project key or infers adoption from Claude cursors. Without a delivered record, it uses an existing
+profile key, or a validated profile-local adoption record naming an existing default-root key. An
+eligible unretired root remains active as `standalone_unregistered`, with separate detail
+`coordination unreadable`. Otherwise memory is disabled with `pairing_needed`; a lost locally
+recorded standalone key reports `standalone_key_missing`, never `paired_key_missing`.
 
 Registration of a genuine legacy-gap adoption first writes
 `<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned subdirectory). It
 records version, profile root and adopted default root, with no key or conversation content, and is
-never transmitted. This validated local history preserves that adoption through coordination damage
-or loss; a fresh keyless profile cannot join a pair merely because its root has Claude cursors. An
-existing profile key takes precedence. With readable coordination, only the registered profile
-follows its binding; another profile stays standalone. Registration unsupported on Windows, or
-skipped because an unrelated default root is damaged, adds no unregistered status note.
+never transmitted. This validated local history preserves that adoption only in degraded mode. With
+absent or readable coordination, the local marker does not change normal root selection or bypass
+registration gates. Initialization and adoption publish an owner-only `paired-root` marker in the
+shared root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
+adoption of that root, including after coordination loss. It does not pause or disable an otherwise
+entitled client. A fresh profile gets its own key after loss; an explicitly delivered missing record
+still reports `pairing_record_missing`. An existing profile key takes precedence. With readable
+coordination, only the registered profile follows its binding; another profile stays standalone.
+Unsupported registration on Windows adds no unregistered status note. An unrelated damaged default
+root does not prevent registration or add a status note. Only absolute plugin-data paths are
+registered, normalized with `path.resolve`; relative, empty or invalid paths retain standalone
+behavior without registration. Every install record is validated before publication.
 
 Reset pauses the old shared root, rotates its generation, and writes a private `retired` marker
 there. Retirement is checked only at the selected root. A present `retired` entry, valid or invalid,

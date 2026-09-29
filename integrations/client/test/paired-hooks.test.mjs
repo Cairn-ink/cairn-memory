@@ -67,6 +67,7 @@ async function setup(t, paired = true, customRoot = false) {
   function run(action, input = {}, overrides = {}, entry = hook, args = []) {
     const child = spawn(process.execPath, [entry, ...(entry === hook ? [action] : []), ...args], {
       env: { ...env, ...overrides },
+      cwd: workspace.path,
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "",
@@ -605,3 +606,83 @@ test("fresh B cannot join or resume a degraded default-root pair", async (t) => 
   assert.notEqual(f.requests.at(-1).body.project_id, pairedId);
   assert.equal((await readControlState(root)).paused, true);
 });
+
+for (const loss of ["directory", "records", "file"]) {
+  test(`fresh B cannot inherit a captured pair after coordination loss: ${loss}`, async (t) => {
+    const f = await setup(t);
+    const root = join(f.options.home, ".cairn-memory");
+    const transcript = join(f.workspace.path, "lost-coordination.jsonl");
+    const event = {
+      cwd: "/p",
+      session_id: "lost-coordination",
+      transcript_path: transcript,
+      prompt: "synthetic",
+    };
+    await writeFile(transcript, row("before"));
+    await f.run("capture", event);
+    await appendFile(transcript, row("after"));
+    await f.run("capture", event);
+    assert.equal(f.requests.length, 1);
+    const pairedId = f.requests[0].body.project_id;
+    await setPaused(root, true);
+    const coordination = join(f.options.home, ".cairn-memory-clients");
+    assert.equal(JSON.parse(await readFile(join(root, "paired-root"))).paired, true);
+    if (loss === "records") {
+      await unlink(join(coordination, "install.json"));
+      await unlink(join(coordination, "pairing.json"));
+    } else {
+      await rm(coordination, { recursive: true });
+      if (loss === "file") await writeFile(coordination, "not coordination");
+    }
+    assert.match((await f.run("status")).stdout, /pairing_record_missing/);
+    await f.run("recall", event);
+    assert.equal(f.requests.length, 1, "A never bypasses missing explicit record");
+    const b = {
+      CLAUDE_PLUGIN_DATA: join(f.options.home, "profile-b"),
+      CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined,
+    };
+    assert.equal((await f.run("resume", {}, b)).code, 0);
+    assert.equal((await readControlState(root)).paused, true);
+    await f.run("recall", event, b);
+    assert.equal(f.requests.length, 2);
+    assert.notEqual(f.requests.at(-1).body.project_id, pairedId);
+    assert.notEqual(
+      await readFile(join(b.CLAUDE_PLUGIN_DATA, "project-key"), "utf8"),
+      await readFile(join(root, "project-key"), "utf8"),
+    );
+    assert.equal((await readControlState(root)).paused, true);
+  });
+}
+
+for (const form of ["trailing", "relative", "empty"]) {
+  test(`noncanonical profile leaves other profiles and later setup usable: ${form}`, async (t) => {
+    const f = await setup(t, false);
+    const raw =
+      form === "trailing"
+        ? f.env.CLAUDE_PLUGIN_DATA + "/"
+        : form === "relative"
+          ? "relative-profile"
+          : "";
+    // The relative and empty profiles are resolved only inside the owned fixture cwd.
+    const a = { CLAUDE_PLUGIN_DATA: raw };
+    await f.run("recall", { cwd: "/p", prompt: "synthetic" }, a);
+    const count = f.requests.length;
+    const b = { CLAUDE_PLUGIN_DATA: join(f.options.home, "other-profile") };
+    await f.run("recall", { cwd: "/p", prompt: "synthetic" }, b);
+    assert.equal(f.requests.length, count + 1);
+    await f.run("recall", { cwd: "/p", prompt: "synthetic" }, { CLAUDE_PLUGIN_DATA: undefined });
+    assert.equal(f.requests.length, count + 2);
+    const snapshot = await detectClients(f.options);
+    assert.equal(
+      snapshot.install.clients.claude.profileRoot,
+      form === "trailing" ? f.env.CLAUDE_PLUGIN_DATA : b.CLAUDE_PLUGIN_DATA,
+    );
+    const pending = await initializePairing({
+      ...f.options,
+      adopt: true,
+      claudeProfileRoot: snapshot.install.clients.claude.profileRoot,
+      root: snapshot.install.clients.claude.root,
+    });
+    assert.equal(pending.status, "binding_pending");
+  });
+}

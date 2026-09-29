@@ -4,7 +4,12 @@ import { readFile, cp } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
-import { BASE, observeStandalone, observeProfiles } from "../testing/main-golden.mjs";
+import {
+  BASE,
+  observeStandalone,
+  observeProfiles,
+  observeProfileForms,
+} from "../testing/main-golden.mjs";
 import { observeHosted } from "./observe-legacy.mjs";
 const plugin = fileURLToPath(new URL("../../../plugins/cairn-memory/", import.meta.url));
 const golden = JSON.parse(
@@ -20,7 +25,7 @@ test("frozen golden pins main 0.1.1 and its complete runtime source inventory", 
   ]) {
     assert.match(golden.hashes[`plugins/cairn-memory/${file}`], /^[a-f0-9]{64}$/);
   }
-  assert.equal(golden.standalone.length, 44);
+  assert.equal(golden.standalone.length, 84);
 });
 test("isolated 0.1.2 plugin matches 0.1.1 bytes with only VERSION token changes", async (t) => {
   const workspace = createTestWorkspace(t, { prefix: "cx2-main-parity-" });
@@ -39,4 +44,5 @@ test("isolated 0.1.2 plugin matches 0.1.1 bytes with only VERSION token changes"
   assert.deepEqual(actual, expected);
   assert.deepEqual(await observeHosted(workspace.path), golden.hosted);
   assert.deepEqual(await observeProfiles(workspace.path), golden.profiles);
+  assert.deepEqual(await observeProfileForms(workspace.path), golden.profileForms);
 });

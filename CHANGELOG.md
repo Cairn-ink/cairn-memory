@@ -63,11 +63,14 @@
   directories, symlinked ancestors and platforms without POSIX owner APIs.
   Absent coordination retains normal first-use behavior; unreadable existing
   coordination never mints a key. It preserves existing profile keys or a
-  legacy adoption recorded privately in that profile; cursor evidence alone
-  cannot admit a fresh profile while coordination is degraded. Unusable HOME
+  legacy adoption recorded privately in that profile, used only while degraded.
+  Shared-root markers prevent fresh profiles from inferring legacy use after
+  coordination loss; cursor evidence also requires a valid default key. Absolute
+  plugin-data roots are normalized, and relative/empty roots never register.
+  Install records are validated before publication. Unusable HOME
   and non-directory coordination retain absent-coordination behavior. One pure
   decision function governs hooks, launchers and controls. Reset pauses and marks the
-  retired root. A present marker disables only the selected root, blocks resume
+  retired root. A present `retired` entry disables only the selected root, blocks resume
   and setup/reset reuse, and retains successful hook exits with a clear status.
   Temporary-source adoption rejects durable sources, which are adopted in place.
   Golden fixtures compare memory traffic against 0.1.1, allowing only VERSION

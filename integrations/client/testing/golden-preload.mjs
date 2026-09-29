@@ -10,6 +10,10 @@ if (process.env.CAIRN_TEST_PLATFORM) {
   Object.defineProperty(process, "platform", { value: process.env.CAIRN_TEST_PLATFORM });
   os.platform = () => process.env.CAIRN_TEST_PLATFORM;
 }
+if (process.env.CAIRN_TEST_FOREIGN_UID === "yes") {
+  const uid = process.getuid();
+  process.getuid = () => uid + 1;
+}
 if (process.env.CAIRN_TEST_NO_GETUID === "yes") process.getuid = undefined;
 if (process.env.CAIRN_TEST_FALSY_HOME === "yes") os.homedir = () => "";
 syncBuiltinESMExports();
