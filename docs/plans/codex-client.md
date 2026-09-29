@@ -1148,3 +1148,89 @@ this contract, the setup plan and the session-episodes plan resolved (exit 0).
 Working/staged `git diff --check` exited 0 before the new local correction commit.
 No Node 20/24 execution, F0/HMA host calls, new-client implementation or human
 two-client acceptance is implied by these existing repository checks.
+
+### CX-2 implementation decisions and handoff
+
+Resolved with the coordinator during CX-2:
+
+- Release parity against main `3a1c17d9c888b28e878f5e2d8de0180d9b49fa4e`
+  permits only the `VERSION` token changing from `0.1.1` to `0.1.2` in telemetry
+  bodies or version-bearing headers. Root selection, key bytes/handling, HMAC,
+  request bodies, session IDs, limits and successful hook exits otherwise retain
+  their released behavior. The frozen golden fixture is reproducible from that
+  Git object; parity tests exercise the isolated plugin, including a falsy home.
+  Baseline reproduction is an explicit maintainer check so ordinary parity tests
+  also run in shallow CI clones without historic Git objects.
+- `sessions/` is reserved for **Claude in every root**. CX-3 must put Codex
+  cursors and worker state elsewhere. The shared cursor helper is the extracted
+  Claude capture path, not a location Codex may reuse. The F0 harness is test-only,
+  ran in isolated temporary homes, and is excluded from shipped artifacts.
+  A source-boundary guard rejects non-test references outside the audited Claude
+  path and the pairing detector; an artifact guard excludes `test/feasibility/`.
+- For the legacy default-root gap, a valid, regular, owner-only
+  `sessions/<64 lowercase hex>.json` cursor with a nonnegative integer offset is
+  positive evidence of prior Claude use. Detection visits at most 256 entries in
+  this Cairn directory, without recursion or transcript reads. No evidence within
+  that bound means newcomer/confirmation required; merely having `sessions/`
+  does not suffice. Shared key, telemetry and control files never count.
+  With evidence, preserve the default root even if the upgraded host newly exports
+  `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
+  evidence the new Claude client sends nothing until explicit adoption.
+- The internal client names are `claude` and `codex`. Version-1 `install.json`
+  contains `clients` (root/state/initialized), optional `shared` initialization and
+  readiness, and retained invalidated bindings after an explicit identity reset.
+  `pairing.json` binds a random record ID, root, both participants, policy and
+  machine/boot/PID namespace. No key or conversation is recorded there.
+- Linux lock liveness uses boot ID plus `/proc/self/ns/pid`. A foreign or unknown
+  namespace is never reaped. Other platforms can continue uncontended standalone
+  use, but pairing refuses an unverified namespace; platform support remains a
+  verification gate. The test seam supplies namespace and synchronous liveness.
+- The setup APIs require an absolute home, consent for both clients, and an
+  explicit stopped-host/worker assertion from the caller. `initializePairing`
+  writes pending bindings before publishing a key and returns `binding_pending`.
+  Retry reuses the winner; an initialized missing key returns `paired_key_missing`.
+  `completePairing` requires both configurations confirmed before activation.
+  Pending clients cannot initialize another root. CX-7 owns consent UI, host
+  configuration and verifying hosts are stopped; these APIs execute no host.
+- `detectClients` is read-only and uses exact known files. A setup caller with
+  unconfirmed origin receives `claude_confirmation_needed` before any writes;
+  `usesClaude: true` requires adoption. `standardClaudeOrigin: true` is evidence
+  supplied by setup, never inferred from a missing file. Setup must also treat
+  relocated/nonstandard origins as unconfirmed. The standalone Claude path keeps
+  its released first-use behavior; a new standalone Codex caller must supply
+  origin evidence or the person's negative answer.
+- Pairing rotates the pause generation, preserving an existing pause. New/stale
+  Claude cursors begin at EOF. The shared API supplies the same control root to a
+  scripted second client; CX-3 still owns its worker/cursor implementation.
+- `resetIdentity` requires an explicit identity-reset confirmation, stopped
+  hosts/workers and a new durable root. It retains old state and invalidated
+  binding metadata, creates only the selected primary client, starts paused and
+  returns the changed-scope disclosure. The second client must explicitly adopt.
+  Restoring an original key needs no regeneration API: with hosts stopped, restore
+  the backup as a regular 0600 file, then verify both project IDs before resume.
+
+API details and test commands are in
+[`integrations/client/README.md`](../../integrations/client/README.md).
+Pinned-host Claude configuration delivery is still **to verify**: CX-2 performs
+only synthetic tests, not Claude/Codex host invocations or real-user migration.
+
+The optional `adoptFrom` API parameter covers an explicitly selected temporary
+legacy key: with both hosts stopped, copy that key under the setup lock to the
+chosen durable `root` using exclusive temporary publication/hard linking. Reject
+an existing different destination key, preserve the source, and leave both
+clients pending until configuration completes. This is an API tested with
+synthetic paths, not an executed real-user migration.
+
+CX-2 synthetic verification on Linux, local Node **v22.16.0**: `npm test`
+(160 tests), `npm run validate`, `npm run test:core` (1,105 tests),
+`npm run test:artifact` (86 tests), `npm run test:pairing` (29 tests),
+`demo:capture`, `demo:recall`, explicit main-golden reproduction, and
+`git diff --check` all exited 0. The artifact suite initially failed because this
+isolated worktree lacked adapter dependencies; after installing the pinned
+adapters from exact locally cached public-package entries with `--offline`, its
+retry passed. No registry/network, model, Claude CLI or Codex CLI call was made
+(synthetic loopback HTTP is used by fixtures). All suites ran sequentially with
+worktree temporary/cache directories and a temporary home; a preload guard rejects
+real-home resolution and access to real client-state paths. No Node 20 or 24 run
+is claimed here; CI owns those matrix runs. CONTRIBUTING has no dedicated
+identity/pause demo; capture and recall demos were run with scripted models.

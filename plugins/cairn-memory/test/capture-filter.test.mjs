@@ -42,6 +42,7 @@ async function capture({ port, dataDir, transcript, sessionId }) {
       CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
       CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
       CLAUDE_PLUGIN_DATA: dataDir,
+      HOME: dataDir + "-home",
     },
     stdio: ["pipe", "ignore", "ignore"],
   });
@@ -113,7 +114,7 @@ async function frozenWindow(workspace, sessionId, text) {
   const transcript = join(workspace.path, "transcript.jsonl");
   await writeFile(transcript, text);
   const cursorPath = captureCursorPath(dataDir, sessionId);
-  await mkdir(join(dataDir, "sessions"), { recursive: true });
+  await mkdir(join(dataDir, "sessions"), { recursive: true, mode: 0o700 });
   await writeCaptureCursor(cursorPath, { offset: 0, generation: "initial", discardUntilNewline: false,
     pendingEnd: Buffer.byteLength(text) });
   return { dataDir, transcript, cursorPath };

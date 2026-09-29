@@ -2,6 +2,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { privateDirectory, privateRead, privateWrite } from "./private-state.mjs";
 
 async function randomIdFile(dataDir, filename) {
   const path = join(dataDir, filename);
@@ -44,8 +45,24 @@ export function installId(dataDir) {
  * Stable project id keyed with a separate secret that never leaves the device.
  * Keeping it separate from installId prevents Cairn from testing likely paths.
  */
-export async function opaqueProjectId(dataDir, cwd) {
+export async function projectKey(dataDir, { create = true, checkpoint } = {}) {
+  await privateDirectory(dataDir);
+  const path = join(dataDir, "project-key");
+  let value = await privateRead(path, { missing: true });
+  if (value === undefined) {
+    if (!create) throw new Error("paired_key_missing");
+    await privateWrite(path, `${randomUUID()}\n`, { exclusive: true, checkpoint });
+    value = await privateRead(path);
+  }
+  const key = value.trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
+    throw new Error("invalid_identity: project-key");
+  }
+  return key;
+}
+
+export async function opaqueProjectId(dataDir, cwd, options) {
   if (!cwd) return undefined;
-  const key = await randomIdFile(dataDir, "project-key");
+  const key = await projectKey(dataDir, options);
   return createHmac("sha256", key).update(String(cwd)).digest("hex");
 }

@@ -35,15 +35,15 @@ async function readOwner(path) {
   }
 }
 
-async function reapDeadOwner(path, owner) {
-  if (processIsAlive(owner.pid)) return;
+async function reapDeadOwner(path, owner, processIsAlive, context) {
+  if (processIsAlive(owner.pid) !== false) return;
 
   // A token-specific marker elects exactly one reaper. It prevents a
   // delayed contender from unlinking a successor after another contender has
   // already recovered this dead owner's lock.
   const reaperPath = `${path}.reap-${owner.token}`;
   const reaperToken = randomUUID();
-  const reaperOwner = { pid: process.pid, token: reaperToken };
+  const reaperOwner = { pid: process.pid, token: reaperToken, ...context };
   const reaperOwnerPath = `${reaperPath}.owner-${process.pid}-${reaperToken}`;
   await writeFile(reaperOwnerPath, JSON.stringify(reaperOwner), {
     mode: 0o600,
@@ -63,7 +63,7 @@ async function reapDeadOwner(path, owner) {
   if (
     current?.pid === owner.pid &&
     current.token === owner.token &&
-    !processIsAlive(current.pid)
+    processIsAlive(current.pid) === false
   ) {
     await unlink(path).catch(() => {});
     await unlink(`${path}.owner-${owner.pid}-${owner.token}`).catch(() => {});
@@ -84,11 +84,12 @@ async function reapDeadOwner(path, owner) {
 export async function withFileLock(
   path,
   work,
-  { timeoutMs = 30_000, pollMs = 100 } = {},
+  { timeoutMs = 30_000, pollMs = 100, context, validateOwner = async () => {},
+    isAlive = processIsAlive, validatePath = async () => {} } = {},
 ) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const token = randomUUID();
-  const owner = { pid: process.pid, token };
+  const owner = { pid: process.pid, token, ...context };
   const ownerPath = `${path}.owner-${owner.pid}-${token}`;
   await writeFile(ownerPath, JSON.stringify(owner), {
     mode: 0o600,
@@ -104,8 +105,10 @@ export async function withFileLock(
         acquired = true;
       } catch (error) {
         if (error?.code !== "EEXIST") throw error;
+        await validatePath(path);
         const existing = await readOwner(path);
-        if (existing) await reapDeadOwner(path, existing);
+        if (existing) await validateOwner(existing);
+        if (existing) await reapDeadOwner(path, existing, isAlive, context);
         if (!acquired) await wait(pollMs);
       }
     }

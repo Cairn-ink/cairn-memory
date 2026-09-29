@@ -94,7 +94,7 @@ async function writeState(path, state) {
 }
 
 /** Atomically change pause state while preserving the pause generation. */
-export async function setPaused(dataDir, paused) {
+export async function setPaused(dataDir, paused, { rotate = false } = {}) {
   const controlPaths = paths(dataDir);
   let updated;
   const acquired = await withFileLock(
@@ -102,7 +102,7 @@ export async function setPaused(dataDir, paused) {
     async () => {
       const current = await readControlState(dataDir);
       const generation = paused
-        ? current.paused && current.valid
+        ? current.paused && current.valid && !rotate
           ? current.generation
           : randomUUID()
         : current.paused && current.valid

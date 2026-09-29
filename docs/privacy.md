@@ -27,7 +27,9 @@ The service may retain durable Memory text and bounded redacted Source Receipts.
 
 ## Local state
 
-By default the plugin stores control state under `~/.cairn-memory/`:
+The unpaired plugin uses `CLAUDE_PLUGIN_DATA` when supplied, otherwise
+`~/.cairn-memory/` (the released temporary fallback applies only to a falsy home).
+An explicitly paired plugin uses the recorded durable shared root:
 
 - `install-id`: random id used only for anonymous lifecycle telemetry;
 - `project-key`: separate random secret used to derive opaque project ids and never transmitted;
@@ -36,6 +38,36 @@ By default the plugin stores control state under `~/.cairn-memory/`:
 - `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
   keyed by a hash of the Claude session id;
 - process-owned lock files coordinating control changes and session capture.
+
+Version 0.1.2 also stores coordination metadata under
+`~/.cairn-memory-clients/`, independently of `CLAUDE_PLUGIN_DATA`:
+
+- `install.json`: version, established/pending client/root bindings, initialization
+  and configuration progress; explicit resets retain invalidated binding metadata;
+- `pairing.json`: version, absolute shared root, participating clients, record ID,
+  initialize/adopt policy and machine/boot/PID namespace;
+- `setup.lock` and token-specific owner/recovery files: process ownership for
+  registration, key eligibility and pairing.
+
+The coordination directory is 0700 and its files are 0600. Owners, permissions
+and symlinks are validated. Metadata contains local paths but no keys, tokens or
+conversation text, and is never included in telemetry. Standalone use retains the
+falsy-home temporary fallback for these paths; setup and pairing require a
+specified absolute durable home. Crash recovery may leave private temporary or
+lock-recovery files; only a process's own temporary file is cleaned automatically.
+
+Pairing requires consent and stopped hosts/workers. Newcomers remain disabled with
+`pairing_needed`; established conflicting clients keep their own existing keys.
+Only Claude writes `sessions/`. A bounded check of valid cursor metadata there can
+establish prior Claude use of a shared default root; shared telemetry/key/control
+files cannot. No host directory search or conversation read is involved.
+A delivered pairing record selects the shared root and pause generation;
+`CAIRN_MEMORY_STATE_DIR` is a validated worker handoff, never an override.
+Paired key loss disables memory with `paired_key_missing`, while hooks still exit
+successfully. Restore the original backup key with stopped workers to retain IDs.
+An explicit identity reset retains old state, changes addressable project scope,
+starts paused at a fresh EOF barrier and requires new adoption by the second client.
+There is no automatic key regeneration, history merge or paused backfill for a pair.
 
 Stop and PreCompact pipe only session id, transcript path, working directory,
 and a content-free control generation directly to the detached worker. The

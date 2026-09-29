@@ -36,3 +36,25 @@ only session id, transcript path, working directory, and a content-free control
 generation directly to the worker; it does not use a queue file or enlarge the
 worker environment. See the repository security policy before reporting a
 possible privacy issue.
+
+
+## Explicit pairing (0.1.2)
+
+Standalone Claude keeps its existing key and root. Leave `pairing_record` unset
+unless you have explicitly adopted a shared Cairn root. Set it to the absolute
+`~/.cairn-memory-clients/pairing.json` path in plugin configuration after both
+clients/workers are stopped and the shared binding is prepared. The option reaches
+hooks as `CLAUDE_PLUGIN_OPTION_PAIRING_RECORD`; setup tooling is not shipped here.
+Both clients must be configured before the shared binding becomes active.
+
+`pairing_needed` means a newcomer is disabled, or an established client retains its
+own key while sharing awaits confirmation. `paired_key_missing` disables both
+clients' memory without blocking host work. Do not generate a replacement key:
+restore the original 0600 backup with both clients stopped, then verify project IDs.
+An explicitly confirmed identity reset changes scope and requires fresh adoption.
+
+Paired pause/resume uses one shared generation and discards paused history at EOF.
+Old workers must be stopped during pairing. Shared state across PID namespaces is
+unsupported; current pairing verification is Linux-only. Claude configuration
+on real hosts remains to verify. See [privacy](../../docs/privacy.md) and the
+[shared API](../../integrations/client/README.md) for state and recovery details.

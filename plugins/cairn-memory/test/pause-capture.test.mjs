@@ -19,7 +19,7 @@ function record(id, content) {
 
 function startHook(action, input, env) {
   const child = spawn(process.execPath, [hook, action], {
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...env, HOME: env.CLAUDE_PLUGIN_DATA + "-home" },
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stdout = "";

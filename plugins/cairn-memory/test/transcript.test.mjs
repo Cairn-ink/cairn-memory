@@ -143,6 +143,7 @@ test("capture hook redacts locally before constructing the HTTP body", async (t)
         CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
         CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
         CLAUDE_PLUGIN_DATA: join(dir, "data"),
+        HOME: join(dir, "home"),
       },
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -201,6 +202,7 @@ test("detached capture survives after its short-lived launcher exits", async (t)
         CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
         CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
         CLAUDE_PLUGIN_DATA: join(dir, "data"),
+        HOME: join(dir, "home"),
       },
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -233,6 +235,8 @@ test("a recall outage fails open with a successful, silent hook exit", async () 
     {
       env: {
         ...process.env,
+        HOME: await mkdtemp(join(tmpdir(), "cairn-outage-home-")),
+        CLAUDE_PLUGIN_DATA: undefined,
         CLAUDE_PLUGIN_OPTION_API_ENDPOINT: "http://127.0.0.1:9",
         CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
         CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",

@@ -1,0 +1,609 @@
+{
+  "base": "3a1c17d9c888b28e878f5e2d8de0180d9b49fa4e",
+  "hashes": {
+    "plugins/cairn-memory/lib/capture-cursor.mjs": "e49ec3c55619e310e0c82a9afb0346f8860ea9616cf8fd12507442e5318e44c1",
+    "plugins/cairn-memory/lib/capture-event.mjs": "e8523cef22f6a5d153b0652e1d5abff178ba52dfab0dda2e1754a74934af2d30",
+    "plugins/cairn-memory/lib/config.mjs": "cb68e6ea051cef69c2e1bb0b58100623ec0f56e780b8b182360dc3c56f3b372c",
+    "plugins/cairn-memory/lib/control-state.mjs": "a2cbf16b3d3bff6a83ef7e01ca8337b3ea980257ed7f9e0a9d8dc85ed90a2e20",
+    "plugins/cairn-memory/lib/file-lock.mjs": "d8a267156fbda18888aded8f01e364a727128a95254f97066a13ecc1f876a508",
+    "plugins/cairn-memory/lib/http.mjs": "8e31f3693f6b70788b4be99d6f0c85e249aa12d3b63ff5646a97d1bfa1c533f0",
+    "plugins/cairn-memory/lib/identity.mjs": "6c5e7197139e7956ffdb977ae95792b61db4ba26303d6a665b67c3a830b6836f",
+    "plugins/cairn-memory/lib/recall-query.mjs": "dd097f2ac96b0cbebef1a73ee1bec0c7f9665e5eee7e2baaeb9848afacf15991",
+    "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5",
+    "plugins/cairn-memory/lib/transcript.mjs": "f0303e45af508854d0179ff0b688e099c0ad21753801ca6a083bfc0681bf7250",
+    "plugins/cairn-memory/lib/version.mjs": "6e5e3197bcd22e6e6674f825578d7bad32a71a4d28bd9bc93f407a88fc8240cc",
+    "plugins/cairn-memory/scripts/hook.mjs": "a26d1b0ac0b94cd211a0a762d4d6b737cc21782f01358ad6344304e217e6a2b2",
+    "plugins/cairn-memory/scripts/launch-capture.mjs": "a628fc0642ca625b5be9b3eb6fa0770e19a19e9386021ddf8f3f1f5508e10f30"
+  },
+  "standalone": [
+    {
+      "mode": "plugin-data",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "home",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "mode": "falsy-home",
+      "key": "11111111-1111-4111-8111-111111111111\n",
+      "identity": "11111111-1111-4111-8111-111111111111\n",
+      "requestBytes": "{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"plugin_started\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/recall\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"query\\\":\\\"Prefer short examples.\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"limit\\\":6}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/capture\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\",\"authorization\":\"Bearer synthetic-token\"},\"body\":\"{\\\"client\\\":\\\"claude-code\\\",\\\"event_id\\\":\\\"6c0ddbaddbda0bd63ea3b923faa2238715c4aff15068c0c43a753069cdcebcfa\\\",\\\"session_id\\\":\\\"synthetic-session\\\",\\\"project_id\\\":\\\"986760371e4ea6565e8444e5f824fc2ba27817e0676345adfb4fd0c362d59332\\\",\\\"messages\\\":[{\\\"id\\\":\\\"synthetic-golden\\\",\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Please remember concise examples.\\\"}]}\"}\n{\"url\":\"https://synthetic.invalid/api/memory/telemetry\",\"method\":\"POST\",\"headers\":{\"content-type\":\"application/json\"},\"body\":\"{\\\"install_id\\\":\\\"11111111-1111-4111-8111-111111111111\\\",\\\"event\\\":\\\"capture_succeeded\\\",\\\"client\\\":\\\"claude-code\\\",\\\"version\\\":\\\"0.1.1\\\",\\\"platform\\\":\\\"linux\\\"}\"}\n",
+      "outcomes": [
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    }
+  ],
+  "hosted": {
+    "requests": [
+      {
+        "path": "/api/memory/capture",
+        "bytes": 42790,
+        "sha256": "cc4d7358fa5c4877c7700ad347b406ceb914dcdd2cd7df33bf0d28323bb91c37",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "790d43ed043cdc8dafe3bc4a4a57ba482e7a2e24761ab013f5912b2e1ad378c3",
+        "messages": [
+          {
+            "id": "4a1ceabe7ba202bcd4dab5cc6719d5efc46c094ad70bbeaf77641b61420b26c6",
+            "role": "user",
+            "units": 20000
+          },
+          {
+            "id": "synthetic-1",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-2",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "5fc814d9a7bb379b2210006b69808cff12a471020810b5ea6710885f0566addc",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-4",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-5",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "35078c7d2eb30483ff7bcbcabf7db7cfedc22c03373dfdde6f6c141b5e262017",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-7",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-8",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "8cc7e681a4853cc3799e02e682ec4b1fde48620fb143ce41d35615066a06bc05",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-10",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-11",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "fe9ace2219487363a810a97870a4d3fef33db8adac3913e5cec4cbce76479403",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-13",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-14",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "d69f8958a2b5dbb2ee3f54764dfbd06b1406c011d34e4ce8ffa388c56445772f",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-16",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-17",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "1d54dd58ac4118120cf578631db0b84b8965bccdc580274768de5be6b2356360",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-19",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-20",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "2ae1c99177c31230cc9c7918d0fc15d9dfef759820804ba3ed71624fbb41bb89",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-22",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-23",
+            "role": "assistant",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 376,
+        "sha256": "b1f343ad3b2fae166d38290537710b556e965a71a615aecf7dd9ce3485480651",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "e7a9d1ba567ed70e94d01d9295880ac2442ee48b13b5be46565a38c695642862",
+        "messages": [
+          {
+            "id": "0e925c4dfbc130e9a6e75a2428bdac3d348ed5810e1750acc3ed3493e3088a55",
+            "role": "user",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 42790,
+        "sha256": "cc4d7358fa5c4877c7700ad347b406ceb914dcdd2cd7df33bf0d28323bb91c37",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "790d43ed043cdc8dafe3bc4a4a57ba482e7a2e24761ab013f5912b2e1ad378c3",
+        "messages": [
+          {
+            "id": "4a1ceabe7ba202bcd4dab5cc6719d5efc46c094ad70bbeaf77641b61420b26c6",
+            "role": "user",
+            "units": 20000
+          },
+          {
+            "id": "synthetic-1",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-2",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "5fc814d9a7bb379b2210006b69808cff12a471020810b5ea6710885f0566addc",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-4",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-5",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "35078c7d2eb30483ff7bcbcabf7db7cfedc22c03373dfdde6f6c141b5e262017",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-7",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-8",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "8cc7e681a4853cc3799e02e682ec4b1fde48620fb143ce41d35615066a06bc05",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-10",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-11",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "fe9ace2219487363a810a97870a4d3fef33db8adac3913e5cec4cbce76479403",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-13",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-14",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "d69f8958a2b5dbb2ee3f54764dfbd06b1406c011d34e4ce8ffa388c56445772f",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-16",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-17",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "1d54dd58ac4118120cf578631db0b84b8965bccdc580274768de5be6b2356360",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-19",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-20",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "2ae1c99177c31230cc9c7918d0fc15d9dfef759820804ba3ed71624fbb41bb89",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-22",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-23",
+            "role": "assistant",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 376,
+        "sha256": "b1f343ad3b2fae166d38290537710b556e965a71a615aecf7dd9ce3485480651",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "e7a9d1ba567ed70e94d01d9295880ac2442ee48b13b5be46565a38c695642862",
+        "messages": [
+          {
+            "id": "0e925c4dfbc130e9a6e75a2428bdac3d348ed5810e1750acc3ed3493e3088a55",
+            "role": "user",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 42790,
+        "sha256": "cc4d7358fa5c4877c7700ad347b406ceb914dcdd2cd7df33bf0d28323bb91c37",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "790d43ed043cdc8dafe3bc4a4a57ba482e7a2e24761ab013f5912b2e1ad378c3",
+        "messages": [
+          {
+            "id": "4a1ceabe7ba202bcd4dab5cc6719d5efc46c094ad70bbeaf77641b61420b26c6",
+            "role": "user",
+            "units": 20000
+          },
+          {
+            "id": "synthetic-1",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-2",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "5fc814d9a7bb379b2210006b69808cff12a471020810b5ea6710885f0566addc",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-4",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-5",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "35078c7d2eb30483ff7bcbcabf7db7cfedc22c03373dfdde6f6c141b5e262017",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "synthetic-7",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-8",
+            "role": "user",
+            "units": 35
+          },
+          {
+            "id": "8cc7e681a4853cc3799e02e682ec4b1fde48620fb143ce41d35615066a06bc05",
+            "role": "assistant",
+            "units": 35
+          },
+          {
+            "id": "synthetic-10",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-11",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "fe9ace2219487363a810a97870a4d3fef33db8adac3913e5cec4cbce76479403",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-13",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-14",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "d69f8958a2b5dbb2ee3f54764dfbd06b1406c011d34e4ce8ffa388c56445772f",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-16",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-17",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "1d54dd58ac4118120cf578631db0b84b8965bccdc580274768de5be6b2356360",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-19",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-20",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "2ae1c99177c31230cc9c7918d0fc15d9dfef759820804ba3ed71624fbb41bb89",
+            "role": "assistant",
+            "units": 36
+          },
+          {
+            "id": "synthetic-22",
+            "role": "user",
+            "units": 36
+          },
+          {
+            "id": "synthetic-23",
+            "role": "assistant",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 376,
+        "sha256": "b1f343ad3b2fae166d38290537710b556e965a71a615aecf7dd9ce3485480651",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "e7a9d1ba567ed70e94d01d9295880ac2442ee48b13b5be46565a38c695642862",
+        "messages": [
+          {
+            "id": "0e925c4dfbc130e9a6e75a2428bdac3d348ed5810e1750acc3ed3493e3088a55",
+            "role": "user",
+            "units": 36
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/capture",
+        "bytes": 321,
+        "sha256": "36eac7734874b4b1ad73bd1dda326bade30eba08c6388428abf37acb3f494cda",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": "synthetic-session/中文",
+        "eventId": "70a7d8092cd28e5254d58e7b2d2fea12229a3b19e27e620ee824f6de67be9bf7",
+        "messages": [
+          {
+            "id": "synthetic-25",
+            "role": "assistant",
+            "units": 32
+          }
+        ]
+      },
+      {
+        "path": "/api/memory/recall",
+        "bytes": 134,
+        "sha256": "db13692e5b0c9fb06c0a9cc27353c35c6c3b8af8a545eb5fb8397bb6569a1729",
+        "authorization": "Bearer synthetic-token",
+        "contentType": "application/json",
+        "sessionId": null,
+        "eventId": null,
+        "messages": null
+      }
+    ],
+    "cursorPath": "sessions/44b6c59a516d5b66d16f861ddb211b0de8e3cd5d05bbe1ddd07a5235be2bd8a5.json",
+    "cursorFiles": [
+      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":43835}",
+      "{\"offset\":0,\"generation\":\"initial\",\"discardUntilNewline\":false,\"pendingEnd\":43835}",
+      "{\"offset\":43835,\"generation\":\"initial\",\"discardUntilNewline\":false}",
+      "{\"offset\":43952,\"generation\":\"initial\",\"discardUntilNewline\":false}"
+    ],
+    "outcomes": [
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ]
+  }
+}

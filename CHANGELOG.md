@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 — explicit client pairing
+
+- Add the optional Claude `pairing_record` setting and validated worker root
+  delivery. Explicit adoption shares project identity and pause barriers; new
+  clients remain disabled until binding completes.
+- Add private coordination records, serialized joint-initialization APIs for
+  future setup, durable no-clobber key publication, and paired lost-key handling.
+- Preserve standalone Claude 0.1.1 behavior, with only the release version token
+  changed in telemetry. Codex installation and real-host setup remain future work.
+
 ## Unreleased — opt-in background context
 
 - `sessionStartContext({groups: {background: true}})` includes current facts and

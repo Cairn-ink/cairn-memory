@@ -1,0 +1,72 @@
+// Owner-only local state. Only ENOENT means absence; never follow symlinks.
+import { constants } from 'node:fs';
+import { lstat, mkdir, open, link, rename, unlink } from 'node:fs/promises';
+import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+
+export async function checkedPath(path, { directory = false, missing = false } = {}) {
+  if (!isAbsolute(path) || resolve(path) !== path) throw new Error('invalid_state_path');
+  let current = parse(path).root;
+  const parts = path.slice(current.length).split('/').filter(Boolean);
+  for (let i = 0; i < parts.length; i++) {
+    current = join(current, parts[i]);
+    let info;
+    try { info = await lstat(current); }
+    catch (error) { if (missing && error.code === 'ENOENT') return undefined; throw error; }
+    if (info.isSymbolicLink()) throw new Error('state_symlink');
+    if (i < parts.length - 1) {
+      if (!info.isDirectory()) throw new Error('invalid_state_parent');
+    } else {
+      if (directory ? !info.isDirectory() : !info.isFile()) throw new Error('invalid_state_type');
+      if (typeof process.getuid !== 'function' || info.uid !== process.getuid()) throw new Error('state_owner');
+      if ((info.mode & 0o777) !== (directory ? 0o700 : 0o600)) throw new Error('state_permissions');
+      return info;
+    }
+  }
+  throw new Error('invalid_state_path');
+}
+export async function privateDirectory(path) {
+  if (!await checkedPath(path, { directory: true, missing: true })) {
+    await mkdir(path, { recursive: true, mode: 0o700 });
+  }
+  await checkedPath(path, { directory: true });
+}
+export async function privateRead(path, { missing = false } = {}) {
+  // Atomic metadata replacement can race the read-only discovery preceding a
+  // setup lock. Retry a changed inode, but never relax ownership or permissions.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const before = await checkedPath(path, { missing });
+    if (!before) return undefined;
+    let file;
+    try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }
+    catch (error) { if (missing && error.code === 'ENOENT') return undefined; throw error; }
+    try {
+      const after = await file.stat();
+      if (after.ino !== before.ino || after.dev !== before.dev) continue;
+      if (!after.isFile() || after.uid !== process.getuid() || (after.mode & 0o777) !== 0o600) throw new Error('state_changed');
+      if (after.size > 64 * 1024) throw new Error('state_too_large');
+      return await file.readFile('utf8');
+    } finally { await file.close(); }
+  }
+  throw new Error('state_changed');
+}
+export async function syncDirectory(path) {
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+export async function privateWrite(path, bytes, { exclusive = false, checkpoint = async () => {} } = {}) {
+  await privateDirectory(dirname(path));
+  await checkedPath(path, { missing: true });
+  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  const file = await open(temporary, 'wx', 0o600);
+  try {
+    try { await file.writeFile(bytes); await file.sync(); } finally { await file.close(); }
+    await checkpoint('temporary-written');
+    if (exclusive) {
+      try { await link(temporary, path); }
+      catch (error) { if (error.code !== 'EEXIST') throw error; }
+    } else await rename(temporary, path);
+    await syncDirectory(dirname(path));
+    await checkpoint('published');
+  } finally { await unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; }); }
+}
