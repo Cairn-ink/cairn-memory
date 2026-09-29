@@ -1,7 +1,6 @@
-import { createHash } from 'node:crypto';
+import { opaqueQuestionId, opaqueSessionId, stableTurnIdV2 } from '../longmemeval/prepare.mjs';
 
-const digest = text => createHash('sha256').update(text).digest('hex');
-const id = (kind, ...parts) => `lme-${kind}-${digest(['m1e-classification-followup-v1', ...parts].join(':'))}`;
+const sourceQuestionIds = ['m1e_workshop_drying_rack_v1', 'm1e_cold_chain_dock_v1'];
 const freeze = value => {
   if (value && typeof value === 'object') {
     Object.values(value).forEach(freeze);
@@ -137,13 +136,13 @@ function logisticsTurn(sessionIndex, turnIndex) {
 }
 
 function makeCase(key, questionText, turnText) {
-  const questionId = id('case', key);
+  const questionId = opaqueQuestionId(key);
   const sessions = Array.from({ length: 16 }, (_, sessionIndex) => ({
     session_index: sessionIndex,
-    session_id: id('session', key, sessionIndex),
+    session_id: opaqueSessionId(key, sessionIndex),
     date: dateAt(sessionIndex),
     turns: Array.from({ length: 32 }, (_, turnIndex) => ({
-      turn_id: id('turn', key, sessionIndex, turnIndex),
+      turn_id: stableTurnIdV2(key, sessionIndex, turnIndex),
       role: 'user',
       content: turnText(sessionIndex, turnIndex),
     })),
@@ -154,9 +153,9 @@ function makeCase(key, questionText, turnText) {
 }
 
 export const sourceCases = freeze([
-  makeCase('workshop-drying-rack',
+  makeCase(sourceQuestionIds[0],
     'For the kiln workshop wet-glaze drying location, what was adopted first, what is adopted now, and what recorded reason explains the change?', workshopTurn),
-  makeCase('cold-chain-dock',
+  makeCase(sourceQuestionIds[1],
     '夜間冷鏈出貨的月台決策，先前採用什麼、當時理由是什麼、現在應如何描述其狀態？', logisticsTurn),
 ]);
 export const armOrders = freeze([['cairn', 'mem0'], ['mem0', 'cairn']]);
