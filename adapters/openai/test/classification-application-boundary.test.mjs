@@ -17,9 +17,7 @@ const captureInput = (eventId, content = source) => ({ namespace, client: 'synth
   sessionId: 'session', eventId, messages: [{ id: `source-${eventId}`, role: 'user', content }] });
 const ok = (result) => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 
-function fixture(t, classifyOutput, { beforeCapture = () => {}, wrapModel = model => model,
-  extractOutput = input => ({ items: [{ content: input.messages[0].content, kind: 'fact',
-    confidence: 0.9, sourceIndices: [0] }] }) } = {}) {
+function fixture(t, classifyOutput, { beforeCapture = () => {}, wrapModel = model => model } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-classification-boundary-' });
   const calls = [];
   const timings = [];
@@ -40,7 +38,8 @@ function fixture(t, classifyOutput, { beforeCapture = () => {}, wrapModel = mode
       const input = JSON.parse(body.input[0].content[0].text);
       if (method === 'cairn_extract') assert.equal(input.inputMode, 'indexed-windows-v1');
       const output = method === 'cairn_extract'
-        ? extractOutput(input)
+        ? { items: [{ content: input.messages[0].content, kind: 'fact',
+          confidence: 0.9, sourceIndices: [0] }] }
         : classifyOutput(input, body);
       assert.ok(['cairn_extract', 'cairn_classify'].includes(method));
       return Response.json({ object: 'response', model: body.model, status: 'completed', error: null,

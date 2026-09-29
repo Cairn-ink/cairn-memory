@@ -1,12 +1,12 @@
 # M1d classification application boundary diagnosis
 
-Status: bounded offline diagnosis plus a classification-error reporting fix;
-no core/adapter behavior change, commit, push, paid run, production operation
-or historical-cause claim in this packet.
+Status: bounded offline diagnosis plus a committed classification-error reporting
+candidate; no core/adapter behavior change, paid run, production operation or
+historical-cause claim in this packet.
 Worktree: `classification-application-boundary` on
-`diag/classification-application-boundary` at starting
-`9f3fcc8825adf6588196685ff9e13a49cc5d9d85`. The branch depends on PR
-#299; its merge base with `origin/main` is
+`diag/classification-application-boundary`. The work began at
+`9f3fcc8825adf6588196685ff9e13a49cc5d9d85`, dependent on PR #299; the
+starting merge base with `origin/main` was
 `c2212ce12fa0f31d4847bfc3838f11db377fa51f`. Implementation owner:
 GPT-6 Sol/high as configured by the primary dispatch (runtime model ID is not
 independently exposed here). Primary owns accounting, acceptance and delivery.
@@ -193,21 +193,30 @@ fingerprint, but not evidence that it occurred in the paid run.
 
 ## Ownership and verification record
 
+The checks below are a pre-commit worker/primary checkpoint on the scoped
+candidate that began at `9f3fcc8`; they are not a claim about later commits.
+
 The primary dispatched this bounded D01–D05 worker packet to GPT-6 Sol/high
 on the fixed `9f3fcc8` starting HEAD and retained accounting, result adjudication,
-actual-diff review and final delivery. The worker made four scoped file changes:
+actual-diff review and final delivery. The initial candidate made four scoped file changes:
 the adapter-to-core-to-ingestion fixture, the finite ingestion error mapping,
-this plan, and the Unreleased changelog entry. No correction round or ownership
-escalation was needed after the red fixture identified the reporting boundary.
+this plan, and the Unreleased changelog entry. No ownership escalation was
+needed after the red fixture identified the reporting boundary.
 Elapsed time and token cost are not measured by the repository; do not infer
 them from the model label. The primary independently reran the focused six-test
 fixture on Node 22.16.0 and 24.15.0 at an intermediate candidate. The primary
 also ran full `npm test` (131/131) and `npm run test:longmemeval` (199/199)
 on both Node versions, plus `npm run validate` on both. Pinned Claude 2.1.260
-strict marketplace and plugin checks passed on Node 22. These are
-pre-integration checks; final-diff acceptance and independent reviews remain
-primary-owned gates after the planned fast-forward to PR #299's reviewed head
-`588e430`. The four owned files do not overlap that integration. The DRI
+strict marketplace and plugin checks passed on Node 22. After this checkpoint,
+the primary fast-forwarded to PR #299's reviewed head `588e430` without overlap
+in the four owned files and created local candidate `fb4c4e5`. On that
+candidate, the primary reran the focused fixture (6/6), full `npm test`
+(131/131), and `npm run validate` on Node 22.16.0 and 24.15.0. Final fixed-diff
+review and CI evidence belong in the PR record. Standards review correction
+round 1 added the required `docs/limitations.md` note, removed an unused
+fixture option, and clarified this plan's historical checkpoint. The focused
+fixture passed 6/6 again on Node 22.16.0 and 24.15.0; `npm run validate` and
+`git diff --check` passed. This correction changed no runtime behavior. The DRI
 defers any automatic same-title topic reuse; no product decision or behavior
 change beyond error reporting is part of this packet.
 
@@ -221,6 +230,6 @@ change beyond error reporting is part of this packet.
 `npm run validate` passed once on Node 22.16.0 (JSON and version validation).
 All fixtures and demos used synthetic data and the owned test runner; the
 OpenAI suites used fake HTTP. The red and green focused commands and their
-specific assertion outcomes are recorded above. These checks establish the
-source reporting change on this uncommitted candidate, not installed-artifact
+specific assertion outcomes are recorded above. These pre-commit checks
+establish the source reporting change; they do not establish installed-artifact
 parity or the missing paid-plan cause.

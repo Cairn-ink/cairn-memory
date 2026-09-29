@@ -1132,6 +1132,15 @@ evidence/adoption preservation in a separately frozen packet; consumed-case
 replay, fixed-30 expansion, raw-retention growth and MCP/Hermes conclusions
 do not follow.
 
+The [M1d classification-boundary diagnosis](plans/classification-application-boundary.md)
+found that LongMemEval reporting previously converted the trusted core code
+`moc_title_conflict` to generic `classification_failed`. Reporting now retains
+that specific code. A synthetic repeated-topic proposal reproduces the M1c
+report's partial-capture, completed-adapter and empty-diagnostic fingerprint,
+but the missing paid classification plan prevents attributing M1c to that
+collision. This reporting fix does not repair MOC classification, retry the
+failed batch or reclassify or rescore the frozen result.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the
