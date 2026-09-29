@@ -1147,6 +1147,35 @@ that confirmation resolves every contradiction.
 
 Evidence: `core/test/confirmation-state.test.mjs` tests both confirmation orders.
 
+## Background context is recent, not relevant or reviewed
+
+Opt-in session-start `background` returns at most six current facts/context
+items, newest-updated first, with ties broken by ID. This is recency ordering,
+not relevance ranking. Its independent budget and the whole-response limits may
+return fewer items; the existing next-step and procedural groups fill first.
+If no item fits with its additional warning, the group is omitted. An empty
+complete group is allowed when there are no candidates and metadata fits.
+`backgroundOmitted: true` reports omission only if the marker itself fits;
+otherwise it is absent too. A requested but absent background group always
+means incomplete, never an empty complete result. Per-group completeness
+reports truncation when the group is present.
+
+Background includes **agent-inferred facts no one has reviewed**, as well as
+explicit facts and context. Excluding awaiting decisions does not make other
+inferences verified. Receipts retain provenance, not truth or human approval.
+Returned background content is framed as potentially inferred and unverified.
+Without background content, the original session framing is retained.
+A concurrent forget fails the final reread with a conflict; a fresh retry drops
+the forgotten item, consistent with SE-3. The reread includes background rows
+even when the group was omitted, so forgetting an item that was never returned
+can still cause that conflict.
+
+Evidence: `core/test/background-context.test.mjs`, including character-budget
+(200–8000) and token-budget (1–2000) sweeps under character, lexical and
+camelCase-splitting counters, comparing existing group bytes with background
+on/off. Synthetic counters test budgeting, not provider tokenizer fidelity.
+See the [session-start contract](storage-contract.md#session-start-context).
+
 ## Where the evidence lives
 
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
