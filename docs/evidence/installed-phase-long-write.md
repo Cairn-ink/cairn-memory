@@ -23,7 +23,7 @@ claim. The prelaunch contract and installation hashes are in the
 | --- | --- | --- | --- |
 | First case, Cairn | Failed before answer | Unresolved; judge not attempted | Five batches completed; batch index 5 was partial; 26 were not run. |
 | First case, Mem0 | Completed and answered | Incorrect | Native add and answer path completed. |
-| Second case, Cairn | Completed and answered | Correct | All 32 batches completed; two cards and two receipts reached the packed answer context. |
+| Second case, Cairn | Completed and answered | Correct | All 32 batches completed; two memories and two receipts reached the packed answer context. |
 | Second case, Mem0 | Completed and answered | Correct | Native add and answer path completed. |
 
 The frozen automatic scorer therefore reports fixed N=2 per arm and
@@ -63,9 +63,9 @@ provider latency. This result does not establish the cause of the historical
 N7 timeout.
 
 The second Cairn case completed 32 batches and recorded 160 admission-memory
-references. These are references across batches, **not** 160 unique cards;
+references. These are references across batches, **not** 160 unique memories;
 the primary's read-only store observation found 114 distinct memories and 171
-source receipts. Recall selected two cards, with two authoritative receipts
+source receipts. Recall selected two memories, with two authoritative receipts
 and two packed evidence units. The selected receipts came from later
 premise-change and schedule passages; they do not include the earlier adoption
 passage. The primary

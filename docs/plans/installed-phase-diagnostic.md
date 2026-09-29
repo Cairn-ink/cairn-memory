@@ -453,3 +453,11 @@ Pinned Claude 2.1.260 with Node 22.16.0 passed both marketplace and plugin
 `--strict` validation. A committed fixed-head independent review and CI for
 this documentation candidate remain pending. No worker commit, push, merge,
 release or deployment occurred.
+
+The Standards reviewer's final report flagged the result document's use of
+“cards” for memories after a preliminary pass. This terminology finding is
+accepted and corrected. The small duplicated freeze helpers remain in the
+independent source and evaluator modules. The primary had pushed candidate
+`5dd5cba691d7e0cd89e10ca638370530cc8b0542` on the preliminary pass;
+the draft is unfinished. The corrected candidate requires both independent
+review axes and exact-head CI again.
