@@ -23,6 +23,19 @@ an immutable host. The normalized native result has only ordered bounded
 ADD records; it does not infer source provenance, timestamps, missing facts,
 or a quality score. Synthetic fake-provider tests do not authorize paid work.
 
+For a future parsed, priced Mem0 response rejected specifically as
+`invalid_payload`, the wire inspector and the private mixed guard attempt may
+carry one fixed `payloadFailureReason` naming the first local validation
+category that failed. Successful responses, usage-bound failures and malformed
+responses without priced usage do not gain this field. The reason is selected
+from code-owned constants; no provider field, content, identifier, source hash,
+body, exception or arbitrary string is copied into it. It remains a private
+process-local guard observation unless a separately controlled caller chooses
+to retain an attempt snapshot. It neither changes validation, accounting,
+case isolation or retry policy nor proves whether Mem0 or the provider caused
+the malformed payload. It adds no core, MCP, plugin, HTTP or hosted telemetry
+field.
+
 The private mixed generation report may retain a failed Cairn arm's first
 noncompleted, arm-disqualifying ingestion batch index and fixed outcome counts.
 A duplicate can precede another ingested batch; this field does not claim the

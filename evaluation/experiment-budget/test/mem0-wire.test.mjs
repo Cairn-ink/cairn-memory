@@ -286,3 +286,63 @@ test('W6/W8 response byte ceiling and immutable result fields', () => {
     'actualMicroUsd', 'usageWithinBounds', 'payloadValid', 'failureCode', 'bodyText']);
   assert.equal(Object.isFrozen(result), true);
 });
+
+test('D2 priced invalid payloads expose only the first closed validator category', () => {
+  const c = request('chat', chat());
+  const withContent = content => {
+    const body = chatResponse();
+    body.choices[0].message.content = content;
+    return body;
+  };
+  const cases = [
+    ['unsafe_response_graph', { ...chatResponse(), extra: '\ud800' }],
+    ['chat_envelope', { ...chatResponse(), object: 'other' }],
+    ['chat_choice', { ...chatResponse(), choices: [] }],
+    ['chat_content_json', withContent('```json\n{}\n```')],
+    ['chat_content_shape', withContent('[]')],
+    ['chat_memory_shape', withContent('{"memory":"not-an-array"}')],
+    ['chat_memory_count', withContent(JSON.stringify({ memory: Array(257).fill({}) }))],
+    ['chat_fact_shape', withContent('{"memory":[null]}')],
+    ['chat_fact_text', withContent('{"memory":[{"text":null}]}')],
+    ['chat_fact_token_bound', withContent(JSON.stringify({ memory: [
+      { text: ' a'.repeat(8193) }] }))],
+  ];
+  for (const [reason, body] of cases) {
+    const observed = inspectMem0WireResponse(c, JSON.stringify(body));
+    assert.equal(observed.failureCode, 'invalid_payload', reason);
+    assert.equal(observed.payloadFailureReason, reason);
+    assert.equal(observed.actualMicroUsd, 3);
+    assert.equal(observed.bodyText, null);
+    assert.equal(JSON.stringify(observed).includes('not-an-array'), false);
+    assert.equal(Object.isFrozen(observed), true);
+  }
+
+  const e = request('embedding', embedding());
+  const brokenEmbedding = embeddingResponse();
+  brokenEmbedding.data[0].embedding.pop();
+  const embeddingObserved = inspectMem0WireResponse(e, JSON.stringify(brokenEmbedding));
+  assert.equal(embeddingObserved.payloadFailureReason, 'embedding_payload');
+  assert.equal(embeddingObserved.failureCode, 'invalid_payload');
+  assert.equal(embeddingObserved.actualMicroUsd, 1);
+
+  // JSON.parse accepts compact exponents that expand when canonicalized.
+  const base = JSON.stringify(chatResponse());
+  const raw = base.slice(0, -1) + ',"extra":[' + Array(35_000).fill('1e-6').join(',') + ']}';
+  assert.ok(Buffer.byteLength(raw) <= mem0WireProfile().chat.maxResponseBytes);
+  const normalizedSize = inspectMem0WireResponse(c, raw);
+  assert.equal(normalizedSize.failureCode, 'invalid_payload');
+  assert.equal(normalizedSize.payloadFailureReason, 'normalized_response_size');
+
+  for (const memory of [undefined, [], null, false, 0, '']) {
+    const body = chatResponse(memory);
+    const observed = inspectMem0WireResponse(c, JSON.stringify(body));
+    assert.equal(observed.payloadValid, true);
+    assert.equal(Object.hasOwn(observed, 'payloadFailureReason'), false);
+  }
+  const both = chatResponse('not JSON', { prompt_tokens: c.inputTokenUpperBound + 1,
+    completion_tokens: 1, total_tokens: c.inputTokenUpperBound + 2 });
+  const over = inspectMem0WireResponse(c, JSON.stringify(both));
+  assert.equal(over.payloadValid, false);
+  assert.equal(over.failureCode, 'usage_bound_exceeded');
+  assert.equal(Object.hasOwn(over, 'payloadFailureReason'), false);
+});

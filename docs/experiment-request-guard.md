@@ -662,6 +662,24 @@ verify the declared artifact
 hashes against an installation, grant a paid launch or measure quality. See
 [its acceptance contract](plans/mixed-source-pair-guard.md).
 
+For a priced Mem0 response whose final wire `failureCode` is `invalid_payload`,
+the wire inspection result and the private `attempts()` record additionally
+carry `payloadFailureReason`. Its complete vocabulary is
+`unsafe_response_graph`, `chat_envelope`, `chat_choice`, `chat_content_json`,
+`chat_content_shape`, `chat_memory_shape`, `chat_memory_count`,
+`chat_fact_shape`, `chat_fact_text`, `chat_fact_token_bound`,
+`embedding_payload`, and `normalized_response_size`. The first failed
+validation category wins; a category may group several predicates. A valid
+response and a usage-bound failure retain their previous exact field shapes,
+including when the latter also has an invalid payload. The reason contains no
+response text, field value, identifier
+or source-derived hash. It is attached before settlement freezes the attempt,
+so a failed ledger write may leave a reason and observed price while durable
+outcome and actual cost remain pending. The ledger has no reason column; the
+mixed per-case summary does not retain it. A private caller may persist the
+process-local attempt snapshot under its own controls. The category identifies
+a local rejection class, not the actor that caused it or semantic quality.
+
 The explicit evaluation-only `indexed-evidence-v1` comparison profile binds
 `comparisonProfile`, `captureSourcePolicy: 'indexed-evidence-v1'` and
 `qualificationInputProfile: 'not-requested'` together in the mixed manifest.
