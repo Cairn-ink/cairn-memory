@@ -62,6 +62,21 @@ service must use the same public core, not separate engines.
   evidence/adoption preservation separately. No consumed-case replay,
   fixed-30 expansion, raw-retention increase or installed MCP/Hermes claim.
 
+- The [M1e installed classification follow-up](docs/evidence/installed-classification-followup.md)
+  completed both new cases in both arms, with all four judgments resolved:
+  fixed N=2 and common-resolved N=2; automatic Cairn 2/0/0 and Mem0 1/1/0
+  correct/incorrect/unresolved. All 32 Cairn batches and initial-classification
+  journal entries completed per case. The engine was unchanged; prior timeout
+  and classification failure causes remain unproven. All eight required source
+  windows were stored, but logistics recall selected only the reconfirmation
+  passage; the visibility/selection/ranking cause remains unknown. Positive
+  grades coexist with finer source omissions, so semantic coverage stays open.
+  Diagnose those stages on new synthetic cases before engine/prompt changes.
+  This explicit bounded-keyset source-evidence/bounded-source-scan route does
+  not establish default MOC navigation, reliability, lightweight fit or
+  installed MCP/Hermes acceptance; no immediate fixed-30 expansion, consumed-case
+  replay/retuning or raw-retention increase follows.
+
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
   completed, five failed and six blocked outcomes. Mechanical completion and

@@ -1354,17 +1354,49 @@ cases is 16,982 requests and 3,326,968 microUSD (US$3.326968), under the
 predeclared 4,000,000 microUSD (US$4) new reservation limit while protecting
 30,000,000 microUSD (US$30) of the original 200,000,000 microUSD (US$200).
 
-These checks establish fixture shape, source separation and preparation only.
-No model was called, no answer was graded, and no classification or semantic
-reliability improvement has been measured. Phase and context behavior in an
-installed run remain unknown. This is a source-backed diagnostic packet, not an
-official benchmark. The [contract and verification record](plans/installed-classification-followup.md)
-define its limited claim.
+At the prospective prelaunch checkpoint, these checks established fixture
+shape, source separation and preparation only; no model had been called or
+answer graded. This source-backed diagnostic packet is not an official
+benchmark. The [contract and verification record](plans/installed-classification-followup.md)
+preserve that checkpoint and the later closure record.
+
+## M1e installed classification follow-up result
+
+The [one-shot M1e report](evidence/installed-classification-followup.md) records
+two completed ingestions, answers and judgments per arm, fixed N=2 and
+common-resolved N=2. Automatic correct/incorrect/unresolved were Cairn 2/0/0
+and Mem0 1/1/0. Both Cairn cases completed all 32 batches; the primary separately
+found 32 admissions and 32 `applied` initial-classification journal entries per
+case. No classification failure was observed, but unchanged engine bytes and
+different cases do not establish a repair of prior classification or timeout
+failures; their causes remain unproven.
+
+The primary found all eight required source windows stored as exact receipts.
+Workshop recall selected prior adoption, replacement and reaffirmation; the
+replacement passage also carries the HVAC reason. Logistics selected only its
+final reconfirmation window, leaving stored earlier-adoption, explicit
+power-removal and unadopted-proposal windows unselected. All selected receipts
+were packed. The observed logistics loss precedes packing; candidate visibility,
+selection or ranking as its cause remains unknown. Four of eight exact windows
+selected is not a semantic-coverage percentage.
+
+Agent reading found finer omissions despite Cairn's positive grades: its
+workshop answer does not explicitly give the original clearance rationale or
+link current status to reaffirmation; logistics answers omit explicit power
+removal and the dock-six proposal. This preserves the finite completion pass
+while leaving strict source/rubric coverage open. The explicit bounded-keyset,
+source-evidence/bounded-source-scan route does not validate default MOC
+navigation, reliability, lightweight resource fit, installed MCP/Hermes,
+comparative superiority or an official score. Diagnose candidate visibility,
+selection and ranking on new synthetic cases before changing engine or prompts;
+no fixed-30 expansion, consumed-case replay/retuning or raw-retention increase
+follows.
 
 ## Where the evidence lives
 
 - [Model input budgets and packing](model-input-budgets.md)
 - [Prospective M1e classification follow-up fixture](#prospective-m1e-classification-follow-up-fixture)
+- [M1e installed classification follow-up result](evidence/installed-classification-followup.md)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)

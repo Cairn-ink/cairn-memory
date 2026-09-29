@@ -44,3 +44,34 @@ The new source module feeds only the new preflight/prepare wrapper and the canon
 - The owned offline regression constructs a halted canonical generation report from the two authored source cases and calls the actual `scoreMixedGeneration` with a no-dispatch guard. The old row shape returns `invalid_evaluator_rows`; the corrected rows produce fixed N=2 with one `multi-session` and one `knowledge-update` row, both arms unresolved as expected for a halt. Separate missing-key, extra-metadata and wrong-opaque-ID mutants also fail. A green halted score proves the wire format and categories, not a model answer.
 - After the correction, Node 22.16.0 and 24.15.0 both passed `npm run test:installed-classification-followup:offline` (6 tests), `npm test` (131), `npm run test:longmemeval` (199), `npm run validate`, `npm run validate --prefix tools/plugin-validation` with its strict plugin check, and `npm run demo:longmemeval-mixed` with `transportDispatched:false`. These are offline checks only.
 - The primary's new private actual-worker composition gate is pending. It will combine these exact authored cases with installed core and native Mem0 under fake HTTP and a synthetic ledger, requiring four judge calls and two resolved categories. The previous private root ending `.0JHCr9` is rejected and unstarted; the new root ending `.csPoNd` is the pending candidate. No private helper runtime or scorer was changed. No paid call has started. The primary must create fresh review, launch and preflight hashes after this freeze, then complete independent review and latest-head CI.
+
+## Current record: corrected candidate and one-shot closure
+
+The preceding pending/unstarted statements are historical checkpoints. The
+corrected public candidate `d14951d31e3f83533d8876475b6f8950e2ebe9ea` completed
+prelaunch acceptance: the primary reports private installed fake-HTTP 8/8 and
+the actual-authored installed/native canonical-scoring composition 1/1 on both
+Node 22.16.0 and 24.15.0. Two independent reviews found zero findings; all
+21 exact-head checks passed (CI `36624638158`, CodeQL `36624633600`). The
+rejected schema was corrected before any paid call. No engine fix was made.
+
+The new one-shot run has now closed. Both arms completed both cases and all
+four judgments resolved: fixed N=2, common-resolved N=2, Cairn 2 correct / 0
+incorrect / 0 unresolved, Mem0 1 / 1 / 0. The workshop order was Cairn then
+Mem0; logistics was Mem0 then Cairn. The primary's read-only audit reports
+470 new requests, 2,630,914 microUSD reserved and zero pending; the original
+cumulative ledger is now 24,697 requests / 154,418,470 microUSD reserved,
+with 45,581,530 remaining under the unchanged 200,000,000 cap.
+
+This finite completion pass does not close semantic coverage. All eight
+required source windows were stored, but logistics selected only the final
+reconfirmation passage; agent source/rubric reading finds finer omissions
+despite positive question-level grades. Previous failure causes remain
+unproven. The [result contract and identities](installed-classification-results.md)
+and [one-shot report](../evidence/installed-classification-followup.md) separate
+automatic judgments, agent assessment, primary store checks and original-ledger
+audit. The reporting worker subsequently passed result-document contributor
+gates on both Node versions (focused 6, generic 131, LongMemEval 199, validation,
+mixed pregrant demo and pinned Claude 2.1.260 strict plugin checks). Final
+independent reviews and latest-head CI remain primary-owned and pending; no
+consumed-case replay, fixed-30 expansion or MCP/Hermes claim follows.
