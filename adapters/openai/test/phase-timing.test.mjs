@@ -88,6 +88,48 @@ test('W01 red: opt-in phase timing observes one real two-request adapter invocat
   eventShape(events);
 });
 
+test('W01 explicit undefined matches omission without installing a timing callback', async () => {
+  async function run(explicitUndefined, failOutput) {
+    const calls = [], diagnostics = [];
+    const options = {
+      apiKey: 'synthetic',
+      fetchImpl: async (url, requestOptions) => {
+        calls.push({ url, body: requestOptions.body });
+        if (url.endsWith('/input_tokens')) return countResponse();
+        return failOutput ? Response.json({ ...generation(), status: 'failed' }) : generationResponse();
+      },
+      onDiagnostic: event => diagnostics.push(event),
+    };
+    if (explicitUndefined) options.onPhaseTiming = undefined;
+    assert.equal(Object.hasOwn(options, 'onPhaseTiming'), explicitUndefined);
+    const model = createOpenAIModel(options);
+    let result;
+    try { result = { status: 'fulfilled', value: await model.extract(request()) }; }
+    catch (error) {
+      result = { status: 'rejected', error: { name: error.name, message: error.message, code: error.code } };
+    }
+    return { result, calls, diagnostics };
+  }
+
+  for (const failOutput of [false, true]) {
+    const omitted = await run(false, failOutput);
+    const explicitUndefined = await run(true, failOutput);
+    assert.deepEqual(explicitUndefined, omitted);
+    assert.equal(omitted.calls.length, 2);
+    assert.deepEqual(omitted.calls.map(({ url }) => url.endsWith('/input_tokens') ? 'count' : 'generation'),
+      ['count', 'generation']);
+    if (failOutput) {
+      assert.equal(omitted.result.status, 'rejected');
+      assert.equal(omitted.result.error.code, 'invalid_model_output');
+      assert.deepEqual(omitted.diagnostics, [{ version: 1, stage: 'extract', layer: 'adapter',
+        reason: 'response_envelope' }]);
+    } else {
+      assert.deepEqual(omitted.result, { status: 'fulfilled', value: { items: [] } });
+      assert.deepEqual(omitted.diagnostics, []);
+    }
+  }
+});
+
 test('W01/W02 invalid option, disabled and hostile observers preserve exact wires and errors', async () => {
   for (const onPhaseTiming of [null, false, 0, 'callback', [], {}]) {
     assert.throws(() => fakeModel(() => assert.fail('no HTTP'), onPhaseTiming),

@@ -53,6 +53,12 @@ raise a timeout, retry a consumed question or claim benchmark superiority.
   The isolated trap may allow that exact constructor configuration but expose
   only its synchronous `countTokens`; all checkout model ports and other
   factory/store calls must fail. Positively count installed model/store calls.
+  The two primary CLI files are outside the generated runtime inventory.
+  Before either preflight or live invocation, the trusted primary command must
+  pin the separate review-manifest digest, verify every listed file (including
+  the selected CLI entry), and only then spawn that entry in a plain Node
+  process. Direct unverified entry invocation is not the launch procedure.
+  Preserve the internal runtime checks before import and first dispatch.
 - I05 — New private coordinator only; historical operators/results remain
   immutable. No I/O/dispatch on module import. Reuse source-only preflight,
   exact inventory rechecks, original v2 parent/ledger, durable create-only start
@@ -334,6 +340,52 @@ The primary integration entry hashes are
 `3f73eb78aa1affb4974a0ccef824a9746e9bb78d8b7c3e28918f53a107f18407`.
 Reviewers must verify these exact bytes as well as the public candidate; this
 does not make the private operator a shipped public interface.
+
+### Independent-review correction, still before any paid call
+
+The first Spec review rejected the candidate because the CLI key-reader's
+recorded hash was not enforced by the executable launch procedure. The separate
+trusted-command gate now hashes the pinned review manifest and every listed
+file before spawning any entry; the selected entry must itself be listed.
+The primary embeds the reviewed `PROGRAM` from `entry-gate-source.mjs` directly
+in its trusted Node command, with literal pinned manifest/entry identities;
+it does not import an unverified source module to obtain the gate. It repeats
+this gate for both preflight and the eventual one-shot run. Internal bootstrap,
+runtime, installation, source and budget checks remain unchanged. This is
+trusted-operator identity enforcement, not protection against a hostile same-UID
+process or proof of an immutable filesystem between checks.
+
+The two new private verification files have SHA-256
+`8061b86d413c7dc09253e315e3570a11711770c63643234a57b3792abccde054`
+(`entry-gate-source.mjs`) and
+`0fb94a6cbe95ee4e9888a3d3b1e2ceb6d95b9e3aab704fcb5f3f8cedd71fa81a`
+(`entry-gate.test.mjs`). The superseding **16-file** private manifest hash is
+`e6b9d2263ca0096013bda754f20c843e2328a8163afcbd6407856f78e08fb191`.
+The earlier 14-file manifest is historical review evidence, not launch authority.
+The owned gate test passed on both Node versions: wrong manifest digest, an
+unlisted entry, changed entry bytes and changed helper bytes all refuse before
+the synthetic child executes; unchanged bytes execute it once. The actual
+key-free preflight passed again through this gate with the same digest and
+checkpoint, not a direct entry command.
+
+The same review found W01's optional-callback prose ambiguous about explicit
+`undefined`. The DRI chooses ordinary optional-argument semantics, consistent
+with `onDiagnostic`: omitted or explicitly `undefined` disables observation;
+other non-functions fail before HTTP. This prospective clarification adds a
+direct explicit-undefined parity regression, without changing adapter code,
+models, deadlines, sources, evaluator, scoring thresholds or prior results.
+Both independent review axes must inspect the new fixed candidate before launch.
+The bounded prose/regression packet used configured GPT-6 Luna/max; primary
+inspected its two-file diff. The worker's focused suite passed 14/14 on each
+runtime. Primary reran the entire adapter gate on both final candidates:
+324/324 on Node22 (136,799 ms) and Node24 (133,889 ms), zero skips/failures.
+Both offline OpenAI demos also passed. Their two explicitly retained synthetic
+example databases were removed only after both processes closed; only these
+new files and their empty directories were removed, not historical scratch.
+The primary's trusted-gate negative controls passed 1/1 on both runtimes.
+The five runtime helpers, installation receipt, generated assembly, source,
+evaluator and actual launch JSON remain byte-identical; only documentation,
+regression checks and the external entry gate changed in this correction.
 
 The primary's first Node24 private-suite run retained 1 pass and 7 failures.
 Four failures were precisely localized to Node24 test-worker `execArgv`
