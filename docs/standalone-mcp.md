@@ -29,6 +29,49 @@ stdio transport. Registry packaging, named-client compatibility and remote
 connectors are separate acceptance gates. General memory quality is evaluated
 separately; a protocol test does not establish relevance.
 
+### Access to retained session episodes
+
+Start a local source or installed server with
+`--session-episodes-access episode-v1` (or programmatic
+`sessionEpisodesAccess: 'episode-v1'`) to add three keyless tools for episodes
+already retained by the core. Access alone does not enable episode capture,
+interpretation, staging, source qualification, or a model. Omit the option to
+keep the five-tool default. `--check-config` reports access as enabled and
+`episodeGenerationEnabled: false`; it checks syntax without opening the store
+or loading a provider or tokenizer. Starting the server may open or migrate its
+SQLite database, and episode inspection may perform staging-expiry housekeeping.
+
+`list_session_episodes` requires explicit canonical UTC `since` and `until`
+timestamps (`YYYY-MM-DDTHH:mm:ss.sssZ`) with `since < until` and a range of at
+most 366 days. Its optional `timeBasis` is `event` (default) or `receipt`;
+unknown event intervals are excluded and marked, so use receipt time when
+event time is unknown. Optional `client` is an exact filter. Pages default to
+20 records, cap at 50, and expose `nextCursor`, `exhausted` and coverage status.
+An incomplete page does not prove an episode absent. Cursors bind the store,
+namespace, filter and page size and become stale after a mutation.
+Core reports invalid ranges as `invalid_input`, mismatched/tampered cursors as
+`invalid_cursor`, and changed pagination epochs as `cursor_stale`.
+
+`inspect_session_episode` takes an `episodeId` and independently pages sources,
+memory links, policies and keep actions with `sourceLimit/sourceCursor`,
+`memoryLimit/memoryCursor`, `policyLimit/policyCursor`, and
+`keepLimit/keepCursor` (default 20, maximum 50 each). It returns the core's
+current episode revision, exact selected source passages, attributed roles,
+source IDs, digests and provenance. Those passages are distinct from admitted
+memory receipts and from the episode's interpretation. They are untrusted
+submitted evidence, not a transcript archive, verified truth, adopted choice,
+or execution permission. Follow each page cursor before claiming coverage.
+
+`forget_session_episode` requires an `episodeId` and the freshly inspected
+`expectedRevision`. Call it only on actual user intent to delete the captured
+conversation. Core deletion also forgets derived memories, including a
+deduplicated memory with another source carrier, and invalidates episode
+interpretations that copied its sources. It does not erase earlier caller or
+provider copies, SQLite journals, snapshots or backups. A later cold reopen
+does not restore logically deleted sources. All tools use the exact configured
+owner/project namespace; arguments cannot select another scope. This MCP
+option does not expose native Hermes episode tools.
+
 ## Start from source
 
 ### Keyless complete-source walkthrough
@@ -117,6 +160,9 @@ someone who can edit your process configuration or read your database file.
 | classify_unfiled_memories (opt-in only) | refs: 1–5 unique memoryId/revision pairs | Explicit, guarded model classification and placement of current unfiled memories |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
+| list_session_episodes (opt-in only) | since, until, optional timeBasis/client/limit/cursor | Bounded event- or receipt-time discovery of already retained episodes |
+| inspect_session_episode (opt-in only) | episodeId, optional independent source/memory/policy/keep limits and cursors | Current interpretation and paged cited sources |
+| forget_session_episode (opt-in only) | episodeId, expectedRevision | Destructive conversation deletion and derived-memory suppression |
 
 Remember/correct text is limited to 600 characters; kind defaults to fact.
 Inspection list/receipt pages default to 20 and cap at 50; use nextReceiptCursor

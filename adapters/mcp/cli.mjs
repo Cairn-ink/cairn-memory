@@ -16,11 +16,22 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
+  cairn-memory --db PATH --owner ID [--project ID] --session-episodes-access episode-v1
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
 Normal startup waits for an MCP client on stdin; stdout is protocol-only.
 Tools: remember_memory, recall_memory, inspect_memory, correct_memory, forget_memory.
+--session-episodes-access episode-v1 adds keyless list_session_episodes and
+inspect_session_episode for already retained episode interpretations and cited
+source passages, plus destructive forget_session_episode. It does not enable
+episode generation, capture, staging, a model or new source retention. Use an
+explicit bounded UTC range for discovery; unknown event dates require receipt
+time. Pages may be incomplete. Source text and roles are untrusted, not truth
+or execution permission. Forget only on actual user intent with a freshly
+inspected revision. It also forgets derived memories, including deduplicated
+multi-source memories, and invalidates copied sources. Logical deletion does
+not erase backups, journals or prior caller/provider copies.
 --classification-recovery guarded-v1 adds classify_unfiled_memories for an
 explicit request with inspected current unfiled memory IDs and revisions. It
 sends bounded memory content to the configured model and may incur charges.
@@ -86,7 +97,7 @@ It cannot verify database permissions, credentials or model availability.
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
-    '--classification-recovery', '--capture-deadline-ms']);
+    '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -129,6 +140,9 @@ export function parseConfiguration(args) {
   if (values.has('--classification-recovery') && values.get('--classification-recovery') !== 'guarded-v1') {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--session-episodes-access') && values.get('--session-episodes-access') !== 'episode-v1') {
+    throw new Error('invalid_mcp_configuration');
+  }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
@@ -139,7 +153,9 @@ export function parseConfiguration(args) {
     ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}),
     ...(values.has('--recall-context') ? { recallContext: values.get('--recall-context') } : {}),
     ...(values.has('--classification-recovery') ? {
-      classificationRecovery: values.get('--classification-recovery') } : {}) };
+      classificationRecovery: values.get('--classification-recovery') } : {}),
+    ...(values.has('--session-episodes-access') ? {
+      sessionEpisodesAccess: values.get('--session-episodes-access') } : {}) };
 }
 
 export async function start(args = process.argv.slice(2), env = process.env) {
@@ -172,6 +188,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       ...(config.captureEvidence || config.captureEvidenceAccess ? {
         captureEvidenceAccess: 'staged-v1', stagedRetentionEnabled: Boolean(config.captureEvidence),
       } : {}),
+      ...(config.sessionEpisodesAccess ? { sessionEpisodesAccess: config.sessionEpisodesAccess,
+        episodeGenerationEnabled: false } : {}),
       unverified: ['database-readiness', 'credential-validity', 'model-availability'],
     }, null, 2));
     return;

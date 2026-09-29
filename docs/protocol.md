@@ -695,3 +695,29 @@ uses `index_revision_conflict` for changed epochs and `revision_conflict` for
 changed identities/evidence. Explicit step closure has exact step/revision/action
 replay guards and does not grant execution permission. Source deletion invalidates
 its descriptive evidence. Core episode generation remains opt-in.
+
+### Explicit local MCP access to retained episodes
+
+`sessionEpisodesAccess: 'episode-v1'` on the local MCP server, or
+`--session-episodes-access episode-v1` on its stdio CLI, exposes only
+`list_session_episodes`, `inspect_session_episode`, and the destructive
+`forget_session_episode`. The first two delegate to the existing core's
+bounded `listEpisodes` and `getEpisode`; the last delegates to
+revision-guarded `forgetEpisode`. All tool inputs exclude namespace and use
+the server's cloned exact owner/project binding. Strict schemas, existing
+response/transport byte caps and untrusted-data framing remain in force.
+Reads are keyless and do not generate, capture, select, rank, or call a model;
+access alone does not enable episode generation or new retention. Opening a
+store may migrate it, and `getEpisode` can expire staged evidence during
+housekeeping, so these calls are not a zero-database-write promise.
+
+Event-time discovery excludes unknown intervals with an explicit marker;
+receipt-time discovery uses `firstReceivedAt`. Explicit canonical UTC bounds,
+exact client filtering, signed scoped cursors and incomplete coverage are
+preserved from core. Source text and claimed roles remain untrusted evidence,
+not verified memory assertions. Forgetting deletes the conversation and its
+derived memories, including deduplicated multi-source memories, and
+invalidates copied source consumers; logical deletion does not erase earlier
+caller/provider copies, journals or backups. The hosted protocol, default MCP
+tool set, native Hermes allowlists, core schema and generation settings do
+not change. See [local MCP usage](standalone-mcp.md#access-to-retained-session-episodes).

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — explicit local MCP access to retained episodes
+
+- Add opt-in keyless listing and inspection of already retained session
+  episodes through the local stdio MCP host, with bounded UTC discovery,
+  independent source pages and exact configured namespace. Access does not
+  enable capture, generation or new retention.
+- Add revision-guarded `forget_session_episode` for actual user-requested
+  conversation deletion. Existing core behavior also suppresses derived
+  memories and invalidates copied sources; logical deletion has the existing
+  backup and prior-copy limits. Native Hermes and default MCP tools are
+  unchanged.
+
 ## Unreleased — model calls fit their budgets
 
 - Recall no longer fails with `context_budget_exceeded` because a person has

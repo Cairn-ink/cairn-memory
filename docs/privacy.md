@@ -194,6 +194,20 @@ deletion suppresses even multi-source/historical derived memories. Inspection
 and tag writes invoke no model. Existing source/prompt/receipt contents remain
 unchanged when neither opt-in is used.
 
+The local MCP server can explicitly expose already retained episodes with
+`sessionEpisodesAccess: 'episode-v1'`. This adds keyless discovery and inspection
+of selected passages, potentially revealing personal conversation text that
+has no admitted memory receipt, to the configured MCP caller. It does not
+turn on episode capture or broaden local retention. The caller must treat
+source text, roles and episode interpretation as untrusted and must obtain
+actual user intent before `forget_session_episode`: deletion also suppresses
+derived memories, including deduplicated multi-source memories, and
+invalidates consumers of copied passages. Core reads can still perform
+staging-expiry housekeeping and store opening may migrate a database. Access
+does not promise read-only filesystem behavior or physical erasure of prior
+caller/provider copies, journals, snapshots or backups. Native Hermes and
+hosted disclosures are unchanged.
+
 ### Durable message identity metadata
 
 Schema v16 adds `episode_messages`: episode/message identity, first and coverage
