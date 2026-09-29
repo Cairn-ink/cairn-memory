@@ -293,3 +293,101 @@ mode passed both versions with identical file hashes before/after. This was a
 test invocation mismatch, not an unexplained green rerun or product fix; no
 runtime guard was weakened. Independent exact-candidate review, CI and paid
 launch remain pending.
+
+## Exact candidate acceptance and one-shot launch checkpoint
+
+After the private freeze above, primary bound the public candidate
+`59c74540bdbd4984896afa80452f4928f7c1bfdf` and final private helper hashes.
+Separate nonauthor Standards and Spec reviews passed without a hard finding;
+Standards noted a low-severity duplicate local freeze helper and primary kept
+the bounded helper. Exact-head CI run `36548669714` passed all 17 reported
+checks. Primary verified mergeability and marked PR #290 ready but did not
+merge it.
+
+The source-only preflight inspected 1,297 files. Its runtime inventory SHA-256
+was `2d7a90f97ede2cc87846e69267a0544530d1613ad6c641ccfa95a9e6a3ecd089`,
+launch pin SHA-256
+`35e60544e0b5fd30dadcbed0b70db8f9e560ef3d78d738a73f4435b6ec2a2ded`,
+and preflight digest
+`8608d9e71d8677d4038fcfdb3ead309280a182388ef30cb2e19f17bfca3e3287`.
+The actual planner remained `[16,16,16]`; the joint conservative upper
+reservation was 2,724,132 microUSD and 12,753 worst-case requests. The prior
+authenticated parent checkpoint was 21,497 requests / 136,659,334 microUSD
+reserved with zero pending. Primary reported a fresh matched preflight and
+launched the fixed one-shot operator. **Generation, scoring, source paths,
+current-card counts, post-run accounting and timing remain pending primary
+verification.** The [public report skeleton](../evidence/selection-localization-three.md)
+contains no result claims. No raw provider output or private operator artifact
+was read in drafting it.
+
+## Primary-verified one-shot result and convergence decision
+
+The preceding pending-status paragraph records the state at launch; the public
+report now contains only the later primary-verified aggregates below.
+
+The fixed N6 one-shot completed all six generation arms, six independent
+judgments and twelve scheduled scopes. On three fixed authored cases, Cairn
+was 3 correct / 0 incorrect / 0 unresolved and native Mem0 was 3 / 0 / 0;
+common resolved N was 3/3. Every Cairn case completed sixteen capture batches
+and 32 admission references; every native case had 32 verified add records.
+The independent binary judge's three correct labels per arm remain frozen,
+but do not certify every answer detail. Primary noticed a Mem0 pantry paper
+backup description that did not match the paper-number-token source and a
+Mem0 shuttle answer omitting the changed 19:00 event end. No answer was edited
+or rescored. Cairn included the original reason and later status in each
+answer.
+
+The prospective selection precondition was **met in all three cases**: a
+complete read-only public `core.list` of each fresh synthetic store with
+`states:['active']`, `limit:100` found 32 distinct current active cards,
+`exhausted:true`, `nextCursor:null`, and no database-hash change. Each recall
+used `model-selected` and an observed select callback, rather than a
+complete-map bypass. Each designated family had two admitted members, one
+current matching carrier, complete two-member before/after reads, one observed
+carrier, zero unavailable carriers and `anyCompleteCarrierPath: yes` without
+an observed first gap. All three paid families had only one carrier, so this
+run does not exercise real-model multi-carrier reporting. The
+[public report](../evidence/selection-localization-three.md) preserves each
+carrier's separate selection, ranking, final and packing observations and
+the source-free answer-pack binding limitation.
+
+The run used 365 unique successful guarded requests (359 generation, six
+judgments), with 2,180,302 microUSD new conservative reservation below the
+2,724,132-microUSD prospective bound and US$3 packet ceiling. Known actual
+cost estimates were 222,441 microUSD on 262 rows; 103 successful count
+requests retained unknown actual cost and 515,000 microUSD of reservation.
+The cumulative ledger reached 21,862 requests / 138,839,636 microUSD
+reserved, leaving 61,160,364 microUSD; primary authenticated the saved
+post-run history hash against the live zero-pending checkpoint. Reservation
+is not an invoice, and unknown cost is not zero. Independent nonauthor
+post-run audit is **in progress**, not yet accepted.
+
+L8 decision: this three-case success justifies **no** new retrieval, prompt
+or graph correction and no further diagnostic expansion. Proceed instead to
+a new blind official six, one previously unused case per official type, with
+the same indexed-evidence route and pinned native controls. Seal at least
+148 prior consumed/reserved IDs plus the six newly selected IDs as future
+exclusions before cost inspection. A new prospective whole-vector reservation
+check must fit the US$30 packet maximum, original US$200 ledger and US$10 protected remainder;
+failure retains the roster rather than substituting cases. Fixed-30 expansion
+requires both arms to reach 6/6 completion and paired resolution first; it
+is not a 100%-accuracy gate. The earlier official-six 3/2/1 Cairn and 3/3/0
+Mem0 result and failed feasibility gate remain unchanged.
+
+## Independent recorded-evidence audit acceptance
+
+After the primary-verified result above, a separate nonauthor GPT-6 auditor
+reported **PASS** on bounded recorded evidence. It checked the fixed source,
+roster and digests; all twelve completed scopes; read-only unchanged cold
+stores with 32 distinct active cards and 32 receipts per case; and 365 unique
+ledger-tail requests matched to guarded attempts (359 generation, six scoring).
+It confirmed 2,180,302 microUSD new reservation, 222,441 microUSD known
+actual cost on 262 rows, and 103 null-actual-cost rows retaining 515,000
+microUSD. Its authenticated current checkpoint matched 21,862 requests /
+138,839,636 microUSD reserved, history SHA-256
+`0308923a4fad9b1f7dff8b220c3a3929157b9a160da2db7717cfc2d09138661f`,
+zero pending and 61,160,364 microUSD remaining. The earlier “in progress”
+statement records its status before this audit arrived; no result, score,
+source trace, accounting row or L8 decision was altered. The audit also
+retained the one-carrier and unavailable pack-binding limits and the two Mem0
+answer-detail caveats. The auditor's exact reasoning effort was not exposed.
