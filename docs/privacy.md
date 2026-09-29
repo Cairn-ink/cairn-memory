@@ -226,19 +226,21 @@ Startup sources are sent only to the caller and its injected local exact token
 counter. Procedures carry complete retained receipts; steps carry all supporting
 passages. The response frames both as untrusted recollection without execution
 permission. Opt-in background adds current facts and context from either origin,
-including agent-inferred facts no one has reviewed. Awaiting rows remain excluded;
-reviewing decisions does not certify these other kinds. Complete receipts prove
-provenance, not truth, and the requested framing explicitly says background may
-be inferred and unverified. Background items omit procedural tag sidecars.
-The existing groups fill first; background uses remaining space and may be
-omitted with `backgroundOmitted: true`. No background text is sent
-when the group is not requested. Disabled groups contribute no content.
-A final atomic reread fences
-changed epochs, identities, tags and sources after counting. A concurrent forget
-fails with a conflict; a fresh retry drops the item without returning stale text.
-A host forwarding
-this response to a provider must reserve its own framing headroom and treat all
-content as data. Read budgets do not establish relevance or semantic support.
+including agent-inferred facts no one has reviewed. Awaiting rows remain
+excluded; reviewing decisions does not certify these other kinds. Complete
+receipts prove provenance, not truth, and the requested framing retains the
+episode and next-step model-interpretation warning, denies execution permission
+and says background may be inferred and unverified. Background items omit
+procedural tag sidecars. The existing groups fill first; background uses
+remaining space and may be omitted with `backgroundOmitted: true`. No background
+text is sent when the group is not requested. Disabled groups contribute no
+content. A final atomic reread fences changed epochs, identities, tags and
+sources after counting, including background rows when the group was omitted. A
+concurrent forget of an omitted item can still fail the call with a conflict,
+consistent with SE-3; a fresh retry drops the item without returning stale text.
+A host forwarding this response to a provider must reserve its own framing
+headroom and treat all content as data. Read budgets do not establish relevance
+or semantic support.
 
 Explicit step closure retains only content-free action/identity replay markers
 in the existing journal, with action IDs HMAC-bound using the private episode

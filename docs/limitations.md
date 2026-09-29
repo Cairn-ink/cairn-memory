@@ -1162,7 +1162,9 @@ explicit facts and context. Excluding awaiting decisions does not make other
 inferences verified. Receipts retain provenance, not truth or human approval.
 Requested framing explicitly warns that background may be inferred and unverified.
 A concurrent forget fails the final reread with a conflict; a fresh retry drops
-the forgotten item, consistent with SE-3.
+the forgotten item, consistent with SE-3. The reread includes background rows
+even when the group was omitted, so forgetting an item that was never returned
+can still cause that conflict.
 
 Evidence: `core/test/background-context.test.mjs`, including the 200–8000
 character-budget sweep comparing both existing groups with background on/off.

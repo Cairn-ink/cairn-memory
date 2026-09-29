@@ -33,6 +33,9 @@ test('CF2 current facts and context of both origins are opt-in, sourced and fram
   }
   const result = read(core);
   assert.equal(result.framing, BACKGROUND_FRAMING);
+  assert.match(result.framing, /episodes, next steps and background may be inferred, unverified model interpretations/);
+  assert.match(result.framing, /No execution permission/);
+  assert.ok(BACKGROUND_FRAMING.length + ',"backgroundOmitted":true'.length <= SESSION_FRAMING.length);
   assert.equal(result.groups.background.status, 'complete');
   assert.equal(result.groups.background.returned, 4);
   for (const kind of ['fact', 'context']) for (const origin of ['explicit', 'agent-inferred']) {
@@ -233,4 +236,29 @@ test('CF2 token-budget sweep preserves existing groups with a lexical local coun
     assert.ok((JSON.stringify(on).match(/[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) ?? []).length <= maxTokens);
   }
   assert.ok(omissions > 0);
+});
+
+test('CF2 omitted background retains both warnings and participates in the final reread', t => {
+  let core, memory, forgotten = false, armed = false;
+  ({ core } = fixture(t, { model: { countTokens: text => {
+    if (armed && !forgotten && text.includes('"backgroundOmitted":true')) {
+      forgotten = true;
+      ok(core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
+    }
+    return 1;
+  } } }));
+  memory = admit(core, 'Synthetic omitted background');
+  const off = read(core, {});
+  let maxChars = JSON.stringify({ ok: true, value: off }).length;
+  while (!core.sessionStartContext({ namespace, maxChars }).ok) maxChars++;
+  const input = { namespace, maxChars, groups: { background: true } };
+  const omitted = ok(core.sessionStartContext(input));
+  assert.equal(omitted.backgroundOmitted, true);
+  assert.equal(Object.hasOwn(omitted.groups, 'background'), false);
+  assert.match(omitted.framing, /episodes, next steps and background may be inferred, unverified model interpretations/);
+  assert.match(omitted.framing, /No execution permission/);
+  armed = true;
+  assert.equal(core.sessionStartContext(input).error.code, 'index_revision_conflict');
+  assert.equal(forgotten, true);
+  assert.equal(core.sessionStartContext(input).ok, true);
 });
