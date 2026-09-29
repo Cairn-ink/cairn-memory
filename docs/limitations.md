@@ -1413,3 +1413,28 @@ follows.
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
+
+## Offline recall stage witnesses are boundary observations
+
+The [M1g recall witness](plans/recall-stage-witness.md) is an evaluation-only,
+bounded, ephemeral facade, not paid-generation wiring or a product API. It
+records opaque reference/receipt membership at select/rank adapter boundaries;
+public summaries contain finite aggregates. Adapter-returned references are not
+individually core-accepted references, and a successful whole recall establishes
+only chain completion. Missing observations after overflow, projection failure,
+plain close, bypass or skipped packed pages remain partial/unknown, not absent.
+Reference visibility does not prove source-preview completeness; receipt
+membership does not prove full excerpt or semantic coverage. Rank-input loss
+alone cannot distinguish fetch from packing. Synthetic parity/loss controls do
+not establish the cause of earlier paid omissions, and no consumed case is
+replayed or rescored by this seam. Raw custom IDs exist only in bounded private
+lookup state until disposal; no source/query/namespace text or raw errors are
+emitted. Model identity changes, so tested frozen OpenAI compatibility is not
+universal transparency for arbitrary timing-sensitive or hostile models.
+Disposal clears private mappings and witness events while retaining bounded
+aggregates and the observation enum; a failed pending call remains partial
+after disposal. Final offline gates on both exact Node versions include this
+controlled lifecycle regression, with interrupted and superseded verification
+recorded in the plan. At this authoring checkpoint, independent fixed-head
+review and CI were pending; final review and CI delivery status is recorded on
+the PR. These results establish synthetic mechanics only.
