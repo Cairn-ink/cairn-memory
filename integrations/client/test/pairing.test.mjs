@@ -202,6 +202,7 @@ test("legacy gap: only Claude cursors count, preserve root despite new plugin da
     await privateWrite(join(root, "install-id"), `${key}\n`);
     if (evidence)
       await writeCaptureCursor(captureCursorPath(root, "synthetic-claude"), { offset: 0 });
+    assert.equal((await resolveClient({ ...options, client: "claude" })).enabled, evidence);
     const newRoot = join(options.home, "new-plugin-data");
     const claude = {
       ...options,
@@ -218,7 +219,13 @@ test("legacy gap: only Claude cursors count, preserve root despite new plugin da
     }
     await assert.rejects(stat(newRoot), { code: "ENOENT" });
     const consent = { claude: true, codex: true };
-    await initializePairing({ ...options, adopt: true, hostsStopped: true, consent });
+    await initializePairing({
+      ...options,
+      env: claude.env,
+      adopt: true,
+      hostsStopped: true,
+      consent,
+    });
     const ready = await completePairing({ ...options, hostsStopped: true, configured: consent });
     assert.equal(
       await clientProjectId(
@@ -760,8 +767,68 @@ test("registration failure preserves legacy evidence and explicit plugin-key pre
   assert.equal((await resolveClient(input)).root, paths.defaultRoot);
   await seed(plugin);
   assert.equal((await resolveClient(input)).root, plugin);
-  await assert.rejects(
-    resolveClient({ ...input, env: { ...input.env, CAIRN_MEMORY_STATE_DIR: paths.defaultRoot } }),
-    /state_dir_mismatch/,
+  assert.equal(
+    (
+      await resolveClient({
+        ...input,
+        env: { ...input.env, CAIRN_MEMORY_STATE_DIR: paths.defaultRoot },
+      })
+    ).root,
+    plugin,
   );
+});
+
+test("a second profile stays standalone when the registered profile pairs", async (t) => {
+  const options = await fixture(t);
+  const a = {
+    ...options,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-a") },
+  };
+  const b = {
+    ...options,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-b") },
+  };
+  const aId = await clientProjectId(a, "/synthetic/project");
+  const bId = await clientProjectId(b, "/synthetic/project");
+  assert.notEqual(aId, bId);
+  const defaultId = await clientProjectId(options, "/synthetic/project");
+  assert.notEqual(defaultId, aId);
+  assert.notEqual(defaultId, bId);
+  assert.equal((await resolveClient(options)).status, "standalone_unregistered");
+  assert.equal((await resolveClient(b)).status, "standalone_unregistered");
+  await setPaused(a.env.CLAUDE_PLUGIN_DATA, true);
+  assert.equal((await readControlState(b.env.CLAUDE_PLUGIN_DATA)).paused, false);
+  const setup = {
+    ...a,
+    adopt: true,
+    root: a.env.CLAUDE_PLUGIN_DATA,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  };
+  const pending = await initializePairing(setup);
+  await completePairing({ ...setup, configured: setup.consent });
+  assert.equal(
+    await clientProjectId({ ...a, pairingRecord: pending.pairingRecord }, "/synthetic/project"),
+    aId,
+  );
+  assert.equal(await clientProjectId(b, "/synthetic/project"), bId);
+  const inherited = { ...b, pairingRecord: pending.pairingRecord };
+  assert.equal((await resolveClient(inherited)).status, "standalone_unregistered");
+  assert.equal(await clientProjectId(inherited, "/synthetic/project"), bId);
+  await assert.rejects(
+    resolveClient({ ...b, pairingRecord: join(options.home, "wrong.json") }),
+    /pairing_record_mismatch/,
+  );
+});
+
+test("a new default profile cannot claim another profile's shared root without evidence", async (t) => {
+  const options = await fixture(t);
+  const env = { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-a") };
+  const setup = { ...options, env, hostsStopped: true, consent: { claude: true, codex: true } };
+  const pending = await initializePairing(setup);
+  await completePairing({ ...setup, configured: setup.consent });
+  assert.ok(
+    await clientProjectId({ ...setup, pairingRecord: pending.pairingRecord }, "/synthetic/project"),
+  );
+  assert.equal((await resolveClient(options)).enabled, false);
 });

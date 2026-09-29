@@ -61,6 +61,7 @@ function validateInstall(value) {
     if (
       !CLIENTS.includes(client) ||
       !absolute(binding?.root) ||
+      (binding.profileRoot !== undefined && !absolute(binding.profileRoot)) ||
       !["established", "pending"].includes(binding?.state)
     )
       fail("invalid_install");
@@ -251,7 +252,7 @@ export function parsePairingRecord(argv = []) {
 }
 
 function activeBinding(root, env, status = "single", paired = false) {
-  if (env.CAIRN_MEMORY_STATE_DIR !== undefined && env.CAIRN_MEMORY_STATE_DIR !== root) {
+  if (paired && env.CAIRN_MEMORY_STATE_DIR !== undefined && env.CAIRN_MEMORY_STATE_DIR !== root) {
     fail("state_dir_mismatch");
   }
   return {
@@ -266,14 +267,33 @@ function activeBinding(root, env, status = "single", paired = false) {
 async function selectBinding(options, snapshot, delivered) {
   const { client = "claude", env = process.env } = options;
   const { locations, install, record, keys } = snapshot;
-  if (install.resetPending) return disabled();
   const binding = install.clients[client];
+  const legacyClaude =
+    client === "claude" &&
+    (locations.claudeRoot === locations.defaultRoot || !keys.includes(locations.claudeRoot)) &&
+    keys.includes(locations.defaultRoot) &&
+    (await hasClaudeEvidence(locations.defaultRoot));
+  const claudeRoot = legacyClaude ? locations.defaultRoot : locations.claudeRoot;
+  const profileRoot = binding?.profileRoot ?? binding?.root;
   if (delivered !== undefined) {
     if (!absolute(delivered) || delivered !== locations.pairing) {
       fail("pairing_record_mismatch");
     }
     if (!record) fail("pairing_record_missing");
   }
+  // A registry entry belongs to one profile, not every Claude sharing this HOME.
+  if (
+    client === "claude" &&
+    binding &&
+    locations.claudeRoot !== profileRoot &&
+    !(legacyClaude && profileRoot === locations.defaultRoot)
+  ) {
+    // A distinct profile needs a distinct root. A shared default without Claude
+    // evidence still belongs to the registered pair, not this newcomer.
+    if (claudeRoot === binding.root && !legacyClaude) return disabled();
+    return activeBinding(claudeRoot, env, "standalone_unregistered");
+  }
+  if (install.resetPending) return disabled();
   if (record || install.shared || binding?.state === "pending") {
     if (!record || !delivered || !install.shared?.ready) return disabled();
     if (process.platform === "win32") fail("pairing_platform_unsupported");
@@ -294,22 +314,9 @@ async function selectBinding(options, snapshot, delivered) {
     return activeBinding(record.root, env, "paired", true);
   }
   const other = install.clients[CLIENTS.find((name) => name !== client)];
-  const explicitClaudeKey =
-    client === "claude" &&
-    env.CLAUDE_PLUGIN_DATA !== undefined &&
-    keys.includes(locations.claudeRoot);
-  let root = explicitClaudeKey
-    ? locations.claudeRoot
-    : (binding?.root ??
-      (client === "claude" ? locations.claudeRoot : (options.root ?? locations.defaultRoot)));
+  const root =
+    client === "claude" ? claudeRoot : (binding?.root ?? options.root ?? locations.defaultRoot);
   if (!absolute(root)) fail("invalid_state_path");
-  // An existing plugin-data key always wins over an old default-root cursor.
-  const legacyClaude =
-    client === "claude" &&
-    !explicitClaudeKey &&
-    keys.includes(locations.defaultRoot) &&
-    (await hasClaudeEvidence(locations.defaultRoot));
-  if (!binding && legacyClaude) root = locations.defaultRoot;
   let established = binding?.state === "established" && binding.root === root;
   if (!established && client === "claude" && keys.includes(root)) {
     established = !other || other.root !== root || legacyClaude;
@@ -349,7 +356,7 @@ async function fallbackStandalone(options, delivered, snapshot) {
     if (!["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code)) return undefined;
   }
   const env = options.env ?? process.env;
-  let root = snapshot?.install.clients.claude?.root ?? locations.claudeRoot;
+  let root = locations.claudeRoot;
   let explicitKey = false;
   if (env.CLAUDE_PLUGIN_DATA !== undefined) {
     try {
@@ -360,7 +367,7 @@ async function fallbackStandalone(options, delivered, snapshot) {
     }
   }
   if (explicitKey) root = locations.claudeRoot;
-  else if (!snapshot?.install.clients.claude) {
+  else if (env.CLAUDE_PLUGIN_DATA !== undefined || !snapshot?.install.clients.claude) {
     try {
       if (
         (await keyPresent(locations.defaultRoot)) &&
@@ -408,7 +415,11 @@ export async function resolveClient(options = {}) {
         async (current) => {
           const selected = await selectBinding(options, current, delivered);
           if (selected.enabled && !selected.paired && !current.install.clients[client]) {
-            current.install.clients[client] = { root: selected.root, state: "established" };
+            current.install.clients[client] = {
+              root: selected.root,
+              state: "established",
+              ...(client === "claude" ? { profileRoot: current.locations.claudeRoot } : {}),
+            };
             await saveInstall(current.locations, current.install);
           }
           return selected;
@@ -504,7 +515,14 @@ export async function initializePairing(options = {}) {
         ready: false,
         ...(options.adoptFrom ? { adoptFrom: options.adoptFrom } : {}),
       };
-      for (const client of CLIENTS) install.clients[client] = { root, state: "pending" };
+      const profileRoot =
+        install.clients.claude?.profileRoot ?? install.clients.claude?.root ?? locations.claudeRoot;
+      for (const client of CLIENTS)
+        install.clients[client] = {
+          root,
+          state: "pending",
+          ...(client === "claude" ? { profileRoot } : {}),
+        };
       await saveInstall(locations, install);
       await options.checkpoint?.("binding-written");
     }
@@ -572,7 +590,11 @@ export async function completePairing(options = {}) {
       fail("pending_binding_mismatch");
     if (!(await keyPresent(record.root, { strict: true }))) return disabled("paired_key_missing");
     for (const client of CLIENTS)
-      install.clients[client] = { root: record.root, state: "established" };
+      install.clients[client] = {
+        ...install.clients[client],
+        root: record.root,
+        state: "established",
+      };
     install.shared.ready = true;
     await saveInstall(locations, install);
     return { status: "paired", enabled: true, pairingRecord: locations.pairing, root: record.root };

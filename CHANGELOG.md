@@ -54,6 +54,9 @@
   clients remain disabled until binding completes.
 - Add private coordination records, serialized joint-initialization APIs for
   future setup, durable no-clobber key publication, and paired lost-key handling.
+- Keep separate Claude profiles on separate keys and pause state; an unregistered
+  profile never inherits another profile's pairing. Standalone ignores inherited
+  `CAIRN_MEMORY_STATE_DIR`, as 0.1.1 did.
 - Keep standalone Claude on its released key/path behavior, including host-created
   directories, symlinked ancestors and platforms without POSIX owner APIs.
   Coordination failures report unregistered status without disabling memory.

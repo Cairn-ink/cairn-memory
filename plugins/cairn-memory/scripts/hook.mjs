@@ -291,9 +291,13 @@ async function control() {
     return;
   }
   const state = await readControlState(dataDir);
+  const note = binding.status === "pairing_needed"
+    ? "; pairing_needed (existing client active)"
+    : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${binding.status === "pairing_needed" ? "; pairing_needed (existing client active)"
-      : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : ""}; telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; credential: ${token ? "configured" : "missing"}.\n`,
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}; ` +
+    `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
+    `credential: ${token ? "configured" : "missing"}.\n`,
   );
 }
 

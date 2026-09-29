@@ -1,7 +1,5 @@
 // Test preload: forbid resolution of the operator's home and access to host state.
 import os from "node:os";
-import childProcess from "node:child_process";
-import { basename } from "node:path";
 import fs from "node:fs";
 import promises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
@@ -9,10 +7,12 @@ import { fileURLToPath } from "node:url";
 import { resolve, join } from "node:path";
 const realHome = process.env.CAIRN_TEST_REAL_HOME;
 if (!realHome) throw new Error("home_guard_requires_real_home_string");
-const violationLog = process.env.CAIRN_TEST_GUARD_LOG;
-const rawAppend = fs.appendFileSync;
+let violated = false;
+process.on("exit", () => {
+  if (violated) process.exitCode = 1;
+});
 function violation(message) {
-  if (violationLog) rawAppend(violationLog, message + "\n");
+  violated = true;
   throw new Error(message);
 }
 const originalHome = os.homedir;
@@ -82,55 +82,4 @@ for (const api of [fs, promises]) {
     }
   }
 }
-syncBuiltinESMExports();
-
-// Fixture helpers and artifact subprocesses sometimes deliberately strip env.
-// Keep the guard and a synthetic HOME across those boundaries, without forwarding
-// credentials or other application configuration. This file is test-only.
-const guard = fileURLToPath(import.meta.url);
-const home = process.env.HOME;
-const cache = process.env.CAIRN_TEST_NPM_CACHE;
-function guardedOptions(command, options = {}) {
-  const name = basename(String(command));
-  if (!["node", "node.exe", "npm", "npm.cmd"].includes(name)) return options;
-  const supplied = options.env ?? process.env;
-  const optionsText = supplied.NODE_OPTIONS ?? "";
-  const env = {
-    ...supplied,
-    HOME: supplied.HOME ?? home,
-    CAIRN_TEST_REAL_HOME: supplied.CAIRN_TEST_REAL_HOME ?? realHome,
-    CAIRN_TEST_NPM_CACHE: cache,
-    NODE_OPTIONS: optionsText.includes(guard)
-      ? optionsText
-      : `${optionsText} --import=${JSON.stringify(guard)}`,
-  };
-  if (!supplied.CAIRN_TEST_REAL_HOME || supplied.CAIRN_TEST_REAL_HOME === realHome) {
-    env.CAIRN_TEST_GUARD_LOG = supplied.CAIRN_TEST_GUARD_LOG ?? violationLog;
-  }
-  if (name.startsWith("npm") && cache) env.npm_config_cache = cache;
-  return { ...options, env };
-}
-for (const method of ["spawn", "spawnSync", "execFile", "execFileSync"]) {
-  const original = childProcess[method];
-  childProcess[method] = function (command, args, options, ...rest) {
-    if (!Array.isArray(args)) {
-      rest = options === undefined ? rest : [options, ...rest];
-      options = args;
-      args = [];
-    }
-    if (typeof options === "function") {
-      rest.unshift(options);
-      options = undefined;
-    }
-    return original.call(this, command, args, guardedOptions(command, options), ...rest);
-  };
-}
-const originalFork = childProcess.fork;
-childProcess.fork = function (modulePath, args, options) {
-  if (!Array.isArray(args)) {
-    options = args;
-    args = [];
-  }
-  return originalFork.call(this, modulePath, args, guardedOptions(process.execPath, options));
-};
 syncBuiltinESMExports();

@@ -292,7 +292,8 @@ Pinned-host reconfiguration and hook delivery remain CX-2/CX-7 verification gate
 Codex's installed command passes a fixed, quoted `--pairing-record /absolute/path`
 to its launcher. Controls use the same bindings. The paired launcher validates
 the record and supplies its root to workers as
-`CAIRN_MEMORY_STATE_DIR`; a preexisting value must match the record or fail closed.
+`CAIRN_MEMORY_STATE_DIR`; paired worker handoffs must match the record or fail
+closed. Unpaired hooks ignore inherited values, retaining 0.1.1 behavior.
 Without pairing, the launcher uses only its established single-client binding.
 That environment variable alone cannot override a root or bypass second-client
 pairing. No dependency on GUI inheritance of an interactive shell's environment.
@@ -1200,21 +1201,38 @@ Resolved with the coordinator during CX-2:
   same boot, a foreign or unknown namespace is never reaped. A different boot
   makes the owner stale before probing a possibly reused PID. macOS has one PID
   space; use `kill(pid, 0)` and `Date.now() - os.uptime()*1000` as a boot estimate,
-  with 2,000 ms tolerance for sampling/rounding. Windows pairing is unsupported;
+  with 2,000 ms tolerance for sampling/rounding. A wall-clock step larger than
+  this during a lock hold can reap a live owner; holds are short. Windows pairing
+  is unsupported;
   standalone remains unaffected. The test seam supplies boot, namespace and
   synchronous liveness. Real macOS host behavior remains a CX-7/A6 verification
   gate, including the F0 finding that Codex hooks run outside the tool sandbox.
 - An empty Claude `pairing_record` option is unset. Explicit pause/resume on a
   disabled client reports its status and exits nonzero; automatic hooks still
   exit successfully without sending memory requests.
-- The committed `integrations/client/testing/run.mjs` entry isolates HOME and
-  preloads the home guard for all offline npm suites and their Node children.
-  A violation log fails the suite even when application code catches the error.
-  Golden cases run both hook and launcher against actual base Git sources:
-  0755 plugin roots with/without keys, symlinked HOME/`.claude`/`/var` ancestors,
-  no `getuid`, empty record option, existing plugin-data plus legacy cursor, and
-  12 concurrent calls per simulated linux/darwin/win32 platform. Concurrent
-  request lines are compared as a sorted multiset; each body remains exact bytes.
+- Only `npm test`, `test:pairing` and `test:pairing:golden` use the thin
+  `integrations/client/testing/run.mjs` guard shim. It adds NODE_OPTIONS and the
+  real-home guard string, then invokes the unchanged `tools/testing/run.mjs` with
+  the same arguments. It does not replace HOME/USERPROFILE/cache or rewrite child
+  environments. Other root scripts match base, including prefix adapter suites
+  and unwrapped demos whose databases remain retained.
+- The golden concurrency check extends control-lock waits to 30 seconds in both
+  isolated copies only. Production retains 250 ms; test-file serialization is
+  removed. Exact deliveries are required, with parallel request lines compared
+  as a sorted multiset and individual bodies preserved byte for byte. Thirty
+  hook/launcher variants include inherited state-dir values. One-HOME profile
+  fixtures compare separate keys, IDs and pause against actual base; only the
+  new unregistered status note is normalized for those status outputs.
+- A set `CLAUDE_PLUGIN_DATA` selects its own root even before key creation. A
+  different registered plugin-data root belongs to another profile and is never
+  adopted implicitly: the new profile stays `standalone_unregistered`. Only a
+  keyless profile with Claude evidence in the legacy **default** root may retain
+  that default root. Pairing applies only to the registered profile. Metadata's
+  optional `profileRoot` preserves that profile identity when an explicit adoption
+  changes its shared root; CX-7 supplies the intended profile's environment during
+  setup. Existing metadata without the field uses its registered root. A different
+  profile inheriting the valid record still runs unregistered on its own root;
+  invalid record delivery remains an error.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
   writes pending bindings before publishing a key and returns `binding_pending`.
@@ -1261,9 +1279,32 @@ Round-2 synthetic verification on Linux, local Node **v22.16.0** and **v24.15.0*
 `npm run test:pairing:golden` (actual-base reproduction), `demo:capture`,
 `demo:recall`, `test:workspace-lifecycle` (25 tests), and `git diff --check`
 exited 0 on each runtime. The first Node 22 plugin run with parallel test files
-observed 11 of 12 concurrent requests; plugin/pairing test files now run serially
+observed 11 of 12 concurrent requests; round 2 serialized plugin/pairing test files
 while their 12–20 hook processes remain concurrent. The full plugin retry passed;
 the inherited production pause-lock deadline was not changed. All suites ran
 sequentially with temporary homes and worktree TMPDIR/cache; exact cached public
 package entries supplied the offline artifact checks. No model or host CLI calls,
 real-user state access, installer or native macOS/Windows acceptance is implied.
+
+Round 3 supersedes that serialization workaround: independent review reproduced
+the inherited 250 ms timeout in base as well. The golden-only timeout adjustment
+now exercises exact delivery in both copies with ordinary test-file concurrency.
+The global guard runner and wrapped demos from round 2 are reverted per the
+coordinator decision; only the three pairing/plugin commands add the thin guard.
+
+A different profile whose requested root is already the registered pair's shared
+root cannot claim that key as an independent standalone identity. Without the
+legacy default-root Claude evidence, it remains `pairing_needed`; a genuinely
+distinct profile root stays unregistered and independent.
+
+Round-3 synthetic verification used local Node **v22.16.0** and **v24.15.0**
+on Linux. On each runtime, plugin tests (169), pairing tests (38), validation,
+artifact tests (86), MCP tests (91), OpenAI tests (304), and both unwrapped demos
+exited 0. Actual-base golden reproduction passed five normal runs and five runs
+under `taskset -c 0-1` on each runtime, including exact concurrent delivery.
+All four demo databases were retained. Core tests (1,105) passed on Node 24;
+Node 22 initially failed two existing invocation-deadline timing assertions, then
+passed both a targeted retry and the complete unchanged core suite. No core file
+or production timeout was changed. Whitespace checks passed. Suites ran
+sequentially with synthetic homes and worktree TMPDIR/cache, without host/model
+calls. Native macOS host verification remains pending.

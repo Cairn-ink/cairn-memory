@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdir, readFile, writeFile, symlink, chmod } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { mkdir, readFile, writeFile, symlink, chmod, cp } from "node:fs/promises";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
@@ -31,7 +31,19 @@ export async function extractMain(destination) {
   }
   return hashes;
 }
+async function goldenControlTimeout(plugin) {
+  // Only isolated base/candidate copies are changed; shipped limits stay exact.
+  if (resolve(plugin) === join(repo, "plugins/cairn-memory"))
+    throw new Error("golden_requires_copy");
+  const path = join(plugin, "lib/control-state.mjs");
+  const source = await readFile(path, "utf8");
+  if ((source.match(/timeoutMs: (?:250|30_000),/g) ?? []).length !== 2) {
+    throw new Error("golden_control_lock_shape_changed");
+  }
+  await writeFile(path, source.replaceAll("timeoutMs: 250,", "timeoutMs: 30_000,"));
+}
 export async function observeStandalone(plugin) {
+  await goldenControlTimeout(plugin);
   const workspace = createTestWorkspace(null, { prefix: "cx2-golden-" });
   try {
     const variants = [];
@@ -46,6 +58,7 @@ export async function observeStandalone(plugin) {
       "symlink-var",
       "no-getuid",
       "empty-option",
+      "inherited-state-dir",
       "existing-plugin-and-legacy",
       "concurrent-linux",
       "concurrent-darwin",
@@ -121,6 +134,9 @@ export async function observeStandalone(plugin) {
           CAIRN_TEST_REAL_HOME: process.env.CAIRN_TEST_REAL_HOME,
           ...(pluginData ? { CLAUDE_PLUGIN_DATA: root } : {}),
           ...(mode === "empty-option" ? { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: "" } : {}),
+          ...(mode === "inherited-state-dir"
+            ? { CAIRN_MEMORY_STATE_DIR: join(home, "unrelated") }
+            : {}),
           CAIRN_TEST_FALSY_HOME: fallback ? "yes" : "no",
           CAIRN_TEST_CONCURRENT: concurrent ? "yes" : "no",
           CAIRN_TEST_PLATFORM: concurrent ? mode.slice("concurrent-".length) : "linux",
@@ -166,7 +182,7 @@ export async function observeStandalone(plugin) {
         } else outcomes = [await run("capture")];
         if (entry === "launch-capture") {
           const expected = concurrent ? 12 : 1;
-          const deadline = Date.now() + 15000;
+          const deadline = Date.now() + 45000;
           while (
             (await readFile(completions, "utf8"))
               .split("\n")
@@ -203,6 +219,7 @@ export async function generateMainGolden(output) {
       hashes,
       standalone: await observeStandalone(workspace.path),
       hosted: await observeHosted(workspace.path),
+      profiles: await observeProfiles(workspace.path),
     };
     await writeFile(output, JSON.stringify(result, null, 2) + "\n");
   } finally {
@@ -220,6 +237,81 @@ export async function verifyMainGolden(fixture) {
     assert.deepEqual(await extractMain(workspace.path), golden.hashes);
     assert.deepEqual(await observeStandalone(workspace.path), golden.standalone);
     assert.deepEqual(await observeHosted(workspace.path), golden.hosted);
+    assert.deepEqual(await observeProfiles(workspace.path), golden.profiles);
+    const candidate = join(workspace.path, "candidate");
+    for (const name of ["lib", "scripts"])
+      await cp(join(repo, "plugins/cairn-memory", name), join(candidate, name), {
+        recursive: true,
+      });
+    const expected = structuredClone(golden.standalone);
+    for (const variant of expected)
+      variant.requestBytes = variant.requestBytes.replaceAll(
+        '\\"version\\":\\"0.1.1\\"',
+        '\\"version\\":\\"0.1.2\\"',
+      );
+    assert.deepEqual(await observeStandalone(candidate), expected);
+    assert.deepEqual(await observeHosted(candidate), golden.hosted);
+    assert.deepEqual(await observeProfiles(candidate), golden.profiles);
+  } finally {
+    await workspace.cleanup();
+  }
+}
+
+export async function observeProfiles(plugin) {
+  const workspace = createTestWorkspace(null, { prefix: "cx2-profile-golden-" });
+  try {
+    const home = join(workspace.path, "home");
+    await mkdir(home);
+    const requests = join(workspace.path, "requests");
+    await writeFile(requests, "");
+    const roots = [join(home, "profile-a"), join(home, "profile-b")];
+    async function run(profile, action) {
+      const env = {
+        ...process.env,
+        HOME: home,
+        CLAUDE_PLUGIN_DATA: roots[profile],
+        CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: "",
+        CAIRN_MEMORY_STATE_DIR: "inherited-ignored",
+        CAIRN_TEST_UUID: profile
+          ? "22222222-2222-4222-8222-222222222222"
+          : "11111111-1111-4111-8111-111111111111",
+        CAIRN_TEST_REQUESTS: requests,
+        CLAUDE_PLUGIN_OPTION_API_TOKEN: "synthetic",
+        CLAUDE_PLUGIN_OPTION_API_ENDPOINT: "https://synthetic.invalid",
+        CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${JSON.stringify(preload)}`,
+      };
+      const child = spawn(process.execPath, [join(plugin, "scripts/hook.mjs"), action], {
+        env,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (bytes) => (stdout += bytes));
+      child.stderr.on("data", (bytes) => (stderr += bytes));
+      child.stdin.end(JSON.stringify({ cwd: "/synthetic/project", prompt: "profile isolation" }));
+      const code = await new Promise((resolve, reject) => {
+        child.on("error", reject);
+        child.on("close", resolve);
+      });
+      return { code, stdout: stdout.replace("; standalone_unregistered", ""), stderr };
+    }
+    const outcomes = [];
+    outcomes.push(await run(0, "recall"), await run(1, "recall"));
+    outcomes.push(await run(0, "pause"), await run(0, "status"), await run(1, "status"));
+    outcomes.push(await run(1, "recall"));
+    const keys = await Promise.all(
+      roots.map((root) => readFile(join(root, "project-key"), "utf8")),
+    );
+    const requestBytes = await readFile(requests, "utf8");
+    const ids = requestBytes
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(JSON.parse(line).body).project_id);
+    if (ids.length !== 3 || ids[0] === ids[1] || ids[1] !== ids[2] || keys[0] === keys[1]) {
+      throw new Error("golden_profiles_not_isolated");
+    }
+    return { keys, requestBytes, outcomes };
   } finally {
     await workspace.cleanup();
   }

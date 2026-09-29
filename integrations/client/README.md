@@ -29,7 +29,8 @@ Use `workerEnv` when spawning a worker; `CAIRN_MEMORY_STATE_DIR` alone cannot se
 an arbitrary root. The worker must resolve the binding again. Claude automatically
 reads `CLAUDE_PLUGIN_OPTION_PAIRING_RECORD`; a launcher uses
 `parsePairingRecord(argv)` to extract `--pairing-record /absolute/path` and forwards
-that record too. Conflicting record delivery or state-root environment fails closed.
+that record too. Conflicting record delivery or a paired worker state-root mismatch fails closed.
+Standalone hooks ignore inherited state-root environment values.
 Only the canonical home coordination record is accepted.
 
 Call `clientProjectId(options, cwd)` for the unchanged HMAC identity, after checking
@@ -76,10 +77,37 @@ Old-boot locks are stale; durable pairing records contain neither boot nor PID
 namespace. Windows pairing is unsupported; standalone is unaffected. Real macOS
 host verification remains with CX-7/A6.
 
-All offline root npm suites use the committed home-guard runner, including Node
-children that strip their environment. Swallowed violations still fail the suite.
-Run `npm run test:pairing:golden` to reproduce the fixture from actual base sources.
-The 28 hook/launcher variants include host 0755 roots, ancestor symlinks, absent
-`getuid`, empty option, existing plugin-data plus old cursor, and 12 concurrent
-hooks per simulated platform. Parallel request lines are sorted for comparison;
-request bodies, IDs and exits remain exact (apart from the VERSION token).
+Only `npm test`, `test:pairing` and `test:pairing:golden` add the home guard through
+an environment-only shim before invoking the unchanged `tools/testing/run.mjs`.
+The shim preserves HOME, USERPROFILE, npm cache and arguments. The guard does not
+rewrite child environments; a caught violation still forces that process to fail.
+Other suite commands and unwrapped demos retain their base behavior and retention.
+Run with synthetic HOME and worktree TMPDIR/cache, as with the other tests.
+
+Run `npm run test:pairing:golden` to reproduce the actual-base fixture and compare
+the candidate. Both isolated copies get a 30-second control-lock timeout solely
+for golden concurrency checks; production keeps its original 250 ms. Test files
+need no serialization. Thirty hook/launcher variants include inherited state-dir
+values and 12 concurrent hooks per simulated platform. Exact delivery is required.
+A separate one-HOME, two-profile golden checks distinct keys/IDs and pause isolation;
+only the new unregistered status note is normalized for that status comparison.
+
+`install.clients.claude.profileRoot` identifies the registered profile independently
+of an explicitly adopted shared root. CX-7 must supply the intended Claude profile's
+`CLAUDE_PLUGIN_DATA` in setup's `env`; initialization preserves an existing profile
+binding across adoption. Other profiles use their own plugin-data roots and remain
+unregistered. Only a keyless profile with Claude evidence in the legacy default
+root may use that default root. Pairing never grants another profile access.
+
+The macOS boot estimate assumes no wall-clock step larger than two seconds during
+a setup lock hold; such a step could reap a live owner. Holds are short; native
+host verification remains a CX-7/A6 gate.
+
+If another profile inherits the registered profile's valid record option, it still
+runs as unregistered standalone on its own root. Invalid record paths remain
+errors; a record never expands the set of registered profiles.
+
+A different profile whose requested root is already the registered pair's shared
+root cannot claim that key as an independent standalone identity. Without the
+legacy default-root Claude evidence, it remains `pairing_needed`; a genuinely
+distinct profile root stays unregistered and independent.

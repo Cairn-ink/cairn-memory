@@ -42,7 +42,8 @@ An explicitly paired plugin uses the recorded durable shared root:
 Version 0.1.2 also stores coordination metadata under
 `~/.cairn-memory-clients/`, independently of `CLAUDE_PLUGIN_DATA`:
 
-- `install.json`: version, established/pending client/root bindings, initialization
+- `install.json`: version, established/pending client/root bindings and the registered Claude
+  profile root, initialization
   and configuration progress; explicit resets retain invalidated binding metadata;
 - `pairing.json`: version, absolute shared root, participating clients, record ID,
   initialize/adopt policy;
@@ -57,7 +58,9 @@ falsy-home temporary fallback for these paths; setup and pairing require a
 specified absolute durable home. Standalone Claude preserves released key/root
 handling when coordination is unavailable and reports `standalone_unregistered`.
 Pairing supports Linux within one PID namespace and macOS; Windows pairing is
-unsupported. Boot identity affects stale setup locks, never durable pair validity. Crash recovery may leave private temporary or
+unsupported. Boot identity affects stale setup locks, never durable pair validity.
+On macOS, a wall-clock step over two seconds during a lock hold can make a live
+owner look stale; lock holds are short and native host behavior is still to verify. Crash recovery may leave private temporary or
 lock-recovery files; only a process's own temporary file is cleaned automatically.
 
 Pairing requires consent and stopped hosts/workers. Newcomers remain disabled with
@@ -66,7 +69,10 @@ Only Claude writes `sessions/`. A bounded check of valid cursor metadata there c
 establish prior Claude use of a shared default root; shared telemetry/key/control
 files cannot. No host directory search or conversation read is involved.
 A delivered pairing record selects the shared root and pause generation;
-`CAIRN_MEMORY_STATE_DIR` is a validated worker handoff, never an override.
+`CAIRN_MEMORY_STATE_DIR` is validated for paired worker handoffs, never an
+override; standalone hooks ignore inherited values, as 0.1.1 did. A different
+Claude plugin-data profile remains unregistered with its own key and pause;
+pairing applies only to the registered profile.
 Paired key loss disables memory with `paired_key_missing`, while hooks still exit
 successfully. Restore the original backup key with stopped workers to retain IDs.
 An explicit identity reset retains old state, changes addressable project scope,

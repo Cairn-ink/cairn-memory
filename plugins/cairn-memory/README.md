@@ -35,9 +35,8 @@ and `claude -p` teardown without delaying Claude's response. The launcher pipes
 only session id, transcript path, working directory, and a content-free control
 generation directly to the worker, without a queue file. The worker environment
 adds the validated `CAIRN_MEMORY_STATE_DIR` and, when supplied by the launcher,
-the pairing-record option; it does not carry conversation text. See the repository security policy before reporting a
-possible privacy issue.
-
+the pairing-record option; it does not carry conversation text. See the repository
+security policy before reporting a possible privacy issue.
 
 ## Explicit pairing (0.1.2)
 
@@ -56,6 +55,20 @@ An explicitly confirmed identity reset changes scope and requires fresh adoption
 
 Paired pause/resume uses one shared generation and discards paused history at EOF.
 Old workers must be stopped during pairing. Shared state across PID namespaces is
-unsupported; current pairing verification is Linux-only. Claude configuration
-on real hosts remains to verify. See [privacy](../../docs/privacy.md) and the
+unsupported. Pairing supports Linux within one PID namespace and macOS; native
+macOS host behavior and Claude configuration on real hosts remain to verify. See [privacy](../../docs/privacy.md) and the
 [shared API](../../integrations/client/README.md) for state and recovery details.
+
+Each Claude plugin-data profile keeps its own root, key and pause. A different
+profile from the registered one runs as `standalone_unregistered`; it does not
+adopt that registration or its pairing record. The exception is a keyless profile
+with evidence of prior Claude use in the legacy default root. Standalone hooks
+ignore inherited `CAIRN_MEMORY_STATE_DIR`; paired worker handoffs validate it.
+
+macOS setup-lock boot estimates tolerate two seconds of sampling drift. A wall
+clock step larger than two seconds while a lock is held can make a live owner
+look stale; setup lock holds are short, and native host verification is pending.
+
+If another profile inherits the registered profile's valid record option, it still
+runs as unregistered standalone on its own root. Invalid record paths remain
+errors; a record never expands the set of registered profiles.

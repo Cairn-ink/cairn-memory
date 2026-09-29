@@ -4,7 +4,7 @@ import os from "node:os";
 import { appendFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 if (process.env.CAIRN_TEST_CONCURRENT !== "yes") {
-  crypto.randomUUID = () => "11111111-1111-4111-8111-111111111111";
+  crypto.randomUUID = () => process.env.CAIRN_TEST_UUID ?? "11111111-1111-4111-8111-111111111111";
 }
 if (process.env.CAIRN_TEST_PLATFORM) {
   Object.defineProperty(process, "platform", { value: process.env.CAIRN_TEST_PLATFORM });

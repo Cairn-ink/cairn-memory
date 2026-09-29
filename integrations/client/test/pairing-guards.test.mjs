@@ -85,33 +85,50 @@ test("suite home guard rejects real home resolution and host state before filesy
   }
 });
 
-test("committed suite entry catches swallowed home violations in stripped child environments", async (t) => {
+test("thin guard entry preserves the caller environment and fails swallowed violations", async (t) => {
   const workspace = createTestWorkspace(t, { prefix: "cx2-guard-entry-" });
-  const script = join(workspace.path, "swallowed.mjs");
+  const script = join(workspace.path, "probe.mjs");
+  const runner = fileURLToPath(new URL("../testing/run.mjs", import.meta.url));
+  const env = {
+    PATH: process.env.PATH,
+    HOME: workspace.path,
+    USERPROFILE: join(workspace.path, "profile"),
+    npm_config_cache: join(workspace.path, "cache"),
+    CAIRN_TEST_REAL_HOME: join(workspace.path, "forbidden"),
+    TMPDIR: process.env.TMPDIR,
+  };
   await writeFile(
     script,
-    `import {spawnSync} from 'node:child_process';
-    const result = spawnSync(process.execPath, ['-e',
-      'process.env.HOME=process.env.CAIRN_TEST_REAL_HOME; try {require("node:os").homedir()} catch {}'],
-      {env:{PATH:process.env.PATH}});
-    if (result.status !== 0) throw new Error('child did not swallow the violation');`,
+    `console.log(JSON.stringify({HOME:process.env.HOME,
+    USERPROFILE:process.env.USERPROFILE,cache:process.env.npm_config_cache}));`,
   );
-  const runner = fileURLToPath(new URL("../testing/run.mjs", import.meta.url));
-  const result = spawnSync(process.execPath, [runner, "--script", script], {
-    env: {
-      PATH: process.env.PATH,
-      HOME: join(workspace.path, "synthetic-home"),
-      CAIRN_TEST_REAL_HOME: workspace.path,
-      TMPDIR: process.env.TMPDIR,
-    },
+  const clean = spawnSync(process.execPath, [runner, "--script", script], {
+    env,
     encoding: "utf8",
   });
-  assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /home_guard_violation_in_suite/);
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.deepEqual(JSON.parse(clean.stdout), {
+    HOME: env.HOME,
+    USERPROFILE: env.USERPROFILE,
+    cache: env.npm_config_cache,
+  });
+  await writeFile(
+    script,
+    `import {homedir} from "node:os";
+    process.env.HOME = process.env.CAIRN_TEST_REAL_HOME; try { homedir(); } catch {}`,
+  );
+  const denied = spawnSync(process.execPath, [runner, "--script", script], {
+    env,
+    encoding: "utf8",
+  });
+  assert.equal(denied.status, 1);
   const { scripts } = JSON.parse(await readFile(join(root, "package.json")));
-  for (const [name, command] of Object.entries(scripts)) {
-    if (name === "test" || (name.startsWith("test:") && name !== "test:openai-live")) {
-      assert.match(command, /integrations\/client\/testing\/run.mjs/, name);
-    }
+  const base = JSON.parse(
+    await readFile(new URL("./fixtures/base-scripts-3a1c17d9.json", import.meta.url)),
+  );
+  const guarded = ["test", "test:pairing", "test:pairing:golden"];
+  for (const name of guarded) assert.match(scripts[name], /integrations\/client\/testing\/run.mjs/);
+  for (const [name, command] of Object.entries(base)) {
+    if (!guarded.includes(name)) assert.equal(scripts[name], command, name);
   }
 });
