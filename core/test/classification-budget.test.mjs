@@ -25,7 +25,7 @@ function fixture(t, classify) {
     return classify(request);
   } };
   const core = openMemoryCore({ path: join(ws.path, 'memory.sqlite'), model });
-  t.after(() => core.close());
+  ws.defer(() => core.close());
   let events = 0;
   const admit = (content) => ok(core.admit({ namespace, memory: { content, kind: 'fact' },
     receipts: [{ client: 'wiki', sessionId: 's', eventId: `event-${events++}`, role: 'user', excerpt: content.slice(0, 800) }] })).memory;
@@ -106,7 +106,7 @@ test('CR1 classification refuses a topic that packing left out of its request', 
     return { items: input.memories.map((memory) => ({ memoryId: memory.id, parentIds: [hidden.id] })) };
   } };
   const core = openMemoryCore({ path: join(ws.path, 'memory.sqlite'), model });
-  t.after(() => core.close());
+  ws.defer(() => core.close());
   let events = 0;
   const seed = (content) => ok(core.admit({ namespace, memory: { content, kind: 'fact' },
     receipts: [{ client: 'wiki', sessionId: 's', eventId: `event-${events++}`, role: 'user', excerpt: content.slice(0, 800) }] })).memory;

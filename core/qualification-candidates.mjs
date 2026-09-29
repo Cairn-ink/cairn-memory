@@ -5,6 +5,7 @@ import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { countTokens } from './model-budget.mjs';
 import { createQualificationTextCatalog } from './qualification-text-catalog.mjs';
+import { fittingCap, prefixUnits } from './model-packing.mjs';
 import { isPromise } from 'node:util/types';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
@@ -168,11 +169,14 @@ function qualificationFit(model, deadline) {
   // An inherited capability could be a throwing getter or a mutable function.
   // Accept only an explicit own-data callable; never invoke a prototype value.
   if (lookupFailed || inherited) reject();
-  if (descriptor === undefined) return null;
-  if (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'function') {
+  // Without an adapter capability, plan by the core count alone. A port that
+  // is missing or misconfigured is left to the guarded call's own errors.
+  if (descriptor === undefined && (typeof model.qualifyCandidates !== 'function' ||
+      !Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192)) return null;
+  if (descriptor !== undefined && (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'function')) {
     reject();
   }
-  const fit = descriptor.value;
+  const fit = descriptor?.value;
   return (request) => {
     deadline?.check();
     let logical;
@@ -180,6 +184,7 @@ function qualificationFit(model, deadline) {
     catch { deadline?.check(); reject(); }
     finally { deadline?.check(); }
     if (logical > 6000) return false;
+    if (!fit) return true;
     let result;
     try {
       deadline?.check();
@@ -203,45 +208,85 @@ function singletonSnapshot(snapshot, index) {
       candidates: source.candidates }] } });
 }
 
-export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence, episode = false) {
+// One item with each receipt's text cut to a prefix of at most `cap` units.
+// Candidates keep their original indices and every receipt keeps its first
+// one; a candidate wholly past the cut is not sent, a straddling one is cut
+// and marked. Anchors compile from the shown text, a prefix of the source.
+function shortenedSingleton(local, cap) {
+  const cut = local.items[0].receipts.map((receipt) => prefixUnits(receipt.excerpt, cap).length);
+  const partial = new Set();
+  const shown = local.candidates[0].flatMap((candidate) => {
+    const end = Math.min(candidate.end, cut[candidate.receiptIndex]);
+    if (end <= candidate.start) return [];
+    if (end === candidate.end) return [candidate];
+    partial.add(candidate.candidateIndex);
+    return [{ ...candidate, end, text: candidate.text.slice(0, end - candidate.start) }];
+  });
+  const source = local.input.items[0];
+  return { snapshot: { items: local.items, candidates: [shown] },
+    input: { items: [{ itemIndex: 0, content: source.content, kind: source.kind,
+      candidates: shown.map(({ candidateIndex, role, text }) => ({ candidateIndex, role, text,
+        ...(partial.has(candidateIndex) ? { textShortened: true } : {}) })) }] } };
+}
+
+/**
+ * Plan every group before the first request: all items, else their text
+ * catalog, else one request per item (inline, then catalog). An item that
+ * cannot fit alone is sent with its receipt text cut to a common prefix of at
+ * least 120 units; if even that cannot fit it stays unqualified. Size never
+ * fails the capture. `report` receives how many items were shortened or left
+ * unqualified.
+ */
+export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence, episode = false, report = {}) {
   deadline?.check();
   const system = episode ? episodeSystem : legacySystem;
   const snapshot = createQualificationCandidateSnapshot(items);
   deadline?.check();
-  let input = snapshot.input;
+  const all = snapshot.items.map((_, index) => index);
+  let groups = [{ indices: all, snapshot, input: snapshot.input }];
+  const unqualified = [];
+  let shortened = 0;
   const fits = qualificationFit(model, deadline);
-  let partition = null;
-  if (fits && !fits({ system, input, maxOutputTokens: 1024 })) {
-    deadline?.check();
-    let catalog;
-    try { catalog = createQualificationTextCatalog(snapshot.input); }
+  const catalogOf = (input) => {
+    try { return createQualificationTextCatalog(input).catalog; }
     catch { deadline?.check(); fail('invalid_model_output'); }
+  };
+  if (fits && !fits({ system, input: snapshot.input, maxOutputTokens: 1024 })) {
     deadline?.check();
-    if (fits({ system, input: catalog.catalog, maxOutputTokens: 1024 })) input = catalog.catalog;
+    const catalog = catalogOf(snapshot.input);
+    deadline?.check();
+    if (fits({ system, input: catalog, maxOutputTokens: 1024 })) groups = [{ indices: all, snapshot, input: catalog }];
     else {
-      // Plan every bounded singleton from the same detached source snapshot.
-      // A later unfit item must fail before the first model/HTTP request.
-      partition = snapshot.items.map((_, index) => {
+      groups = [];
+      for (const index of all) {
         deadline?.check();
         const local = singletonSnapshot(snapshot, index);
-        let selected = local.input;
-        if (!fits({ system, input: selected, maxOutputTokens: 1024 })) {
-          let localCatalog;
-          try { localCatalog = createQualificationTextCatalog(selected); }
-          catch { deadline?.check(); fail('invalid_model_output'); }
-          deadline?.check();
-          if (!fits({ system, input: localCatalog.catalog, maxOutputTokens: 1024 })) {
-            emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'context_budget_exceeded');
-            fail('context_budget_exceeded');
-          }
-          selected = localCatalog.catalog;
+        if (fits({ system, input: local.input, maxOutputTokens: 1024 })) {
+          groups.push({ indices: [index], snapshot: local, input: local.input });
+          continue;
         }
-        return { snapshot: local, input: selected };
-      });
+        const localCatalog = catalogOf(local.input);
+        deadline?.check();
+        if (fits({ system, input: localCatalog, maxOutputTokens: 1024 })) {
+          groups.push({ indices: [index], snapshot: local, input: localCatalog });
+          continue;
+        }
+        const longest = Math.max(...local.items[0].receipts.map((receipt) => receipt.excerpt.length));
+        const cap = fittingCap(longest, (units) =>
+          fits({ system, input: shortenedSingleton(local, units).input, maxOutputTokens: 1024 }));
+        if (cap === null) {
+          // Observable, but this item alone stays unqualified; the capture continues.
+          emitDiagnostic(model, 'qualifyCandidates', 'core_call', 'context_budget_exceeded');
+          unqualified.push(index);
+          continue;
+        }
+        groups.push({ indices: [index], ...shortenedSingleton(local, cap) });
+        shortened += 1;
+      }
     }
   }
-  const results = [];
-  for (const planned of partition ?? [{ snapshot, input }]) {
+  const compiled = new Map();
+  for (const planned of groups) {
     deadline?.check();
     // The capture layer supplies only its scoped, trusted staged-source check.
     // Never dispatch another group after explicit discard/forget during a
@@ -255,8 +300,8 @@ export async function qualifyCandidateItems(model, items, deadline, assertCaptur
         validateFresh: assertCaptureEvidence });
     let reason = 'invalid_qualification';
     try {
-      results.push(...compileQualification(output, planned.snapshot,
-        (category) => { reason = category; }, episode));
+      compileQualification(output, planned.snapshot, (category) => { reason = category; }, episode)
+        .forEach((item, position) => compiled.set(planned.indices[position], item));
       deadline?.check();
     }
     catch {
@@ -265,5 +310,7 @@ export async function qualifyCandidateItems(model, items, deadline, assertCaptur
       fail('invalid_model_output');
     }
   }
-  return results;
+  report.itemsShortened = shortened;
+  report.itemsUnqualified = unqualified.length;
+  return snapshot.items.map(({ proceduralProposal, ...item }, index) => compiled.get(index) ?? item);
 }

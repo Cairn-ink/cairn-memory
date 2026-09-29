@@ -165,13 +165,20 @@ test('AQ3 missing qualifier, timeout and bounded overflow preserve atomicity and
     [{ qualify: () => { throw Object.assign(new Error('synthetic'), { code: 'model_timeout' }); } }, 'model_timeout'],
     [{ qualify: () => { throw Object.assign(new Error('synthetic'), { name: 'AbortError' }); } }, 'model_cancelled'],
     [{ countTokens: (text) => text.includes('"qualifications"') ? 1025 : 1 }, 'invalid_model_output'],
-    [{ countTokens: (text) => text.includes('"receiptIndex"') && text.includes('maxOutputTokens') ? 6001 : 1 }, 'context_budget_exceeded'],
   ]) {
     const f = fixture(t, overrides); const before = material(f.db);
     error(await f.core.capture(input()), code); assert.deepEqual(material(f.db), before);
     f.model.qualify = qualify; f.model.countTokens = () => 1;
     assert.equal(ok(await f.core.capture(input())).admission.memories.length, 1);
   }
+});
+
+test('AQ3 a qualification request that cannot fit leaves only that item unqualified and admits the capture', async (t) => {
+  const f = fixture(t, { countTokens: (text) => text.includes('"receiptIndex"') && text.includes('maxOutputTokens') ? 6001 : 1 });
+  const result = ok(await f.core.capture(input()));
+  assert.deepEqual(result.qualificationTruncated, { itemsShortened: 0, itemsUnqualified: 1, reason: 'context_budget' });
+  assert.equal(f.calls.filter((call) => call.method === 'qualify').length, 0);
+  assert.equal(detail(f.core, result.admission.memories[0].id).qualification, null);
 });
 
 test('AQ4 ordered captures remain unresolved even all-unknown metadata, with durable replay and no retirement', async (t) => {

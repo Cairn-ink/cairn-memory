@@ -187,11 +187,15 @@ request that already fits is sent unchanged, byte for byte.
   still fits with at least 120 code points of text, the navigation label width.
   Every admitted candidate then gets the largest common text allowance that
   fits: candidates under it stay whole, and longer ones are shortened and marked
-  `textShortened: true`. A shortened candidate shows its content, then its
-  receipts in stored order, cut to a query-aware window (the same literal
-  policy as the navigation labels). Its memory ID, revision, metadata,
-  `receiptCount`, each included receipt's ID, client, session, event, role and
-  time, and any `qualification` stay whole. A qualification is never cut: a
+  `textShortened: true`. Only text is shortened. A shortened candidate carries
+  every receipt that recall returns with it, in stored order, with ID, client,
+  session, event, role and time whole. Text is spent on content first, then on
+  receipt excerpts in order, each cut to a query-aware window (the same literal
+  policy as the navigation labels). An excerpt that was cut, possibly to empty,
+  is marked `excerptShortened: true`. The memory ID, revision, metadata,
+  `receiptCount` and any `qualification` stay whole. A candidate whose receipt
+  identities alone cannot fit is left out whole and counted as omitted; a
+  partial receipt list is never sent. A qualification is never cut either: a
   qualified candidate that cannot fit is left out whole. In `source-evidence`
   and `rationale-evidence` modes each complete source set is atomic: it is sent
   whole or left out, never trimmed.
@@ -220,6 +224,10 @@ packed, so the response shape is unchanged for callers that do not read it.
 A query that cannot fit even with no candidates still refuses with
 `context_budget_exceeded`. See [model input budgets](model-input-budgets.md) for
 every core call.
+
+`recallTruncated` is part of this local core response only. The hosted recall
+contract, `schemas/recall-response.schema.json`, is separate and owned by CX-4;
+hosted responses do not carry `recallTruncated` until CX-4 publishes it there.
 
 After ranking and output counting, the core validates every fetched candidate
 and rereads the selected memories and their receipt prefixes in one SQLite

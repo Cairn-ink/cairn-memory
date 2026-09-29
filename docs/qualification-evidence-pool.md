@@ -98,7 +98,8 @@ helper must verify actual artifact and configuration bytes before paid use.
 
 The fixed repeated-source synthetic five-item × four-receipt × 800-unit fixture
 fits this catalog route in fake HTTP and compiles exact original anchors. The
-all-unique fixture still refuses locally. A surrogate-safe split can produce
+all-unique fixture does not fit as one request; core now plans it per item
+instead of refusing ([model input budgets](model-input-budgets.md)). A surrogate-safe split can produce
 five candidates per 800-unit receipt, so catalog validation allows up to 100
 candidates across the five items without changing the four-cited-anchor cap.
 These local controls do not establish real-provider interpretation, strict-schema

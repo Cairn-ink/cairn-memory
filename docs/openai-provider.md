@@ -146,6 +146,15 @@ tags, failure gaps, startup reads and replay. These checks establish transport
 and provenance plumbing, not model fidelity or semantic support. No real-provider
 episode acceptance or hosted/MCP generation is claimed.
 
+`fitsQualificationRequest` is now exposed in every qualification input mode,
+not only with `qualificationInputMode: 'adaptive-text-catalog-v1'`. It measures
+the exact evidence-pool wire, including pool instructions and the strict output
+schema, so core can plan qualification around the adapter's larger request
+instead of meeting a local `context_budget_exceeded`. Without the opt-in catalog
+mode it reports false for a catalog-form request, which that mode cannot send.
+Requests that already fit are unchanged. See
+[model input budgets](model-input-budgets.md).
+
 The adapter's test helpers and frozen oracle live in `adapters/openai/test/`.
 To re-freeze the oracle, prepare a clean checkout at `7f9ee869`, install its
 adapter dependencies, then run the maintainer-only generator from the current

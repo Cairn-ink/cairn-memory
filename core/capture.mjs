@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
+import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { reconcileCapture } from './ordered-capture.mjs';
@@ -64,16 +65,68 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
   }
 }
 
+/** The exact extraction request for a snapshot under one capture configuration. */
+export function extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode = false }) {
+  const catalog = captureSourcePolicy ? sourceWindowCatalog(snapshot) : null;
+  const retained = !catalog && captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  const sourceMessages = retained?.messages ?? snapshot.messages;
+  return { catalog, retained, sourceMessages,
+    system: episode ? episodeSystem : catalog ? windowSystem : retained ? retainedSystem : system,
+    input: catalog?.input ?? { messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })) } };
+}
+
+/**
+ * Whether an extraction request fits, counted exactly as the guarded call
+ * counts it; null when the port is missing or misconfigured, which the
+ * guarded call reports itself.
+ */
+export function extractionFits(model, request) {
+  if (typeof model?.extract !== 'function' || !Number.isSafeInteger(model.contextWindow) ||
+      model.contextWindow < 8192) return null;
+  return requestFits(model, 'extract')(request.system, request.input);
+}
+
+// A submitted batch whose extraction request cannot fit is an input error,
+// refused before any claim, staging, write or provider call. Hosts split
+// batches with core.planCaptureBatches, which uses this same measurement.
+export function checkExtractionFits(model, request) {
+  if (extractionFits(model, request) !== false) return;
+  emitDiagnostic(model, 'extract', 'core_call', 'context_budget_exceeded');
+  fail('context_budget_exceeded');
+}
+
+// Keep extracts from an existing episode's staged sources, which the host did
+// not size. When they cannot fit, every source stays in the request with its
+// text cut to a common prefix of at least 120 units, and the result says so.
+function keepRequest(model, request, deadline) {
+  if (extractionFits(model, request) !== false) return { request, shortened: 0 };
+  const fits = requestFits(model, 'extract', deadline);
+  const messages = request.input.messages;
+  const view = (cap) => ({ ...request.input, messages: messages.map((message) =>
+    ({ ...message, content: prefixUnits(message.content, cap) })) });
+  const cap = fittingCap(Math.max(...messages.map((message) => message.content.length)),
+    (units) => fits(request.system, view(units)));
+  if (cap === null) return { request, shortened: 0 };
+  return { request: { ...request, input: view(cap) },
+    shortened: messages.filter((message) => message.content.length > cap).length };
+}
+
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
   captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun }) {
   deadline?.check();
   const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
   deadline?.check();
-  const catalog = captureSourcePolicy ? sourceWindowCatalog(snapshot) : null;
-  const retained = !catalog && captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
+  let request = extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: Boolean(episodeRun) });
+  const { catalog, retained, sourceMessages } = request;
   deadline?.check();
-  const sourceMessages = retained?.messages ?? snapshot.messages;
+  if (!episodeRun) checkExtractionFits(model, request);
+  let extractionTruncated;
+  if (episodeRun?.keep) {
+    const kept = keepRequest(model, request, deadline);
+    request = kept.request;
+    if (kept.shortened) extractionTruncated = { messagesShortened: kept.shortened };
+  }
   // Retention coverage of this submitted snapshot, not an attestation of which
   // extraction policy executed an earlier duplicate batch.
   const coverage = { ...(catalog?.coverage ?? (retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {})),
@@ -87,11 +140,11 @@ export async function captureMessages({ model, input, operations, captureQualifi
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
       previousOutcome: 'unavailable' } } : {}) };
   const owned = { ...key, token: claim.token };
+  const qualificationReport = {};
   let finished;
   try {
     deadline?.check();
-    const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', episodeRun ? episodeSystem : catalog ? windowSystem : retained ? retainedSystem : system,
-      catalog?.input ?? { messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })) },
+    const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
       { failureCode: 'extraction_failed', deadline });
     let items = catalog ? extractedWindowItems(output, snapshot, catalog,
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot, retained?.messages,
@@ -102,8 +155,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items, deadline,
-        captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined, Boolean(episodeRun))
-      : await qualifyExtractedItems(model, items, deadline);
+        captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined, Boolean(episodeRun),
+        qualificationReport)
+      : await qualifyExtractedItems(model, items, deadline, qualificationReport);
     deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
@@ -127,8 +181,12 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline, episodeRun?.keep);
   const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
     classification, sourceMessages, operations, deadline }) : undefined;
+  const { itemsShortened, itemsUnqualified } = qualificationReport;
   return { duplicate: false, admission, classification,
     ...(captureRationale ? { rationale } : {}),
     ...coverage,
-    ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}) };
+    ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}),
+    ...(itemsShortened || itemsUnqualified
+      ? { qualificationTruncated: { itemsShortened, itemsUnqualified, reason: 'context_budget' } } : {}),
+    ...(extractionTruncated ? { extractionTruncated } : {}) };
 }

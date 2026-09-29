@@ -167,16 +167,21 @@ test('fit callback sees a detached request and cannot rewrite authoritative sour
   assert.equal(admitted[0].content, 'Synthetic claim');
 });
 
-test('neither-fit and invalid fit results refuse before model invocation, including cross-realm rejection', async () => {
+test('neither-fit leaves items unqualified and invalid fit results refuse, all before model invocation', async () => {
   const calls = []; const source = small();
-  for (const badFit of [() => false, () => undefined, () => Promise.reject(new Error('private')),
+  const neither = { contextWindow: 8192, countTokens: () => 1, fitsQualificationRequest: () => false,
+    qualifyCandidates() { calls.push(1); } };
+  const report = {};
+  const unqualified = await qualifyCandidateItems(neither, source, undefined, undefined, false, report);
+  assert.deepEqual(report, { itemsShortened: 0, itemsUnqualified: 1 });
+  assert.equal(Object.hasOwn(unqualified[0], 'qualification'), false);
+  assert.deepEqual(unqualified[0].receipts, source[0].receipts);
+  for (const badFit of [() => undefined, () => Promise.reject(new Error('private')),
     () => runInNewContext('Promise.reject(new Error("private"))'), () => { throw new Error('private'); }]) {
-    let checks = 0;
     const model = { contextWindow: 8192, countTokens: () => 1,
-      fitsQualificationRequest() { checks++; return badFit(); },
+      fitsQualificationRequest() { return badFit(); },
       qualifyCandidates() { calls.push(1); } };
-    await assert.rejects(qualifyCandidateItems(model, source), error =>
-      error.code === (checks === 4 ? 'context_budget_exceeded' : 'token_count_unavailable'));
+    await assert.rejects(qualifyCandidateItems(model, source), error => error.code === 'token_count_unavailable');
   }
   const accessor = { contextWindow: 8192, countTokens: () => 1,
     qualifyCandidates() { calls.push(1); } };
@@ -191,7 +196,9 @@ test('pre-dispatch fit failures emit only finite source-free core diagnostics', 
     const events = [];
     const model = { contextWindow: 8192, countTokens: () => 1, fitsQualificationRequest: fit,
       onDiagnostic: (event) => events.push(event), qualifyCandidates: () => assert.fail('No dispatch') };
-    await assert.rejects(qualifyCandidateItems(model, small()), error => error.code === code);
+    // A budget refusal degrades the item alone; a fit-capability failure still refuses.
+    if (code === 'context_budget_exceeded') await qualifyCandidateItems(model, small());
+    else await assert.rejects(qualifyCandidateItems(model, small()), error => error.code === code);
     assert.deepEqual(events, [{ version: 1, stage: 'qualifyCandidates', layer: 'core_call', reason: code }]);
     assert.equal(JSON.stringify(events).includes('Synthetic source text'), false);
     assert.equal(JSON.stringify(events).includes('private source'), false);

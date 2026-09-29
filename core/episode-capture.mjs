@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isStorageBusy, STORAGE_BUSY_TIMEOUT_MS } from './database.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
-import { captureMessages } from './capture.mjs';
+import { captureMessages, checkExtractionFits, extractionRequest } from './capture.mjs';
 import { callModel } from './model-call.mjs';
 import { countTokens } from './model-budget.mjs';
 import { fail, MemoryStoreError, object } from './validation.mjs';
@@ -195,8 +195,10 @@ export async function endEpisode({ runtime, ns, model, input }) {
 }
 
 export async function captureEpisodeMessages(options) {
-  const { runtime, ns, model, input, startAdmission } = options;
+  const { runtime, ns, model, input, startAdmission, captureQualification, captureSourcePolicy } = options;
   const snapshot = episodeSnapshot(input);
+  // Before staging, lazy interpretation or any claim: an oversized batch is an input error.
+  checkExtractionFits(model, extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: true }));
   const batch = { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
     payloadDigest: snapshot.payloadDigest, ...snapshot.episodeContext, view: snapshot.view,
     messages: snapshot.messages, eventStart: snapshot.eventStart, eventEnd: snapshot.eventEnd,

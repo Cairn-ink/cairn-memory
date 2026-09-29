@@ -36,6 +36,33 @@ Fresh work claims a fixed 125-second lease. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
 
+### Planning capture batches
+
+One capture makes one extraction request, so a submitted batch must fit it.
+Capture measures that request (prompt, messages and JSON framing, with the
+adapter's `countTokens`) before any claim, staging, write or provider call. A
+batch that does not fit is refused as an input error, `context_budget_exceeded`,
+and retrying the same batch refuses again. Callers plan batches first:
+
+```js
+const plan = core.planCaptureBatches({ messages }); // same message shape as capture
+// plan.value: { batches: [[0, 1, 2], [3]], oversizedMessageIndices: [] }
+```
+
+The planner uses this core's own capture configuration and measurement. It
+keeps message order, splits only between whole messages and respects capture's
+24-message, 20,000-unit and indexed-window limits, so every batch it returns is
+admissible. It makes no model call and writes nothing, and it accepts at most
+240 messages per call. It never splits a message: a message that cannot fit even
+alone is listed in `oversizedMessageIndices`. In retained (`source-bound-v2`)
+and session-episode modes, each message is extracted from its 800-unit view,
+and one such message always fits: the densest synthetic text measured under
+o200k × 1.15 reached 3,608 tokens. A plain or indexed-window message of up to
+4,000 units fits for ordinary Chinese, Japanese, Korean, Thai and English text
+(4,611 tokens at most). Dense rare-script text such as CJK Extension A, Yi or
+Tangut can reach about 14,000 tokens alone and is then reported as oversized.
+See [model input budgets](model-input-budgets.md).
+
 Trusted embedded callers may opt in with
 `openMemoryCore({ path, model, captureDeadlineMs: 120000 })`. The setting is
 snapshotted at construction, accepts an integer from 1 through 120000, and is
@@ -106,8 +133,9 @@ snapshotted, not read from caller configuration again during capture. It is not
 a new MCP, HTTP or capture input field. Legacy mode is explicitly unprotected
 against semantic errors in automatic retirement.
 
-For nonempty extraction, call `model.qualify` once before admission, under the
-same 6000-input/1024-output token ceilings and 30-second deadline. The input is
+For nonempty extraction, call `model.qualify` before admission, under the
+same 6000-input/1024-output token ceilings and 30-second deadline: once for all
+items, or once per item when they cannot fit together. The input is
 `{items:[{itemIndex,content,kind,sources:[{receiptIndex,role,excerpt}]}]}`; receipt
 indices are local to each item, regardless of original message index order.
 Only exact canonical/redacted receipt excerpts (at most 800 UTF-16 units) reach
@@ -123,9 +151,16 @@ Model descriptions remain unverified interpretations. Evidence past the stored
 800-unit excerpt cannot support an anchor, even if extraction saw it. There is
 no quote relocation, larger transcript retention or trusted single-claim binding.
 
-Invalid metadata, malformed Unicode, a missing qualifier, timeout or token
-overflow fails explicitly; there is no silent unqualified fallback. Validation
-of all items precedes their shared atomic admission. Existing unqualified
+Invalid metadata, malformed Unicode, a missing qualifier or timeout fails
+explicitly. Size never fails a valid capture. An item that cannot fit alone is
+sent with each receipt excerpt cut to a common prefix, never below 120 units;
+receipt indices and roles stay whole, so every anchor is still an exact offset
+into the stored excerpt. If even that cannot fit, that item alone is admitted
+unqualified (`qualification: null`), a `context_budget_exceeded` diagnostic is
+emitted, and the capture reports
+`qualificationTruncated: {itemsShortened, itemsUnqualified, reason: 'context_budget'}`.
+The field is absent otherwise. Validation of all qualified items precedes their
+shared atomic admission. Existing unqualified
 duplicates are not backfilled: qualification mismatch fails
 `qualification_conflict`. Suppression retains the existing forgotten-content
 protection. Empty extraction and completed replay make no qualifier call.
@@ -193,8 +228,15 @@ then catalog for each before any model call. The local item index is rebased to
 zero in each request while original candidate IDs and receipt/source anchors
 stay bound to an immutable snapshot. All results must compile before admission;
 failure of any group rejects the batch without partial memories or a retry.
-Models without this fit capability retain one whole inline request. Each
-request retains the same token/output limits and original capture deadline.
+Models without this fit capability are planned the same way by core token
+count alone, and a request that fits whole is sent unchanged. An item that fits
+neither inline nor as a catalog is sent inline with each receipt's text cut to a
+common prefix of at least 120 units. Candidates keep their original indices,
+every receipt keeps its first candidate, and a cut candidate is marked
+`textShortened: true`. Anchors compile from the text shown, a prefix of the
+stored excerpt. If even that cannot fit, only that item stays unqualified,
+reported as for v1. Each request retains the same token/output limits and
+original capture deadline.
 For staged evidence, the capture layer rechecks its scoped ownership immediately
 before each group, including the first after planning. Explicit discard or
 forget during an already-started request cannot recall that request, but blocks
@@ -239,9 +281,9 @@ calculate character positions, copy quotes, or maintain a separate coverage list
 Missing/foreign references, unsupported values or incomplete batches fail
 atomically; there is no v1 repair, fallback citation or guessed evidence.
 
-The same input/output/time bounds apply. Windows can split a phrase and complex
-batches may exceed the input budget; neither is hidden by dropping evidence or
-increasing provider limits. Multiple selected windows can support one field.
+The same input/output/time bounds apply. Windows can split a phrase. A batch too
+large for the input budget is planned as above, and anything shortened or left
+unqualified is reported, never hidden; provider limits are not raised. Multiple selected windows can support one field.
 Precise evidence attachment does not prove correct interpretation, shared slot
 identity, adoption or currentness. Both qualified modes keep ordered retirement
 unresolved until trusted identity is separately established.
@@ -433,6 +475,10 @@ signal. `keepEpisode({namespace,episodeId,expectedRevision,actionId})` runs norm
 inferred extraction, qualification and placement over currently retained passages,
 never the gist. It bypasses debounce. Its durable action binds the source revision;
 identical completed replay makes no calls. Keep cannot recover omitted/expired text.
+If its sources no longer fit one extraction request, every source is still
+sent with its text cut to a common prefix of at least 120 units, and the result
+reports `extractionTruncated: {messagesShortened}`; receipts keep the full
+retained text.
 Inspection exposes paged content-free keep actions in creation-ordinal order:
 `keepActions:{items,nextCursor,exhausted}`, with `keepLimit` (default 20, max 50)
 and `keepCursor`. Coverage records exact source IDs, revision and source fence,

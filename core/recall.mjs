@@ -19,25 +19,26 @@ const mapRef = (item) => item.type === 'unfiled' ? item.ref :
 const oversized = (result) => !result.ok && result.error.code === 'context_item_too_large';
 
 // Content first, then receipts in stored order, each cut to a query-aware window.
-// Metadata, ids and qualification stay whole; source-context sets are atomic.
+// Every receipt stays in the list with its identity; only excerpt text is cut,
+// possibly to empty. Metadata and qualification stay whole; source-context
+// sets are atomic. A candidate whose receipt identities alone cannot fit is
+// left out whole by the packer, never sent with a partial receipt list.
 function rankText(window) {
   return (candidate) => {
     const lengths = [candidate.memory.content, ...candidate.receipts.map((receipt) => receipt.excerpt)]
       .map((text) => [...text].length);
     const [contentPoints, ...receiptPoints] = lengths;
     return { points: lengths.reduce((sum, length) => sum + length, 0), view: (limit) => {
-      if (limit < contentPoints) return { ...candidate,
-        memory: { ...candidate.memory, content: window(candidate.memory.content, limit) },
-        receipts: [], textShortened: true };
-      const receipts = [];
-      let left = limit - contentPoints;
-      for (const [index, receipt] of candidate.receipts.entries()) {
-        if (left <= 0) break;
-        const excerpt = receiptPoints[index] <= left ? receipt.excerpt : window(receipt.excerpt, left);
-        receipts.push(excerpt === receipt.excerpt ? receipt : { ...receipt, excerpt });
-        left -= receiptPoints[index];
-      }
-      return { ...candidate, receipts, textShortened: true };
+      const content = limit < contentPoints ? window(candidate.memory.content, limit) : candidate.memory.content;
+      let left = Math.max(0, limit - contentPoints);
+      const receipts = candidate.receipts.map((receipt, index) => {
+        const shown = Math.min(left, receiptPoints[index]);
+        left -= shown;
+        return shown === receiptPoints[index] ? receipt
+          : { ...receipt, excerpt: window(receipt.excerpt, shown), excerptShortened: true };
+      });
+      return { ...candidate, ...(content === candidate.memory.content ? {}
+        : { memory: { ...candidate.memory, content } }), receipts, textShortened: true };
     } };
   };
 }

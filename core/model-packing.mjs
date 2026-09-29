@@ -31,6 +31,29 @@ function largest(low, high, fits) {
   return low;
 }
 
+/** Whether a whole request fits, counted exactly as the guarded call counts it. */
+export function requestFits(model, stage, deadline) {
+  const count = counter(model, stage, deadline);
+  return (system, input) => count(modelRequestText(system, input)) <= MODEL_INPUT_TOKENS;
+}
+
+/** The longest prefix of whole code points within `units` UTF-16 units. */
+export function prefixUnits(text, units) {
+  if (text.length <= units) return text;
+  let end = units;
+  if (end > 0 && /[\uD800-\uDBFF]/u.test(text[end - 1])) end -= 1;
+  return text.slice(0, end);
+}
+
+/**
+ * The largest common source-text cap, at least `TEXT_FLOOR` units, for which
+ * `fits(cap)` holds; null when even the floor does not fit.
+ */
+export function fittingCap(longest, fits) {
+  if (!fits(TEXT_FLOOR)) return null;
+  return largest(TEXT_FLOOR, Math.max(TEXT_FLOOR, longest), fits);
+}
+
 /**
  * Fit select's navigation maps into the model input limit. A request that
  * already fits is returned as the same object. Otherwise items are kept in a

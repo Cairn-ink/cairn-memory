@@ -128,20 +128,20 @@ test('T04: public recall returns exact contiguous two-page evidence prefix, incl
   }
 });
 
-test('T05: accumulated ranking overflow shortens only the model view and reports it', async (t) => {
+test('T05: accumulated ranking overflow omits the whole candidate, never a partial receipt list', async (t) => {
   const { core, model } = fixture(t, { countTokens: (text) => {
     let parsed = null;
-    try { parsed = JSON.parse(text); } catch { /* A candidate fragment, not a request. */ }
+    try { parsed = JSON.parse(text); } catch { /* Not a request. */ }
     if (parsed?.input?.candidates?.[0]?.receipts.length > 100) return 6001;
     return 1;
   } });
   admit(core, 'Accumulated evidence', personal, 101);
   const result = ok(await recall(core));
-  assert.deepEqual(model.calls.map((call) => call.method), ['select', 'rank']);
-  const sent = model.calls[1].input.candidates[0];
-  assert.ok(sent.receipts.length <= 100 && sent.textShortened === true);
-  assert.equal(result.memories[0].receipts.length, 101, 'returned receipts are never shortened');
-  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 1 });
+  // All 101 receipt identities must travel together; they cannot fit, so the
+  // candidate is left out whole and no rank request is sent.
+  assert.deepEqual(model.calls.map((call) => call.method), ['select']);
+  assert.deepEqual(result.memories, []);
+  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
   assert.equal(result.coverage, 'budget_exhausted');
 });
 

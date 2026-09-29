@@ -54,7 +54,7 @@ function fixture(t, { select = selectUpTo(24), rank = rankAll, extract, counter 
   const model = { contextWindow: 8192, countTokens: counter, select: record('select', select),
     rank: record('rank', rank), ...(extract ? { extract, classify: fileAll } : {}) };
   const core = openMemoryCore({ path: join(ws.path, 'memory.sqlite'), model });
-  t.after(() => core.close());
+  ws.defer(() => core.close());
   let events = 0;
   const admit = (content, excerpt = content, namespace = personal, eventId = `event-${events++}`) =>
     ok(core.admit({ namespace, memory: { content, kind: 'fact' },
@@ -65,6 +65,19 @@ function fixture(t, { select = selectUpTo(24), rank = rankAll, extract, counter 
 function withinBudget(calls) {
   assert.ok(calls.length > 0, 'at least one model call ran');
   for (const call of calls) assert.ok(call.tokens <= LIMIT, `${call.method} request counted ${call.tokens} tokens`);
+}
+
+// Every receipt a ranked candidate returns was sent with its identity whole;
+// only excerpt text may be shorter, marked, and still an original slice.
+function sameReceiptIdentities(sent, returned) {
+  assert.deepEqual(sent.map((receipt) => receipt.id), returned.map((receipt) => receipt.id));
+  for (const [index, receipt] of sent.entries()) {
+    const { excerpt, excerptShortened, ...identity } = receipt;
+    const { excerpt: original, ...expected } = returned[index];
+    assert.deepEqual(identity, expected);
+    assert.ok(original.includes(excerpt));
+    assert.equal(excerptShortened === true, excerpt !== original);
+  }
 }
 
 // The candidate exactly as recall assembled it before packing: two fetch pages.
@@ -99,6 +112,7 @@ test('CR1 probe 1: one memory re-extracted from many ~300-character Chinese turn
     assert.equal(result.memories.length, 1);
     assert.deepEqual(result.memories[0].receipts, fullCandidate(f.core, personal, 0, memory).receipts,
       'returned receipts are the complete fetched prefix, never shortened');
+    sameReceiptIdentities(sent.receipts, result.memories[0].receipts);
     assert.equal(result.memories[0].memory.content, content);
     assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 1 });
     assert.equal(result.coverage, 'budget_exhausted');
@@ -119,7 +133,23 @@ test('CR1 probe 1: short English turns re-extracting one memory stay recallable 
   const result = ok(await f.core.recall({ readSet: [personal], query }));
   withinBudget(f.calls);
   assert.equal(result.memories[0].receipts.length, fullCandidate(f.core, personal, 0, memory).receipts.length);
+  sameReceiptIdentities(f.calls.find((call) => call.method === 'rank').input.candidates[0].receipts,
+    result.memories[0].receipts);
   assert.equal(result.recallTruncated.candidatesShortened, 1);
+});
+
+test('CR1 a candidate whose receipt identities alone cannot fit is left out whole, never partially', async (t) => {
+  const f = fixture(t);
+  const kept = f.admit('Deploy checklist owner is Lin.', 'Deploy checklist owner is Lin.');
+  // Tiny excerpts let two fetch pages carry about 160 receipts, whose identity
+  // fields alone exceed the rank budget.
+  for (let i = 0; i < 200; i++) f.admit('Deploy checklist reminder', `r${i}`, personal, `crowded-${i}`);
+  const result = ok(await f.core.recall({ readSet: [personal], query: 'deploy checklist' }));
+  withinBudget(f.calls);
+  const rank = f.calls.find((call) => call.method === 'rank');
+  assert.deepEqual(rank.input.candidates.map((candidate) => candidate.memory.id), [kept.id]);
+  assert.deepEqual(result.memories.map((item) => item.memory.id), [kept.id]);
+  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 1, candidatesShortened: 0 });
 });
 
 test('CR1 probe 2: ten distinct Chinese memories with a selector returning twelve refs', async (t) => {
@@ -248,11 +278,7 @@ test('CR1 mixed Chinese and code memories keep exact slices and identities', asy
     const stored = ok(f.core.get({ namespace: personal, memoryId: candidate.memory.id }));
     assert.equal(candidate.memory.revision, stored.memory.revision);
     assert.ok(stored.memory.content.includes(candidate.memory.content));
-    for (const receipt of candidate.receipts) {
-      const original = stored.receipts.find((item) => item.id === receipt.id);
-      assert.deepEqual({ ...receipt, excerpt: original.excerpt }, original, 'receipt identity is untouched');
-      assert.ok(original.excerpt.includes(receipt.excerpt));
-    }
+    sameReceiptIdentities(candidate.receipts, stored.receipts);
   }
   assert.equal(result.memories.length, 6);
 });

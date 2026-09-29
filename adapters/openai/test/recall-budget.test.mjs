@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { countOpenAITokens } from '../index.mjs';
 
 // Exact local o200k_base counts, padded 15% as a host counter does. Synthetic
@@ -40,8 +40,9 @@ function fixture(t, selectCount) {
     }),
     rank: record('rank', ({ input }) => ({ refs: input.candidates.slice(0, input.limit).map((candidate) => ({
       namespaceIndex: candidate.namespaceIndex, memoryId: candidate.memory.id, revision: candidate.memory.revision })) })) };
-  const core = openMemoryCore({ path: join(mkdtempSync(join(tmpdir(), 'cr1-o200k-')), 'memory.sqlite'), model });
-  t.after(() => core.close());
+  const ws = createTestWorkspace(t, { prefix: 'cr1-o200k-' });
+  const core = openMemoryCore({ path: join(ws.path, 'memory.sqlite'), model });
+  ws.defer(() => core.close());
   return { core, calls };
 }
 
@@ -68,6 +69,29 @@ test('CR1 o200k probe 1: re-extracting one memory from long Chinese turns stays 
     assert.ok(f.calls.every((call) => call.tokens <= 6000), JSON.stringify(f.calls.map((call) => call.tokens)));
     assert.equal(result.memories.length, 1);
     assert.equal(result.recallTruncated.candidatesShortened, 1);
+  }
+});
+
+test('CR1 o200k: every returned receipt identity is ranked, or the whole candidate is left out', async (t) => {
+  // Short English turns re-extracting one memory: identities cost about 86 tokens each.
+  for (const [count, ranked] of [[64, true], [68, false]]) {
+    const f = fixture(t, 24);
+    for (let i = 0; i < count; i++) ok(f.core.admit({ namespace: personal,
+      memory: { content: 'Run the deploy checklist before every release.', kind: 'fact' },
+      receipts: [{ client: 'wiki', sessionId: 's', eventId: `turn-${i}`, role: 'user',
+        excerpt: 'I always want the deploy checklist run before every release, so please remind me next time.' }] }));
+    const result = ok(await f.core.recall({ readSet: [personal], query: 'deploy checklist' }));
+    assert.ok(f.calls.every((call) => call.tokens <= 6000));
+    const rank = f.calls.find((call) => call.method === 'rank');
+    if (ranked) {
+      assert.deepEqual(rank.input.candidates[0].receipts.map((receipt) => receipt.id),
+        result.memories[0].receipts.map((receipt) => receipt.id));
+      assert.equal(result.memories[0].receipts.length, count);
+    } else {
+      assert.equal(rank, undefined);
+      assert.deepEqual(result.memories, []);
+      assert.equal(result.recallTruncated.candidatesOmitted, 1);
+    }
   }
 });
 
