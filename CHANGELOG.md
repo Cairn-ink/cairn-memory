@@ -55,7 +55,12 @@
 - Add private coordination records, joint-initialization APIs for future setup,
   durable no-clobber key publication, and paired lost-key handling. Every pair-root
   operation marks its root; only explicit original-backup repair can restore a lost key.
-  Sharing an existing own-root identity never claims a registration through hooks or reads.
+  Neither client registers through hooks or resolve/status; explicit setup owns registration.
+  Own-root sharing reads the existing identity and pause without claiming ownership.
+  One gate protects marked and recorded pair roots, including fingerprint-bound reset roots
+  and identity-facade calls. Reset refuses aliases and pre-keyed destinations; initialization
+  requires explicit adoption of an existing key. Unknown private state fails closed with named
+  refusals, and failure rollback permits only legitimate lock-recovery artifacts.
   Readable coordination prevents regeneration even after the whole pair root is deleted.
   Both clients check their recorded identity fingerprint before sending. Failed explicit
   setup operations preserve local files and modes. An explicit confirmed reset to a new root
@@ -85,6 +90,9 @@
   Golden fixtures compare history-free memory traffic against 0.1.1, allowing only
   VERSION changes in telemetry. Separate history fixtures assert the authorized
   refusals. Codex installation and real-host setup remain future work.
+
+- Durable second-client binding history protects current and retired roots even when
+  both coordination and the root are lost; only explicit recovery can change identity.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

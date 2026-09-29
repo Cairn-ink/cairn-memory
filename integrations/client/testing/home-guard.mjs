@@ -27,9 +27,13 @@ os.userInfo = (...args) => {
   if (String(info.homedir) === realHome) violation("test_resolved_real_home");
   return info;
 };
-const protectedPaths = [".cairn-memory", ".cairn-memory-clients", ".claude", ".codex"].map((name) =>
-  join(realHome, name),
-);
+const protectedPaths = [
+  ".cairn-memory",
+  ".cairn-memory-clients",
+  ".cairn-memory-profile",
+  ".claude",
+  ".codex",
+].map((name) => join(realHome, name));
 function check(value) {
   if (value instanceof URL) value = fileURLToPath(value);
   if (typeof value !== "string" && !Buffer.isBuffer(value)) return;

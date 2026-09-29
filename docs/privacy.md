@@ -7,13 +7,29 @@ changes below. Current local storage and deletion boundaries are documented in
 injected model adapter can send source text to its provider. Local storage alone
 is not a promise of offline interpretation.
 
-The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
+The main risk in automatic memory is not bad retrieval. It is silently collecting more than the
+user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a
+narrow, inspectable boundary.
 
 ## Data flow
 
-After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
+After explicit installation, automatic capture and content-free telemetry default on. The plugin
+reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose
+top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24
+messages, and sends them to the configured service.
 
-From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Assistant text is sent as before, including anything it quotes from those records. Only the record shapes and wrappers listed in the [plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as
+meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool
+result (the whole record is skipped); or its text starts with a Claude Code wrapper
+(slash-command and local-command output, bash-mode input and output, system reminders,
+prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude
+Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts
+with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had
+queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request
+0.1.0 had already sent may still complete. Assistant text is sent as before, including anything
+it quotes from those records. Only the record shapes and wrappers listed in the
+[plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see
+[limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
 
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
@@ -23,7 +39,10 @@ Empty queries are skipped. Neither path can guarantee detection of every secret.
 Tool blocks are excluded from capture, but ordinary conversation can include
 pasted files, terminal output, paths, and repository names.
 
-The service may retain durable Memory text and bounded redacted Source Receipts. It does not need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not claimed by this repository.
+The service may retain durable Memory text and bounded redacted Source Receipts. It does not
+need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when
+the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not
+claimed by this repository.
 
 ## Local state
 
@@ -38,7 +57,8 @@ An explicitly paired plugin uses the recorded durable shared root:
 - `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
   root history, published with the same owner/symlink checks as other private state;
 - `paused`: compatibility marker also honored as a pause;
-- `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
+- `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard
+  state,
   keyed by a hash of the Claude session id;
 - process-owned lock files coordinating control changes and session capture.
 
@@ -199,7 +219,10 @@ still receives the aliased request's personal text and ordinary network metadata
 
 ## Disable automatic behavior
 
-Run `/cairn-memory:pause` to pause both automatic capture and recall, and `/cairn-memory:resume` to restore them. Disable telemetry independently in plugin configuration. Uninstalling the plugin stops future local processing; use `forget_memory` or the hosted memory UI when available to remove already stored Memories.
+Run `/cairn-memory:pause` to pause both automatic capture and recall, and `/cairn-memory:resume`
+to restore them. Disable telemetry independently in plugin configuration. Uninstalling the
+plugin stops future local processing; use `forget_memory` or the hosted memory UI when available
+to remove already stored Memories.
 
 Pause creates a persistent generation barrier. Workers from an earlier
 generation cannot send later batches after the barrier. A request already
@@ -375,3 +398,27 @@ refuses `binding_identity_mismatch` before sending if the key changed. Fingerpri
 metadata and are never transmitted. Explicit setup validates its preconditions before durable
 writes and rolls back caught failures; a failed operation preserves files, modes and markers.
 Stopped-host original-backup repair checks the saved fingerprint inside the private key write.
+
+Explicit setup owns registration for both clients. Hooks and resolve/status never write
+`install.json`. Existing own-root sharing also leaves registration untouched. Readable pair
+ownership includes fingerprint-bound client roots, reset destinations and retired roots;
+a missing marker never makes these roots eligible for key creation. The shared mint gate
+also protects identity-facade calls. Only original-backup repair may restore such a key.
+
+Root identity uses real paths and device/inode, so symlink aliases cannot be new reset
+identities. Reset accepts only a new path or an empty directory; otherwise it reports
+`reset_destination_not_new`. Initialization at an existing key reports
+`existing_key_requires_adoption` until the caller explicitly adopts it.
+
+Private entry probes distinguish present, absent and unknown. ENOENT proves absence;
+ENOTDIR does so only for a known controlled regular-file parent. Unknown selected state
+refuses with a named status such as `state_unreadable`, keeping the system error in detail.
+Unusable HOME and unrelated damaged paths keep history-free standalone parity. Invalid
+repair history reports `binding_history_invalid`; invalid backup arguments report
+`invalid_original_key`. Failed explicit operations restore files and modes, except for
+legitimate setup-lock ownership and crashed-owner recovery artifacts.
+
+Codex also keeps private non-secret binding history at
+`<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
+so losing both coordination and a root cannot authorize a replacement key or legacy
+adoption. Invalid history fails closed. Hooks and status never register either client.

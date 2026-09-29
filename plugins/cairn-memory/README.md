@@ -138,8 +138,8 @@ permanently excludes cursor-based legacy adoption of that root, including after 
 It does not pause or disable an otherwise entitled client. A fresh profile gets its own key after
 loss; an explicitly delivered missing record still reports `pairing_record_missing`. An existing
 profile key takes precedence. With readable coordination, only the registered profile follows its
-binding; another profile stays standalone. Unsupported registration on Windows adds no unregistered
-status note. An unrelated damaged default root does not prevent registration or add a status note.
+binding; another profile stays standalone. Standalone on Windows adds no unregistered
+status note. An unrelated damaged default root does not affect another profile or add a status note.
 Only absolute plugin-data paths are registered, normalized with `path.resolve`; relative, empty or
 invalid paths retain standalone behavior without registration. Every install record is validated
 before publication.
@@ -161,3 +161,27 @@ refuses `binding_identity_mismatch` before sending if the key changed. Fingerpri
 metadata and are never transmitted. Explicit setup validates its preconditions before durable
 writes and rolls back caught failures; a failed operation preserves files, modes and markers.
 Stopped-host original-backup repair checks the saved fingerprint inside the private key write.
+
+Explicit setup owns registration for both clients. Hooks and resolve/status never write
+`install.json`. Existing own-root sharing also leaves registration untouched. Readable pair
+ownership includes fingerprint-bound client roots, reset destinations and retired roots;
+a missing marker never makes these roots eligible for key creation. The shared mint gate
+also protects identity-facade calls. Only original-backup repair may restore such a key.
+
+Root identity uses real paths and device/inode, so symlink aliases cannot be new reset
+identities. Reset accepts only a new path or an empty directory; otherwise it reports
+`reset_destination_not_new`. Initialization at an existing key reports
+`existing_key_requires_adoption` until the caller explicitly adopts it.
+
+Private entry probes distinguish present, absent and unknown. ENOENT proves absence;
+ENOTDIR does so only for a known controlled regular-file parent. Unknown selected state
+refuses with a named status such as `state_unreadable`, keeping the system error in detail.
+Unusable HOME and unrelated damaged paths keep history-free standalone parity. Invalid
+repair history reports `binding_history_invalid`; invalid backup arguments report
+`invalid_original_key`. Failed explicit operations restore files and modes, except for
+legitimate setup-lock ownership and crashed-owner recovery artifacts.
+
+Codex also keeps private non-secret binding history at
+`<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
+so losing both coordination and a root cannot authorize a replacement key or legacy
+adoption. Invalid history fails closed. Hooks and status never register either client.

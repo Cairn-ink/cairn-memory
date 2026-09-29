@@ -109,3 +109,18 @@ export async function privateWrite(
     });
   }
 }
+
+// All private-entry probes preserve uncertainty. Callers decide policy from facts.
+export async function probeEntry(
+  path,
+  { read = () => lstat(path), controlledParent = false } = {},
+) {
+  try {
+    const value = await read();
+    return value === undefined ? { state: "absent" } : { state: "present", value };
+  } catch (error) {
+    if (error.code === "ENOENT") return { state: "absent" };
+    if (error.code === "ENOTDIR" && controlledParent) return { state: "absent" };
+    return { state: "unknown", code: error.code ?? error.message, error };
+  }
+}

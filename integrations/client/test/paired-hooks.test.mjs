@@ -1,3 +1,4 @@
+import { privateWrite } from "../private-state.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -65,11 +66,15 @@ async function setup(t, paired = true, customRoot = false) {
     CLAUDE_PLUGIN_OPTION_API_ENDPOINT: `http://127.0.0.1:${server.address().port}`,
   };
   function run(action, input = {}, overrides = {}, entry = hook, args = []) {
-    const child = spawn(process.execPath, [entry, ...(entry === hook ? [action] : []), ...args], {
-      env: { ...env, ...overrides },
-      cwd: workspace.path,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const child = spawn(
+      process.execPath,
+      [entry, ...(entry === hook ? [action] : []), ...args],
+      {
+        env: { ...env, ...overrides },
+        cwd: workspace.path,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
     let stdout = "",
       stderr = "";
     child.stdout.on("data", (b) => (stdout += b));
@@ -151,7 +156,10 @@ test(
           entered();
         }),
     );
-    const result = f.run("recall", { cwd: "/synthetic/project", prompt: "A synthetic question" });
+    const result = f.run("recall", {
+      cwd: "/synthetic/project",
+      prompt: "A synthetic question",
+    });
     await waiting;
     const codex = await resolveClient({ ...f.options, client: "codex" });
     await setPaused(codex.root, true);
@@ -173,7 +181,11 @@ test("launcher CLI record reaches worker; mismatches and lost keys produce no re
   const f = await setup(t);
   const transcript = join(f.workspace.path, "transcript.jsonl");
   await writeFile(transcript, row("before"));
-  const event = { session_id: "launcher", cwd: "/synthetic/project", transcript_path: transcript };
+  const event = {
+    session_id: "launcher",
+    cwd: "/synthetic/project",
+    transcript_path: transcript,
+  };
   await f.run("capture", event);
   await appendFile(transcript, row("launched"));
   assert.equal(
@@ -207,7 +219,10 @@ test("launcher CLI record reaches worker; mismatches and lost keys produce no re
     assert.equal(result.code, 1);
     assert.match(result.stderr + result.stdout, /paired_key_missing/);
   }
-  assert.equal((await f.run("recall", { cwd: "/synthetic/project", prompt: "blocked" })).code, 0);
+  assert.equal(
+    (await f.run("recall", { cwd: "/synthetic/project", prompt: "blocked" })).code,
+    0,
+  );
   assert.equal(f.requests.length, before);
 });
 test("newcomer Claude without evidence is fail-open and sends nothing", async (t) => {
@@ -215,8 +230,21 @@ test("newcomer Claude without evidence is fail-open and sends nothing", async (t
   const home = join(workspace.path, "home");
   await mkdir(home, { mode: 0o700 });
   await clientProjectId(
-    { home, env: { HOME: home }, client: "codex", standardClaudeOrigin: true },
+    {
+      home,
+      env: { HOME: home },
+      client: "codex",
+      standardClaudeOrigin: true,
+      usesClaude: false,
+    },
     "/synthetic/project",
+  );
+  await privateWrite(
+    join(home, ".cairn-memory-clients/install.json"),
+    JSON.stringify({
+      version: 1,
+      clients: { codex: { root: join(home, ".cairn-memory"), state: "established" } },
+    }),
   );
   const requests = join(workspace.path, "requests");
   await writeFile(requests, "");
@@ -273,6 +301,16 @@ test("paired capture evidence does not adopt another Claude profile", async (t) 
 
 test("registered standalone default capture does not move a fresh profile", async (t) => {
   const f = await setup(t, false);
+  const defaultRoot = join(f.options.home, ".cairn-memory");
+  await privateWrite(
+    join(f.options.home, ".cairn-memory-clients/install.json"),
+    JSON.stringify({
+      version: 1,
+      clients: {
+        claude: { root: defaultRoot, profileRoot: defaultRoot, state: "established" },
+      },
+    }),
+  );
   const transcript = join(f.workspace.path, "standalone.jsonl");
   const event = { session_id: "standalone", cwd: "/p", transcript_path: transcript };
   await writeFile(transcript, row("captured"));
@@ -352,9 +390,21 @@ test("untrusted then lost metadata never moves an established legacy-gap identit
       const oldId = f.requests[0].body.project_id;
       const coordination = join(f.options.home, ".cairn-memory-clients");
       const install = join(coordination, "install.json");
-      // Simulate pre-0.1.2 cursors, then register the upgraded plugin-data profile.
-      await unlink(install);
+      // Simulate pre-0.1.2 cursors and a prior explicit standalone adoption record.
       await f.run("recall", { ...event, prompt: "synthetic" });
+      await privateWrite(
+        install,
+        JSON.stringify({
+          version: 1,
+          clients: {
+            claude: { root, profileRoot: f.env.CLAUDE_PLUGIN_DATA, state: "established" },
+          },
+        }),
+      );
+      await privateWrite(
+        join(f.env.CLAUDE_PLUGIN_DATA, ".cairn-memory-profile/legacy.json"),
+        JSON.stringify({ version: 1, profileRoot: f.env.CLAUDE_PLUGIN_DATA, root }),
+      );
       assert.equal(f.requests.length, 2, "upgraded recall sent");
       assert.equal(f.requests.at(-1).body.project_id, oldId);
       if (damage === "permissions") await chmod(coordination, 0o755);
@@ -415,7 +465,10 @@ test("unreadable coordination cannot revive either reset primary's retired root"
       await chmod(directory, 0o755);
       for (const overrides of [{}, { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: "" }, b]) {
         const count = f.requests.length;
-        assert.equal((await f.run("recall", { ...event, prompt: "synthetic" }, overrides)).code, 0);
+        assert.equal(
+          (await f.run("recall", { ...event, prompt: "synthetic" }, overrides)).code,
+          0,
+        );
         assert.equal((await f.run("capture", event, overrides)).code, 0);
         assert.equal((await f.run("", event, overrides, launcher)).code, 0);
         assert.equal(f.requests.length, count, "retired identity sends nothing");
@@ -427,7 +480,9 @@ test("unreadable coordination cannot revive either reset primary's retired root"
         );
         assert.notEqual((await f.run("resume", {}, overrides)).code, 0);
       }
-      await assert.rejects(readFile(join(b.CLAUDE_PLUGIN_DATA, "project-key")), { code: "ENOENT" });
+      await assert.rejects(readFile(join(b.CLAUDE_PLUGIN_DATA, "project-key")), {
+        code: "ENOENT",
+      });
       await chmod(directory, 0o700);
       await f.run("recall", { ...event, prompt: "synthetic" }, b);
       assert.equal(f.requests.length, 2, "B sends after repair");
@@ -435,7 +490,11 @@ test("unreadable coordination cannot revive either reset primary's retired root"
       assert.notEqual(bId, oldId);
       await chmod(directory, 0o755);
       await f.run("recall", { ...event, prompt: "synthetic" }, b);
-      assert.equal(f.requests.length, 3, "B uses its existing standalone key during degradation");
+      assert.equal(
+        f.requests.length,
+        3,
+        "B uses its existing standalone key during degradation",
+      );
       assert.equal(f.requests.at(-1).body.project_id, bId);
       await chmod(directory, 0o700);
       await f.run("recall", { ...event, prompt: "synthetic" }, b);
@@ -474,7 +533,10 @@ test("custom-root resets never mint keys under degraded coordination", async (t)
         },
       ];
       for (const overrides of profiles) {
-        assert.equal((await f.run("recall", { ...event, prompt: "synthetic" }, overrides)).code, 0);
+        assert.equal(
+          (await f.run("recall", { ...event, prompt: "synthetic" }, overrides)).code,
+          0,
+        );
         assert.equal(f.requests.length, 1, "no requests under any identity");
         const root = overrides.CLAUDE_PLUGIN_DATA ?? f.env.CLAUDE_PLUGIN_DATA;
         await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
@@ -542,7 +604,11 @@ test("custom-root bindings survive unrelated default-root damage before and afte
         const pairedId = f.requests[0].body.project_id;
         await damageDefault();
         await f.run("recall", event);
-        assert.equal(f.requests.length, 2, "paired delivery ignores the unrelated damaged root");
+        assert.equal(
+          f.requests.length,
+          2,
+          "paired delivery ignores the unrelated damaged root",
+        );
         assert.equal(f.requests.at(-1).body.project_id, pairedId);
         await chmod(legacy, 0o700);
         await rm(legacy, { recursive: true });
@@ -679,18 +745,21 @@ for (const form of ["trailing", "relative", "empty"]) {
     const b = { CLAUDE_PLUGIN_DATA: join(f.options.home, "other-profile") };
     await f.run("recall", { cwd: "/p", prompt: "synthetic" }, b);
     assert.equal(f.requests.length, count + 1);
-    await f.run("recall", { cwd: "/p", prompt: "synthetic" }, { CLAUDE_PLUGIN_DATA: undefined });
+    await f.run(
+      "recall",
+      { cwd: "/p", prompt: "synthetic" },
+      { CLAUDE_PLUGIN_DATA: undefined },
+    );
     assert.equal(f.requests.length, count + 2);
     const snapshot = await detectClients(f.options);
-    assert.equal(
-      snapshot.install.clients.claude.profileRoot,
-      form === "trailing" ? f.env.CLAUDE_PLUGIN_DATA : b.CLAUDE_PLUGIN_DATA,
-    );
+    assert.equal(snapshot.install.clients.claude, undefined);
+    const selectedProfile =
+      form === "trailing" ? f.env.CLAUDE_PLUGIN_DATA : b.CLAUDE_PLUGIN_DATA;
     const pending = await initializePairing({
       ...f.options,
       adopt: true,
-      claudeProfileRoot: snapshot.install.clients.claude.profileRoot,
-      root: snapshot.install.clients.claude.root,
+      claudeProfileRoot: selectedProfile,
+      root: selectedProfile,
     });
     assert.equal(pending.status, "binding_pending");
   });
@@ -707,7 +776,8 @@ test("a lost marked default key cannot be minted by any Claude entry point or pr
     const before = f.requests.length;
     for (const action of ["recall", "capture"])
       assert.equal(
-        (await f.run(action, { cwd: "/synthetic/lost-key", prompt: "synthetic" }, overrides)).code,
+        (await f.run(action, { cwd: "/synthetic/lost-key", prompt: "synthetic" }, overrides))
+          .code,
         0,
       );
     assert.equal(f.requests.length, before);

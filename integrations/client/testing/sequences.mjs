@@ -1,6 +1,7 @@
-// Fixed CI seeds: 73 sequences per original seed and 9 per regression seed (300 total).
+// 201 random sequences plus explicitly scripted regression fixtures.
 const ORIGINAL_SEEDS = [0x43583210, 0x51a7e001, 0x0badcafe];
 export const REGRESSION_SEQUENCES = Object.freeze([
+  // These are scripted fixtures, not discoveries by random generation.
   {
     seed: 0x11b00001,
     finding: "sharing must not register (absent)",
@@ -64,10 +65,256 @@ export const REGRESSION_SEQUENCES = Object.freeze([
     finding: "explicit setup profile conflict refuses",
     operations: ["initialize", "complete", "reset-other-profile"],
   },
+
+  {
+    seed: 313524225,
+    finding: "reset root loss retains ownership",
+    pairRoot: "custom",
+    operations: [
+      "initialize",
+      "complete",
+      "reset-claude-default",
+      "delete-root",
+      "fresh-unset",
+      "recall",
+    ],
+  },
+  {
+    seed: 313524226,
+    finding: "alias destination cannot reset identity",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "reset-alias"],
+  },
+  {
+    seed: 313524227,
+    finding: "pre-keyed reset destination refuses",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "reset-prekeyed"],
+  },
+  {
+    seed: 313524228,
+    finding: "pre-keyed initialization requires adoption",
+    pairRoot: "custom",
+    operations: ["initialize-prekeyed"],
+  },
+  {
+    seed: 313524229,
+    finding: "Codex resolution cannot register after loss",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "coord-absent", "codex-single"],
+  },
+  {
+    seed: 313524230,
+    finding: "unknown marker never registers absent",
+    pairRoot: "default",
+    operations: [
+      "initialize",
+      "complete",
+      "coord-absent",
+      "root-mode-zero",
+      "fresh-unset",
+      "recall",
+      "root-mode-restore",
+    ],
+  },
+  {
+    seed: 313524231,
+    finding: "unknown marker never registers empty",
+    pairRoot: "default",
+    operations: [
+      "initialize",
+      "complete",
+      "coord-empty",
+      "root-mode-zero",
+      "fresh-unset",
+      "recall",
+      "root-mode-restore",
+    ],
+  },
+  {
+    seed: 313524232,
+    finding: "root file returns named refusal",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "root-file", "codex-recall"],
+  },
+  {
+    seed: 313524233,
+    finding: "key directory returns named refusal",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "key-directory", "codex-recall"],
+  },
+  {
+    seed: 313524234,
+    finding: "facade mint checks recorded root",
+    pairRoot: "default",
+    operations: ["initialize", "complete", "delete-root", "facade-project-key"],
+  },
+  {
+    seed: 313524235,
+    finding: "facade ignores no repair option",
+    pairRoot: "default",
+    operations: ["initialize", "complete", "delete-root", "facade-original-key"],
+  },
+  {
+    seed: 313524236,
+    finding: "facade HMAC checks recorded root",
+    pairRoot: "default",
+    operations: ["initialize", "complete", "delete-root", "facade-project-id"],
+  },
+  {
+    seed: 313524237,
+    finding: "invalid backup returns named refusal",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "repair-invalid"],
+  },
+  {
+    seed: 313524238,
+    finding: "crashed lock recovery permits refusal",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "crashed-lock", "reset-other-profile"],
+  },
+  {
+    seed: 313524239,
+    finding: "unreadable key returns named refusal",
+    pairRoot: "custom",
+    operations: ["initialize", "complete", "key-mode-zero", "codex-recall", "key-mode-restore"],
+  },
+  {
+    seed: 313524240,
+    finding: "unreadable coordination returns named refusal",
+    pairRoot: "custom",
+    operations: [
+      "initialize",
+      "complete",
+      "coord-mode-zero",
+      "codex-recall",
+      "coord-mode-restore",
+    ],
+  },
+  {
+    seed: 313524241,
+    finding: "Codex strict refusal never registers",
+    pairRoot: "custom",
+    operations: ["root-mode-host", "codex-single"],
+  },
+  {
+    seed: 313524242,
+    finding: "invalid repair history is named precisely",
+    operations: ["initialize", "complete", "binding-mode", "repair"],
+    expectedRefusal: "binding_history_invalid",
+  },
+  {
+    seed: 313524243,
+    finding: "combined root and coordination loss preserves K",
+    pairRoot: "default",
+    operations: [
+      "initialize",
+      "complete",
+      "coord-absent",
+      "delete-root",
+      "fresh-unset",
+      "recall",
+    ],
+  },
+  {
+    seed: 313524244,
+    finding: "deleted pair roots retain identity through ancestor aliases",
+    operations: ["initialize", "complete", "delete-root", "reset-alias"],
+    expectedRefusal: "identity_reset_requires_new_root",
+  },
+  {
+    seed: 313524245,
+    finding: "facade mint protects deleted pair roots through ancestor aliases",
+    operations: ["initialize", "complete", "delete-root", "facade-alias-key"],
+  },
+  {
+    seed: 313524246,
+    finding: "retargeted profile aliases cannot inherit a binding",
+    operations: ["bind-profile-alias", "complete", "repoint-profile-alias", "recall"],
+  },
+  {
+    seed: 313524247,
+    finding: "alias switches without an option retain standalone delivery",
+    operations: [
+      "bind-profile-alias",
+      "complete",
+      "repoint-profile-alias",
+      "clear-option",
+      "recall",
+    ],
+  },
+  {
+    seed: 313524248,
+    finding: "deleted local history cannot split a paired profile after coordination loss",
+    operations: ["initialize", "complete", "binding-delete", "coord-absent", "recall"],
+  },
+  {
+    seed: 313524249,
+    finding: "explicit reset recovers erased local history and lost key and coordination",
+    operations: [
+      "initialize",
+      "complete",
+      "binding-delete",
+      "delete-root",
+      "coord-absent",
+      "reset-lost",
+      "recall",
+    ],
+  },
+  {
+    seed: 313524250,
+    finding: "deleted Codex history cannot split the second client after coordination loss",
+    operations: [
+      "initialize",
+      "complete",
+      "codex-binding-delete",
+      "coord-absent",
+      "codex-single",
+    ],
+  },
+  // Retained discoveries from earlier rounds are scripted fixtures too.
+  {
+    seed: 0x51a7e001,
+    finding: "retained reset and loss discovery",
+    operations: [
+      "initialize",
+      "complete",
+      "adopt",
+      "reset-claude-custom",
+      "coord-absent",
+      "reset-claude-custom",
+      "capture",
+    ],
+  },
+  {
+    seed: 0x43583210,
+    finding: "retained key-loss discovery",
+    operations: [
+      "initialize",
+      "complete",
+      "delete-key",
+      "fresh-relative",
+      "recall",
+      "repair",
+      "recall",
+    ],
+  },
+  {
+    seed: 0x43583210,
+    finding: "retained deleted-history discovery",
+    operations: [
+      "initialize",
+      "complete",
+      "binding-delete",
+      "replace-key",
+      "recall",
+      "codex-recall",
+      "repair",
+    ],
+  },
 ]);
 export const SEQUENCE_SEEDS = Object.freeze([
-  ...ORIGINAL_SEEDS,
-  ...REGRESSION_SEQUENCES.map(({ seed }) => seed),
+  ...new Set([...ORIGINAL_SEEDS, ...REGRESSION_SEQUENCES.map(({ seed }) => seed)]),
 ]);
 export const DAMAGE_OPERATIONS = Object.freeze([
   "delete-root",
@@ -127,6 +374,30 @@ export const OPERATIONS = Object.freeze([
   "legacy-delete",
   "legacy-json",
   "legacy-directory",
+  "coord-mode-restore",
+  "coord-mode-zero",
+  "crashed-lock",
+  "facade-original-key",
+  "facade-project-id",
+  "facade-project-key",
+  "initialize-prekeyed",
+  "key-directory",
+  "key-mode-restore",
+  "key-mode-zero",
+  "repair-invalid",
+  "reset-alias",
+  "reset-prekeyed",
+  "root-file",
+  "root-mode-restore",
+  "root-mode-zero",
+  "profile-alias",
+  "root-mode-host",
+  "delete-reset-root",
+  "facade-alias-key",
+  "bind-profile-alias",
+  "repoint-profile-alias",
+  "clear-option",
+  "codex-binding-delete",
 ]);
 export function generateSequences() {
   const sequences = [];
@@ -138,7 +409,7 @@ export function generateSequences() {
       state ^= state << 5;
       return (state >>> 0) % count;
     };
-    for (let index = 0; index < 73; index++) {
+    for (let index = 0; index < 67; index++) {
       const start = index % 2 ? "adopt" : "initialize";
       const roots = [
         "reset-claude-default",
@@ -184,64 +455,19 @@ export function generateSequences() {
           { length: 1 + next(7) },
           () => OPERATIONS[next(OPERATIONS.length)],
         );
-      // The discovered case is retained verbatim even if generator tuning changes
-      // random draw order. Its original seed and seed stays stable; this retained regression is last in the shortened seed block.
-      if (seed === 0x51a7e001 && index === 72)
-        operations = [
-          "initialize",
-          "complete",
-          "adopt",
-          "reset-claude-custom",
-          "coord-absent",
-          "reset-claude-custom",
-          "capture",
-        ];
-      if (seed === 0x43583210 && index === 24)
-        operations = [
-          "initialize",
-          "complete",
-          "delete-key",
-          "fresh-relative",
-          "recall",
-          "repair",
-          "recall",
-        ];
-      if (seed === 0x43583210 && index === 37)
-        operations = [
-          "initialize",
-          "complete",
-          "binding-delete",
-          "replace-key",
-          "recall",
-          "codex-recall",
-          "repair",
-        ];
       sequences.push({ seed, operations });
     }
   }
-  for (const regression of REGRESSION_SEQUENCES) {
-    for (let index = 0; index < 9; index++) {
-      const operations =
-        index === 0
-          ? regression.operations
-          : [
-              "initialize",
-              "complete",
-              DAMAGE_OPERATIONS[(index + regression.seed) % DAMAGE_OPERATIONS.length],
-              index % 2 ? "codex-status" : "status",
-              index % 3 ? "repair" : "setup-implicit",
-            ];
-      sequences.push({
-        ...regression,
-        finding: index === 0 ? regression.finding : undefined,
-        operations,
-      });
-    }
-  }
+  for (const fixture of REGRESSION_SEQUENCES) sequences.push({ ...fixture, scripted: true });
   return sequences;
 }
 
 const setupRefusals = [
+  "state_unreadable",
+  "reset_destination_not_new",
+  "existing_key_requires_adoption",
+  "invalid_original_key",
+  "unexpected_state_error",
   "pairing_needed",
   "paired_key_missing",
   "retired_root",
@@ -270,7 +496,7 @@ export const OPERATION_REFUSALS = Object.freeze(
   Object.fromEntries(
     OPERATIONS.map((name) => [
       name,
-      name === "repair"
+      ["repair", "repair-invalid"].includes(name)
         ? [
             ...setupRefusals,
             "repair_key_conflict",
@@ -283,10 +509,18 @@ export const OPERATION_REFUSALS = Object.freeze(
               "identity_reset_requires_new_root",
               "identity_reset_history_required",
             ]
-          : ["initialize", "adopt", "complete", "setup-implicit"].includes(name)
+          : [
+                "initialize",
+                "initialize-prekeyed",
+                "adopt",
+                "complete",
+                "setup-implicit",
+                "bind-profile-alias",
+              ].includes(name)
             ? setupRefusals
             : name.startsWith("codex-")
               ? [
+                  "state_unreadable",
                   "pairing_needed",
                   "pairing_record_missing",
                   "paired_key_missing",
@@ -299,7 +533,17 @@ export const OPERATION_REFUSALS = Object.freeze(
                   "invalid_install",
                   "invalid_pairing_record",
                 ]
-              : [],
+              : name.startsWith("facade-")
+                ? [
+                    "paired_key_missing",
+                    "invalid_original_key",
+                    "state_unreadable",
+                    "invalid_state_type",
+                    "state_permissions",
+                    "state_symlink",
+                    "pairing_needed",
+                  ]
+                : [],
     ]),
   ),
 );

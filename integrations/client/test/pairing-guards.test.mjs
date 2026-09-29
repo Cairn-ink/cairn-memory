@@ -32,7 +32,7 @@ test("sessions namespace belongs only to Claude capture; F0 never ships", async 
     const source = await readFile(file, "utf8");
     if (relative(root, file).endsWith("/pairing.mjs")) {
       const detector = source.slice(
-        source.indexOf("export async function hasClaudeEvidence"),
+        source.indexOf("async function hasClaudeEvidenceImpl"),
         source.indexOf("/** Read-only, exact known-file"),
       );
       assert.match(detector, /join\(root, ["']sessions["']\)/);
@@ -127,7 +127,8 @@ test("thin guard entry preserves the caller environment and fails swallowed viol
     await readFile(new URL("./fixtures/base-scripts-3a1c17d9.json", import.meta.url)),
   );
   const guarded = ["test", "test:pairing", "test:pairing:golden"];
-  for (const name of guarded) assert.match(scripts[name], /integrations\/client\/testing\/run.mjs/);
+  for (const name of guarded)
+    assert.match(scripts[name], /integrations\/client\/testing\/run.mjs/);
   for (const [name, command] of Object.entries(base)) {
     if (!guarded.includes(name)) assert.equal(scripts[name], command, name);
   }

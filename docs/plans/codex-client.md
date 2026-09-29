@@ -278,21 +278,21 @@ Cairn-owned subdirectory and stores only version, profile root and adopted root.
 It preserves that profile's adoption when coordination cannot be trusted, without
 allowing cursor evidence to bind a fresh profile in degraded mode.
 Normal hooks perform read-only detection. Take the setup lock and recheck only
-for fresh registration, joint initialization, adoption or reset. Established hooks
-never rewrite/fsync `install.json`. Registration waits at most 100 ms by default;
-lock contention permits unregistered standalone use. Unsupported registration
-adds no status note. Absent coordination retains 0.1.1 first use only without
+for explicit setup registration, joint initialization, adoption or reset. Established hooks
+never rewrite/fsync `install.json`. Explicit setup uses a bounded lock wait and recheck. Read paths do not wait,
+register or rewrite metadata. Unsupported pairing adds no standalone status note. Absent coordination retains 0.1.1 first use only without
 0.1.2 profile history; a local binding record instead refuses with
 `pairing_record_missing`. Degraded
 coordination uses only existing keys, with profile-local proof for legacy adoption,
 as specified in the decision table below. One fresh joint setup elects one
 initializer for both consenting clients and writes their shared binding before
-activating either. Concurrent separate installs elect one initializer; the other
-needs adoption. A partial joint setup must not let either host independently
+activating either. Concurrent explicit setup operations elect one initializer; the other
+needs adoption. Concurrent read paths remain unregistered. A partial joint setup must not let either host independently
 initialize another root/key.
 Released Claude cannot honor this lock: setup must require
 it to be stopped during pairing, and never claim concurrent legacy setup is safe.
-Automatically register a fresh single client; a pairing record is still unnecessary.
+Register a fresh single client only through explicit setup; read paths never register.
+A pairing record is still unnecessary for ordinary standalone use.
 Metadata loss never authorizes ignoring an existing key or bypassing detection.
 
 Claude delivery uses CX-2's declared `userConfig` option `pairing_record`, exposed
@@ -1395,7 +1395,12 @@ reset changes identity only with consent; explicit repair restores the original 
 Binding history survives reset and coordination loss. Every binding operation writes
 `<profileRoot>/.cairn-memory-profile/binding.json` through one helper: version, profile
 root, bound root and a non-secret HMAC identity fingerprint, never the key. Both reset
-primaries rewrite it to the destination, including when Claude becomes retired. Clearing
+primaries rewrite it to the destination, including when Claude becomes retired. Codex
+also has durable binding history at
+`<HOME>/.cairn-memory-profile/binding.json`, written through the same helper. It retains
+current and retired root/fingerprint pairs, so deleting both coordination and a pair root
+cannot authorize silent key minting. The single recorded-roots function includes this
+known-file history, without searching profiles. Invalid history refuses publication. Clearing
 an option never removes it. There is no leave/unpair API in CX-2.
 
 A profile carrying binding history requires readable, consistent coordination. Missing,
@@ -1438,6 +1443,40 @@ Enabled rows exercise pause/resume and delivery; the empty plugin-data rows reta
 nothing, keep hooks successful, and reject explicit pause/resume. Setup rejects retired
 destinations (including reset) and retired sources. `adoptFrom` accepts only temporary
 storage outside durable HOME; durable roots are adopted in place.
+
+### Root ownership and probe rules (CX-2 round 12)
+
+`recordedPairRoots(coordination)` is the single production source for readable pair
+ownership: shared and delivered-record roots, client roots carrying fingerprints,
+reset destinations, and retired roots. The resolver, setup, repair and mint gate use
+it. Marker absence cannot erase recorded ownership. The mint gate checks both before
+creating anything, including facade calls; only private original-key repair with a
+matching binding fingerprint can restore a recorded or marked root.
+
+`sameRoot(a, b)` compares real paths and device/inode for existing roots, and normalized
+paths for two absent roots. Aliases cannot authorize a new identity. Reset requires a
+new path or an empty directory, claimed exclusively under the setup lock; otherwise
+`reset_destination_not_new`. A keyed initialization destination requires explicit
+adoption (`existing_key_requires_adoption`).
+
+Private-state probes are `present`, `absent`, or `unknown(code)`. Only ENOENT proves
+absence; ENOTDIR does so only with a known controlled regular-file parent. Unknown
+markers, keys or history fail closed with a named refusal (`state_unreadable` with
+system code in detail). Unrelated damaged roots do not gate a standalone profile.
+Neither client's hooks, resolve nor status register or rewrite install metadata;
+registration belongs exclusively to explicit setup. Existing standalone behavior and
+(b′) own-root sharing remain available without registration. Invalid repair history
+reports `binding_history_invalid`; invalid backup arguments report `invalid_original_key`.
+
+F excludes exactly setup lock files and their owner/reap artifacts: recovering a
+crashed owner is legitimate. Other failed-operation files, modes and bytes stay
+unchanged. The independent test oracle remembers pair ownership from successful
+operations; it never derives expected ownership from production probes or metadata.
+
+The review severity bar blocks silent identity changes, silent pair-root minting,
+cross-profile/client exposure, registration outside explicit setup, and ordinary-use
+states with no documented recovery. Named fail-closed exotic states and wording or
+hygiene findings are recorded as follow-ups rather than release blockers.
 
 <!-- claude-resolution-table:start -->
 
@@ -1526,7 +1565,7 @@ Defaults (each row overrides only the listed facts):
 | D09 | no | existing own key precedes a local legacy marker | `{"coord":"degraded","profileKey":true,"localMarker":"valid","default":"retired"}` | `{"root":"profile","status":"standalone_unregistered","createKey":false,"enabled":true,"requests":1,"mint":false,"detail":"coordination unreadable"}` | — |
 | D10 | no | degraded own retirement wins | `{"coord":"degraded","profileKey":true,"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
 | A08 | no | ordinary unpaired key loss retains released creation behavior | `{"coord":"readable","registration":"self-active","boundKey":false}` | `{"root":"bound","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | — |
-| P10 | no | paired private-root validation becomes a disabled fact | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundPermissions":true}` | `{"root":null,"status":"state_permissions","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| P10 | no | paired private-root validation becomes a disabled fact | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundPermissions":true}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | P11 | no | invalid paired key never regenerates | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","boundInvalid":true}` | `{"root":null,"status":"invalid_identity","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | P12 | no | inconsistent record cannot bind | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","recordMismatch":true}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | P13 | no | Windows pairing remains unsupported | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","platform":"win32"}` | `{"root":null,"status":"pairing_platform_unsupported","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
@@ -1576,13 +1615,25 @@ Defaults (each row overrides only the listed facts):
 | Q02 | no | b-prime shares but never registers after empty readable coordination | `{"profile":"default","profileKey":true,"sharedMarker":true,"coord":"readable"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
 | P19 | no | readable pair-root ownership survives whole-directory loss | `{"coord":"readable","registration":"other","shared":"ready","profile":"default","bound":"default","boundKey":false,"recordedPairRoot":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
 | B18 | no | recorded fingerprint remains authoritative if local binding history is deleted | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","registeredFingerprint":"mismatch"}` | `{"root":null,"status":"binding_identity_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| Q03 | no | unknown own-root marker never registers without coordination | `{"profile":"default","markerState":"unknown"}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"EACCES"}` | — |
+| Q04 | no | unknown own-root marker never registers with empty coordination | `{"profile":"default","coord":"readable","markerState":"unknown"}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"EACCES"}` | — |
+| P20 | no | reset fingerprint records the missing default root after marker loss | `{"coord":"readable","registration":"other","profile":"default","bound":"default","boundKey":false,"recordedPairRoot":true,"recordedClientFingerprint":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| Q05 | no | unknown own-root key never permits minting | `{"keyState":"unknown"}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"EACCES"}` | — |
+| P21 | no | durable second-client history protects a deleted pair root after absent coordination | `{"profile":"default","coord":"absent","durableRootHistory":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| P22 | no | durable second-client history protects a deleted pair root after readable coordination | `{"profile":"default","coord":"readable","durableRootHistory":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| P23 | no | durable second-client history protects a deleted pair root after file coordination | `{"profile":"default","coord":"file","durableRootHistory":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| P24 | no | durable pair-root history blocks legacy adoption after root marker and coordination loss | `{"durableRootHistory":true,"default":"legacy"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true,"register":false}` | — |
+| P25 | no | b-prime shares an existing durable recorded default-root identity without registration | `{"durableRootHistory":true,"profile":"default","profileKey":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
+| Q07 | no | invalid durable second-client history is a named refusal | `{"durableRootHistory":"invalid"}` | `{"root":null,"status":"binding_history_invalid","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| X90 | no | retargeted host profile alias remains standalone without a delivered option | `{"coord":"readable","registration":"other","shared":"ready","profileKey":true,"profileAliasRepoint":true}` | `{"root":"profile","status":"standalone_unregistered","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
+| X91 | no | retargeted host profile alias refuses another profile's explicit record | `{"coord":"readable","registration":"other","shared":"ready","delivery":"match","profileKey":true,"profileAliasRepoint":true}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
 <!-- claude-resolution-table:end -->
 
 ### Explicit operation decision table (CX-2 round 11)
 
 These rows are also executable fixtures. They cover mutation/refusal effects separately
 from read-only Claude resolution. **F:** a failed explicit operation leaves files,
-contents, modes and markers byte-identical. Validate every precondition before writing;
+contents, modes and markers byte-identical, excluding setup locks and their owner/reap artifacts. Validate every precondition before writing;
 restore prior state if a caught write failure interrupts an otherwise valid operation.
 A host/process crash retains the existing pending-state retry contract.
 
@@ -1605,7 +1656,7 @@ binding authorizes this intentional new identity; invalid history refuses before
 | F04 | initialize | mode | binding_identity_mismatch | unchanged |
 | F05 | adopt | json | binding_identity_mismatch | unchanged |
 | F06 | complete | directory | binding_identity_mismatch | unchanged |
-| F07 | repair | mode | repair_key_conflict | unchanged |
+| F07 | repair | mode | binding_history_invalid | unchanged |
 | C01 | codex | key-replaced | binding_identity_mismatch | unchanged |
 | R01 | reset | key-and-coordination-lost | identity_reset | new-marked-binding |
 | R02 | repair | no-claude | repair_binding_missing | unchanged |
@@ -1616,4 +1667,25 @@ binding authorizes this intentional new identity; invalid history refuses before
 | F09 | reset | profile-conflict | claude_profile_mismatch | unchanged |
 | F10 | complete | profile-conflict | claude_profile_mismatch | unchanged |
 | F11 | repair | profile-conflict | claude_profile_mismatch | unchanged |
+| D01 | reset | alias | reset_destination_not_new | unchanged |
+| D02 | reset | pre-keyed | reset_destination_not_new | unchanged |
+| D03 | initialize | pre-keyed | existing_key_requires_adoption | unchanged |
+| E01 | repair | invalid-backup | invalid_original_key | unchanged |
+| E02 | codex | root-file | state_unreadable | unchanged |
+| E03 | codex | key-directory | state_unreadable | unchanged |
+| E04 | facade | root-lost | paired_key_missing | unchanged |
+| Q06 | codex | coordination-lost | pairing_record_missing | unchanged |
+| D04 | reset | alias-root-lost | identity_reset_requires_new_root | unchanged |
+| E05 | facade | alias-root-lost | paired_key_missing | unchanged |
 <!-- pairing-operation-table:end -->
+
+When a pair root has been deleted, root identity normalizes its missing suffix against
+its nearest existing real ancestor. An ancestor alias still denotes the recorded root:
+reset refuses reuse and the facade cannot mint there. Scripted fixtures retain this
+composition alongside the whole-root and coordination-loss cases.
+
+Explicit binding writers persist physical root paths through the same root-identity
+helper used for comparisons. This includes Claude's profile root and both clients'
+bound roots. Retargeting a host profile alias therefore becomes another profile;
+a delivered record refuses, and no delivered option preserves that profile's own
+standalone key and pause. Standalone root selection itself remains unchanged.

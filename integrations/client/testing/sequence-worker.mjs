@@ -7,7 +7,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 const source = process.env.CX2_SEQUENCE_SOURCE_ROOT;
 const moduleUrl = (name) =>
@@ -16,7 +16,21 @@ const moduleUrl = (name) =>
     : new URL(`../${name}`, import.meta.url);
 const pairing = await import(moduleUrl("pairing.mjs"));
 const identity = await import(moduleUrl("identity.mjs"));
-const { readControlState } = await import(moduleUrl("control-state.mjs"));
+// Independent observations: no production identity/ownership helpers in the oracle.
+async function readControlState(root) {
+  try {
+    const value = JSON.parse(await fsp.readFile(join(root, "control.json"), "utf8"));
+    return {
+      paused: value.paused || (await exists(join(root, "paused"))),
+      generation: value.generation,
+    };
+  } catch (error) {
+    return {
+      paused: error.code !== "ENOENT" || (await exists(join(root, "paused"))),
+      generation: error.code === "ENOENT" ? "initial" : "invalid",
+    };
+  }
+}
 const { projectKey } = identity;
 import { snapshotHome } from "./sequence-snapshot.mjs";
 import {
@@ -109,14 +123,24 @@ for (let index = 0; index < sequences.length; index++) {
   const { seed, operations } = sequences[index];
   home = join(parent, `home-${index}`);
   await fsp.mkdir(home, { mode: 0o700 });
+  process.env.HOME = home;
+  process.env.TMPDIR = join(home, "tmp");
   process.chdir(home);
   const roots = [join(home, ".cairn-memory"), join(home, "shared"), join(home, "next")];
   const profileA = join(home, "a");
   let profile = profileA;
   let option;
-  let activeRoot = sequences[index].pairRoot === "default" ? roots[0] : roots[index % 2];
+  let activeRoot = sequences[index].pairRoot === "default" ? roots[0] : roots[1];
   let codexId;
+  let bindingProfile;
+  // The model is built ONLY by explicit successful operation history. Deletion,
+  // corruption and unreadable metadata cannot erase pair-root ownership.
   const pairRoots = new Map();
+  const currentKeys = new Map();
+  const retiredRoots = new Set();
+
+  const observations = new Set(roots);
+  let alias;
   const pairedProfiles = new Map();
   const pairedIds = new Map();
   const requests = [];
@@ -130,7 +154,7 @@ for (let index = 0; index < sequences.length; index++) {
     env: env(),
     temporary: join(home, "tmp"),
     root: activeRoot,
-    claudeProfileRoot: profileA,
+    claudeProfileRoot: bindingProfile ?? profileA,
     hostsStopped: true,
     consent: { claude: true, codex: true },
     configured: { claude: true, codex: true },
@@ -188,33 +212,54 @@ for (let index = 0; index < sequences.length; index++) {
     for (const operation of operations) {
       coverage.set(operation, (coverage.get(operation) ?? 0) + 1);
       const before = new Map();
-      for (const root of roots)
+      for (const root of observations)
         before.set(root, {
           retired: await exists(join(root, "retired")),
           marked: await exists(join(root, "paired-root")),
-          key: await keyAt(root),
+          key: (await keyAt(root)) ?? currentKeys.get(root),
           pause: await readControlState(root),
         });
       const requestStart = requests.length;
       const installPath = join(home, ".cairn-memory-clients", "install.json");
       const installBefore = await fsp.readFile(installPath, "utf8").catch(() => undefined);
-      const recordedBefore = new Set();
-      if (installBefore) {
-        try {
-          const value = JSON.parse(installBefore);
-          if (value.shared?.root) recordedBefore.add(value.shared.root);
-        } catch {}
-      }
+      const recordedBefore = new Set(pairRoots.keys());
+      const oldActiveRoot = activeRoot;
+      let requestedProfile = profileA;
       let apiBefore;
       const call = async (work) => {
         apiBefore = await snapshotHome(home);
         return work();
       };
-      const actor = operation === "unset-recall" ? roots[0] : ownRoot();
+      const actorPath = operation === "unset-recall" ? roots[0] : ownRoot();
+      const actor = await fsp.realpath(actorPath).catch(() => actorPath);
       let result;
       let failure;
       try {
-        if (["initialize", "adopt"].includes(operation)) {
+        if (operation === "bind-profile-alias") {
+          await fsp.mkdir(profileA, { recursive: true, mode: 0o700 });
+          profile = join(home, "profile-alias");
+          if (!(await exists(profile))) await fsp.symlink(profileA, profile);
+          requestedProfile = profile;
+          result = await call(() =>
+            pairing.initializePairing({ ...settings(), claudeProfileRoot: profile }),
+          );
+          if (result.pairingRecord) option = result.pairingRecord;
+        } else if (operation === "repoint-profile-alias") {
+          const target = join(home, "b");
+          await fsp.mkdir(target, { recursive: true, mode: 0o700 });
+          if (!(await exists(join(target, "project-key"))))
+            await fsp.writeFile(
+              join(target, "project-key"),
+              "22222222-2222-4222-8222-222222222222\n",
+              { mode: 0o600 },
+            );
+          const path = join(home, "profile-alias");
+          await fsp.rm(path, { force: true });
+          await fsp.symlink(target, path);
+          profile = path;
+        } else if (operation === "clear-option") {
+          option = undefined;
+        } else if (["initialize", "adopt"].includes(operation)) {
           if (operation === "adopt" && !(await exists(join(activeRoot, "paired-root")))) {
             await projectKey(activeRoot);
             // Genuine default-root adoption with existing Claude cursors.
@@ -236,6 +281,124 @@ for (let index = 0; index < sequences.length; index++) {
             pairedProfiles.set(profileA, result.root);
             pairedIds.set(profileA, id(await keyAt(result.root)));
           }
+        } else if (["reset-alias", "reset-prekeyed"].includes(operation)) {
+          let destination;
+          if (operation === "reset-alias") {
+            alias = join(home, "alias");
+            if (!(await exists(alias))) await fsp.symlink(home, alias);
+            destination = join(alias, activeRoot.slice(home.length + 1));
+          } else {
+            destination = join(home, "b");
+            await fsp.mkdir(destination, { recursive: true, mode: 0o700 });
+            await fsp.writeFile(
+              join(destination, "project-key"),
+              "22222222-2222-4222-8222-222222222222\n",
+              { mode: 0o600 },
+            );
+          }
+          observations.add(destination);
+          result = await call(() =>
+            pairing.resetIdentity({
+              ...settings(),
+              root: destination,
+              primaryClient: "claude",
+              confirmIdentityReset: true,
+            }),
+          );
+          assert.notEqual(
+            result?.status,
+            "identity_reset",
+            "reset destination must refuse aliases and pre-keyed roots",
+          );
+        } else if (operation === "initialize-prekeyed") {
+          const destination = join(home, "b");
+          await fsp.rm(destination, { recursive: true, force: true });
+          await fsp.mkdir(destination, { recursive: true, mode: 0o700 });
+          await fsp.writeFile(
+            join(destination, "project-key"),
+            "22222222-2222-4222-8222-222222222222\n",
+            { mode: 0o600 },
+          );
+          result = await call(() =>
+            pairing.initializePairing({ ...settings(), root: destination }),
+          );
+          assert.equal(
+            result?.status,
+            "existing_key_requires_adoption",
+            "pre-keyed destination requires adoption",
+          );
+        } else if (operation.startsWith("facade-")) {
+          let target = activeRoot;
+          if (operation === "facade-alias-key") {
+            const alias = join(home, "alias");
+            if (!(await exists(alias))) await fsp.symlink(home, alias);
+            target = join(alias, activeRoot.slice(home.length + 1));
+          }
+          result = await call(() =>
+            operation === "facade-project-id"
+              ? identity.opaqueProjectId(activeRoot, "/synthetic/sequence")
+              : identity.projectKey(
+                  target,
+                  operation === "facade-original-key"
+                    ? { originalKey: "22222222-2222-4222-8222-222222222222" }
+                    : undefined,
+                ),
+          );
+        } else if (operation === "repair-invalid") {
+          result = await call(() =>
+            pairing.repairIdentity({
+              ...settings(),
+              confirmKeyRepair: true,
+              originalKey: 12345,
+            }),
+          );
+        } else if (operation === "crashed-lock") {
+          const location = join(home, ".cairn-memory-clients");
+          await fsp.mkdir(location, { recursive: true, mode: 0o700 });
+          const live = await pairing.localLiveness();
+          await fsp.writeFile(
+            join(location, "setup.lock"),
+            JSON.stringify({
+              pid: 2147483647,
+              token: randomUUID(),
+              boot: live.boot,
+              namespace: live.namespace,
+            }),
+            { mode: 0o600 },
+          );
+        } else if (operation === "root-mode-host") {
+          await fsp.mkdir(activeRoot, { recursive: true, mode: 0o755 });
+          await fsp.chmod(activeRoot, 0o755);
+        } else if (
+          operation.startsWith("root-mode-") ||
+          operation.startsWith("key-mode-") ||
+          operation.startsWith("coord-mode-")
+        ) {
+          const target = operation.startsWith("root-")
+            ? activeRoot
+            : operation.startsWith("key-")
+              ? join(activeRoot, "project-key")
+              : join(home, ".cairn-memory-clients");
+          if (await exists(target))
+            await fsp.chmod(
+              target,
+              operation.endsWith("zero") ? 0 : operation.startsWith("key-") ? 0o600 : 0o700,
+            );
+        } else if (operation === "root-file") {
+          await fsp.rm(activeRoot, { recursive: true, force: true });
+          currentKeys.delete(activeRoot);
+          await fsp.writeFile(activeRoot, "synthetic replaced root");
+        } else if (operation === "key-directory") {
+          await fsp.rm(join(activeRoot, "project-key"), { recursive: true, force: true });
+          currentKeys.delete(activeRoot);
+          await fsp.mkdir(join(activeRoot, "project-key"), { recursive: true, mode: 0o700 });
+        } else if (operation === "profile-alias") {
+          alias = join(home, "profile-alias");
+          if (!(await exists(alias))) await fsp.symlink(profileA, alias);
+          profile = alias;
+        } else if (operation === "delete-reset-root") {
+          if (activeRoot === roots[2] || retiredRoots.size)
+            await fsp.rm(activeRoot, { recursive: true, force: true });
         } else if (operation.startsWith("reset-")) {
           const root = operation.endsWith("default") ? roots[0] : roots[2];
           result = await call(() =>
@@ -265,11 +428,15 @@ for (let index = 0; index < sequences.length; index++) {
             pairing.repairIdentity({
               ...settings(),
               confirmKeyRepair: true,
-              originalKey: pairRoots.get(activeRoot),
+              originalKey: pairRoots.get(activeRoot) ?? "33333333-3333-4333-8333-333333333333",
             }),
           );
         } else if (operation === "setup-implicit") {
           const input = settings();
+          requestedProfile =
+            bindingProfile ??
+            profile ??
+            join(home, ".claude/plugins/data/cairn-memory-cairn-memory");
           delete input.claudeProfileRoot;
           result = await call(() => pairing.initializePairing({ ...input, adopt: true }));
         } else if (operation === "inventory-repair-public") {
@@ -288,6 +455,8 @@ for (let index = 0; index < sequences.length; index++) {
             undefined,
             "repair capability is private in bundle",
           );
+        } else if (operation === "codex-binding-delete") {
+          await fsp.rm(join(home, ".cairn-memory-profile/binding.json"), { force: true });
         } else if (operation.startsWith("codex-")) {
           const input = {
             ...settings(),
@@ -301,14 +470,16 @@ for (let index = 0; index < sequences.length; index++) {
             usesClaude: false,
           };
           result = await call(() => pairing.resolveClient(input));
-          if (result.enabled && result.paired) {
+          if (result.enabled) {
             const projectId = await pairing.clientProjectId(
               input,
               "/synthetic/sequence",
               result,
             );
-            if (codexId === undefined) codexId = projectId;
-            assert.equal(projectId, codexId, "c: Codex never silently changes identity");
+            if (codexId === undefined && pairRoots.has(result.root))
+              assert.fail("Codex cannot inherit unbound pair identity");
+            if (codexId !== undefined)
+              assert.equal(projectId, codexId, "c: Codex never silently changes identity");
             if (
               ["codex-capture", "codex-recall"].includes(operation) &&
               !(await readControlState(result.root)).paused
@@ -331,6 +502,7 @@ for (let index = 0; index < sequences.length; index++) {
             );
         } else if (operation === "delete-root") {
           await fsp.rm(activeRoot, { recursive: true, force: true });
+          currentKeys.delete(activeRoot);
         } else if (operation === "replace-key") {
           await fsp.mkdir(activeRoot, { recursive: true, mode: 0o700 });
           await fsp.writeFile(
@@ -385,7 +557,8 @@ for (let index = 0; index < sequences.length; index++) {
             await fsp.writeFile(path, "{", { mode: 0o600 });
           }
         } else if (operation === "delete-key") {
-          await fsp.rm(join(activeRoot, "project-key"), { force: true });
+          await fsp.rm(join(activeRoot, "project-key"), { recursive: true, force: true });
+          currentKeys.delete(activeRoot);
         } else if (operation.startsWith("coord-")) {
           const coordination = join(home, ".cairn-memory-clients");
           await fsp.rm(coordination, { recursive: true, force: true });
@@ -401,13 +574,36 @@ for (let index = 0; index < sequences.length; index++) {
                   : "missing/../.cairn-memory"
                 : join(home, "b");
           option = undefined;
-        } else result = await hookAction(operation);
+        } else if (operation === "unset-recall") {
+          const priorProfile = profile;
+          profile = undefined;
+          try {
+            result = await hookAction("recall");
+          } finally {
+            profile = priorProfile;
+          }
+        } else {
+          assert.ok(
+            ["capture", "recall", "pause", "resume", "status"].includes(operation),
+            `unhandled operation: ${operation}`,
+          );
+          result = await hookAction(operation);
+        }
       } catch (error) {
-        failure = error;
+        // Damage operations may be inapplicable after a preceding corruption.
+        // API calls never receive this exemption, and invariants still run.
+        if (
+          !apiBefore &&
+          ["ENOENT", "ENOTDIR", "EACCES", "EISDIR", "EEXIST"].includes(error.code)
+        )
+          result = { fixtureInapplicable: error.code };
+        else failure = error;
       }
       if (
         apiBefore &&
         result &&
+        typeof result === "object" &&
+        !result.fixtureInapplicable &&
         !["paired", "binding_pending", "identity_reset", "key_restored", "single"].includes(
           result.status,
         )
@@ -426,6 +622,17 @@ for (let index = 0; index < sequences.length; index++) {
           failure?.message ?? result?.status,
           "claude_profile_mismatch",
           "explicit profile conflict must refuse",
+        );
+      if (sequences[index].expectedRefusal && operation === operations.at(-1))
+        assert.equal(failure?.message ?? result?.status, sequences[index].expectedRefusal);
+      if (
+        sequences[index].finding ===
+          "alias switches without an option retain standalone delivery" &&
+        operation === "recall"
+      )
+        assert.ok(
+          requests.length > requestStart,
+          "a switched profile with its own key must send standalone",
         );
       if (failure instanceof assert.AssertionError) throw failure;
       if (failure) {
@@ -452,6 +659,7 @@ for (let index = 0; index < sequences.length; index++) {
         failure ||
         (apiBefore &&
           result &&
+          typeof result === "object" &&
           !["paired", "binding_pending", "identity_reset", "key_restored", "single"].includes(
             result.status,
           ));
@@ -461,28 +669,41 @@ for (let index = 0; index < sequences.length; index++) {
           apiBefore,
           "F: failed operation leaves HOME byte-identical",
         );
+
+      const explicit =
+        [
+          "initialize",
+          "initialize-prekeyed",
+          "adopt",
+          "complete",
+          "repair",
+          "repair-invalid",
+          "setup-implicit",
+          "bind-profile-alias",
+        ].includes(operation) || operation.startsWith("reset-");
       if (
-        sequences[index].finding === "explicit reset recovers lost identity" &&
-        operation === "reset-lost"
-      )
-        assert.equal(
-          result?.status,
-          "identity_reset",
-          "explicit lost-state reset must recover",
-        );
-      if (
-        before.get(actor)?.marked &&
-        ["recall", "capture", "pause", "resume", "status"].includes(operation)
+        !explicit &&
+        (operation.startsWith("codex-") ||
+          ["recall", "capture", "pause", "resume", "status", "unset-recall"].includes(
+            operation,
+          ))
       )
         assert.equal(
           await fsp.readFile(installPath, "utf8").catch(() => undefined),
           installBefore,
-          "b-prime: sharing never writes registration",
+          "registration only through explicit setup for both clients",
         );
       // Invariant P: every successful operation in the exported inventory marks its root.
       if (
         result?.root &&
-        (["initialize", "adopt", "complete", "repair", "setup-implicit"].includes(operation) ||
+        ([
+          "initialize",
+          "adopt",
+          "complete",
+          "repair",
+          "setup-implicit",
+          "bind-profile-alias",
+        ].includes(operation) ||
           operation.startsWith("reset-")) &&
         ["binding_pending", "paired", "identity_reset", "key_restored"].includes(result.status)
       ) {
@@ -505,6 +726,26 @@ for (let index = 0; index < sequences.length; index++) {
           result.root,
           "P: successful mutation records profile binding",
         );
+        if (!(source && reproduce)) {
+          const codexHistory = JSON.parse(
+            await fsp.readFile(join(home, ".cairn-memory-profile/binding.json"), "utf8"),
+          );
+          assert.equal(
+            codexHistory.root,
+            result.root,
+            "P: durable Codex binding matches the operation",
+          );
+          assert.equal(
+            codexHistory.fingerprint,
+            history.fingerprint,
+            "P: both histories share the identity fingerprint",
+          );
+          for (const knownRoot of pairRoots.keys())
+            assert.ok(
+              codexHistory.roots.some((entry) => entry.root === knownRoot),
+              "P: durable history retains every model pair root",
+            );
+        }
         if (installed.clients.codex && !(source && reproduce))
           assert.equal(
             installed.clients.codex.fingerprint,
@@ -519,12 +760,29 @@ for (let index = 0; index < sequences.length; index++) {
           "P: identity fingerprint",
         );
       }
-      for (const root of roots) {
+      if (
+        explicit &&
+        result?.root &&
+        ["binding_pending", "paired", "identity_reset", "key_restored"].includes(result.status)
+      ) {
+        const key = await keyAt(result.root);
+        if (operation.startsWith("reset-")) retiredRoots.add(oldActiveRoot);
+        pairRoots.set(result.root, key);
+        currentKeys.set(result.root, key);
+        observations.add(result.root);
+        bindingProfile = requestedProfile;
+        const owner = await fsp.realpath(requestedProfile).catch(() => requestedProfile);
+        pairedProfiles.set(owner, result.root);
+        pairedIds.set(owner, id(key));
+        codexId = id(key);
+      }
+      for (const root of observations) {
         const old = before.get(root);
+        if (!old) continue;
         const key = await keyAt(root);
         const marked = await exists(join(root, "paired-root"));
         if (
-          old.retired &&
+          retiredRoots.has(root) &&
           ["recall", "capture", "unset-recall", "codex-recall", "codex-capture"].includes(
             operation,
           )
@@ -535,14 +793,14 @@ for (let index = 0; index < sequences.length; index++) {
               .every((request) => request.project_id !== id(old.key ?? "")),
             "retired roots never send",
           );
-        if (marked && key && !pairRoots.has(root)) pairRoots.set(root, key);
+
         if (
-          (old.marked || recordedBefore.has(root)) &&
+          recordedBefore.has(root) &&
           key !== undefined &&
           key !== old.key &&
           operation !== "replace-key"
         ) {
-          assert.equal(operation, "repair", "K: marked root gained a key outside repair");
+          assert.equal(operation, "repair", "K: model pair root gained a key outside repair");
           assert.equal(key, pairRoots.get(root), "repair restores original identity");
         }
         // (b) unrelated never-paired profiles cannot borrow identity or controls.
@@ -550,7 +808,7 @@ for (let index = 0; index < sequences.length; index++) {
         if (
           !pairedProfiles.has(actor) &&
           actor !== root &&
-          old.marked &&
+          pairRoots.has(root) &&
           ["recall", "capture", "pause", "resume", "status"].includes(operation)
         ) {
           const pairId = pairRoots.get(root) && id(pairRoots.get(root));
@@ -562,7 +820,7 @@ for (let index = 0; index < sequences.length; index++) {
         }
         if (
           actor === root &&
-          old.marked &&
+          pairRoots.has(root) &&
           old.key &&
           !(await exists(join(root, "retired"))) &&
           ["pause", "resume"].includes(operation) &&
@@ -616,11 +874,18 @@ for (let index = 0; index < sequences.length; index++) {
     };
     findings.push(finding);
     output(JSON.stringify(finding) + "\n");
-    if (!reproduce) {
-      process.exitCode = 1;
-      break;
+    if (!reproduce) process.exitCode = 1;
+  } finally {
+    // Permission damage is part of the sequence, never a burden on workspace cleanup.
+    for (const path of [...observations, join(home, ".cairn-memory-clients")]) {
+      const info = await fsp.lstat(path).catch(() => undefined);
+      if (info?.isDirectory()) await fsp.chmod(path, 0o700);
+      const key = join(path, "project-key");
+      const keyInfo = await fsp.lstat(key).catch(() => undefined);
+      if (keyInfo?.isFile()) await fsp.chmod(key, 0o600);
     }
   }
+  if (process.exitCode && !reproduce) break;
 }
 process.stdout.write = output;
 Object.defineProperty(process, "stdin", stdin);
@@ -628,6 +893,8 @@ process.chdir(priorCwd);
 output(
   JSON.stringify({
     sequences: completedSequences,
+    randomSequences: sequences.filter((sequence) => !sequence.scripted && !reproduce).length,
+    scriptedFixtures: sequences.filter((sequence) => sequence.scripted || reproduce).length,
     sequencesWithPairHistory,
     seeds: SEQUENCE_SEEDS,
     runtimeMs: Math.round(performance.now() - started),

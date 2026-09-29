@@ -13,10 +13,17 @@ import {
   mkdir,
   writeFile,
   rmdir,
+  readdir,
 } from "node:fs/promises";
 import { constants } from "node:fs";
 import { createHmac, randomUUID } from "node:crypto";
-import { privateDirectory, privateRead, privateWrite, checkedPath } from "./private-state.mjs";
+import {
+  privateDirectory,
+  privateRead,
+  privateWrite,
+  checkedPath,
+  probeEntry,
+} from "./private-state.mjs";
 import { withFileLock } from "./file-lock.mjs";
 
 import { setPaused, readControlState } from "./control-state.mjs";
@@ -24,7 +31,14 @@ import { setPaused, readControlState } from "./control-state.mjs";
 async function randomIdFile(dataDir, filename, { create = true } = {}) {
   const path = join(dataDir, filename);
   async function readIdentity() {
-    const value = (await readFile(path, "utf8")).trim();
+    const entry = await probeEntry(path, { read: () => readFile(path, "utf8") });
+    if (entry.state === "unknown") failUnreadable(entry.code);
+    if (entry.state === "absent") {
+      const error = new Error("missing");
+      error.code = "ENOENT";
+      throw error;
+    }
+    const value = entry.value.trim();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
       throw new Error(`invalid_identity: ${filename}`);
     }
@@ -44,24 +58,99 @@ async function randomIdFile(dataDir, filename, { create = true } = {}) {
   return readIdentity();
 }
 
-/** Positive presence only: inaccessible or unrelated roots are not history. */
-export async function rootMarker(root, name) {
-  try {
-    // Match join(dataDir, filename) used for publication. In particular, a
-    // missing component canceled by .. must not hide the target's history.
-    const directory = join(root, ".");
-    const info = await stat(directory);
-    if (
-      !info.isDirectory() ||
-      (typeof process.getuid === "function" && info.uid !== process.getuid())
-    )
-      return false;
-    await lstat(join(directory, name));
-    return true;
-  } catch {
-    return false;
+/** One tri-state marker probe; invalid-but-present markers still count. */
+async function markerProbe(root, name) {
+  const directory = join(root, ".");
+  const parent = await probeEntry(directory, { read: () => stat(directory) });
+  if (parent.state !== "present") return parent;
+  if (!parent.value.isDirectory() || !owned(parent.value)) return { state: "absent" };
+  return probeEntry(join(directory, name));
+}
+async function rootMarkerImpl(root, name) {
+  const entry = await markerProbe(root, name);
+  if (entry.state === "unknown") failUnreadable(entry.code);
+  return entry.state === "present";
+}
+
+/** Every durable recorded pair root, independent of readiness or root-local markers. */
+function recordedPairRootsImpl(coordination) {
+  const readable =
+    coordination.coordination === "readable" || coordination.state === "readable";
+  const install = readable ? (coordination.install ?? { clients: {} }) : { clients: {} };
+  return [
+    ...new Set(
+      [
+        install.shared?.root,
+        readable && coordination.record?.root,
+        ...(coordination.durableHistory?.state === "valid"
+          ? [
+              coordination.durableHistory.root,
+              ...(coordination.durableHistory.roots ?? []).map((entry) => entry.root),
+            ]
+          : []),
+        install.resetPending?.root,
+        ...Object.values(install.clients ?? {})
+          .filter((binding) => binding.fingerprint)
+          .map((binding) => binding.root),
+        ...(install.retired ?? []).flatMap((entry) => [
+          entry.root,
+          ...CLIENTS.map((name) => entry[name]?.root),
+        ]),
+      ].filter(Boolean),
+    ),
+  ];
+}
+
+/** Filesystem identity belongs in the probe layer, never in the pure decision. */
+async function rootIdentity(path, { cache = new Map() } = {}) {
+  path = resolve(path);
+  const inspect = (candidate) => {
+    if (!cache.has(candidate))
+      cache.set(
+        candidate,
+        probeEntry(candidate, {
+          read: async () => ({ path: await realpath(candidate), info: await stat(candidate) }),
+        }),
+      );
+    return cache.get(candidate);
+  };
+  const entry = await inspect(path);
+  if (entry.state === "unknown") failUnreadable(entry.code);
+  if (entry.state === "present") return { present: true, ...entry.value };
+  let ancestor = dirname(path);
+  for (;;) {
+    const parent = await inspect(ancestor);
+    if (parent.state === "unknown") failUnreadable(parent.code);
+    if (parent.state === "present") {
+      if (!parent.value.info.isDirectory()) failUnreadable("ENOTDIR");
+      return { present: false, path: resolve(parent.value.path, relative(ancestor, path)) };
+    }
+    const next = dirname(ancestor);
+    if (next === ancestor) failUnreadable("ENOENT");
+    ancestor = next;
   }
 }
+async function sameRootImpl(a, b, options = {}) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (resolve(a) === resolve(b)) return true;
+  const cache = options.cache ?? new Map();
+  const left = await rootIdentity(a, { cache });
+  const right = await rootIdentity(b, { cache });
+  if (left.present !== right.present) return false;
+  return (
+    left.path === right.path ||
+    (left.present && left.info.dev === right.info.dev && left.info.ino === right.info.ino)
+  );
+}
+async function containsRoot(roots, root) {
+  for (const candidate of roots) if (await sameRoot(candidate, root)) return true;
+  return false;
+}
+const failUnreadable = (code) => {
+  const error = new Error("state_unreadable");
+  error.detail = code;
+  throw error;
+};
 
 async function publishLegacyFile(dataDir, filename) {
   await mkdir(dataDir, { recursive: true, mode: 0o700 });
@@ -86,18 +175,36 @@ const validKey = (key) =>
 // The only publication gate for project-key, including legacy creation and adoption.
 async function publishProjectKey(
   dataDir,
-  { create = true, strict = true, checkpoint, originalKey, capability, repairProfileRoot } = {},
+  {
+    create = true,
+    strict = true,
+    checkpoint,
+    originalKey,
+    capability,
+    repairProfileRoot,
+    home,
+  } = {},
 ) {
   if (capability === repairCapability) {
     const history = await readBindingHistory(repairProfileRoot);
     if (
       history.state !== "valid" ||
-      history.root !== dataDir ||
+      !(await sameRoot(history.root, dataDir)) ||
       history.fingerprint !== identityFingerprint(originalKey ?? "")
     )
       fail("repair_key_conflict");
   }
-  if (await rootMarker(dataDir, "paired-root")) {
+  const retired = await markerProbe(dataDir, "retired");
+  if (retired.state === "unknown") failUnreadable(retired.code);
+  if (retired.state === "present") fail("pairing_needed");
+  const marker = await markerProbe(dataDir, "paired-root");
+  if (marker.state === "unknown") failUnreadable(marker.code);
+  const coordination = await probeCoordination(stateLocations({ home: home ?? homedir() }));
+  if (coordination.coordination === "degraded" && capability !== repairCapability)
+    failUnreadable(coordination.detail);
+  if (coordination.durableHistory?.state === "invalid") fail("binding_history_invalid");
+  const recorded = await containsRoot(recordedPairRoots(coordination), dataDir);
+  if (marker.state === "present" || recorded) {
     if (capability !== repairCapability) throw new Error("paired_key_missing");
   }
   if (!create) throw new Error(strict ? "paired_key_missing" : "standalone_key_missing");
@@ -111,16 +218,21 @@ async function publishProjectKey(
 }
 
 /** Restore only the supplied original backup; never generate a repair identity. */
-async function restoreProjectKey(dataDir, originalKey, profileRoot) {
+async function restoreProjectKey(dataDir, originalKey, profileRoot, home) {
   if (typeof originalKey !== "string" || !validKey(originalKey))
     throw new Error("invalid_identity: project-key");
   await privateDirectory(dataDir);
-  const existing = await privateRead(join(dataDir, "project-key"), { missing: true });
+  const entry = await probeEntry(join(dataDir, "project-key"), {
+    read: () => privateRead(join(dataDir, "project-key"), { missing: true }),
+  });
+  if (entry.state === "unknown") failUnreadable(entry.code);
+  const existing = entry.value;
   if (existing === undefined)
     await publishProjectKey(dataDir, {
       originalKey,
       capability: repairCapability,
       repairProfileRoot: profileRoot,
+      home,
     });
   const winner = await projectKey(dataDir, { create: false });
   if (winner !== originalKey) throw new Error("repair_key_conflict");
@@ -128,7 +240,7 @@ async function restoreProjectKey(dataDir, originalKey, profileRoot) {
 }
 
 /** Anonymous product telemetry id. This value may be sent to Cairn. */
-export function installId(dataDir) {
+function installIdImpl(dataDir) {
   return randomIdFile(dataDir, "install-id");
 }
 
@@ -136,12 +248,15 @@ export function installId(dataDir) {
  * Stable project id keyed with a separate secret that never leaves the device.
  * Keeping it separate from installId prevents Cairn from testing likely paths.
  */
-export async function projectKey(dataDir, { create = true, checkpoint, originalKey } = {}) {
-  await privateDirectory(dataDir);
+async function projectKeyImpl(dataDir, { create = true, checkpoint, originalKey, home } = {}) {
+  if (originalKey !== undefined) fail("invalid_original_key");
+  await checkedPath(dataDir, { directory: true, missing: true });
   const path = join(dataDir, "project-key");
-  let value = await privateRead(path, { missing: true });
+  const entry = await probeEntry(path, { read: () => privateRead(path, { missing: true }) });
+  if (entry.state === "unknown") failUnreadable(entry.code);
+  let value = entry.value;
   if (value === undefined) {
-    await publishProjectKey(dataDir, { create, checkpoint, originalKey });
+    await publishProjectKey(dataDir, { create, checkpoint, home });
     value = await privateRead(path);
   }
   const key = value.trim();
@@ -151,7 +266,7 @@ export async function projectKey(dataDir, { create = true, checkpoint, originalK
   return key;
 }
 
-export async function opaqueProjectId(dataDir, cwd, options) {
+async function opaqueProjectIdImpl(dataDir, cwd, options) {
   if (!cwd) return undefined;
   const key = options?.strict
     ? await projectKey(dataDir, options)
@@ -175,14 +290,13 @@ const beneath = (parent, child) =>
   child === parent ||
   (!relative(parent, child).startsWith("..") && !isAbsolute(relative(parent, child)));
 
-export function stateLocations({
+function stateLocationsImpl({
   home = homedir(),
   temporary = tmpdir(),
   env = process.env,
   setup = false,
 } = {}) {
-  if (setup && !absolute(home))
-    fail("Cannot determine an absolute home directory; setup made no changes.");
+  if (setup && !absolute(home)) fail("pairing_requires_durable_home");
   const base = home || temporary;
   const coordination = join(base, ".cairn-memory-clients");
   return {
@@ -199,8 +313,58 @@ export function stateLocations({
   };
 }
 
+async function probeCoordination(locations) {
+  const empty = {
+    coordination: "absent",
+    install: { version: 1, clients: {} },
+    record: undefined,
+  };
+  const home = await probeEntry(locations.home || locations.temporary, {
+    read: () => stat(locations.home || locations.temporary),
+  });
+  if (
+    home.state !== "present" ||
+    !home.value.isDirectory() ||
+    !(await probe(async () => {
+      await access(locations.home || locations.temporary, constants.X_OK);
+      return true;
+    }, false))
+  )
+    return empty;
+  locations.durableHome = (await rootIdentity(locations.home || locations.temporary)).path;
+  const durableHistory = await readBindingHistory(locations.home || locations.temporary);
+  empty.durableHistory = durableHistory;
+  const entry = await probeEntry(locations.coordination);
+  if (entry.state === "absent") return empty;
+  if (entry.state === "unknown")
+    return { ...empty, coordination: "degraded", detail: entry.code };
+  if (entry.value.isSymbolicLink()) {
+    const target = await probeEntry(locations.coordination, {
+      read: () => stat(locations.coordination),
+    });
+    if (target.state === "absent") return empty;
+    return { ...empty, coordination: "degraded", detail: "state_symlink" };
+  }
+  if (!entry.value.isDirectory() || !owned(entry.value)) return empty;
+  try {
+    await checkedPath(locations.coordination, { directory: true });
+    const install = validateInstall(await jsonFile(locations.install));
+    const record = await jsonFile(locations.pairing);
+    if (record) validateRecord(record, locations);
+    return { coordination: "readable", install, record, durableHistory };
+  } catch (error) {
+    const entries = await Promise.all(
+      [locations.install, locations.pairing].map((path) => probeEntry(path)),
+    );
+    if (entries.every((entry) => entry.state === "absent")) return empty;
+    return { ...empty, coordination: "degraded", detail: error.code ?? error.message };
+  }
+}
+
 async function jsonFile(path) {
-  const text = await privateRead(path, { missing: true });
+  const entry = await probeEntry(path, { read: () => privateRead(path, { missing: true }) });
+  if (entry.state === "unknown") failUnreadable(entry.code);
+  const text = entry.value;
   if (text === undefined) return undefined;
   try {
     return JSON.parse(text);
@@ -272,7 +436,7 @@ function durable(root, locations) {
   // Test homes may be under TMPDIR; the durable logical boundary is the explicit home.
   // Outside it, reject the known temporary-storage trees.
   if (
-    !beneath(locations.home, root) &&
+    !beneath(locations.durableHome ?? locations.home, root) &&
     [locations.temporary, "/tmp", "/var/tmp"].some((path) => beneath(path, root))
   )
     fail("temporary_pairing_root");
@@ -294,28 +458,23 @@ async function requireTemporarySource(root, locations) {
 
 async function keyPresent(root, { strict = false } = {}) {
   if (strict && !absolute(root)) fail("invalid_state_path");
-  let bytes;
-  if (strict) {
-    await checkedPath(root, { directory: true, missing: true });
-    bytes = await privateRead(join(root, "project-key"), { missing: true });
-  } else {
-    // Read-only discovery must preserve released Claude's host-owned paths.
-    try {
-      bytes = await readFile(join(root, "project-key"), "utf8");
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
-  }
-  if (bytes === undefined) return false;
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(bytes.trim())
-  )
-    fail("invalid_identity: project-key");
+  const entry = await probeEntry(join(root, "project-key"), {
+    read: async () => {
+      if (strict) {
+        await checkedPath(root, { directory: true, missing: true });
+        return privateRead(join(root, "project-key"), { missing: true });
+      }
+      return readFile(join(root, "project-key"), "utf8");
+    },
+  });
+  if (entry.state === "unknown") failUnreadable(entry.code);
+  if (entry.state === "absent" || entry.value === undefined) return false;
+  if (!validKey(entry.value.trim())) fail("invalid_identity: project-key");
   return true;
 }
 
 /** Bounded metadata-only evidence in Cairn's root; never read a host transcript. */
-export async function hasClaudeEvidence(root) {
+async function hasClaudeEvidenceImpl(root) {
   const directory = join(root, "sessions");
   if (!(await checkedPath(directory, { directory: true, missing: true }))) return false;
   const entries = await opendir(directory);
@@ -330,19 +489,18 @@ export async function hasClaudeEvidence(root) {
 }
 
 /** Read-only, exact known-file checks. Unknown Claude origins need a setup answer. */
-export async function detectClients(options = {}) {
+async function detectClientsImpl(options = {}) {
   const locations = stateLocations(options);
   if (options.claudeProfileRoot !== undefined && !absolute(options.claudeProfileRoot))
     fail("invalid_claude_profile_root");
-  if (await checkedPath(locations.coordination, { directory: true, missing: true })) {
-    /* validated */
-  }
-  const install = validateInstall(await jsonFile(locations.install));
-  const record = await jsonFile(locations.pairing);
-  if (record) validateRecord(record, locations);
+  const coordination = await probeCoordination(locations);
+  if (coordination.coordination === "degraded") failUnreadable(coordination.detail);
+  if (coordination.durableHistory?.state === "invalid") fail("binding_history_invalid");
+  const { install, record } = coordination;
   const roots = [
     ...new Set([
       locations.defaultRoot,
+      ...(options.root ? [options.root] : []),
       locations.knownClaudeRoot,
       locations.claudeRoot,
       ...(options.claudeProfileRoot === undefined ? [] : [options.claudeProfileRoot]),
@@ -352,12 +510,17 @@ export async function detectClients(options = {}) {
     ]),
   ];
   const keys = [];
-  for (const root of roots) if (await keyPresent(root)) keys.push(root);
-  return { locations, install, record, keys };
+  for (const root of roots) {
+    const entry = await probeEntry(join(root, "project-key"), {
+      read: () => readFile(join(root, "project-key"), "utf8"),
+    });
+    if (entry.state === "present" && validKey(entry.value.trim())) keys.push(root);
+  }
+  return { ...coordination, locations, install, record, keys };
 }
 
 /** Boot and namespace identity belong to lock owners, not durable bindings. */
-export async function localLiveness({ platform = process.platform } = {}) {
+async function localLivenessImpl({ platform = process.platform } = {}) {
   const isAlive = (pid) => {
     try {
       process.kill(pid, 0);
@@ -449,15 +612,28 @@ async function setupTransaction(options, work) {
         (options.env ?? process.env).CLAUDE_PLUGIN_DATA,
     );
     const registeredProfile = claudeRegistration(install)?.profileRoot;
-    if (registeredProfile && profileRoot !== registeredProfile) fail("claude_profile_mismatch");
+    if (registeredProfile && !(await sameRoot(profileRoot, registeredProfile)))
+      fail("claude_profile_mismatch");
     const history = profileRoot && (await readBindingHistory(profileRoot));
+    const codexHistory = await readBindingHistory(locations.home);
+    if (codexHistory.state === "invalid") fail("binding_history_invalid");
     if (operation === "repair" && !claudeRegistration(install)?.profileRoot)
       fail("repair_binding_missing");
     if (history?.state === "invalid")
-      fail(operation === "repair" ? "repair_key_conflict" : "binding_identity_mismatch");
+      fail(operation === "repair" ? "binding_history_invalid" : "binding_identity_mismatch");
     const destination = options.root ?? snapshot.record?.root ?? locations.defaultRoot;
+    if (operation !== "reset" && codexHistory.state === "valid") {
+      if (!(await sameRoot(codexHistory.root, destination))) fail("binding_identity_mismatch");
+      if (await keyPresent(destination)) {
+        const fingerprint = identityFingerprint(
+          await projectKey(destination, { create: false }),
+        );
+        if (fingerprint !== codexHistory.fingerprint)
+          fail(operation === "repair" ? "repair_key_conflict" : "binding_identity_mismatch");
+      }
+    }
     if (operation !== "reset" && history?.state === "valid") {
-      if (history.root !== destination) fail("binding_identity_mismatch");
+      if (!(await sameRoot(history.root, destination))) fail("binding_identity_mismatch");
       if (await keyPresent(destination)) {
         const fingerprint = identityFingerprint(
           await projectKey(destination, { create: false }),
@@ -470,7 +646,7 @@ async function setupTransaction(options, work) {
       const fingerprint = identityFingerprint(await projectKey(destination, { create: false }));
       for (const binding of Object.values(install.clients))
         if (
-          binding.root === destination &&
+          (await sameRoot(binding.root, destination)) &&
           binding.fingerprint &&
           binding.fingerprint !== fingerprint
         )
@@ -480,9 +656,12 @@ async function setupTransaction(options, work) {
       ...new Set(
         [
           destination,
-          install.shared?.root,
-          snapshot.record?.root,
-          operation === "reset" && history?.state === "valid" ? history.root : undefined,
+          ...(operation === "reset" ? [] : recordedPairRoots(snapshot)),
+          operation === "reset" &&
+          history?.state === "valid" &&
+          (await probe(() => checkedPath(history.root, { directory: true }), false))
+            ? history.root
+            : undefined,
         ].filter(Boolean),
       ),
     ];
@@ -494,6 +673,7 @@ async function setupTransaction(options, work) {
           join(root, name),
         ),
       ),
+      bindingHistoryPath(locations.home),
       ...(profileRoot ? [bindingHistoryPath(profileRoot)] : []),
     ];
     const directories = new Set();
@@ -551,7 +731,7 @@ const disabled = (status = "pairing_needed", detail) => ({
   ...(detail ? { detail } : {}),
 });
 
-export function parsePairingRecord(argv = []) {
+function parsePairingRecordImpl(argv = []) {
   let pairingRecord;
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
@@ -570,7 +750,7 @@ async function activeBinding(root, env, status = "single", paired = false) {
   if (
     paired &&
     env.CAIRN_MEMORY_STATE_DIR !== undefined &&
-    env.CAIRN_MEMORY_STATE_DIR !== root
+    !(await sameRoot(env.CAIRN_MEMORY_STATE_DIR, root))
   ) {
     fail("state_dir_mismatch");
   }
@@ -587,6 +767,11 @@ async function selectCodexBinding(options, snapshot, delivered) {
   const { client = "claude", env = process.env } = options;
   const { locations, install, record, keys } = snapshot;
   const binding = install.clients[client];
+  if (
+    snapshot.durableHistory?.state === "valid" &&
+    (snapshot.coordination !== "readable" || !binding?.fingerprint)
+  )
+    return disabled("pairing_record_missing");
   if (delivered !== undefined) {
     if (!absolute(delivered) || delivered !== locations.pairing) {
       fail("pairing_record_mismatch");
@@ -600,10 +785,10 @@ async function selectCodexBinding(options, snapshot, delivered) {
     if (
       !binding ||
       binding.state !== "established" ||
-      binding.root !== record.root ||
+      !(await sameRoot(binding.root, record.root)) ||
       !install.shared.initialized ||
       install.shared.id !== record.id ||
-      install.shared.root !== record.root ||
+      !(await sameRoot(install.shared.root, record.root)) ||
       install.shared.policy !== record.policy
     ) {
       fail("pairing_record_mismatch");
@@ -613,8 +798,11 @@ async function selectCodexBinding(options, snapshot, delivered) {
       return disabled("paired_key_missing");
     }
     if (
+      (snapshot.durableHistory?.state === "valid" &&
+        (!(await sameRoot(snapshot.durableHistory.root, record.root)) ||
+          snapshot.durableHistory.fingerprint !== binding.fingerprint)) ||
       binding.fingerprint !==
-      identityFingerprint(await projectKey(record.root, { create: false }))
+        identityFingerprint(await projectKey(record.root, { create: false }))
     )
       return disabled("binding_identity_mismatch");
     return {
@@ -625,14 +813,21 @@ async function selectCodexBinding(options, snapshot, delivered) {
   const other = install.clients[CLIENTS.find((name) => name !== client)];
   const root = binding?.root ?? options.root ?? locations.defaultRoot;
   if (!absolute(root)) fail("invalid_state_path");
-  if (await rootMarker(root, "paired-root")) {
-    if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
-  }
-  let established = binding?.state === "established" && binding.root === root;
+  const pairedRoot =
+    (await rootMarker(root, "paired-root")) ||
+    (await containsRoot(recordedPairRoots(snapshot), root));
+  if (pairedRoot && !binding?.fingerprint) return disabled("pairing_record_missing");
+  if (pairedRoot && !(await keyPresent(root, { strict: true })))
+    return disabled("paired_key_missing");
+  let established = binding?.state === "established" && (await sameRoot(binding.root, root));
   const conflict =
     !!other ||
+    (await probe(() => hasClaudeEvidence(root), false)) ||
     (client === "codex" &&
-      (keys.some((keyRoot) => keyRoot !== root) || (!established && keys.length > 0)));
+      keys.length > 0 &&
+      (!(await containsRoot(keys, root)) ||
+        keys.length > 1 ||
+        (!established && options.usesClaude !== false)));
   if (!established && conflict) return disabled();
   if (
     client === "codex" &&
@@ -641,7 +836,7 @@ async function selectCodexBinding(options, snapshot, delivered) {
     options.usesClaude !== false
   )
     return disabled();
-  if (conflict && !keys.includes(root)) return disabled();
+  if (conflict && !(await containsRoot(keys, root))) return disabled();
   if (binding?.fingerprint) {
     if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
     if (binding.fingerprint !== identityFingerprint(await projectKey(root, { create: false })))
@@ -662,52 +857,80 @@ const identityFingerprint = (key) =>
 
 async function readBindingHistory(profileRoot) {
   const directory = join(profileRoot, ".cairn-memory-profile");
-  if (!(await probe(() => lstat(directory), undefined))) return { state: "absent" };
-  let entry;
-  try {
-    entry = await lstat(bindingHistoryPath(profileRoot));
-  } catch (error) {
-    return { state: ["ENOENT", "ENOTDIR"].includes(error.code) ? "absent" : "invalid" };
-  }
-  if (!entry) return { state: "absent" };
+  const parent = await probeEntry(directory);
+  if (parent.state === "absent") return { state: "absent" };
+  if (parent.state === "unknown") return { state: "invalid", detail: parent.code };
+  const entry = await probeEntry(bindingHistoryPath(profileRoot));
+  if (entry.state === "absent") return { state: "absent" };
+  if (entry.state === "unknown") return { state: "invalid", detail: entry.code };
   const value = await probe(async () => {
     await checkedPath(directory, { directory: true });
     return jsonFile(bindingHistoryPath(profileRoot));
   }, undefined);
   if (
     value?.version !== 1 ||
-    value.profileRoot !== profileRoot ||
+    !(await sameRoot(value.profileRoot, profileRoot)) ||
     !absolute(value.root) ||
-    !/^[0-9a-f]{64}$/.test(value.fingerprint)
+    !/^[0-9a-f]{64}$/.test(value.fingerprint) ||
+    (value.roots !== undefined &&
+      (!Array.isArray(value.roots) ||
+        value.roots.some(
+          (entry) => !absolute(entry.root) || !/^[0-9a-f]{64}$/.test(entry.fingerprint),
+        )))
   )
     return { state: "invalid" };
   return { state: "valid", ...value };
 }
 
 // Only explicit reset may replace recorded scope. No option-clearing/leave side effect.
-async function writeBindingHistory(profileRoot, root, { reset = false, install } = {}) {
+async function writeBindingHistory(profileRoot, root, { reset = false, install, home } = {}) {
+  profileRoot = (await rootIdentity(profileRoot)).path;
+  root = (await rootIdentity(root)).path;
   const previous = await readBindingHistory(profileRoot);
   const fingerprint = identityFingerprint(await projectKey(root, { create: false }));
   if (previous.state === "invalid") fail("binding_identity_mismatch");
   if (
     !reset &&
     previous.state === "valid" &&
-    (previous.root !== root || previous.fingerprint !== fingerprint)
+    (!(await sameRoot(previous.root, root)) || previous.fingerprint !== fingerprint)
   )
     fail("binding_identity_mismatch");
-  if (install)
+  if (install) {
     for (const client of CLIENTS)
-      if (install.clients[client]?.root === root)
+      if (await sameRoot(install.clients[client]?.root, root)) {
+        install.clients[client].root = root;
         install.clients[client].fingerprint = fingerprint;
-  await privateWrite(
-    bindingHistoryPath(profileRoot),
-    JSON.stringify({
-      version: 1,
-      profileRoot,
-      root,
-      fingerprint,
-    }),
-  );
+        if (client === "claude") install.clients[client].profileRoot = profileRoot;
+      }
+    if (await sameRoot(install.shared?.root, root)) install.shared.root = root;
+    if (await sameRoot(install.resetPending?.root, root)) install.resetPending.root = root;
+    for (const retired of install.retired ?? [])
+      if (retired.claude && (await sameRoot(retired.claude.profileRoot, profileRoot)))
+        retired.claude.profileRoot = profileRoot;
+  }
+  const homes = home ? [(await rootIdentity(home)).path] : [];
+  for (const localRoot of new Set([profileRoot, ...homes])) {
+    const localHistory = await readBindingHistory(localRoot);
+    if (localHistory.state === "invalid") fail("binding_history_invalid");
+    const roots =
+      localHistory.state === "valid"
+        ? [
+            ...(localHistory.roots ?? []),
+            { root: localHistory.root, fingerprint: localHistory.fingerprint },
+          ]
+        : [];
+    roots.push({ root, fingerprint });
+    await privateWrite(
+      bindingHistoryPath(localRoot),
+      JSON.stringify({
+        version: 1,
+        profileRoot: localRoot,
+        root,
+        fingerprint,
+        roots: [...new Map(roots.map((entry) => [entry.root, entry])).values()],
+      }),
+    );
+  }
 }
 
 const owned = (info) => typeof process.getuid !== "function" || info.uid === process.getuid();
@@ -722,12 +945,20 @@ const probe = async (read, missing) => {
 async function rootFacts(root, { strict = false, evidence = false } = {}) {
   const info = await probe(() => stat(root), undefined);
   const usable = !!info?.isDirectory();
-  const retired = await rootMarker(root, "retired");
-  const sharedMarker = await rootMarker(root, "paired-root");
+  const retiredEntry = await markerProbe(root, "retired");
+  const sharedEntry = await markerProbe(root, "paired-root");
+  const retired = retiredEntry.state === "present";
+  const sharedMarker = sharedEntry.state === "present";
   const validKey = evidence && (await probe(() => keyPresent(root), false));
   // A present key is not freshness, even if its bytes are invalid. The ordinary
   // identity reader preserves released standalone errors without replacing it.
-  const key = !!(await probe(() => lstat(join(root, "project-key")), undefined));
+  const keyEntry = await probeEntry(join(root, "project-key"));
+  const key = keyEntry.state === "present";
+  const keyRead = key
+    ? await probeEntry(join(root, "project-key"), {
+        read: () => readFile(join(root, "project-key"), "utf8"),
+      })
+    : keyEntry;
   let error;
   if (strict && !retired) {
     try {
@@ -739,6 +970,12 @@ async function rootFacts(root, { strict = false, evidence = false } = {}) {
   return {
     root,
     usable,
+    markerState: [retiredEntry, sharedEntry].some((entry) => entry.state === "unknown")
+      ? "unknown"
+      : sharedEntry.state,
+    keyState: keyRead.state,
+    unreadable: [retiredEntry, sharedEntry, keyRead].find((entry) => entry.state === "unknown")
+      ?.code,
     key,
     retired,
     sharedMarker,
@@ -749,7 +986,7 @@ async function rootFacts(root, { strict = false, evidence = false } = {}) {
 }
 
 /** Every filesystem failure becomes a fact, never another selection path. */
-export async function probeClaudeFacts(options = {}) {
+async function probeClaudeFactsImpl(options = {}) {
   const env = options.env ?? process.env;
   const locations = stateLocations(options);
   const base = locations.home || locations.temporary;
@@ -772,74 +1009,31 @@ export async function probeClaudeFacts(options = {}) {
     platform: options.liveness?.platform ?? process.platform,
     attempt: options.registrationAttempt,
   };
-  if (homeUsable) {
-    const entry = await probe(() => lstat(locations.coordination), undefined);
-    const directory = entry?.isSymbolicLink()
-      ? await probe(() => stat(locations.coordination), undefined)
-      : entry;
-    if (!entry) {
-      facts.canRegister = await probe(async () => {
-        await access(base, constants.W_OK | constants.X_OK);
-        return true;
-      }, false);
-    } else if (directory?.isDirectory() && owned(directory)) {
-      const records = await Promise.all(
-        [locations.install, locations.pairing].map((path) =>
-          probe(async () => !!(await lstat(path)), "unknown"),
-        ),
-      );
-      try {
-        await checkedPath(locations.coordination, { directory: true });
-        facts.install = validateInstall(await jsonFile(locations.install));
-        facts.record = await jsonFile(locations.pairing);
-        if (facts.record) validateRecord(facts.record, locations);
-        facts.coordination = "readable";
-        facts.canRegister = true;
-      } catch {
-        if (records.some((value) => value === true || value === "unknown")) {
-          // ENOENT is absence, not unreadability of an existing record.
-          const knownAbsent = await Promise.all(
-            [locations.install, locations.pairing].map(async (path) => {
-              try {
-                await lstat(path);
-                return false;
-              } catch (error) {
-                return ["ENOENT", "ENOTDIR"].includes(error.code);
-              }
-            }),
-          );
-          if (!knownAbsent.every(Boolean)) facts.coordination = "degraded";
-        }
-        facts.install = { version: 1, clients: {} };
-        facts.record = undefined;
-      }
-    }
-  }
+  if (homeUsable) Object.assign(facts, await probeCoordination(locations));
   const registration = claudeRegistration(facts.install);
   if (registration) {
-    facts.registration =
-      registration.profileRoot !== locations.claudeRoot
-        ? "other"
-        : facts.install.clients.claude
-          ? "self-active"
-          : "self-retired";
+    facts.registration = !(await sameRoot(registration.profileRoot, locations.claudeRoot))
+      ? "other"
+      : facts.install.clients.claude
+        ? "self-active"
+        : "self-retired";
   }
   facts.profile = await rootFacts(locations.claudeRoot);
-  facts.profileIsRecordedPairRoot =
-    facts.coordination === "readable" &&
-    [facts.install.shared?.root, facts.record?.root].includes(resolve(locations.claudeRoot));
+  facts.profileIsRecordedPairRoot = await probe(
+    () => containsRoot(recordedPairRoots(facts), locations.claudeRoot),
+    false,
+  );
   facts.bindingHistory = await readBindingHistory(locations.claudeRoot);
   facts.localMarker = "absent";
   const markerPath = profileMarkerPath(locations.claudeRoot);
   const markerDirectory = join(locations.claudeRoot, ".cairn-memory-profile");
-  const markerParent = await probe(() => lstat(markerDirectory), undefined);
+  const markerParent = await probeEntry(markerDirectory);
   let markerEntry;
-  if (markerParent) {
-    try {
-      markerEntry = await lstat(markerPath);
-    } catch (error) {
-      if (!["ENOENT", "ENOTDIR"].includes(error.code)) facts.localMarker = "invalid";
-    }
+  if (markerParent.state === "unknown") facts.localMarker = "invalid";
+  if (markerParent.state === "present") {
+    const entry = await probeEntry(markerPath);
+    if (entry.state === "unknown") facts.localMarker = "invalid";
+    if (entry.state === "present") markerEntry = entry.value;
   }
   if (markerEntry) {
     facts.localMarker = "invalid";
@@ -851,8 +1045,8 @@ export async function probeClaudeFacts(options = {}) {
     }, undefined);
     if (
       marker?.version === 1 &&
-      marker.profileRoot === locations.claudeRoot &&
-      marker.root === locations.defaultRoot
+      (await sameRoot(marker.profileRoot, locations.claudeRoot)) &&
+      (await sameRoot(marker.root, locations.defaultRoot))
     )
       facts.localMarker = "valid";
   }
@@ -873,12 +1067,15 @@ export async function probeClaudeFacts(options = {}) {
   }
   if (
     facts.registration === "none" &&
-    (!facts.profile.key || locations.claudeRoot === locations.defaultRoot)
+    (!facts.profile.key ||
+      (await probe(() => sameRoot(locations.claudeRoot, locations.defaultRoot), false)))
   ) {
     facts.default = await rootFacts(locations.defaultRoot, {
       evidence: facts.coordination !== "degraded",
     });
   }
+  for (const root of [facts.profile, facts.bound, facts.default].filter(Boolean))
+    root.recorded = await probe(() => containsRoot(recordedPairRoots(facts), root.root), false);
   const option = env.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD || undefined;
   const argument = options.pairingRecord || undefined;
   const delivered = argument ?? option;
@@ -891,11 +1088,37 @@ export async function probeClaudeFacts(options = {}) {
         ? "wrong"
         : "delivered";
   facts.stateDir = env.CAIRN_MEMORY_STATE_DIR;
+  facts.sameRoots = [];
+  const identityCache = new Map();
+  const relevant = [
+    ...new Set(
+      [
+        locations.claudeRoot,
+        locations.defaultRoot,
+        facts.bound?.root,
+        facts.record?.root,
+        facts.install.shared?.root,
+        facts.install.clients.codex?.root,
+        facts.bindingHistory.root,
+        facts.stateDir,
+      ].filter((root) => typeof root === "string"),
+    ),
+  ];
+  for (let i = 0; i < relevant.length; i++)
+    for (let j = i + 1; j < relevant.length; j++) {
+      // Unrelated unreadable roots do not gate the selected profile.
+      if (
+        await probe(() => sameRoot(relevant[i], relevant[j], { cache: identityCache }), false)
+      )
+        facts.sameRoots.push([relevant[i], relevant[j]]);
+    }
   return facts;
 }
 
 /** The only Claude root/eligibility decision. No I/O, clock, environment or throws. */
-export function resolveClaudeBinding(facts) {
+function resolveClaudeBindingImpl(facts) {
+  const equal = (a, b) =>
+    a === b || facts.sameRoots?.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
   const stop = (status = "pairing_needed", detail) => ({
     enabled: false,
     root: undefined,
@@ -904,10 +1127,13 @@ export function resolveClaudeBinding(facts) {
     ...(detail ? { detail } : {}),
   });
   const select = (root, createKey, status = "single", detail, paired = false) => {
+    if (root.markerState === "unknown" || root.keyState === "unknown")
+      return stop("state_unreadable", root.unreadable);
     if (root.retired) return stop("pairing_needed", "retired root");
     if (
       (root.sharedMarker ||
-        (facts.profileIsRecordedPairRoot && root.root === facts.profile.root)) &&
+        root.recorded ||
+        (facts.profileIsRecordedPairRoot && equal(root.root, facts.profile.root))) &&
       !root.key
     )
       return stop("paired_key_missing");
@@ -920,13 +1146,13 @@ export function resolveClaudeBinding(facts) {
     if (facts.bindingHistory?.state === "valid" && !root.key) return stop("paired_key_missing");
     if (
       facts.bindingHistory?.state === "valid" &&
-      (facts.bindingHistory.root !== root.root ||
+      (!equal(facts.bindingHistory.root, root.root) ||
         facts.bindingHistory.fingerprint !== root.fingerprint)
     )
       return stop("binding_identity_mismatch");
     if (!createKey && !root.key)
       return stop(paired ? "paired_key_missing" : "standalone_key_missing", detail);
-    if (paired && facts.stateDir !== undefined && facts.stateDir !== root.root)
+    if (paired && facts.stateDir !== undefined && !equal(facts.stateDir, root.root))
       return stop("state_dir_mismatch");
     return {
       enabled: true,
@@ -940,19 +1166,13 @@ export function resolveClaudeBinding(facts) {
           ? { expectedFingerprint: registeredFingerprint }
           : {}),
       ...(detail ? { detail } : {}),
-      register:
-        !paired &&
-        !root.sharedMarker &&
-        !facts.profileIsRecordedPairRoot &&
-        facts.registration === "none" &&
-        facts.coordination !== "degraded" &&
-        facts.canRegister &&
-        facts.pluginRootAbsolute &&
-        facts.platform !== "win32" &&
-        !facts.attempt,
+      register: false,
     };
   };
   if (facts.delivery === "wrong") return stop("pairing_record_mismatch");
+  if (facts.durableHistory?.state === "invalid") return stop("binding_history_invalid");
+  if (facts.profile.markerState === "unknown" || facts.profile.keyState === "unknown")
+    return stop("state_unreadable", facts.profile.unreadable);
   if (facts.bindingHistory && facts.bindingHistory.state !== "absent") {
     if (
       facts.bindingHistory.state !== "valid" ||
@@ -986,10 +1206,10 @@ export function resolveClaudeBinding(facts) {
     if (
       !binding ||
       binding.state !== "established" ||
-      binding.root !== facts.record.root ||
+      !equal(binding.root, facts.record.root) ||
       !shared.initialized ||
       shared.id !== facts.record.id ||
-      shared.root !== facts.record.root ||
+      !equal(shared.root, facts.record.root) ||
       shared.policy !== facts.record.policy
     )
       return stop("pairing_record_mismatch");
@@ -1008,16 +1228,18 @@ export function resolveClaudeBinding(facts) {
     !root.key &&
     facts.default?.validKey &&
     !facts.default.sharedMarker &&
+    !facts.default.recorded &&
     facts.default.evidence
   ) {
     root = facts.default;
   }
   const legacy =
-    root.root === facts.default?.root &&
+    equal(root.root, facts.default?.root) &&
     facts.default.validKey &&
     facts.default.evidence &&
-    !facts.default.sharedMarker;
-  if (codex && (!root.key || (codex.root === root.root && !legacy))) return stop();
+    !facts.default.sharedMarker &&
+    !facts.default.recorded;
+  if (codex && (!root.key || (equal(codex.root, root.root) && !legacy))) return stop();
   return select(
     root,
     createKey,
@@ -1026,46 +1248,8 @@ export function resolveClaudeBinding(facts) {
 }
 
 async function resolveClaudeClient(options) {
-  let facts = await probeClaudeFacts(options);
-  let binding = resolveClaudeBinding(facts);
-  if (binding.register) {
-    try {
-      binding = await locked(
-        { ...options, claudeFacts: true, timeoutMs: options.timeoutMs ?? 100 },
-        async (current) => {
-          const selected = resolveClaudeBinding(current);
-          if (selected.register) {
-            if (
-              selected.root === current.locations.defaultRoot &&
-              selected.root !== current.locations.claudeRoot
-            ) {
-              await privateWrite(
-                profileMarkerPath(current.locations.claudeRoot),
-                JSON.stringify({
-                  version: 1,
-                  profileRoot: current.locations.claudeRoot,
-                  root: selected.root,
-                }),
-              );
-            }
-            current.install.clients.claude = {
-              root: selected.root,
-              profileRoot: current.locations.claudeRoot,
-              state: "established",
-            };
-            await saveInstall(current.locations, current.install);
-          }
-          return selected;
-        },
-      );
-    } catch (error) {
-      facts = await probeClaudeFacts({
-        ...options,
-        registrationAttempt: error.message === "setup_busy" ? "busy" : "skipped",
-      });
-      binding = resolveClaudeBinding(facts);
-    }
-  }
+  const facts = await probeClaudeFacts(options);
+  const binding = resolveClaudeBinding(facts);
   if (binding.enabled) {
     binding.workerEnv = {
       ...(options.env ?? process.env),
@@ -1077,26 +1261,12 @@ async function resolveClaudeClient(options) {
 }
 
 /** Claude decisions never share the setup/Codex detector's exception path. */
-export async function resolveClient(options = {}) {
+async function resolveClientImpl(options = {}) {
   const client = options.client ?? "claude";
   if (!CLIENTS.includes(client)) fail("invalid_client");
   if (client === "claude") return resolveClaudeClient(options);
   const snapshot = await detectClients(options);
   let binding = await selectCodexBinding(options, snapshot, options.pairingRecord || undefined);
-  if (binding.enabled && !binding.paired && !snapshot.install.clients.codex) {
-    binding = await locked(options, async (current) => {
-      const selected = await selectCodexBinding(
-        options,
-        current,
-        options.pairingRecord || undefined,
-      );
-      if (selected.enabled && !selected.paired && !current.install.clients.codex) {
-        current.install.clients.codex = { root: selected.root, state: "established" };
-        await saveInstall(current.locations, current.install);
-      }
-      return selected;
-    });
-  }
   if (binding.enabled && options.initialize) await identityForBinding(binding, client);
   return binding;
 }
@@ -1119,7 +1289,7 @@ async function identityForBinding(binding, client, cwd = "initialization") {
   );
 }
 
-export async function clientProjectId(options, cwd, binding) {
+async function clientProjectIdImpl(options, cwd, binding) {
   if (!cwd) return undefined;
   binding ??= await resolveClient(options);
   if (!binding.enabled) fail(binding.status);
@@ -1127,7 +1297,7 @@ export async function clientProjectId(options, cwd, binding) {
 }
 
 /** CX-7 API: no host execution. Caller obtains consent and stops hosts/workers. */
-export async function initializePairing(options = {}) {
+async function initializePairingImpl(options = {}) {
   const setupOptions = { ...options, setup: true };
   const locations = stateLocations(setupOptions); // refuse bad home before writes
   if (
@@ -1135,14 +1305,22 @@ export async function initializePairing(options = {}) {
     !CLIENTS.every((client) => options.consent?.[client] === true)
   )
     fail("pairing_consent_required");
-  const root = options.root ?? locations.defaultRoot;
+  locations.durableHome = (await rootIdentity(locations.home)).path;
+  const root = (await rootIdentity(options.root ?? locations.defaultRoot)).path;
+  setupOptions.root = root;
   durable(root, locations);
   if ((await retiredRoot(root)) || (await retiredRoot(options.adoptFrom)))
     return disabled("retired_root");
   if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
   const initial = await detectClients(setupOptions);
+  if (
+    !initial.install.shared &&
+    options.adopt !== true &&
+    (await containsRoot(initial.keys, root))
+  )
+    return disabled("existing_key_requires_adoption");
   if (initial.record && !initial.install.shared) fail("pairing_record_mismatch");
-  const profileRoot = normalizeRoot(
+  let profileRoot = normalizeRoot(
     options.claudeProfileRoot ??
       claudeRegistration(initial.install)?.profileRoot ??
       (options.env ?? process.env).CLAUDE_PLUGIN_DATA ??
@@ -1150,8 +1328,9 @@ export async function initializePairing(options = {}) {
   );
   if (profileRoot === undefined) return disabled("claude_profile_root_required");
   if (!absolute(profileRoot)) fail("invalid_claude_profile_root");
+  profileRoot = (await rootIdentity(profileRoot)).path;
   const registeredProfile = claudeRegistration(initial.install)?.profileRoot;
-  if (registeredProfile !== undefined && registeredProfile !== profileRoot)
+  if (registeredProfile !== undefined && !(await sameRoot(registeredProfile, profileRoot)))
     fail("claude_profile_mismatch");
   if (!options.standardClaudeOrigin && options.usesClaude === undefined)
     return { status: "claude_confirmation_needed", enabled: false };
@@ -1170,10 +1349,13 @@ export async function initializePairing(options = {}) {
         return disabled("retired_root");
       if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
       const registration = claudeRegistration(install);
-      if (registration && registration.profileRoot !== profileRoot)
+      if (registration && !(await sameRoot(registration.profileRoot, profileRoot)))
         fail("claude_profile_mismatch");
       const history = await readBindingHistory(profileRoot);
-      if (history.state === "invalid" || (history.state === "valid" && history.root !== root))
+      if (
+        history.state === "invalid" ||
+        (history.state === "valid" && !(await sameRoot(history.root, root)))
+      )
         fail("binding_identity_mismatch");
       if (history.state === "valid" && !(await keyPresent(root)))
         return disabled("paired_key_missing");
@@ -1182,7 +1364,7 @@ export async function initializePairing(options = {}) {
       if (install.resetPending) fail("identity_reset_pending");
       if (
         install.shared &&
-        (install.shared.root !== root ||
+        (!(await sameRoot(install.shared.root, root)) ||
           (existingRecord && existingRecord.id !== install.shared.id))
       )
         fail("pending_binding_mismatch");
@@ -1202,6 +1384,18 @@ export async function initializePairing(options = {}) {
             (await projectKey(options.adoptFrom, { create: false }))
         )
           fail("adoption_key_conflict");
+        if (options.adoptFrom && !(await keyPresent(root))) {
+          await publishProjectKey(root, {
+            originalKey: await projectKey(options.adoptFrom, { create: false }),
+            checkpoint: options.checkpoint,
+            home: locations.home,
+          });
+        }
+        await projectKey(root, {
+          create: options.adopt !== true,
+          checkpoint: options.checkpoint,
+          home: locations.home,
+        });
         install.shared = {
           id: randomUUID(),
           root,
@@ -1221,21 +1415,11 @@ export async function initializePairing(options = {}) {
       }
       if (
         options.adoptFrom &&
-        (!options.adopt || install.shared.adoptFrom !== options.adoptFrom)
+        (!options.adopt || !(await sameRoot(install.shared.adoptFrom, options.adoptFrom)))
       )
         fail("pending_binding_mismatch");
       if (!install.shared.initialized) {
-        if (install.shared.adoptFrom && !(await keyPresent(root))) {
-          const source = await projectKey(install.shared.adoptFrom, { create: false });
-          await projectKey(root, { originalKey: source, checkpoint: options.checkpoint });
-          if ((await projectKey(root, { create: false })) !== source)
-            fail("adoption_key_conflict");
-        }
-        // Retrying after publication always reads the winner. Adoption never creates.
-        await projectKey(root, {
-          create: install.shared.policy === "initialize-shared",
-          checkpoint: options.checkpoint,
-        });
+        if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
         install.shared.initialized = true;
         await saveInstall(locations, install);
         await options.checkpoint?.("initialized");
@@ -1243,7 +1427,7 @@ export async function initializePairing(options = {}) {
         return disabled("paired_key_missing");
       // Root-local history survives loss or replacement of the coordination directory.
       await markPairRoot(root);
-      await writeBindingHistory(profileRoot, root, { install });
+      await writeBindingHistory(profileRoot, root, { install, home: locations.home });
       const record = {
         version: 1,
         id: install.shared.id,
@@ -1272,7 +1456,7 @@ export async function initializePairing(options = {}) {
 }
 
 /** Call only after BOTH hook configurations have the record and workers are stopped. */
-export async function completePairing(options = {}) {
+async function completePairingImpl(options = {}) {
   if (
     options.hostsStopped !== true ||
     !CLIENTS.every((client) => options.configured?.[client] === true)
@@ -1287,7 +1471,7 @@ export async function completePairing(options = {}) {
         !install.shared?.initialized ||
         !install.shared.barrier ||
         install.shared.id !== record.id ||
-        install.shared.root !== record.root
+        !(await sameRoot(install.shared.root, record.root))
       )
         fail("pending_binding_mismatch");
       if (await retiredRoot(record.root)) return disabled("retired_root");
@@ -1301,7 +1485,10 @@ export async function completePairing(options = {}) {
           state: "established",
         };
       await markPairRoot(record.root);
-      await writeBindingHistory(install.clients.claude.profileRoot, record.root, { install });
+      await writeBindingHistory(install.clients.claude.profileRoot, record.root, {
+        install,
+        home: locations.home,
+      });
       install.shared.ready = true;
       await saveInstall(locations, install);
       return {
@@ -1315,7 +1502,7 @@ export async function completePairing(options = {}) {
 }
 
 /** Explicit stopped-worker identity reset; old roots and memories are retained. */
-export async function resetIdentity(options = {}) {
+async function resetIdentityImpl(options = {}) {
   if (
     options.confirmIdentityReset !== true ||
     options.hostsStopped !== true ||
@@ -1324,6 +1511,7 @@ export async function resetIdentity(options = {}) {
     fail("identity_reset_confirmation_required");
   const locations = stateLocations({ ...options, setup: true });
   durable(options.root, locations);
+  if (await retiredRoot(options.root)) return disabled("retired_root");
   const initial = await detectClients({ ...options, setup: true });
   const profileRoot = normalizeRoot(
     options.claudeProfileRoot ??
@@ -1333,12 +1521,23 @@ export async function resetIdentity(options = {}) {
   if (!absolute(profileRoot)) fail("identity_reset_history_required");
   const initialHistory = await readBindingHistory(profileRoot);
   if (initialHistory.state === "invalid") fail("binding_identity_mismatch");
+  const destination = await probeEntry(options.root);
+  if (destination.state === "unknown") failUnreadable(destination.code);
+  if (
+    destination.state === "present" &&
+    (!destination.value.isDirectory() || (await readdir(options.root)).length !== 0)
+  )
+    fail("reset_destination_not_new");
   return setupTransaction(
     { ...options, claudeProfileRoot: profileRoot, setup: true, setupOperation: "reset" },
     async ({ install, record, keys }) => {
       const history = await readBindingHistory(profileRoot);
       if (history.state === "invalid") fail("binding_identity_mismatch");
-      if (!install.shared && history.state === "valid" && !(await keyPresent(history.root))) {
+      if (
+        !install.shared &&
+        history.state === "valid" &&
+        !(await probe(() => keyPresent(history.root), false))
+      ) {
         install.shared = {
           id: randomUUID(),
           root: history.root,
@@ -1354,22 +1553,34 @@ export async function resetIdentity(options = {}) {
       if (
         !install.shared ||
         (!record && !install.resetPending) ||
-        options.root === install.shared.root ||
-        (keys.includes(options.root) && !install.resetPending)
+        (await sameRoot(options.root, install.shared.root))
       )
         fail("identity_reset_requires_new_root");
-      if (install.resetPending && install.resetPending.root !== options.root)
+      if (install.resetPending && !(await sameRoot(install.resetPending.root, options.root)))
         fail("pending_binding_mismatch");
+      const destination = await probeEntry(options.root);
+      if (destination.state === "unknown") failUnreadable(destination.code);
+      if (
+        destination.state === "present" &&
+        (!destination.value.isDirectory() || (await readdir(options.root)).length !== 0)
+      )
+        fail("reset_destination_not_new");
+      if (destination.state === "absent") {
+        await mkdir(dirname(options.root), { recursive: true, mode: 0o700 });
+        await mkdir(options.root, { mode: 0o700 }); // exclusive create; EEXIST refuses
+      }
+      await projectKey(options.root, { home: locations.home });
       install.resetPending = { root: options.root, client: options.primaryClient };
       await saveInstall(locations, install);
       // Retire the old root before the new identity can become active. Retrying a
       // stopped-host reset may rotate again, but never re-enables old workers.
-      await setPaused(install.shared.root, true, { rotate: true });
-      await privateWrite(
-        join(install.shared.root, "retired"),
-        JSON.stringify({ version: 1, retired: true }),
-      );
-      await projectKey(options.root);
+      if (await probe(() => checkedPath(install.shared.root, { directory: true }), false)) {
+        await setPaused(install.shared.root, true, { rotate: true });
+        await privateWrite(
+          join(install.shared.root, "retired"),
+          JSON.stringify({ version: 1, retired: true }),
+        );
+      }
       await markPairRoot(options.root);
       await setPaused(options.root, true, { rotate: true });
       const retired = [
@@ -1396,6 +1607,7 @@ export async function resetIdentity(options = {}) {
       await writeBindingHistory(profileRoot, options.root, {
         reset: true,
         install: resetInstall,
+        home: locations.home,
       });
       await saveInstall(locations, resetInstall);
       return {
@@ -1415,7 +1627,9 @@ async function markPairRoot(root) {
 }
 
 /** Explicit original-backup repair, under the setup lock with both hosts stopped. */
-export async function repairIdentity(options = {}) {
+async function repairIdentityImpl(options = {}) {
+  if (typeof options.originalKey !== "string" || !validKey(options.originalKey))
+    fail("invalid_original_key");
   if (options.hostsStopped !== true || options.confirmKeyRepair !== true)
     fail("key_repair_confirmation_required");
   return setupTransaction(
@@ -1424,8 +1638,7 @@ export async function repairIdentity(options = {}) {
       const root = options.root;
       if (
         !absolute(root) ||
-        (root !== install.shared?.root &&
-          !Object.values(install.clients).some((client) => client.root === root))
+        !(await containsRoot(recordedPairRoots({ coordination: "readable", install }), root))
       )
         fail("pairing_record_mismatch");
       if (await retiredRoot(root)) return disabled("retired_root");
@@ -1434,18 +1647,72 @@ export async function repairIdentity(options = {}) {
       const history = await readBindingHistory(profileRoot);
       if (
         history.state !== "valid" ||
-        history.root !== root ||
+        !(await sameRoot(history.root, root)) ||
         history.fingerprint !== identityFingerprint(options.originalKey ?? "")
       )
         fail("repair_key_conflict");
-      await restoreProjectKey(root, options.originalKey, profileRoot);
+      if (history.state !== "valid") fail("binding_history_invalid");
+      await restoreProjectKey(
+        root,
+        options.originalKey,
+        profileRoot,
+        stateLocations(options).home,
+      );
       await markPairRoot(root);
-      await writeBindingHistory(profileRoot, root, { install });
+      await writeBindingHistory(profileRoot, root, {
+        install,
+        home: stateLocations(options).home,
+      });
       await saveInstall(stateLocations(options), install);
       return { status: "key_restored", root };
     },
   );
 }
+
+function refusal(error) {
+  if (
+    error?.constructor === Error &&
+    !error.code &&
+    /^[a-z][a-z0-9_]*(?:: [^\n]+)?$/.test(error.message)
+  )
+    return error;
+  const named = new Error(error.code ? "state_unreadable" : "invalid_arguments");
+  named.detail = error.code ?? error.message;
+  return named;
+}
+function boundary(work) {
+  return (...args) => {
+    try {
+      const result = work(...args);
+      return result && typeof result.then === "function"
+        ? result.catch((error) => {
+            throw refusal(error);
+          })
+        : result;
+    } catch (error) {
+      throw refusal(error);
+    }
+  };
+}
+export const rootMarker = boundary(rootMarkerImpl);
+export const recordedPairRoots = boundary(recordedPairRootsImpl);
+export const sameRoot = boundary(sameRootImpl);
+export const installId = boundary(installIdImpl);
+export const projectKey = boundary(projectKeyImpl);
+export const opaqueProjectId = boundary(opaqueProjectIdImpl);
+export const stateLocations = boundary(stateLocationsImpl);
+export const hasClaudeEvidence = boundary(hasClaudeEvidenceImpl);
+export const detectClients = boundary(detectClientsImpl);
+export const localLiveness = boundary(localLivenessImpl);
+export const parsePairingRecord = boundary(parsePairingRecordImpl);
+export const probeClaudeFacts = boundary(probeClaudeFactsImpl);
+export const resolveClaudeBinding = boundary(resolveClaudeBindingImpl);
+export const resolveClient = boundary(resolveClientImpl);
+export const clientProjectId = boundary(clientProjectIdImpl);
+export const initializePairing = boundary(initializePairingImpl);
+export const completePairing = boundary(completePairingImpl);
+export const resetIdentity = boundary(resetIdentityImpl);
+export const repairIdentity = boundary(repairIdentityImpl);
 
 /** Mutation inventory: tests exercise every operation, including adoption separately. */
 export const PAIR_ROOT_OPERATIONS = Object.freeze([

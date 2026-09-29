@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile, readFile, chmod, lstat, symlink, rm } from "node:fs/promises";
+import {
+  mkdir,
+  writeFile,
+  readFile,
+  chmod,
+  lstat,
+  symlink,
+  unlink,
+  rm,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHmac } from "node:crypto";
@@ -63,6 +72,8 @@ const schema = {
   delivery: ["none", "wrong", "match"],
   profile: ["default"],
   profileMode: [755],
+  markerState: ["unknown"],
+  keyState: ["unknown"],
   pluginData: ["absolute", "trailing", "relative", "empty", "relative-pair-root"],
   default: [
     "empty",
@@ -79,6 +90,7 @@ const schema = {
   bound: ["shared", "reset", "default"],
   bindingHistory: ["valid", "invalid", "permissions", "mismatch"],
   registeredFingerprint: ["mismatch"],
+  durableRootHistory: [true, false, "invalid"],
   resetKind: ["claude-default", "codex-default", "claude-custom", "codex-custom"],
   platform: ["linux", "win32"],
   ...Object.fromEntries(
@@ -100,6 +112,8 @@ const schema = {
       "sharedMarker",
       "resetDestination",
       "recordedPairRoot",
+      "recordedClientFingerprint",
+      "profileAliasRepoint",
     ].map((name) => [name, [true, false]]),
   ),
 };
@@ -228,6 +242,19 @@ for (const row of table.rows) {
       await chmod(directory, 0);
     }
     const coordination = join(home, ".cairn-memory-clients");
+    if (f.durableRootHistory)
+      await privateWrite(
+        join(home, ".cairn-memory-profile/binding.json"),
+        f.durableRootHistory === "invalid"
+          ? "{"
+          : JSON.stringify({
+              version: 1,
+              profileRoot: home,
+              root: defaultRoot,
+              fingerprint: "a".repeat(64),
+              roots: [{ root: defaultRoot, fingerprint: "a".repeat(64) }],
+            }),
+      );
     const install = { version: 1, clients: {} };
     if (f.registration !== "none") {
       const binding = {
@@ -260,6 +287,7 @@ for (const row of table.rows) {
       };
       install.clients.codex = { root: bound, state: "established" };
     }
+    if (f.recordedClientFingerprint) install.clients.claude.fingerprint = "a".repeat(64);
     if (f.registeredFingerprint)
       install.clients.claude.fingerprint = createHmac("sha256", "different synthetic key")
         .update("cairn-memory:binding:v1")
@@ -335,6 +363,30 @@ for (const row of table.rows) {
         await chmod(directory, 0);
       }
     }
+    let switchedAlias;
+    if (f.profileAliasRepoint) {
+      await rm(coordination, { recursive: true, force: true });
+      const oldProfile = join(workspace.path, "old-profile");
+      await mkdir(oldProfile, { mode: 0o700 });
+      switchedAlias = join(workspace.path, "host-profile");
+      await symlink(oldProfile, switchedAlias);
+      const setup = {
+        home,
+        root: bound,
+        claudeProfileRoot: switchedAlias,
+        env: { HOME: home, CLAUDE_PLUGIN_DATA: switchedAlias },
+        standardClaudeOrigin: true,
+        hostsStopped: true,
+        consent: { claude: true, codex: true },
+        configured: { claude: true, codex: true },
+        adopt: true,
+      };
+      await initializePairing(setup);
+      await completePairing(setup);
+      await unlink(switchedAlias);
+      await symlink(profile, switchedAlias);
+      roots.profile = switchedAlias;
+    }
     const selected = row.expect.root && roots[row.expect.root];
     if (f.paused) await setPaused(selected || defaultRoot, true);
     const preservedPause = f.resetDestination && (await readControlState(defaultRoot));
@@ -356,7 +408,7 @@ for (const row of table.rows) {
       TMPDIR: process.env.TMPDIR,
       NODE_OPTIONS: process.env.NODE_OPTIONS,
       CAIRN_TEST_REAL_HOME: process.env.CAIRN_TEST_REAL_HOME,
-      CLAUDE_PLUGIN_DATA: f.profile === "default" ? undefined : pluginData,
+      CLAUDE_PLUGIN_DATA: switchedAlias ?? (f.profile === "default" ? undefined : pluginData),
       CLAUDE_PLUGIN_OPTION_API_TOKEN: "synthetic",
       CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
       CLAUDE_PLUGIN_OPTION_API_ENDPOINT: `http://127.0.0.1:${server.address().port}`,
@@ -376,6 +428,16 @@ for (const row of table.rows) {
           : "const uid = process.getuid(); process.getuid = () => uid + 1;",
       );
       env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import=${JSON.stringify(preload)}`;
+    }
+    if (f.markerState === "unknown") {
+      await mkdir(profile, { recursive: true, mode: 0o700 });
+      workspace.defer(() => chmod(profile, 0o700));
+      await chmod(profile, 0);
+    }
+    if (f.keyState === "unknown") {
+      await seed(profile, "1");
+      await chmod(join(profile, "project-key"), 0);
+      // A stat alone is present, but reading is unknown.
     }
     const uid = process.getuid;
     let facts;

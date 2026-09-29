@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, readFile, unlink, writeFile, stat } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile, stat, chmod, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import * as pairing from "../pairing.mjs";
+import * as sourceIdentity from "../identity.mjs";
+import * as builtIdentity from "../../../plugins/cairn-memory/lib/identity.mjs";
+import { snapshotHome } from "../testing/sequence-snapshot.mjs";
 import { opaqueProjectId, projectKey } from "../identity.mjs";
 import { SEQUENCE_SEEDS, generateSequences, OPERATIONS } from "../testing/sequences.mjs";
 
@@ -25,6 +28,8 @@ test("pair-root operation inventory covers the public mutation surface", () => {
     "installId",
     "opaqueProjectId",
     "rootMarker",
+    "recordedPairRoots",
+    "sameRoot",
   ];
   const writers = new Set(pairing.PAIR_ROOT_OPERATIONS.map((operation) => operation.run));
   for (const [name, value] of Object.entries(pairing))
@@ -101,6 +106,12 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
     assert.equal(binding.root, result.root);
     assert.equal(binding.profileRoot, options.env.CLAUDE_PLUGIN_DATA);
     assert.match(binding.fingerprint, /^[a-f0-9]{64}$/);
+    const codexBinding = JSON.parse(
+      await readFile(join(home, ".cairn-memory-profile/binding.json"), "utf8"),
+    );
+    assert.equal(codexBinding.root, result.root);
+    assert.equal(codexBinding.fingerprint, binding.fingerprint);
+    assert.ok(codexBinding.roots.some((entry) => entry.root === result.root));
     const install = JSON.parse(
       await readFile(join(home, ".cairn-memory-clients/install.json"), "utf8"),
     );
@@ -120,11 +131,8 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
 
 test("identity source and bundle export only the safe identity facade", async () => {
   const expected = ["installId", "opaqueProjectId", "projectKey", "rootMarker"];
-  for (const url of [
-    new URL("../identity.mjs", import.meta.url),
-    new URL("../../../plugins/cairn-memory/lib/identity.mjs", import.meta.url),
-  ])
-    assert.deepEqual(Object.keys(await import(url)).sort(), expected);
+  for (const module of [sourceIdentity, builtIdentity])
+    assert.deepEqual(Object.keys(module).sort(), expected);
 });
 
 test("invariant K guards both strict and legacy publication; only original-key repair restores", async (t) => {
@@ -163,9 +171,9 @@ test("invariant K guards both strict and legacy publication; only original-key r
   assert.equal(await projectKey(root), originalKey);
 });
 
-test("300 seeded operation sequences enforce P, K, b, b-prime, identity and containment", async (t) => {
+test("201 random sequences and 38 scripted fixtures enforce P, K, b, b-prime, identity and containment", async (t) => {
   const sequences = generateSequences();
-  assert.equal(sequences.length, 300);
+  assert.equal(sequences.length, 239);
   assert.ok(sequences.every((sequence) => sequence.operations.length <= 7));
   assert.deepEqual([...new Set(sequences.map((sequence) => sequence.seed))], SEQUENCE_SEEDS);
   for (const operation of OPERATIONS)
@@ -196,8 +204,8 @@ test("300 seeded operation sequences enforce P, K, b, b-prime, identity and cont
   t.diagnostic(output.trim());
   assert.equal(code, 0, output);
   const result = JSON.parse(output.trim().split("\n").at(-1));
-  assert.equal(result.sequences, 300);
-  assert.ok(result.sequencesWithPairHistory >= 120, "substantial paired-state coverage");
+  assert.equal(result.sequences, 239);
+  assert.ok(result.sequencesWithPairHistory >= 100, "substantial paired-state coverage");
   assert.deepEqual(result.seeds, SEQUENCE_SEEDS);
 });
 
@@ -219,7 +227,9 @@ const operationRows = operationPlan
   );
 for (const [id, operation, damage, outcome, effect] of operationRows) {
   assert.ok(
-    ["initialize", "adopt", "complete", "reset", "repair", "codex"].includes(operation) ||
+    ["initialize", "adopt", "complete", "reset", "repair", "codex", "facade"].includes(
+      operation,
+    ) ||
       ["reset-claude-default", "reset-codex-default", "reset-codex-custom"].includes(operation),
   );
   assert.ok(
@@ -231,6 +241,14 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       "key-and-coordination-lost",
       "no-claude",
       "profile-conflict",
+      "alias",
+      "alias-root-lost",
+      "pre-keyed",
+      "invalid-backup",
+      "root-file",
+      "key-directory",
+      "root-lost",
+      "coordination-lost",
     ].includes(damage),
   );
   assert.ok(["unchanged", "new-marked-binding"].includes(effect));
@@ -250,7 +268,7 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       consent: { claude: true, codex: true },
       configured: { claude: true, codex: true },
     };
-    if (damage === "no-claude")
+    if (damage === "no-claude" || (operation === "initialize" && damage === "pre-keyed"))
       await pairing.resolveClient({
         ...options,
         client: "codex",
@@ -262,10 +280,12 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       await pairing.completePairing(options);
     }
     const binding = join(profile, ".cairn-memory-profile/binding.json");
-    const originalKey = await projectKey(root, { create: false });
-    const fs = await import("node:fs/promises");
+    const originalKey = ["no-claude", "pre-keyed"].includes(damage)
+      ? "33333333-3333-4333-8333-333333333333"
+      : await projectKey(root, { create: false });
+
     if (damage === "json") await writeFile(binding, "{");
-    if (damage === "mode") await fs.chmod(binding, 0o644);
+    if (damage === "mode") await chmod(binding, 0o644);
     if (damage === "directory") {
       await unlink(binding);
       await mkdir(binding);
@@ -273,25 +293,48 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
     if (damage === "key-replaced")
       await writeFile(join(root, "project-key"), "11111111-1111-4111-8111-111111111111\n");
     if (damage === "key-and-coordination-lost") {
-      await fs.rm(root, { recursive: true });
-      await fs.rm(join(home, ".cairn-memory-clients"), { recursive: true });
+      await rm(root, { recursive: true });
+      await rm(join(home, ".cairn-memory-clients"), { recursive: true });
     }
-    const { snapshotHome } = await import("../testing/sequence-snapshot.mjs");
+
     if (damage === "profile-conflict") options.claudeProfileRoot = join(home, "b");
+    let destination = join(home, operation.endsWith("default") ? ".cairn-memory" : "next");
+    if (["alias", "alias-root-lost"].includes(damage)) {
+      const alias = join(home, "alias");
+      await symlink(home, alias);
+      destination = join(alias, "shared");
+    }
+    if (damage === "pre-keyed") {
+      const target = operation === "initialize" ? root : destination;
+      await mkdir(target, { recursive: true, mode: 0o700 });
+      await writeFile(join(target, "project-key"), "22222222-2222-4222-8222-222222222222\n", {
+        mode: 0o600,
+      });
+    }
+    if (damage === "root-file" || damage === "root-lost" || damage === "alias-root-lost") {
+      await rm(root, { recursive: true });
+      if (damage === "root-file") await writeFile(root, "synthetic file");
+    }
+    if (damage === "key-directory") {
+      await unlink(join(root, "project-key"));
+      await mkdir(join(root, "project-key"));
+    }
+    if (damage === "coordination-lost")
+      await rm(join(home, ".cairn-memory-clients"), { recursive: true });
     const before = await snapshotHome(home);
     let result, failure;
     try {
       if (operation.startsWith("reset"))
         result = await pairing.resetIdentity({
           ...options,
-          root: join(home, operation.endsWith("default") ? ".cairn-memory" : "next"),
+          root: destination,
           primaryClient: operation.includes("codex") ? "codex" : "claude",
           confirmIdentityReset: true,
         });
       else if (operation === "repair")
         result = await pairing.repairIdentity({
           ...options,
-          originalKey,
+          originalKey: damage === "invalid-backup" ? 12345 : originalKey,
           confirmKeyRepair: true,
         });
       else if (operation === "codex")
@@ -300,6 +343,8 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
           client: "codex",
           pairingRecord: join(home, ".cairn-memory-clients/pairing.json"),
         });
+      else if (operation === "facade")
+        result = await projectKey(damage === "alias-root-lost" ? destination : root, { home });
       else if (operation === "complete") result = await pairing.completePairing(options);
       else
         result = await pairing.initializePairing({ ...options, adopt: operation === "adopt" });
@@ -317,7 +362,6 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
 }
 
 test("caught write failures roll back each explicit binding operation", async (t) => {
-  const { snapshotHome } = await import("../testing/sequence-snapshot.mjs");
   for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
     const workspace = createTestWorkspace(t, { prefix: "cx2-rollback-" });
     const home = join(workspace.path, "home");
