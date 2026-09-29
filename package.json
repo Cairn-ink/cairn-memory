@@ -15,6 +15,8 @@
     "demo:synthetic-lineage": "node evaluation/architecture/synthetic-lineage-cli.mjs",
     "measure:bounded-keyset-source-candidates": "node evaluation/architecture/bounded-keyset-measure.mjs",
     "test:longmemeval": "node tools/testing/run.mjs evaluation/longmemeval/test/*.test.mjs",
+    "test:installed-phase-live:offline": "node tools/testing/run.mjs evaluation/installed-phase-live/fixture.test.mjs",
+    "test:installed-classification-followup:offline": "node tools/testing/run.mjs evaluation/installed-classification-followup/fixture.test.mjs",
     "test:long-history": "node tools/testing/run.mjs evaluation/long-history/*.test.mjs",
     "test:long-history-live:offline": "node tools/testing/run.mjs evaluation/long-history-live/*.test.mjs",
     "prepare:longmemeval": "node evaluation/longmemeval/cli.mjs",
