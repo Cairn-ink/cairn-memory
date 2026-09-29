@@ -1,7 +1,9 @@
 # Fresh official-six checkpoint after selection localization
 
 Prospective contract, 2026-09-29. Branch `test/official-six-post-localization`,
-worktree `official-six-post-localization`, fixed initial base
+worktree `official-six-post-localization`, fixed delivery base
+`f8af59d18cb91b7b550e8a498333c4db1a0b9eaf` (results PR #291). The initial
+planning base and unchanged runtime were
 `59c74540bdbd4984896afa80452f4928f7c1bfdf` (PR #290). No new official case
 has been selected and no history length, question or answer inspected for this
 cohort. Source-only helper implementation may proceed offline. Actual selection
@@ -197,3 +199,14 @@ implementation/test attempt was reported in this preparation packet; worker
 elapsed time and token cost are unavailable. Separate nonauthor Standards and
 Spec reviews are the next gate. Later operator implementation/launch review
 and all paid dispatch remain uncompleted, separate work.
+
+The first preparation Spec review passed, but Standards found the initial
+planning branch inherited a prospective N6 roadmap while this plan cited its
+completed results. Primary corrected this integration boundary by rebasing
+only the unpublished planning commit onto results PR #291, fixed commit
+`f8af59d18cb91b7b550e8a498333c4db1a0b9eaf`. This incorporates its audited
+limitations and roadmap without copying or rewriting their evidence. The
+runtime and all five private hashes are unchanged. Both independent axes
+must review the new final candidate; the prior pass is not reused. Standards'
+low-severity repeated 142/148 exclusion-parser heuristic is retained as a
+bounded explicit validation pair rather than introducing another shared API.
