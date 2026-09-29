@@ -230,8 +230,13 @@ optional field, and `coverage` is `budget_exhausted`:
 `navigationItemsOmitted` counts map items left out of `select` requests across
 both rounds. `candidatesOmitted` counts selected memories that were left out of
 the `rank` request, including unfetchable ones. `candidatesShortened` counts
-candidates ranked from shortened text. `receiptListsCapped` counts memories sent
-and returned with a capped receipt list. The field is absent when nothing was
+candidates ranked from shortened text. `receiptListsCapped` counts candidate
+receipt lists that were capped in the `rank` request; a capped memory that is
+returned carries that same list. It is a count of lists, not of receipts: each
+returned capped memory's own `receiptsOmitted` counts the receipts left off it.
+A memory with 200 receipts returned with its 66 most recent shows
+`receiptsOmitted: 134`, while the recall reports `receiptListsCapped: 1`.
+The field is absent when nothing was
 packed, and so is `receiptsOmitted` on a memory whose list was not capped, so
 the response shape is unchanged for callers that do not read them.
 A query that cannot fit even with no candidates still refuses with

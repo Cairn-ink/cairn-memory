@@ -1218,11 +1218,14 @@ or planning, and capture batches are planned. See
   fields cost about 86 tokens each under o200k × 1.15 (55 under the test
   counter). When a memory's whole receipt list cannot fit, recall caps the list
   to its most recent receipts, newest first with ties broken by ID. It sends
-  and returns that same list, with `receiptsOmitted` on the memory and in
-  `recallTruncated.receiptListsCapped`. A memory recaptured from 200 short
-  English turns returns its 66 most recent receipts under o200k × 1.15. Older
-  receipts stay readable through `get`. The memory itself is left out only when
-  its content floor and one receipt identity cannot fit.
+  and returns that same list. Two separate counts report it. Each capped
+  memory's `receiptsOmitted` counts the receipts left off that memory's list.
+  `recallTruncated.receiptListsCapped` counts how many candidate lists were
+  capped in the recall. For example, a memory recaptured from 200 short English
+  turns returns its 66 most recent receipts under o200k × 1.15. That memory
+  shows `receiptsOmitted: 134`, and the recall reports `receiptListsCapped: 1`.
+  Older receipts stay readable through `get`. The memory itself is left out
+  only when its content floor and one receipt identity cannot fit.
 - **Shares are equal in characters, not tokens.** Every shortened rank
   candidate gets the same code-point allowance, so a CJK candidate spends about
   four times the tokens of an English one of the same length.

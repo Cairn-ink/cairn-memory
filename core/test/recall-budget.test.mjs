@@ -61,7 +61,7 @@ function fixture(t, { select = selectUpTo(24), rank = rankAll, extract, counter 
   const admit = (content, excerpt = content, namespace = personal, eventId = `event-${events++}`) =>
     ok(core.admit({ namespace, memory: { content, kind: 'fact' },
       receipts: [{ client: 'wiki', sessionId: 's', eventId, role: 'user', excerpt }] })).memory;
-  return { core, model, calls, admit, path };
+  return { core, model, calls, admit, path, ws };
 }
 
 function withinBudget(calls) {
@@ -166,7 +166,7 @@ test('CR1 a memory recaptured 200 times is returned with the capped receipt list
   sameReceiptIdentities(sent.receipts, returned.receipts);
   // Exactly the newest receipts, most recent first, ties broken by ID.
   const db = new DatabaseSync(f.path, { readOnly: true });
-  t.after(() => db.close());
+  f.ws.defer(() => db.close());
   const newest = db.prepare('SELECT id, created_at FROM receipts WHERE memory_id = ?').all(crowded.id)
     .sort((a, b) => a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.id < b.id ? -1 : 1)
     .slice(0, returned.receipts.length).map((row) => row.id);
