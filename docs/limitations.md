@@ -1341,9 +1341,30 @@ and `core/test/classification-budget.test.mjs` use the test counter.
 counter is shaped like a padded o200k count but is not a provider tokenizer. The
 small-recall parity fixture was frozen from main `3a1c17d`.
 
+## Prospective M1e classification follow-up fixture
+
+The new synthetic packet has two separate 16-session, 512-user-turn histories:
+one records an adopted workshop rack being replaced by a later adopted rack
+with a stated reason; the other records an adopted cold-chain dock whose
+supporting power premise later ceased to apply, with no replacement adopted.
+Source-only indexed-evidence preparation reports 32 batches and 512 windows
+per case, and the canonical mixed preflight marks both ready. The separately
+stored answer key is held in another module. The pure conditional ceiling for both
+cases is 16,982 requests and 3,326,968 microUSD (US$3.326968), under the
+predeclared 4,000,000 microUSD (US$4) new reservation limit while protecting
+30,000,000 microUSD (US$30) of the original 200,000,000 microUSD (US$200).
+
+These checks establish fixture shape, source separation and preparation only.
+No model was called, no answer was graded, and no classification or semantic
+reliability improvement has been measured. Phase and context behavior in an
+installed run remain unknown. This is a source-backed diagnostic packet, not an
+official benchmark. The [contract and verification record](plans/installed-classification-followup.md)
+define its limited claim.
+
 ## Where the evidence lives
 
 - [Model input budgets and packing](model-input-budgets.md)
+- [Prospective M1e classification follow-up fixture](#prospective-m1e-classification-follow-up-fixture)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
