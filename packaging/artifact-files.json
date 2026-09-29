@@ -81,6 +81,7 @@
   "adapters/mcp/server.mjs",
   "adapters/openai/classification-wire.mjs",
   "adapters/openai/index.mjs",
+  "adapters/openai/phase-timing.mjs",
   "adapters/openai/prompts/qualify-candidates-pool.md",
   "adapters/openai/qualification-evidence-pool.mjs",
   "adapters/openai/profiles.mjs",
