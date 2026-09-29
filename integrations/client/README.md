@@ -9,10 +9,11 @@ callers normally omit `home`, `temporary`, `env` and `liveness`; these are injec
 seams for isolated fixtures. Setup passes `setup: true` to refuse an undetermined
 home. A missing standard plugin path is not evidence of standard origin.
 
-`initializePairing({root, adopt, standardClaudeOrigin, usesClaude, consent:
+`initializePairing({root, claudeProfileRoot, adopt, standardClaudeOrigin, usesClaude, consent:
 {claude:true,codex:true}, hostsStopped:true})` is the CX-7 joint/adoption API.
 Only supply consent and stopped-worker assertions after actually obtaining them.
-Unknown origin returns `claude_confirmation_needed` without writes. `adopt:true`
+With a known profile, unknown origin returns `claude_confirmation_needed` without
+writes. An unknown profile returns `claude_profile_root_required`. `adopt:true`
 requires the explicitly selected existing key; neither conflicting keys nor old
 state are overwritten. The default fresh joint root is `~/.cairn-memory`.
 The return value includes `pairingRecord`, `root` and `binding_pending`.
@@ -92,22 +93,22 @@ values and 12 concurrent hooks per simulated platform. Exact delivery is require
 A separate one-HOME, two-profile golden checks distinct keys/IDs and pause isolation;
 only the new unregistered status note is normalized for that status comparison.
 
-`install.clients.claude.profileRoot` identifies the registered profile independently
-of an explicitly adopted shared root. CX-7 must supply the intended Claude profile's
-`CLAUDE_PLUGIN_DATA` in setup's `env`; initialization preserves an existing profile
-binding across adoption. Other profiles use their own plugin-data roots and remain
-unregistered. Only a keyless profile with Claude evidence in the legacy default
-root may use that default root. Pairing never grants another profile access.
+`install.clients.claude.profileRoot` is required in every Claude binding, including
+reset bindings. It is the host's plugin-data root, or the legacy default when the
+host leaves `CLAUDE_PLUGIN_DATA` unset. Reset and adoption preserve it.
+CX-7 passes `claudeProfileRoot` explicitly; an existing registration is preserved.
+Without either, setup accepts its environment's `CLAUDE_PLUGIN_DATA`, or defaults
+to `knownClaudeRoot` only with `standardClaudeOrigin:true`. Otherwise it returns
+`claude_profile_root_required` without writes. Conflicting supplied profile roots
+fail with `pairing_record_mismatch`. No setup process guesses the legacy default.
+
+Other profiles remain unregistered at their own standalone roots. Cursor evidence
+can select the legacy default only when there is no Claude registration at all.
+An explicitly delivered record for a different profile fails visibly with
+`pairing_record_mismatch`; hooks exit successfully without requests, while status
+and controls report the error. A matching profile follows its binding through an
+identity reset, including its new paused root, then through explicit re-pairing.
 
 The macOS boot estimate assumes no wall-clock step larger than two seconds during
 a setup lock hold; such a step could reap a live owner. Holds are short; native
 host verification remains a CX-7/A6 gate.
-
-If another profile inherits the registered profile's valid record option, it still
-runs as unregistered standalone on its own root. Invalid record paths remain
-errors; a record never expands the set of registered profiles.
-
-A different profile whose requested root is already the registered pair's shared
-root cannot claim that key as an independent standalone identity. Without the
-legacy default-root Claude evidence, it remains `pairing_needed`; a genuinely
-distinct profile root stays unregistered and independent.

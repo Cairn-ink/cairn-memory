@@ -14,7 +14,7 @@ const hook = fileURLToPath(
 const launcher = fileURLToPath(
   new URL("../../../plugins/cairn-memory/scripts/launch-capture.mjs", import.meta.url),
 );
-async function setup(t) {
+async function setup(t, paired = true) {
   const workspace = createTestWorkspace(t, { prefix: "cx2-hook-" });
   const home = join(workspace.path, "home");
   await mkdir(home, { mode: 0o700 });
@@ -26,8 +26,8 @@ async function setup(t) {
     consent: { claude: true, codex: true },
     standardClaudeOrigin: true,
   };
-  const pending = await initializePairing(options);
-  await completePairing({ ...options, configured: options.consent });
+  const pending = paired ? await initializePairing(options) : {};
+  if (paired) await completePairing({ ...options, configured: options.consent });
   const requests = [];
   let recallReply = () => ({ memories: [] });
   const server = createServer((req, res) => {
@@ -230,4 +230,52 @@ test("newcomer Claude without evidence is fail-open and sends nothing", async (t
   }
   assert.equal(await readFile(requests, "utf8"), "");
   await assert.rejects(readFile(join(home, "plugin/project-key")), { code: "ENOENT" });
+});
+
+test("paired capture evidence does not adopt another Claude profile", async (t) => {
+  const f = await setup(t);
+  const transcript = join(f.workspace.path, "profiles.jsonl");
+  const event = { session_id: "profiles", cwd: "/p", transcript_path: transcript };
+  await writeFile(transcript, row("before"));
+  await f.run("capture", event);
+  await appendFile(transcript, row("after"));
+  await f.run("capture", event);
+  assert.equal(f.requests.length, 1);
+  const pairedId = f.requests[0].body.project_id;
+  const profile = join(f.options.home, "profile-b");
+  const overrides = { CLAUDE_PLUGIN_DATA: profile, CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: "" };
+  assert.equal((await f.run("recall", { ...event, prompt: "synthetic" }, overrides)).code, 0);
+  assert.notEqual(f.requests.at(-1).body.project_id, pairedId);
+  assert.ok(await readFile(join(profile, "project-key"), "utf8"));
+  await f.run("pause", {}, overrides);
+  assert.match((await f.run("status")).stdout, /active/);
+  const delivered = { CLAUDE_PLUGIN_DATA: profile };
+  const count = f.requests.length;
+  assert.equal((await f.run("recall", { ...event, prompt: "synthetic" }, delivered)).code, 0);
+  assert.equal(f.requests.length, count);
+  const status = await f.run("status", {}, delivered);
+  assert.match(status.stderr + status.stdout, /pairing_record_mismatch/);
+  const control = await f.run("pause", {}, delivered);
+  assert.notEqual(control.code, 0);
+  assert.match(control.stderr + control.stdout, /pairing_record_mismatch/);
+});
+
+
+test("registered standalone default capture does not move a fresh profile", async (t) => {
+  const f = await setup(t, false);
+  const transcript = join(f.workspace.path, "standalone.jsonl");
+  const event = { session_id: "standalone", cwd: "/p", transcript_path: transcript };
+  await writeFile(transcript, row("captured"));
+  const defaults = { CLAUDE_PLUGIN_DATA: undefined };
+  await f.run("capture", event, defaults);
+  assert.equal(f.requests.length, 1);
+  const defaultId = f.requests[0].body.project_id;
+  const profile = join(f.options.home, "fresh-profile");
+  const overrides = { CLAUDE_PLUGIN_DATA: profile };
+  await f.run("recall", { ...event, prompt: "synthetic" }, overrides);
+  assert.equal(f.requests.length, 2);
+  assert.notEqual(f.requests[1].body.project_id, defaultId);
+  assert.ok(await readFile(join(profile, "project-key"), "utf8"));
+  await f.run("pause", {}, overrides);
+  assert.match((await f.run("status", {}, defaults)).stdout, /active/);
 });

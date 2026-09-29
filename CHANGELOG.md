@@ -49,6 +49,10 @@
 
 ## 0.1.2 — explicit client pairing
 
+- Preserve Claude profile ownership through identity reset and re-pairing. External
+  setup accepts an explicit profile root; only confirmed standard origins use the
+  marketplace default. Registered capture cursors never redirect another profile,
+  and a record delivered to the wrong profile reports a mismatch.
 - Add the optional Claude `pairing_record` setting and validated worker root
   delivery. Explicit adoption shares project identity and pause barriers; new
   clients remain disabled until binding completes.

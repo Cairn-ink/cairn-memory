@@ -60,7 +60,7 @@ function validateInstall(value) {
     if (
       !CLIENTS.includes(client) ||
       !absolute(binding?.root) ||
-      (binding.profileRoot !== undefined && !absolute(binding.profileRoot)) ||
+      (client === "claude" && !absolute(binding.profileRoot)) ||
       !["established", "pending"].includes(binding?.state)
     )
       fail("invalid_install");
@@ -142,6 +142,8 @@ export async function hasClaudeEvidence(root) {
 /** Read-only, exact known-file checks. Unknown Claude origins need a setup answer. */
 export async function detectClients(options = {}) {
   const locations = stateLocations(options);
+  if (options.claudeProfileRoot !== undefined && !absolute(options.claudeProfileRoot))
+    fail("invalid_claude_profile_root");
   if (await checkedPath(locations.coordination, { directory: true, missing: true })) {
     /* validated */
   }
@@ -153,6 +155,7 @@ export async function detectClients(options = {}) {
       locations.defaultRoot,
       locations.knownClaudeRoot,
       locations.claudeRoot,
+      ...(options.claudeProfileRoot === undefined ? [] : [options.claudeProfileRoot]),
       ...Object.values(install.clients).map((binding) => binding.root),
       ...(record ? [record.root] : []),
       ...(install.resetPending ? [install.resetPending.root] : []),
@@ -269,11 +272,12 @@ async function selectBinding(options, snapshot, delivered) {
   const binding = install.clients[client];
   const legacyClaude =
     client === "claude" &&
+    !install.clients.claude &&
     (locations.claudeRoot === locations.defaultRoot || !keys.includes(locations.claudeRoot)) &&
     keys.includes(locations.defaultRoot) &&
     (await hasClaudeEvidence(locations.defaultRoot));
   const claudeRoot = legacyClaude ? locations.defaultRoot : locations.claudeRoot;
-  const profileRoot = binding?.profileRoot ?? binding?.root;
+  const profileRoot = binding?.profileRoot;
   if (delivered !== undefined) {
     if (!absolute(delivered) || delivered !== locations.pairing) {
       fail("pairing_record_mismatch");
@@ -281,15 +285,8 @@ async function selectBinding(options, snapshot, delivered) {
     if (!record) fail("pairing_record_missing");
   }
   // A registry entry belongs to one profile, not every Claude sharing this HOME.
-  if (
-    client === "claude" &&
-    binding &&
-    locations.claudeRoot !== profileRoot &&
-    !(legacyClaude && profileRoot === locations.defaultRoot)
-  ) {
-    // A distinct profile needs a distinct root. A shared default without Claude
-    // evidence still belongs to the registered pair, not this newcomer.
-    if (claudeRoot === binding.root && !legacyClaude) return disabled();
+  if (client === "claude" && binding && locations.claudeRoot !== profileRoot) {
+    if (delivered !== undefined) fail("pairing_record_mismatch");
     return activeBinding(claudeRoot, env, "standalone_unregistered");
   }
   if (install.resetPending) return disabled();
@@ -314,7 +311,7 @@ async function selectBinding(options, snapshot, delivered) {
   }
   const other = install.clients[CLIENTS.find((name) => name !== client)];
   const root =
-    client === "claude" ? claudeRoot : (binding?.root ?? options.root ?? locations.defaultRoot);
+    binding?.root ?? (client === "claude" ? claudeRoot : (options.root ?? locations.defaultRoot));
   if (!absolute(root)) fail("invalid_state_path");
   let established = binding?.state === "established" && binding.root === root;
   if (!established && client === "claude" && keys.includes(root)) {
@@ -365,8 +362,16 @@ async function fallbackStandalone(options, delivered, snapshot) {
       if (error.code !== "ENOENT") throw error;
     }
   }
+  let unregistered = snapshot ? !snapshot.install.clients.claude : false;
+  if (!snapshot) {
+    try {
+      await lstat(locations.install);
+    } catch (error) {
+      unregistered = error.code === "ENOENT";
+    }
+  }
   if (explicitKey) root = locations.claudeRoot;
-  else if (env.CLAUDE_PLUGIN_DATA !== undefined || !snapshot?.install.clients.claude) {
+  else if (unregistered) {
     try {
       if (
         (await keyPresent(locations.defaultRoot)) &&
@@ -471,6 +476,13 @@ export async function initializePairing(options = {}) {
   durable(root, locations);
   const initial = await detectClients(setupOptions);
   if (initial.record && !initial.install.shared) fail("pairing_record_mismatch");
+  const profileRoot =
+    options.claudeProfileRoot ??
+    initial.install.clients.claude?.profileRoot ??
+    (options.env ?? process.env).CLAUDE_PLUGIN_DATA ??
+    (options.standardClaudeOrigin === true ? locations.knownClaudeRoot : undefined);
+  if (profileRoot === undefined) return disabled("claude_profile_root_required");
+  if (!absolute(profileRoot)) fail("invalid_claude_profile_root");
   if (!options.standardClaudeOrigin && options.usesClaude === undefined)
     return { status: "claude_confirmation_needed", enabled: false };
   if (
@@ -482,6 +494,8 @@ export async function initializePairing(options = {}) {
   )
     return disabled();
   return locked(setupOptions, async ({ install, keys, record: existingRecord }) => {
+    if (install.clients.claude && install.clients.claude.profileRoot !== profileRoot)
+      fail("pairing_record_mismatch");
     if (existingRecord && (!install.shared || !install.shared.initialized))
       fail("pairing_record_mismatch");
     if (install.resetPending) fail("identity_reset_pending");
@@ -514,8 +528,6 @@ export async function initializePairing(options = {}) {
         ready: false,
         ...(options.adoptFrom ? { adoptFrom: options.adoptFrom } : {}),
       };
-      const profileRoot =
-        install.clients.claude?.profileRoot ?? install.clients.claude?.root ?? locations.claudeRoot;
       for (const client of CLIENTS)
         install.clients[client] = {
           root,
@@ -632,7 +644,14 @@ export async function resetIdentity(options = {}) {
       version: 1,
       retired,
       clients: {
-        [options.primaryClient]: { root: options.root, state: "established", initialized: true },
+        [options.primaryClient]: {
+          root: options.root,
+          state: "established",
+          initialized: true,
+          ...(options.primaryClient === "claude"
+            ? { profileRoot: install.clients.claude.profileRoot }
+            : {}),
+        },
       },
     });
     return {

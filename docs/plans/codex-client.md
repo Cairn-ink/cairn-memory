@@ -1187,13 +1187,15 @@ Resolved with the coordinator during CX-2:
   this Cairn directory, without recursion or transcript reads. No evidence within
   that bound means newcomer/confirmation required; merely having `sessions/`
   does not suffice. Shared key, telemetry and control files never count.
-  With evidence and no key in the exported plugin-data root, preserve the default
-  root if the upgraded host newly exports `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
+  With no Claude registration, evidence and no key in the exported plugin-data
+  root, preserve the default root if the upgraded host newly exports
+  `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
   evidence, when Codex is registered, the new Claude client sends nothing until
   explicit adoption. A plugin-data root that already holds a key always wins,
   even when an old default root contains a Claude cursor.
 - The internal client names are `claude` and `codex`. Version-1 `install.json`
-  contains `clients` (root/state/initialized), optional `shared` initialization and
+  contains `clients` (root/state/initialized and required Claude `profileRoot`),
+  optional `shared` initialization and
   readiness, and retained invalidated bindings after an explicit identity reset.
   `pairing.json` binds a random record ID, root, both participants and policy. Boot and PID namespace identity belongs
   only to `setup.lock` ownership, never record validity; pairs survive reboot. No key or conversation is recorded there.
@@ -1223,16 +1225,20 @@ Resolved with the coordinator during CX-2:
   hook/launcher variants include inherited state-dir values. One-HOME profile
   fixtures compare separate keys, IDs and pause against actual base; only the
   new unregistered status note is normalized for those status outputs.
-- A set `CLAUDE_PLUGIN_DATA` selects its own root even before key creation. A
-  different registered plugin-data root belongs to another profile and is never
-  adopted implicitly: the new profile stays `standalone_unregistered`. Only a
-  keyless profile with Claude evidence in the legacy **default** root may retain
-  that default root. Pairing applies only to the registered profile. Metadata's
-  optional `profileRoot` preserves that profile identity when an explicit adoption
-  changes its shared root; CX-7 supplies the intended profile's environment during
-  setup. Existing metadata without the field uses its registered root. A different
-  profile inheriting the valid record still runs unregistered on its own root;
-  invalid record delivery remains an error.
+- Round-4 profile ownership resolution: every Claude binding requires
+  `profileRoot`, the host plugin-data root or the default when the variable is
+  unset. Registration, joint initialization, adoption, completion and reset all
+  retain it. A different profile always follows standalone root selection and is
+  unregistered. Cursor evidence can select the legacy default only with **no
+  Claude registration**, never after registered standalone or paired capture.
+  Explicit record delivery to a different profile fails `pairing_record_mismatch`;
+  hooks still exit successfully, while status and controls report the error.
+  CX-7 supplies `claudeProfileRoot` explicitly. Existing registration or the setup
+  environment's plugin-data value can supply it; otherwise only confirmed
+  `standardClaudeOrigin:true` permits `knownClaudeRoot`. Without that evidence,
+  setup returns `claude_profile_root_required` without writes, never guessing the
+  legacy default. Reset preserves profile ownership and selects the new paused
+  root; re-pairing keeps that same ownership.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
   writes pending bindings before publishing a key and returns `binding_pending`.
@@ -1241,7 +1247,9 @@ Resolved with the coordinator during CX-2:
   Pending clients cannot initialize another root. CX-7 owns consent UI, host
   configuration and verifying hosts are stopped; these APIs execute no host.
 - `detectClients` is read-only and uses exact known files. A setup caller with
-  unconfirmed origin receives `claude_confirmation_needed` before any writes;
+  unconfirmed origin receives `claude_confirmation_needed` before any writes
+  once its profile is known; an unknown profile first requires
+  `claude_profile_root_required`;
   `usesClaude: true` requires adoption. `standardClaudeOrigin: true` is evidence
   supplied by setup, never inferred from a missing file. Setup must also treat
   relocated/nonstandard origins as unconfirmed. The standalone Claude path keeps
@@ -1292,11 +1300,6 @@ now exercises exact delivery in both copies with ordinary test-file concurrency.
 The global guard runner and wrapped demos from round 2 are reverted per the
 coordinator decision; only the three pairing/plugin commands add the thin guard.
 
-A different profile whose requested root is already the registered pair's shared
-root cannot claim that key as an independent standalone identity. Without the
-legacy default-root Claude evidence, it remains `pairing_needed`; a genuinely
-distinct profile root stays unregistered and independent.
-
 Round-3 synthetic verification used local Node **v22.16.0** and **v24.15.0**
 on Linux. On each runtime, plugin tests (169), pairing tests (38), validation,
 artifact tests (86), MCP tests (91), OpenAI tests (304), and both unwrapped demos
@@ -1308,3 +1311,12 @@ passed both a targeted retry and the complete unchanged core suite. No core file
 or production timeout was changed. Whitespace checks passed. Suites ran
 sequentially with synthetic homes and worktree TMPDIR/cache, without host/model
 calls. Native macOS host verification remains pending.
+
+Round-4 synthetic verification on Linux used local Node **v22.16.0** and
+**v24.15.0**. On both versions, `npm test` (175), validation, core (1,105),
+artifact (86), pairing (44), MCP (91), OpenAI (304), and both demos exited 0.
+Actual-base golden reproduction passed five runs per runtime. Both core runs
+passed without retries. Suites were sequential with synthetic homes and worktree
+TMPDIR/cache; no host or model calls were made. Whitespace checks passed. Demo
+databases are removed after this round rather than retained. Native host
+verification and release approval remain separate.

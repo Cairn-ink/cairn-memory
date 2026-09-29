@@ -41,6 +41,7 @@ async function fixture(t, extra = {}) {
     temporary: workspace.path,
     env: { HOME: home },
     standardClaudeOrigin: true,
+    claudeProfileRoot: join(home, ".cairn-memory"),
     ...extra,
   };
 }
@@ -177,7 +178,9 @@ test("two established keys retain separate IDs and both expose conflict", async 
     assert.equal(binding.enabled, true);
   }
   const consent = { claude: true, codex: true };
-  await initializePairing({ ...options, root, adopt: true, consent, hostsStopped: true });
+  await initializePairing({
+    ...options, claudeProfileRoot: root, root, adopt: true, consent, hostsStopped: true,
+  });
   const ready = await completePairing({ ...options, configured: consent, hostsStopped: true });
   assert.equal(
     await clientProjectId({ ...options, pairingRecord: ready.pairingRecord }, "/synthetic/project"),
@@ -202,7 +205,6 @@ test("legacy gap: only Claude cursors count, preserve root despite new plugin da
     await privateWrite(join(root, "install-id"), `${key}\n`);
     if (evidence)
       await writeCaptureCursor(captureCursorPath(root, "synthetic-claude"), { offset: 0 });
-    assert.equal((await resolveClient({ ...options, client: "claude" })).enabled, evidence);
     const newRoot = join(options.home, "new-plugin-data");
     const claude = {
       ...options,
@@ -222,6 +224,7 @@ test("legacy gap: only Claude cursors count, preserve root despite new plugin da
     await initializePairing({
       ...options,
       env: claude.env,
+      claudeProfileRoot: newRoot,
       adopt: true,
       hostsStopped: true,
       consent,
@@ -742,7 +745,10 @@ test("strict pairing permits host-owned symlink ancestors and absent getuid", as
   const getuid = process.getuid;
   try {
     process.getuid = undefined;
-    const input = { ...options, home: alias, env: { HOME: alias } };
+    const input = {
+      ...options, home: alias, claudeProfileRoot: join(alias, ".cairn-memory"),
+      env: { HOME: alias },
+    };
     const pending = await initializePairing(input);
     await completePairing({ ...input, configured: options.consent });
     assert.ok(
@@ -800,6 +806,7 @@ test("a second profile stays standalone when the registered profile pairs", asyn
   assert.equal((await readControlState(b.env.CLAUDE_PLUGIN_DATA)).paused, false);
   const setup = {
     ...a,
+    claudeProfileRoot: a.env.CLAUDE_PLUGIN_DATA,
     adopt: true,
     root: a.env.CLAUDE_PLUGIN_DATA,
     hostsStopped: true,
@@ -813,22 +820,125 @@ test("a second profile stays standalone when the registered profile pairs", asyn
   );
   assert.equal(await clientProjectId(b, "/synthetic/project"), bId);
   const inherited = { ...b, pairingRecord: pending.pairingRecord };
-  assert.equal((await resolveClient(inherited)).status, "standalone_unregistered");
-  assert.equal(await clientProjectId(inherited, "/synthetic/project"), bId);
+  await assert.rejects(resolveClient(inherited), /pairing_record_mismatch/);
   await assert.rejects(
     resolveClient({ ...b, pairingRecord: join(options.home, "wrong.json") }),
     /pairing_record_mismatch/,
   );
 });
 
-test("a new default profile cannot claim another profile's shared root without evidence", async (t) => {
+test("a different default profile follows standalone root selection", async (t) => {
   const options = await fixture(t);
   const env = { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-a") };
-  const setup = { ...options, env, hostsStopped: true, consent: { claude: true, codex: true } };
+  const setup = {
+    ...options,
+    env,
+    claudeProfileRoot: env.CLAUDE_PLUGIN_DATA,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  };
   const pending = await initializePairing(setup);
   await completePairing({ ...setup, configured: setup.consent });
   assert.ok(
     await clientProjectId({ ...setup, pairingRecord: pending.pairingRecord }, "/synthetic/project"),
   );
-  assert.equal((await resolveClient(options)).enabled, false);
+  assert.equal((await resolveClient(options)).status, "standalone_unregistered");
+});
+
+test("Claude reset preserves its profile through standalone resolution and re-pairing", async (t) => {
+  const input = await fixture(t);
+  const profile = join(input.home, "profile-a");
+  const options = {
+    ...input,
+    claudeProfileRoot: profile,
+    env: { HOME: input.home, CLAUDE_PLUGIN_DATA: profile },
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  };
+  const first = await initializePairing(options);
+  await completePairing({ ...options, configured: options.consent });
+  const oldId = await clientProjectId({ ...options, pairingRecord: first.pairingRecord }, "/p");
+  const root = join(input.home, "reset-root");
+  await resetIdentity({ ...options, root, primaryClient: "claude", confirmIdentityReset: true });
+  assert.equal((await detectClients(options)).install.clients.claude.profileRoot, profile);
+  assert.equal((await resolveClient(options)).root, root);
+  assert.equal((await readControlState(root)).paused, true);
+  const newId = await clientProjectId(options, "/p");
+  assert.notEqual(newId, oldId);
+  const pending = await initializePairing({ ...options, root, adopt: true });
+  await completePairing({ ...options, configured: options.consent });
+  assert.equal((await detectClients(options)).install.clients.claude.profileRoot, profile);
+  for (const client of ["claude", "codex"]) {
+    const paired = { ...options, client, pairingRecord: pending.pairingRecord };
+    assert.equal(await clientProjectId(paired, "/p"), newId);
+    assert.equal((await readControlState((await resolveClient(paired)).root)).paused, true);
+  }
+});
+
+test("external setup uses a confirmed standard profile or requires an explicit root", async (t) => {
+  const options = await fixture(t, {
+    claudeProfileRoot: undefined,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  assert.equal((await initializePairing({
+    ...options, standardClaudeOrigin: false, usesClaude: false,
+  })).status, "claude_profile_root_required");
+  assert.deepEqual(await readdir(options.home), []);
+  const pending = await initializePairing(options);
+  await completePairing({ ...options, configured: options.consent });
+  const profile = stateLocations(options).knownClaudeRoot;
+  const claude = {
+    ...options,
+    pairingRecord: pending.pairingRecord,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: profile },
+  };
+  const codex = { ...options, client: "codex", pairingRecord: pending.pairingRecord };
+  assert.equal((await resolveClient(claude)).status, "paired");
+  assert.equal(await clientProjectId(claude, "/p"), await clientProjectId(codex, "/p"));
+  await setPaused((await resolveClient(codex)).root, true);
+  assert.equal((await readControlState((await resolveClient(claude)).root)).paused, true);
+  await assert.rejects(resolveClient({
+    ...claude, env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "other") },
+  }), /pairing_record_mismatch/);
+});
+
+test("registered default-root cursors never move a fresh plugin-data profile", async (t) => {
+  const options = await fixture(t);
+  const root = (await resolveClient({ ...options, initialize: true })).root;
+  await writeCaptureCursor(captureCursorPath(root, "registered"), { offset: 12 });
+  const other = { ...options, env: {
+    HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-b"),
+  } };
+  assert.equal((await resolveClient(other)).root, other.env.CLAUDE_PLUGIN_DATA);
+  assert.notEqual(await clientProjectId(options, "/p"), await clientProjectId(other, "/p"));
+  await setPaused(root, true);
+  assert.equal((await readControlState(other.env.CLAUDE_PLUGIN_DATA)).paused, false);
+});
+
+
+test("explicit external profile participates in key detection and adoption", async (t) => {
+  const options = await fixture(t, {
+    standardClaudeOrigin: false,
+    usesClaude: true,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  const profile = join(options.home, "custom-profile");
+  await seed(profile);
+  const setup = { ...options, claudeProfileRoot: profile, root: profile };
+  assert.equal((await initializePairing(setup)).status, "pairing_needed");
+  assert.deepEqual((await detectClients(setup)).keys, [profile]);
+  const pending = await initializePairing({ ...setup, adopt: true });
+  await completePairing({ ...setup, configured: setup.consent });
+  const host = {
+    ...setup,
+    pairingRecord: pending.pairingRecord,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: profile },
+  };
+  assert.equal((await resolveClient(host)).status, "paired");
+  assert.equal((await detectClients(setup)).install.clients.claude.profileRoot, profile);
+  await assert.rejects(initializePairing({
+    ...setup, adopt: true, claudeProfileRoot: join(options.home, "different-profile"),
+  }), /pairing_record_mismatch/);
 });
