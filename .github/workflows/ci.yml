@@ -76,6 +76,7 @@ jobs:
       - run: python3 --version
       - run: npm run test:longmemeval
       - run: npm run test:long-history
+      - run: timeout --signal=TERM --kill-after=20s 300s node tools/testing/run.mjs evaluation/architecture/testing/retained-window-control.test.mjs
       - run: npm run test:long-history-live:offline
       - run: npm run demo:longmemeval-ingestion
       - run: npm run demo:longmemeval-comparison

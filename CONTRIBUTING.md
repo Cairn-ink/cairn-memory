@@ -113,6 +113,15 @@ install is for evaluation imports only; it does not change the public core's
 dependency surface. See `docs/longmemeval-ingestion.md` for source
 reconstruction, normalization and remaining evaluation boundaries.
 
+The dedicated retained-window diagnostic needs that same locked OpenAI adapter
+dependency for local exact token counting. Run `timeout --signal=TERM
+--kill-after=20s 300s node tools/testing/run.mjs
+evaluation/architecture/testing/retained-window-control.test.mjs` on Node
+22.16 and 24 after the isolated install. It uses only fresh synthetic SQLite
+stores and scripted callbacks, including failure/cleanup controls; it does not
+read a corpus, use a provider, or establish semantic answer quality. It is
+outside ordinary `npm test` so that the Node 20 job stays dependency-free.
+
 For comparison/scoring changes, also run `npm run demo:longmemeval-comparison`
 on both runtimes. The same `test:longmemeval` suite includes these tests. This
 demo compares three synthetic arms using scripted models and the real local

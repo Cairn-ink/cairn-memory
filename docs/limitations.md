@@ -1214,6 +1214,34 @@ evidence audit precede any new paid experiment. The earlier official-six
 3/2/1 versus 3/3/0 result and default-MOC and installed Hermes/MCP quality
 limits remain unchanged.
 
+## Synthetic retained-window control shows availability, not answer reliability
+
+The [retained-window control](plans/retained-window-control.md) compares 50
+synthetic six-window batches through real indexed-evidence capture against
+explicit admission of every canonical window into a separate fresh core store.
+It is **not** automatic full-window capture or an installed retention policy.
+Cold source identity matched all 250 baseline and 300 control receipts. An
+omitted primary source reached final source-backed recall and answer packing
+only in the direct-admission control; a retained positive source reached both.
+All five collection-query recalls reported `budget_exhausted`, so this does
+not prove complete search. The conflict probe packed both a primary and an
+obsolete decoy in the control. The absent-answer probe returned six other
+sources in both arms. No answer model ran, and no answer correctness was
+scored. The short one-window messages test collection/cardinality and source
+routing, not N7's long-document token stress or the default MCP/Hermes path.
+
+The first two local tokenizer-work ceilings stopped before a complete trial:
+2,000,902 tokens at baseline batch 22 against 2M, then 12,002,505 during Q2
+against 12M. After a bounded real-core map-work probe, the primary approved a
+final 32M diagnostic ceiling without changing the frozen fixture, callbacks,
+engine or 300-second deadline. The first full offline Node 22.16 trial used
+17,331,529 local counted tokens, 230,385 scripted callback tokens and zero
+provider calls in 33.7 seconds. These are neither paid-token estimates nor
+latency guarantees. Direct synthetic correction, forgetting, deduplication
+and namespace controls passed separately; none shows automatic decision-link
+updates or permission to retain previously omitted real user text. That
+product/privacy choice and any fresh paid semantic comparison remain separate.
+
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
 Plugin 0.1.1 stops sending user-role records that Claude Code writes itself (the
