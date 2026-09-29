@@ -192,7 +192,12 @@ test("two established keys retain separate IDs and both expose conflict", async 
     consent,
     hostsStopped: true,
   });
-  const ready = await completePairing({ ...options, configured: consent, hostsStopped: true });
+  const ready = await completePairing({
+    ...options,
+    claudeProfileRoot: root,
+    configured: consent,
+    hostsStopped: true,
+  });
   assert.equal(
     await clientProjectId({ ...options, pairingRecord: ready.pairingRecord }, "/synthetic/project"),
     claudeId,
@@ -245,7 +250,12 @@ test("legacy gap: only Claude cursors count, preserve root despite new plugin da
       hostsStopped: true,
       consent,
     });
-    const ready = await completePairing({ ...options, hostsStopped: true, configured: consent });
+    const ready = await completePairing({
+      ...options,
+      claudeProfileRoot: newRoot,
+      hostsStopped: true,
+      configured: consent,
+    });
     assert.equal(
       await clientProjectId(
         { ...claude, pairingRecord: ready.pairingRecord },

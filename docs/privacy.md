@@ -60,7 +60,6 @@ local paths but no project keys, credentials or conversation text, and is never
 included in telemetry. Standalone use retains the falsy-home temporary fallback
 for these paths; setup and pairing require a specified absolute durable home.
 
-
 Every binding operation also writes private
 `<profileRoot>/.cairn-memory-profile/binding.json` (0600 inside a 0700 directory),
 containing version, profile root, bound root and a non-secret identity fingerprint.
@@ -69,6 +68,9 @@ rewrite it to the new root. Clearing an option does not remove it; CX-2 has no l
 With binding history, missing, empty or untrusted coordination disables memory with
 `pairing_record_missing`, with no key creation or requests. Invalid binding history also
 refuses. Trusted coordination with a different identity reports `binding_identity_mismatch`.
+If both the key and coordination are lost, explicitly call `resetIdentity` with the affected
+`claudeProfileRoot`, a new durable `root`, `primaryClient`, `confirmIdentityReset: true`, and
+`hostsStopped: true`. Valid binding history authorizes this intentional new scope.
 
 A `paired-root` entry prevents every ordinary key-creation path from replacing a lost
 key, including standalone access to that same root. Only explicit original-backup repair
@@ -364,3 +366,12 @@ key. Replays cannot close a different step or advance a read epoch. Descriptive
 closure evidence remains source-bound and is cleared by source invalidation or
 conversation deletion. Schema v17 adds read indexes only; these indexes add no
 new source text or retention policy. Existing file, journal and backup limits apply.
+
+At a marked root, a profile sharing its own existing key and pause never claims or changes
+registration through hooks or reads; only explicit setup/pairing may register it. Readable
+coordination also prevents minting at a recorded pair root when deletion removed its marker.
+Codex's paired binding stores the same non-secret identity fingerprint in `install.json` and
+refuses `binding_identity_mismatch` before sending if the key changed. Fingerprints are local
+metadata and are never transmitted. Explicit setup validates its preconditions before durable
+writes and rolls back caught failures; a failed operation preserves files, modes and markers.
+Stopped-host original-backup repair checks the saved fingerprint inside the private key write.

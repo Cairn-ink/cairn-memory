@@ -55,6 +55,11 @@
 - Add private coordination records, joint-initialization APIs for future setup,
   durable no-clobber key publication, and paired lost-key handling. Every pair-root
   operation marks its root; only explicit original-backup repair can restore a lost key.
+  Sharing an existing own-root identity never claims a registration through hooks or reads.
+  Readable coordination prevents regeneration even after the whole pair root is deleted.
+  Both clients check their recorded identity fingerprint before sending. Failed explicit
+  setup operations preserve local files and modes. An explicit confirmed reset to a new root
+  recovers a lost key and coordination when valid profile binding history remains.
   Private profile-local binding history survives reset and coordination loss, refusing
   memory with `pairing_record_missing` until consistent coordination is restored. Setup accepts
   an explicit profile root or a confirmed standard origin. Retired bindings keep

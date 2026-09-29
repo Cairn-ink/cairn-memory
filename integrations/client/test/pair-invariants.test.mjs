@@ -21,6 +21,10 @@ test("pair-root operation inventory covers the public mutation surface", () => {
     "clientProjectId",
     "localLiveness",
     "hasClaudeEvidence",
+    "projectKey",
+    "installId",
+    "opaqueProjectId",
+    "rootMarker",
   ];
   const writers = new Set(pairing.PAIR_ROOT_OPERATIONS.map((operation) => operation.run));
   for (const [name, value] of Object.entries(pairing))
@@ -57,11 +61,20 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
       // Remove marker to prove this operation itself establishes invariant P.
       await unlink(join(root, "paired-root"));
       if (operation.name === "complete")
-        await unlink(join(options.env.CLAUDE_PLUGIN_DATA, ".cairn-memory-profile", "binding.json"));
+        await unlink(
+          join(options.env.CLAUDE_PLUGIN_DATA, ".cairn-memory-profile", "binding.json"),
+        );
       if (operation.name === "reset")
-        extra = { root: join(home, "reset"), primaryClient: "claude", confirmIdentityReset: true };
+        extra = {
+          root: join(home, "reset"),
+          primaryClient: "claude",
+          confirmIdentityReset: true,
+        };
       if (operation.name === "repair") {
-        extra = { originalKey: await projectKey(root, { create: false }), confirmKeyRepair: true };
+        extra = {
+          originalKey: await projectKey(root, { create: false }),
+          confirmKeyRepair: true,
+        };
         await unlink(join(root, "project-key"));
       }
     }
@@ -88,6 +101,15 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
     assert.equal(binding.root, result.root);
     assert.equal(binding.profileRoot, options.env.CLAUDE_PLUGIN_DATA);
     assert.match(binding.fingerprint, /^[a-f0-9]{64}$/);
+    const install = JSON.parse(
+      await readFile(join(home, ".cairn-memory-clients/install.json"), "utf8"),
+    );
+    if (install.clients.codex)
+      assert.equal(
+        install.clients.codex.fingerprint,
+        binding.fingerprint,
+        "P: Codex uses the same fingerprint helper",
+      );
     assert.equal(JSON.stringify(binding).includes(await projectKey(result.root)), false);
     assert.deepEqual(JSON.parse(await readFile(join(result.root, "paired-root"), "utf8")), {
       version: 1,
@@ -95,6 +117,15 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
     });
   });
 }
+
+test("identity source and bundle export only the safe identity facade", async () => {
+  const expected = ["installId", "opaqueProjectId", "projectKey", "rootMarker"];
+  for (const url of [
+    new URL("../identity.mjs", import.meta.url),
+    new URL("../../../plugins/cairn-memory/lib/identity.mjs", import.meta.url),
+  ])
+    assert.deepEqual(Object.keys(await import(url)).sort(), expected);
+});
 
 test("invariant K guards both strict and legacy publication; only original-key repair restores", async (t) => {
   const workspace = createTestWorkspace(t, { prefix: "cx2-mint-" });
@@ -112,7 +143,10 @@ test("invariant K guards both strict and legacy publication; only original-key r
   await unlink(join(root, "project-key"));
   for (const strict of [false, true])
     await assert.rejects(opaqueProjectId(root, "/synthetic", { strict }), /paired_key_missing/);
-  await assert.rejects(opaqueProjectId(`${root}/missing/..`, "/synthetic"), /paired_key_missing/);
+  await assert.rejects(
+    opaqueProjectId(`${root}/missing/..`, "/synthetic"),
+    /paired_key_missing/,
+  );
   assert.equal((await pairing.initializePairing(options)).status, "paired_key_missing");
   await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
   await assert.rejects(
@@ -143,7 +177,14 @@ test("300 seeded operation sequences enforce P, K, b, b-prime, identity and cont
   const child = spawn(
     process.execPath,
     [new URL("../testing/sequence-worker.mjs", import.meta.url).pathname, workspace.path],
-    { env: { ...process.env, CLAUDE_PLUGIN_DATA: undefined }, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      env: {
+        ...process.env,
+        CLAUDE_PLUGIN_DATA: undefined,
+        CX2_SEQUENCE_SOURCE_ROOT: undefined,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
   );
   let output = "";
   child.stdout.on("data", (data) => (output += data));
@@ -158,4 +199,170 @@ test("300 seeded operation sequences enforce P, K, b, b-prime, identity and cont
   assert.equal(result.sequences, 300);
   assert.ok(result.sequencesWithPairHistory >= 120, "substantial paired-state coverage");
   assert.deepEqual(result.seeds, SEQUENCE_SEEDS);
+});
+
+// Mutation rows are parsed from the plan, not maintained as a parallel test list.
+const operationPlan = (
+  await readFile(new URL("../../../docs/plans/codex-client.md", import.meta.url), "utf8")
+)
+  .split("<!-- pairing-operation-table:start -->")[1]
+  .split("<!-- pairing-operation-table:end -->")[0];
+const operationRows = operationPlan
+  .split("\n")
+  .filter((line) => line.startsWith("|"))
+  .slice(2)
+  .map((line) =>
+    line
+      .split("|")
+      .slice(1, -1)
+      .map((value) => value.trim()),
+  );
+for (const [id, operation, damage, outcome, effect] of operationRows) {
+  assert.ok(
+    ["initialize", "adopt", "complete", "reset", "repair", "codex"].includes(operation) ||
+      ["reset-claude-default", "reset-codex-default", "reset-codex-custom"].includes(operation),
+  );
+  assert.ok(
+    [
+      "json",
+      "mode",
+      "directory",
+      "key-replaced",
+      "key-and-coordination-lost",
+      "no-claude",
+      "profile-conflict",
+    ].includes(damage),
+  );
+  assert.ok(["unchanged", "new-marked-binding"].includes(effect));
+  test(`operation table ${id}: ${operation} with ${damage}`, async (t) => {
+    const workspace = createTestWorkspace(t, { prefix: "cx2-operation-table-" });
+    const home = join(workspace.path, "home");
+    await mkdir(home, { mode: 0o700 });
+    const root = join(home, "shared");
+    const profile = join(home, "a");
+    const options = {
+      home,
+      root,
+      env: { HOME: home, CLAUDE_PLUGIN_DATA: profile },
+      claudeProfileRoot: profile,
+      hostsStopped: true,
+      standardClaudeOrigin: true,
+      consent: { claude: true, codex: true },
+      configured: { claude: true, codex: true },
+    };
+    if (damage === "no-claude")
+      await pairing.resolveClient({
+        ...options,
+        client: "codex",
+        usesClaude: false,
+        initialize: true,
+      });
+    else {
+      await pairing.initializePairing(options);
+      await pairing.completePairing(options);
+    }
+    const binding = join(profile, ".cairn-memory-profile/binding.json");
+    const originalKey = await projectKey(root, { create: false });
+    const fs = await import("node:fs/promises");
+    if (damage === "json") await writeFile(binding, "{");
+    if (damage === "mode") await fs.chmod(binding, 0o644);
+    if (damage === "directory") {
+      await unlink(binding);
+      await mkdir(binding);
+    }
+    if (damage === "key-replaced")
+      await writeFile(join(root, "project-key"), "11111111-1111-4111-8111-111111111111\n");
+    if (damage === "key-and-coordination-lost") {
+      await fs.rm(root, { recursive: true });
+      await fs.rm(join(home, ".cairn-memory-clients"), { recursive: true });
+    }
+    const { snapshotHome } = await import("../testing/sequence-snapshot.mjs");
+    if (damage === "profile-conflict") options.claudeProfileRoot = join(home, "b");
+    const before = await snapshotHome(home);
+    let result, failure;
+    try {
+      if (operation.startsWith("reset"))
+        result = await pairing.resetIdentity({
+          ...options,
+          root: join(home, operation.endsWith("default") ? ".cairn-memory" : "next"),
+          primaryClient: operation.includes("codex") ? "codex" : "claude",
+          confirmIdentityReset: true,
+        });
+      else if (operation === "repair")
+        result = await pairing.repairIdentity({
+          ...options,
+          originalKey,
+          confirmKeyRepair: true,
+        });
+      else if (operation === "codex")
+        result = await pairing.resolveClient({
+          ...options,
+          client: "codex",
+          pairingRecord: join(home, ".cairn-memory-clients/pairing.json"),
+        });
+      else if (operation === "complete") result = await pairing.completePairing(options);
+      else
+        result = await pairing.initializePairing({ ...options, adopt: operation === "adopt" });
+    } catch (error) {
+      failure = error;
+    }
+    if (failure) assert.equal(failure.constructor, Error);
+    assert.equal(failure?.message ?? result?.status, outcome);
+    if (effect === "unchanged") assert.deepEqual(await snapshotHome(home), before);
+    else {
+      assert.equal(await stat(join(result.root, "paired-root")).then(() => true), true);
+      assert.equal(JSON.parse(await readFile(binding, "utf8")).root, result.root);
+    }
+  });
+}
+
+test("caught write failures roll back each explicit binding operation", async (t) => {
+  const { snapshotHome } = await import("../testing/sequence-snapshot.mjs");
+  for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
+    const workspace = createTestWorkspace(t, { prefix: "cx2-rollback-" });
+    const home = join(workspace.path, "home");
+    await mkdir(home, { mode: 0o700 });
+    const root = join(home, "shared");
+    const options = {
+      home,
+      root,
+      env: { HOME: home, CLAUDE_PLUGIN_DATA: join(home, "a") },
+      hostsStopped: true,
+      standardClaudeOrigin: true,
+      consent: { claude: true, codex: true },
+      configured: { claude: true, codex: true },
+    };
+    let extra = {};
+    if (operation.name === "adopt") {
+      await projectKey(root);
+      extra.adopt = true;
+    } else if (operation.name !== "initialize") {
+      await pairing.initializePairing(options);
+      if (operation.name === "reset")
+        extra = {
+          root: join(home, "next"),
+          primaryClient: "codex",
+          confirmIdentityReset: true,
+        };
+      if (operation.name === "repair") {
+        extra = {
+          originalKey: await projectKey(root, { create: false }),
+          confirmKeyRepair: true,
+        };
+        await unlink(join(root, "project-key"));
+      }
+    }
+    const before = await snapshotHome(home);
+    await assert.rejects(
+      operation.run({
+        ...options,
+        ...extra,
+        checkpoint: async (stage) => {
+          if (stage === "before-commit") throw new Error("synthetic_write_failure");
+        },
+      }),
+      /synthetic_write_failure/,
+    );
+    assert.deepEqual(await snapshotHome(home), before, operation.name);
+  }
 });

@@ -78,6 +78,7 @@ const schema = {
   localMarker: ["absent", "valid", "invalid", "permissions"],
   bound: ["shared", "reset", "default"],
   bindingHistory: ["valid", "invalid", "permissions", "mismatch"],
+  registeredFingerprint: ["mismatch"],
   resetKind: ["claude-default", "codex-default", "claude-custom", "codex-custom"],
   platform: ["linux", "win32"],
   ...Object.fromEntries(
@@ -98,6 +99,7 @@ const schema = {
       "codexDefault",
       "sharedMarker",
       "resetDestination",
+      "recordedPairRoot",
     ].map((name) => [name, [true, false]]),
   ),
 };
@@ -190,10 +192,14 @@ for (const row of table.rows) {
     if (f.profileRetired) await privateWrite(join(profile, "retired"), "{}");
     if (["key", "legacy", "retired"].includes(f.default)) await seed(defaultRoot, "2");
     if (["legacy", "retired"].includes(f.default))
-      await privateWrite(join(defaultRoot, "sessions", "a".repeat(64) + ".json"), '{"offset":1}');
+      await privateWrite(
+        join(defaultRoot, "sessions", "a".repeat(64) + ".json"),
+        '{"offset":1}',
+      );
     if (f.defaultKey !== "valid") {
       await rm(join(defaultRoot, "project-key"));
-      if (f.defaultKey === "garbage") await writeFile(join(defaultRoot, "project-key"), "garbage");
+      if (f.defaultKey === "garbage")
+        await writeFile(join(defaultRoot, "project-key"), "garbage");
       else await mkdir(join(defaultRoot, "project-key"));
     }
     if (f.resetDestination) await setPaused(defaultRoot, true);
@@ -254,6 +260,10 @@ for (const row of table.rows) {
       };
       install.clients.codex = { root: bound, state: "established" };
     }
+    if (f.registeredFingerprint)
+      install.clients.claude.fingerprint = createHmac("sha256", "different synthetic key")
+        .update("cairn-memory:binding:v1")
+        .digest("hex");
     if (["readable", "degraded", "foreign"].includes(f.coord)) {
       await privateWrite(join(coordination, "install.json"), JSON.stringify(install));
       if (f.shared !== "none")
@@ -305,7 +315,9 @@ for (const row of table.rows) {
     } else if (f.bindingHistory) {
       if (!(await exists(join(bound, "project-key")))) await seed(bound, "3");
       const key = (await readFile(join(bound, "project-key"), "utf8")).trim();
-      const fingerprint = createHmac("sha256", key).update("cairn-memory:binding:v1").digest("hex");
+      const fingerprint = createHmac("sha256", key)
+        .update("cairn-memory:binding:v1")
+        .digest("hex");
       const directory = join(profile, ".cairn-memory-profile");
       await privateWrite(
         join(directory, "binding.json"),
@@ -351,7 +363,9 @@ for (const row of table.rows) {
     };
     if (f.delivery !== "none")
       env.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD =
-        f.delivery === "wrong" ? join(workspace.path, "wrong") : join(coordination, "pairing.json");
+        f.delivery === "wrong"
+          ? join(workspace.path, "wrong")
+          : join(coordination, "pairing.json");
     if (f.stateMismatch) env.CAIRN_MEMORY_STATE_DIR = join(workspace.path, "wrong-state");
     if (f.platform === "win32" || f.coord === "foreign") {
       const preload = join(workspace.path, "platform.mjs");
@@ -380,6 +394,7 @@ for (const row of table.rows) {
       process.getuid = uid;
       process.chdir(previousCwd);
     }
+    if (f.recordedPairRoot) assert.equal(facts.profileIsRecordedPairRoot, true);
     const beforeFacts = structuredClone(facts);
     const decision = resolveClaudeBinding(facts);
     assert.deepEqual(facts, beforeFacts, "pure decision does not mutate facts");
@@ -395,10 +410,15 @@ for (const row of table.rows) {
       !["relative", "empty", "relative-pair-root"].includes(f.pluginData),
     );
     if (!facts.pluginRootAbsolute) assert.notEqual(decision.register, true);
+    if (Object.hasOwn(row.expect, "register"))
+      assert.equal(!!decision.register, row.expect.register, `${row.id} registration effect`);
     for (const key of ["enabled", "createKey", "status", "detail"])
       assert.equal(decision[key], row.expect[key], `${row.id} ${key}`);
     const keys = [...new Set(Object.values(roots))].map((root) => join(root, "project-key"));
     const beforeKeys = await Promise.all(keys.map(exists));
+    const installBefore = await readFile(join(coordination, "install.json"), "utf8").catch(
+      () => undefined,
+    );
     const run = (action) =>
       new Promise((resolve, reject) => {
         const child = spawn(
@@ -406,7 +426,9 @@ for (const row of table.rows) {
           [
             hook,
             action,
-            ...(f.argumentConflict ? ["--pairing-record", join(workspace.path, "argument")] : []),
+            ...(f.argumentConflict
+              ? ["--pairing-record", join(workspace.path, "argument")]
+              : []),
           ],
           {
             env,
@@ -420,7 +442,9 @@ for (const row of table.rows) {
         child.stderr.on("data", (data) => (stderr += data));
         child.on("error", reject);
         child.on("close", (code) => resolve({ code, stdout, stderr }));
-        child.stdin.end(JSON.stringify({ cwd: "/synthetic/table", prompt: "synthetic recall" }));
+        child.stdin.end(
+          JSON.stringify({ cwd: "/synthetic/table", prompt: "synthetic recall" }),
+        );
       });
     assert.equal((await run("recall")).code, 0);
     assert.equal(requests.length, row.expect.requests, "exact request count");
@@ -445,7 +469,11 @@ for (const row of table.rows) {
     );
     assert.equal((await run("pause")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
-    assert.equal(requests.length, row.expect.requests, "pause or disabled gate suppresses recall");
+    assert.equal(
+      requests.length,
+      row.expect.requests,
+      "pause or disabled gate suppresses recall",
+    );
     assert.equal((await run("resume")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
     assert.equal(
@@ -457,5 +485,11 @@ for (const row of table.rows) {
       const id = createHmac("sha256", key).update("/synthetic/table").digest("hex");
       assert.ok(requests.every((request) => request.project_id === id));
     } else if (f.paused) assert.equal((await readControlState(defaultRoot)).paused, true);
+    if (row.expect.register === false)
+      assert.equal(
+        await readFile(join(coordination, "install.json"), "utf8").catch(() => undefined),
+        installBefore,
+        "sharing/refusal never writes install metadata",
+      );
   });
 }

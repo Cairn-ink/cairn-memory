@@ -99,6 +99,10 @@ fingerprint. It contains no key or conversation data and is never transmitted. B
 rewrite it to the new root. Clearing an option does not remove it; CX-2 has no leave API. With
 binding history, missing, empty or untrusted coordination disables memory with
 `pairing_record_missing`, with no key creation or requests. Invalid binding history also refuses.
+If both the key and coordination are lost,
+explicitly call `resetIdentity` with the affected `claudeProfileRoot`, a new durable `root`,
+`primaryClient`, `confirmIdentityReset: true`, and `hostsStopped: true`. This knowingly starts
+new project scope; it requires valid binding history and rewrites that history.
 Trusted coordination with a different identity reports `binding_identity_mismatch`.
 
 A `paired-root` entry prevents every ordinary key-creation path from replacing a lost key, including
@@ -148,3 +152,12 @@ unrelated default root cannot disable an unpaired plugin-data profile. Setup ref
 destination with `retired_root`, including an implicit default destination, and requires another
 unmarked root. Status remains a single token; explanations are separate details. Disabled hooks exit
 0 without requests, while explicit controls fail visibly.
+
+At a marked root, a profile sharing its own existing key and pause never claims or changes
+registration through hooks or reads; only explicit setup/pairing may register it. Readable
+coordination also prevents minting at a recorded pair root when deletion removed its marker.
+Codex's paired binding stores the same non-secret identity fingerprint in `install.json` and
+refuses `binding_identity_mismatch` before sending if the key changed. Fingerprints are local
+metadata and are never transmitted. Explicit setup validates its preconditions before durable
+writes and rolls back caught failures; a failed operation preserves files, modes and markers.
+Stopped-host original-backup repair checks the saved fingerprint inside the private key write.

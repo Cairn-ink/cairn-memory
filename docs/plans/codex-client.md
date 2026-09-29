@@ -1435,8 +1435,8 @@ precedence.
 
 Enabled rows exercise pause/resume and delivery; the empty plugin-data rows retain
 0.1.1's no-delivery behavior even after resume. Disabled rows send nothing, mint
-nothing, keep hooks successful, and reject explicit pause/resume. Setup rejects marked
-destinations (including reset) and marked sources. `adoptFrom` accepts only temporary
+nothing, keep hooks successful, and reject explicit pause/resume. Setup rejects retired
+destinations (including reset) and retired sources. `adoptFrom` accepts only temporary
 storage outside durable HOME; durable roots are adopted in place.
 
 <!-- claude-resolution-table:start -->
@@ -1572,4 +1572,48 @@ Defaults (each row overrides only the listed facts):
 | B17 | no | trusted binding retains reset identity | `{"bindingHistory":"valid","coord":"readable","registration":"self-active"}` | `{"root":"bound","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` | — |
 | P18 | no | relative traversal probes the same marked root as key publication | `{"coord":"readable","registration":"other","shared":"ready","pluginData":"relative-pair-root","bound":"default","boundKey":false,"sharedMarker":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | R05 | no | relative traversal cannot bypass a present retired root | `{"pluginData":"relative-pair-root","default":"retired"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
+| Q01 | no | b-prime shares but never registers after absent coordination | `{"profile":"default","profileKey":true,"sharedMarker":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
+| Q02 | no | b-prime shares but never registers after empty readable coordination | `{"profile":"default","profileKey":true,"sharedMarker":true,"coord":"readable"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
+| P19 | no | readable pair-root ownership survives whole-directory loss | `{"coord":"readable","registration":"other","shared":"ready","profile":"default","bound":"default","boundKey":false,"recordedPairRoot":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| B18 | no | recorded fingerprint remains authoritative if local binding history is deleted | `{"coord":"readable","registration":"self-active","shared":"ready","delivery":"match","registeredFingerprint":"mismatch"}` | `{"root":null,"status":"binding_identity_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 <!-- claude-resolution-table:end -->
+
+### Explicit operation decision table (CX-2 round 11)
+
+These rows are also executable fixtures. They cover mutation/refusal effects separately
+from read-only Claude resolution. **F:** a failed explicit operation leaves files,
+contents, modes and markers byte-identical. Validate every precondition before writing;
+restore prior state if a caught write failure interrupts an otherwise valid operation.
+A host/process crash retains the existing pending-state retry contract.
+
+Sharing under (b′) never registers or claims profile ownership. A readable record of a
+pair root blocks key creation even if deletion removed the root-local marker. Both clients
+carry a non-secret fingerprint, written through the binding helper, and compare it before
+sending. The repair capability is private; the write checks the original fingerprint.
+
+`pairing_record_missing` after losing both key and coordination can be recovered explicitly:
+call `resetIdentity` with the affected Claude profile root, a new durable root,
+`confirmIdentityReset: true`, `hostsStopped: true`, and the primary client. A valid durable
+binding authorizes this intentional new identity; invalid history refuses before writes.
+
+<!-- pairing-operation-table:start -->
+| ID | Operation | Damage | Outcome | Effect |
+| --- | --- | --- | --- | --- |
+| F01 | reset | json | binding_identity_mismatch | unchanged |
+| F02 | reset | mode | binding_identity_mismatch | unchanged |
+| F03 | reset | directory | binding_identity_mismatch | unchanged |
+| F04 | initialize | mode | binding_identity_mismatch | unchanged |
+| F05 | adopt | json | binding_identity_mismatch | unchanged |
+| F06 | complete | directory | binding_identity_mismatch | unchanged |
+| F07 | repair | mode | repair_key_conflict | unchanged |
+| C01 | codex | key-replaced | binding_identity_mismatch | unchanged |
+| R01 | reset | key-and-coordination-lost | identity_reset | new-marked-binding |
+| R02 | repair | no-claude | repair_binding_missing | unchanged |
+| R03 | reset-claude-default | key-and-coordination-lost | identity_reset | new-marked-binding |
+| R04 | reset-codex-default | key-and-coordination-lost | identity_reset | new-marked-binding |
+| R05 | reset-codex-custom | key-and-coordination-lost | identity_reset | new-marked-binding |
+| F08 | reset-codex-custom | mode | binding_identity_mismatch | unchanged |
+| F09 | reset | profile-conflict | claude_profile_mismatch | unchanged |
+| F10 | complete | profile-conflict | claude_profile_mismatch | unchanged |
+| F11 | repair | profile-conflict | claude_profile_mismatch | unchanged |
+<!-- pairing-operation-table:end -->
