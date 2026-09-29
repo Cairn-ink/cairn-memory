@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — specific classification error in evaluation reports
+
+- LongMemEval ingestion and its comparison summaries preserve the core's
+  `moc_title_conflict` code when classification proposes a new topic with an
+  existing title. Previously they reported `classification_failed`. Unknown
+  error codes remain generic. This changes reporting only: the colliding
+  placement still fails, admitted source receipts remain, and no failed batch
+  is retried. See the [M1d diagnosis](docs/plans/classification-application-boundary.md).
+
 ## Unreleased — bounded mixed-runner phase diagnostics
 
 - The source Cairn/Mem0 paired runner accepts `phaseTiming: 'bounded-tail-v1'`
