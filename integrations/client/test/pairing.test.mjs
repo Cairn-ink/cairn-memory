@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import {
   mkdir,
@@ -967,4 +968,92 @@ test("explicit external profile participates in key detection and adoption", asy
     }),
     /claude_profile_mismatch/,
   );
+});
+
+test("setup rejects active and retired profile conflicts before and inside the lock", async (t) => {
+  for (const retired of [false, true]) {
+    await t.test(retired ? "retired" : "active", async (t) => {
+      const options = await paired(t);
+      let root = stateLocations(options).defaultRoot;
+      if (retired) {
+        root = join(options.home, "reset-root");
+        await resetIdentity({
+          ...options,
+          root,
+          primaryClient: "codex",
+          confirmIdentityReset: true,
+        });
+      }
+      const path = stateLocations(options).install;
+      const before = await readFile(path, "utf8");
+      const profile = join(options.home, "other-profile");
+      await assert.rejects(
+        initializePairing({ ...options, root, adopt: true, claudeProfileRoot: profile }),
+        /claude_profile_mismatch/,
+      );
+      assert.equal(await readFile(path, "utf8"), before, "pre-lock conflict writes nothing");
+      const liveness = await localLiveness();
+      let rechecked = false;
+      const input = {
+        ...options,
+        root,
+        adopt: true,
+        liveness: {
+          ...liveness,
+          get namespace() {
+            // This liveness check occurs after detection, before lock acquisition.
+            if (!rechecked) {
+              const changed = JSON.parse(before);
+              const binding = retired ? changed.retired.at(-1).claude : changed.clients.claude;
+              binding.profileRoot = profile;
+              writeFileSync(path, JSON.stringify(changed));
+              rechecked = true;
+            }
+            return liveness.namespace;
+          },
+        },
+      };
+      await assert.rejects(initializePairing(input), (error) => {
+        assert.equal(error.message, "claude_profile_mismatch");
+        assert.match(error.stack, /withFileLock/, "failure comes from the locked recheck");
+        return true;
+      });
+      assert.equal(rechecked, true, "conflict introduced at lock boundary");
+      const after = JSON.parse(await readFile(path, "utf8"));
+      assert.equal(
+        (retired ? after.retired.at(-1).claude : after.clients.claude).profileRoot,
+        profile,
+        "setup never overwrites concurrent ownership",
+      );
+    });
+  }
+});
+
+test("retired markers remain private and fail closed after metadata loss", async (t) => {
+  for (const damage of ["intact", "permissions", "corruption", "symlink"]) {
+    await t.test(damage, async (t) => {
+      const options = await paired(t);
+      const paths = stateLocations(options);
+      await resetIdentity({
+        ...options,
+        root: join(options.home, "reset"),
+        primaryClient: "codex",
+        confirmIdentityReset: true,
+      });
+      const marker = join(paths.defaultRoot, "retired");
+      assert.equal((await stat(marker)).mode & 0o777, 0o600);
+      if (damage === "permissions") await chmod(marker, 0o644);
+      if (damage === "corruption") await writeFile(marker, "{");
+      if (damage === "symlink") {
+        const target = join(options.home, "marker-target");
+        await privateWrite(target, JSON.stringify({ version: 1, retired: true }));
+        await unlink(marker);
+        await symlink(target, marker);
+      }
+      await unlink(paths.install);
+      const binding = await resolveClient({ ...options, pairingRecord: undefined });
+      assert.equal(binding.enabled, false);
+      assert.match(binding.status, /coordination_unreadable/);
+    });
+  }
 });

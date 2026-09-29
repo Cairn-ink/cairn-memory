@@ -42,9 +42,10 @@ An explicitly paired plugin uses the recorded durable shared root:
 Version 0.1.2 also stores coordination metadata under
 `~/.cairn-memory-clients/`, independently of `CLAUDE_PLUGIN_DATA`:
 
-- `install.json`: version, established/pending client/root bindings and the registered Claude
-  profile root, initialization
-  and configuration progress; explicit resets retain invalidated binding metadata and Claude profile ownership;
+- `install.json`: version, established/pending client/root bindings and the
+  registered Claude profile root, initialization and configuration progress;
+  explicit resets retain invalidated binding metadata
+  and Claude profile ownership;
 - `pairing.json`: version, absolute shared root, participating clients, record ID,
   initialize/adopt policy;
 - `setup.lock` and token-specific owner/recovery files: process ownership for
@@ -57,7 +58,13 @@ local paths but no project keys, credentials or conversation text, and is never
 included in telemetry. Standalone use retains the
 falsy-home temporary fallback for these paths; setup and pairing require a
 specified absolute durable home. Standalone Claude preserves released key/root
-handling when coordination is unavailable and reports `standalone_unregistered`.
+handling when coordination is unavailable and reports `standalone_unregistered`
+for an evidenced legacy-gap root without a retirement marker. If either known
+plugin-data/default root has a retirement marker (or an invalid marker), degraded
+mode fails closed with `coordination_unreadable: pairing_needed`. Hooks exit 0
+and send nothing; status explains the failure and explicit controls fail visibly.
+This can temporarily disable independent profiles, preserving their identities
+until coordination is repaired. Metadata loss does not invalidate the marker.
 Pairing supports Linux within one PID namespace and macOS; Windows pairing is
 unsupported. Boot identity affects stale setup locks, never durable pair validity.
 On macOS, a wall-clock step over two seconds during a lock hold can make a live
@@ -73,13 +80,17 @@ registration exists, active or retired; shared telemetry/key/control files canno
 No host directory search or conversation read is involved.
 A delivered pairing record selects the shared root and pause generation;
 `CAIRN_MEMORY_STATE_DIR` is validated for paired worker handoffs, never an
-override; standalone hooks ignore inherited values, as 0.1.1 did. A different
-Claude plugin-data profile remains unregistered with its own key and pause;
+override; standalone hooks ignore inherited values, as 0.1.1 did. With readable
+coordination, a different Claude plugin-data profile remains unregistered with
+its own key and pause;
 pairing applies only to the registered profile.
 Paired key loss disables memory with `paired_key_missing`, while hooks still exit
 successfully. Restore the original backup key with stopped workers to retain IDs.
 An explicit identity reset retains old state, changes addressable project scope,
 starts paused at a fresh EOF barrier and requires new adoption by the second client.
+The retired shared root is also paused with a rotated generation and stores a
+private 0600 `retired` marker (`{"version":1,"retired":true}`), validated for ownership,
+permissions and symlinks like other private state.
 There is no automatic key regeneration, history merge or paused backfill for a pair.
 
 Stop and PreCompact pipe only session id, transcript path, working directory,

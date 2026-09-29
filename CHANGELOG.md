@@ -61,7 +61,9 @@
   share its key and pause. Standalone ignores inherited `CAIRN_MEMORY_STATE_DIR`.
 - Keep standalone Claude on its released key/path behavior, including host-created
   directories, symlinked ancestors and platforms without POSIX owner APIs.
-  Coordination failures report unregistered status without disabling memory.
+  Degraded coordination preserves a genuine legacy-gap identity without a
+  retirement marker. Reset pauses and marks the retired root; degraded access to
+  a marked root fails closed with a clear status and successful hook exits.
   Golden fixtures compare memory traffic against 0.1.1, allowing only VERSION
   changes in telemetry. Codex installation and real-host setup remain future work.
 

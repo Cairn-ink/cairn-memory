@@ -93,16 +93,18 @@ values and 12 concurrent hooks per simulated platform. Exact delivery is require
 A separate one-HOME, two-profile golden checks distinct keys/IDs and pause isolation;
 only the new unregistered status note is normalized for that status comparison.
 
-`install.clients.claude.profileRoot` is required in every Claude binding, including
-active and retired reset bindings. It is the host's plugin-data root, or the legacy default when the
-host leaves `CLAUDE_PLUGIN_DATA` unset. Reset and adoption preserve it.
+`install.clients.claude.profileRoot` is required in every Claude binding,
+including active and retired reset bindings. It is the host's plugin-data root,
+or the legacy default when the host leaves `CLAUDE_PLUGIN_DATA` unset. Reset and
+adoption preserve it.
 CX-7 passes `claudeProfileRoot` explicitly; an existing registration is preserved.
 Without either, setup accepts its environment's `CLAUDE_PLUGIN_DATA`, or defaults
 to `knownClaudeRoot` only with `standardClaudeOrigin:true`. Otherwise it returns
 `claude_profile_root_required` without writes. Conflicting supplied profile roots
 fail with `claude_profile_mismatch`. No setup process guesses the legacy default.
 
-Other profiles remain unregistered at their own standalone roots. Cursor evidence
+With readable coordination, other profiles remain unregistered at their own
+standalone roots. Cursor evidence
 can select the legacy default only when there is no active or retired Claude registration.
 An explicitly delivered record for a different profile fails visibly with
 `pairing_record_mismatch`; hooks exit successfully without requests, while status
@@ -121,9 +123,19 @@ root; it cannot overwrite that ownership. Re-initialization preserves the retire
 profile when no explicit profile argument is supplied.
 
 If coordination is unreadable or untrusted, standalone fallback prefers an
-existing default-root key with Claude cursor evidence over creating a key in an
+existing default-root key with Claude cursor evidence and no retirement marker
+over creating a key in an
 empty plugin-data root, reporting `standalone_unregistered`. Losing metadata later
 therefore cannot cement a newly minted identity. Trusted active/retired metadata
 still prevents cursor-based adoption by another profile. A plugin-data key that
 already exists retains precedence. With plugin data unset, standalone uses the
 default root, including its key and pause if shared by another client.
+
+Before publishing a reset identity, reset pauses the old shared root, rotates its
+generation, and writes `retired` there using the private-state writer. The marker
+is `{"version":1,"retired":true}` and remains after retries and metadata loss.
+Degraded resolution checks only the known plugin-data/default root markers;
+present or invalid markers return disabled `coordination_unreadable: pairing_needed`.
+This check takes precedence over legacy-gap preservation and can disable an
+independent profile until metadata is repaired. Its existing key stays unchanged.
+Ownership never expires; CX-7 must supply explicit profile-move recovery.

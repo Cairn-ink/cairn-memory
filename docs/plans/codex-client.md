@@ -1188,10 +1188,10 @@ Resolved with the coordinator during CX-2:
   that bound means newcomer/confirmation required; merely having `sessions/`
   does not suffice. Shared key, telemetry and control files never count.
   With no active or retired Claude registration, evidence and no key in the
-  exported plugin-data
-  root, preserve the default root if the upgraded host newly exports
-  `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
-  evidence, when Codex is registered, the new Claude client sends nothing until
+  exported plugin-data root, preserve the default root if the upgraded host
+  newly exports `CLAUDE_PLUGIN_DATA`; both established clients show
+  `pairing_needed`. Without evidence, when Codex is registered, the new Claude
+  client sends nothing until
   explicit adoption. A plugin-data root that already holds a key always wins,
   even when an old default root contains a Claude cursor.
 - The internal client names are `claude` and `codex`. Version-1 `install.json`
@@ -1226,12 +1226,14 @@ Resolved with the coordinator during CX-2:
   hook/launcher variants include inherited state-dir values. One-HOME profile
   fixtures compare separate keys, IDs and pause against actual base; only the
   new unregistered status note is normalized for those status outputs.
-- Round-4 profile ownership resolution: every Claude binding requires
+- Profile ownership: every Claude binding requires
   `profileRoot`, the host plugin-data root or the default when the variable is
   unset. Registration, joint initialization, adoption, completion and reset all
-  retain it. A different profile always follows standalone root selection and is
-  unregistered. Cursor evidence can select the legacy default only with **no
-  active or retired Claude registration**, never after registered standalone or paired capture.
+  retain it. With trusted coordination, a different profile follows standalone
+  root selection and remains unregistered. Cursor evidence can select the legacy
+  default only with **no
+  active or retired Claude registration**, never after registered standalone
+  or paired capture.
   Explicit record delivery to a different profile fails `pairing_record_mismatch`;
   hooks still exit successfully, while status and controls report the error.
   CX-7 supplies `claudeProfileRoot` explicitly. Existing registration or the setup
@@ -1245,7 +1247,8 @@ Resolved with the coordinator during CX-2:
   fresh profiles cannot replace it. Setup profile conflicts use
   `claude_profile_mismatch`; delivered-record conflicts retain their record status.
   When metadata is unreadable/untrusted, standalone fallback preserves an
-  evidenced existing default-root key rather than minting a key in an empty
+  evidenced existing default-root key without a retirement marker rather than
+  minting a key in an empty
   plugin-data root, with `standalone_unregistered`. Later metadata loss must not
   make an accidental identity change permanent. This conservative fallback is
   distinct from adoption based on trusted active/retired metadata.
@@ -1287,57 +1290,30 @@ an existing different destination key, preserve the source, and leave both
 clients pending until configuration completes. This is an API tested with
 synthetic paths, not an executed real-user migration.
 
-Round-1 verification was superseded by the round-2 standalone regressions above.
-Round-2 runtime results are recorded with the implementation handoff; synthetic
-platform simulation is not a native macOS/Windows or pinned-host acceptance run.
+The golden harness raises the control-lock timeout only in isolated base and
+candidate copies, preserving exact concurrent delivery assertions. Ordinary
+suite concurrency and the shared runner remain unchanged; only the three
+plugin/pairing commands add the thin home guard. Native host verification and
+release approval remain separate from synthetic validation.
 
-Round-2 synthetic verification on Linux, local Node **v22.16.0** and **v24.15.0**:
-`npm test` (167 tests), `npm run validate`, `npm run test:core` (1,105 tests),
-`npm run test:artifact` (86 tests), `npm run test:pairing` (36 tests),
-`npm run test:pairing:golden` (actual-base reproduction), `demo:capture`,
-`demo:recall`, `test:workspace-lifecycle` (25 tests), and `git diff --check`
-exited 0 on each runtime. The first Node 22 plugin run with parallel test files
-observed 11 of 12 concurrent requests; round 2 serialized plugin/pairing test files
-while their 12–20 hook processes remain concurrent. The full plugin retry passed;
-the inherited production pause-lock deadline was not changed. All suites ran
-sequentially with temporary homes and worktree TMPDIR/cache; exact cached public
-package entries supplied the offline artifact checks. No model or host CLI calls,
-real-user state access, installer or native macOS/Windows acceptance is implied.
+A reset also pauses the retired shared root and rotates its control generation,
+then writes an owner-only `retired` marker there before creating the new identity.
+The marker is private JSON `{"version":1,"retired":true}`, mode 0600 in the private
+root, with the same owner/symlink/inode checks as other private state. Reset
+retries keep the old root paused; the marker is never automatically removed.
 
-Round 3 supersedes that serialization workaround: independent review reproduced
-the inherited 250 ms timeout in base as well. The golden-only timeout adjustment
-now exercises exact delivery in both copies with ordinary test-file concurrency.
-The global guard runner and wrapped demos from round 2 are reverted per the
-coordinator decision; only the three pairing/plugin commands add the thin guard.
+When coordination is unreadable or untrusted, Claude checks the exact known
+plugin-data and default roots for retirement markers. A present or invalid marker
+fails closed with `coordination_unreadable: pairing_needed`: hooks exit 0 and send
+nothing; status explains the problem and pause/resume fail visibly. A marker also
+prevents re-adoption from cursors after install metadata is lost. This may disable
+an independent profile during degradation rather than risk a retired identity.
+Readable coordination restores its existing independent key and ID. Without a
+retirement marker, the genuine legacy-gap fallback preserves its existing key
+and reports `standalone_unregistered`; an existing plugin-data key retains its
+normal precedence. No untrusted metadata may unpause a retired root.
 
-Round-3 synthetic verification used local Node **v22.16.0** and **v24.15.0**
-on Linux. On each runtime, plugin tests (169), pairing tests (38), validation,
-artifact tests (86), MCP tests (91), OpenAI tests (304), and both unwrapped demos
-exited 0. Actual-base golden reproduction passed five normal runs and five runs
-under `taskset -c 0-1` on each runtime, including exact concurrent delivery.
-All four demo databases were retained. Core tests (1,105) passed on Node 24;
-Node 22 initially failed two existing invocation-deadline timing assertions, then
-passed both a targeted retry and the complete unchanged core suite. No core file
-or production timeout was changed. Whitespace checks passed. Suites ran
-sequentially with synthetic homes and worktree TMPDIR/cache, without host/model
-calls. Native macOS host verification remains pending.
-
-Round-4 synthetic verification on Linux used local Node **v22.16.0** and
-**v24.15.0**. On both versions, `npm test` (175), validation, core (1,105),
-artifact (86), pairing (44), MCP (91), OpenAI (304), and both demos exited 0.
-Actual-base golden reproduction passed five runs per runtime. Both core runs
-passed without retries. Suites were sequential with synthetic homes and worktree
-TMPDIR/cache; no host or model calls were made. Whitespace checks passed. Demo
-databases are removed after this round rather than retained. Native host
-verification and release approval remain separate.
-
-Round-5 synthetic verification on Linux used local Node **v22.16.0** and
-**v24.15.0**. On both, `npm test` (177), `npm run validate`, `test:core`
-(1,105), `test:artifact` (86), `test:pairing` (46), `test:mcp` (91),
-`test:openai` (304), `demo:capture`, and `demo:recall` exited 0.
-`npm run test:pairing:golden` passed five separate runs per runtime.
-All suites ran sequentially with synthetic HOME and worktree TMPDIR/npm cache;
-artifact installs used cached public packages offline. No retries, host calls,
-model calls or production timeout changes were needed. `git diff --check`
-passed. The four demo databases and all round-5 scratch are removed after
-verification. Native host verification and release approval remain separate.
+Active and retired Claude ownership is permanent in this API. CX-7 must provide
+an explicit recovery path to move a HOME to a different Claude profile, with
+stopped hosts/workers, consent and identity implications made clear. CX-2 does
+not implement that recovery UI or silently replace recorded ownership.

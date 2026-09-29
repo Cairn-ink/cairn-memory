@@ -80,3 +80,12 @@ Reset retains Claude's profile ownership even when Codex is primary. That Claude
 remains disabled with `pairing_needed` until explicit re-adoption; a stale delivered
 record reports `pairing_record_missing`. Setup profile conflicts report
 `claude_profile_mismatch`, distinct from wrong-record delivery.
+
+If coordination cannot be trusted, a genuine legacy-gap root without a retirement
+marker retains its existing identity and reports `standalone_unregistered`.
+Reset pauses the old shared root, rotates its generation, and writes a private
+`retired` marker. In degraded mode a marker at the known plugin-data or default
+root (including an invalid marker) disables memory with
+`coordination_unreadable: pairing_needed`. Hooks exit successfully without requests;
+status reports the problem and pause/resume fail visibly. Independent profiles may
+also be disabled until coordination is repaired; their keys are not changed.

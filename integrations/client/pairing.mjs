@@ -86,7 +86,7 @@ function validateInstall(value) {
 }
 // Retired ownership still identifies the profile that must explicitly re-adopt.
 function claudeRegistration(install) {
-  return install.clients.claude ?? install.retired?.findLast((entry) => entry.claude)?.claude;
+  return install.clients.claude ?? install.retired?.at(-1)?.claude;
 }
 
 function validateRecord(record, locations) {
@@ -283,14 +283,20 @@ async function selectBinding(options, snapshot, delivered) {
   const { client = "claude", env = process.env } = options;
   const { locations, install, record, keys } = snapshot;
   const binding = install.clients[client];
+  const registration = claudeRegistration(install);
+  if (
+    client === "claude" &&
+    !registration &&
+    ((await retiredRoot(locations.defaultRoot)) || (await retiredRoot(locations.claudeRoot)))
+  )
+    return disabled("coordination_unreadable: pairing_needed");
   const legacyClaude =
     client === "claude" &&
-    !claudeRegistration(install) &&
+    !registration &&
     (locations.claudeRoot === locations.defaultRoot || !keys.includes(locations.claudeRoot)) &&
     keys.includes(locations.defaultRoot) &&
     (await hasClaudeEvidence(locations.defaultRoot));
   const claudeRoot = legacyClaude ? locations.defaultRoot : locations.claudeRoot;
-  const registration = claudeRegistration(install);
   const profileRoot = registration?.profileRoot;
   if (delivered !== undefined) {
     if (!absolute(delivered) || delivered !== locations.pairing) {
@@ -348,7 +354,29 @@ async function selectBinding(options, snapshot, delivered) {
   return activeBinding(root, env, conflict ? "pairing_needed" : "single");
 }
 
+async function retiredRoot(root) {
+  if (!absolute(root)) return false;
+  const marker = await jsonFile(join(root, "retired"));
+  if (marker === undefined) return false;
+  if (marker?.version !== 1 || marker.retired !== true) fail("invalid_retired_marker");
+  await checkedPath(root, { directory: true });
+  return true;
+}
+
 async function fallbackStandalone(options, delivered, snapshot) {
+  const locations = stateLocations(options);
+  if (
+    (options.client ?? "claude") === "claude" &&
+    (!snapshot || !claudeRegistration(snapshot.install))
+  ) {
+    try {
+      for (const root of new Set([locations.claudeRoot, locations.defaultRoot])) {
+        if (await retiredRoot(root)) return disabled("coordination_unreadable: pairing_needed");
+      }
+    } catch {
+      return disabled("coordination_unreadable: pairing_needed");
+    }
+  }
   if (
     (options.client ?? "claude") !== "claude" ||
     delivered !== undefined ||
@@ -358,7 +386,6 @@ async function fallbackStandalone(options, delivered, snapshot) {
     snapshot?.install.clients.codex
   )
     return undefined;
-  const locations = stateLocations(options);
   // Even an unreadable surviving record proves this is not standalone.
   try {
     await lstat(locations.pairing);
@@ -646,6 +673,13 @@ export async function resetIdentity(options = {}) {
       fail("pending_binding_mismatch");
     install.resetPending = { root: options.root, client: options.primaryClient };
     await saveInstall(locations, install);
+    // Retire the old root before the new identity can become active. Retrying a
+    // stopped-host reset may rotate again, but never re-enables old workers.
+    await setPaused(install.shared.root, true, { rotate: true });
+    await privateWrite(
+      join(install.shared.root, "retired"),
+      JSON.stringify({ version: 1, retired: true }),
+    );
     await projectKey(options.root);
     await setPaused(options.root, true, { rotate: true });
     const retired = [
