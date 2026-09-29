@@ -1,12 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile, readFile, appendFile, unlink } from "node:fs/promises";
+import { mkdir, writeFile, readFile, appendFile, unlink, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
-import { initializePairing, completePairing, resolveClient, clientProjectId } from "../pairing.mjs";
+import {
+  initializePairing,
+  completePairing,
+  resolveClient,
+  clientProjectId,
+  resetIdentity,
+  detectClients,
+} from "../pairing.mjs";
 import { setPaused } from "../control-state.mjs";
 const hook = fileURLToPath(
   new URL("../../../plugins/cairn-memory/scripts/hook.mjs", import.meta.url),
@@ -260,7 +267,6 @@ test("paired capture evidence does not adopt another Claude profile", async (t) 
   assert.match(control.stderr + control.stdout, /pairing_record_mismatch/);
 });
 
-
 test("registered standalone default capture does not move a fresh profile", async (t) => {
   const f = await setup(t, false);
   const transcript = join(f.workspace.path, "standalone.jsonl");
@@ -278,4 +284,82 @@ test("registered standalone default capture does not move a fresh profile", asyn
   assert.ok(await readFile(join(profile, "project-key"), "utf8"));
   await f.run("pause", {}, overrides);
   assert.match((await f.run("status", {}, defaults)).stdout, /active/);
+});
+
+test("Codex reset preserves retired Claude ownership after paired capture", async (t) => {
+  const f = await setup(t);
+  const transcript = join(f.workspace.path, "reset.jsonl");
+  const event = { session_id: "reset", cwd: "/p", transcript_path: transcript };
+  await writeFile(transcript, row("before"));
+  await f.run("capture", event);
+  await appendFile(transcript, row("after"));
+  await f.run("capture", event);
+  const oldId = f.requests[0].body.project_id;
+  const root = join(f.options.home, "reset-root");
+  await resetIdentity({
+    ...f.options,
+    root,
+    primaryClient: "codex",
+    confirmIdentityReset: true,
+  });
+  const profile = join(f.options.home, "profile-b");
+  const overrides = { CLAUDE_PLUGIN_DATA: profile, CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: "" };
+  await f.run("recall", { ...event, prompt: "synthetic" }, overrides);
+  assert.notEqual(f.requests.at(-1).body.project_id, oldId);
+  assert.ok(await readFile(join(profile, "project-key")));
+  const install = (await detectClients(f.options)).install;
+  assert.equal(install.clients.claude, undefined);
+  assert.equal(install.retired.at(-1).claude.profileRoot, f.env.CLAUDE_PLUGIN_DATA);
+  const count = f.requests.length;
+  for (const option of [f.pending.pairingRecord, ""]) {
+    const env = { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: option };
+    assert.equal((await f.run("recall", { ...event, prompt: "synthetic" }, env)).code, 0);
+    const status = await f.run("status", {}, env);
+    assert.match(
+      status.stdout + status.stderr,
+      option ? /pairing_record_missing/ : /pairing_needed/,
+    );
+    await assert.rejects(readFile(join(f.env.CLAUDE_PLUGIN_DATA, "project-key")), {
+      code: "ENOENT",
+    });
+  }
+  assert.equal(f.requests.length, count);
+  const setupOptions = { ...f.options, env: { HOME: f.options.home }, root, adopt: true };
+  await initializePairing(setupOptions);
+  await completePairing({ ...setupOptions, configured: f.options.consent });
+  assert.equal(
+    (await detectClients(f.options)).install.clients.claude.profileRoot,
+    f.env.CLAUDE_PLUGIN_DATA,
+  );
+  assert.match((await f.run("status")).stdout, /paused/);
+});
+
+test("untrusted then lost metadata never moves an established legacy-gap identity", async (t) => {
+  for (const damage of ["permissions", "corruption"]) {
+    const f = await setup(t, false);
+    const root = join(f.options.home, ".cairn-memory");
+    const transcript = join(f.workspace.path, "legacy.jsonl");
+    const event = { session_id: "legacy", cwd: "/p", transcript_path: transcript };
+    await writeFile(transcript, row("legacy"));
+    await f.run("capture", event, { CLAUDE_PLUGIN_DATA: undefined });
+    const oldId = f.requests[0].body.project_id;
+    const coordination = join(f.options.home, ".cairn-memory-clients");
+    const install = join(coordination, "install.json");
+    // Simulate pre-0.1.2 cursors, then register the upgraded plugin-data profile.
+    await unlink(install);
+    await f.run("recall", { ...event, prompt: "synthetic" });
+    assert.equal(f.requests.at(-1).body.project_id, oldId);
+    if (damage === "permissions") await chmod(coordination, 0o755);
+    else await writeFile(install, "{");
+    for (const lost of [false, true]) {
+      if (lost) await unlink(install);
+      await f.run("recall", { ...event, prompt: "synthetic" });
+      assert.equal(f.requests.at(-1).body.project_id, oldId);
+      await assert.rejects(readFile(join(f.env.CLAUDE_PLUGIN_DATA, "project-key")), {
+        code: "ENOENT",
+      });
+      assert.ok(await readFile(join(root, "project-key")));
+      if (!lost) assert.match((await f.run("status")).stdout, /standalone_unregistered/);
+    }
+  }
 });

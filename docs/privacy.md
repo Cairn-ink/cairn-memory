@@ -44,7 +44,7 @@ Version 0.1.2 also stores coordination metadata under
 
 - `install.json`: version, established/pending client/root bindings and the registered Claude
   profile root, initialization
-  and configuration progress; explicit resets retain invalidated binding metadata;
+  and configuration progress; explicit resets retain invalidated binding metadata and Claude profile ownership;
 - `pairing.json`: version, absolute shared root, participating clients, record ID,
   initialize/adopt policy;
 - `setup.lock` and token-specific owner/recovery files: process ownership for
@@ -69,8 +69,8 @@ Pairing requires consent and stopped hosts/workers. Newcomers remain disabled wi
 `pairing_needed`; established conflicting clients keep their own existing keys.
 Only Claude writes `sessions/`. A bounded check of valid cursor metadata there can
 establish prior Claude use of a shared default root only when no Claude
-registration exists; shared telemetry/key/control files cannot. No host directory
-search or conversation read is involved.
+registration exists, active or retired; shared telemetry/key/control files cannot.
+No host directory search or conversation read is involved.
 A delivered pairing record selects the shared root and pause generation;
 `CAIRN_MEMORY_STATE_DIR` is validated for paired worker handoffs, never an
 override; standalone hooks ignore inherited values, as 0.1.1 did. A different

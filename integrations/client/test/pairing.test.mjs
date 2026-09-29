@@ -179,7 +179,12 @@ test("two established keys retain separate IDs and both expose conflict", async 
   }
   const consent = { claude: true, codex: true };
   await initializePairing({
-    ...options, claudeProfileRoot: root, root, adopt: true, consent, hostsStopped: true,
+    ...options,
+    claudeProfileRoot: root,
+    root,
+    adopt: true,
+    consent,
+    hostsStopped: true,
   });
   const ready = await completePairing({ ...options, configured: consent, hostsStopped: true });
   assert.equal(
@@ -746,7 +751,9 @@ test("strict pairing permits host-owned symlink ancestors and absent getuid", as
   try {
     process.getuid = undefined;
     const input = {
-      ...options, home: alias, claudeProfileRoot: join(alias, ".cairn-memory"),
+      ...options,
+      home: alias,
+      claudeProfileRoot: join(alias, ".cairn-memory"),
       env: { HOME: alias },
     };
     const pending = await initializePairing(input);
@@ -881,9 +888,16 @@ test("external setup uses a confirmed standard profile or requires an explicit r
     hostsStopped: true,
     consent: { claude: true, codex: true },
   });
-  assert.equal((await initializePairing({
-    ...options, standardClaudeOrigin: false, usesClaude: false,
-  })).status, "claude_profile_root_required");
+  assert.equal(
+    (
+      await initializePairing({
+        ...options,
+        standardClaudeOrigin: false,
+        usesClaude: false,
+      })
+    ).status,
+    "claude_profile_root_required",
+  );
   assert.deepEqual(await readdir(options.home), []);
   const pending = await initializePairing(options);
   await completePairing({ ...options, configured: options.consent });
@@ -898,24 +912,31 @@ test("external setup uses a confirmed standard profile or requires an explicit r
   assert.equal(await clientProjectId(claude, "/p"), await clientProjectId(codex, "/p"));
   await setPaused((await resolveClient(codex)).root, true);
   assert.equal((await readControlState((await resolveClient(claude)).root)).paused, true);
-  await assert.rejects(resolveClient({
-    ...claude, env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "other") },
-  }), /pairing_record_mismatch/);
+  await assert.rejects(
+    resolveClient({
+      ...claude,
+      env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "other") },
+    }),
+    /pairing_record_mismatch/,
+  );
 });
 
 test("registered default-root cursors never move a fresh plugin-data profile", async (t) => {
   const options = await fixture(t);
   const root = (await resolveClient({ ...options, initialize: true })).root;
   await writeCaptureCursor(captureCursorPath(root, "registered"), { offset: 12 });
-  const other = { ...options, env: {
-    HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-b"),
-  } };
+  const other = {
+    ...options,
+    env: {
+      HOME: options.home,
+      CLAUDE_PLUGIN_DATA: join(options.home, "profile-b"),
+    },
+  };
   assert.equal((await resolveClient(other)).root, other.env.CLAUDE_PLUGIN_DATA);
   assert.notEqual(await clientProjectId(options, "/p"), await clientProjectId(other, "/p"));
   await setPaused(root, true);
   assert.equal((await readControlState(other.env.CLAUDE_PLUGIN_DATA)).paused, false);
 });
-
 
 test("explicit external profile participates in key detection and adoption", async (t) => {
   const options = await fixture(t, {
@@ -938,7 +959,12 @@ test("explicit external profile participates in key detection and adoption", asy
   };
   assert.equal((await resolveClient(host)).status, "paired");
   assert.equal((await detectClients(setup)).install.clients.claude.profileRoot, profile);
-  await assert.rejects(initializePairing({
-    ...setup, adopt: true, claudeProfileRoot: join(options.home, "different-profile"),
-  }), /pairing_record_mismatch/);
+  await assert.rejects(
+    initializePairing({
+      ...setup,
+      adopt: true,
+      claudeProfileRoot: join(options.home, "different-profile"),
+    }),
+    /claude_profile_mismatch/,
+  );
 });

@@ -61,11 +61,12 @@ macOS host behavior and Claude configuration on real hosts remain to verify.
 See [privacy](../../docs/privacy.md) and the
 [shared API](../../integrations/client/README.md) for state and recovery details.
 
-Each Claude plugin-data profile keeps its own root, key and pause. A different
+Distinct Claude plugin-data roots keep separate keys and pause state. With
+`CLAUDE_PLUGIN_DATA` unset, Claude uses the default root as 0.1.1 did and can
+share its key and pause. A different
 profile from the registered one runs as `standalone_unregistered`; it does not
-adopt that registration. Only when no Claude registration exists may a keyless
-profile use evidence of pre-0.1.2 Claude use in the legacy default root.
-Standalone hooks ignore inherited `CAIRN_MEMORY_STATE_DIR`; paired worker handoffs validate it.
+adopt that registration. Only when no active or retired Claude registration exists
+may a keyless profile use evidence of pre-0.1.2 Claude use in the legacy default root.
 
 macOS setup-lock boot estimates tolerate two seconds of sampling drift. A wall
 clock step larger than two seconds while a lock is held can make a live owner
@@ -74,3 +75,8 @@ look stale; setup lock holds are short, and native host verification is pending.
 An explicitly delivered record for another profile fails with
 `pairing_record_mismatch`. Hooks still exit successfully without memory requests;
 status and explicit controls report the mismatch.
+
+Reset retains Claude's profile ownership even when Codex is primary. That Claude
+remains disabled with `pairing_needed` until explicit re-adoption; a stale delivered
+record reports `pairing_record_missing`. Setup profile conflicts report
+`claude_profile_mismatch`, distinct from wrong-record delivery.

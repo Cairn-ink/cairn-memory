@@ -49,18 +49,16 @@
 
 ## 0.1.2 — explicit client pairing
 
-- Preserve Claude profile ownership through identity reset and re-pairing. External
-  setup accepts an explicit profile root; only confirmed standard origins use the
-  marketplace default. Registered capture cursors never redirect another profile,
-  and a record delivered to the wrong profile reports a mismatch.
-- Add the optional Claude `pairing_record` setting and validated worker root
-  delivery. Explicit adoption shares project identity and pause barriers; new
-  clients remain disabled until binding completes.
-- Add private coordination records, serialized joint-initialization APIs for
-  future setup, durable no-clobber key publication, and paired lost-key handling.
-- Keep separate Claude profiles on separate keys and pause state; an unregistered
-  profile never inherits another profile's pairing. Standalone ignores inherited
-  `CAIRN_MEMORY_STATE_DIR`, as 0.1.1 did.
+- Add the optional Claude `pairing_record` setting and validated paired-worker
+  root delivery. Explicit adoption shares identity and pause barriers; new clients
+  remain disabled until binding completes. Wrong-profile records fail visibly.
+- Add private coordination records, joint-initialization APIs for future setup,
+  durable no-clobber key publication, and paired lost-key handling. Setup accepts
+  an explicit profile root or a confirmed standard origin. Retired bindings keep
+  profile ownership through identity reset and explicit re-adoption.
+- Keep distinct plugin-data profiles on separate keys and pause state. With
+  `CLAUDE_PLUGIN_DATA` unset, Claude uses the default root as 0.1.1 did and can
+  share its key and pause. Standalone ignores inherited `CAIRN_MEMORY_STATE_DIR`.
 - Keep standalone Claude on its released key/path behavior, including host-created
   directories, symlinked ancestors and platforms without POSIX owner APIs.
   Coordination failures report unregistered status without disabling memory.

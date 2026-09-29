@@ -1187,7 +1187,8 @@ Resolved with the coordinator during CX-2:
   this Cairn directory, without recursion or transcript reads. No evidence within
   that bound means newcomer/confirmation required; merely having `sessions/`
   does not suffice. Shared key, telemetry and control files never count.
-  With no Claude registration, evidence and no key in the exported plugin-data
+  With no active or retired Claude registration, evidence and no key in the
+  exported plugin-data
   root, preserve the default root if the upgraded host newly exports
   `CLAUDE_PLUGIN_DATA`; both established clients show `pairing_needed`. Without
   evidence, when Codex is registered, the new Claude client sends nothing until
@@ -1230,7 +1231,7 @@ Resolved with the coordinator during CX-2:
   unset. Registration, joint initialization, adoption, completion and reset all
   retain it. A different profile always follows standalone root selection and is
   unregistered. Cursor evidence can select the legacy default only with **no
-  Claude registration**, never after registered standalone or paired capture.
+  active or retired Claude registration**, never after registered standalone or paired capture.
   Explicit record delivery to a different profile fails `pairing_record_mismatch`;
   hooks still exit successfully, while status and controls report the error.
   CX-7 supplies `claudeProfileRoot` explicitly. Existing registration or the setup
@@ -1238,7 +1239,16 @@ Resolved with the coordinator during CX-2:
   `standardClaudeOrigin:true` permits `knownClaudeRoot`. Without that evidence,
   setup returns `claude_profile_root_required` without writes, never guessing the
   legacy default. Reset preserves profile ownership and selects the new paused
-  root; re-pairing keeps that same ownership.
+  root; re-pairing keeps that same ownership. Every reset retains the retired
+  Claude binding and `profileRoot` in `retired[].claude`, whichever client is
+  primary. A Codex-primary reset leaves that Claude disabled pending adoption;
+  fresh profiles cannot replace it. Setup profile conflicts use
+  `claude_profile_mismatch`; delivered-record conflicts retain their record status.
+  When metadata is unreadable/untrusted, standalone fallback preserves an
+  evidenced existing default-root key rather than minting a key in an empty
+  plugin-data root, with `standalone_unregistered`. Later metadata loss must not
+  make an accidental identity change permanent. This conservative fallback is
+  distinct from adoption based on trusted active/retired metadata.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
   writes pending bindings before publishing a key and returns `binding_pending`.
@@ -1320,3 +1330,14 @@ passed without retries. Suites were sequential with synthetic homes and worktree
 TMPDIR/cache; no host or model calls were made. Whitespace checks passed. Demo
 databases are removed after this round rather than retained. Native host
 verification and release approval remain separate.
+
+Round-5 synthetic verification on Linux used local Node **v22.16.0** and
+**v24.15.0**. On both, `npm test` (177), `npm run validate`, `test:core`
+(1,105), `test:artifact` (86), `test:pairing` (46), `test:mcp` (91),
+`test:openai` (304), `demo:capture`, and `demo:recall` exited 0.
+`npm run test:pairing:golden` passed five separate runs per runtime.
+All suites ran sequentially with synthetic HOME and worktree TMPDIR/npm cache;
+artifact installs used cached public packages offline. No retries, host calls,
+model calls or production timeout changes were needed. `git diff --check`
+passed. The four demo databases and all round-5 scratch are removed after
+verification. Native host verification and release approval remain separate.

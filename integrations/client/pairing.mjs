@@ -74,8 +74,21 @@ function validateInstall(value) {
       typeof value.shared.ready !== "boolean")
   )
     fail("invalid_install");
+  if (
+    value.retired !== undefined &&
+    (!Array.isArray(value.retired) ||
+      value.retired.some(
+        (entry) => !entry || !absolute(entry.claude?.profileRoot) || !absolute(entry.claude?.root),
+      ))
+  )
+    fail("invalid_install");
   return value;
 }
+// Retired ownership still identifies the profile that must explicitly re-adopt.
+function claudeRegistration(install) {
+  return install.clients.claude ?? install.retired?.findLast((entry) => entry.claude)?.claude;
+}
+
 function validateRecord(record, locations) {
   if (
     !record ||
@@ -272,12 +285,13 @@ async function selectBinding(options, snapshot, delivered) {
   const binding = install.clients[client];
   const legacyClaude =
     client === "claude" &&
-    !install.clients.claude &&
+    !claudeRegistration(install) &&
     (locations.claudeRoot === locations.defaultRoot || !keys.includes(locations.claudeRoot)) &&
     keys.includes(locations.defaultRoot) &&
     (await hasClaudeEvidence(locations.defaultRoot));
   const claudeRoot = legacyClaude ? locations.defaultRoot : locations.claudeRoot;
-  const profileRoot = binding?.profileRoot;
+  const registration = claudeRegistration(install);
+  const profileRoot = registration?.profileRoot;
   if (delivered !== undefined) {
     if (!absolute(delivered) || delivered !== locations.pairing) {
       fail("pairing_record_mismatch");
@@ -285,10 +299,11 @@ async function selectBinding(options, snapshot, delivered) {
     if (!record) fail("pairing_record_missing");
   }
   // A registry entry belongs to one profile, not every Claude sharing this HOME.
-  if (client === "claude" && binding && locations.claudeRoot !== profileRoot) {
+  if (client === "claude" && registration && locations.claudeRoot !== profileRoot) {
     if (delivered !== undefined) fail("pairing_record_mismatch");
     return activeBinding(claudeRoot, env, "standalone_unregistered");
   }
+  if (client === "claude" && registration && !binding) return disabled();
   if (install.resetPending) return disabled();
   if (record || install.shared || binding?.state === "pending") {
     if (!record || !delivered || !install.shared?.ready) return disabled();
@@ -362,16 +377,10 @@ async function fallbackStandalone(options, delivered, snapshot) {
       if (error.code !== "ENOENT") throw error;
     }
   }
-  let unregistered = snapshot ? !snapshot.install.clients.claude : false;
-  if (!snapshot) {
-    try {
-      await lstat(locations.install);
-    } catch (error) {
-      unregistered = error.code === "ENOENT";
-    }
-  }
+  // Untrusted metadata cannot justify minting a replacement for an evidenced key.
+  const preserveLegacy = !snapshot || !claudeRegistration(snapshot.install);
   if (explicitKey) root = locations.claudeRoot;
-  else if (unregistered) {
+  else if (preserveLegacy) {
     try {
       if (
         (await keyPresent(locations.defaultRoot)) &&
@@ -478,11 +487,14 @@ export async function initializePairing(options = {}) {
   if (initial.record && !initial.install.shared) fail("pairing_record_mismatch");
   const profileRoot =
     options.claudeProfileRoot ??
-    initial.install.clients.claude?.profileRoot ??
+    claudeRegistration(initial.install)?.profileRoot ??
     (options.env ?? process.env).CLAUDE_PLUGIN_DATA ??
     (options.standardClaudeOrigin === true ? locations.knownClaudeRoot : undefined);
   if (profileRoot === undefined) return disabled("claude_profile_root_required");
   if (!absolute(profileRoot)) fail("invalid_claude_profile_root");
+  const registeredProfile = claudeRegistration(initial.install)?.profileRoot;
+  if (registeredProfile !== undefined && registeredProfile !== profileRoot)
+    fail("claude_profile_mismatch");
   if (!options.standardClaudeOrigin && options.usesClaude === undefined)
     return { status: "claude_confirmation_needed", enabled: false };
   if (
@@ -494,8 +506,8 @@ export async function initializePairing(options = {}) {
   )
     return disabled();
   return locked(setupOptions, async ({ install, keys, record: existingRecord }) => {
-    if (install.clients.claude && install.clients.claude.profileRoot !== profileRoot)
-      fail("pairing_record_mismatch");
+    const registration = claudeRegistration(install);
+    if (registration && registration.profileRoot !== profileRoot) fail("claude_profile_mismatch");
     if (existingRecord && (!install.shared || !install.shared.initialized))
       fail("pairing_record_mismatch");
     if (install.resetPending) fail("identity_reset_pending");
@@ -636,7 +648,10 @@ export async function resetIdentity(options = {}) {
     await saveInstall(locations, install);
     await projectKey(options.root);
     await setPaused(options.root, true, { rotate: true });
-    const retired = [...(install.retired ?? []), { ...install.shared, invalidated: true }];
+    const retired = [
+      ...(install.retired ?? []),
+      { ...install.shared, invalidated: true, claude: { ...install.clients.claude } },
+    ];
     await unlink(locations.pairing).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
