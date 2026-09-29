@@ -374,8 +374,7 @@ async function runLifecycle(workspace, shared) {
 
 /** Executes the real shared core twice; reports only source-free probe roles. */
 export async function runRetainedWindowControl(workspace, {
-  questionIds = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6'], fault = null,
-  counterCeiling = limits.counterTokens,
+  fault = null, counterCeiling = limits.counterTokens,
 } = {}) {
   if (!workspace?.path || typeof workspace.defer !== 'function') throw new Error('owned_workspace_required');
   if (!Number.isSafeInteger(counterCeiling) || counterCeiling < 1 ||
@@ -422,7 +421,6 @@ export async function runRetainedWindowControl(workspace, {
       row.uniqueRetainedCount !== 5 || row.uniqueUnmatchedCount !== 1)) {
     throw new Error('baseline_observer_nonfit');
   }
-  const selected = questions.filter(question => questionIds.includes(question.id));
   const queries = [];
   let lifecycle = null;
   const reportMetrics = metrics();
@@ -454,7 +452,7 @@ export async function runRetainedWindowControl(workspace, {
     }
     return output;
   };
-  for (const question of selected) {
+  for (const question of questions) {
     if (question.id === 'Q6') continue;
     try {
       queries.push({ id: question.id,
@@ -468,15 +466,13 @@ export async function runRetainedWindowControl(workspace, {
       throw error;
     }
   }
-  if (selected.some(question => question.id === 'Q6')) {
-    try { lifecycle = await runLifecycle(workspace, shared); }
-    catch (error) {
-      if (shared.exceeded || error.message === 'recall_measurement_limit') {
-        return report('incomplete', shared.exceeded ? `resource_nonfit_${shared.exceeded}`
-          : 'recall_measurement_limit');
-      }
-      throw error;
+  try { lifecycle = await runLifecycle(workspace, shared); }
+  catch (error) {
+    if (shared.exceeded || error.message === 'recall_measurement_limit') {
+      return report('incomplete', shared.exceeded ? `resource_nonfit_${shared.exceeded}`
+        : 'recall_measurement_limit');
     }
+    throw error;
   }
   return report('completed');
 }

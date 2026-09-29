@@ -113,5 +113,8 @@ test('real counter guard, post-collection failure and watchdog clean owned scrat
   const cleanup = run(workspace, 300, '--fault=cleanup');
   assert.equal(cleanup.status, 1);
   assert.equal(cleanup.stdout, '');
+  assert.match(cleanup.stderr, /retained_window_report_ready/u);
   assert.match(cleanup.stderr, /retained_window_cleanup_failed/u);
+  assert.ok(cleanup.stderr.indexOf('retained_window_report_ready') <
+    cleanup.stderr.indexOf('retained_window_cleanup_failed'));
 });
