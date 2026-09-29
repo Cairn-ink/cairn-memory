@@ -44,6 +44,7 @@ async function goldenControlTimeout(plugin) {
 }
 export async function observeStandalone(plugin) {
   await goldenControlTimeout(plugin);
+  const candidate = !(await readFile(join(plugin, "lib/version.mjs"), "utf8")).includes("0.1.1");
   const workspace = createTestWorkspace(null, { prefix: "cx2-golden-" });
   try {
     const variants = [];
@@ -87,6 +88,7 @@ export async function observeStandalone(plugin) {
       "paired-marker-absent",
       "paired-marker-readable",
       "paired-marker-file",
+      "own-paired-default",
       "concurrent-linux",
       "concurrent-darwin",
       "concurrent-win32",
@@ -125,7 +127,9 @@ export async function observeStandalone(plugin) {
         if (mode === "coordination-file")
           await writeFile(join(home, ".cairn-memory-clients"), "not a Cairn directory");
         const fallback = ["falsy-home", "symlink-var"].includes(mode);
-        const pluginData = !["home", "falsy-home", "symlink-var"].includes(mode);
+        const pluginData = !["home", "falsy-home", "symlink-var", "own-paired-default"].includes(
+          mode,
+        );
         const root = mode.startsWith("plugin-empty")
           ? directory
           : pluginData
@@ -224,6 +228,13 @@ export async function observeStandalone(plugin) {
             await writeFile(join(legacy, "paired-root"), "{}", { mode: 0o600 });
           if (mode === "paired-marker-file") await writeFile(coordination, "not a directory");
         }
+        if (mode === "own-paired-default") {
+          await mkdir(root, { mode: 0o700 });
+          await writeFile(join(root, "project-key"), uuid + "\n", { mode: 0o600 });
+          await writeFile(join(root, "paired-root"), '{"version":1,"paired":true}', {
+            mode: 0o600,
+          });
+        }
         const requestsFile = join(directory, "requests.jsonl");
         const completions = join(directory, "completions");
         await writeFile(requestsFile, "");
@@ -314,7 +325,11 @@ export async function observeStandalone(plugin) {
             outcomes.push(await run(action));
           }
         } else outcomes = [await run("capture")];
-        if (entry === "launch-capture" && mode !== "paused-standalone") {
+        if (
+          entry === "launch-capture" &&
+          mode !== "paused-standalone" &&
+          !(candidate && mode.startsWith("local-marker-"))
+        ) {
           const expected = concurrent ? 12 : 1;
           const deadline = Date.now() + 45000;
           while (
@@ -331,7 +346,12 @@ export async function observeStandalone(plugin) {
           try {
             return await readFile(join(root, name), "utf8");
           } catch (error) {
-            if (mode.startsWith("plugin-empty") && error.code === "ENOENT") return null;
+            if (
+              (mode.startsWith("plugin-empty") ||
+                (candidate && mode.startsWith("local-marker-"))) &&
+              error.code === "ENOENT"
+            )
+              return null;
             throw error;
           }
         };
@@ -354,6 +374,32 @@ export async function observeStandalone(plugin) {
     await workspace.cleanup();
   }
 }
+export function candidateGolden(base) {
+  const expected = structuredClone(base);
+  for (const variant of expected) {
+    variant.requestBytes = variant.requestBytes.replaceAll(
+      '\\"version\\":\\"0.1.1\\"',
+      '\\"version\\":\\"0.1.2\\"',
+    );
+    // Coordinator's round-10 tie-break: local 0.1.2 history is not first use.
+    // These remain actual-base fixtures, but are refusal tests rather than parity.
+    if (variant.mode.startsWith("local-marker-")) {
+      variant.key = null;
+      variant.identity = null;
+      variant.requestBytes = "";
+      variant.outcomes = variant.outcomes.map((outcome, index) => ({
+        code: 0,
+        stderr: "",
+        stdout:
+          index === variant.outcomes.length - 1
+            ? "Cairn automatic memory: pairing_record_missing.\n"
+            : "",
+      }));
+    }
+  }
+  return expected;
+}
+
 export async function generateMainGolden(output) {
   const workspace = createTestWorkspace(null, { prefix: "cx2-base-" });
   try {
@@ -389,12 +435,7 @@ export async function verifyMainGolden(fixture) {
       await cp(join(repo, "plugins/cairn-memory", name), join(candidate, name), {
         recursive: true,
       });
-    const expected = structuredClone(golden.standalone);
-    for (const variant of expected)
-      variant.requestBytes = variant.requestBytes.replaceAll(
-        '\\"version\\":\\"0.1.1\\"',
-        '\\"version\\":\\"0.1.2\\"',
-      );
+    const expected = candidateGolden(golden.standalone);
     assert.deepEqual(await observeStandalone(candidate), expected);
     assert.deepEqual(await observeHosted(candidate), golden.hosted);
     assert.deepEqual(await observeProfiles(candidate), golden.profiles);

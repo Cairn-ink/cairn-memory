@@ -55,9 +55,11 @@ Call `clientProjectId(options, cwd)` for the unchanged HMAC identity, after chec
 key; it does not mean the clients share controls. A disabled newcomer never creates a key or sends
 memory requests. Hooks catch errors and exit successfully; explicit controls report errors visibly.
 
-Paired key loss returns `paired_key_missing`. With both clients stopped, restore the original key
-from backup with 0600 permissions, verify shared IDs, then resume. If the person instead chooses
-changed scope, call `resetIdentity` with a new root:
+Paired key loss returns `paired_key_missing`. With both clients stopped, call
+`repairIdentity({root, originalKey, confirmKeyRepair:true, hostsStopped:true})` to restore the
+original backup under the setup lock, then verify shared IDs before resuming. The recorded
+fingerprint must match; repair never generates a replacement or overwrites a different key. If the
+person instead chooses changed scope, call `resetIdentity` with a new root:
 
 ```js
 resetIdentity({
@@ -76,11 +78,12 @@ alone owns `sessions/`; Codex must use another cursor/worker location. Never inf
 shared control, telemetry or key files.
 
 Run `npm run test:pairing` with a synthetic HOME, worktree TMPDIR and npm cache. The fixture
-`claude-hosted-3a1c17d9.json` pins main's 0.1.1 behavior; tests allow only the 0.1.2 VERSION
-substitution. The maintenance `verifyMainGolden(fixturePath)` export in `testing/main-golden.mjs`
-reconstructs the pinned Git source and checks fixture reproducibility when that object is available;
-ordinary parity tests also work in shallow clones. The earlier CX-1 fixture remains checked for
-unchanged mechanisms and hosted capture behavior.
+`claude-hosted-3a1c17d9.json` pins main's 0.1.1 behavior; history-free tests allow only the 0.1.2
+VERSION substitution. Eight local-history variants instead assert the authorized round-10 refusals.
+The maintenance `verifyMainGolden(fixturePath)` export in `testing/main-golden.mjs` reconstructs the
+pinned Git source and checks fixture reproducibility when that object is available; ordinary parity
+tests also work in shallow clones. The earlier CX-1 fixture remains checked for unchanged mechanisms
+and hosted capture behavior.
 
 When the explicitly selected legacy key is in temporary storage, pass
 `adopt:true, adoptFrom:sourceRoot, root:durableRoot` to `initializePairing`. With stopped hosts and
@@ -144,34 +147,52 @@ without a record, `pairing_record_missing` with the stale delivered option). Ano
 unregistered at its own root; it cannot overwrite that ownership. Re-initialization preserves the
 retired profile when no explicit profile argument is supplied.
 
+Every binding operation also writes private `<profileRoot>/.cairn-memory-profile/binding.json` (0600
+inside a 0700 directory), containing version, profile root, bound root and a non-secret identity
+fingerprint. It contains no key or conversation data and is never transmitted. Both reset primaries
+rewrite it to the new root. Clearing an option does not remove it; CX-2 has no leave API. With
+binding history, missing, empty or untrusted coordination disables memory with
+`pairing_record_missing`, with no key creation or requests. Invalid binding history also refuses.
+Trusted coordination with a different identity reports `binding_identity_mismatch`.
+
+A `paired-root` entry prevents every ordinary key-creation path from replacing a lost key, including
+standalone access to that same root. Only explicit original-backup repair may restore it. An
+unset-plugin-data profile still shares an existing default-root key and pause when it has no
+conflicting binding history. A never-paired profile whose own root differs from the pair root cannot
+use that identity or change its pause. For state carrying 0.1.2 history, these invariants take
+precedence over standalone parity.
+
 Cursor-based legacy adoption requires a valid `project-key`, Claude-only cursor evidence, no active
 or retired Claude registration, and no `paired-root` entry. Garbage keys and directories named
 `project-key` do not qualify.
 
-Absent coordination preserves normal 0.1.1 first use, including an unusable HOME, a missing path,
-ENOTDIR, or a non-directory/foreign coordination entry. Degraded means an owned coordination
-directory cannot be listed, or its existing records cannot be read or trusted. It never creates a
-project key or infers adoption from Claude cursors. Without a delivered record, it uses an existing
-profile key, or a validated profile-local adoption record naming an existing default-root key. An
-eligible unretired root remains active as `standalone_unregistered`, with separate detail
-`coordination unreadable`. Otherwise memory is disabled with `pairing_needed`; a lost locally
-recorded standalone key reports `standalone_key_missing`, never `paired_key_missing`.
+For profiles without 0.1.2 binding or legacy history, absent coordination preserves normal 0.1.1
+first use, including an unusable HOME, a missing path, ENOTDIR, or a non-directory/foreign
+coordination entry. Degraded means an owned coordination directory cannot be listed, or its existing
+records cannot be read or trusted. It never creates a project key or infers adoption from Claude
+cursors. Without a delivered record, it uses an existing profile key, or a validated profile-local
+adoption record naming an existing default-root key. An eligible unretired root remains active as
+`standalone_unregistered`, with separate detail `coordination unreadable`. Otherwise memory is
+disabled with `pairing_needed`; a lost locally recorded standalone key in an unmarked root reports
+`standalone_key_missing`, never `paired_key_missing`.
 
 Registration of a genuine legacy-gap adoption first writes
 `<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned subdirectory). It
 records version, profile root and adopted default root, with no key or conversation content, and is
 never transmitted. This validated local history preserves that adoption only in degraded mode. With
-absent or readable coordination, the local marker does not change normal root selection or bypass
-registration gates. Initialization and adoption publish an owner-only `paired-root` marker in the
-shared root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
-adoption of that root, including after coordination loss. It does not pause or disable an otherwise
-entitled client. A fresh profile gets its own key after loss; an explicitly delivered missing record
-still reports `pairing_record_missing`. An existing profile key takes precedence. With readable
-coordination, only the registered profile follows its binding; another profile stays standalone.
-Unsupported registration on Windows adds no unregistered status note. An unrelated damaged default
-root does not prevent registration or add a status note. Only absolute plugin-data paths are
-registered, normalized with `path.resolve`; relative, empty or invalid paths retain standalone
-behavior without registration. Every install record is validated before publication.
+absent or empty coordination, local legacy history refuses with `pairing_record_missing`; it never
+authorizes silently minting a different identity. With readable registration it does not bypass
+profile ownership gates. Initialization, adoption, completion, reset destinations and repair publish
+a private `paired-root` marker in the shared root. Its positive presence, valid or invalid,
+permanently excludes cursor-based legacy adoption of that root, including after coordination loss.
+It does not pause or disable an otherwise entitled client. A fresh profile gets its own key after
+loss; an explicitly delivered missing record still reports `pairing_record_missing`. An existing
+profile key takes precedence. With readable coordination, only the registered profile follows its
+binding; another profile stays standalone. Unsupported registration on Windows adds no unregistered
+status note. An unrelated damaged default root does not prevent registration or add a status note.
+Only absolute plugin-data paths are registered, normalized with `path.resolve`; relative, empty or
+invalid paths retain standalone behavior without registration. Every install record is validated
+before publication.
 
 Retirement is checked only at the selected root. A present `retired` entry, valid or invalid,
 disables that root with `pairing_needed`; resume refuses to unpause it. Missing or inaccessible

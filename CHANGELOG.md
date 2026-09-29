@@ -53,7 +53,10 @@
   root delivery. Explicit adoption shares identity and pause barriers; new clients
   remain disabled until binding completes. Wrong-profile records fail visibly.
 - Add private coordination records, joint-initialization APIs for future setup,
-  durable no-clobber key publication, and paired lost-key handling. Setup accepts
+  durable no-clobber key publication, and paired lost-key handling. Every pair-root
+  operation marks its root; only explicit original-backup repair can restore a lost key.
+  Private profile-local binding history survives reset and coordination loss, refusing
+  memory with `pairing_record_missing` until consistent coordination is restored. Setup accepts
   an explicit profile root or a confirmed standard origin. Retired bindings keep
   profile ownership through identity reset and explicit re-adoption.
 - Keep distinct plugin-data profiles on separate keys and pause state. With
@@ -61,7 +64,8 @@
   share its key and pause. Standalone ignores inherited `CAIRN_MEMORY_STATE_DIR`.
 - Keep standalone Claude on its released key/path behavior, including host-created
   directories, symlinked ancestors and platforms without POSIX owner APIs.
-  Absent coordination retains normal first-use behavior; unreadable existing
+  Without 0.1.2 profile history, absent coordination retains normal first-use
+  behavior; unreadable existing
   coordination never mints a key. It preserves existing profile keys or a
   legacy adoption recorded privately in that profile, used only while degraded.
   Shared-root markers prevent fresh profiles from inferring legacy use after
@@ -73,8 +77,9 @@
   retired root. A present `retired` entry disables only the selected root, blocks resume
   and setup/reset reuse, and retains successful hook exits with a clear status.
   Temporary-source adoption rejects durable sources, which are adopted in place.
-  Golden fixtures compare memory traffic against 0.1.1, allowing only VERSION
-  changes in telemetry. Codex installation and real-host setup remain future work.
+  Golden fixtures compare history-free memory traffic against 0.1.1, allowing only
+  VERSION changes in telemetry. Separate history fixtures assert the authorized
+  refusals. Codex installation and real-host setup remain future work.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

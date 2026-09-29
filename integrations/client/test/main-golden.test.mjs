@@ -9,6 +9,7 @@ import {
   observeStandalone,
   observeProfiles,
   observeProfileForms,
+  candidateGolden,
 } from "../testing/main-golden.mjs";
 import { observeHosted } from "./observe-legacy.mjs";
 const plugin = fileURLToPath(new URL("../../../plugins/cairn-memory/", import.meta.url));
@@ -25,22 +26,15 @@ test("frozen golden pins main 0.1.1 and its complete runtime source inventory", 
   ]) {
     assert.match(golden.hashes[`plugins/cairn-memory/${file}`], /^[a-f0-9]{64}$/);
   }
-  assert.equal(golden.standalone.length, 84);
+  assert.equal(golden.standalone.length, 86);
 });
-test("isolated 0.1.2 plugin matches 0.1.1 bytes with only VERSION token changes", async (t) => {
+test("isolated plugin preserves no-history parity and explicitly refuses lost 0.1.2 history", async (t) => {
   const workspace = createTestWorkspace(t, { prefix: "cx2-main-parity-" });
   for (const name of ["lib", "scripts"])
     await cp(join(plugin, name), join(workspace.path, name), { recursive: true });
   const actual = await observeStandalone(workspace.path);
-  const expected = structuredClone(golden.standalone);
-  let substitutions = 0;
-  for (const variant of expected) {
-    variant.requestBytes = variant.requestBytes.replaceAll('\\"version\\":\\"0.1.1\\"', () => {
-      substitutions++;
-      return '\\"version\\":\\"0.1.2\\"';
-    });
-  }
-  assert.ok(substitutions > 0, "fixture must exercise telemetry VERSION");
+  const expected = candidateGolden(golden.standalone);
+  assert.equal(expected.filter((variant) => variant.mode.startsWith("local-marker-")).length, 8);
   assert.deepEqual(actual, expected);
   assert.deepEqual(await observeHosted(workspace.path), golden.hosted);
   assert.deepEqual(await observeProfiles(workspace.path), golden.profiles);

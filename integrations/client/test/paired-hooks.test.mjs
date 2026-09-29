@@ -363,8 +363,13 @@ test("untrusted then lost metadata never moves an established legacy-gap identit
         if (lost) await unlink(install);
         const count = f.requests.length;
         await f.run("recall", { ...event, prompt: "synthetic" });
-        assert.equal(f.requests.length, count + 1, `recall sent with metadata lost=${lost}`);
-        assert.equal(f.requests.at(-1).body.project_id, oldId);
+        assert.equal(
+          f.requests.length,
+          count + (lost ? 0 : 1),
+          `history preserves identity or refuses with metadata lost=${lost}`,
+        );
+        if (!lost) assert.equal(f.requests.at(-1).body.project_id, oldId);
+        else assert.match((await f.run("status")).stdout, /pairing_record_missing/);
         await assert.rejects(readFile(join(f.env.CLAUDE_PLUGIN_DATA, "project-key")), {
           code: "ENOENT",
         });
@@ -416,7 +421,9 @@ test("unreadable coordination cannot revive either reset primary's retired root"
         assert.equal(f.requests.length, count, "retired identity sends nothing");
         assert.match(
           (await f.run("status", {}, overrides)).stdout,
-          /pairing_needed; coordination unreadable/,
+          overrides.CLAUDE_PLUGIN_DATA
+            ? /pairing_needed; coordination unreadable/
+            : /pairing_record_missing/,
         );
         assert.notEqual((await f.run("resume", {}, overrides)).code, 0);
       }
@@ -473,7 +480,9 @@ test("custom-root resets never mint keys under degraded coordination", async (t)
         await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
         assert.match(
           (await f.run("status", {}, overrides)).stdout,
-          /pairing_needed; coordination unreadable/,
+          overrides.CLAUDE_PLUGIN_DATA
+            ? /pairing_needed; coordination unreadable/
+            : /pairing_record_missing/,
         );
       }
     });
@@ -686,3 +695,29 @@ for (const form of ["trailing", "relative", "empty"]) {
     assert.equal(pending.status, "binding_pending");
   });
 }
+
+test("a lost marked default key cannot be minted by any Claude entry point or profile", async (t) => {
+  const f = await setup(t);
+  await unlink(join(f.pending.root, "project-key"));
+  for (const overrides of [
+    {},
+    { CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined },
+    { CLAUDE_PLUGIN_DATA: undefined, CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: undefined },
+  ]) {
+    const before = f.requests.length;
+    for (const action of ["recall", "capture"])
+      assert.equal(
+        (await f.run(action, { cwd: "/synthetic/lost-key", prompt: "synthetic" }, overrides)).code,
+        0,
+      );
+    assert.equal(f.requests.length, before);
+    assert.match(
+      (await f.run("status", {}, overrides)).stdout,
+      /paired_key_missing|pairing_needed/,
+    );
+    assert.equal((await f.run("resume", {}, overrides)).code, 1);
+    assert.equal((await f.run("capture", {}, overrides, launcher)).code, 0);
+    await assert.rejects(readFile(join(f.pending.root, "project-key")), { code: "ENOENT" });
+  }
+  assert.equal((await initializePairing(f.options)).status, "paired_key_missing");
+});

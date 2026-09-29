@@ -11,10 +11,10 @@ import {
   realpath,
 } from "node:fs/promises";
 import { constants } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { privateDirectory, privateRead, privateWrite, checkedPath } from "./private-state.mjs";
 import { withFileLock } from "./file-lock.mjs";
-import { opaqueProjectId, projectKey } from "./identity.mjs";
+import { opaqueProjectId, projectKey, rootMarker, restoreProjectKey } from "./identity.mjs";
 import { setPaused, readControlState } from "./control-state.mjs";
 
 const CLIENTS = ["claude", "codex"];
@@ -370,20 +370,59 @@ async function selectCodexBinding(options, snapshot, delivered) {
   return activeBinding(root, env, conflict ? "pairing_needed" : "single");
 }
 
-async function rootMarker(root, name) {
-  // Only positive presence inside an owned directory establishes local history.
-  try {
-    const info = await stat(root);
-    if (!info.isDirectory() || !owned(info)) return false;
-    await lstat(join(root, name));
-    return true;
-  } catch {
-    return false;
-  }
-}
 const retiredRoot = (root) => absolute(root) && rootMarker(root, "retired");
 
 const profileMarkerPath = (root) => join(root, ".cairn-memory-profile", "legacy.json");
+const bindingHistoryPath = (root) => join(root, ".cairn-memory-profile", "binding.json");
+const identityFingerprint = (key) =>
+  createHmac("sha256", key).update("cairn-memory:binding:v1").digest("hex");
+
+async function readBindingHistory(profileRoot) {
+  const directory = join(profileRoot, ".cairn-memory-profile");
+  if (!(await probe(() => lstat(directory), undefined))) return { state: "absent" };
+  let entry;
+  try {
+    entry = await lstat(bindingHistoryPath(profileRoot));
+  } catch (error) {
+    return { state: ["ENOENT", "ENOTDIR"].includes(error.code) ? "absent" : "invalid" };
+  }
+  if (!entry) return { state: "absent" };
+  const value = await probe(async () => {
+    await checkedPath(directory, { directory: true });
+    return jsonFile(bindingHistoryPath(profileRoot));
+  }, undefined);
+  if (
+    value?.version !== 1 ||
+    value.profileRoot !== profileRoot ||
+    !absolute(value.root) ||
+    !/^[0-9a-f]{64}$/.test(value.fingerprint)
+  )
+    return { state: "invalid" };
+  return { state: "valid", ...value };
+}
+
+// Only explicit reset may replace recorded scope. No option-clearing/leave side effect.
+async function writeBindingHistory(profileRoot, root, { reset = false } = {}) {
+  const previous = await readBindingHistory(profileRoot);
+  const fingerprint = identityFingerprint(await projectKey(root, { create: false }));
+  if (previous.state === "invalid") fail("binding_identity_mismatch");
+  if (
+    !reset &&
+    previous.state === "valid" &&
+    (previous.root !== root || previous.fingerprint !== fingerprint)
+  )
+    fail("binding_identity_mismatch");
+  await privateWrite(
+    bindingHistoryPath(profileRoot),
+    JSON.stringify({
+      version: 1,
+      profileRoot,
+      root,
+      fingerprint,
+    }),
+  );
+}
+
 const owned = (info) => typeof process.getuid !== "function" || info.uid === process.getuid();
 const probe = async (read, missing) => {
   try {
@@ -499,6 +538,7 @@ export async function probeClaudeFacts(options = {}) {
           : "self-retired";
   }
   facts.profile = await rootFacts(locations.claudeRoot);
+  facts.bindingHistory = await readBindingHistory(locations.claudeRoot);
   facts.localMarker = "absent";
   const markerPath = profileMarkerPath(locations.claudeRoot);
   const markerDirectory = join(locations.claudeRoot, ".cairn-memory-profile");
@@ -529,6 +569,12 @@ export async function probeClaudeFacts(options = {}) {
     facts.bound = await rootFacts(facts.install.clients.claude.root, {
       strict: !!facts.record && !!facts.install.shared?.ready,
     });
+    if (facts.bindingHistory.state === "valid" && facts.bound.key) {
+      facts.bound.fingerprint = await probe(
+        async () => identityFingerprint(await projectKey(facts.bound.root, { create: false })),
+        undefined,
+      );
+    }
   }
   if (
     facts.registration === "none" &&
@@ -564,7 +610,15 @@ export function resolveClaudeBinding(facts) {
   });
   const select = (root, createKey, status = "single", detail, paired = false) => {
     if (root.retired) return stop("pairing_needed", "retired root");
+    if (root.sharedMarker && !root.key) return stop("paired_key_missing");
     if (paired && root.error) return stop(root.error);
+    if (facts.bindingHistory?.state === "valid" && !root.key) return stop("paired_key_missing");
+    if (
+      facts.bindingHistory?.state === "valid" &&
+      (facts.bindingHistory.root !== root.root ||
+        facts.bindingHistory.fingerprint !== root.fingerprint)
+    )
+      return stop("binding_identity_mismatch");
     if (!createKey && !root.key)
       return stop(paired ? "paired_key_missing" : "standalone_key_missing", detail);
     if (paired && facts.stateDir !== undefined && facts.stateDir !== root.root)
@@ -587,6 +641,17 @@ export function resolveClaudeBinding(facts) {
     };
   };
   if (facts.delivery === "wrong") return stop("pairing_record_mismatch");
+  if (facts.bindingHistory && facts.bindingHistory.state !== "absent") {
+    if (
+      facts.bindingHistory.state !== "valid" ||
+      facts.coordination !== "readable" ||
+      !["self-active", "self-retired"].includes(facts.registration) ||
+      (facts.install.shared && !facts.record)
+    )
+      return stop("pairing_record_missing");
+  }
+  if (facts.coordination === "absent" && facts.localMarker !== "absent")
+    return stop("pairing_record_missing");
   if (facts.coordination === "degraded") {
     if (facts.delivery !== "none") return stop("pairing_needed", "coordination unreadable");
     if (facts.profile.key)
@@ -623,6 +688,7 @@ export function resolveClaudeBinding(facts) {
     return select(facts.bound, true, facts.install.clients.codex ? "pairing_needed" : "single");
   }
   const codex = facts.install.clients.codex;
+  if (!codex && facts.localMarker !== "absent") return stop("pairing_record_missing");
   let root = facts.profile;
   const createKey = true;
   if (
@@ -782,6 +848,11 @@ export async function initializePairing(options = {}) {
     if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
     const registration = claudeRegistration(install);
     if (registration && registration.profileRoot !== profileRoot) fail("claude_profile_mismatch");
+    const history = await readBindingHistory(profileRoot);
+    if (history.state === "invalid" || (history.state === "valid" && history.root !== root))
+      fail("binding_identity_mismatch");
+    if (history.state === "valid" && !(await keyPresent(root)))
+      return disabled("paired_key_missing");
     if (existingRecord && (!install.shared || !install.shared.initialized))
       fail("pairing_record_mismatch");
     if (install.resetPending) fail("identity_reset_pending");
@@ -828,10 +899,7 @@ export async function initializePairing(options = {}) {
     if (!install.shared.initialized) {
       if (install.shared.adoptFrom && !(await keyPresent(root))) {
         const source = await projectKey(install.shared.adoptFrom, { create: false });
-        await privateWrite(join(root, "project-key"), `${source}\n`, {
-          exclusive: true,
-          checkpoint: options.checkpoint,
-        });
+        await projectKey(root, { originalKey: source, checkpoint: options.checkpoint });
         if ((await projectKey(root, { create: false })) !== source) fail("adoption_key_conflict");
       }
       // Retrying after publication always reads the winner. Adoption never creates.
@@ -844,7 +912,8 @@ export async function initializePairing(options = {}) {
       await options.checkpoint?.("initialized");
     } else if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
     // Root-local history survives loss or replacement of the coordination directory.
-    await privateWrite(join(root, "paired-root"), JSON.stringify({ version: 1, paired: true }));
+    await markPairRoot(root);
+    await writeBindingHistory(profileRoot, root);
     const record = {
       version: 1,
       id: install.shared.id,
@@ -895,6 +964,8 @@ export async function completePairing(options = {}) {
         root: record.root,
         state: "established",
       };
+    await markPairRoot(record.root);
+    await writeBindingHistory(install.clients.claude.profileRoot, record.root);
     install.shared.ready = true;
     await saveInstall(locations, install);
     return { status: "paired", enabled: true, pairingRecord: locations.pairing, root: record.root };
@@ -932,6 +1003,8 @@ export async function resetIdentity(options = {}) {
       JSON.stringify({ version: 1, retired: true }),
     );
     await projectKey(options.root);
+    await markPairRoot(options.root);
+    await writeBindingHistory(install.clients.claude.profileRoot, options.root, { reset: true });
     await setPaused(options.root, true, { rotate: true });
     const retired = [
       ...(install.retired ?? []),
@@ -963,3 +1036,45 @@ export async function resetIdentity(options = {}) {
     };
   });
 }
+
+// All successful pair-root operations publish through this single helper.
+async function markPairRoot(root) {
+  await privateWrite(join(root, "paired-root"), JSON.stringify({ version: 1, paired: true }));
+}
+
+/** Explicit original-backup repair, under the setup lock with both hosts stopped. */
+export async function repairIdentity(options = {}) {
+  if (options.hostsStopped !== true || options.confirmKeyRepair !== true)
+    fail("key_repair_confirmation_required");
+  return locked({ ...options, setup: true }, async ({ install }) => {
+    const root = options.root;
+    if (
+      !absolute(root) ||
+      (root !== install.shared?.root &&
+        !Object.values(install.clients).some((client) => client.root === root))
+    )
+      fail("pairing_record_mismatch");
+    if (await retiredRoot(root)) return disabled("retired_root");
+    const profileRoot = claudeRegistration(install)?.profileRoot;
+    const history = await readBindingHistory(profileRoot);
+    if (
+      history.state !== "valid" ||
+      history.root !== root ||
+      history.fingerprint !== identityFingerprint(options.originalKey ?? "")
+    )
+      fail("repair_key_conflict");
+    await restoreProjectKey(root, options.originalKey);
+    await markPairRoot(root);
+    await writeBindingHistory(profileRoot, root);
+    return { status: "key_restored", root };
+  });
+}
+
+/** Mutation inventory: tests exercise every operation, including adoption separately. */
+export const PAIR_ROOT_OPERATIONS = Object.freeze([
+  { name: "initialize", run: initializePairing },
+  { name: "adopt", run: initializePairing },
+  { name: "complete", run: completePairing },
+  { name: "reset", run: resetIdentity },
+  { name: "repair", run: repairIdentity },
+]);

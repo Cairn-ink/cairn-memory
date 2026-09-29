@@ -402,8 +402,7 @@ test("permissions, owner seam, malformed state and symlinks fail closed", async 
       );
     await chmod(path, target === "root" || target === "coordination" ? 0o755 : 0o644);
     if (["coordination", "install", "pairing"].includes(target)) {
-      const result = await expectDisabled(resolveClient(options), "pairing_needed");
-      assert.equal(result.detail, "coordination unreadable");
+      await expectDisabled(resolveClient(options), "pairing_record_missing");
     } else {
       if (target === "lock")
         await assert.rejects(
@@ -549,8 +548,7 @@ test("explicit reset retains old root, changes scope, starts paused and requires
 test("wrong owner and unreadable/corrupt coordination disable pairs, never freshness", async (t) => {
   const options = await paired(t);
   const assertDisabled = async () => {
-    const result = await expectDisabled(resolveClient(options), "pairing_needed");
-    assert.equal(result.detail, "coordination unreadable");
+    await expectDisabled(resolveClient(options), "pairing_record_missing");
   };
   const getuid = process.getuid;
   try {
@@ -1081,8 +1079,7 @@ test("retired markers remain private and fail closed after metadata loss", async
       await unlink(paths.install);
       const binding = await resolveClient({ ...options, pairingRecord: undefined });
       assert.equal(binding.enabled, false);
-      assert.equal(binding.status, "pairing_needed");
-      assert.equal(binding.detail, "retired root");
+      assert.equal(binding.status, "pairing_record_missing");
     });
   }
 });

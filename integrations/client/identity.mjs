@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, unlink, writeFile, stat, lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { privateDirectory, privateRead, privateWrite } from "./private-state.mjs";
 
@@ -17,23 +17,83 @@ async function randomIdFile(dataDir, filename, { create = true } = {}) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
+  if (filename === "project-key") {
+    await publishProjectKey(dataDir, { create, strict: false });
+    return readIdentity();
+  }
   if (!create) throw new Error("standalone_key_missing");
+  await publishLegacyFile(dataDir, filename);
+  return readIdentity();
+}
+
+/** Positive presence only: inaccessible or unrelated roots are not history. */
+export async function rootMarker(root, name) {
+  try {
+    // Match join(dataDir, filename) used for publication. In particular, a
+    // missing component canceled by .. must not hide the target's history.
+    const directory = join(root, ".");
+    const info = await stat(directory);
+    if (
+      !info.isDirectory() ||
+      (typeof process.getuid === "function" && info.uid !== process.getuid())
+    )
+      return false;
+    await lstat(join(directory, name));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function publishLegacyFile(dataDir, filename) {
   await mkdir(dataDir, { recursive: true, mode: 0o700 });
   const value = randomUUID();
   const temporaryPath = join(dataDir, `.${filename}.${randomUUID()}.tmp`);
-  // Publish a fully written inode without replacing another process's winner.
-  // Opening the final path with wx alone would expose a partially written key.
   await writeFile(temporaryPath, `${value}\n`, { flag: "wx", mode: 0o600 });
   try {
     try {
-      await link(temporaryPath, path);
+      await link(temporaryPath, join(dataDir, filename));
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
     }
-    return await readIdentity();
   } finally {
     await unlink(temporaryPath).catch(() => {});
   }
+}
+
+const repairCapability = Symbol("explicit original-key restore");
+const validKey = (key) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key);
+
+// The only publication gate for project-key, including legacy creation and adoption.
+async function publishProjectKey(
+  dataDir,
+  { create = true, strict = true, checkpoint, originalKey, capability } = {},
+) {
+  if (await rootMarker(dataDir, "paired-root")) {
+    if (capability !== repairCapability) throw new Error("paired_key_missing");
+  }
+  if (!create) throw new Error(strict ? "paired_key_missing" : "standalone_key_missing");
+  if (!strict) return publishLegacyFile(dataDir, "project-key");
+  if (originalKey !== undefined && !validKey(originalKey))
+    throw new Error("invalid_identity: project-key");
+  await privateWrite(join(dataDir, "project-key"), `${originalKey ?? randomUUID()}\n`, {
+    exclusive: true,
+    checkpoint,
+  });
+}
+
+/** Restore only the supplied original backup; never generate a repair identity. */
+export async function restoreProjectKey(dataDir, originalKey) {
+  if (typeof originalKey !== "string" || !validKey(originalKey))
+    throw new Error("invalid_identity: project-key");
+  await privateDirectory(dataDir);
+  const existing = await privateRead(join(dataDir, "project-key"), { missing: true });
+  if (existing === undefined)
+    await publishProjectKey(dataDir, { originalKey, capability: repairCapability });
+  const winner = await projectKey(dataDir, { create: false });
+  if (winner !== originalKey) throw new Error("repair_key_conflict");
+  return winner;
 }
 
 /** Anonymous product telemetry id. This value may be sent to Cairn. */
@@ -45,13 +105,12 @@ export function installId(dataDir) {
  * Stable project id keyed with a separate secret that never leaves the device.
  * Keeping it separate from installId prevents Cairn from testing likely paths.
  */
-export async function projectKey(dataDir, { create = true, checkpoint } = {}) {
+export async function projectKey(dataDir, { create = true, checkpoint, originalKey } = {}) {
   await privateDirectory(dataDir);
   const path = join(dataDir, "project-key");
   let value = await privateRead(path, { missing: true });
   if (value === undefined) {
-    if (!create) throw new Error("paired_key_missing");
-    await privateWrite(path, `${randomUUID()}\n`, { exclusive: true, checkpoint });
+    await publishProjectKey(dataDir, { create, checkpoint, originalKey });
     value = await privateRead(path);
   }
   const key = value.trim();

@@ -8,7 +8,13 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { privateWrite } from "../private-state.mjs";
-import { probeClaudeFacts, resolveClaudeBinding } from "../pairing.mjs";
+import {
+  probeClaudeFacts,
+  resolveClaudeBinding,
+  initializePairing,
+  completePairing,
+  resetIdentity,
+} from "../pairing.mjs";
 import { setPaused, readControlState } from "../control-state.mjs";
 
 const plan = await readFile(
@@ -57,7 +63,7 @@ const schema = {
   delivery: ["none", "wrong", "match"],
   profile: ["default"],
   profileMode: [755],
-  pluginData: ["absolute", "trailing", "relative", "empty"],
+  pluginData: ["absolute", "trailing", "relative", "empty", "relative-pair-root"],
   default: [
     "empty",
     "key",
@@ -70,7 +76,9 @@ const schema = {
   ],
   defaultKey: ["valid", "garbage", "directory"],
   localMarker: ["absent", "valid", "invalid", "permissions"],
-  bound: ["shared", "reset"],
+  bound: ["shared", "reset", "default"],
+  bindingHistory: ["valid", "invalid", "permissions", "mismatch"],
+  resetKind: ["claude-default", "codex-default", "claude-custom", "codex-custom"],
   platform: ["linux", "win32"],
   ...Object.fromEntries(
     [
@@ -89,6 +97,7 @@ const schema = {
       "argumentConflict",
       "codexDefault",
       "sharedMarker",
+      "resetDestination",
     ].map((name) => [name, [true, false]]),
   ),
 };
@@ -159,21 +168,23 @@ for (const row of table.rows) {
     }
     const defaultRoot = join(home, ".cairn-memory");
     const profile =
-      f.profile === "default"
+      f.profile === "default" || f.pluginData === "relative-pair-root"
         ? defaultRoot
         : f.pluginData === "empty"
           ? workspace.path
           : join(workspace.path, "profile");
     const pluginData =
-      f.pluginData === "relative"
-        ? "profile"
-        : f.pluginData === "empty"
-          ? ""
-          : f.pluginData === "trailing"
-            ? profile + "/"
-            : profile;
+      f.pluginData === "relative-pair-root"
+        ? "missing/../home/.cairn-memory"
+        : f.pluginData === "relative"
+          ? "profile"
+          : f.pluginData === "empty"
+            ? ""
+            : f.pluginData === "trailing"
+              ? profile + "/"
+              : profile;
     if (f.profileMode) await mkdir(profile, { mode: parseInt(String(f.profileMode), 8) });
-    const bound = join(home, f.bound);
+    const bound = f.bound === "default" ? defaultRoot : join(home, f.bound);
     const roots = { profile, default: defaultRoot, bound };
     if (f.profileKey) await seed(profile, "1");
     if (f.profileRetired) await privateWrite(join(profile, "retired"), "{}");
@@ -185,6 +196,7 @@ for (const row of table.rows) {
       if (f.defaultKey === "garbage") await writeFile(join(defaultRoot, "project-key"), "garbage");
       else await mkdir(join(defaultRoot, "project-key"));
     }
+    if (f.resetDestination) await setPaused(defaultRoot, true);
     if (f.sharedMarker) await privateWrite(join(defaultRoot, "paired-root"), "{}");
     if (f.default === "retired") await privateWrite(join(defaultRoot, "retired"), "{}");
     if (f.default === "file") await writeFile(defaultRoot, "unrelated file");
@@ -266,8 +278,54 @@ for (const row of table.rows) {
     if (f.coord === "file") await writeFile(coordination, "not Cairn coordination");
     if (f.coord === "missing-parent")
       await symlink(join(workspace.path, "missing", "coordination"), coordination);
+    if (f.resetKind) {
+      await rm(coordination, { recursive: true, force: true });
+      const destination = f.resetKind.endsWith("default") ? defaultRoot : bound;
+      const setup = {
+        home,
+        root: join(home, "old-pair"),
+        env: { HOME: home, CLAUDE_PLUGIN_DATA: profile },
+        temporary: workspace.path,
+        hostsStopped: true,
+        standardClaudeOrigin: true,
+        consent: { claude: true, codex: true },
+        configured: { claude: true, codex: true },
+      };
+      await initializePairing(setup);
+      await completePairing(setup);
+      await resetIdentity({
+        ...setup,
+        root: destination,
+        primaryClient: f.resetKind.split("-")[0],
+        confirmIdentityReset: true,
+      });
+      await rm(coordination, { recursive: true, force: true });
+      if (f.coord === "readable") await mkdir(coordination, { mode: 0o700 });
+      if (f.coord === "file") await writeFile(coordination, "unrelated");
+    } else if (f.bindingHistory) {
+      if (!(await exists(join(bound, "project-key")))) await seed(bound, "3");
+      const key = (await readFile(join(bound, "project-key"), "utf8")).trim();
+      const fingerprint = createHmac("sha256", key).update("cairn-memory:binding:v1").digest("hex");
+      const directory = join(profile, ".cairn-memory-profile");
+      await privateWrite(
+        join(directory, "binding.json"),
+        f.bindingHistory === "invalid"
+          ? "{"
+          : JSON.stringify({
+              version: 1,
+              profileRoot: profile,
+              root: bound,
+              fingerprint: f.bindingHistory === "mismatch" ? "f".repeat(64) : fingerprint,
+            }),
+      );
+      if (f.bindingHistory === "permissions") {
+        workspace.defer(() => chmod(directory, 0o700));
+        await chmod(directory, 0);
+      }
+    }
     const selected = row.expect.root && roots[row.expect.root];
     if (f.paused) await setPaused(selected || defaultRoot, true);
+    const preservedPause = f.resetDestination && (await readControlState(defaultRoot));
     const requests = [];
     const server = createServer((req, res) => {
       let bytes = "";
@@ -327,12 +385,16 @@ for (const row of table.rows) {
     assert.deepEqual(facts, beforeFacts, "pure decision does not mutate facts");
     assert.equal(
       decision.root,
-      row.expect.root === "profile" && ["relative", "empty"].includes(f.pluginData)
+      row.expect.root === "profile" &&
+        ["relative", "empty", "relative-pair-root"].includes(f.pluginData)
         ? pluginData
         : selected || undefined,
     );
-    assert.equal(facts.pluginRootAbsolute, !["relative", "empty"].includes(f.pluginData));
-    if (!facts.pluginRootAbsolute) assert.equal(decision.register, false);
+    assert.equal(
+      facts.pluginRootAbsolute,
+      !["relative", "empty", "relative-pair-root"].includes(f.pluginData),
+    );
+    if (!facts.pluginRootAbsolute) assert.notEqual(decision.register, true);
     for (const key of ["enabled", "createKey", "status", "detail"])
       assert.equal(decision[key], row.expect[key], `${row.id} ${key}`);
     const keys = [...new Set(Object.values(roots))].map((root) => join(root, "project-key"));
@@ -362,6 +424,7 @@ for (const row of table.rows) {
       });
     assert.equal((await run("recall")).code, 0);
     assert.equal(requests.length, row.expect.requests, "exact request count");
+    if (preservedPause) assert.deepEqual(await readControlState(defaultRoot), preservedPause);
     const afterKeys = await Promise.all(keys.map(exists));
     assert.equal(
       afterKeys.filter((value, i) => value && !beforeKeys[i]).length,

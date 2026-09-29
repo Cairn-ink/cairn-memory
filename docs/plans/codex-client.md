@@ -281,13 +281,15 @@ Normal hooks perform read-only detection. Take the setup lock and recheck only
 for fresh registration, joint initialization, adoption or reset. Established hooks
 never rewrite/fsync `install.json`. Registration waits at most 100 ms by default;
 lock contention permits unregistered standalone use. Unsupported registration
-adds no status note. Absent coordination retains 0.1.1 first use; degraded
+adds no status note. Absent coordination retains 0.1.1 first use only without
+0.1.2 profile history; a local binding record instead refuses with
+`pairing_record_missing`. Degraded
 coordination uses only existing keys, with profile-local proof for legacy adoption,
 as specified in the decision table below. One fresh joint setup elects one
 initializer for both consenting clients and writes their shared binding before
 activating either. Concurrent separate installs elect one initializer; the other
-needs adoption. A partial
-joint setup must not let either host independently initialize another root/key.
+needs adoption. A partial joint setup must not let either host independently
+initialize another root/key.
 Released Claude cannot honor this lock: setup must require
 it to be stopped during pairing, and never claim concurrent legacy setup is safe.
 Automatically register a fresh single client; a pairing record is still unnecessary.
@@ -1236,7 +1238,9 @@ Resolved with the coordinator during CX-2:
   roots that are files, unreadable, or contain a directory named `retired`.
   Eight more variants cover unusable HOME and non-directory coordination,
   for 44 retained variants; round 9 adds 40 more to cover every linked parity
-  row, for 84 total. Every variant also compares status output.
+  row. Round 10 adds two own-default sharing cases, for 86 total. Eight local-history
+  observations now assert authorized refusals; the other 78 retain parity comparisons.
+  Every variant also compares status output.
   One-HOME profile fixtures compare separate keys, IDs and pause against actual
   base; only the new unregistered status note is normalized for those status outputs.
 - Profile ownership: every Claude binding requires
@@ -1261,8 +1265,9 @@ Resolved with the coordinator during CX-2:
   Degraded coordination never mints a project key. Only an existing profile key
   or a validated profile-local adoption record with an existing, unmarked key
   is eligible; cursor evidence alone cannot authorize degraded adoption. Absent
-  coordination remains the normal standalone environment. The retirement and degraded-mode
-  rules below apply independently of registration.
+  coordination remains the normal standalone environment only without profile history.
+  Binding history survives reset and disables memory when coordination is lost.
+  The retirement and degraded-mode rules below apply independently of registration.
 - The setup APIs require an absolute home, consent for both clients, and an
   explicit stopped-host/worker assertion from the caller. `initializePairing`
   writes pending bindings before publishing a key and returns `binding_pending`.
@@ -1286,8 +1291,9 @@ Resolved with the coordinator during CX-2:
   hosts/workers and a new durable root. It retains old state and invalidated
   binding metadata, creates only the selected primary client, starts paused and
   returns the changed-scope disclosure. The second client must explicitly adopt.
-  Restoring an original key needs no regeneration API: with hosts stopped, restore
-  the backup as a regular 0600 file, then verify both project IDs before resume.
+  The explicit `repairIdentity` API restores the supplied original backup under the
+  setup lock with hosts stopped. It checks the recorded identity fingerprint, never
+  generates a replacement and never overwrites an existing different key.
 
 API details and test commands are in
 [`integrations/client/README.md`](../../integrations/client/README.md).
@@ -1315,23 +1321,27 @@ The marker is private JSON `{"version":1,"retired":true}`, mode 0600 in the priv
 root, with the same owner/symlink/inode checks as other private state. Reset
 retries keep the old root paused; the marker is never automatically removed.
 
-Absent coordination preserves normal 0.1.1 first use, including an unusable HOME, a
-missing path, ENOTDIR, or a non-directory/foreign coordination entry. Degraded means an
+For profiles without 0.1.2 binding or legacy history, absent coordination preserves
+normal 0.1.1 first use, including an unusable HOME, a missing path, ENOTDIR, or a
+non-directory/foreign coordination entry. Degraded means an
 owned coordination directory cannot be listed, or its existing records cannot be read or
 trusted. It never creates a project key or infers adoption from Claude cursors. Without
 a delivered record, it uses an existing profile key, or a validated profile-local
 adoption record naming an existing default-root key. An eligible unretired root remains
 active as `standalone_unregistered`, with separate detail `coordination unreadable`.
 Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
-key reports `standalone_key_missing`, never `paired_key_missing`.
+key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
 
 Registration of a genuine legacy-gap adoption first writes
 `<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned
 subdirectory). It records version, profile root and adopted default root, with no key or
 conversation content, and is never transmitted. This validated local history preserves
-that adoption only in degraded mode. With absent or readable coordination, the local
-marker does not change normal root selection or bypass registration gates.
-Initialization and adoption publish an owner-only `paired-root` marker in the shared
+that adoption only in degraded mode. With absent or empty coordination, local legacy
+history refuses with
+`pairing_record_missing`; it never authorizes silently minting a different identity.
+With readable registration it does not bypass profile ownership gates.
+Initialization, adoption, completion, reset destinations and repair publish a private
+`paired-root` marker in the shared
 root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
 adoption of that root, including after coordination loss. It does not pause or disable
 an otherwise entitled client. A fresh profile gets its own key after loss; an explicitly
@@ -1368,17 +1378,40 @@ variant; the generator asserts the link, and the golden suite compares both hook
 launcher observations. Unknown fact keys or values fail schema validation. No exception
 chooses a fallback.
 
-Round 9 adds absolute plugin-data eligibility, valid default keys, paired-root history
-and unlistable coordination. Absolute plugin-data paths are normalized with
-`path.resolve` before registration; relative/empty/invalid values never register. Every
-install write is validated before publication. L02–L05 ignore local proof when
-coordination is absent: no written pairing rule authorizes a new fail-closed path there,
-so 0.1.1 selection and key handling win. N05 ignores local proof with readable Codex
-registration and enforces D3. Local proof only preserves an existing adoption in
-degraded mode.
+Round 10 enforces two publication invariants below the resolver. **P:** every
+initialization, adoption, completion, reset destination and explicit key repair publishes
+`paired-root` through one helper before reporting success. **K:** the sole project-key
+publication function refuses a marked root with a missing key (`paired_key_missing`),
+except explicit stopped-host repair restoring the supplied original backup. Neither an
+unset plugin-data option nor lost coordination authorizes regeneration.
 
-Initialization/adoption publishes a private `paired-root` marker before enabling either
-client. Positive presence, including invalid content, excludes that root from
+Generated operation sequences enforce **(b)**: a never-paired profile whose own root
+(as 0.1.1 resolves it) differs from the pair root never sends the pair's project ID or
+changes its pause state. **(b′)**: a profile whose own root is the pair root keeps sharing
+its existing key and pause. In particular, unset `CLAUDE_PLUGIN_DATA` owns the default
+root. This parity exception permits sharing, never minting a missing marked key. Explicit
+reset changes identity only with consent; explicit repair restores the original key.
+
+Binding history survives reset and coordination loss. Every binding operation writes
+`<profileRoot>/.cairn-memory-profile/binding.json` through one helper: version, profile
+root, bound root and a non-secret HMAC identity fingerprint, never the key. Both reset
+primaries rewrite it to the destination, including when Claude becomes retired. Clearing
+an option never removes it. There is no leave/unpair API in CX-2.
+
+A profile carrying binding history requires readable, consistent coordination. Missing,
+empty, damaged or untrusted coordination returns `pairing_record_missing`, without key
+creation or requests. Invalid binding history also refuses; a different key under trusted
+coordination returns `binding_identity_mismatch`. Repair restores the original backup
+under the setup lock and checks its fingerprint; reset alone authorizes changed scope.
+The 0.1.1 first-use rule applies only without local binding/legacy history or pair-root
+history. Invariant safety wins over parity when any 0.1.2 marker exists. L02–L05 now refuse
+instead of silently creating a new identity after losing legacy registration; N05 retains
+its existing D3 refusal. The golden keeps the original history fixtures as base evidence,
+but explicitly asserts these eight hook/launcher observations as authorized refusals,
+not parity. Unrelated-root markers never taint a history-free profile.
+
+Every pair-root operation publishes a private `paired-root` marker before reporting
+success. Positive presence, including invalid content, excludes that root from
 cursor-based legacy inference after registry loss. It does not itself pause or disable a
 client already entitled to that root. Retirement still wins. An owned unlistable
 coordination directory is conservatively degraded even when record existence cannot be
@@ -1388,7 +1421,9 @@ Probes normalize HOME, coordination, registration, delivery, keys and markers. E
 ENOTDIR, non-directory/foreign coordination and unusable HOME mean absent coordination.
 An owned unlistable directory, or one with existing untrusted records, is degraded. No
 unrelated root probe can change a trusted binding. A retirement entry needs positive
-existence in an owned directory; its contents are irrelevant.
+existence in an owned directory; its contents are irrelevant. Marker probes use the same
+lexically normalized directory as key publication, including relative paths with `..`.
+A missing ancestor canceled by `..` must never hide a marker at the publication target.
 
 The profile-local adoption record is `<profileRoot>/.cairn-memory-profile/legacy.json`,
 a 0600 private file in a 0700 Cairn-owned subdirectory. It records version, profileRoot
@@ -1450,9 +1485,9 @@ Defaults (each row overrides only the listed facts):
 | S08 | yes | own key wins over legacy evidence | `{"profileKey":true,"default":"legacy"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` | `existing-plugin-and-legacy` |
 | S09 | yes | paused standalone preserves pause | `{"profileKey":true,"paused":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":0,"mint":false}` | `paused-standalone` |
 | L01 | no | authorized legacy gap | `{"default":"legacy"}` | `{"root":"default","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` | — |
-| L02 | yes | absent coordination: ignore local proof and use 0.1.1 root | `{"localMarker":"valid","default":"key"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `local-marker-valid` |
-| L03 | yes | absent coordination: lost recorded key does not override 0.1.1 | `{"localMarker":"valid"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `local-marker-missing-key` |
-| L04 | yes | absent coordination: invalid local proof does not disable standalone | `{"localMarker":"invalid"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `local-marker-invalid` |
+| L02 | no | lost legacy registration cannot become first use | `{"localMarker":"valid","default":"key"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| L03 | no | lost legacy registration cannot become first use | `{"localMarker":"valid"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| L04 | no | lost legacy registration cannot become first use | `{"localMarker":"invalid"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | R01 | no | present own retirement wins | `{"profileKey":true,"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
 | R02 | no | retired legacy destination wins | `{"default":"retired"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
 | D01 | no | degraded fresh profile cannot mint | `{"coord":"degraded"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"coordination unreadable"}` | — |
@@ -1483,7 +1518,7 @@ Defaults (each row overrides only the listed facts):
 | N03 | no | legacy evidence establishes old Claude beside Codex | `{"coord":"readable","codex":true,"default":"legacy"}` | `{"root":"default","status":"pairing_needed","createKey":true,"enabled":true,"requests":1,"mint":false}` | — |
 | N04 | no | shared key alone is not Claude evidence | `{"coord":"readable","codex":true,"codexSame":true,"profileKey":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | C04 | yes | empty unsafe directory has no coordination records | `{"coord":"empty-unsafe"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `coordination-empty-unsafe` |
-| L05 | yes | absent coordination: unreadable local proof does not disable standalone | `{"localMarker":"permissions"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `local-marker-unreadable` |
+| L05 | no | lost legacy registration cannot become first use | `{"localMarker":"permissions"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
 | L06 | no | legacy registration accepts a host-created profile directory | `{"default":"legacy","profileMode":755}` | `{"root":"default","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` | — |
 | R03 | no | marker without a key still wins | `{"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
 | R04 | no | unset plugin data cannot resume a marked default | `{"profile":"default","profileKey":true,"profileRetired":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
@@ -1513,4 +1548,28 @@ Defaults (each row overrides only the listed facts):
 | G05 | yes | non-absolute plugin data preserves 0.1.1 even beside legacy evidence | `{"pluginData":"empty","default":"legacy"}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":0,"mint":false,"resumeRequests":0}` | `plugin-empty-legacy` |
 | N06 | no | unset plugin data retains evidenced legacy use beside Codex | `{"profile":"default","profileKey":true,"default":"legacy","codex":true,"codexDefault":true,"coord":"readable","sharedMarker":false}` | `{"root":"default","status":"pairing_needed","createKey":true,"enabled":true,"requests":1,"mint":false}` | — |
 | N07 | no | paired history never counts as legacy use beside Codex | `{"profile":"default","profileKey":true,"default":"legacy","codex":true,"codexDefault":true,"coord":"readable","sharedMarker":true}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| P16 | no | another registration cannot mint in its own marked default pair root | `{"coord":"readable","registration":"other","shared":"ready","profile":"default","bound":"default","boundKey":false,"sharedMarker":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| P17 | yes | b-prime shares an existing own-root key and pause | `{"coord":"readable","registration":"other","shared":"ready","profile":"default","bound":"default","boundKey":true,"sharedMarker":true}` | `{"root":"profile","status":"standalone_unregistered","createKey":true,"enabled":true,"requests":1,"mint":false}` | `own-paired-default` |
+| Z01 | yes | reset destination marker excludes legacy adoption after absent coordination | `{"default":"legacy","sharedMarker":true,"coord":"absent","resetDestination":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `paired-marker-absent` |
+| Z02 | yes | reset destination marker excludes legacy adoption after empty readable coordination | `{"default":"legacy","sharedMarker":true,"coord":"readable","resetDestination":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `paired-marker-readable` |
+| Z03 | yes | reset destination marker excludes legacy adoption after file coordination | `{"default":"legacy","sharedMarker":true,"coord":"file","resetDestination":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":true}` | `paired-marker-file` |
+| B01 | no | reset claude to default, coordination absent: identity history survives | `{"bindingHistory":"valid","resetKind":"claude-default","coord":"absent"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B02 | no | reset claude to default, coordination readable: identity history survives | `{"bindingHistory":"valid","resetKind":"claude-default","coord":"readable"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B03 | no | reset claude to default, coordination file: identity history survives | `{"bindingHistory":"valid","resetKind":"claude-default","coord":"file"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B04 | no | reset claude to custom, coordination absent: identity history survives | `{"bindingHistory":"valid","resetKind":"claude-custom","coord":"absent"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B05 | no | reset claude to custom, coordination readable: identity history survives | `{"bindingHistory":"valid","resetKind":"claude-custom","coord":"readable"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B06 | no | reset claude to custom, coordination file: identity history survives | `{"bindingHistory":"valid","resetKind":"claude-custom","coord":"file"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B07 | no | reset codex to default, coordination absent: identity history survives | `{"bindingHistory":"valid","resetKind":"codex-default","coord":"absent"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B08 | no | reset codex to default, coordination readable: identity history survives | `{"bindingHistory":"valid","resetKind":"codex-default","coord":"readable"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B09 | no | reset codex to default, coordination file: identity history survives | `{"bindingHistory":"valid","resetKind":"codex-default","coord":"file"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B10 | no | reset codex to custom, coordination absent: identity history survives | `{"bindingHistory":"valid","resetKind":"codex-custom","coord":"absent"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B11 | no | reset codex to custom, coordination readable: identity history survives | `{"bindingHistory":"valid","resetKind":"codex-custom","coord":"readable"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B12 | no | reset codex to custom, coordination file: identity history survives | `{"bindingHistory":"valid","resetKind":"codex-custom","coord":"file"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B13 | no | unreadable coordination retains binding history | `{"bindingHistory":"valid","coord":"degraded"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B14 | no | invalid binding history cannot authorize first use | `{"bindingHistory":"invalid","coord":"readable"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B15 | no | untrusted binding history cannot authorize first use | `{"bindingHistory":"permissions","coord":"readable"}` | `{"root":null,"status":"pairing_record_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B16 | no | trusted binding detects replacement identity | `{"bindingHistory":"mismatch","coord":"readable","registration":"self-active"}` | `{"root":null,"status":"binding_identity_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| B17 | no | trusted binding retains reset identity | `{"bindingHistory":"valid","coord":"readable","registration":"self-active"}` | `{"root":"bound","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false}` | — |
+| P18 | no | relative traversal probes the same marked root as key publication | `{"coord":"readable","registration":"other","shared":"ready","pluginData":"relative-pair-root","bound":"default","boundKey":false,"sharedMarker":true}` | `{"root":null,"status":"paired_key_missing","createKey":false,"enabled":false,"requests":0,"mint":false}` | — |
+| R05 | no | relative traversal cannot bypass a present retired root | `{"pluginData":"relative-pair-root","default":"retired"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"detail":"retired root"}` | — |
 <!-- claude-resolution-table:end -->

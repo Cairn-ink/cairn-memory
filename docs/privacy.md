@@ -60,27 +60,48 @@ local paths but no project keys, credentials or conversation text, and is never
 included in telemetry. Standalone use retains the falsy-home temporary fallback
 for these paths; setup and pairing require a specified absolute durable home.
 
+
+Every binding operation also writes private
+`<profileRoot>/.cairn-memory-profile/binding.json` (0600 inside a 0700 directory),
+containing version, profile root, bound root and a non-secret identity fingerprint.
+It contains no key or conversation data and is never transmitted. Both reset primaries
+rewrite it to the new root. Clearing an option does not remove it; CX-2 has no leave API.
+With binding history, missing, empty or untrusted coordination disables memory with
+`pairing_record_missing`, with no key creation or requests. Invalid binding history also
+refuses. Trusted coordination with a different identity reports `binding_identity_mismatch`.
+
+A `paired-root` entry prevents every ordinary key-creation path from replacing a lost
+key, including standalone access to that same root. Only explicit original-backup repair
+may restore it. An unset-plugin-data profile still shares an existing default-root key
+and pause when it has no conflicting binding history. A never-paired profile whose own
+root differs from the pair root cannot use that identity or change its pause. For state
+carrying 0.1.2 history, these invariants take precedence over standalone parity.
+
 Cursor-based legacy adoption requires a valid `project-key`, Claude-only cursor
 evidence, no active or retired Claude registration, and no `paired-root` entry.
 Garbage keys and directories named `project-key` do not qualify.
 
-Absent coordination preserves normal 0.1.1 first use, including an unusable HOME, a
-missing path, ENOTDIR, or a non-directory/foreign coordination entry. Degraded means an
+For profiles without 0.1.2 binding or legacy history, absent coordination preserves
+normal 0.1.1 first use, including an unusable HOME, a missing path, ENOTDIR, or a
+non-directory/foreign coordination entry. Degraded means an
 owned coordination directory cannot be listed, or its existing records cannot be read or
 trusted. It never creates a project key or infers adoption from Claude cursors. Without
 a delivered record, it uses an existing profile key, or a validated profile-local
 adoption record naming an existing default-root key. An eligible unretired root remains
 active as `standalone_unregistered`, with separate detail `coordination unreadable`.
 Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
-key reports `standalone_key_missing`, never `paired_key_missing`.
+key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
 
 Registration of a genuine legacy-gap adoption first writes
 `<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned
 subdirectory). It records version, profile root and adopted default root, with no key or
 conversation content, and is never transmitted. This validated local history preserves
-that adoption only in degraded mode. With absent or readable coordination, the local
-marker does not change normal root selection or bypass registration gates.
-Initialization and adoption publish an owner-only `paired-root` marker in the shared
+that adoption only in degraded mode. With absent or empty coordination, local legacy
+history refuses with
+`pairing_record_missing`; it never authorizes silently minting a different identity.
+With readable registration it does not bypass profile ownership gates.
+Initialization, adoption, completion, reset destinations and repair publish a private
+`paired-root` marker in the shared
 root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
 adoption of that root, including after coordination loss. It does not pause or disable
 an otherwise entitled client. A fresh profile gets its own key after loss; an explicitly
