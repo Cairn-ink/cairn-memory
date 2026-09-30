@@ -858,6 +858,18 @@ five singleton qualifier pairs. Valid maximal-label outputs also exceed the
 unchanged output-token ceiling. The decision is to revise the design rather
 than adopt it; no paid cases, user data or operational ledger were used.
 
+## Capture classification diagnostics are an offline ingestion contract check
+
+The [classification-metadata regression](plans/ingestion-classification-metadata.md)
+uses a real local core and scripted models with synthetic source and topics.
+Ingestion now accepts and retains the producer's optional `classificationTruncated`
+counts on an applied result; malformed diagnostics remain unknown, and genuine
+classification failures remain partial and stop later batches. Applied
+classification does not establish complete filing or semantic coverage. These
+offline checks neither diagnose any historical or ongoing paid failure nor
+revise frozen results, scores, source policies or the public core/default
+behavior or the currently frozen paid runtime.
+
 ## Combined ingestion remains an offline design experiment
 
 The [12-case ingestion comparison](plans/ingestion-design-comparison.md) uses
