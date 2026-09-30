@@ -1284,3 +1284,20 @@ small-recall parity fixture was frozen from main `3a1c17d`.
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
+
+## CX-4 round 2 verification environment
+
+The 202 processing, operation-scoped refusal/cooldown and interrupted-hook
+recovery changes have 184 direct conformance/transport/plugin cases on Node
+22.16.0, 24.15.0 and 20.19.0. Real hook subprocesses receive SIGTERM/SIGKILL;
+a gated file-based fake fetch peer supplies synthetic HTTP replies. These tests
+exercise request classification and persistent cursor/gate behavior, not TCP
+acceptance against a deployed server.
+
+The round 2 worker's restricted execution environment rejects localhost TCP
+listeners with EPERM and loses Node child pipe I/O, including test-runner
+serialization. The required CI-shaped matrix is attempted and its actual exits
+are retained in the [round 2 handoff](plans/codex-client.md#cx-4-round-2-決策與交接2026-10-01).
+A file-level pass from a broken worker pipe is not evidence of case-level success;
+hung or failed CI commands require a rerun in the ordinary CI environment.
+The existing round 1 results do not qualify the revised round 2 implementation.
