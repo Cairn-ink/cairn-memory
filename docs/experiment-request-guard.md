@@ -689,6 +689,20 @@ outside its trusted-host boundary.
 
 Never create a new ledger to replenish an existing experiment. Historical
 spending authority is not renewed by a merge, passing tests or this policy.
+The separate `authorizeChainedBenchmarkBudgetV3` / `loadChainedBenchmarkBudgetV3`
+path binds exactly the original embedding-enabled 200M ledger to a cumulative
+300M ceiling and a finite increased request cap. It requires the immutable
+`benchmark-request-cap-v2` parent and the complete original 50/100/200 ancestry,
+settled checkpoint, both cap-bound rowid history hashes and an authentic current
+snapshot. Its private immutable record is fsynced before the transactional cap
+update; exact interrupted-commit recovery reuses that record without repairing
+conflicts or partial files. Fresh mixed capabilities can use 300M only with
+this verified v3 lineage. Old configurations and consumed or unused old mixed
+capabilities cannot dispatch after transition. Existing 200M behavior, routes,
+prices, timeouts and request shapes remain unchanged. This does not recreate
+an allowance or establish provider billing totals; retained unknown attempts
+continue to consume their full reservations. See the [bounded continuation
+contract](plans/benchmark-budget-300.md).
 There are no paid runs, user profiles, production writes, release or deployment
 changes in this slice. V05 remains incomplete until the remaining host/budget
 gates pass. See [acceptance and verification](plans/experiment-request-guard.md).
