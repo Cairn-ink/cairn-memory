@@ -46,7 +46,8 @@ Acknowledged and reason-skipped byte counts conserve the offset; truncation and
 unknown final tails remain visible. An authorized later hook may retry the same
 pending range. Loss of that source records `source_unavailable`; a new session
 cannot recover it. Replacement/truncation/mutation/path changes establish EOF
-with a gap. Pause-generation changes establish EOF and discard spanning lines.
+with a gap. A changed project binding (including resume in another cwd) creates
+a new EOF epoch with `binding_changed`; old text is never sent under the new project. Pause-generation changes establish EOF and discard spanning lines.
 
 The injected transport must provide idempotent admission by event ID, return an
 exact `{status:'complete'|'duplicate'|'empty'|'processing', eventId}` descriptor,
@@ -58,9 +59,10 @@ The shared guard must be supplied for every call. A model that ignores abort
 retains its reservation until confirmed termination. Local uncertainty has a
 125-second not-before fence; only later authorized hooks retry, never timers.
 
-Corrupt cursors fail closed. With workers stopped, restore a trusted private
-backup; no automatic file deletion is a repair. For a valid stopped cursor with
-a repaired/supported source, `resetCapture(binding,{hostsStopped:true,
+Corrupt cursors fail closed during automatic work. With workers stopped, restore
+a trusted private backup or use the explicit EOF reset below. Reset also recovers
+a changed binding, unsupported format or corrupt JSON, with an authorized readable
+source; unsafe ownership/permissions still refuse. For a stopped cursor, `resetCapture(binding,{hostsStopped:true,
 confirm:true})` deliberately establishes EOF and records `state_reset`. This
 does not replay old bytes. Runtime-guard corruption similarly needs a trusted
 backup; unknown reservations need verified termination. Explicit quota resume
@@ -76,3 +78,17 @@ node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs \
 The decision table generates 25 cases and rejects misspelled fact keys/values.
 The seeded history oracle and exhaustive durable-write interruptions supplement
 those examples. No real host, subscription, credentials or session files are used.
+
+
+Cursor v2 uses HMAC-SHA256 for transcript anchors and pending ranges, derived from
+owner-private 0600 `codex-digest-key` under the bound 0700 state root. That key is
+never stored in the cursor/handoff or sent. Existing v1 cursors deliberately start
+a new EOF epoch with `digest_migrated` on the first authorized source read; their
+old pending text is skipped with that recorded reason. Missing sources retain the
+unresolved migration/gap until an authorized source returns. Lost digest keys
+cause a detected digest change and an EOF gap, never an old-text replay.
+
+Quota replies persist a closed reset/latch intent before touching the shared usage
+latch. Lock/persistence failure remains `quota_reached`; later hooks retry the
+latch before dispatch. The shared policy is staged for the next UTC window, and
+only daily-cap refusal becomes automatically eligible on the next UTC day.
