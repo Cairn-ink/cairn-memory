@@ -2166,3 +2166,48 @@ All six final invocations passed 133/133, with no failures or skips. They
 cover 48 seeded sequences/3072 main operations and 444 exhaustive interruption
 points (74 per invocation). The complete packet passes git diff --check, exit 0.
 Scratch and logs are removed after recording these results.
+
+### CX-3 review and handoff, 2026-09-30
+
+Round-3 Claude SPEC and STANDARDS reviews of `579c441` both passed under the
+capture severity bar: capture loss or duplication through ordinary use, a wrong
+destination, excluded content sent, a policy or quota bypass, or a dead end
+reachable by ordinary use. The coordinator's `579c441` makes `test:codex` glob
+every file in `integrations/codex/test/` and the `runtime-*` client tests, and
+adds `test:client` for CX-1's parity and fixture-generator tests, which no script
+ran before; CI runs both on Node 22.16.0 and 24.
+
+The coordinator qualified `579c441` (the round-3 head plus `test:codex` and
+`test:client`) in the complete matrix, each command sequential with HOME =
+CAIRN_TEST_REAL_HOME = scratch: on Node 22.16.0 and 24.15.0, `npm test`,
+`validate`, `test:core`, `test:pairing`, `test:pairing:golden`, `test:artifact`,
+`test:mcp`, `test:openai`, `test:codex`, `test:client` and `demo:capture` all exit
+0; Node 20 `npm test` and `validate` exit 0; `test:codex` from a depth-1 clone
+exits 0; `git diff --check` exits 0.
+
+Below-bar follow-ups, each with its owner:
+
+1. **SessionStart on resume (CX-5, before install).** The oracle and W34 expect
+   text written after a cwd change, before the next hook, to be skipped as
+   `binding_changed`. That is safe only if Codex fires `SessionStart` when a
+   session resumes in another cwd; the host table above has seen only
+   `startup`. CX-5 verifies this on the pinned host. If resume emits no
+   `SessionStart`, CX-5 plans the boundary before install.
+2. **Stale policy declarations (CX-7).** After one client is uninstalled, a
+   later policy change in the other returns `policy_conflict` until the removed
+   client's declaration is cleared. The documented recovery is an installer
+   repair that calls the guard under the removed client's name; CX-7's setup
+   and repair own it. Until then it fails closed with the named refusal.
+3. **A worker-table row for `policy_conflict` (CX-5).** A reviewer's probe
+   shows the right behaviour (no call, text kept pending, sent once after
+   alignment), but no row pins it.
+4. **Digest-key reset across sessions (CX-6 limitations).** Resetting a corrupt
+   key in one session drops the other sessions' unsent text in the same root as
+   `source_changed`. It needs a corrupted key, not ordinary use.
+5. **Hygiene (whichever package next edits these files):**
+   - the unreachable `invalid_reply` branches at `worker.mjs:204` and `:330`;
+   - the return shapes at `:322` and `:332`;
+   - `round3.test.mjs:80` should assert which text arrived under which project;
+   - the README's "repeating reset … completes that same epoch", which starts
+     a new epoch if the transcript grew in between;
+   - the positional `scheduling` boolean in `runtime-usage.mjs`.
