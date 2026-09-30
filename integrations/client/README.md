@@ -28,6 +28,19 @@ The current day's counts and uncertain reservations stay charged. Lowered
 concurrency waits for excess live calls to terminate before allowing new dispatch.
 Both clients must receive the same installed policy. A daily-cap refusal clears
 on the next eligible UTC day; quota and plan refusals still require explicit resume.
+Reverting a change to the active policy clears its pending proposal before any
+UTC rollover can activate it.
+
+Installed adapters must pass `client: "claude"` or `client: "codex"` to
+`createRuntimeGuard`. The default `"shared"` keeps the installation-wide
+calibration API compatible. Usage v3 retains v1/v2 counters, reservations and
+quota latches, adding at most three closed numeric/enum policy declarations.
+Disagreeing declarations return `policy_conflict` from reserve, dispatch and
+resume; status returns the inspectable state with `ok:false`. They cannot activate
+or alternate proposals. Release and refusal latching remain available. Explicit
+installer repair aligns every stored declaration, including removed clients or
+a legacy `"shared"` owner, by calling its guard with the selected policy. This
+recovers without erasing usage history or clearing quota latches.
 
 `detectClients(options)` performs read-only checks. `stateLocations(options)` returns exact
 coordination paths independent of `CLAUDE_PLUGIN_DATA`. Production callers normally omit `home`,

@@ -52,6 +52,9 @@ cannot recover it. Replacement/truncation/mutation/path changes establish EOF
 with a gap. A changed project binding (including resume in another cwd) creates
 a new EOF epoch with `binding_changed`; old text is never sent under the new
 project. Pause-generation changes establish EOF and discard spanning lines.
+A frozen handoff whose binding differs from the current cursor returns
+`superseded` without changing that cursor. It cannot switch a resumed session
+back to its old cwd or skip the resumed project's first turn.
 
 The injected transport must provide idempotent admission by event ID, return an
 exact `{status:'complete'|'duplicate'|'empty'|'processing', eventId}` descriptor,
@@ -59,6 +62,8 @@ honor AbortSignal and expose synchronous `terminated()`. The test-only refusal
 descriptor is `{status:'refused', code:'quota_reached', resetAt?: epochMs}`; this is
 not a claim about CX-4's future public wire schema. Unknown replies stop automatic
 retry. Lost replies replay stable IDs; uncertainty is never acknowledgement.
+The `invalid_reply` latch survives project changes and SessionStart; the
+documented explicit stopped reset/repair remains required.
 The shared guard must be supplied for every call. A model that ignores abort
 retains its reservation until confirmed termination. Local uncertainty has a
 125-second not-before fence; only later authorized hooks retry, never timers.
@@ -81,7 +86,7 @@ node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs \
   integrations/client/test/runtime-policy.test.mjs
 ```
 
-The worker table generates 33 cases; the usage policy table generates six cases.
+The worker table generates 37 cases; the usage policy table generates ten cases.
 Both reject misspelled facts and assert every result column with a closed vocabulary.
 Mutating any result cell, even to another valid value, must fail its test.
 The seeded history oracle and exhaustive durable-write interruptions supplement
@@ -95,8 +100,17 @@ a new EOF epoch with `digest_migrated` on the first authorized source read; thei
 old pending text is skipped with that recorded reason. Missing sources retain the
 unresolved migration/gap until an authorized source returns. Lost digest keys
 cause a detected digest change and an EOF gap, never an old-text replay.
+For a corrupt owner-private key, the same stopped `resetCapture` recreates it
+and records `digest_key_reset` in a new EOF epoch. It first publishes an EOF
+intent without an anchor, then replaces the key and publishes the keyed anchor.
+Repeating reset after any interrupted write completes that same epoch/reason;
+automatic workers do not dispatch while its intent remains incomplete. Existing
+v2 cursors gain the new reason counter as zero on read, conserving their bytes.
 
 Quota replies persist a closed reset/latch intent before touching the shared usage
 latch. Lock/persistence failure remains `quota_reached`; later hooks retry the
 latch before dispatch. The shared policy is staged for the next UTC window, and
 only daily-cap refusal becomes automatically eligible on the next UTC day.
+An unconfigured refusal guard does not mark that intent latched. Installed
+clients supply named policy declarations to the shared guard; disagreement
+refuses with `policy_conflict` until installer repair aligns them.
