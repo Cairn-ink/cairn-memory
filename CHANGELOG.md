@@ -77,10 +77,11 @@
   Without 0.1.2 profile history, absent coordination retains normal first-use
   behavior; unreadable existing
   coordination never mints a key. It preserves existing profile keys or a
-  legacy adoption recorded privately in that profile, used only while degraded.
+  validated compatibility adoption history. Current explicit adoption writes binding
+  history and refuses when coordination is lost.
   Shared-root markers prevent fresh profiles from inferring legacy use after
   coordination loss; cursor evidence also requires a valid default key. Absolute
-  plugin-data roots are normalized, and relative/empty roots never register.
+  plugin-data roots are canonicalized by explicit setup; relative/empty roots never register.
   Install records are validated before publication. Unusable HOME
   and non-directory coordination retain absent-coordination behavior. One pure
   decision function governs hooks, launchers and controls. Reset pauses and marks the
@@ -90,9 +91,11 @@
   Golden fixtures compare history-free memory traffic against 0.1.1, allowing only
   VERSION changes in telemetry. Separate history fixtures assert the authorized
   refusals. Codex installation and real-host setup remain future work.
-
 - Durable second-client binding history protects current and retired roots even when
   both coordination and the root are lost; only explicit recovery can change identity.
+- Record key creators privately, so Codex-first newcomers require pairing without
+  read-time registration. Interrupted initialization and reset can be retried with
+  the same call, preserving the published identity and pause state.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

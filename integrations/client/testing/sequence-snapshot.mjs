@@ -36,10 +36,11 @@ export async function snapshotHome(root) {
         entry.unreadable = true;
         return;
       }
-      for (const name of names.sort())
-        await visit(join(path, name), relative ? `${relative}/${name}` : name);
+      await Promise.all(
+        names.map((name) => visit(join(path, name), relative ? `${relative}/${name}` : name)),
+      );
     }
   }
   await visit(root, "");
-  return entries;
+  return entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }

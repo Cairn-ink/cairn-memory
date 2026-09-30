@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,7 +37,13 @@ test("separate processes initialize the same persistent key", async () => {
   const ids = await Promise.all(Array.from({ length: 16 }, () => childIdentity(dir, "/project/a")));
   assert.equal(new Set(ids).size, 1);
   assert.equal(await opaqueProjectId(dir, "/project/a"), ids[0]);
-  assert.deepEqual(await readdir(dir), ["project-key"]);
+  assert.deepEqual((await readdir(dir)).sort(), ["created-by", "project-key"]);
+  const key = (await readFile(join(dir, "project-key"), "utf8")).trim();
+  assert.deepEqual(JSON.parse(await readFile(join(dir, "created-by"), "utf8")), {
+    version: 1,
+    client: "claude",
+    fingerprint: createHmac("sha256", key).update("cairn-memory:binding:v1").digest("hex"),
+  });
   if (process.platform !== "win32") assert.equal((await stat(join(dir, "project-key"))).mode & 0o777, 0o600);
 });
 

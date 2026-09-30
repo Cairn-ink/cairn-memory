@@ -272,23 +272,22 @@ legacy standalone single-client operation remains supported. The setup command
 refuses an undetermined/non-absolute home before any writes or host execution;
 its paths never use this fallback. Pairing requires the same durable home.
 Both hosts resolve the same coordination location; no per-host alternate registry.
-A separate profile-local record, `<profileRoot>/.cairn-memory-profile/legacy.json`,
-is published when registration adopts the legacy default. It is 0600 in a 0700
-Cairn-owned subdirectory and stores only version, profile root and adopted root.
-It preserves that profile's adoption when coordination cannot be trusted, without
-allowing cursor evidence to bind a fresh profile in degraded mode.
+Explicit setup writes profile-local `binding.json` with the adopted root and a
+non-secret fingerprint. `legacy.json` is compatibility input only, never written
+by current code. Binding history refuses when coordination is absent or degraded.
 Normal hooks perform read-only detection. Take the setup lock and recheck only
-for explicit setup registration, joint initialization, adoption or reset. Established hooks
-never rewrite/fsync `install.json`. Explicit setup uses a bounded lock wait and recheck. Read paths do not wait,
-register or rewrite metadata. Unsupported pairing adds no standalone status note. Absent coordination retains 0.1.1 first use only without
-0.1.2 profile history; a local binding record instead refuses with
-`pairing_record_missing`. Degraded
-coordination uses only existing keys, with profile-local proof for legacy adoption,
-as specified in the decision table below. One fresh joint setup elects one
-initializer for both consenting clients and writes their shared binding before
-activating either. Concurrent explicit setup operations elect one initializer; the other
-needs adoption. Concurrent read paths remain unregistered. A partial joint setup must not let either host independently
-initialize another root/key.
+for explicit setup registration, joint initialization, adoption or reset. Established
+hooks never rewrite/fsync `install.json`. Explicit setup uses a bounded lock wait and
+recheck. Read paths do not wait, register or rewrite metadata. Unsupported pairing
+adds no standalone status note. Absent coordination retains 0.1.1 first use only
+without 0.1.2 profile history; a local binding record instead refuses with
+`pairing_record_missing`. Degraded coordination uses only existing keys, with
+profile-local proof for legacy adoption, as specified in the decision table below.
+One fresh joint setup elects one initializer for both consenting clients and writes
+their shared binding before activating either. Concurrent explicit setup operations
+elect one initializer; the other needs adoption. Concurrent read paths remain
+unregistered. A partial joint setup must not let either host independently initialize
+another root/key.
 Released Claude cannot honor this lock: setup must require
 it to be stopped during pairing, and never claim concurrent legacy setup is safe.
 Register a fresh single client only through explicit setup; read paths never register.
@@ -1332,14 +1331,11 @@ active as `standalone_unregistered`, with separate detail `coordination unreadab
 Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
 key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
 
-Registration of a genuine legacy-gap adoption first writes
-`<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned
-subdirectory). It records version, profile root and adopted default root, with no key or
-conversation content, and is never transmitted. This validated local history preserves
-that adoption only in degraded mode. With absent or empty coordination, local legacy
-history refuses with
-`pairing_record_missing`; it never authorizes silently minting a different identity.
-With readable registration it does not bypass profile ownership gates.
+Explicit setup records adopted scope in the private profile-local `binding.json`,
+not `legacy.json`. Binding history contains the root and a non-secret fingerprint,
+never a key or conversation. With absent or degraded coordination it refuses with
+`pairing_record_missing` until repair or an explicit reset to a new root. Older
+`legacy.json` records remain read-only compatibility input; no current path writes one.
 Initialization, adoption, completion, reset destinations and repair publish a private
 `paired-root` marker in the shared
 root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
@@ -1349,9 +1345,9 @@ delivered missing record still reports `pairing_record_missing`. An existing pro
 takes precedence. With readable coordination, only the registered profile follows its
 binding; another profile stays standalone. Unsupported registration on Windows adds no
 unregistered status note. An unrelated damaged default root does not prevent
-registration or add a status note. Only absolute plugin-data paths are registered,
-normalized with `path.resolve`; relative, empty or invalid paths retain standalone
-behavior without registration. Every install record is validated before publication.
+registration or add a status note. Only explicit setup registers absolute plugin-data
+profiles, storing resolved real paths; relative, empty or invalid paths retain
+standalone behavior without registration. Every install record is validated before publication.
 
 Retirement is checked only at the selected root. A present `retired` entry,
 valid or invalid, disables that root with `pairing_needed`; resume refuses to
@@ -1430,13 +1426,10 @@ existence in an owned directory; its contents are irrelevant. Marker probes use 
 lexically normalized directory as key publication, including relative paths with `..`.
 A missing ancestor canceled by `..` must never hide a marker at the publication target.
 
-The profile-local adoption record is `<profileRoot>/.cairn-memory-profile/legacy.json`,
-a 0600 private file in a 0700 Cairn-owned subdirectory. It records version, profileRoot
-and the adopted default root. Registration publishes it before recording a legacy-gap
-binding. Degraded resolution never infers adoption from cursors: a keyless profile needs
-this validated record and its existing, unretired key. In degraded mode, invalid local
-history or a lost adopted key fails closed. Ordinary existing profile keys keep
-precedence.
+The old profile-local adoption record `legacy.json` is read-only compatibility input.
+Current adoption writes `binding.json`, which refuses absent or degraded coordination;
+older validated adoption history can preserve its existing, unretired default key
+while degraded. Ordinary existing profile keys retain precedence.
 
 Enabled rows exercise pause/resume and delivery; the empty plugin-data rows retain
 0.1.1's no-delivery behavior even after resume. Disabled rows send nothing, mint
@@ -1477,6 +1470,35 @@ The review severity bar blocks silent identity changes, silent pair-root minting
 cross-profile/client exposure, registration outside explicit setup, and ordinary-use
 states with no documented recovery. Named fail-closed exotic states and wording or
 hygiene findings are recorded as follow-ups rather than release blockers.
+
+### Creator ownership and crash retries (CX-2 round 13)
+
+A private `created-by` record in a newly minted key root names its creator, `claude`
+or `codex`, and its non-secret identity fingerprint. Key publication durably prepares
+both values before publishing the key; an interrupted publication retains a private
+staged key so retry reuses the winner. This is creation evidence, never registration.
+A pre-existing key without the record retains the earlier decision rows. Codex creator
+evidence supplies the `codex` fact in N01–N07 even without install metadata. A keyless
+Claude newcomer, including a set plugin-data profile, cannot mint beside that evidence.
+An already established Claude key keeps working; newly added Codex remains disabled.
+
+Only explicit setup registers. Read paths never attempt registration or wait for its
+lock, so the old `registrationAttempt`/`busy` branch has no reachable row.
+
+Initialization records pending intent before publishing a new key. Retry of that
+intent does not require adoption. Reset records its pending destination before any
+new-root write, and a same-root retry skips the fresh-destination check. A completed
+reset retains a receipt so interruption after its last write is also retryable.
+Pause-barrier intent preserves the original pause flag across an interrupted rotation.
+Unknown key probes refuse with `state_unreadable`; reset never treats uncertainty as
+absence or skips retirement because of a failed check. Interruption fixtures stop after
+every durable state-helper write and retry the identical call. A process crash retains
+pending state; invariant F applies to caught refusals, with its existing lock exemption.
+
+Below-bar follow-ups, deliberately not fixed: wiping a profile's plugin data together
+with coordination loss erases its ownership evidence; deleting a root, coordination
+and HOME binding history together erases all detectable pair ownership. Neither state
+can be distinguished from first use from the remaining files.
 
 <!-- claude-resolution-table:start -->
 
@@ -1627,13 +1649,19 @@ Defaults (each row overrides only the listed facts):
 | Q07 | no | invalid durable second-client history is a named refusal | `{"durableRootHistory":"invalid"}` | `{"root":null,"status":"binding_history_invalid","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
 | X90 | no | retargeted host profile alias remains standalone without a delivered option | `{"coord":"readable","registration":"other","shared":"ready","profileKey":true,"profileAliasRepoint":true}` | `{"root":"profile","status":"standalone_unregistered","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
 | X91 | no | retargeted host profile alias refuses another profile's explicit record | `{"coord":"readable","registration":"other","shared":"ready","delivery":"match","profileKey":true,"profileAliasRepoint":true}` | `{"root":null,"status":"pairing_record_mismatch","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| O01 | no | Codex creator makes unset-profile Claude a newcomer without registration | `{"profile":"default","default":"key","profileKey":true,"creator":"codex"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| O02 | no | Codex creator prevents a fresh plugin-data profile from minting | `{"default":"key","creator":"codex"}` | `{"root":null,"status":"pairing_needed","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false}` | — |
+| O03 | no | pre-existing Claude profile keeps its own key beside Codex creator evidence | `{"default":"key","creator":"codex","profileKey":true}` | `{"root":"profile","status":"pairing_needed","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
+| O04 | no | Claude creator alone does not imply another client | `{"creator":"claude","profileKey":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
+| O05 | no | invalid selected creator evidence refuses | `{"creator":"invalid","profileKey":true}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"invalid_creator_record"}` | — |
 <!-- claude-resolution-table:end -->
 
 ### Explicit operation decision table (CX-2 round 11)
 
 These rows are also executable fixtures. They cover mutation/refusal effects separately
 from read-only Claude resolution. **F:** a failed explicit operation leaves files,
-contents, modes and markers byte-identical, excluding setup locks and their owner/reap artifacts. Validate every precondition before writing;
+contents, modes and markers byte-identical, excluding setup locks and their owner/reap
+artifacts. Validate every precondition before writing;
 restore prior state if a caught write failure interrupts an otherwise valid operation.
 A host/process crash retains the existing pending-state retry contract.
 
@@ -1677,6 +1705,15 @@ binding authorizes this intentional new identity; invalid history refuses before
 | Q06 | codex | coordination-lost | pairing_record_missing | unchanged |
 | D04 | reset | alias-root-lost | identity_reset_requires_new_root | unchanged |
 | E05 | facade | alias-root-lost | paired_key_missing | unchanged |
+| J01 | interrupt | initialize | binding_pending | same-end-state |
+| J02 | interrupt | adopt | binding_pending | same-end-state |
+| J03 | interrupt | complete | paired | same-end-state |
+| J04 | interrupt | reset-claude | identity_reset | same-end-state |
+| J05 | interrupt | reset-codex | identity_reset | same-end-state |
+| J06 | interrupt | repair | key_restored | same-end-state |
+| J07 | interrupt | adopt-temporary | binding_pending | same-end-state |
+| J08 | reset | key-mode | state_unreadable | unchanged |
+| J09 | detect | key-mode | state_unreadable | unchanged |
 <!-- pairing-operation-table:end -->
 
 When a pair root has been deleted, root identity normalizes its missing suffix against
@@ -1689,3 +1726,28 @@ helper used for comparisons. This includes Claude's profile root and both client
 bound roots. Retargeting a host profile alias therefore becomes another profile;
 a delivered record refuses, and no delivered option preserves that profile's own
 standalone key and pause. Standalone root selection itself remains unchanged.
+
+The key publisher records its creator in private `created-by` JSON (0600): version,
+client (`claude` or `codex`) and a non-secret identity fingerprint. It is ownership
+evidence, not registration. A newcomer Claude beside a Codex-created standalone
+root needs explicit pairing, with either set or unset plugin data; it sends nothing
+and mints nothing. The established client continues with `pairing_needed`. Older
+keys without a creator record keep the legacy rules. Publication first durably
+stages the key in private `.project-key.pending`, then the creator intent, then
+links the key. A retry reuses the staged winner. Standalone publishers serialize
+this transaction with `.project-key.lock`; read paths never write creator records.
+
+Interrupted setup is retried with the same explicit call. Pending initialization
+reuses its winner without demanding adoption; pending reset to the same root skips
+the fresh-destination test. Reset retains a completion receipt for a retry after
+its final write. Initialization retains the original pause flag across its barrier.
+Unreadable key probes refuse with `state_unreadable`, rather than treating the key
+as absent or skipping retirement.
+
+#### Below-bar deletion follow-ups
+
+A plugin-data directory wiped together with coordination loss, or root, coordination
+and HOME history deleted together, can erase all durable ownership evidence. These
+undetectable deletions are follow-ups under the round-12 severity bar, not blockers.
+Read resolution never registers, so the old registration-attempt/busy branch has no
+reachable table row. Creator publication supplies first-client evidence instead.

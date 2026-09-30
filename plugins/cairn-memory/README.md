@@ -126,13 +126,12 @@ adoption record naming an existing default-root key. An eligible unretired root 
 disabled with `pairing_needed`; a lost locally recorded standalone key in an unmarked root reports
 `standalone_key_missing`, never `paired_key_missing`.
 
-Registration of a genuine legacy-gap adoption first writes
-`<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned subdirectory). It
-records version, profile root and adopted default root, with no key or conversation content, and is
-never transmitted. This validated local history preserves that adoption only in degraded mode. With
-absent or empty coordination, local legacy history refuses with `pairing_record_missing`; it never
-authorizes silently minting a different identity. With readable registration it does not bypass
-profile ownership gates. Initialization, adoption, completion, reset destinations and repair publish
+Explicit setup records adopted scope in the private profile-local `binding.json`,
+not `legacy.json`. Binding history contains the root and a non-secret fingerprint,
+never a key or conversation. With absent or degraded coordination it refuses with
+`pairing_record_missing` until repair or an explicit reset to a new root. Older
+`legacy.json` records remain read-only compatibility input; no current path writes one.
+Initialization, adoption, completion, reset destinations and repair publish
 a private `paired-root` marker in the shared root. Its positive presence, valid or invalid,
 permanently excludes cursor-based legacy adoption of that root, including after coordination loss.
 It does not pause or disable an otherwise entitled client. A fresh profile gets its own key after
@@ -140,9 +139,9 @@ loss; an explicitly delivered missing record still reports `pairing_record_missi
 profile key takes precedence. With readable coordination, only the registered profile follows its
 binding; another profile stays standalone. Standalone on Windows adds no unregistered
 status note. An unrelated damaged default root does not affect another profile or add a status note.
-Only absolute plugin-data paths are registered, normalized with `path.resolve`; relative, empty or
-invalid paths retain standalone behavior without registration. Every install record is validated
-before publication.
+Only explicit setup registers absolute plugin-data profiles, storing their resolved real paths.
+Relative, empty or invalid paths retain standalone behavior without registration. Every install
+record is validated before publication.
 
 Reset pauses the old shared root, rotates its generation, and writes a private `retired` marker
 there. Retirement is checked only at the selected root. A present `retired` entry, valid or invalid,
@@ -185,3 +184,20 @@ Codex also keeps private non-secret binding history at
 `<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
 so losing both coordination and a root cannot authorize a replacement key or legacy
 adoption. Invalid history fails closed. Hooks and status never register either client.
+
+The key publisher records its creator in private `created-by` JSON (0600): version,
+client (`claude` or `codex`) and a non-secret identity fingerprint. It is ownership
+evidence, not registration. A newcomer Claude beside a Codex-created standalone
+root needs explicit pairing, with either set or unset plugin data; it sends nothing
+and mints nothing. The established client continues with `pairing_needed`. Older
+keys without a creator record keep the legacy rules. Publication first durably
+stages the key in private `.project-key.pending`, then the creator intent, then
+links the key. A retry reuses the staged winner. Standalone publishers serialize
+this transaction with `.project-key.lock`; read paths never write creator records.
+
+Interrupted setup is retried with the same explicit call. Pending initialization
+reuses its winner without demanding adoption; pending reset to the same root skips
+the fresh-destination test. Reset retains a completion receipt for a retry after
+its final write. Initialization retains the original pause flag across its barrier.
+Unreadable key probes refuse with `state_unreadable`, rather than treating the key
+as absent or skipping retirement.

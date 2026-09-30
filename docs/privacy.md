@@ -7,29 +7,13 @@ changes below. Current local storage and deletion boundaries are documented in
 injected model adapter can send source text to its provider. Local storage alone
 is not a promise of offline interpretation.
 
-The main risk in automatic memory is not bad retrieval. It is silently collecting more than the
-user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a
-narrow, inspectable boundary.
+The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 
 ## Data flow
 
-After explicit installation, automatic capture and content-free telemetry default on. The plugin
-reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose
-top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24
-messages, and sends them to the configured service.
+After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
 
-From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as
-meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool
-result (the whole record is skipped); or its text starts with a Claude Code wrapper
-(slash-command and local-command output, bash-mode input and output, system reminders,
-prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude
-Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts
-with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had
-queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request
-0.1.0 had already sent may still complete. Assistant text is sent as before, including anything
-it quotes from those records. Only the record shapes and wrappers listed in the
-[plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see
-[limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Assistant text is sent as before, including anything it quotes from those records. Only the record shapes and wrappers listed in the [plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
 
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
@@ -39,10 +23,7 @@ Empty queries are skipped. Neither path can guarantee detection of every secret.
 Tool blocks are excluded from capture, but ordinary conversation can include
 pasted files, terminal output, paths, and repository names.
 
-The service may retain durable Memory text and bounded redacted Source Receipts. It does not
-need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when
-the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not
-claimed by this repository.
+The service may retain durable Memory text and bounded redacted Source Receipts. It does not need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not claimed by this repository.
 
 ## Local state
 
@@ -53,12 +34,14 @@ An explicitly paired plugin uses the recorded durable shared root:
 
 - `install-id`: random id used only for anonymous lifecycle telemetry;
 - `project-key`: separate random secret used to derive opaque project ids and never transmitted;
+- `created-by`: private client-creator record and non-secret identity fingerprint;
+- `.project-key.pending`: private staged secret during crash-safe key publication;
+- `.project-key.lock`: publication ownership and recovery files;
 - `control.json`: content-free pause state and generation barrier;
 - `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
   root history, published with the same owner/symlink checks as other private state;
 - `paused`: compatibility marker also honored as a pause;
-- `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard
-  state,
+- `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
   keyed by a hash of the Claude session id;
 - process-owned lock files coordinating control changes and session capture.
 
@@ -114,14 +97,11 @@ active as `standalone_unregistered`, with separate detail `coordination unreadab
 Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
 key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
 
-Registration of a genuine legacy-gap adoption first writes
-`<profileRoot>/.cairn-memory-profile/legacy.json` (0600 inside a 0700 Cairn-owned
-subdirectory). It records version, profile root and adopted default root, with no key or
-conversation content, and is never transmitted. This validated local history preserves
-that adoption only in degraded mode. With absent or empty coordination, local legacy
-history refuses with
-`pairing_record_missing`; it never authorizes silently minting a different identity.
-With readable registration it does not bypass profile ownership gates.
+Explicit setup records adopted scope in the private profile-local `binding.json`,
+not `legacy.json`. Binding history contains the root and a non-secret fingerprint,
+never a key or conversation. With absent or degraded coordination it refuses with
+`pairing_record_missing` until repair or an explicit reset to a new root. Older
+`legacy.json` records remain read-only compatibility input; no current path writes one.
 Initialization, adoption, completion, reset destinations and repair publish a private
 `paired-root` marker in the shared
 root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
@@ -131,8 +111,8 @@ delivered missing record still reports `pairing_record_missing`. An existing pro
 takes precedence. With readable coordination, only the registered profile follows its
 binding; another profile stays standalone. Unsupported registration on Windows adds no
 unregistered status note. An unrelated damaged default root does not prevent
-registration or add a status note. Only absolute plugin-data paths are registered,
-normalized with `path.resolve`; relative, empty or invalid paths retain standalone
+registration or add a status note. Only explicit setup registers absolute plugin-data
+profiles, storing resolved real paths; relative, empty or invalid paths retain standalone
 behavior without registration. Every install record is validated before publication.
 
 Retirement is checked only at the selected root. A present `retired` entry,
@@ -422,3 +402,20 @@ Codex also keeps private non-secret binding history at
 `<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
 so losing both coordination and a root cannot authorize a replacement key or legacy
 adoption. Invalid history fails closed. Hooks and status never register either client.
+
+The key publisher records its creator in private `created-by` JSON (0600): version,
+client (`claude` or `codex`) and a non-secret identity fingerprint. It is ownership
+evidence, not registration. A newcomer Claude beside a Codex-created standalone
+root needs explicit pairing, with either set or unset plugin data; it sends nothing
+and mints nothing. The established client continues with `pairing_needed`. Older
+keys without a creator record keep the legacy rules. Publication first durably
+stages the key in private `.project-key.pending`, then the creator intent, then
+links the key. A retry reuses the staged winner. Standalone publishers serialize
+this transaction with `.project-key.lock`; read paths never write creator records.
+
+Interrupted setup is retried with the same explicit call. Pending initialization
+reuses its winner without demanding adoption; pending reset to the same root skips
+the fresh-destination test. Reset retains a completion receipt for a retry after
+its final write. Initialization retains the original pause flag across its barrier.
+Unreadable key probes refuse with `state_unreadable`, rather than treating the key
+as absent or skipping retirement.

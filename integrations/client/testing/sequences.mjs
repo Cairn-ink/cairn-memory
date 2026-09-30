@@ -183,13 +183,7 @@ export const REGRESSION_SEQUENCES = Object.freeze([
     seed: 313524240,
     finding: "unreadable coordination returns named refusal",
     pairRoot: "custom",
-    operations: [
-      "initialize",
-      "complete",
-      "coord-mode-zero",
-      "codex-recall",
-      "coord-mode-restore",
-    ],
+    operations: ["initialize", "complete", "coord-mode-zero", "codex-recall", "coord-mode-restore"],
   },
   {
     seed: 313524241,
@@ -207,14 +201,7 @@ export const REGRESSION_SEQUENCES = Object.freeze([
     seed: 313524243,
     finding: "combined root and coordination loss preserves K",
     pairRoot: "default",
-    operations: [
-      "initialize",
-      "complete",
-      "coord-absent",
-      "delete-root",
-      "fresh-unset",
-      "recall",
-    ],
+    operations: ["initialize", "complete", "coord-absent", "delete-root", "fresh-unset", "recall"],
   },
   {
     seed: 313524244,
@@ -264,14 +251,40 @@ export const REGRESSION_SEQUENCES = Object.freeze([
   {
     seed: 313524250,
     finding: "deleted Codex history cannot split the second client after coordination loss",
-    operations: [
-      "initialize",
-      "complete",
-      "codex-binding-delete",
-      "coord-absent",
-      "codex-single",
-    ],
+    operations: ["initialize", "complete", "codex-binding-delete", "coord-absent", "codex-single"],
   },
+  {
+    seed: 313589761,
+    finding: "Codex-first unset Claude is a disabled newcomer",
+    pairRoot: "default",
+    operations: ["codex-first", "fresh-unset", "recall", "codex-status"],
+  },
+  {
+    seed: 313589762,
+    finding: "Codex-first plugin-data Claude cannot mint",
+    pairRoot: "default",
+    operations: ["codex-first", "fresh-set", "recall", "codex-status"],
+  },
+  {
+    seed: 313589763,
+    finding: "Claude-first Codex is a disabled newcomer",
+    pairRoot: "default",
+    operations: ["claude-first", "codex-single", "recall"],
+  },
+  ...[
+    "initialize",
+    "adopt",
+    "complete",
+    "reset-claude",
+    "reset-codex",
+    "repair",
+    "adopt-temporary",
+  ].map((setupOperation, index) => ({
+    seed: 313589764 + index,
+    finding: `interrupted ${setupOperation} retries`,
+    setupOperation,
+    operations: ["interrupt"],
+  })),
   // Retained discoveries from earlier rounds are scripted fixtures too.
   {
     seed: 0x51a7e001,
@@ -398,6 +411,9 @@ export const OPERATIONS = Object.freeze([
   "repoint-profile-alias",
   "clear-option",
   "codex-binding-delete",
+  "codex-first",
+  "claude-first",
+  "interrupt",
 ]);
 export function generateSequences() {
   const sequences = [];
@@ -451,10 +467,10 @@ export function generateSequences() {
           "recall",
         ];
       else
-        operations = Array.from(
-          { length: 1 + next(7) },
-          () => OPERATIONS[next(OPERATIONS.length)],
-        );
+        operations = Array.from({ length: 1 + next(7) }, () => {
+          const randomOperations = OPERATIONS.filter((operation) => operation !== "interrupt");
+          return randomOperations[next(randomOperations.length)];
+        });
       sequences.push({ seed, operations });
     }
   }
@@ -467,6 +483,7 @@ const setupRefusals = [
   "reset_destination_not_new",
   "existing_key_requires_adoption",
   "invalid_original_key",
+  "invalid_claude_profile_root",
   "unexpected_state_error",
   "pairing_needed",
   "paired_key_missing",
@@ -537,6 +554,7 @@ export const OPERATION_REFUSALS = Object.freeze(
                 ? [
                     "paired_key_missing",
                     "invalid_original_key",
+                    "invalid_claude_profile_root",
                     "state_unreadable",
                     "invalid_state_type",
                     "state_permissions",

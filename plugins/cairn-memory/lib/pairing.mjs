@@ -3,6 +3,7 @@ import { homedir, tmpdir, uptime } from "node:os";
 import { isAbsolute, join, resolve, relative, dirname } from "node:path";
 import {
   opendir,
+  open,
   readFile,
   readlink,
   unlink,
@@ -14,6 +15,7 @@ import {
   mkdir,
   writeFile,
   rmdir,
+  rename,
   readdir,
 } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -24,15 +26,19 @@ import {
   privateWrite,
   checkedPath,
   probeEntry,
+  notifyWrite,
+  syncDirectory,
 } from "./private-state.mjs";
 import { withFileLock } from "./file-lock.mjs";
 
 import { setPaused, readControlState } from "./control-state.mjs";
 
-async function randomIdFile(dataDir, filename, { create = true } = {}) {
+async function randomIdFile(dataDir, filename, { create = true, client = "claude" } = {}) {
   const path = join(dataDir, filename);
   async function readIdentity() {
-    const entry = await probeEntry(path, { read: () => readFile(path, "utf8") });
+    const entry = await probeEntry(path, {
+      read: () => readFile(path, "utf8"),
+    });
     if (entry.state === "unknown") failUnreadable(entry.code);
     if (entry.state === "absent") {
       const error = new Error("missing");
@@ -51,7 +57,7 @@ async function randomIdFile(dataDir, filename, { create = true } = {}) {
     if (error.code !== "ENOENT") throw error;
   }
   if (filename === "project-key") {
-    await publishProjectKey(dataDir, { create, strict: false });
+    await publishProjectKey(dataDir, { create, strict: false, client });
     return readIdentity();
   }
   if (!create) throw new Error("standalone_key_missing");
@@ -75,8 +81,7 @@ async function rootMarkerImpl(root, name) {
 
 /** Every durable recorded pair root, independent of readiness or root-local markers. */
 function recordedPairRootsImpl(coordination) {
-  const readable =
-    coordination.coordination === "readable" || coordination.state === "readable";
+  const readable = coordination.coordination === "readable" || coordination.state === "readable";
   const install = readable ? (coordination.install ?? { clients: {} }) : { clients: {} };
   return [
     ...new Set(
@@ -110,7 +115,10 @@ async function rootIdentity(path, { cache = new Map() } = {}) {
       cache.set(
         candidate,
         probeEntry(candidate, {
-          read: async () => ({ path: await realpath(candidate), info: await stat(candidate) }),
+          read: async () => ({
+            path: await realpath(candidate),
+            info: await stat(candidate),
+          }),
         }),
       );
     return cache.get(candidate);
@@ -124,7 +132,10 @@ async function rootIdentity(path, { cache = new Map() } = {}) {
     if (parent.state === "unknown") failUnreadable(parent.code);
     if (parent.state === "present") {
       if (!parent.value.info.isDirectory()) failUnreadable("ENOTDIR");
-      return { present: false, path: resolve(parent.value.path, relative(ancestor, path)) };
+      return {
+        present: false,
+        path: resolve(parent.value.path, relative(ancestor, path)),
+      };
     }
     const next = dirname(ancestor);
     if (next === ancestor) failUnreadable("ENOENT");
@@ -170,6 +181,7 @@ async function publishLegacyFile(dataDir, filename) {
 }
 
 const repairCapability = Symbol("explicit original-key restore");
+const creationCapability = Symbol("explicit pending first publication");
 const validKey = (key) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key);
 
@@ -184,8 +196,12 @@ async function publishProjectKey(
     capability,
     repairProfileRoot,
     home,
+    client = "claude",
   } = {},
 ) {
+  if (dataDir === "" && !strict) await mkdir(dataDir, { recursive: true });
+  dataDir = resolve(dataDir);
+  if (!CLIENTS.includes(client)) fail("invalid_client");
   if (capability === repairCapability) {
     const history = await readBindingHistory(repairProfileRoot);
     if (
@@ -206,16 +222,183 @@ async function publishProjectKey(
   if (coordination.durableHistory?.state === "invalid") fail("binding_history_invalid");
   const recorded = await containsRoot(recordedPairRoots(coordination), dataDir);
   if (marker.state === "present" || recorded) {
-    if (capability !== repairCapability) throw new Error("paired_key_missing");
+    const pending = coordination.install.resetPending ?? coordination.install.shared;
+    const firstPublication =
+      capability === creationCapability &&
+      marker.state === "absent" &&
+      pending &&
+      (await sameRoot(pending.root, dataDir)) &&
+      !pending.initialized;
+    if (capability !== repairCapability && !firstPublication) throw new Error("paired_key_missing");
   }
   if (!create) throw new Error(strict ? "paired_key_missing" : "standalone_key_missing");
-  if (!strict) return publishLegacyFile(dataDir, "project-key");
   if (originalKey !== undefined && !validKey(originalKey))
     throw new Error("invalid_identity: project-key");
-  await privateWrite(join(dataDir, "project-key"), `${originalKey ?? randomUUID()}\n`, {
-    exclusive: true,
-    checkpoint,
+  const publish = async () => {
+    const keyPath = join(dataDir, "project-key");
+    const existing = await probeEntry(keyPath, {
+      read: () => readFile(keyPath, "utf8"),
+    });
+    if (existing.state === "unknown") failUnreadable(existing.code);
+    if (existing.state === "present") return; // EEXIST reads the winner, never rewrites it.
+    const pendingPath = join(dataDir, ".project-key.pending");
+    const staged = await probeEntry(pendingPath, {
+      read: () => privateRead(pendingPath, { missing: true, portable: !strict }),
+    });
+    if (staged.state === "unknown") failUnreadable(staged.code);
+    let value;
+    if (staged.state === "present") {
+      try {
+        value = JSON.parse(staged.value);
+      } catch {
+        failUnreadable("invalid_key_publication");
+      }
+      if (value.version !== 1 || !CLIENTS.includes(value.client) || !validKey(value.key))
+        failUnreadable("invalid_key_publication");
+      if (originalKey !== undefined && value.key !== originalKey) fail("repair_key_conflict");
+    } else {
+      const prior = await creatorRecord(dataDir);
+      if (prior.state === "unknown") failUnreadable(prior.code);
+      if (
+        (marker.state === "present" || recorded) &&
+        prior.state === "present" &&
+        capability !== repairCapability
+      )
+        fail("paired_key_missing");
+      value = {
+        version: 1,
+        client: prior.value?.client ?? client,
+        key: originalKey ?? randomUUID(),
+      };
+      await writeIdentityFile(pendingPath, JSON.stringify(value), { strict });
+    }
+    // Creator intent is durable before the key becomes visible. Both are published
+    // under the mint lock; a crash leaves the exact winner in the private staging file.
+    await writeIdentityFile(
+      join(dataDir, "created-by"),
+      JSON.stringify({
+        version: 1,
+        client: value.client,
+        fingerprint: identityFingerprint(value.key),
+      }),
+      { strict },
+    );
+    await writeIdentityFile(keyPath, `${value.key}\n`, {
+      strict,
+      exclusive: true,
+      checkpoint,
+    });
+    const winner = (await readFile(keyPath, "utf8")).trim();
+    if (winner !== value.key) {
+      if (capability === repairCapability) fail("repair_key_conflict");
+      // A released pre-creator writer can win EEXIST without obeying the mint lock.
+      // Its existing key has no trustworthy creator; do not attribute it to us.
+      const creator = await creatorRecord(dataDir);
+      if (creator.value?.fingerprint === identityFingerprint(value.key)) {
+        await unlink(join(dataDir, "created-by"));
+        await notifyWrite(join(dataDir, "created-by"), "unlink");
+      }
+    }
+    await unlink(pendingPath);
+    await notifyWrite(pendingPath, "unlink");
+  };
+  if (strict) await privateDirectory(dataDir);
+  else await mkdir(dataDir, { recursive: true, mode: 0o700 });
+  if (capability === creationCapability || capability === repairCapability) await publish();
+  else {
+    const acquired = await withFileLock(join(dataDir, ".project-key.lock"), publish, {
+      timeoutMs: 5000,
+      pollMs: 10,
+    });
+    if (!acquired) {
+      const winner = await probeEntry(join(dataDir, "project-key"));
+      if (winner.state !== "present") fail("key_publication_busy");
+    }
+  }
+}
+
+async function writeIdentityFile(path, bytes, { strict, exclusive = false, checkpoint } = {}) {
+  if (strict) return privateWrite(path, bytes, { exclusive, checkpoint });
+  await checkedPath(path, { missing: true, portable: true });
+  const temporary = `${path}.tmp-${randomUUID()}`;
+  const staged = await open(temporary, "wx", 0o600);
+  try {
+    await staged.writeFile(bytes);
+    await staged.sync();
+  } finally {
+    await staged.close();
+  }
+  try {
+    if (exclusive) {
+      try {
+        await link(temporary, path);
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+    } else await rename(temporary, path);
+    if (process.platform !== "win32") await syncDirectory(dirname(path));
+    await notifyWrite(path);
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
+}
+
+async function creatorRecord(root) {
+  root = resolve(root);
+  const parent = await probeEntry(root, { read: () => stat(root) });
+  if (parent.state === "present" && !owned(parent.value)) return { state: "absent" };
+  const entry = await probeEntry(join(root, "created-by"), {
+    read: () => privateRead(join(root, "created-by"), { missing: true, portable: true }),
   });
+  if (entry.state === "absent") {
+    const pending = await probeEntry(join(root, ".project-key.pending"), {
+      read: () =>
+        privateRead(join(root, ".project-key.pending"), {
+          missing: true,
+          portable: true,
+        }),
+    });
+    if (pending.state !== "present") return pending;
+    try {
+      const value = JSON.parse(pending.value);
+      if (value.version !== 1 || !CLIENTS.includes(value.client) || !validKey(value.key))
+        throw new Error("invalid_key_publication");
+      return {
+        state: "present",
+        value: {
+          version: 1,
+          client: value.client,
+          fingerprint: identityFingerprint(value.key),
+        },
+      };
+    } catch (error) {
+      return { state: "unknown", code: "invalid_key_publication", error };
+    }
+  }
+  if (entry.state !== "present") return entry;
+  try {
+    const value = JSON.parse(entry.value);
+    if (
+      value.version !== 1 ||
+      !CLIENTS.includes(value.client) ||
+      !/^[a-f0-9]{64}$/.test(value.fingerprint)
+    )
+      throw new Error("invalid_creator_record");
+    return { state: "present", value };
+  } catch (error) {
+    return { state: "unknown", code: "invalid_creator_record", error };
+  }
+}
+
+async function firstProjectKey(root, { client = "claude", home, checkpoint } = {}) {
+  if (!(await keyPresent(root, { strict: true })))
+    await publishProjectKey(root, {
+      client,
+      home,
+      checkpoint,
+      capability: creationCapability,
+    });
+  return projectKey(root, { create: false });
 }
 
 /** Restore only the supplied original backup; never generate a repair identity. */
@@ -249,15 +432,20 @@ function installIdImpl(dataDir) {
  * Stable project id keyed with a separate secret that never leaves the device.
  * Keeping it separate from installId prevents Cairn from testing likely paths.
  */
-async function projectKeyImpl(dataDir, { create = true, checkpoint, originalKey, home } = {}) {
+async function projectKeyImpl(
+  dataDir,
+  { create = true, checkpoint, originalKey, home, client = "claude" } = {},
+) {
   if (originalKey !== undefined) fail("invalid_original_key");
   await checkedPath(dataDir, { directory: true, missing: true });
   const path = join(dataDir, "project-key");
-  const entry = await probeEntry(path, { read: () => privateRead(path, { missing: true }) });
+  const entry = await probeEntry(path, {
+    read: () => privateRead(path, { missing: true }),
+  });
   if (entry.state === "unknown") failUnreadable(entry.code);
   let value = entry.value;
   if (value === undefined) {
-    await publishProjectKey(dataDir, { create, checkpoint, home });
+    await publishProjectKey(dataDir, { create, checkpoint, home, client });
     value = await privateRead(path);
   }
   const key = value.trim();
@@ -337,8 +525,7 @@ async function probeCoordination(locations) {
   empty.durableHistory = durableHistory;
   const entry = await probeEntry(locations.coordination);
   if (entry.state === "absent") return empty;
-  if (entry.state === "unknown")
-    return { ...empty, coordination: "degraded", detail: entry.code };
+  if (entry.state === "unknown") return { ...empty, coordination: "degraded", detail: entry.code };
   if (entry.value.isSymbolicLink()) {
     const target = await probeEntry(locations.coordination, {
       read: () => stat(locations.coordination),
@@ -358,12 +545,18 @@ async function probeCoordination(locations) {
       [locations.install, locations.pairing].map((path) => probeEntry(path)),
     );
     if (entries.every((entry) => entry.state === "absent")) return empty;
-    return { ...empty, coordination: "degraded", detail: error.code ?? error.message };
+    return {
+      ...empty,
+      coordination: "degraded",
+      detail: error.code ?? error.message,
+    };
   }
 }
 
 async function jsonFile(path) {
-  const entry = await probeEntry(path, { read: () => privateRead(path, { missing: true }) });
+  const entry = await probeEntry(path, {
+    read: () => privateRead(path, { missing: true }),
+  });
   if (entry.state === "unknown") failUnreadable(entry.code);
   const text = entry.value;
   if (text === undefined) return undefined;
@@ -401,12 +594,20 @@ function validateInstall(value) {
       typeof value.shared.ready !== "boolean")
   )
     fail("invalid_install");
+  for (const receipt of [value.resetPending, value.lastReset]) {
+    if (
+      receipt &&
+      (!absolute(receipt.root) ||
+        !CLIENTS.includes(receipt.client) ||
+        (receipt.initialized !== undefined && typeof receipt.initialized !== "boolean"))
+    )
+      fail("invalid_install");
+  }
   if (
     value.retired !== undefined &&
     (!Array.isArray(value.retired) ||
       value.retired.some(
-        (entry) =>
-          !entry || !absolute(entry.claude?.profileRoot) || !absolute(entry.claude?.root),
+        (entry) => !entry || !absolute(entry.claude?.profileRoot) || !absolute(entry.claude?.root),
       ))
   )
     fail("invalid_install");
@@ -515,6 +716,7 @@ async function detectClientsImpl(options = {}) {
     const entry = await probeEntry(join(root, "project-key"), {
       read: () => readFile(join(root, "project-key"), "utf8"),
     });
+    if (entry.state === "unknown") failUnreadable(entry.code);
     if (entry.state === "present" && validKey(entry.value.trim())) keys.push(root);
   }
   return { ...coordination, locations, install, record, keys };
@@ -541,7 +743,12 @@ async function localLivenessImpl({ platform = process.platform } = {}) {
   if (platform === "darwin") {
     // os.uptime is system uptime in seconds. Allow two seconds of sampling/
     // rounding drift when comparing estimates from separate processes.
-    return { boot: Date.now() - uptime() * 1000, namespace: "darwin", platform, isAlive };
+    return {
+      boot: Date.now() - uptime() * 1000,
+      namespace: "darwin",
+      platform,
+      isAlive,
+    };
   }
   return { platform, namespace: undefined, boot: undefined, isAlive };
 }
@@ -626,9 +833,7 @@ async function setupTransaction(options, work) {
     if (operation !== "reset" && codexHistory.state === "valid") {
       if (!(await sameRoot(codexHistory.root, destination))) fail("binding_identity_mismatch");
       if (await keyPresent(destination)) {
-        const fingerprint = identityFingerprint(
-          await projectKey(destination, { create: false }),
-        );
+        const fingerprint = identityFingerprint(await projectKey(destination, { create: false }));
         if (fingerprint !== codexHistory.fingerprint)
           fail(operation === "repair" ? "repair_key_conflict" : "binding_identity_mismatch");
       }
@@ -636,9 +841,7 @@ async function setupTransaction(options, work) {
     if (operation !== "reset" && history?.state === "valid") {
       if (!(await sameRoot(history.root, destination))) fail("binding_identity_mismatch");
       if (await keyPresent(destination)) {
-        const fingerprint = identityFingerprint(
-          await projectKey(destination, { create: false }),
-        );
+        const fingerprint = identityFingerprint(await projectKey(destination, { create: false }));
         if (fingerprint !== history.fingerprint)
           fail(operation === "repair" ? "repair_key_conflict" : "binding_identity_mismatch");
       }
@@ -658,11 +861,7 @@ async function setupTransaction(options, work) {
         [
           destination,
           ...(operation === "reset" ? [] : recordedPairRoots(snapshot)),
-          operation === "reset" &&
-          history?.state === "valid" &&
-          (await probe(() => checkedPath(history.root, { directory: true }), false))
-            ? history.root
-            : undefined,
+          operation === "reset" ? (install.shared?.root ?? history?.root) : undefined,
         ].filter(Boolean),
       ),
     ];
@@ -670,9 +869,15 @@ async function setupTransaction(options, work) {
       locations.install,
       locations.pairing,
       ...roots.flatMap((root) =>
-        ["project-key", "paired-root", "retired", "control.json", "paused"].map((name) =>
-          join(root, name),
-        ),
+        [
+          "project-key",
+          "created-by",
+          ".project-key.pending",
+          "paired-root",
+          "retired",
+          "control.json",
+          "paused",
+        ].map((name) => join(root, name)),
       ),
       bindingHistoryPath(locations.home),
       ...(profileRoot ? [bindingHistoryPath(profileRoot)] : []),
@@ -802,8 +1007,7 @@ async function selectCodexBinding(options, snapshot, delivered) {
       (snapshot.durableHistory?.state === "valid" &&
         (!(await sameRoot(snapshot.durableHistory.root, record.root)) ||
           snapshot.durableHistory.fingerprint !== binding.fingerprint)) ||
-      binding.fingerprint !==
-        identityFingerprint(await projectKey(record.root, { create: false }))
+      binding.fingerprint !== identityFingerprint(await projectKey(record.root, { create: false }))
     )
       return disabled("binding_identity_mismatch");
     return {
@@ -820,7 +1024,12 @@ async function selectCodexBinding(options, snapshot, delivered) {
   if (pairedRoot && !binding?.fingerprint) return disabled("pairing_record_missing");
   if (pairedRoot && !(await keyPresent(root, { strict: true })))
     return disabled("paired_key_missing");
-  let established = binding?.state === "established" && (await sameRoot(binding.root, root));
+  const creator = await creatorRecord(root);
+  if (creator.state === "unknown") failUnreadable(creator.code);
+  if (creator.value?.client === "claude" && !binding) return disabled();
+  let established =
+    (binding?.state === "established" && (await sameRoot(binding.root, root))) ||
+    creator.value?.client === "codex";
   const conflict =
     !!other ||
     (await probe(() => hasClaudeEvidence(root), false)) ||
@@ -844,7 +1053,13 @@ async function selectCodexBinding(options, snapshot, delivered) {
       return disabled("binding_identity_mismatch");
   }
   return {
-    ...(await activeBinding(root, env, conflict ? "pairing_needed" : "single")),
+    ...(await activeBinding(
+      root,
+      env,
+      conflict || (creator.value?.client === "codex" && options.usesClaude !== false)
+        ? "pairing_needed"
+        : "single",
+    )),
     expectedFingerprint: binding?.fingerprint,
   };
 }
@@ -943,7 +1158,7 @@ const probe = async (read, missing) => {
   }
 };
 
-async function rootFacts(root, { strict = false, evidence = false } = {}) {
+async function rootFacts(root, { strict = false, evidence = false, metadataOnly = false } = {}) {
   const info = await probe(() => stat(root), undefined);
   const usable = !!info?.isDirectory();
   const retiredEntry = await markerProbe(root, "retired");
@@ -953,8 +1168,9 @@ async function rootFacts(root, { strict = false, evidence = false } = {}) {
   const validKey = evidence && (await probe(() => keyPresent(root), false));
   // A present key is not freshness, even if its bytes are invalid. The ordinary
   // identity reader preserves released standalone errors without replacing it.
-  const keyEntry = await probeEntry(join(root, "project-key"));
+  const keyEntry = metadataOnly ? { state: "absent" } : await probeEntry(join(root, "project-key"));
   const key = keyEntry.state === "present";
+  const creator = await creatorRecord(root);
   const keyRead = key
     ? await probeEntry(join(root, "project-key"), {
         read: () => readFile(join(root, "project-key"), "utf8"),
@@ -970,6 +1186,9 @@ async function rootFacts(root, { strict = false, evidence = false } = {}) {
   }
   return {
     root,
+    creator: creator.value?.client,
+    creatorState: creator.state,
+    creatorError: creator.code,
     usable,
     markerState: [retiredEntry, sharedEntry].some((entry) => entry.state === "unknown")
       ? "unknown"
@@ -1008,7 +1227,6 @@ async function probeClaudeFactsImpl(options = {}) {
     record: undefined,
     canRegister: false,
     platform: options.liveness?.platform ?? process.platform,
-    attempt: options.registrationAttempt,
   };
   if (homeUsable) Object.assign(facts, await probeCoordination(locations));
   const registration = claudeRegistration(facts.install);
@@ -1066,13 +1284,12 @@ async function probeClaudeFactsImpl(options = {}) {
       );
     }
   }
-  if (
-    facts.registration === "none" &&
-    (!facts.profile.key ||
-      (await probe(() => sameRoot(locations.claudeRoot, locations.defaultRoot), false)))
-  ) {
+  if (facts.registration === "none") {
     facts.default = await rootFacts(locations.defaultRoot, {
-      evidence: facts.coordination !== "degraded",
+      evidence:
+        (!facts.profile.key && facts.coordination !== "degraded") ||
+        (facts.profile.root === locations.defaultRoot && facts.coordination !== "degraded"),
+      metadataOnly: facts.profile.key && facts.profile.root !== locations.defaultRoot,
     });
   }
   for (const root of [facts.profile, facts.bound, facts.default].filter(Boolean))
@@ -1108,9 +1325,7 @@ async function probeClaudeFactsImpl(options = {}) {
   for (let i = 0; i < relevant.length; i++)
     for (let j = i + 1; j < relevant.length; j++) {
       // Unrelated unreadable roots do not gate the selected profile.
-      if (
-        await probe(() => sameRoot(relevant[i], relevant[j], { cache: identityCache }), false)
-      )
+      if (await probe(() => sameRoot(relevant[i], relevant[j], { cache: identityCache }), false))
         facts.sameRoots.push([relevant[i], relevant[j]]);
     }
   return facts;
@@ -1172,6 +1387,8 @@ function resolveClaudeBindingImpl(facts) {
   };
   if (facts.delivery === "wrong") return stop("pairing_record_mismatch");
   if (facts.durableHistory?.state === "invalid") return stop("binding_history_invalid");
+  if (facts.profile.creatorState === "unknown")
+    return stop("state_unreadable", facts.profile.creatorError);
   if (facts.profile.markerState === "unknown" || facts.profile.keyState === "unknown")
     return stop("state_unreadable", facts.profile.unreadable);
   if (facts.bindingHistory && facts.bindingHistory.state !== "absent") {
@@ -1220,7 +1437,20 @@ function resolveClaudeBindingImpl(facts) {
     if (facts.install.clients.codex && !facts.bound.key) return stop();
     return select(facts.bound, true, facts.install.clients.codex ? "pairing_needed" : "single");
   }
-  const codex = facts.install.clients.codex;
+  const codexCreated =
+    facts.default?.creator === "codex" &&
+    !facts.default.sharedMarker &&
+    !facts.default.recorded &&
+    !facts.default.retired;
+  const ownCodexCreated =
+    facts.profile.creator === "codex" && !facts.profile.sharedMarker && !facts.profile.recorded;
+  const codex =
+    facts.install.clients.codex ??
+    (ownCodexCreated
+      ? { root: facts.profile.root }
+      : codexCreated
+        ? { root: facts.default.root }
+        : undefined);
   if (!codex && facts.localMarker !== "absent") return stop("pairing_record_missing");
   let root = facts.profile;
   const createKey = true;
@@ -1241,11 +1471,7 @@ function resolveClaudeBindingImpl(facts) {
     !facts.default.sharedMarker &&
     !facts.default.recorded;
   if (codex && (!root.key || (equal(codex.root, root.root) && !legacy))) return stop();
-  return select(
-    root,
-    createKey,
-    codex ? "pairing_needed" : facts.attempt === "busy" ? "standalone_unregistered" : "single",
-  );
+  return select(root, createKey, codex ? "pairing_needed" : "single");
 }
 
 async function resolveClaudeClient(options) {
@@ -1275,19 +1501,30 @@ async function resolveClientImpl(options = {}) {
 async function identityForBinding(binding, client, cwd = "initialization") {
   if (binding.expectedFingerprint) {
     const key = await projectKey(binding.root, { create: false });
-    if (identityFingerprint(key) !== binding.expectedFingerprint)
-      fail("binding_identity_mismatch");
+    if (identityFingerprint(key) !== binding.expectedFingerprint) fail("binding_identity_mismatch");
     return createHmac("sha256", key).update(String(cwd)).digest("hex");
   }
-  return opaqueProjectId(
+  const projectId = await opaqueProjectId(
     binding.root,
     cwd,
     binding.paired || client !== "claude"
-      ? { strict: true, create: !binding.paired }
+      ? { strict: true, create: !binding.paired, client }
       : binding.createKey === false
         ? { create: false }
         : undefined,
   );
+  if (!binding.paired) {
+    const creator = await creatorRecord(binding.root);
+    if (creator.state === "unknown") failUnreadable(creator.code);
+    const otherCreator = creator.value && creator.value.client !== client;
+    if (
+      otherCreator &&
+      !(await rootMarker(binding.root, "paired-root")) &&
+      !(client === "claude" && (await hasClaudeEvidence(binding.root)))
+    )
+      fail("pairing_needed");
+  }
+  return projectId;
 }
 
 async function clientProjectIdImpl(options, cwd, binding) {
@@ -1314,11 +1551,7 @@ async function initializePairingImpl(options = {}) {
     return disabled("retired_root");
   if (options.adoptFrom) await requireTemporarySource(options.adoptFrom, locations);
   const initial = await detectClients(setupOptions);
-  if (
-    !initial.install.shared &&
-    options.adopt !== true &&
-    (await containsRoot(initial.keys, root))
-  )
+  if (!initial.install.shared && options.adopt !== true && (await containsRoot(initial.keys, root)))
     return disabled("existing_key_requires_adoption");
   if (initial.record && !initial.install.shared) fail("pairing_record_mismatch");
   let profileRoot = normalizeRoot(
@@ -1344,7 +1577,11 @@ async function initializePairingImpl(options = {}) {
   )
     return disabled();
   return setupTransaction(
-    { ...setupOptions, claudeProfileRoot: profileRoot, setupOperation: "initialize" },
+    {
+      ...setupOptions,
+      claudeProfileRoot: profileRoot,
+      setupOperation: "initialize",
+    },
     async ({ install, keys, record: existingRecord }) => {
       if ((await retiredRoot(root)) || (await retiredRoot(options.adoptFrom)))
         return disabled("retired_root");
@@ -1385,18 +1622,6 @@ async function initializePairingImpl(options = {}) {
             (await projectKey(options.adoptFrom, { create: false }))
         )
           fail("adoption_key_conflict");
-        if (options.adoptFrom && !(await keyPresent(root))) {
-          await publishProjectKey(root, {
-            originalKey: await projectKey(options.adoptFrom, { create: false }),
-            checkpoint: options.checkpoint,
-            home: locations.home,
-          });
-        }
-        await projectKey(root, {
-          create: options.adopt !== true,
-          checkpoint: options.checkpoint,
-          home: locations.home,
-        });
         install.shared = {
           id: randomUUID(),
           root,
@@ -1420,15 +1645,32 @@ async function initializePairingImpl(options = {}) {
       )
         fail("pending_binding_mismatch");
       if (!install.shared.initialized) {
+        if (install.shared.adoptFrom && !(await keyPresent(root))) {
+          await publishProjectKey(root, {
+            originalKey: await projectKey(install.shared.adoptFrom, {
+              create: false,
+            }),
+            checkpoint: options.checkpoint,
+            home: locations.home,
+            capability: creationCapability,
+          });
+        }
+        if (install.shared.policy === "initialize-shared")
+          await firstProjectKey(root, {
+            home: locations.home,
+            checkpoint: options.checkpoint,
+          });
         if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
         install.shared.initialized = true;
         await saveInstall(locations, install);
         await options.checkpoint?.("initialized");
-      } else if (!(await keyPresent(root, { strict: true })))
-        return disabled("paired_key_missing");
+      } else if (!(await keyPresent(root, { strict: true }))) return disabled("paired_key_missing");
       // Root-local history survives loss or replacement of the coordination directory.
       await markPairRoot(root);
-      await writeBindingHistory(profileRoot, root, { install, home: locations.home });
+      await writeBindingHistory(profileRoot, root, {
+        install,
+        home: locations.home,
+      });
       const record = {
         version: 1,
         id: install.shared.id,
@@ -1439,9 +1681,12 @@ async function initializePairingImpl(options = {}) {
       await privateWrite(locations.pairing, JSON.stringify(record));
       // Establish the EOF barrier before either client can become active.
       if (!install.shared.barrier) {
-        const before = await readControlState(root);
+        if (install.shared.barrierPaused === undefined) {
+          install.shared.barrierPaused = (await readControlState(root)).paused;
+          await saveInstall(locations, install);
+        }
         await setPaused(root, true, { rotate: true });
-        if (!before.paused) await setPaused(root, false);
+        if (!install.shared.barrierPaused) await setPaused(root, false);
         install.shared.barrier = true;
         await saveInstall(locations, install);
       }
@@ -1476,8 +1721,7 @@ async function completePairingImpl(options = {}) {
       )
         fail("pending_binding_mismatch");
       if (await retiredRoot(record.root)) return disabled("retired_root");
-      if (!(await keyPresent(record.root, { strict: true })))
-        return disabled("paired_key_missing");
+      if (!(await keyPresent(record.root, { strict: true }))) return disabled("paired_key_missing");
       if (!install.clients.claude?.profileRoot) fail("binding_history_invalid");
       for (const client of CLIENTS)
         install.clients[client] = {
@@ -1522,23 +1766,39 @@ async function resetIdentityImpl(options = {}) {
   if (!absolute(profileRoot)) fail("identity_reset_history_required");
   const initialHistory = await readBindingHistory(profileRoot);
   if (initialHistory.state === "invalid") fail("binding_identity_mismatch");
+  if (
+    initial.install.lastReset &&
+    (await sameRoot(initial.install.lastReset.root, options.root)) &&
+    initial.install.lastReset.client === options.primaryClient &&
+    initialHistory.state === "valid" &&
+    (await sameRoot(initialHistory.root, options.root)) &&
+    (await keyPresent(options.root, { strict: true })) &&
+    identityFingerprint(await projectKey(options.root, { create: false })) ===
+      initialHistory.fingerprint
+  )
+    return { status: "identity_reset", root: options.root };
+  const retry =
+    initial.install.resetPending &&
+    (await sameRoot(initial.install.resetPending.root, options.root));
   const destination = await probeEntry(options.root);
   if (destination.state === "unknown") failUnreadable(destination.code);
   if (
+    !retry &&
     destination.state === "present" &&
     (!destination.value.isDirectory() || (await readdir(options.root)).length !== 0)
   )
     fail("reset_destination_not_new");
   return setupTransaction(
-    { ...options, claudeProfileRoot: profileRoot, setup: true, setupOperation: "reset" },
+    {
+      ...options,
+      claudeProfileRoot: profileRoot,
+      setup: true,
+      setupOperation: "reset",
+    },
     async ({ install, record, keys }) => {
       const history = await readBindingHistory(profileRoot);
       if (history.state === "invalid") fail("binding_identity_mismatch");
-      if (
-        !install.shared &&
-        history.state === "valid" &&
-        !(await probe(() => keyPresent(history.root), false))
-      ) {
+      if (!install.shared && history.state === "valid" && !(await keyPresent(history.root))) {
         install.shared = {
           id: randomUUID(),
           root: history.root,
@@ -1546,7 +1806,11 @@ async function resetIdentityImpl(options = {}) {
           initialized: true,
           ready: false,
         };
-        install.clients.claude = { root: history.root, profileRoot, state: "established" };
+        install.clients.claude = {
+          root: history.root,
+          profileRoot,
+          state: "established",
+        };
         install.clients.codex = { root: history.root, state: "established" };
         record = { root: history.root };
       }
@@ -1562,20 +1826,35 @@ async function resetIdentityImpl(options = {}) {
       const destination = await probeEntry(options.root);
       if (destination.state === "unknown") failUnreadable(destination.code);
       if (
+        !install.resetPending &&
         destination.state === "present" &&
         (!destination.value.isDirectory() || (await readdir(options.root)).length !== 0)
       )
         fail("reset_destination_not_new");
+      if (!install.resetPending) {
+        install.resetPending = {
+          root: options.root,
+          client: options.primaryClient,
+          initialized: false,
+        };
+        await saveInstall(locations, install);
+      }
       if (destination.state === "absent") {
         await mkdir(dirname(options.root), { recursive: true, mode: 0o700 });
         await mkdir(options.root, { mode: 0o700 }); // exclusive create; EEXIST refuses
+        await notifyWrite(options.root, "directory");
       }
-      await projectKey(options.root, { home: locations.home });
-      install.resetPending = { root: options.root, client: options.primaryClient };
-      await saveInstall(locations, install);
+      await firstProjectKey(options.root, {
+        home: locations.home,
+        client: options.primaryClient,
+      });
       // Retire the old root before the new identity can become active. Retrying a
       // stopped-host reset may rotate again, but never re-enables old workers.
-      if (await probe(() => checkedPath(install.shared.root, { directory: true }), false)) {
+      const oldRoot = await probeEntry(install.shared.root, {
+        read: () => checkedPath(install.shared.root, { directory: true, missing: true }),
+      });
+      if (oldRoot.state === "unknown") failUnreadable(oldRoot.code);
+      if (oldRoot.state === "present") {
         await setPaused(install.shared.root, true, { rotate: true });
         await privateWrite(
           join(install.shared.root, "retired"),
@@ -1586,13 +1865,19 @@ async function resetIdentityImpl(options = {}) {
       await setPaused(options.root, true, { rotate: true });
       const retired = [
         ...(install.retired ?? []),
-        { ...install.shared, invalidated: true, claude: { ...install.clients.claude } },
+        {
+          ...install.shared,
+          invalidated: true,
+          claude: { ...install.clients.claude },
+        },
       ];
       await unlink(locations.pairing).catch((error) => {
         if (error.code !== "ENOENT") throw error;
       });
+      await notifyWrite(locations.pairing, "unlink");
       const resetInstall = {
         version: 1,
+        lastReset: { root: options.root, client: options.primaryClient },
         retired,
         clients: {
           [options.primaryClient]: {
@@ -1624,6 +1909,23 @@ async function resetIdentityImpl(options = {}) {
 
 // All successful pair-root operations publish through this single helper.
 async function markPairRoot(root) {
+  const pendingPath = join(root, ".project-key.pending");
+  const pending = await jsonFile(pendingPath);
+  if (pending) {
+    const key = await projectKey(root, { create: false });
+    const creator = await creatorRecord(root);
+    if (
+      pending.version !== 1 ||
+      !CLIENTS.includes(pending.client) ||
+      pending.key !== key ||
+      creator.state !== "present" ||
+      creator.value.client !== pending.client ||
+      creator.value.fingerprint !== identityFingerprint(key)
+    )
+      failUnreadable("invalid_key_publication");
+    await unlink(pendingPath);
+    await notifyWrite(pendingPath, "unlink");
+  }
   await privateWrite(join(root, "paired-root"), JSON.stringify({ version: 1, paired: true }));
 }
 
@@ -1653,12 +1955,7 @@ async function repairIdentityImpl(options = {}) {
       )
         fail("repair_key_conflict");
       if (history.state !== "valid") fail("binding_history_invalid");
-      await restoreProjectKey(
-        root,
-        options.originalKey,
-        profileRoot,
-        stateLocations(options).home,
-      );
+      await restoreProjectKey(root, options.originalKey, profileRoot, stateLocations(options).home);
       await markPairRoot(root);
       await writeBindingHistory(profileRoot, root, {
         install,

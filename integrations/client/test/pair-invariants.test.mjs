@@ -9,6 +9,7 @@ import * as sourceIdentity from "../identity.mjs";
 import * as builtIdentity from "../../../plugins/cairn-memory/lib/identity.mjs";
 import { snapshotHome } from "../testing/sequence-snapshot.mjs";
 import { opaqueProjectId, projectKey } from "../identity.mjs";
+import { exerciseInterruptions, INTERRUPTION_OPERATIONS } from "../testing/interruption-cases.mjs";
 import { SEQUENCE_SEEDS, generateSequences, OPERATIONS } from "../testing/sequences.mjs";
 
 // Every public operation must be classified. New mutation exports cannot bypass
@@ -66,9 +67,7 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
       // Remove marker to prove this operation itself establishes invariant P.
       await unlink(join(root, "paired-root"));
       if (operation.name === "complete")
-        await unlink(
-          join(options.env.CLAUDE_PLUGIN_DATA, ".cairn-memory-profile", "binding.json"),
-        );
+        await unlink(join(options.env.CLAUDE_PLUGIN_DATA, ".cairn-memory-profile", "binding.json"));
       if (operation.name === "reset")
         extra = {
           root: join(home, "reset"),
@@ -151,10 +150,7 @@ test("invariant K guards both strict and legacy publication; only original-key r
   await unlink(join(root, "project-key"));
   for (const strict of [false, true])
     await assert.rejects(opaqueProjectId(root, "/synthetic", { strict }), /paired_key_missing/);
-  await assert.rejects(
-    opaqueProjectId(`${root}/missing/..`, "/synthetic"),
-    /paired_key_missing/,
-  );
+  await assert.rejects(opaqueProjectId(`${root}/missing/..`, "/synthetic"), /paired_key_missing/);
   assert.equal((await pairing.initializePairing(options)).status, "paired_key_missing");
   await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
   await assert.rejects(
@@ -167,13 +163,18 @@ test("invariant K guards both strict and legacy publication; only original-key r
     /repair_key_conflict/,
   );
   await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
-  await pairing.repairIdentity({ ...options, root, originalKey, confirmKeyRepair: true });
+  await pairing.repairIdentity({
+    ...options,
+    root,
+    originalKey,
+    confirmKeyRepair: true,
+  });
   assert.equal(await projectKey(root), originalKey);
 });
 
-test("201 random sequences and 38 scripted fixtures enforce P, K, b, b-prime, identity and containment", async (t) => {
+test("201 random sequences and 48 scripted fixtures enforce P, K, b, b-prime, identity and containment", async (t) => {
   const sequences = generateSequences();
-  assert.equal(sequences.length, 239);
+  assert.equal(sequences.length, 249);
   assert.ok(sequences.every((sequence) => sequence.operations.length <= 7));
   assert.deepEqual([...new Set(sequences.map((sequence) => sequence.seed))], SEQUENCE_SEEDS);
   for (const operation of OPERATIONS)
@@ -204,7 +205,7 @@ test("201 random sequences and 38 scripted fixtures enforce P, K, b, b-prime, id
   t.diagnostic(output.trim());
   assert.equal(code, 0, output);
   const result = JSON.parse(output.trim().split("\n").at(-1));
-  assert.equal(result.sequences, 239);
+  assert.equal(result.sequences, 249);
   assert.ok(result.sequencesWithPairHistory >= 100, "substantial paired-state coverage");
   assert.deepEqual(result.seeds, SEQUENCE_SEEDS);
 });
@@ -227,9 +228,17 @@ const operationRows = operationPlan
   );
 for (const [id, operation, damage, outcome, effect] of operationRows) {
   assert.ok(
-    ["initialize", "adopt", "complete", "reset", "repair", "codex", "facade"].includes(
-      operation,
-    ) ||
+    [
+      "initialize",
+      "adopt",
+      "complete",
+      "reset",
+      "repair",
+      "codex",
+      "facade",
+      "interrupt",
+      "detect",
+    ].includes(operation) ||
       ["reset-claude-default", "reset-codex-default", "reset-codex-custom"].includes(operation),
   );
   assert.ok(
@@ -247,13 +256,22 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       "invalid-backup",
       "root-file",
       "key-directory",
+      "key-mode",
       "root-lost",
       "coordination-lost",
-    ].includes(damage),
+    ].includes(damage) ||
+      (operation === "interrupt" && INTERRUPTION_OPERATIONS.includes(damage)),
   );
-  assert.ok(["unchanged", "new-marked-binding"].includes(effect));
+  assert.ok(["unchanged", "new-marked-binding", "same-end-state"].includes(effect));
   test(`operation table ${id}: ${operation} with ${damage}`, async (t) => {
-    const workspace = createTestWorkspace(t, { prefix: "cx2-operation-table-" });
+    const workspace = createTestWorkspace(t, {
+      prefix: "cx2-operation-table-",
+    });
+    if (operation === "interrupt") {
+      const points = await exerciseInterruptions(workspace.path, damage);
+      t.diagnostic(JSON.stringify({ interruptionOperation: damage, points }));
+      return;
+    }
     const home = join(workspace.path, "home");
     await mkdir(home, { mode: 0o700 });
     const root = join(home, "shared");
@@ -290,6 +308,7 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       await unlink(binding);
       await mkdir(binding);
     }
+    if (damage === "key-mode") await chmod(join(root, "project-key"), 0);
     if (damage === "key-replaced")
       await writeFile(join(root, "project-key"), "11111111-1111-4111-8111-111111111111\n");
     if (damage === "key-and-coordination-lost") {
@@ -345,9 +364,13 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
         });
       else if (operation === "facade")
         result = await projectKey(damage === "alias-root-lost" ? destination : root, { home });
+      else if (operation === "detect") result = await pairing.detectClients(options);
       else if (operation === "complete") result = await pairing.completePairing(options);
       else
-        result = await pairing.initializePairing({ ...options, adopt: operation === "adopt" });
+        result = await pairing.initializePairing({
+          ...options,
+          adopt: operation === "adopt",
+        });
     } catch (error) {
       failure = error;
     }

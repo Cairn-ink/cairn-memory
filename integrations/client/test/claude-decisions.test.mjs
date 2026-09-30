@@ -1,15 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  mkdir,
-  writeFile,
-  readFile,
-  chmod,
-  lstat,
-  symlink,
-  unlink,
-  rm,
-} from "node:fs/promises";
+import { mkdir, writeFile, readFile, chmod, lstat, symlink, unlink, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHmac } from "node:crypto";
@@ -56,6 +47,7 @@ const rows = section
     };
   });
 const schema = {
+  creator: ["claude", "codex", "invalid"],
   home: ["usable", "dev-null", "file", "unsearchable"],
   coord: [
     "absent",
@@ -206,14 +198,10 @@ for (const row of table.rows) {
     if (f.profileRetired) await privateWrite(join(profile, "retired"), "{}");
     if (["key", "legacy", "retired"].includes(f.default)) await seed(defaultRoot, "2");
     if (["legacy", "retired"].includes(f.default))
-      await privateWrite(
-        join(defaultRoot, "sessions", "a".repeat(64) + ".json"),
-        '{"offset":1}',
-      );
+      await privateWrite(join(defaultRoot, "sessions", "a".repeat(64) + ".json"), '{"offset":1}');
     if (f.defaultKey !== "valid") {
       await rm(join(defaultRoot, "project-key"));
-      if (f.defaultKey === "garbage")
-        await writeFile(join(defaultRoot, "project-key"), "garbage");
+      if (f.defaultKey === "garbage") await writeFile(join(defaultRoot, "project-key"), "garbage");
       else await mkdir(join(defaultRoot, "project-key"));
     }
     if (f.resetDestination) await setPaused(defaultRoot, true);
@@ -233,7 +221,11 @@ for (const row of table.rows) {
       await privateWrite(
         join(profile, ".cairn-memory-profile", "legacy.json"),
         ["valid", "permissions"].includes(f.localMarker)
-          ? JSON.stringify({ version: 1, profileRoot: profile, root: defaultRoot })
+          ? JSON.stringify({
+              version: 1,
+              profileRoot: profile,
+              root: defaultRoot,
+            })
           : "{",
       );
     if (f.localMarker === "permissions") {
@@ -276,6 +268,28 @@ for (const row of table.rows) {
         root: f.codexSame ? profile : f.codexDefault ? defaultRoot : join(home, "codex"),
         state: "established",
       };
+    const creatorRoot =
+      f.creator === "claude" || f.creator === "invalid"
+        ? profile
+        : f.codex
+          ? install.clients.codex.root
+          : defaultRoot;
+    if (f.creator || f.codex) {
+      if (!(await exists(join(creatorRoot, "project-key")))) await seed(creatorRoot, "4");
+      const creatorKey = (await readFile(join(creatorRoot, "project-key"), "utf8")).trim();
+      await privateWrite(
+        join(creatorRoot, "created-by"),
+        f.creator === "invalid"
+          ? "{"
+          : JSON.stringify({
+              version: 1,
+              client: f.creator ?? "codex",
+              fingerprint: createHmac("sha256", creatorKey)
+                .update("cairn-memory:binding:v1")
+                .digest("hex"),
+            }),
+      );
+    }
     if (f.resetPending) install.resetPending = { root: bound, client: "claude" };
     if (f.shared !== "none") {
       install.shared = {
@@ -343,9 +357,7 @@ for (const row of table.rows) {
     } else if (f.bindingHistory) {
       if (!(await exists(join(bound, "project-key")))) await seed(bound, "3");
       const key = (await readFile(join(bound, "project-key"), "utf8")).trim();
-      const fingerprint = createHmac("sha256", key)
-        .update("cairn-memory:binding:v1")
-        .digest("hex");
+      const fingerprint = createHmac("sha256", key).update("cairn-memory:binding:v1").digest("hex");
       const directory = join(profile, ".cairn-memory-profile");
       await privateWrite(
         join(directory, "binding.json"),
@@ -415,9 +427,7 @@ for (const row of table.rows) {
     };
     if (f.delivery !== "none")
       env.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD =
-        f.delivery === "wrong"
-          ? join(workspace.path, "wrong")
-          : join(coordination, "pairing.json");
+        f.delivery === "wrong" ? join(workspace.path, "wrong") : join(coordination, "pairing.json");
     if (f.stateMismatch) env.CAIRN_MEMORY_STATE_DIR = join(workspace.path, "wrong-state");
     if (f.platform === "win32" || f.coord === "foreign") {
       const preload = join(workspace.path, "platform.mjs");
@@ -488,9 +498,7 @@ for (const row of table.rows) {
           [
             hook,
             action,
-            ...(f.argumentConflict
-              ? ["--pairing-record", join(workspace.path, "argument")]
-              : []),
+            ...(f.argumentConflict ? ["--pairing-record", join(workspace.path, "argument")] : []),
           ],
           {
             env,
@@ -505,7 +513,10 @@ for (const row of table.rows) {
         child.on("error", reject);
         child.on("close", (code) => resolve({ code, stdout, stderr }));
         child.stdin.end(
-          JSON.stringify({ cwd: "/synthetic/table", prompt: "synthetic recall" }),
+          JSON.stringify({
+            cwd: "/synthetic/table",
+            prompt: "synthetic recall",
+          }),
         );
       });
     assert.equal((await run("recall")).code, 0);
@@ -531,11 +542,7 @@ for (const row of table.rows) {
     );
     assert.equal((await run("pause")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
-    assert.equal(
-      requests.length,
-      row.expect.requests,
-      "pause or disabled gate suppresses recall",
-    );
+    assert.equal(requests.length, row.expect.requests, "pause or disabled gate suppresses recall");
     assert.equal((await run("resume")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
     assert.equal(
