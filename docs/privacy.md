@@ -469,3 +469,28 @@ source consumers. Unrelated admitted memories survive; existing namespace-wide
 staged purges and content-free replay fences remain. Neither forgetting nor
 redaction guarantees physical erasure of journals, free pages, backups or prior
 provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
+
+
+### Hosted 0.2.0 client boundary
+
+The Codex discriminator identifies filtered user/assistant conversation text;
+it admits no tools, credentials, metadata or transcript paths. Its reader remains
+disabled pending installed-host/target acceptance. Telemetry stays disabled for
+Codex. Session-start may return owner-bound episode sources, memory receipts and
+accessible claimed commitment provenance, all untrusted and budgeted together.
+These fields can contain personal text; clients must not log response bodies.
+Publishing and parsing do not wire session-start or hosted pause into hooks.
+
+Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
+The selected private root retains `hosted-quota/<target digest>.json` and its
+process-owned lock/recovery files. The 0600 record contains only version, a finite
+gate state and validated reset/null; no conversation, raw error, credential or
+session ID. The digest binds the configured endpoint and credential (or an
+installer-supplied target ID), is sensitive identity metadata, not anonymization.
+Paired clients must share both root and target identity. A refusal preserves
+pending cursor/event identity across restarts and suppresses both endpoints.
+Status shows validated reset or “reset unknown”. Explicit quota resume grants
+one attempt without changing the shared pause or discarding pending bytes.
+A paused local plugin still follows its existing EOF barrier on resume. H5's
+hosted pause publication and CX-5's observation are separate gates; an already
+started request may finish. See [protocol 0.2.0](protocol.md#hosted-protocol-020).
