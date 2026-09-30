@@ -2155,7 +2155,7 @@ worktree TMPDIR/cache. No real transcripts, credentials or memory roots are used
 
 | Runtime | Three complete CX-3 runs (seconds) | Exit codes | Generator seconds |
 | --- | --- | --- | --- |
-| Node 22.16.0 | RESULTS_NODE22 | 0, 0, 0 | GENERATOR_NODE22 |
+| Node 22.16.0 | 43.301, 42.488, 43.040 | 0, 0, 0 | 43.135, 42.347, 42.888 |
 | Node 24.15.0 | qualification in progress | pending | pending |
 
 The full matrix is not rerun; the coordinator must qualify this round's final
