@@ -54,6 +54,39 @@ CX-3 must pin primary format/schema evidence and synthetic
 host fixtures before capture ships; unsupported formats disable capture. Do not
 advertise a blanket “>=0.150” compatibility claim.
 
+### CX-3 primary format pin
+
+Evidence fetched from the public **openai/codex** repository, without inspecting
+sessions or credential files: annotated tag `rust-v0.157.1`, tag object
+`ac0e23e5232692b95268583c8278c50b8c436d2b`, peeled commit
+**`36650394c5b38c2990ccf2a3457165ca3e9d9726`**. The tag was resolved through the
+GitHub Git refs/tag API. This identifies one source format, not a supported
+version range. File SHA-256 values are frozen in
+[`format-evidence.json`](../../integrations/codex/test/fixtures/format-evidence.json).
+
+| Primary source at that commit | Format evidence |
+| --- | --- |
+| [history/src/rollout_payload.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/history/src/rollout_payload.rs) | `RolloutItemWire`, serde `type` tag, snake_case variants and `payload`. |
+| [rollout/src/recorder.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/rollout/src/recorder.rs) | `RolloutLineRef`: timestamp, optional ordinal, flattened item; `write_line` appends newline and flushes. This is file evidence, not exec stdout. |
+| [rollout/src/policy.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/rollout/src/policy.rs) | Paginated history persists `ItemCompleted`; legacy `UserMessage`/`AgentMessage` events are a different representation. |
+| [protocol/src/protocol.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/protocol.rs) | `SessionMeta.cli_version`, `history_mode`, source and lineage; `EventMsg` snake_case `item_completed`; `ItemCompletedEvent.thread_id/turn_id/item`. |
+| [protocol/src/items.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/items.rs) | `TurnItem` case-sensitive `UserMessage` and `AgentMessage`; user content is `UserInput`; assistant content only `Text { text }`. `HookPrompt`, reasoning and tool items are separate variants. |
+| [protocol/src/user_input.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/user_input.rs) | User `text { text, text_elements }`; image/audio/skill/mention are separately tagged. Rich text markers remain unqualified and exclude their record. |
+| [protocol/src/models.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/models.rs) | Visible assistant phases are `commentary` and `final_answer`; absent phase is supported. Unknown channels/phases refuse. |
+| [core/src/session/mod.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/core/src/session/mod.rs) | Submitted input constructs `UserMessageItem::new(input)` and emits completed turn items; model-history response items are recorded separately. |
+
+The initial parser requires the exact metadata version `0.157.1`, paginated
+history, matching thread ID, `cli`/`exec` source and no inherited/fork/subagent
+history. It consumes only `event_msg` → `item_completed` → `UserMessage/text`
+or `AgentMessage/Text`. Response-item messages, legacy mirrors, compaction,
+instructions, sandbox/cwd and other metadata never supply captured text.
+Unknown discriminators or conversational fields return `unsupported_format`;
+there is no response-item fallback. Synthetic fixtures are authored from these
+types; F0's observed records are not used as parser fixtures. Resume in the same
+flat file is supported; fork, inherited pagination and other host layouts remain
+unavailable pending separate primary evidence and qualification. Hosted dispatch
+and context injection remain disabled; CX-3 uses scripted transports only.
+
 ## Architecture and compatibility profiles
 
 Recommend extracting `integrations/client/` from the Claude plugin, with thin
@@ -471,6 +504,92 @@ only the explicit D1 quota/concurrency exception changes its scheduling. Profile
 new cursor/replay identity; pending ranges cannot change profile on retry.
 
 ## Cursor and worker contract
+
+### CX-3 executable state contract (before implementation)
+
+The table below is the test source. Its closed fact schema is `state` = fresh,
+ready, pending, discard, stale; `event` = append, timeout, processing, lost,
+bad-reply, refusal, pause, resume, replace, truncate, mutate, partial, malformed,
+oversized, missing, unsupported, crash, finish, last-hook, new-session; `batch`
+= first, middle, last; `mode` = hosted-stub, local-stub. Omitted facts default to
+ready/append/first/hosted-stub. Unknown keys and values fail the fixture loader.
+`sent` counts newly admitted batches; retransmission under the same event ID is
+permitted only to an idempotent receiver. Nothing here enables a hosted target.
+
+<!-- codex-worker-table:start -->
+| ID | Facts | Cursor | Sent | Worker | Refusal |
+| --- | --- | --- | --- | --- | --- |
+| W01 | `{"state":"fresh"}` | end | 1 | idle | none |
+| W02 | `{}` | end | 1 | idle | none |
+| W03 | `{"event":"timeout"}` | batch-start | 0 | pending | timeout |
+| W04 | `{"event":"timeout","batch":"middle"}` | batch-start | 1 | pending | timeout |
+| W05 | `{"event":"timeout","batch":"last"}` | batch-start | 2 | pending | timeout |
+| W06 | `{"event":"processing"}` | batch-start | 0 | pending | processing |
+| W07 | `{"event":"lost"}` | batch-start | 1 | pending | timeout |
+| W08 | `{"event":"bad-reply"}` | batch-start | 0 | disabled | invalid_reply |
+| W09 | `{"event":"refusal"}` | batch-start | 0 | pending | quota_reached |
+| W10 | `{"event":"refusal","batch":"middle"}` | batch-start | 1 | pending | quota_reached |
+| W11 | `{"event":"pause"}` | unchanged | 0 | pending | paused |
+| W12 | `{"state":"stale","event":"resume"}` | eof | 0 | idle | pause_boundary |
+| W13 | `{"event":"replace"}` | eof | 0 | idle | source_changed |
+| W14 | `{"event":"truncate"}` | eof | 0 | idle | source_changed |
+| W15 | `{"state":"pending","event":"mutate"}` | eof | 0 | idle | source_changed |
+| W16 | `{"event":"partial"}` | unchanged | 0 | pending | partial_tail |
+| W17 | `{"event":"malformed"}` | end | 0 | idle | excluded |
+| W18 | `{"event":"oversized"}` | end | 0 | idle | excluded |
+| W19 | `{"state":"discard","event":"append"}` | end | 0 | idle | excluded |
+| W20 | `{"event":"missing"}` | unchanged | 0 | pending | source_unavailable |
+| W21 | `{"event":"unsupported"}` | unchanged | 0 | disabled | unsupported_format |
+| W22 | `{"event":"crash"}` | retry-end | 1 | idle | none |
+| W23 | `{"event":"finish","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
+| W24 | `{"event":"last-hook","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
+| W25 | `{"event":"new-session","mode":"local-stub"}` | old-unchanged | 1 | pending | batch_limit |
+| W26 | `{"event":"binding-change"}` | eof | 0 | idle | binding_changed |
+| W27 | `{"state":"pending","event":"binding-change"}` | eof | 0 | idle | binding_changed |
+| W28 | `{"state":"pending","event":"reset-binding"}` | eof | 0 | idle | state_reset |
+| W29 | `{"event":"late-worker"}` | unchanged | 0 | idle | superseded |
+| W30 | `{"state":"stale","event":"start-binding"}` | eof | 0 | idle | binding_changed |
+| W31 | `{"event":"digest-migration"}` | eof | 0 | idle | digest_migrated |
+| W32 | `{"event":"latch-failure"}` | batch-start | 0 | pending | quota_reached |
+| W33 | `{"state":"pending","event":"refused-binding"}` | eof | 0 | idle | binding_changed |
+| W34 | `{"state":"pending","event":"late-binding"}` | unchanged | 0 | idle | superseded |
+| W35 | `{"state":"pending","event":"invalid-binding"}` | batch-start | 0 | disabled | invalid_reply |
+| W36 | `{"event":"digest-key-reset"}` | eof | 0 | idle | digest_key_reset |
+| W37 | `{"event":"unconfigured-latch"}` | batch-start | 0 | pending | quota_reached |
+<!-- codex-worker-table:end -->
+
+The single cursor publication site validates a closed schema, finite counters,
+monotone offsets within one epoch and conservation of processed bytes:
+acknowledged bytes plus reason-counted exclusions equal the offset. Only detected
+source replacement/truncation/mutation/path change starts a new epoch at EOF;
+that epoch starts with an explicit `source_changed` gap. Pause generation changes
+also establish EOF, count `pause_boundary`, and discard a spanning line through
+its newline. Missing cursors after any pause start at EOF. Unsupported/corrupt
+state refuses; repair restores a trusted backup, or explicit stopped-worker reset
+establishes EOF and records `state_reset`, never backfills.
+
+Invariants enforced at dispatch/publication: (1) each source position has stable
+message/event identity and at most one admission; uncertain delivery replays that
+identity; (2) every consumed byte is acknowledged or deliberately excluded with a
+reason, and all other authorized bytes remain visibly pending; (3) no backward
+cursor movement within an epoch; (4) no paused-generation dispatch or backfill;
+(5) interrupted publication retries the same frozen range; (6) one target-wide
+atomic usage writer validates nonnegative counters and the daily/concurrency caps.
+Transport must provide idempotent admission; this is not an exactly-once network
+delivery claim. Refusal leaves the frozen event identity unchanged.
+
+Tests generated from every row run against synthetic files and an independent
+receiver. A seeded operation-history oracle models append, replacement,
+truncation, malformed lines, pause/resume, crashes at every state write, lost
+replies and mixed Claude/Codex dispatch without invoking production parsing,
+cursor or guard helpers to derive expectations. It checks coverage, admission
+uniqueness, pause fencing and cap conservation after every step. Interruption
+fixtures enumerate every durable write of prepare, dispatch/acknowledgement,
+pause-boundary (including the one-byte SessionStart path), replacement, oversized
+discard and usage reserve/dispatch/release/refusal/resume/observe; retry must
+reach the uninterrupted semantic state (opaque random IDs are compared by their
+stable bindings). The source authorization is supplied anew by each hook; cursors
+contain no path/session/text queue and a new session never drains an old cursor.
 
 Reuse [byte cursors](../../plugins/cairn-memory/lib/capture-cursor.mjs), frozen
 `pendingEnd`, newline framing and [pause generations](../../plugins/cairn-memory/lib/control-state.mjs).
@@ -1767,3 +1886,328 @@ and HOME history deleted together, can erase all durable ownership evidence. The
 undetectable deletions are follow-ups under the round-12 severity bar, not blockers.
 Read resolution never registers, so the old registration-attempt/busy branch has no
 reachable table row. Creator publication supplies first-client evidence instead.
+
+
+### CX-3 offline qualification, 2026-09-30
+
+The package supplies disabled parser/cursor/worker/guard building blocks and
+synthetic A1/A4/A5/A9 gates. It enables no hosted transport, installed hook,
+context injection or real model. Linux/WSL2 5.15.167.4 was tested. Non-Linux source
+traversal, installed HMA/LAC termination/latency, real-host context authority and
+release cap calibration remain their assigned owners' gates.
+
+The 100 ms overall deadline in the unknown-termination fixture could expire
+under suite contention before its child started. The fixture now gives setup
+5 s while retaining the 30 ms request timeout, asserts exactly one child start,
+and checks that unknown termination retains the permit and advances no bytes.
+The handler also bounds binding/key/preparation/launch together (750 ms capture,
+2.5 s disabled context events), fences late launch, and tests a real exit-0 hook
+process while a live identity publication lock remains held. Installed callers
+must flush and exit after the bounded result, without waiting for late identity
+completion. No Claude capture/bundle runtime bytes changed.
+
+The closed decision table has 25 rows/25 generated cases plus one schema check.
+The complete CX-3 invocation has 89 cases: parser 20, table 26, privacy 4, gates
+12, seeded sequences 8, worker interruption 1 and runtime usage 18. Each of six
+consecutive invocations passed all 89 cases, with no skips/failures. Commands used
+`node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs
+integrations/client/test/runtime-usage.test.mjs`, foreground and sequential, with
+HOME = CAIRN_TEST_REAL_HOME = the worktree scratch HOME and worktree TMPDIR/cache.
+No real sessions, credentials, memory directories or models were accessed.
+
+| Runtime | Three complete invocations (seconds) | Exit codes | Generator seconds per invocation |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 36.54, 37.61, 36.98 | 0, 0, 0 | 36.305, 37.427, 36.794 |
+| Node 24.15.0 | 37.4, 37.06, 37.13 | 0, 0, 0 | 37.203, 36.864, 36.918 |
+
+The independent operation-history oracle uses seeds 1, 7, 42, 91, 12345, 65537,
+49374 and 3405691582, 64 operations each (512/invocation; 3072 across six runs).
+Operations are append, replacement, truncation, malformed lines, pause, resume,
+actual worker crash, lost reply and concurrent Claude/Codex dispatch. Expected
+admissions/offsets/epochs/billing derive from history, not production helpers.
+
+Exhaustive interruptions cover 25 real worker process publication points:
+prepare 2, capture/ack 17, pause boundary 1, one-byte SessionStart 1, replacement
+1 and oversized discard 3. The usage fixture covers 10 reserve/dispatch/release/
+refuse/resume/observe publication points. All k-th-publication retries reached the
+uninterrupted semantic end state; uncertain billing remains conservatively charged.
+Each full invocation repeats all 35 points (210 across the six invocations).
+
+Retained full-matrix results below are actual exits from earlier invocations;
+subsequent changes only affected Codex hook/test code and this documentation.
+The final coordinator instruction stopped full-matrix work and delegated remaining
+rows to chunked runs. A blank completion is not success.
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| npm ci --prefix adapters/openai | 0 | 0 |
+| npm ci --prefix adapters/mcp | 0 | 0 |
+| prepare-cache (runner --script packaging/prepare-cache.mjs) | 0 | 0 |
+| npm test (CI shape, explicit scratch HOME) | 0 | 0 |
+| npm run validate | 0 | 0 |
+| npm run test:core | 0 | 0 |
+| npm run test:pairing | 0 | 0 |
+| npm run test:pairing:golden | 0 | coordinator pending |
+| npm run test:artifact | 0 | 0 |
+| npm run test:mcp | 0 | coordinator pending |
+| npm run test:openai | 0 | coordinator pending |
+| CX-3 suites, three complete runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| npm run demo:capture | 0 | coordinator pending |
+| git diff --check (entire packet tree and current edits) | 0 | 0 |
+
+Initial Node22 npm-test bundle inventory failures were fixed by the explicit
+uninstalled-module exclusion; its rerun passed 401 cases. Initial cache/artifact
+failures were test-environment setup: packaging sanitizes the npm child environment.
+The successful reruns used copied exact-version Node binaries under worktree
+scratch and an npm wrapper supplying explicit scratch cache/HOME; no packaging
+code changed. Artifact passed 86 cases on each version; core passed 1136 and
+pairing 270 on each version. The old Node22 CX-3 timing failure is superseded by
+the six passing repetitions above.
+
+Coordinator still runs Node24 golden/MCP/OpenAI/demo:capture, applicable Node20
+shared bundle checks (never importing core), and any additional CI chunks it
+requires. Native host/model, hosted service and installed HMA/LAC acceptance are
+not established by these stubs. Scratch/logs are removed after recording results.
+
+
+### CX-3 round 2 recovery contract (table before code)
+
+Failing-first at 7b7ce787 on Node22.16.0: the reviewer cwd A → cwd B synthetic
+repro failed all three cases (exit 1). Stop returned capture_unavailable; direct
+worker and stopped reset both threw cursor_binding_mismatch. W26–W30 cover the
+new EOF binding epoch, reset precedence, superseded handoff and SessionStart path.
+W31 migrates v1 bare transcript digests by deliberately starting a new EOF epoch
+with digest_migrated. W32 preserves quota_reached/resetAt if the shared latch fails;
+its persisted refusal intent is retried before any subsequent model dispatch.
+W33 preserves that target-wide refusal intent across a binding EOF epoch.
+Source, pause and stopped-reset boundaries preserve it as well: skipping source
+bytes never authorizes clearing a quota refusal or an uncertain reservation.
+
+Facts additionally admit binding-change, reset-binding, late-worker, start-binding,
+digest-migration, latch-failure and refused-binding. All result columns are closed.
+Cursor: end, eof, retry-end, unchanged, batch-start, batch-end, old-unchanged.
+Sent: integers 0–3. Worker: idle, pending, disabled. Refusal: the literal finite
+values used in W01–W33. Tests derive all four observed results independently of
+expected cells, assert their concrete cursor/worker properties, and reject both
+unknown values and alternate valid mutations in every result column.
+
+Changing a usage policy stages cap/mode/concurrency until the next UTC accounting
+day. No same-day counter or uncertain reservation is refunded. Old unstarted
+permits are invalidated at activation. If live reservations exceed a lowered
+concurrency, new dispatch remains concurrency_limited until confirmed termination
+allows activation; release/status/refusal operations remain available. Daily-cap
+refusal clears automatically when its UTC day rolls over. Other refusal/resume
+latches remain explicit, including a previously consumed one-attempt quota gate.
+
+<!-- codex-usage-policy-table:start -->
+| ID | Facts | Same window | Next window | Refusal |
+| --- | --- | --- | --- | --- |
+| P01 | `{"change":"cap"}` | preserved | applied | none |
+| P02 | `{"change":"mode"}` | preserved | applied | none |
+| P03 | `{"change":"concurrency"}` | preserved | applied | none |
+| P04 | `{"change":"concurrency","active":2}` | preserved | drain | concurrency_limited |
+| P05 | `{"event":"daily-rollover"}` | latched | automatic | none |
+| P06 | `{"event":"quota-rollover"}` | latched | latched | quota_reached |
+| P07 | `{"event":"revert","change":"cap"}` | preserved | preserved | daily_cap_reached |
+| P08 | `{"event":"revert","change":"concurrency"}` | preserved | preserved | concurrency_limited |
+| P09 | `{"event":"revert","change":"mode"}` | preserved | preserved | plan_threshold |
+| P10 | `{"event":"policy-conflict"}` | conflict | conflict | policy_conflict |
+<!-- codex-usage-policy-table:end -->
+
+Handoffs: CX-6 records retained engineering/evaluation limitations in
+`docs/limitations.md` (and relevant ROADMAP gate notes per CONTRIBUTING); this
+package cannot edit that ownership. The coordinator adds `test:codex` and its
+Node22.16/24 CI wiring after this round, as for pairing. Context/model/hosted
+integration remains disabled. The coordinator reports the complete 11-command
+matrix passed on 7b7ce787 on Node22/24, plus npm test/validate on Node20; those are
+coordinator evidence, not new implementation-worker executions in this round.
+
+### CX-3 round 2 qualification
+
+The reviewer cwd repro was run first against 7b7ce787: 0/3 passed, exit 1.
+The identical synthetic repro then passed 3/3, exit 0. The permanent round-2
+suite has eleven cases, including the actual 400 ms usage-lock reproduction, which
+preserves quota_reached/resetAt and retries the latch before further dispatch.
+
+W26–W33 add eight worker cases; P01–P06 add six usage-window cases. Together
+the tables have 39 rows/39 generated cases plus two schema checks. Every result
+cell is tested against unknown and alternative legal mutations. The complete
+CX-3 invocation has 115 cases: parser 20, worker table 34, privacy 4, gates 12,
+round-2 regressions 11, sequences 8, interruption 1, usage 18 and policy table 7.
+
+The independent oracle now includes resume-cwd, using real project IDs derived
+from synthetic cwd changes. Its ten operations are append, replacement,
+truncation, malformed lines, pause, resume, worker crash, lost reply, concurrent
+Claude/Codex dispatch and resume in another cwd. Seeds remain 1, 7, 42, 91,
+12345, 65537, 49374 and 3405691582, with 64 steps each (512 per invocation).
+All invariants are asserted after every step, including while paused.
+
+Exhaustive real worker interruption fixtures cover 40 publication points:
+prepare 3, capture 17, pause-boundary 1, SessionStart 1, replacement 1,
+oversized 3, binding-change 1, digest-migration 1, reset 1 and refusal 11.
+Reset retry at the same EOF is idempotent. The usage fixture additionally
+covers ten publication points. Each k-th-write retry reaches the uninterrupted
+semantic end state; uncertain billing stays conservatively charged.
+
+All touched JavaScript uses double quotes and lines at most 100 columns;
+the reported unused imports are removed. The 31-second local success gate
+advances an injected clock rather than sleeping in real time. A1/A4/A5/A9
+remain synthetic stub gates, with no installed or hosted enablement.
+
+| Runtime | Three CX-3 runs (seconds) | Exit codes | Generator seconds |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 49.864, 42.509, 42.063 | 0, 0, 0 | 49.728, 42.362, 41.922 |
+| Node 24.15.0 | 41.781, 42.302, 42.308 | 0, 0, 0 | 41.639, 42.159, 42.168 |
+
+The invocation includes both `runtime-usage.test.mjs` and the new
+`runtime-policy.test.mjs`, using the command in the Codex README. Commands
+are foreground/sequential with explicit scratch HOME = CAIRN_TEST_REAL_HOME,
+worktree TMPDIR/cache and no real session/credential/memory access. The full
+matrix is delegated to the coordinator and is not rerun in round 2.
+All six final invocations passed 115/115, with zero failures or skips. They
+exercise 48 seeded sequences/3072 operations and 300 exhaustive interruption
+points in total. Final repetitions include W33 and the five-boundary refusal
+regression; the earlier 113-case repetitions are superseded by these results.
+The current packet and working edits pass git diff --check (exit 0). Scratch
+and its logs are removed after recording the final results. The coordinator
+must qualify this round's final HEAD with its full matrix and add test:codex/CI;
+the complete passing matrix on 7b7ce787 remains historical coordinator evidence.
+
+Creator metadata cannot qualify a newer resumed writer: Codex does not append
+new session_meta on resume. CX-5 must independently qualify the installed host;
+CX-6 records this limitation with the other retained offline boundaries.
+
+### CX-3 round 3 contract (table before code)
+
+Failing-first on ad9694e, Node22.16.0: all three synthetic reviewer revert
+probes failed (0/3, exit 1). Cap 3→50→3 granted 50 reservations the next UTC
+day; concurrency 1→8→1 granted eight; plan→api-key→plan allowed a reserve
+at 99% five_hour utilization. P07–P09 require the active policy to remain in
+force, with pendingPolicy cleared before any activation when config matches
+active again. Natural UTC rotation is the only daily-counter reset.
+
+P10 requires deterministic policy_conflict for disagreeing installed clients,
+without activating or alternating either pending proposal. Installation supplies
+client = claude or codex to the guard. The default shared owner retains the
+existing installation-wide calibration API. Three closed owner slots hold only
+finite cap/concurrency values and a mode enum. Each owner's declaration replaces
+its previous declaration; disagreement clears pendingPolicy and blocks reserve,
+dispatch and resume. Status remains inspectable; release and refusal latching
+remain available. Quota latches and counters survive conflict. Synchronizing both
+installed declarations (including a removed client's declaration during explicit
+installer repair) recovers without deleting usage state or refunding counters.
+
+W34 follows A's frozen Stop range → B SessionStart → B first text → late A
+handoff. A handoff with a different cursor binding is superseded before opening
+source or changing state; the next B worker must send B first under B. The oracle
+adds late-handoff, records expected project attribution from operation history,
+and writes text between a cwd change and its next authorized hook.
+
+W35 preserves invalid_reply across binding changes and SessionStart: only the
+existing explicit stopped reset/repair can clear it. W36 resets a corrupt
+owner-private digest key with digest_key_reset at a new EOF epoch. Cursor intent
+is durable before key recreation; interruption after any write is recoverable by
+the same reset, preserving the recorded reason and epoch. Unsafe ownership or
+permissions still refuse. W37 never marks a quota latch complete when refuse
+returns automatic_cap_unconfigured rather than recording quota_reached.
+
+New result vocabularies admit digest_key_reset and policy_conflict; policy cells
+add preserved/conflict. All columns remain independently asserted and closed.
+The client policy suite uses shared client fixture/table helpers and imports no
+Codex test helper. Package.json/CI remain coordinator-owned: test:codex must
+include both runtime-usage.test.mjs and runtime-policy.test.mjs.
+
+### CX-3 round 3 qualification
+
+All round-3 fixes are covered by the complete direct invocation, including
+runtime-policy.test.mjs; package.json/CI are intentionally unchanged. P07–P09
+replace the failing-first 0/3 repro with three passing revert cases. P10 prevents
+disagreeing named clients from swapping policy across successive UTC days and
+verifies alignment preserves a quota latch. Usage v1/v2 migration retains charged
+reservations and refusals. Client fixture/table helpers have moved into the shared
+client test tree; runtime-policy imports no Codex test helper.
+
+Worker rows W34–W37 cover superseded old-binding handoffs, sticky invalid_reply,
+corrupt digest-key EOF reset and an unconfigured refusal latch. The complete
+hook/handoff sequence sends A text under A, then B first/B second under B, with
+no old binding reversion. Empty, malformed and oversized corrupt keys all recover
+through the documented reset. Reset is idempotent after completion.
+
+The tables now contain 47 rows/47 generated cases plus two schema checks.
+The complete invocation has 133 cases: parser 20, worker table 38, privacy 4,
+gates 12, round-2 regressions 11, round-3 regressions 7, sequences 8, worker
+interruption 1, runtime usage 18 and runtime policy 14. Every result cell stays
+closed and independently asserted. The independent oracle checks text/project
+pairs and adds late-handoff to its eleven generated operation types. It also
+writes text after cwd change before the next hook. Eight existing seeds each
+execute 64 main steps (512 per invocation).
+
+Exhaustive worker interruption coverage is 43 publication points, adding the
+three digest-key-reset writes to round 2's 40. Usage covers ten points; policy
+revert/alignment covers 21 (cap 5, concurrency 5, mode 5, conflict 6). Each
+interrupted operation's same retry reaches the uninterrupted semantic end state;
+uncertain billing stays charged.
+
+The initial focused guard check briefly overlapped with scratch-only formatter
+installation. Subsequent focused checks and all final qualification commands are
+foreground and sequential, with HOME = CAIRN_TEST_REAL_HOME = scratch HOME and
+worktree TMPDIR/cache. No real transcripts, credentials or memory roots are used.
+
+| Runtime | Three complete CX-3 runs (seconds) | Exit codes | Generator seconds |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 43.301, 42.488, 43.040 | 0, 0, 0 | 43.135, 42.347, 42.888 |
+| Node 24.15.0 | 41.926, 42.430, 42.417 | 0, 0, 0 | 41.791, 42.290, 42.280 |
+
+The full matrix is not rerun; the coordinator must qualify this round's final
+HEAD and update test:codex to include every CX-3 test file. The CX-6 limitations
+handoff and installed/native-host/model qualification boundaries remain unchanged.
+
+All six final invocations passed 133/133, with no failures or skips. They
+cover 48 seeded sequences/3072 main operations and 444 exhaustive interruption
+points (74 per invocation). The complete packet passes git diff --check, exit 0.
+Scratch and logs are removed after recording these results.
+
+### CX-3 review and handoff, 2026-09-30
+
+Round-3 Claude SPEC and STANDARDS reviews of `579c441` both passed under the
+capture severity bar: capture loss or duplication through ordinary use, a wrong
+destination, excluded content sent, a policy or quota bypass, or a dead end
+reachable by ordinary use. The coordinator's `579c441` makes `test:codex` glob
+every file in `integrations/codex/test/` and the `runtime-*` client tests, and
+adds `test:client` for CX-1's parity and fixture-generator tests, which no script
+ran before; CI runs both on Node 22.16.0 and 24.
+
+The coordinator qualified `579c441` (the round-3 head plus `test:codex` and
+`test:client`) in the complete matrix, each command sequential with HOME =
+CAIRN_TEST_REAL_HOME = scratch: on Node 22.16.0 and 24.15.0, `npm test`,
+`validate`, `test:core`, `test:pairing`, `test:pairing:golden`, `test:artifact`,
+`test:mcp`, `test:openai`, `test:codex`, `test:client` and `demo:capture` all exit
+0; Node 20 `npm test` and `validate` exit 0; `test:codex` from a depth-1 clone
+exits 0; `git diff --check` exits 0.
+
+Below-bar follow-ups, each with its owner:
+
+1. **SessionStart on resume (CX-5, before install).** The oracle and W34 expect
+   text written after a cwd change, before the next hook, to be skipped as
+   `binding_changed`. That is safe only if Codex fires `SessionStart` when a
+   session resumes in another cwd; the host table above has seen only
+   `startup`. CX-5 verifies this on the pinned host. If resume emits no
+   `SessionStart`, CX-5 plans the boundary before install.
+2. **Stale policy declarations (CX-7).** After one client is uninstalled, a
+   later policy change in the other returns `policy_conflict` until the removed
+   client's declaration is cleared. The documented recovery is an installer
+   repair that calls the guard under the removed client's name; CX-7's setup
+   and repair own it. Until then it fails closed with the named refusal.
+3. **A worker-table row for `policy_conflict` (CX-5).** A reviewer's probe
+   shows the right behaviour (no call, text kept pending, sent once after
+   alignment), but no row pins it.
+4. **Digest-key reset across sessions (CX-6 limitations).** Resetting a corrupt
+   key in one session drops the other sessions' unsent text in the same root as
+   `source_changed`. It needs a corrupted key, not ordinary use.
+5. **Hygiene (whichever package next edits these files):**
+   - the unreachable `invalid_reply` branches at `worker.mjs:204` and `:330`;
+   - the return shapes at `:322` and `:332`;
+   - `round3.test.mjs:80` should assert which text arrived under which project;
+   - the README's "repeating reset … completes that same epoch", which starts
+     a new epoch if the transcript grew in between;
+   - the positional `scheduling` boolean in `runtime-usage.mjs`.
