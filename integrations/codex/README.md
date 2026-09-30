@@ -22,7 +22,10 @@ a bounded direct stdin pipe, ignore worker stdout/stderr, use no shell and pass
 only the closed handoff. Never pass tokens or expanded hook input. Recall and
 SessionStart context remain unavailable here. Callers catch automatic-hook
 errors and exit 0; explicit controls report failures.
-`handleHook` bounds its wait for the supplied launcher by the remaining 750 ms;
+The installed hook process must flush the bounded result and exit 0 immediately;
+it must not wait for an identity operation still completing after its deadline.
+`handleHook` bounds binding, identity, preparation and launcher waits together
+at 750 ms (2.5 s for disabled context events), and fences late completion;
 the launcher must enforce its own process/pipe lifetime. SessionStart establishes
 a stale pause generation's EOF using only the last byte, without history parsing.
 

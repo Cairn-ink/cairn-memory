@@ -36,6 +36,18 @@ export async function readHookInput(stream,{limit=65536,deadlineMs=750}={}) {
  */
 export async function handleHook(input,{clientOptions,targetId,launch,now=Date.now}={}) {
   const start=now();
+  const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;
+  let expired=false,timer;
+  const unavailable={output:['Stop','PreCompact','SessionEnd'].includes(input?.hook_event_name)?'{}':'',status:'capture_unavailable'};
+  try {
+    return await Promise.race([processHook(input,{clientOptions,targetId,launch},
+      ()=>expired || now()-start>=budget),new Promise(resolve=>{
+      timer=setTimeout(()=>{expired=true;resolve(unavailable);},budget);
+    })]);
+  } finally {clearTimeout(timer);}
+}
+
+async function processHook(input,{clientOptions,targetId,launch},expired) {
   let event=input?.hook_event_name;
   const output=()=> ['Stop','PreCompact','SessionEnd'].includes(event)?'{}':'';
   try {
@@ -44,25 +56,21 @@ export async function handleHook(input,{clientOptions,targetId,launch,now=Date.n
     const options={...clientOptions,client:'codex'};
     const resolved=await resolveClient(options);
     if (!resolved.enabled) return {output:output(),status:resolved.status};
+    if (expired()) return {output:output(),status:'capture_unavailable'};
     const control=await readControlState(resolved.root);
     if (control.paused) return {output:output(),status:'paused'};
     if (hook.path===null) return {output:output(),status:'source_unavailable'};
     if (event==='UserPromptSubmit') return {output:'',status:'context_unavailable'};
     const projectId=await clientProjectId(options,hook.cwd);
+    if (expired()) return {output:output(),status:'capture_unavailable'};
     const binding={root:resolved.root,targetId,projectId,sessionId:hook.sessionId,path:hook.path};
     if (event==='SessionStart') return {output:'',status:(await establishPauseBoundary(binding)).status};
     const prepared=await prepareCapture(binding);
-    if (prepared.status!=='pending' || now()-start>=750) return {output:output(),status:prepared.status};
+    if (prepared.status!=='pending' || expired()) return {output:output(),status:prepared.status};
     // serialize a closed, content-free handoff; never copy hook extras into it
     const handoff={client:'codex',parser:FORMAT,sessionId:hook.sessionId,path:hook.path,cwd:hook.cwd,
       generation:control.generation,byteEnd:prepared.state.pending.end,endIntent:event==='SessionEnd'};
-    let launchTimer;
-    try {
-      // Waiting for child/model startup cannot consume the host's hook budget.
-      await Promise.race([launch(JSON.stringify(handoff),resolved.workerEnv),
-        new Promise((_,reject)=>{launchTimer=setTimeout(()=>reject(new Error('launch_deadline')),
-          Math.max(0,750-(now()-start)));})]);
-    } finally {clearTimeout(launchTimer);}
+    await launch(JSON.stringify(handoff),resolved.workerEnv);
     return {output:output(),status:'launched'};
   } catch { return {output:output(),status:'capture_unavailable'}; }
 }

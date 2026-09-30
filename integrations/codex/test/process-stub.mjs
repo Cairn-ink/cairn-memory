@@ -1,5 +1,6 @@
 // Test-only real hook and worker processes. Fixed owner-only synthetic config.
 import { spawn } from 'node:child_process';
+import { writeSync } from 'node:fs';
 import { privateRead } from '../../client/private-state.mjs';
 import { readHookInput, handleHook, workerFromHandoff } from '../hook.mjs';
 import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
@@ -17,6 +18,7 @@ try {
       // Test supervisor keeps the hook process alive until its worker exits.
       // The launch itself resolves at the closed-pipe handoff, not on capture.
     })});
+    if(config.exitAfterHook) {writeSync(1,result.output);process.exit(0);}
     process.stdout.write(result.output);
   } else {
     const endpoint=new URL(config.endpoint);

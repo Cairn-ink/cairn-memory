@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFile,writeFile,symlink,chmod,mkdir,readFile } from 'node:fs/promises';
 import { PassThrough } from 'node:stream';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fixture,header,item,session } from './helpers.mjs';
 import { runWorker,prepareCapture,resetCapture } from '../worker.mjs';
@@ -11,6 +12,7 @@ import { setPaused,readControlState } from '../../client/control-state.mjs';
 import { cursorPath,validateCursor,publishCursor } from '../cursor.mjs';
 import { clientProjectId } from '../../client/pairing.mjs';
 import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
+import { withFileLock } from '../../client/file-lock.mjs';
 
 test('A4 partial lines and appends preserve frozen IDs and coverage',async t=>{
   const first=header()+Array.from({length:50},(_,i)=>item(`Human ${i}`,i)).join('');
@@ -108,8 +110,12 @@ test('A5 local uncertainty fences 125 seconds and preserves event identity; term
   await runWorker(f.binding,options);assert.equal(f.calls.length,1);
   clock+=125000;await runWorker(f.binding,options);assert.equal(f.calls[1].event_id,event);assert.equal(f.receiver.size,1);
   const other=await fixture(t,{text:header()+item('Unknown child')});
-  const transport={terminated:()=>false,capture:()=>new Promise(()=>{})};
-  await runWorker(other.binding,{guard:other.guard,transport,requestMs:30,overallMs:100});
+  let starts=0;
+  const transport={terminated:()=>false,capture:()=>{starts++;return new Promise(()=>{});}};
+  // The request deadline measures the unknown child; allow setup to finish under
+  // suite contention so a pre-dispatch overall deadline cannot satisfy this case.
+  await runWorker(other.binding,{guard:other.guard,transport,requestMs:30,overallMs:5000});
+  assert.equal(starts,1);
   assert.equal((await other.guard.status()).state.reservations.length,1);
   assert.equal((await other.cursor()).accepted,0);
 });
@@ -148,6 +154,36 @@ test('A9 stalled fake headless startup never extends the 750ms hook wait',async 
   assert.equal(result.output,'{}');assert.equal(result.status,'capture_unavailable');assert.equal(launches,1);
   assert.ok(performance.now()-began<1100);assert.equal(f.calls.length,0);
   assert.ok((await f.cursor()).pending);assert.equal((await f.cursor()).accepted,0);
+});
+
+test('A5 live identity publication lock cannot extend the hook deadline or dispatch late',async t=>{
+  const f=await fixture(t,{text:header()+item('After blocked key creation')});
+  let unlock,entered,launches=0;
+  const held=new Promise(resolve=>unlock=resolve),ready=new Promise(resolve=>entered=resolve);
+  const locking=withFileLock(join(f.root,'.project-key.lock'),async()=>{entered();await held;});
+  await ready;
+  try {
+    const began=performance.now();
+    const result=await handleHook({hook_event_name:'Stop',session_id:session,cwd:'/synthetic',transcript_path:f.path},
+      {clientOptions:{home:f.home,root:f.root,usesClaude:false,env:{}},targetId:f.binding.targetId,launch:()=>launches++});
+    assert.equal(result.output,'{}');assert.equal(result.status,'capture_unavailable');
+    assert.ok(performance.now()-began<1100);assert.equal(launches,0);
+    const configPath=join(f.ws.path,'deadline-config.json');
+    await writeFile(configPath,JSON.stringify({exitAfterHook:true,
+      clientOptions:{home:f.home,root:f.root,usesClaude:false,env:{}},targetId:f.binding.targetId}),{mode:0o600});
+    const processBegan=performance.now();
+    const child=spawn(process.execPath,[new URL('./process-stub.mjs',import.meta.url).pathname,'hook',configPath],
+      {stdio:['pipe','pipe','pipe'],env:process.env});
+    let output='',errors='';child.stdout.on('data',chunk=>output+=chunk);child.stderr.on('data',chunk=>errors+=chunk);
+    child.stdin.end(JSON.stringify({hook_event_name:'Stop',session_id:session,cwd:'/synthetic',transcript_path:f.path}));
+    const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
+    assert.equal(code,0);assert.equal(output,'{}');assert.equal(errors,'');
+    assert.ok(performance.now()-processBegan<1400);
+  } finally {unlock();await locking;}
+  // Join the identity operation that may still finish after the bounded return.
+  await clientProjectId({client:'codex',home:f.home,root:f.root,usesClaude:false,env:{}},'/synthetic');
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(launches,0);assert.equal(await f.cursor(),null);
 });
 
 test('A9 mid-batch daily refusal and repeated resume preserve pending identity until the next UTC day',async t=>{
