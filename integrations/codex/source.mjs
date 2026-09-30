@@ -1,6 +1,9 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { isAbsolute, normalize } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+const readObservers=new AsyncLocalStorage();
+export const withSourceReadObserver=(observer,work)=>readObservers.run(observer,work);
 
 // The caller supplies the one authorized source on every invocation. No enumeration.
 // Linux fd-relative traversal prevents a swapped parent from redirecting the read.
@@ -26,6 +29,7 @@ export async function openSource(path) {
 }
 
 export async function readBytes(file,start,end) {
+  readObservers.getStore()?.({start,end});
   const buffer = Buffer.alloc(end-start);
   let read = 0;
   while (read < buffer.length) {

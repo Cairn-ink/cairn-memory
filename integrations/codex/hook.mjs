@@ -25,7 +25,7 @@ export async function readHookInput(stream,{limit=65536,deadlineMs=750}={}) {
     };
     const fail=()=>finish(new Error('invalid_hook_input'));
     const data=chunk=>{bytes+=chunk.length; if(bytes>limit) fail(); else chunks.push(chunk);};
-    const end=()=>{try {finish(null,JSON.parse(Buffer.concat(chunks).toString('utf8')));} catch {fail();}};
+    const end=()=>{try {finish(null,JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks))));} catch {fail();}};
     const timer=setTimeout(fail,deadlineMs);
     stream.on('data',data); stream.once('end',end); stream.once('error',fail);
   });

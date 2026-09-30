@@ -181,38 +181,38 @@ export async function runWorker(binding, { transport, guard, mode='hosted-stub',
         const permit=await guard.reserve();
         if (!permit.ok) { s.status=permit.code; await save(); return {status:s.status,state:s}; }
         const abort=new AbortController();
-        let timer, began=false, reply, failed=false;
+        let timer, began=false, reply, failure=null;
         try {
           const gate=await guard.dispatch(permit.id,()=>startIfActive(binding.root,s.generation,() => {
+            if (now()-started+requestMs>overallMs) throw new Error('deadline');
             began=true;
-            return transport.capture(b.body,{signal:abort.signal});
+            const timeout=new Promise((_,reject)=> { timer=setTimeout(()=>{
+              abort.abort(); reject(new Error('timeout'));
+            },requestMs); });
+            return Promise.race([transport.capture(b.body,{signal:abort.signal}),timeout]);
           }));
           if (!gate.ok) { s.status=gate.code; await save(); return {status:s.status,state:s}; }
           const dispatch=gate.dispatch;
           if (!dispatch.started) { s.status='paused'; await save(); return {status:s.status,state:s}; }
           dispatched++;
-          const timeout=new Promise((_,reject)=> { timer=setTimeout(()=>{
-            abort.abort(); reject(new Error('timeout'));
-          },requestMs); });
-          reply=await Promise.race([dispatch.operation,timeout]);
+          reply=await dispatch.operation;
           if (closed(reply,['status','code','resetAt']) && reply.status==='refused' && reply.code==='quota_reached' &&
               (reply.resetAt===undefined || (Number.isSafeInteger(reply.resetAt) && reply.resetAt>=0)))
             await guard.refuse({code:reply.code,resetAt:reply.resetAt??null});
-        } catch { failed=true; }
+        } catch (error) { failure=error.message==='deadline'?'deadline':'timeout'; }
         finally {
           clearTimeout(timer);
           // A noncooperating/unknown child retains its reservation; no age-based refund.
           await guard.release(permit.id,{terminated:!began || transport.terminated()===true,
             accepted:closed(reply,['status','eventId']) && reply.eventId===b.eventId && terminal.has(reply.status)});
         }
-        if (failed) {
-          s.status='timeout';
+        if (failure) {
+          s.status=failure;
           if (mode==='local-stub') s.notBefore=now()+125000;
           await save(); return {status:s.status,state:s};
         }
         if (closed(reply,['status','code','resetAt']) && reply.status==='refused' && reply.code==='quota_reached' &&
             (reply.resetAt===undefined || (Number.isSafeInteger(reply.resetAt) && reply.resetAt>=0))) {
-          await guard.refuse({code:reply.code,resetAt:reply.resetAt??null});
           s.status='quota_reached'; await save(); return {status:s.status,state:s};
         }
         if (closed(reply,['status','eventId']) && reply.eventId===b.eventId && reply.status==='processing') {
