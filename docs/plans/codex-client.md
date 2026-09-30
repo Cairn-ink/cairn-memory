@@ -2233,3 +2233,163 @@ The quota store preserves CX-2's native Windows standalone portable policy;
 Linux/WSL still requires private modes and directory sync. The synthetic
 platform fixture is not native Windows or macOS acceptance. It does not change
 pairing support or the existing binding/root ownership policy.
+
+### CX-4 驗證與交接，2026-10-01
+
+驗證使用 Linux/WSL、合成資料、明確指定的臨時 HOME，所有安裝與測試
+在前景依序執行。外層 `HOME` = `CAIRN_TEST_REAL_HOME` =
+`$PWD/.cx4-scratch/home`，`TMPDIR`/`TMP`/`TEMP` =
+`$PWD/.cx4-scratch/tmp`，npm cache = `$PWD/.cx4-scratch/npm-cache`，
+`NODE_DISABLE_COMPILE_CACHE=1`；外層路徑不含 UUID。
+僅轉送 LANG/LC_ALL/TZ/TERM，未轉送憑證。npm/Node wrapper 固定使用
+22.16.0、24.15.0、20.19.0；測試 runner 的子目錄完成後自行清理。
+未讀寫真實的 Cairn、Claude 或 Codex 使用者狀態。
+
+0.2.0 發布 Codex capture discriminator、兩個端點的 quota refusal/reset、
+H4b v1 session-start 與共享 pause state/generation/resume barrier。
+Session-start/pause 的 hook 消費仍由 CX-5 接手；H5 必須把今日 legacy
+429 改成已發布形狀後，才能做 hosted acceptance，schema merge 不等於
+部署驗證。沒有 hosted/service 變更、Codex hook 啟用或模型付費呼叫。
+
+最終集中測試為 protocol 109 + transport 44 + plugin quota 7 = 160 案，
+兩個主要版本均全部通過。涵蓋 strict unknown fields、有效/缺少/錯誤
+reset、processing 與 ack、session-start 群組/收據/截斷/整體預算、pause
+安全 generation、兩 client/重啟持續拒絕、單次 resume 及既有 Claude
+wire payload。Windows portable fixture 是 Linux 平台模擬，未宣稱
+原生 Windows/macOS 接受度。既有 0.1.1 frozen golden 未改；比較器
+只把候選版本標示改為目前 VERSION，並在隔離副本延長 quota contention
+等待，避免把明訂 D1 串行變更誤算為 payload 差異。正式 quota lock
+仍為 150ms，其爭用與單次 permit 另有真實檔案測試。
+
+每列是 `.cx4-scratch/run.py <Node version> <命令>` 的實際命令與 exit
+code；`—` 表示該命令沒有 TAP/spec 案例總數，不表示略過。
+案例欄為 total/pass/fail/skip。早期失敗與重跑也完整保留。
+
+| 次序 | Node | 命令 | Exit | 案例 total/pass/fail/skip |
+| --- | --- | --- | --- | --- |
+| 1 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs` | 1 | 38/37/1/0 |
+| 2 | 22.16.0 | `npm run test:client` | 0 | 5/5/0/0 |
+| 3 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 38/38/0/0 |
+| 4 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/hosted-quota.test.mjs` | 0 | 6/6/0/0 |
+| 5 | 22.16.0 | `npm test` | 1 | 508/502/6/0 |
+| 6 | 22.16.0 | `node integrations/client/testing/run.mjs --test-name-pattern=quota\|Q[0-9]\|classification\|standalone root\|fresh B\|C03\|keyword inventory integrations/client/test/transport-hosted.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/paired-hooks.test.mjs integrations/client/test/claude-decisions.test.mjs` | 0 | 43/43/0/0 |
+| 7 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 8 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 9 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 10 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 11 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 0 | 2/2/0/0 |
+| 12 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 155/155/0/0 |
+| 13 | 22.16.0 | `npm ci --prefix adapters/openai` | 0 | — |
+| 14 | 22.16.0 | `npm ci --prefix adapters/mcp` | 0 | — |
+| 15 | 22.16.0 | `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | 0 | — |
+| 16 | 22.16.0 | `npm test` | 0 | 511/511/0/0 |
+| 17 | 22.16.0 | `npm run validate` | 0 | — |
+| 18 | 22.16.0 | `npm run test:core` | 0 | 1136/1136/0/0 |
+| 19 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs` | 0 | 48/48/0/0 |
+| 20 | 22.16.0 | `npm test` | 0 | 553/553/0/0 |
+| 21 | 22.16.0 | `npm run validate` | 0 | — |
+| 22 | 22.16.0 | `npm run test:pairing` | 0 | 270/270/0/0 |
+| 23 | 22.16.0 | `npm run test:pairing:golden` | 0 | — |
+| 24 | 22.16.0 | `npm run test:artifact` | 0 | 87/87/0/0 |
+| 25 | 22.16.0 | `npm run test:mcp` | 0 | 111/111/0/0 |
+| 26 | 22.16.0 | `npm run test:codex` | 0 | 133/133/0/0 |
+| 27 | 22.16.0 | `npm run test:client` | 0 | 47/47/0/0 |
+| 28 | 24.15.0 | `npm ci --prefix adapters/openai` | 0 | — |
+| 29 | 24.15.0 | `npm ci --prefix adapters/mcp` | 0 | — |
+| 30 | 24.15.0 | `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | 0 | — |
+| 31 | 22.16.0 | `npm run test:client` | 0 | 48/48/0/0 |
+| 32 | 22.16.0 | `npm test` | 0 | 554/554/0/0 |
+| 33 | 24.15.0 | `npm test` | 0 | 554/554/0/0 |
+| 34 | 24.15.0 | `npm run validate` | 0 | — |
+| 35 | 24.15.0 | `npm run test:core` | 0 | 1136/1136/0/0 |
+| 36 | 24.15.0 | `npm run test:pairing` | 0 | 270/270/0/0 |
+| 37 | 24.15.0 | `npm run test:pairing:golden` | 0 | — |
+| 38 | 24.15.0 | `npm run test:artifact` | 0 | 87/87/0/0 |
+| 39 | 24.15.0 | `npm run test:mcp` | 0 | 111/111/0/0 |
+| 40 | 24.15.0 | `npm run test:codex` | 0 | 133/133/0/0 |
+| 41 | 24.15.0 | `npm run test:client` | 0 | 49/49/0/0 |
+| 42 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 159/159/0/0 |
+| 43 | 24.15.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 159/159/0/0 |
+| 44 | 22.16.0 | `npm test` | 0 | 555/555/0/0 |
+| 45 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 1 | 159/158/1/0 |
+| 46 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 160/160/0/0 |
+| 47 | 24.15.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 160/160/0/0 |
+| 48 | 22.16.0 | `npm test` | 0 | 556/556/0/0 |
+| 49 | 22.16.0 | `npm run validate` | 0 | — |
+| 50 | 22.16.0 | `npm run test:workspace-lifecycle` | 0 | 25/25/0/0 |
+| 51 | 22.16.0 | `npm run demo:capture` | 0 | — |
+| 52 | 22.16.0 | `npm run demo:session-context` | 0 | — |
+| 53 | 22.16.0 | `npm run demo:recall` | 0 | — |
+| 54 | 24.15.0 | `npm test` | 0 | 556/556/0/0 |
+| 55 | 24.15.0 | `npm run validate` | 0 | — |
+| 56 | 24.15.0 | `npm run test:workspace-lifecycle` | 0 | 25/25/0/0 |
+| 57 | 24.15.0 | `npm run demo:capture` | 0 | — |
+| 58 | 24.15.0 | `npm run demo:session-context` | 0 | — |
+| 59 | 24.15.0 | `npm run demo:recall` | 0 | — |
+| 60 | 22.16.0 | `npm run test:client` | 0 | 49/49/0/0 |
+| 61 | 22.16.0 | `npm ci --prefix tools/plugin-validation` | 0 | — |
+| 62 | 22.16.0 | `npm run validate --prefix tools/plugin-validation` | 0 | — |
+| 63 | 24.15.0 | `npm run validate --prefix tools/plugin-validation` | 0 | — |
+| 64 | 20.19.0 | `npm test` | 0 | 556/548/0/8 |
+| 65 | 20.19.0 | `npm run validate` | 0 | — |
+| 66 | 22.16.0 | `node integrations/client/bundle.mjs --check` | 0 | — |
+
+最終主要結果（所有列 exit 0）：
+
+| 命令 | Node 22.16.0 | Node 24.15.0 | Node 20.19.0 |
+| --- | --- | --- | --- |
+| `npm test` | 556 pass，0 skip | 556 pass，0 skip | 548 pass，8 skip |
+| `npm run validate` | 0 | 0 | 0 |
+| `npm run test:core` | 1136 pass | 1136 pass | 不要求 |
+| `npm run test:pairing` | 270 pass | 270 pass | 不要求 |
+| `npm run test:pairing:golden` | 0（fixture 比對） | 0（fixture 比對） | 不要求 |
+| `npm run test:artifact` | 87 pass | 87 pass | 不要求 |
+| `npm run test:mcp` | 111 pass | 111 pass | 不要求 |
+| `npm run test:codex` | 133 pass | 133 pass | 不要求 |
+| `npm run test:client` | 49 pass | 49 pass | 不要求 |
+
+Node 20 的 8 個 skip 全是現存 `node:sqlite` integration guard，
+其對應案例已在兩個主要版本執行。不是 CX-4 conformance skip。
+core/adapter 未變；後續 transport/plugin 修正以最終 160 案、
+兩個主要版本的完整 556 案及 client 49 案覆核，未重複未變的 core suite。
+
+逐次表之外，早期單獨 protocol runner 的兩次結果（`protocol-first.log`、
+`protocol-final.log`）為 103/103、106/106，shell exit 0。最終 109 案
+已由集中測試與完整 CI-shaped `npm test` 再次覆蓋。這兩次早期命令
+的完整環境/參數未存入逐次 ledger，不把後來的命令冒稱為原命令。
+初始化的 Node binary 複製、scratch 建立、schema/bundle 產生與文件
+修改命令均 exit 0；查閱檔案時曾遇到不存在的 workflow 路徑，隨後
+改讀 `.github/workflows/ci.yml`，不算測試失敗。
+
+早期失敗已修正且保留：transport observer 的中斷注入點、root alias／
+空 legacy root／effective UID 相容性、golden 串行等待及鎖檔消失競態、
+pause resume 的既有 stdout、quota-only open gate 的測試隔離。最後
+一項的初稿混入合法的 resume EOF skip，拆成 Q13 與原 quota 案例。
+兩次 orchestrator 在目前命令完成後以 99 停止，以便修正來源；
+下一個命令尚未啟動，99 不是該測試的 exit code。
+
+Git 使用 `$PWD/.x-index`，每次提交依序執行 `git read-tree HEAD`、
+`git add <本次檔案>`、`git write-tree`、`git commit-tree <tree> -p HEAD`、
+`git update-ref refs/heads/feat/cx4-protocol <new> <old>`，並移除 `.x-index`。
+文件、schema/conformance、client 及後續修正共七次 transaction 的
+每一步均 exit 0；每個 commit 最後均有指定 Co-Authored-By trailer。
+第一次普通 `update-ref` 被唯讀 worktree 的 HEAD.lock 拒絕；外層 shell
+最後的 cat 回傳 0，沒有另存內部 exit code，因此不宣稱該步成功。
+成功重試只對 `update-ref` 設定 `GIT_DIR` 為許可寫入的 common git dir，
+未改 worktree metadata 權限。檢查工作區時用新建 alternate index，
+避免把未更新的預設 index 誤讀為刪檔。
+`git diff HEAD --check` 與 `git diff 1bc7f93 HEAD --check` 均 exit 0；
+release metadata 與本驗證文件另以最後一個 transaction 提交。
+
+CX-5 接手共用 port 與 CX-3 stub DTO 的適配：前者是
+`capture(batch,binding,eventId,signal)`，後者是
+`capture(body,{signal})`；不能直接互換。Session-start 的完整預算解析
+需要傳入受信任的 conservative o200k `countTokens`，缺少時計為
+invalid reply，不自行猜測或刪短證據。pause parser 已發布；observe、
+injection 與 EOF resume barrier 的 hook 接線仍是 CX-5 的工作。
+
+外部接手／未執行：H5 服務實作與實際 hosted acceptance、CX-5 hook
+消費、原生 Windows/macOS 驗收；這些不在本包範圍。合併即發布 0.2.0，
+仍需 chichi 的 go，由協調者處理。沒有 push、PR、tag 或 release。
+執行紀錄寫入此節後，僅移除此工作建立的 scratch（含臨時 HOME、
+TMPDIR、cache、demo DB 及 logs）；不掃描其他使用者目錄。
